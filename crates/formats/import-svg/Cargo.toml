@@ -1,0 +1,16 @@
+[package]
+name = "fmt-import-svg"
+description = "Import vectors from SVG"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+usvg.workspace = true
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+fmt-export-svg = { path = "../export-svg" }
+
+[lints]
+workspace = true

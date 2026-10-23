@@ -309,10 +309,11 @@ impl ChangeBuilder<'_> {
 }
 
 /// Undo/redo stacks of applied changes.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct History {
     undo: Vec<Change>,
     redo: Vec<Change>,
+    revision: u64,
 }
 
 impl History {
@@ -324,15 +325,26 @@ impl History {
         doc.apply(&change)?;
         self.undo.push(change);
         self.redo.clear();
+        self.revision += 1;
         Ok(())
     }
 
     pub fn undo(&mut self, doc: &mut Document) -> bool {
-        Self::step(&mut self.undo, &mut self.redo, doc, true)
+        let stepped = Self::step(&mut self.undo, &mut self.redo, doc, true);
+        self.revision += u64::from(stepped);
+        stepped
     }
 
     pub fn redo(&mut self, doc: &mut Document) -> bool {
-        Self::step(&mut self.redo, &mut self.undo, doc, false)
+        let stepped = Self::step(&mut self.redo, &mut self.undo, doc, false);
+        self.revision += u64::from(stepped);
+        stepped
+    }
+
+    /// Changes on every apply, undo and redo and never repeats: compare it with the revision
+    /// at the last save to know whether there is unsaved work.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     pub fn can_undo(&self) -> bool {

@@ -157,3 +157,22 @@ fn added_lists_the_paths_a_change_creates() {
     let added: Vec<&Path> = change.added().collect();
     assert_eq!(added, [&square(0.0), &square(5.0)]);
 }
+
+#[test]
+fn every_applied_undone_or_redone_change_bumps_the_revision() {
+    let mut doc = Document::default();
+    let mut history = History::default();
+    let r0 = history.revision();
+    let change = add_squares(&doc, &[0.0]);
+    history.apply(&mut doc, change).unwrap();
+    let r1 = history.revision();
+    history.undo(&mut doc);
+    let r2 = history.revision();
+    history.redo(&mut doc);
+    assert!(
+        r0 < r1 && r1 < r2 && r2 < history.revision(),
+        "never repeats, so a saved revision cannot be mistaken"
+    );
+    history.apply(&mut doc, Change::default()).unwrap();
+    assert_eq!(history.revision(), r2 + 1, "empty changes do not count");
+}

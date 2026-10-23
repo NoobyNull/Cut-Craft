@@ -1,12 +1,14 @@
 //! The main window: menus, Design and Toolpaths panels, and the 2D/3D views over the
 //! document, its undo history and the command registry.
 
+use crate::files::{self, Session};
 use crate::form::{self, Field};
 use crate::gui;
 use crate::icons::Icons;
 use crate::view2d::{Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut};
 use aspire_core::document::{Document, EntityId};
+use aspire_core::file::JOB_EXTENSION;
 use aspire_core::geometry::{Path, Point, Rect};
 use aspire_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
@@ -29,7 +31,17 @@ const TOOLPATH_STRATEGIES: [&str; 12] = [
     "Moulding",
 ];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 3] = ["undo", "redo", "exit"];
+const BUILT_INS: [&str; 8] = [
+    "undo",
+    "redo",
+    "exit",
+    "new",
+    "open",
+    "save",
+    "save_as",
+    "import_vectors_bitmap",
+];
+const APP_NAME: &str = "Aspire Clone";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const TOOL_ICON_ROWS: f32 = 1.75;
@@ -64,6 +76,9 @@ struct AspireApp {
     form: Option<OpenForm>,
     /// How the 2D view mapped the job last frame.
     view_transform: Option<ViewTransform>,
+    session: Session,
+    /// Window title last sent to the viewport.
+    title: String,
 }
 
 impl AspireApp {
@@ -81,6 +96,8 @@ impl AspireApp {
             cursor: None,
             form: None,
             view_transform: None,
+            session: Session::default(),
+            title: String::new(),
         }
     }
 
@@ -88,7 +105,11 @@ impl AspireApp {
         match id {
             "undo" => self.history.can_undo(),
             "redo" => self.history.can_redo(),
-            _ => BUILT_INS.contains(&id) || self.registry.get(id).is_some(),
+            _ => {
+                BUILT_INS.contains(&id)
+                    || self.registry.get(id).is_some()
+                    || self.registry.exporter(id).is_some()
+            }
         }
     }
 
@@ -105,7 +126,55 @@ impl AspireApp {
                     self.status.set_message("Redone");
                 }
             }
+            // closing goes through the close request, which checks for unsaved work
             "exit" => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            "new" => {
+                if self.confirm_discard() {
+                    (self.doc, self.history, self.session, self.form) = Default::default();
+                }
+            }
+            "open" => {
+                if self.confirm_discard()
+                    && let Some(path) = job_dialog().pick_file()
+                {
+                    match self.session.open(&path) {
+                        Ok((doc, history)) => {
+                            (self.doc, self.history, self.form) = (doc, history, None);
+                        }
+                        Err(e) => self.status.set_message(&e),
+                    }
+                }
+            }
+            "save" => match self.session.path.clone() {
+                Some(path) => self.save_to(&path),
+                None => self.invoke(ctx, "save_as"),
+            },
+            "save_as" => {
+                if let Some(path) = job_dialog()
+                    .set_file_name(format!("untitled.{JOB_EXTENSION}"))
+                    .save_file()
+                {
+                    self.save_to(&path.with_extension(JOB_EXTENSION));
+                }
+            }
+            "import_vectors_bitmap" => {
+                let mut dialog = rfd::FileDialog::new();
+                for importer in self.registry.importers() {
+                    dialog = dialog.add_filter(importer.format.label, importer.format.extensions);
+                }
+                if let Some(path) = dialog.pick_file() {
+                    let result =
+                        files::import(&self.registry, &self.doc, &path).and_then(|change| {
+                            self.history
+                                .apply(&mut self.doc, change)
+                                .map_err(|e| e.to_string())
+                        });
+                    self.status.set_message(
+                        &result.map_or_else(|e| e, |()| format!("Imported {}", path.display())),
+                    );
+                }
+            }
+            id if self.registry.exporter(id).is_some() => self.export(id),
             _ => {
                 let Some(cmd) = self.registry.get(id) else {
                     self.status
@@ -133,6 +202,61 @@ impl AspireApp {
                     });
                 }
             }
+        }
+    }
+
+    fn save_to(&mut self, path: &std::path::Path) {
+        match self.session.save(&self.doc, &self.history, path) {
+            Ok(()) => self
+                .status
+                .set_message(&format!("Saved {}", path.display())),
+            Err(e) => self.status.set_message(&e),
+        }
+    }
+
+    fn export(&mut self, id: &str) {
+        let Some(format) = self.registry.exporter(id).map(|e| e.format) else {
+            return;
+        };
+        let dialog = rfd::FileDialog::new().add_filter(format.label, format.extensions);
+        if let Some(path) = dialog.save_file() {
+            let path = path.with_extension(format.extensions[0]);
+            let result = files::export(&self.registry, id, &self.doc, &path);
+            self.status.set_message(
+                &result.map_or_else(|e| e, |()| format!("Exported {}", path.display())),
+            );
+        }
+    }
+
+    /// True when it is fine to throw the current job away: no unsaved work, or the user chose
+    /// to save it or not to. False if they cancelled.
+    fn confirm_discard(&mut self) -> bool {
+        if !self.session.is_dirty(&self.history) {
+            return true;
+        }
+        let answer = rfd::MessageDialog::new()
+            .set_title(APP_NAME)
+            .set_description(format!(
+                "Save changes to {}?",
+                self.session.title(APP_NAME, &self.history)
+            ))
+            .set_buttons(rfd::MessageButtons::YesNoCancel)
+            .show();
+        match answer {
+            rfd::MessageDialogResult::Yes => {
+                match self
+                    .session
+                    .path
+                    .clone()
+                    .or_else(|| job_dialog().save_file())
+                {
+                    Some(path) => self.save_to(&path.with_extension(JOB_EXTENSION)),
+                    None => return false,
+                }
+                !self.session.is_dirty(&self.history)
+            }
+            rfd::MessageDialogResult::No => true,
+            _ => false,
         }
     }
 
@@ -287,7 +411,7 @@ impl AspireApp {
                             }
                             .selected(self.status.current_tool == label);
                             let response = ui
-                                .add_enabled(cmd.is_some(), button)
+                                .add_enabled(self.available(id), button)
                                 .on_hover_text(&label)
                                 .on_disabled_hover_text(format!("{label}: not implemented yet"));
                             if response.clicked() {
@@ -331,6 +455,10 @@ impl AspireApp {
     }
 }
 
+fn job_dialog() -> rfd::FileDialog {
+    rfd::FileDialog::new().add_filter("Aspire Clone job", &[JOB_EXTENSION])
+}
+
 /// Menu entries, recursing into submenus. Sets `clicked` to the chosen item's action.
 fn menu_items(
     ui: &mut egui::Ui,
@@ -370,6 +498,14 @@ impl eframe::App for AspireApp {
 impl AspireApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.viewport().close_requested()) && !self.confirm_discard() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+        let title = self.session.title(APP_NAME, &self.history);
+        if title != self.title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.title = title;
+        }
         self.shortcuts(ctx);
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| self.menu_bar(ui));
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));

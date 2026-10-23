@@ -170,7 +170,7 @@ impl Path {
                 Segment::Line { to } => points.push(to),
                 Segment::Arc { to, center, ccw } => {
                     let r = from.distance(center);
-                    let total = sweep(from, to, center, ccw);
+                    let total = arc_sweep(from, to, center, ccw);
                     // chord sag r(1 - cos(step/2)) <= tolerance
                     let max_step = 2.0 * (1.0 - (tolerance / r).min(1.0)).acos();
                     let n = pieces(total.abs() / max_step);
@@ -323,7 +323,7 @@ fn in_sweep(a0: f64, a1: f64, ccw: bool, t: f64) -> bool {
 }
 
 /// Signed sweep angle of an arc (positive = counter-clockwise); a closed arc sweeps a full turn.
-fn sweep(from: Point, to: Point, center: Point, ccw: bool) -> f64 {
+pub fn arc_sweep(from: Point, to: Point, center: Point, ccw: bool) -> f64 {
     let (a0, a1) = (angle(from - center), angle(to - center));
     let span = if ccw {
         (a1 - a0).rem_euclid(TAU)
@@ -337,7 +337,7 @@ fn sweep(from: Point, to: Point, center: Point, ccw: bool) -> f64 {
 /// Approximates an arc with cubics of at most 90° each (radial error under 0.03%).
 pub fn arc_to_cubics(from: Point, to: Point, center: Point, ccw: bool) -> Vec<Segment> {
     let r = from.distance(center);
-    let total = sweep(from, to, center, ccw);
+    let total = arc_sweep(from, to, center, ccw);
     // ponytail: at most 4 pieces, so the cast cannot truncate
     #[expect(
         clippy::cast_possible_truncation,

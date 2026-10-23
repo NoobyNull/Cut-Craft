@@ -30,6 +30,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_set_size::SetSize>();
     r.add::<cmd_unselect_all::UnselectAll>();
     // scripts/new-command adds new commands above this line
+    r.add_exporter::<fmt_export_svg::ExportSvg>();
+    r.add_importer::<fmt_import_svg::ImportSvg>();
     r
 }
 
@@ -47,6 +49,20 @@ mod tests {
             assert!(
                 registry.get(&id).is_some(),
                 "crates/commands/{name} is not registered in crates/app/src/commands.rs"
+            );
+        }
+    }
+
+    #[test]
+    fn every_format_crate_is_registered() {
+        let registry = super::registry();
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../formats");
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+            let id = name.replace('-', "_");
+            assert!(
+                registry.exporter(&id).is_some() || registry.importer(&id).is_some(),
+                "crates/formats/{name} is not registered in crates/app/src/commands.rs"
             );
         }
     }

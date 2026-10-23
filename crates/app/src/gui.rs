@@ -244,7 +244,13 @@ impl MenuSystem {
                         ),
                         sub(
                             "Export",
-                            vec![i("EPS"), i("DXF"), i("AI"), i("SVG"), i("PDF")],
+                            vec![
+                                a("EPS", "export_eps"),
+                                a("DXF", "export_dxf"),
+                                a("AI", "export_ai"),
+                                a("SVG", "export_svg"),
+                                a("PDF", "export_pdf"),
+                            ],
                         ),
                         sep(),
                         i("Open Application Data Folder"),

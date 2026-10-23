@@ -1,0 +1,14 @@
+[package]
+name = "fmt-export-svg"
+description = "Export vectors as SVG"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

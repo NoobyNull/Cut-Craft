@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/app", "crates/core", "crates/commands/*"]
+members = ["crates/app", "crates/core", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,9 +13,11 @@ egui_extras = { version = "0.27", default-features = false, features = ["file", 
 env_logger = "0.10"
 glam = { version = "0.30", features = ["serde"] }
 log = "0.4"
+rfd = "0.17"
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+usvg = "0.37"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

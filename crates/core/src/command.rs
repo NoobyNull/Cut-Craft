@@ -2,6 +2,7 @@
 
 use crate::Change;
 use crate::document::Document;
+use crate::formats::{ExportEntry, Exporter, ImportEntry, Importer};
 use crate::geometry::{Point, Rect};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -167,6 +168,8 @@ impl<C: Command> DynCommand for Erased<C> {
 #[derive(Default)]
 pub struct Registry {
     commands: Vec<Box<dyn DynCommand>>,
+    exporters: Vec<ExportEntry>,
+    importers: Vec<ImportEntry>,
 }
 
 impl Registry {
@@ -200,6 +203,55 @@ impl Registry {
             .iter()
             .find(|c| c.id() == id)
             .map(AsRef::as_ref)
+    }
+
+    pub fn add_exporter<E: Exporter>(&mut self) -> &mut Self {
+        assert!(
+            self.exporter(E::ID).is_none(),
+            "exporter `{}` registered twice",
+            E::ID
+        );
+        self.exporters.push(ExportEntry {
+            id: E::ID,
+            format: E::FORMAT,
+            export: E::export,
+        });
+        self
+    }
+
+    pub fn add_importer<I: Importer>(&mut self) -> &mut Self {
+        assert!(
+            self.importers.iter().all(|i| i.id != I::ID),
+            "importer `{}` registered twice",
+            I::ID
+        );
+        self.importers.push(ImportEntry {
+            id: I::ID,
+            format: I::FORMAT,
+            import: I::import,
+        });
+        self
+    }
+
+    pub fn exporter(&self, id: &str) -> Option<&ExportEntry> {
+        self.exporters.iter().find(|e| e.id == id)
+    }
+
+    pub fn importer(&self, id: &str) -> Option<&ImportEntry> {
+        self.importers.iter().find(|i| i.id == id)
+    }
+
+    pub fn exporters(&self) -> impl Iterator<Item = &ExportEntry> {
+        self.exporters.iter()
+    }
+
+    pub fn importers(&self) -> impl Iterator<Item = &ImportEntry> {
+        self.importers.iter()
+    }
+
+    /// The importer for a file extension (without the dot), case-insensitively.
+    pub fn importer_for(&self, extension: &str) -> Option<&ImportEntry> {
+        self.importers.iter().find(|i| i.format.matches(extension))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &dyn DynCommand> {
