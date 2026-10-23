@@ -35,6 +35,9 @@ pub fn registry() -> Registry {
     r.add::<cmd_overlap_intersect::OverlapIntersect>();
     r.add::<cmd_offset_vectors::OffsetVectors>();
     r.add::<cmd_join_vectors::JoinVectors>();
+    r.add::<cmd_profile_toolpath::ProfileToolpath>();
+    r.add::<cmd_pocket_toolpath::PocketToolpath>();
+    r.add::<cmd_drilling_toolpath::DrillingToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

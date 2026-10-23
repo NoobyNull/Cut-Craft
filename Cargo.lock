@@ -166,12 +166,15 @@ dependencies = [
  "cmd-draw-polyline",
  "cmd-draw-rectangle",
  "cmd-draw-star",
+ "cmd-drilling-toolpath",
  "cmd-job-setup",
  "cmd-join-vectors",
  "cmd-mirror",
  "cmd-move",
  "cmd-offset-vectors",
  "cmd-overlap-intersect",
+ "cmd-pocket-toolpath",
+ "cmd-profile-toolpath",
  "cmd-rotate",
  "cmd-select-all-vectors",
  "cmd-set-size",
@@ -551,6 +554,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-drilling-toolpath"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-job-setup"
 version = "0.1.0"
 dependencies = [
@@ -600,6 +612,24 @@ name = "cmd-overlap-intersect"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
+]
+
+[[package]]
+name = "cmd-pocket-toolpath"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-profile-toolpath"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

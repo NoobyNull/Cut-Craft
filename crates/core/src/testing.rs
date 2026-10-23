@@ -183,3 +183,31 @@ pub fn after_err<C: Command>(params: &C::Params) -> String {
         Err(e) => e.to_string(),
     }
 }
+
+/// Runs a toolpath strategy on a document holding `paths` (all selected); the toolpath it made.
+pub fn made_toolpath<C: Command>(
+    paths: Vec<Path>,
+    params: &C::Params,
+) -> Result<crate::toolpath::Toolpath, String> {
+    let mut doc = document_with(paths);
+    let change = C::run(&doc, params).map_err(|e| e.to_string())?;
+    doc.apply(&change).expect("change applies");
+    assert_eq!(
+        doc.toolpaths.len(),
+        1,
+        "{} must add exactly one toolpath",
+        C::ID
+    );
+    Ok(doc.toolpaths.into_values().next().unwrap())
+}
+
+/// The XY extent of a toolpath's cutting moves.
+pub fn cut_bounds(toolpath: &crate::toolpath::Toolpath) -> crate::geometry::Rect {
+    toolpath
+        .moves
+        .iter()
+        .filter(|m| m.kind == crate::toolpath::MoveKind::Cut)
+        .map(|m| crate::geometry::Rect::point(m.to.truncate()))
+        .reduce(crate::geometry::Rect::union)
+        .expect("the toolpath cuts something")
+}
