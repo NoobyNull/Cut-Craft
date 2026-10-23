@@ -1,4 +1,4 @@
-# Aspire Clone
+# Cut Craft
 
 A personal educational project to create an open-source alternative to Vectric Aspire CAD software.
 
@@ -20,7 +20,7 @@ A personal educational project to create an open-source alternative to Vectric A
 ```
 crates/core/              document model, invertible changes, the Command contract
 crates/commands/<name>/   one crate per command: params, run(), tests
-crates/app/               the desktop UI (aspire-clone binary)
+crates/app/               the desktop UI (cut-craft binary)
 re/                       reverse-engineering notes and scripts (re/SPEC.md)
 docs/superpowers/specs/   design docs, including the backlog
 ```

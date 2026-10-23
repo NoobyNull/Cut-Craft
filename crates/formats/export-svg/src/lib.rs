@@ -1,8 +1,8 @@
 //! Export vectors as SVG, in millimetres, the right way up.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Segment, arc_sweep};
-use aspire_core::{CommandError, Exporter, FileFormat};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Segment, arc_sweep};
+use cut_craft_core::{CommandError, Exporter, FileFormat};
 use std::f64::consts::{PI, TAU};
 use std::fmt::Write as _;
 
@@ -77,7 +77,7 @@ fn path_data(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::sample_document;
+    use cut_craft_core::testing::sample_document;
 
     fn svg() -> String {
         String::from_utf8(ExportSvg::export(&sample_document()).unwrap()).unwrap()

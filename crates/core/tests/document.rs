@@ -1,6 +1,6 @@
-use aspire_core::document::{Document, EntityId};
-use aspire_core::geometry::{Path, Point};
-use aspire_core::{ApplyError, Change, History};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::{ApplyError, Change, History};
 
 fn square(x: f64) -> Path {
     Path::polyline(

@@ -1,8 +1,8 @@
-use aspire_core::document::{Document, EntityId};
-use aspire_core::geometry::{Path, Point, Rect};
-use aspire_core::glam::DAffine2;
-use aspire_core::params::Anchor;
-use aspire_core::{Change, CommandError};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::{Path, Point, Rect};
+use cut_craft_core::glam::DAffine2;
+use cut_craft_core::params::Anchor;
+use cut_craft_core::{Change, CommandError};
 
 fn doc_with_squares() -> Document {
     let mut doc = Document::default();

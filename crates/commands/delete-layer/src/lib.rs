@@ -1,7 +1,7 @@
 //! Delete Layer: removes a layer and every vector on it.
 
-use aspire_core::document::{Document, LayerId};
-use aspire_core::{Change, Command, CommandError, Meta, existing_layer};
+use cut_craft_core::document::{Document, LayerId};
+use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -51,9 +51,9 @@ impl Command for DeleteLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{after_err, run_on, sample_document, two_layers};
+    use cut_craft_core::testing::{after_err, run_on, sample_document, two_layers};
 
-    aspire_core::contract_tests!(DeleteLayer, two_layers);
+    cut_craft_core::contract_tests!(DeleteLayer, two_layers);
 
     #[test]
     fn deletes_the_layer_and_its_vectors() {

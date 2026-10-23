@@ -1,8 +1,8 @@
-use aspire_core::document::Job;
-use aspire_core::geometry::Point;
-use aspire_core::glam::DVec3;
-use aspire_core::simulation::Material;
-use aspire_core::toolpath::{Move, MoveKind, Tool, ToolShape, Toolpath};
+use cut_craft_core::document::Job;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::DVec3;
+use cut_craft_core::simulation::Material;
+use cut_craft_core::toolpath::{Move, MoveKind, Tool, ToolShape, Toolpath};
 
 /// A 100 x 100 x 20 mm job in half-millimetre cells.
 fn material() -> Material {
@@ -178,7 +178,7 @@ fn overcut_is_how_far_a_move_would_cut_below_the_surface() {
 
 #[test]
 fn zigzag_lines_alternate_merge_level_runs_and_never_overcut() {
-    use aspire_core::toolpath::zigzag;
+    use cut_craft_core::toolpath::zigzag;
     let tool = Tool::default();
     let flat = zigzag(&material(), &tool, 10.0, 0.01, f64::NEG_INFINITY);
     // 10 lines, each reduced to its two ends

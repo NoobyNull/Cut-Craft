@@ -1,7 +1,7 @@
 //! Select All Vectors.
 
-use aspire_core::document::Document;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct SelectAllVectors;
 
@@ -29,11 +29,11 @@ impl Command for SelectAllVectors {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(SelectAllVectors);
+    cut_craft_core::contract_tests!(SelectAllVectors);
 
     #[test]
     fn selects_every_vector() {
-        let mut doc = aspire_core::testing::sample_document();
+        let mut doc = cut_craft_core::testing::sample_document();
         let mut c = Change::builder(&doc);
         c.select([]);
         doc.apply(&c.finish()).unwrap();
@@ -44,10 +44,10 @@ mod tests {
 
     #[test]
     fn skips_vectors_on_hidden_or_locked_layers() {
-        let mut doc = aspire_core::testing::sample_document();
+        let mut doc = cut_craft_core::testing::sample_document();
         let first = doc.layers[0].id;
-        aspire_core::testing::edit_layer(&mut doc, first, |l| l.locked = true);
-        aspire_core::testing::run_on::<SelectAllVectors>(&mut doc, &NoParams {});
+        cut_craft_core::testing::edit_layer(&mut doc, first, |l| l.locked = true);
+        cut_craft_core::testing::run_on::<SelectAllVectors>(&mut doc, &NoParams {});
         assert!(doc.selection.is_empty());
     }
 }

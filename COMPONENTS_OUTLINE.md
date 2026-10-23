@@ -1,4 +1,4 @@
-# Vectric Aspire Clone - Component Outline
+# Cut Craft - Component Outline
 
 ## Core Architecture
 - Application framework and lifecycle management

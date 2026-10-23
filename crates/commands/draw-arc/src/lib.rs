@@ -1,9 +1,9 @@
 //! Draw Arc: counter-clockwise from the start angle to the end angle.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point, Segment, polar};
-use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point, Segment, polar};
+use cut_craft_core::params::Xy;
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -69,9 +69,9 @@ impl Command for DrawArc {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{drawn_path, rejection};
+    use cut_craft_core::testing::{drawn_path, rejection};
 
-    aspire_core::contract_tests!(DrawArc);
+    cut_craft_core::contract_tests!(DrawArc);
 
     #[test]
     fn runs_counter_clockwise_between_the_angles_and_stays_open() {

@@ -553,7 +553,7 @@ impl MenuSystem {
                         i("Keyboard Shortcuts"),
                         i("Third Party Licenses"),
                         sep(),
-                        i("About Aspire Clone"),
+                        i("About Cut Craft"),
                     ],
                 ),
             ],

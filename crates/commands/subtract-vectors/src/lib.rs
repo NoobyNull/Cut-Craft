@@ -1,8 +1,8 @@
 //! Subtract Vectors.
 
-use aspire_core::document::Document;
-use aspire_core::polygon;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::polygon;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct SubtractVectors;
 
@@ -43,8 +43,8 @@ impl Command for SubtractVectors {
 mod tests {
     use super::*;
 
-    use aspire_core::geometry::Path;
-    use aspire_core::testing::{document_with, square};
+    use cut_craft_core::geometry::Path;
+    use cut_craft_core::testing::{document_with, square};
 
     fn subtract(paths: Vec<Path>) -> Document {
         let mut doc = document_with(paths);
@@ -57,7 +57,11 @@ mod tests {
     fn the_largest_shape_is_cut_by_the_others() {
         // small square listed first: the big one is still the one kept
         let doc = subtract(vec![square(15.0, 15.0, 10.0), square(0.0, 0.0, 20.0)]);
-        let area: f64 = doc.vectors.values().map(aspire_core::polygon::area).sum();
+        let area: f64 = doc
+            .vectors
+            .values()
+            .map(cut_craft_core::polygon::area)
+            .sum();
         assert!(
             (area - 375.0).abs() < 1e-6,
             "400 - the 25 overlap, got {area}"
@@ -74,5 +78,5 @@ mod tests {
         );
     }
 
-    aspire_core::contract_tests!(SubtractVectors);
+    cut_craft_core::contract_tests!(SubtractVectors);
 }

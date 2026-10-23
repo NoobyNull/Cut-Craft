@@ -1,7 +1,7 @@
 //! Move to Layer: puts the selected vectors on a layer.
 
-use aspire_core::document::{Document, LayerId};
-use aspire_core::{Change, Command, CommandError, Meta, existing_layer};
+use cut_craft_core::document::{Document, LayerId};
+use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -52,9 +52,9 @@ impl Command for MoveToLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{edit_layer, rejection, run_on, two_layers};
+    use cut_craft_core::testing::{edit_layer, rejection, run_on, two_layers};
 
-    aspire_core::contract_tests!(MoveToLayer);
+    cut_craft_core::contract_tests!(MoveToLayer);
 
     #[test]
     fn moves_the_selection() {

@@ -1,8 +1,8 @@
 //! Overlap.
 
-use aspire_core::document::Document;
-use aspire_core::polygon;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::polygon;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct OverlapIntersect;
 
@@ -42,7 +42,7 @@ impl Command for OverlapIntersect {
 mod tests {
     use super::*;
 
-    use aspire_core::testing::{document_with, square};
+    use cut_craft_core::testing::{document_with, square};
 
     fn overlapping() -> Document {
         document_with(vec![square(0.0, 0.0, 10.0), square(5.0, 5.0, 10.0)])
@@ -53,7 +53,11 @@ mod tests {
         let mut doc = overlapping();
         doc.apply(&OverlapIntersect::run(&doc, &NoParams {}).unwrap())
             .unwrap();
-        let area: f64 = doc.vectors.values().map(aspire_core::polygon::area).sum();
+        let area: f64 = doc
+            .vectors
+            .values()
+            .map(cut_craft_core::polygon::area)
+            .sum();
         assert!((area - 25.0).abs() < 1e-6, "{area}");
     }
 
@@ -68,5 +72,5 @@ mod tests {
         );
     }
 
-    aspire_core::contract_tests!(OverlapIntersect, overlapping);
+    cut_craft_core::contract_tests!(OverlapIntersect, overlapping);
 }

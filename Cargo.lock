@@ -144,90 +144,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspire-clone"
-version = "0.1.0"
-dependencies = [
- "aspire-core",
- "aspire-post",
- "cmd-3d-finishing-toolpath",
- "cmd-3d-roughing-toolpath",
- "cmd-add-layer",
- "cmd-align-bottom",
- "cmd-align-left",
- "cmd-align-right",
- "cmd-align-top",
- "cmd-center",
- "cmd-center-horizontally",
- "cmd-center-horizontally-in-material",
- "cmd-center-in-material",
- "cmd-center-vertically",
- "cmd-center-vertically-in-material",
- "cmd-create-shape",
- "cmd-delete",
- "cmd-delete-layer",
- "cmd-draw-arc",
- "cmd-draw-circle",
- "cmd-draw-ellipse",
- "cmd-draw-polygon",
- "cmd-draw-polyline",
- "cmd-draw-rectangle",
- "cmd-draw-star",
- "cmd-drilling-toolpath",
- "cmd-job-setup",
- "cmd-join-vectors",
- "cmd-layer-properties",
- "cmd-mirror",
- "cmd-move",
- "cmd-move-to-layer",
- "cmd-offset-vectors",
- "cmd-overlap-intersect",
- "cmd-pocket-toolpath",
- "cmd-profile-toolpath",
- "cmd-rotate",
- "cmd-select-all-vectors",
- "cmd-select-layer-vectors",
- "cmd-set-current-layer",
- "cmd-set-size",
- "cmd-subtract-vectors",
- "cmd-unselect-all",
- "cmd-vcarve-engrave-toolpath",
- "cmd-weld-vectors",
- "eframe",
- "egui_extras",
- "env_logger",
- "fmt-export-as-stl",
- "fmt-export-dxf",
- "fmt-export-gcode",
- "fmt-export-svg",
- "fmt-import-dxf",
- "fmt-import-svg",
- "log",
- "rfd",
- "schemars",
- "serde_json",
-]
-
-[[package]]
-name = "aspire-core"
-version = "0.1.0"
-dependencies = [
- "aspire-core",
- "glam",
- "i_overlay",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "aspire-post"
-version = "0.1.0"
-dependencies = [
- "aspire-core",
- "serde_json",
-]
-
-[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -457,7 +373,7 @@ dependencies = [
 name = "cmd-3d-finishing-toolpath"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -466,7 +382,7 @@ dependencies = [
 name = "cmd-3d-roughing-toolpath"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -475,7 +391,7 @@ dependencies = [
 name = "cmd-add-layer"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -484,81 +400,81 @@ dependencies = [
 name = "cmd-align-bottom"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-align-left"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-align-right"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-align-top"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-center"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
  "cmd-center-horizontally",
  "cmd-center-vertically",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-center-horizontally"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-center-horizontally-in-material"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-center-in-material"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
  "cmd-center-horizontally-in-material",
  "cmd-center-vertically-in-material",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-center-vertically"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-center-vertically-in-material"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-create-shape"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -567,14 +483,14 @@ dependencies = [
 name = "cmd-delete"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-delete-layer"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -583,7 +499,7 @@ dependencies = [
 name = "cmd-draw-arc"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -592,7 +508,7 @@ dependencies = [
 name = "cmd-draw-circle"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -601,7 +517,7 @@ dependencies = [
 name = "cmd-draw-ellipse"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -610,7 +526,7 @@ dependencies = [
 name = "cmd-draw-polygon"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -619,7 +535,7 @@ dependencies = [
 name = "cmd-draw-polyline"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -628,7 +544,7 @@ dependencies = [
 name = "cmd-draw-rectangle"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -637,7 +553,7 @@ dependencies = [
 name = "cmd-draw-star"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -646,7 +562,7 @@ dependencies = [
 name = "cmd-drilling-toolpath"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -655,7 +571,7 @@ dependencies = [
 name = "cmd-job-setup"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -664,7 +580,7 @@ dependencies = [
 name = "cmd-join-vectors"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -673,7 +589,7 @@ dependencies = [
 name = "cmd-layer-properties"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -682,7 +598,7 @@ dependencies = [
 name = "cmd-mirror"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -691,7 +607,7 @@ dependencies = [
 name = "cmd-move"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -700,7 +616,7 @@ dependencies = [
 name = "cmd-move-to-layer"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -709,7 +625,7 @@ dependencies = [
 name = "cmd-offset-vectors"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -718,14 +634,14 @@ dependencies = [
 name = "cmd-overlap-intersect"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-pocket-toolpath"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -734,7 +650,7 @@ dependencies = [
 name = "cmd-profile-toolpath"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -743,7 +659,7 @@ dependencies = [
 name = "cmd-rotate"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -752,14 +668,14 @@ dependencies = [
 name = "cmd-select-all-vectors"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-select-layer-vectors"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -768,7 +684,7 @@ dependencies = [
 name = "cmd-set-current-layer"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -777,7 +693,7 @@ dependencies = [
 name = "cmd-set-size"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -786,21 +702,21 @@ dependencies = [
 name = "cmd-subtract-vectors"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-unselect-all"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "cmd-vcarve-engrave-toolpath"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -809,7 +725,7 @@ dependencies = [
 name = "cmd-weld-vectors"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
@@ -974,6 +890,90 @@ name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
+
+[[package]]
+name = "cut-craft"
+version = "0.1.0"
+dependencies = [
+ "cmd-3d-finishing-toolpath",
+ "cmd-3d-roughing-toolpath",
+ "cmd-add-layer",
+ "cmd-align-bottom",
+ "cmd-align-left",
+ "cmd-align-right",
+ "cmd-align-top",
+ "cmd-center",
+ "cmd-center-horizontally",
+ "cmd-center-horizontally-in-material",
+ "cmd-center-in-material",
+ "cmd-center-vertically",
+ "cmd-center-vertically-in-material",
+ "cmd-create-shape",
+ "cmd-delete",
+ "cmd-delete-layer",
+ "cmd-draw-arc",
+ "cmd-draw-circle",
+ "cmd-draw-ellipse",
+ "cmd-draw-polygon",
+ "cmd-draw-polyline",
+ "cmd-draw-rectangle",
+ "cmd-draw-star",
+ "cmd-drilling-toolpath",
+ "cmd-job-setup",
+ "cmd-join-vectors",
+ "cmd-layer-properties",
+ "cmd-mirror",
+ "cmd-move",
+ "cmd-move-to-layer",
+ "cmd-offset-vectors",
+ "cmd-overlap-intersect",
+ "cmd-pocket-toolpath",
+ "cmd-profile-toolpath",
+ "cmd-rotate",
+ "cmd-select-all-vectors",
+ "cmd-select-layer-vectors",
+ "cmd-set-current-layer",
+ "cmd-set-size",
+ "cmd-subtract-vectors",
+ "cmd-unselect-all",
+ "cmd-vcarve-engrave-toolpath",
+ "cmd-weld-vectors",
+ "cut-craft-core",
+ "cut-craft-post",
+ "eframe",
+ "egui_extras",
+ "env_logger",
+ "fmt-export-as-stl",
+ "fmt-export-dxf",
+ "fmt-export-gcode",
+ "fmt-export-svg",
+ "fmt-import-dxf",
+ "fmt-import-svg",
+ "log",
+ "rfd",
+ "schemars",
+ "serde_json",
+]
+
+[[package]]
+name = "cut-craft-core"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "glam",
+ "i_overlay",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cut-craft-post"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "serde_json",
+]
 
 [[package]]
 name = "data-url"
@@ -1336,14 +1336,14 @@ checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 name = "fmt-export-as-stl"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "fmt-export-dxf"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "dxf",
  "fmt-import-dxf",
 ]
@@ -1352,7 +1352,7 @@ dependencies = [
 name = "fmt-export-gcode"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "serde_json",
 ]
 
@@ -1360,14 +1360,14 @@ dependencies = [
 name = "fmt-export-svg"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
 ]
 
 [[package]]
 name = "fmt-import-dxf"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "dxf",
 ]
 
@@ -1375,7 +1375,7 @@ dependencies = [
 name = "fmt-import-svg"
 version = "0.1.0"
 dependencies = [
- "aspire-core",
+ "cut-craft-core",
  "fmt-export-svg",
  "usvg",
 ]

@@ -1,9 +1,9 @@
 //! Draw Circle.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Path;
-use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Path;
+use cut_craft_core::params::Xy;
+use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -59,10 +59,10 @@ impl Interactive for DrawCircle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::{Point, Rect};
-    use aspire_core::testing::{drawn_path, rejection};
+    use cut_craft_core::geometry::{Point, Rect};
+    use cut_craft_core::testing::{drawn_path, rejection};
 
-    aspire_core::contract_tests!(DrawCircle);
+    cut_craft_core::contract_tests!(DrawCircle);
 
     #[test]
     fn draws_a_closed_circle_of_the_given_radius() {
@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn a_drag_goes_from_the_centre_out_to_the_radius() {
-        let drag = aspire_core::Drag {
+        let drag = cut_craft_core::Drag {
             start: Point::new(5.0, 5.0),
             end: Point::new(8.0, 9.0),
             from_center: false,

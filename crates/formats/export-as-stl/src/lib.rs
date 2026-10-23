@@ -1,10 +1,10 @@
 //! Export the 3D model as a binary STL: the model's surface on its material block, one closed
 //! solid in millimetres.
 
-use aspire_core::component::model;
-use aspire_core::document::Document;
-use aspire_core::glam::DVec3;
-use aspire_core::{CommandError, Exporter, FileFormat};
+use cut_craft_core::component::model;
+use cut_craft_core::document::Document;
+use cut_craft_core::glam::DVec3;
+use cut_craft_core::{CommandError, Exporter, FileFormat};
 
 pub struct ExportStl;
 
@@ -83,7 +83,7 @@ fn binary_stl(triangles: &[[DVec3; 3]]) -> Vec<u8> {
     let mut out = Vec::with_capacity(84 + 50 * triangles.len());
     // the header must not start with "solid", which marks text STL
     let mut header = [0u8; 80];
-    let title = b"Aspire Clone model, mm";
+    let title = b"Cut Craft model, mm";
     header[..title.len()].copy_from_slice(title);
     out.extend(header);
     let count = u32::try_from(triangles.len()).expect("fewer than 4 billion triangles");
@@ -103,10 +103,10 @@ fn binary_stl(triangles: &[[DVec3; 3]]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::Change;
-    use aspire_core::component::{Combine, Component};
-    use aspire_core::document::Job;
-    use aspire_core::geometry::{Point, Rect};
+    use cut_craft_core::Change;
+    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::document::Job;
+    use cut_craft_core::geometry::{Point, Rect};
     use std::collections::HashMap;
 
     type Triangle = [[f32; 3]; 3];
@@ -188,6 +188,12 @@ mod tests {
             "{volume} vs {}",
             block + model
         );
+    }
+
+    #[test]
+    fn the_header_says_what_made_it() {
+        let stl = ExportStl::export(&doc()).unwrap();
+        assert!(stl.starts_with(b"Cut Craft model, mm"));
     }
 
     #[test]

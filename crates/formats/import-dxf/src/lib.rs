@@ -2,10 +2,10 @@
 //! splines, scaled from the drawing's units to millimetres. Everything else (text, hatches,
 //! dimensions, blocks) is skipped.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point, Segment, polar};
-use aspire_core::glam::{DAffine2, DVec2};
-use aspire_core::{Change, CommandError, FileFormat, Importer};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point, Segment, polar};
+use cut_craft_core::glam::{DAffine2, DVec2};
+use cut_craft_core::{Change, CommandError, FileFormat, Importer};
 use dxf::entities::{Ellipse, EntityType, Spline};
 use dxf::enums::Units;
 use std::f64::consts::TAU;
@@ -236,7 +236,7 @@ fn de_boor(degree: usize, span: usize, knots: &[f64], ctrl: &[[f64; 3]], param: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::{Path, Point, Rect, Segment};
+    use cut_craft_core::geometry::{Path, Point, Rect, Segment};
     use dxf::entities::{Arc, Circle, Ellipse, Entity, EntityType, Line, LwPolyline, Spline};
     use dxf::enums::{AcadVersion, Units};
     use dxf::{Drawing, LwPolylineVertex, Point as DxfPoint, Vector};

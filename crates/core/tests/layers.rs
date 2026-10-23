@@ -1,8 +1,8 @@
-use aspire_core::document::{Document, EntityId, LayerId};
-use aspire_core::file::{load_job, save_job};
-use aspire_core::geometry::{Point, Rect};
-use aspire_core::testing::square;
-use aspire_core::{Change, History};
+use cut_craft_core::document::{Document, EntityId, LayerId};
+use cut_craft_core::file::{load_job, save_job};
+use cut_craft_core::geometry::{Point, Rect};
+use cut_craft_core::testing::square;
+use cut_craft_core::{Change, History};
 
 fn add(doc: &mut Document, x: f64) -> EntityId {
     let change = Change::add_and_select(doc, square(x, 0.0, 10.0));

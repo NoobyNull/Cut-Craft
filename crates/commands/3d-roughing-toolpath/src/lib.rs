@@ -1,10 +1,10 @@
 //! 3D Roughing Toolpath: an end mill clears the material above the model level by level,
 //! leaving an allowance for the finishing toolpath.
 
-use aspire_core::component::placed_model;
-use aspire_core::document::Document;
-use aspire_core::toolpath::{Tool, follow, made_by, pass_depths, zigzag};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::component::placed_model;
+use cut_craft_core::document::Document;
+use cut_craft_core::toolpath::{Tool, follow, made_by, pass_depths, zigzag};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -89,13 +89,13 @@ impl Command for RoughingToolpath3d {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::component::model;
-    use aspire_core::geometry::Point;
-    use aspire_core::simulation::Material;
-    use aspire_core::testing::domed;
-    use aspire_core::toolpath::Toolpath;
+    use cut_craft_core::component::model;
+    use cut_craft_core::geometry::Point;
+    use cut_craft_core::simulation::Material;
+    use cut_craft_core::testing::domed;
+    use cut_craft_core::toolpath::Toolpath;
 
-    aspire_core::contract_tests!(RoughingToolpath3d, domed);
+    cut_craft_core::contract_tests!(RoughingToolpath3d, domed);
 
     fn rough(params: &Params) -> Toolpath {
         let mut doc = domed();

@@ -1,7 +1,7 @@
 //! Center.
 
-use aspire_core::document::Document;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct Center;
 
@@ -34,16 +34,16 @@ impl Command for Center {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(Center);
+    cut_craft_core::contract_tests!(Center);
 
-    use aspire_core::testing::after;
+    use cut_craft_core::testing::after;
 
     #[test]
     fn every_centre_meets_the_selection_s() {
         let doc = after::<Center>(&NoParams {});
         assert!(doc.vectors.values().all(|p| {
             let b = p.bounds();
-            (b.center() - aspire_core::geometry::Point::new(117.5, 67.5)).length() < 1e-9
+            (b.center() - cut_craft_core::geometry::Point::new(117.5, 67.5)).length() < 1e-9
         }));
     }
 }

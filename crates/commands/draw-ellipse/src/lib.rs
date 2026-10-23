@@ -1,10 +1,10 @@
 //! Draw Ellipse.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Path;
-use aspire_core::glam::{DAffine2, DVec2};
-use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Path;
+use cut_craft_core::glam::{DAffine2, DVec2};
+use cut_craft_core::params::Xy;
+use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -68,10 +68,10 @@ impl Interactive for DrawEllipse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::{Point, Rect};
-    use aspire_core::testing::{drawn_path, rejection};
+    use cut_craft_core::geometry::{Point, Rect};
+    use cut_craft_core::testing::{drawn_path, rejection};
 
-    aspire_core::contract_tests!(DrawEllipse);
+    cut_craft_core::contract_tests!(DrawEllipse);
 
     #[test]
     fn spans_exactly_its_width_and_height() {
@@ -93,7 +93,7 @@ mod tests {
         assert!(
             path.segments
                 .iter()
-                .all(|s| matches!(s, aspire_core::geometry::Segment::Arc { .. }))
+                .all(|s| matches!(s, cut_craft_core::geometry::Segment::Arc { .. }))
         );
     }
 
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn a_drag_box_sets_the_centre_and_size() {
-        let drag = aspire_core::Drag {
+        let drag = cut_craft_core::Drag {
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 4.0),
             from_center: false,

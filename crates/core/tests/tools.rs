@@ -1,4 +1,4 @@
-use aspire_core::toolpath::{Tool, ToolDatabase, ToolShape};
+use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape};
 
 fn tool(name: &str, diameter: f64) -> Tool {
     Tool {

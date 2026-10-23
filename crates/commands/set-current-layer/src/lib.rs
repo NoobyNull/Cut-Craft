@@ -1,7 +1,7 @@
 //! Set Current Layer: where new vectors go.
 
-use aspire_core::document::{Document, LayerId};
-use aspire_core::{Change, Command, CommandError, Meta, existing_layer};
+use cut_craft_core::document::{Document, LayerId};
+use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -43,9 +43,9 @@ impl Command for SetCurrentLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{after_err, run_on, two_layers};
+    use cut_craft_core::testing::{after_err, run_on, two_layers};
 
-    aspire_core::contract_tests!(SetCurrentLayer);
+    cut_craft_core::contract_tests!(SetCurrentLayer);
 
     #[test]
     fn makes_the_layer_current() {

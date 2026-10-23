@@ -1,10 +1,10 @@
 //! Create Shape: a 3D component raised over the selected closed vectors, rising from their
 //! edges as a round dome, an angled slope or a flat top.
 
-use aspire_core::component::{Combine, Component};
-use aspire_core::document::Document;
-use aspire_core::geometry::{Point, Rect, inside, polyline_distance};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_named};
+use cut_craft_core::component::{Combine, Component};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Point, Rect, inside, polyline_distance};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -83,7 +83,7 @@ impl Command for CreateShape {
         let (_, paths) = doc.selected_paths(|path| path.closed);
         let Some(bounds) = paths
             .iter()
-            .map(aspire_core::geometry::Path::bounds)
+            .map(cut_craft_core::geometry::Path::bounds)
             .reduce(Rect::union)
         else {
             return Err(CommandError::Failed(
@@ -133,10 +133,10 @@ impl Command for CreateShape {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::{Path, Point};
-    use aspire_core::testing::{document_with, square};
+    use cut_craft_core::geometry::{Path, Point};
+    use cut_craft_core::testing::{document_with, square};
 
-    aspire_core::contract_tests!(CreateShape);
+    cut_craft_core::contract_tests!(CreateShape);
 
     /// The component made over `paths` with `params`, or the error.
     fn shape(paths: Vec<Path>, params: &Params) -> Result<Component, String> {

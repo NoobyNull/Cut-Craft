@@ -1,11 +1,11 @@
 //! Job files, imports and exports: the app's only file I/O. Every operation takes a path, so
 //! tests run them without dialogs.
 
-use aspire_core::document::Document;
-use aspire_core::file::{load_job, save_job};
-use aspire_core::toolpath::ToolDatabase;
-use aspire_core::{Change, History, Registry};
-use aspire_post::Post;
+use cut_craft_core::document::Document;
+use cut_craft_core::file::{load_job, save_job};
+use cut_craft_core::toolpath::ToolDatabase;
+use cut_craft_core::{Change, History, Registry};
+use cut_craft_post::Post;
 use std::path::{Path, PathBuf};
 
 /// The job file being edited and whether it has unsaved changes.
@@ -83,14 +83,14 @@ pub fn save_through(post: &Post, doc: &Document, path: &Path) -> Result<(), Stri
     std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// Where the tool database lives: `$XDG_CONFIG_HOME/aspire-clone/tools.json`, else under
+/// Where the tool database lives: `$XDG_CONFIG_HOME/cut-craft/tools.json`, else under
 /// `~/.config`.
 // ponytail: XDG only; add the Windows/macOS config folders when those builds exist
 pub fn tool_database_path() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .map(|dir| dir.join("aspire-clone").join("tools.json"))
+        .map(|dir| dir.join("cut-craft").join("tools.json"))
 }
 
 /// The tool database at `path`; the starter tools when there is none yet.
@@ -116,12 +116,12 @@ fn read(path: &Path) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::sample_document;
-    use aspire_core::toolpath::ToolDatabase;
+    use cut_craft_core::testing::sample_document;
+    use cut_craft_core::toolpath::ToolDatabase;
     use std::fs;
 
     fn temp(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("aspire-files-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cut-craft-files-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         dir.join(name)
     }
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn saving_then_opening_restores_the_job_with_a_clean_history() {
-        let path = temp("round-trip.ajob");
+        let path = temp("round-trip.ccjob");
         let doc = sample_document();
         let mut session = Session::default();
         session.save(&doc, &History::default(), &path).unwrap();
@@ -143,40 +143,40 @@ mod tests {
 
     #[test]
     fn changes_make_the_session_dirty_until_saved() {
-        let path = temp("dirty.ajob");
+        let path = temp("dirty.ccjob");
         let mut doc = Document::default();
         let mut history = History::default();
         let mut session = Session::default();
         assert!(!session.is_dirty(&history));
         let change = Change::add_and_select(
             &doc,
-            aspire_core::geometry::Path::circle(aspire_core::geometry::Point::ZERO, 1.0),
+            cut_craft_core::geometry::Path::circle(cut_craft_core::geometry::Point::ZERO, 1.0),
         );
         history.apply(&mut doc, change).unwrap();
         assert!(session.is_dirty(&history));
         assert_eq!(
-            session.title("Aspire Clone", &history),
-            "Untitled* - Aspire Clone"
+            session.title("Cut Craft", &history),
+            "Untitled* - Cut Craft"
         );
         session.save(&doc, &history, &path).unwrap();
         assert!(!session.is_dirty(&history));
         assert_eq!(
-            session.title("Aspire Clone", &history),
-            "dirty.ajob - Aspire Clone"
+            session.title("Cut Craft", &history),
+            "dirty.ccjob - Cut Craft"
         );
     }
 
     #[test]
     fn opening_something_that_is_not_a_job_explains_why() {
-        let path = temp("not-a-job.ajob");
+        let path = temp("not-a-job.ccjob");
         fs::write(&path, b"{}").unwrap();
         let err = Session::default().open(&path).unwrap_err();
-        assert!(err.contains("not an Aspire Clone job"), "{err}");
+        assert!(err.contains("not a Cut Craft job"), "{err}");
         assert!(
             Session::default()
-                .open(&temp("missing.ajob"))
+                .open(&temp("missing.ccjob"))
                 .unwrap_err()
-                .contains("missing.ajob")
+                .contains("missing.ccjob")
         );
     }
 
@@ -211,6 +211,12 @@ mod tests {
     }
 
     const POST: &str = "POST_NAME = \"Test post\"\nFILE_EXTENSION = \"tap\"\nVAR X_POSITION = [X|A|X|1.1]\nbegin RAPID_MOVE\n\"G0 [X]\"\nbegin FEED_MOVE\n\"G1 [X]\"\n";
+
+    #[test]
+    fn the_tool_database_lives_in_the_cut_craft_config_folder() {
+        let path = tool_database_path().expect("HOME is set");
+        assert!(path.ends_with("cut-craft/tools.json"), "{}", path.display());
+    }
 
     #[test]
     fn a_missing_tool_database_starts_with_the_starter_tools() {

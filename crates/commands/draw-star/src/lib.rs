@@ -1,9 +1,9 @@
 //! Draw Star: alternating outer and inner vertices, first point straight up (before rotation).
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, polar};
-use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, polar};
+use cut_craft_core::params::Xy;
+use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -95,10 +95,10 @@ impl Interactive for DrawStar {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::Point;
-    use aspire_core::testing::{drawn_path, rejection, vertices};
+    use cut_craft_core::geometry::Point;
+    use cut_craft_core::testing::{drawn_path, rejection, vertices};
 
-    aspire_core::contract_tests!(DrawStar);
+    cut_craft_core::contract_tests!(DrawStar);
 
     #[test]
     fn vertices_alternate_between_the_two_radii() {
@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn a_drag_sets_the_outer_radius_and_keeps_the_point_depth() {
-        let drag = aspire_core::Drag {
+        let drag = cut_craft_core::Drag {
             start: Point::new(0.0, 0.0),
             end: Point::new(0.0, 60.0),
             from_center: false,

@@ -1,10 +1,10 @@
 //! Profile Toolpath: cuts along the selected vectors, outside, inside or on the line.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::polygon::{self, Corners};
-use aspire_core::toolpath::{Tool, contour_moves, cut_points, made_by, pass_depths};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::toolpath::{Tool, contour_moves, cut_points, made_by, pass_depths};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -98,11 +98,11 @@ impl Command for ProfileToolpath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::Rect;
-    use aspire_core::testing::{cut_bounds, made_toolpath, square};
-    use aspire_core::toolpath::{MoveKind, Toolpath};
+    use cut_craft_core::geometry::Rect;
+    use cut_craft_core::testing::{cut_bounds, made_toolpath, square};
+    use cut_craft_core::toolpath::{MoveKind, Toolpath};
 
-    aspire_core::contract_tests!(ProfileToolpath);
+    cut_craft_core::contract_tests!(ProfileToolpath);
 
     fn profile(side: Side, square_side: f64) -> Result<Toolpath, String> {
         made_toolpath::<ProfileToolpath>(

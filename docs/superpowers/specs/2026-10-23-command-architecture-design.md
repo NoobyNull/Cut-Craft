@@ -15,13 +15,13 @@ generated forms, local pre-commit hook).
 ## Layout
 ```
 Cargo.toml                 virtual workspace: members, shared deps, shared lints
-crates/core                aspire-core: geometry, Document, Edit/Change, History,
+crates/core                cut-craft-core: geometry, Document, Edit/Change, History,
                            Command trait, Registry, contract tests (feature "testing")
 crates/commands/<name>     cmd-<name>: one command — Params, run(), tests
-crates/app                 aspire-clone binary: egui UI, icons, forms, tools, history
+crates/app                 cut-craft binary: egui UI, icons, forms, tools, history
 .githooks/pre-commit       fmt --check, clippy -D warnings, nextest
 ```
-Command crates depend on `aspire-core` only (plus other command crates they cascade
+Command crates depend on `cut-craft-core` only (plus other command crates they cascade
 from) — never on egui. The app registers every command explicitly in
 `crates/app/src/commands.rs`; a test fails if a `crates/commands/*` crate is missing.
 
@@ -46,7 +46,7 @@ pub trait Command: 'static {
   (number/integer/bool/string/enum, `title`, `description`, `minimum`/`maximum`,
   `x-unit`). A command with no params runs immediately on click.
 
-## Contract tests (`aspire_core::contract_tests!(Type)`)
+## Contract tests (`cut_craft_core::contract_tests!(Type)`)
 default params serialize ↔ deserialize · schema is an object · `run` on the sample
 document succeeds · apply then inverse restores the document exactly · id is a slug and
 meta has a label.
@@ -80,7 +80,7 @@ Done:
 12. ✅ DXF import/export (lines, arcs, bulged polylines, ellipses, splines).
 13. ✅ Layers: current layer, hidden/locked layers (not drawn / not pickable), layer
     commands (add, delete, move to, select on, properties, set current), Layers tab.
-14. ✅ Tool database: shared tools in `~/.config/aspire-clone/tools.json`; toolpath forms
+14. ✅ Tool database: shared tools in `~/.config/cut-craft/tools.json`; toolpath forms
     pick from it and save back; Tool Database window edits and deletes. Toolpaths keep a copy.
 15. ✅ Toolpath preview: material height grid cut by the toolpaths (Preview All = Preview
     Selected for each); orbitable 3D view of the block, drawn as a lit mesh.

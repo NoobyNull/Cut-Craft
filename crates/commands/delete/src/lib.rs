@@ -1,7 +1,7 @@
 //! Delete.
 
-use aspire_core::document::Document;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct Delete;
 
@@ -34,12 +34,12 @@ impl Command for Delete {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(Delete);
+    cut_craft_core::contract_tests!(Delete);
 
     #[test]
     fn removes_the_selected_vectors() {
         assert!(
-            aspire_core::testing::after::<Delete>(&NoParams {})
+            cut_craft_core::testing::after::<Delete>(&NoParams {})
                 .vectors
                 .is_empty()
         );

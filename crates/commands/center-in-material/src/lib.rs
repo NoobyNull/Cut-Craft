@@ -1,7 +1,7 @@
 //! Center In Material.
 
-use aspire_core::document::Document;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct CenterInMaterial;
 
@@ -44,9 +44,9 @@ impl Command for CenterInMaterial {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(CenterInMaterial);
+    cut_craft_core::contract_tests!(CenterInMaterial);
 
-    use aspire_core::testing::after;
+    use cut_craft_core::testing::after;
 
     #[test]
     fn selection_centre_is_the_job_centre() {
@@ -55,7 +55,7 @@ mod tests {
             .unwrap()
             .center();
         assert!(
-            (c - aspire_core::geometry::Point::new(300.0, 200.0)).length() < 1e-9,
+            (c - cut_craft_core::geometry::Point::new(300.0, 200.0)).length() < 1e-9,
             "{c:?}"
         );
     }

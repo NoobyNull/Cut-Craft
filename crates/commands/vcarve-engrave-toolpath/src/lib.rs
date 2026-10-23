@@ -1,13 +1,13 @@
 //! V-Carve / Engrave Toolpath: a V-bit carves the selected shapes, going deeper the further
 //! it is from their edges so its sides cut the edges exactly.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Path;
-use aspire_core::polygon::{self, Corners};
-use aspire_core::toolpath::{
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Path;
+use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::toolpath::{
     Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
 };
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -125,13 +125,13 @@ fn inward_offsets(regions: &[Path], step: f64) -> Vec<(f64, Vec<Path>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::document::Job;
-    use aspire_core::geometry::{Path, Point, inside};
-    use aspire_core::simulation::Material;
-    use aspire_core::testing::{made_toolpath, square};
-    use aspire_core::toolpath::{MoveKind, Toolpath};
+    use cut_craft_core::document::Job;
+    use cut_craft_core::geometry::{Path, Point, inside};
+    use cut_craft_core::simulation::Material;
+    use cut_craft_core::testing::{made_toolpath, square};
+    use cut_craft_core::toolpath::{MoveKind, Toolpath};
 
-    aspire_core::contract_tests!(VcarveEngraveToolpath);
+    cut_craft_core::contract_tests!(VcarveEngraveToolpath);
 
     fn rectangle(width: f64, height: f64) -> Path {
         Path::polyline(

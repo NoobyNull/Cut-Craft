@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-aspire-core = { path = "crates/core" }
+cut-craft-core = { path = "crates/core" }
 eframe = { version = "0.27", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11"] }
 dxf = "0.6"
 egui_extras = { version = "0.27", default-features = false, features = ["file", "svg"] }

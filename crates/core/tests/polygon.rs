@@ -1,7 +1,7 @@
-use aspire_core::Change;
-use aspire_core::document::{Document, EntityId};
-use aspire_core::geometry::{Path, Point, Segment};
-use aspire_core::polygon::{self, Corners};
+use cut_craft_core::Change;
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::{Path, Point, Segment};
+use cut_craft_core::polygon::{self, Corners};
 use std::f64::consts::PI;
 
 fn square(x: f64, y: f64, side: f64) -> Path {
@@ -170,7 +170,7 @@ fn swap_replaces_vectors_with_new_selected_ones() {
 
 #[test]
 fn regions_make_inner_paths_holes_and_shrinking_grows_the_holes() {
-    use aspire_core::geometry::inside;
+    use cut_craft_core::geometry::inside;
     let regions = polygon::regions(&[square(0.0, 0.0, 100.0), square(40.0, 40.0, 20.0)]);
     assert_eq!(regions.len(), 2, "outline and hole");
     let shrunk = polygon::offset_regions(&regions, -5.0, Corners::Sharp);

@@ -4,8 +4,11 @@ use crate::document::Document;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-pub const JOB_EXTENSION: &str = "ajob";
-const FORMAT: &str = "aspire-clone-job";
+pub const JOB_EXTENSION: &str = "ccjob";
+/// Jobs saved before the app was renamed Cut Craft; they still open.
+pub const OLD_JOB_EXTENSION: &str = "ajob";
+const FORMAT: &str = "cut-craft-job";
+const OLD_FORMAT: &str = "aspire-clone-job";
 /// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.
 const VERSION: u32 = 1;
 
@@ -37,7 +40,7 @@ pub enum LoadError {
 impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotAJob => f.write_str("this is not an Aspire Clone job file"),
+            Self::NotAJob => f.write_str("this is not a Cut Craft job file"),
             Self::NewerVersion(v) => {
                 write!(
                     f,
@@ -62,7 +65,7 @@ pub fn save_job(doc: &Document) -> Vec<u8> {
 
 pub fn load_job(bytes: &[u8]) -> Result<Document, LoadError> {
     let header: Header = serde_json::from_slice(bytes).map_err(|_| LoadError::NotAJob)?;
-    if header.format != FORMAT {
+    if header.format != FORMAT && header.format != OLD_FORMAT {
         return Err(LoadError::NotAJob);
     }
     if header.version > VERSION {

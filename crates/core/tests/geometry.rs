@@ -1,4 +1,4 @@
-use aspire_core::geometry::{Path, Point, Rect, Segment};
+use cut_craft_core::geometry::{Path, Point, Rect, Segment};
 use glam::DAffine2;
 use std::f64::consts::FRAC_PI_2;
 
@@ -170,7 +170,7 @@ fn flattened_cubics_stay_within_tolerance_of_the_curve() {
 
 #[test]
 fn inside_counts_holes_out() {
-    use aspire_core::geometry::inside;
+    use cut_craft_core::geometry::inside;
     let ring = |x: f64, side: f64| {
         vec![
             Point::new(x, x),

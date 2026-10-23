@@ -5,14 +5,14 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-aspire-core.workspace = true
+cut-craft-core.workspace = true
 
 cmd-center-horizontally-in-material = { path = "../center-horizontally-in-material" }
 
 cmd-center-vertically-in-material = { path = "../center-vertically-in-material" }
 
 [dev-dependencies]
-aspire-core = { workspace = true, features = ["testing"] }
+cut-craft-core = { workspace = true, features = ["testing"] }
 
 [lints]
 workspace = true

@@ -7,12 +7,12 @@ use crate::gui;
 use crate::icons::Icons;
 use crate::view2d::{Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
-use aspire_core::document::{Document, EntityId, LayerId};
-use aspire_core::file::JOB_EXTENSION;
-use aspire_core::geometry::{Path, Point, Rect};
-use aspire_core::simulation::Material;
-use aspire_core::toolpath::{Tool, ToolDatabase};
-use aspire_core::{Change, Drag, History, Registry};
+use cut_craft_core::document::{Document, EntityId, LayerId};
+use cut_craft_core::file::{JOB_EXTENSION, OLD_JOB_EXTENSION};
+use cut_craft_core::geometry::{Path, Point, Rect};
+use cut_craft_core::simulation::Material;
+use cut_craft_core::toolpath::{Tool, ToolDatabase};
+use cut_craft_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -45,7 +45,7 @@ const PREVIEW_CELLS: usize = 1000;
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
-const APP_NAME: &str = "Aspire Clone";
+const APP_NAME: &str = "Cut Craft";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const TOOL_ICON_ROWS: f32 = 1.75;
@@ -66,7 +66,7 @@ struct OpenForm {
     error: Option<String>,
 }
 
-struct AspireApp {
+struct CutCraftApp {
     doc: Document,
     history: History,
     registry: Registry,
@@ -84,7 +84,7 @@ struct AspireApp {
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
     /// Installed post-processor; without one, toolpaths save as generic G-code.
-    post: Option<aspire_post::Post>,
+    post: Option<cut_craft_post::Post>,
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
@@ -100,7 +100,7 @@ struct AspireApp {
     title: String,
 }
 
-impl AspireApp {
+impl CutCraftApp {
     fn new() -> Self {
         Self {
             doc: Document::default(),
@@ -235,7 +235,7 @@ impl AspireApp {
                 }
                 if let Some(path) = dialog.pick_file() {
                     let change = files::import(&self.registry, &self.doc, &path)
-                        .map_err(aspire_core::CommandError::Failed);
+                        .map_err(cut_craft_core::CommandError::Failed);
                     self.record(change, &format!("Imported {}", path.display()));
                 }
             }
@@ -383,7 +383,7 @@ impl AspireApp {
     }
 
     /// Applies a computed change for undo, reporting how it went in the status bar.
-    fn record(&mut self, change: Result<Change, aspire_core::CommandError>, done: &str) {
+    fn record(&mut self, change: Result<Change, cut_craft_core::CommandError>, done: &str) {
         let result = change.map_err(|e| e.to_string()).and_then(|c| {
             self.history
                 .apply(&mut self.doc, c)
@@ -835,7 +835,7 @@ impl AspireApp {
             ));
         }
         (!self.doc.components.is_empty())
-            .then(|| Cow::Owned(aspire_core::component::model(&self.doc, MESH_CELLS)))
+            .then(|| Cow::Owned(cut_craft_core::component::model(&self.doc, MESH_CELLS)))
     }
 
     /// The preview or model as a block, turned by dragging sideways and tilted up/down.
@@ -908,7 +908,7 @@ impl AspireApp {
 }
 
 fn job_dialog() -> rfd::FileDialog {
-    rfd::FileDialog::new().add_filter("Aspire Clone job", &[JOB_EXTENSION])
+    rfd::FileDialog::new().add_filter("Cut Craft job", &[JOB_EXTENSION, OLD_JOB_EXTENSION])
 }
 
 /// Menu entries, recursing into submenus. Sets `clicked` to the chosen item's action.
@@ -941,13 +941,13 @@ fn menu_items(
     }
 }
 
-impl eframe::App for AspireApp {
+impl eframe::App for CutCraftApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.ui(ctx);
     }
 }
 
-impl AspireApp {
+impl CutCraftApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
         if ctx.input(|i| i.viewport().close_requested()) && !self.confirm_discard() {
@@ -1029,7 +1029,7 @@ impl AspireApp {
         self.registry
             .get(form.id)
             .filter(|c| c.interactive())
-            .map(aspire_core::DynCommand::id)
+            .map(cut_craft_core::DynCommand::id)
     }
 
     /// Paths `id` would create for `drag`, by running the command itself.
@@ -1100,7 +1100,7 @@ pub fn run(title: &str) {
                     info.driver
                 );
             }
-            let mut app = AspireApp::new();
+            let mut app = CutCraftApp::new();
             app.load_tools();
             Box::new(app)
         }),
@@ -1116,7 +1116,7 @@ mod tests {
     /// Drives the real UI headlessly, one frame per call, with synthetic pointer input.
     struct Harness {
         ctx: egui::Context,
-        app: AspireApp,
+        app: CutCraftApp,
         time: f64,
     }
 
@@ -1124,7 +1124,7 @@ mod tests {
         fn new() -> Self {
             let mut h = Self {
                 ctx: egui::Context::default(),
-                app: AspireApp::new(),
+                app: CutCraftApp::new(),
                 time: 0.0,
             };
             h.frame(vec![]);
@@ -1286,8 +1286,8 @@ mod tests {
         );
     }
 
-    fn cut_min_x(app: &AspireApp) -> f64 {
-        aspire_core::testing::cut_bounds(app.doc.toolpaths.values().next().unwrap())
+    fn cut_min_x(app: &CutCraftApp) -> f64 {
+        cut_craft_core::testing::cut_bounds(app.doc.toolpaths.values().next().unwrap())
             .min
             .x
     }
@@ -1369,7 +1369,7 @@ mod tests {
     fn toolpath_forms_take_tools_from_the_database_and_save_them_back() {
         let mut h = Harness::new();
         let path =
-            std::env::temp_dir().join(format!("aspire-tools-{}/tools.json", std::process::id()));
+            std::env::temp_dir().join(format!("cut-craft-tools-{}/tools.json", std::process::id()));
         h.app.tools_path = Some(path.clone());
         h.app.invoke(&h.ctx, "pocket_toolpath");
         h.app.choose_tool("3 mm End Mill");
@@ -1433,7 +1433,7 @@ mod tests {
         h.app.view = View::ThreeD;
         h.frame(vec![]);
         let raised =
-            |app: &mut AspireApp| app.surface_3d().unwrap().heights.iter().any(|&z| z > 0.0);
+            |app: &mut CutCraftApp| app.surface_3d().unwrap().heights.iter().any(|&z| z > 0.0);
         assert!(raised(&mut h.app), "the model");
         let profile = h
             .app
@@ -1445,6 +1445,12 @@ mod tests {
         h.app.invoke(&h.ctx, "preview_all_toolpaths");
         h.frame(vec![]);
         assert!(!raised(&mut h.app), "the preview, cut down from the top");
+    }
+
+    #[test]
+    fn the_window_is_titled_cut_craft() {
+        let h = Harness::new();
+        assert_eq!(h.app.title, "Untitled - Cut Craft");
     }
 
     #[test]

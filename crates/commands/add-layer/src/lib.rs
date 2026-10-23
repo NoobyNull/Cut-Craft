@@ -1,7 +1,7 @@
 //! Add Layer: a new layer on top, made current so new vectors go on it.
 
-use aspire_core::document::Document;
-use aspire_core::{Change, Command, CommandError, Meta, ensure_named};
+use cut_craft_core::document::Document;
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -51,9 +51,9 @@ impl Command for AddLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{after, rejection, sample_document};
+    use cut_craft_core::testing::{after, rejection, sample_document};
 
-    aspire_core::contract_tests!(AddLayer);
+    cut_craft_core::contract_tests!(AddLayer);
 
     #[test]
     fn adds_a_layer_on_top_and_makes_it_current() {

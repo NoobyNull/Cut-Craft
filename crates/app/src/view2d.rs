@@ -1,10 +1,10 @@
 //! The 2D view: job coordinates (mm, y up) ↔ screen points (pixels, y down), pointer
 //! gestures in job coordinates, and painting the document.
 
-use aspire_core::Drag;
-use aspire_core::document::{Document, EntityId, Job};
-use aspire_core::geometry::{Path, Point};
-use aspire_core::toolpath::MoveKind;
+use cut_craft_core::Drag;
+use cut_craft_core::document::{Document, EntityId, Job};
+use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::toolpath::MoveKind;
 use eframe::egui::{self, Pos2, Rect, Sense, Shape, Stroke, pos2};
 
 #[derive(Clone, Copy, Debug)]

@@ -1,7 +1,7 @@
 //! Job Setup: the material block's size, thickness and display units.
 
-use aspire_core::document::{Document, Job, Units};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::document::{Document, Job, Units};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -82,9 +82,9 @@ impl Command for JobSetup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{after, after_err, sample_document};
+    use cut_craft_core::testing::{after, after_err, sample_document};
 
-    aspire_core::contract_tests!(JobSetup);
+    cut_craft_core::contract_tests!(JobSetup);
 
     #[test]
     fn sets_the_material_block() {

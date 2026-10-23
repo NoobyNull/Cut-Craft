@@ -1,10 +1,10 @@
 //! Move.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::glam::DAffine2;
-use aspire_core::params::Anchor;
-use aspire_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::DAffine2;
+use cut_craft_core::params::Anchor;
+use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -64,9 +64,9 @@ impl Command for Move {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(Move);
+    cut_craft_core::contract_tests!(Move);
 
-    use aspire_core::testing::after;
+    use cut_craft_core::testing::after;
 
     #[test]
     fn relative_moves_by_the_offset() {

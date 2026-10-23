@@ -1,8 +1,8 @@
-# AMD Graphics Support in Aspire Clone
+# AMD Graphics Support in Cut Craft
 
 ## Overview
 
-Aspire Clone is designed to support AMD graphics hardware through the wgpu graphics library, which provides cross-platform rendering capabilities including Vulkan support that AMD GPUs excel at.
+Cut Craft is designed to support AMD graphics hardware through the wgpu graphics library, which provides cross-platform rendering capabilities including Vulkan support that AMD GPUs excel at.
 
 ## Implementation Details
 

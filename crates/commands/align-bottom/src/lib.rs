@@ -1,8 +1,8 @@
 //! Align Bottom.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct AlignBottom;
 
@@ -28,9 +28,9 @@ impl Command for AlignBottom {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(AlignBottom);
+    cut_craft_core::contract_tests!(AlignBottom);
 
-    use aspire_core::testing::after;
+    use cut_craft_core::testing::after;
 
     #[test]
     fn every_bottom_edge_meets_the_selection_s() {

@@ -1,9 +1,9 @@
 //! Mirror.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::glam::DAffine2;
-use aspire_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::DAffine2;
+use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -59,10 +59,10 @@ impl Command for Mirror {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(Mirror);
+    cut_craft_core::contract_tests!(Mirror);
 
-    use aspire_core::document::EntityId;
-    use aspire_core::testing::{after, sample_document};
+    use cut_craft_core::document::EntityId;
+    use cut_craft_core::testing::{after, sample_document};
 
     #[test]
     fn horizontal_flip_keeps_the_bounds_and_swaps_sides() {

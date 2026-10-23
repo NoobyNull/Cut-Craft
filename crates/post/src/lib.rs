@@ -2,8 +2,8 @@
 //! and `begin BLOCK` templates (see `re/SPEC.md`). `Post::parse` reads one; `Post::render`
 //! writes a document's toolpaths through it.
 
-use aspire_core::document::Document;
-use aspire_core::toolpath::MoveKind;
+use cut_craft_core::document::Document;
+use cut_craft_core::toolpath::MoveKind;
 use std::collections::HashMap;
 
 const MM_PER_INCH: f64 = 25.4;
@@ -363,7 +363,7 @@ struct Values {
 }
 
 impl Values {
-    fn tool(&mut self, tool: &aspire_core::toolpath::Tool, tools: &[&str]) {
+    fn tool(&mut self, tool: &cut_craft_core::toolpath::Tool, tools: &[&str]) {
         let number = tools
             .iter()
             .position(|t| *t == tool.name)
@@ -473,9 +473,9 @@ fn labels(line: &str) -> impl Iterator<Item = &str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::Change;
-    use aspire_core::glam::DVec3;
-    use aspire_core::toolpath::{Move, MoveKind, Tool, Toolpath};
+    use cut_craft_core::Change;
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
 
     /// A small post written for these tests, in the documented format.
     const BASIC: &str = r#"

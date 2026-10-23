@@ -1,8 +1,8 @@
 //! Import vectors from SVG: every subpath becomes a vector, in millimetres, y up.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point, Segment};
-use aspire_core::{Change, CommandError, FileFormat, Importer};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point, Segment};
+use cut_craft_core::{Change, CommandError, FileFormat, Importer};
 use usvg::tiny_skia_path::{self as skia, PathSegment};
 use usvg::{NodeKind, TreeParsing};
 
@@ -112,9 +112,9 @@ fn subpaths(data: &skia::Path, to_mm: impl Fn(skia::Point) -> Point) -> Vec<Path
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::Exporter;
-    use aspire_core::geometry::{Point, Rect};
-    use aspire_core::testing::sample_document;
+    use cut_craft_core::Exporter;
+    use cut_craft_core::geometry::{Point, Rect};
+    use cut_craft_core::testing::sample_document;
 
     fn import(svg: &str) -> Document {
         let mut doc = Document::default();
@@ -126,7 +126,7 @@ mod tests {
     fn all_bounds(doc: &Document) -> Rect {
         doc.vectors
             .values()
-            .map(aspire_core::geometry::Path::bounds)
+            .map(cut_craft_core::geometry::Path::bounds)
             .reduce(Rect::union)
             .unwrap()
     }

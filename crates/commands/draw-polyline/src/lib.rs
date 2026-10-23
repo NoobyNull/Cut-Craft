@@ -1,9 +1,9 @@
 //! Draw Line / Polyline: straight lines through a list of points.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point};
-use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::params::Xy;
+use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -60,9 +60,9 @@ impl Command for DrawPolyline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{drawn_path, rejection, vertices};
+    use cut_craft_core::testing::{drawn_path, rejection, vertices};
 
-    aspire_core::contract_tests!(DrawPolyline);
+    cut_craft_core::contract_tests!(DrawPolyline);
 
     fn points(xy: &[(f64, f64)]) -> Vec<Xy> {
         xy.iter().map(|&(x, y)| Xy::new(x, y)).collect()

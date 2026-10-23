@@ -1,6 +1,6 @@
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point};
-use aspire_core::{Change, CommandError, Exporter, FileFormat, Importer, Registry};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::{Change, CommandError, Exporter, FileFormat, Importer, Registry};
 use std::fmt::Write as _;
 
 /// Test format: one line per path, "x y" of its start point.
@@ -48,7 +48,7 @@ impl Importer for Starts {
 fn exporters_and_importers_round_trip_through_the_registry() {
     let mut registry = Registry::default();
     registry.add_exporter::<Starts>().add_importer::<Starts>();
-    let doc = aspire_core::testing::sample_document();
+    let doc = cut_craft_core::testing::sample_document();
     let bytes = (registry.exporter("export_starts").unwrap().export)(&doc).unwrap();
     let importer = registry
         .importer_for("ST")

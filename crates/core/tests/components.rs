@@ -1,9 +1,9 @@
-use aspire_core::component::{Combine, Component, model};
-use aspire_core::document::{Document, Job};
-use aspire_core::file::{load_job, save_job};
-use aspire_core::geometry::{Point, Rect};
-use aspire_core::testing::square;
-use aspire_core::{Change, History};
+use cut_craft_core::component::{Combine, Component, model};
+use cut_craft_core::document::{Document, Job};
+use cut_craft_core::file::{load_job, save_job};
+use cut_craft_core::geometry::{Point, Rect};
+use cut_craft_core::testing::square;
+use cut_craft_core::{Change, History};
 
 /// `height` everywhere over `area`, in 1 mm cells.
 fn flat(area: Rect, height: f64, combine: Combine) -> Component {
@@ -111,8 +111,8 @@ fn components_are_saved_and_old_jobs_have_none() {
 
 #[test]
 fn the_placed_model_has_its_top_at_the_surface_and_must_fit() {
-    use aspire_core::component::placed_model;
-    use aspire_core::toolpath::Tool;
+    use cut_craft_core::component::placed_model;
+    use cut_craft_core::toolpath::Tool;
     let mut doc = small_job();
     let tool = Tool::default(); // 6 mm: cells of 0.3 mm
     let why = placed_model(&doc, &tool).unwrap_err().to_string();

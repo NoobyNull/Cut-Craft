@@ -1,8 +1,8 @@
 //! Weld Vectors.
 
-use aspire_core::document::Document;
-use aspire_core::polygon;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::polygon;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct WeldVectors;
 
@@ -34,7 +34,7 @@ impl Command for WeldVectors {
 mod tests {
     use super::*;
 
-    use aspire_core::testing::{after, document_with, square};
+    use cut_craft_core::testing::{after, document_with, square};
 
     #[test]
     fn overlapping_shapes_become_one_outline() {
@@ -45,7 +45,7 @@ mod tests {
             .unwrap();
         assert_eq!(after.vectors.len(), 1);
         assert!(
-            (aspire_core::polygon::area(after.vectors.values().next().unwrap()) - 175.0).abs()
+            (cut_craft_core::polygon::area(after.vectors.values().next().unwrap()) - 175.0).abs()
                 < 1e-6
         );
     }
@@ -71,5 +71,5 @@ mod tests {
         );
     }
 
-    aspire_core::contract_tests!(WeldVectors);
+    cut_craft_core::contract_tests!(WeldVectors);
 }

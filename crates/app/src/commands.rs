@@ -1,7 +1,7 @@
 //! Every command the app offers. To add one: `scripts/new-command …`, add its crate to
 //! `crates/app/Cargo.toml`, and add one `.add::<…>()` line here.
 
-use aspire_core::Registry;
+use cut_craft_core::Registry;
 
 pub fn registry() -> Registry {
     let mut r = Registry::default();

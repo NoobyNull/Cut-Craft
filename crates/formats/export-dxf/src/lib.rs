@@ -1,9 +1,9 @@
 //! Export vectors as DXF (R2000, millimetres): line-and-arc paths as polylines with exact
 //! bulges, paths with curves as LINE / ARC / SPLINE entities.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point, Segment, arc_sweep};
-use aspire_core::{CommandError, Exporter, FileFormat};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point, Segment, arc_sweep};
+use cut_craft_core::{CommandError, Exporter, FileFormat};
 use dxf::entities::{Arc, Entity, EntityType, Line, LwPolyline, Spline};
 use dxf::enums::{AcadVersion, Units};
 use dxf::{Drawing, LwPolylineVertex};
@@ -128,9 +128,9 @@ fn segment_entities(path: &Path) -> Vec<EntityType> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::Importer;
-    use aspire_core::geometry::{Path, Point, Rect, Segment};
-    use aspire_core::testing::{document_with, sample_document};
+    use cut_craft_core::Importer;
+    use cut_craft_core::geometry::{Path, Point, Rect, Segment};
+    use cut_craft_core::testing::{document_with, sample_document};
     use dxf::entities::EntityType;
 
     fn drawing(doc: &Document) -> dxf::Drawing {

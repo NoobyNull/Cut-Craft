@@ -1,8 +1,8 @@
 //! Offset Vectors.
 
-use aspire_core::document::Document;
-use aspire_core::polygon::{self, Corners};
-use aspire_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::document::Document;
+use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +69,7 @@ impl Command for OffsetVectors {
 mod tests {
     use super::*;
 
-    use aspire_core::testing::{document_with, square};
+    use cut_craft_core::testing::{document_with, square};
 
     fn offset(p: &Params) -> Result<Document, String> {
         let mut doc = document_with(vec![square(0.0, 0.0, 10.0)]);
@@ -88,7 +88,7 @@ mod tests {
         .unwrap();
         assert_eq!(doc.vectors.len(), 2);
         let selected = &doc.vectors[doc.selection.iter().next().unwrap()];
-        assert!((aspire_core::polygon::area(selected) - 144.0).abs() < 1e-3);
+        assert!((cut_craft_core::polygon::area(selected) - 144.0).abs() < 1e-3);
     }
 
     #[test]
@@ -126,5 +126,5 @@ mod tests {
         );
     }
 
-    aspire_core::contract_tests!(OffsetVectors);
+    cut_craft_core::contract_tests!(OffsetVectors);
 }

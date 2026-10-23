@@ -1,10 +1,10 @@
 //! Pocket Toolpath: clears the inside of the selected closed vectors with rings that step
 //! in from the outline, working from the middle outwards at each depth.
 
-use aspire_core::document::Document;
-use aspire_core::polygon::{self, Corners};
-use aspire_core::toolpath::{Tool, contour_moves, cut_points, made_by, pass_depths};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::toolpath::{Tool, contour_moves, cut_points, made_by, pass_depths};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -102,11 +102,11 @@ impl Command for PocketToolpath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::{Point, polyline_distance};
-    use aspire_core::testing::{cut_bounds, made_toolpath, square};
-    use aspire_core::toolpath::{MoveKind, Toolpath};
+    use cut_craft_core::geometry::{Point, polyline_distance};
+    use cut_craft_core::testing::{cut_bounds, made_toolpath, square};
+    use cut_craft_core::toolpath::{MoveKind, Toolpath};
 
-    aspire_core::contract_tests!(PocketToolpath);
+    cut_craft_core::contract_tests!(PocketToolpath);
 
     fn pocket(size: f64, p: &Params) -> Result<Toolpath, String> {
         made_toolpath::<PocketToolpath>(vec![square(0.0, 0.0, size)], p)

@@ -1,9 +1,9 @@
 //! Saves toolpaths as generic metric G-code (RS-274): G21/G90, G0 rapids, G1 feeds with modal
 //! F, spindle on per toolpath and a program pause (M0) for each manual tool change.
 
-use aspire_core::document::Document;
-use aspire_core::toolpath::MoveKind;
-use aspire_core::{CommandError, Exporter, FileFormat};
+use cut_craft_core::document::Document;
+use cut_craft_core::toolpath::MoveKind;
+use cut_craft_core::{CommandError, Exporter, FileFormat};
 
 pub struct ExportGcode;
 
@@ -21,7 +21,7 @@ impl Exporter for ExportGcode {
             ));
         }
         let mut out = Gcode::default();
-        out.line("(Aspire Clone)");
+        out.line("(Cut Craft)");
         out.line("G21 G90 G17 (millimetres, absolute, XY plane)");
         let mut tool: Option<&str> = None;
         for toolpath in doc.toolpaths.values() {
@@ -91,9 +91,9 @@ fn comment(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::Change;
-    use aspire_core::glam::DVec3;
-    use aspire_core::toolpath::{Move, MoveKind, Tool, Toolpath};
+    use cut_craft_core::Change;
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
 
     fn mv(kind: MoveKind, x: f64, y: f64, z: f64) -> Move {
         Move {
@@ -134,6 +134,12 @@ mod tests {
             .lines()
             .map(String::from)
             .collect()
+    }
+
+    #[test]
+    fn says_what_made_it() {
+        let lines = gcode(vec![toolpath("Profile", "6 mm End Mill")]);
+        assert!(lines.contains(&"(Cut Craft)".to_owned()), "{lines:?}");
     }
 
     #[test]

@@ -46,9 +46,9 @@ impl Icons {
         icons
     }
 
-    /// `ASPIRE_ICON_DIR`, else `assets/icons` under the working directory.
+    /// `CUT_CRAFT_ICON_DIR`, else `assets/icons` under the working directory.
     pub fn default_dir() -> PathBuf {
-        std::env::var_os("ASPIRE_ICON_DIR")
+        std::env::var_os("CUT_CRAFT_ICON_DIR")
             .map_or_else(|| PathBuf::from("assets/icons"), PathBuf::from)
     }
 
@@ -71,7 +71,8 @@ mod tests {
     use std::fs;
 
     fn icon_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("aspire-icons-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("cut-craft-icons-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("drawing/create_vectors")).unwrap();
         fs::create_dir_all(dir.join("file")).unwrap();

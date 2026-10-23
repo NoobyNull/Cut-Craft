@@ -1,8 +1,8 @@
 //! Center Horizontally.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct CenterHorizontally;
 
@@ -30,9 +30,9 @@ impl Command for CenterHorizontally {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(CenterHorizontally);
+    cut_craft_core::contract_tests!(CenterHorizontally);
 
-    use aspire_core::testing::after;
+    use cut_craft_core::testing::after;
 
     #[test]
     fn every_centre_lines_up_vertically() {

@@ -1,7 +1,7 @@
 //! The 3D view: the simulated material as a lit block, turned and tilted by dragging.
 
-use aspire_core::glam::{DVec2, DVec3};
-use aspire_core::simulation::Material;
+use cut_craft_core::glam::{DVec2, DVec3};
+use cut_craft_core::simulation::Material;
 use eframe::egui::{Color32, Mesh, Pos2, Rect, Rgba};
 
 // ponytail: fixed lighting until the 3D view has light settings
@@ -196,7 +196,7 @@ pub fn mesh(material: &Material, orbit: Orbit, colour: Color32, area: Rect) -> M
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::document::Job;
+    use cut_craft_core::document::Job;
     use eframe::egui::pos2;
 
     /// 100 x 100 mm in 1 mm cells, with a 5 mm deep slot from x = 40 to 60 running along y.

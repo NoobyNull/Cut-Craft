@@ -1,5 +1,5 @@
-use aspire_core::Drag;
-use aspire_core::geometry::{Point, Rect};
+use cut_craft_core::Drag;
+use cut_craft_core::geometry::{Point, Rect};
 
 fn drag(sx: f64, sy: f64, ex: f64, ey: f64) -> Drag {
     Drag {

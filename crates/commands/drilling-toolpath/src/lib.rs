@@ -1,9 +1,9 @@
 //! Drilling Toolpath: pecks a hole at the centre of each selected closed vector.
 
-use aspire_core::document::Document;
-use aspire_core::glam::DVec3;
-use aspire_core::toolpath::{Move, MoveKind, Tool, made_by, pass_depths};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::glam::DVec3;
+use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by, pass_depths};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -86,10 +86,10 @@ impl Command for DrillingToolpath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::{Path, Point};
-    use aspire_core::testing::made_toolpath;
+    use cut_craft_core::geometry::{Path, Point};
+    use cut_craft_core::testing::made_toolpath;
 
-    aspire_core::contract_tests!(DrillingToolpath);
+    cut_craft_core::contract_tests!(DrillingToolpath);
 
     fn holes() -> Vec<Path> {
         vec![

@@ -1,9 +1,9 @@
-use aspire_core::document::{Document, EntityId};
-use aspire_core::geometry::Point;
-use aspire_core::glam::{DAffine2, DVec3};
-use aspire_core::testing::{document_with, square};
-use aspire_core::toolpath::{Move, MoveKind, Tool, made_by};
-use aspire_core::{Change, Command, CommandError, Meta, NoParams, Registry};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::{DAffine2, DVec3};
+use cut_craft_core::testing::{document_with, square};
+use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams, Registry};
 
 /// Test strategy: one plunge at the centre of each selected vector.
 struct Centres;

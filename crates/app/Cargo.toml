@@ -1,12 +1,12 @@
 [package]
-name = "aspire-clone"
+name = "cut-craft"
 description = "Desktop UI: panels, menus, forms and tools over the command registry"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-aspire-core.workspace = true
-aspire-post = { path = "../post" }
+cut-craft-core.workspace = true
+cut-craft-post = { path = "../post" }
 eframe.workspace = true
 egui_extras.workspace = true
 env_logger.workspace = true
@@ -67,7 +67,7 @@ cmd-set-size = { path = "../commands/set-size" }
 cmd-unselect-all = { path = "../commands/unselect-all" }
 
 [dev-dependencies]
-aspire-core = { workspace = true, features = ["testing"] }
+cut-craft-core = { workspace = true, features = ["testing"] }
 
 [lints]
 workspace = true

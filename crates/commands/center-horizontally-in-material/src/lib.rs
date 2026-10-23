@@ -1,8 +1,8 @@
 //! Center Horizontally In Material.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct CenterHorizontallyInMaterial;
 
@@ -31,9 +31,9 @@ impl Command for CenterHorizontallyInMaterial {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(CenterHorizontallyInMaterial);
+    cut_craft_core::contract_tests!(CenterHorizontallyInMaterial);
 
-    use aspire_core::testing::after;
+    use cut_craft_core::testing::after;
 
     #[test]
     fn selection_centre_is_on_the_job_s_vertical_centre_line() {
@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn keeps_the_selection_s_layout() {
-        let before = aspire_core::testing::sample_document();
+        let before = cut_craft_core::testing::sample_document();
         let doc = after::<CenterHorizontallyInMaterial>(&NoParams {});
         let size = |d: &Document| d.selection_bounds().unwrap().size();
         assert!((size(&doc) - size(&before)).length() < 1e-9);

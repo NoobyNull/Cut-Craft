@@ -1,8 +1,8 @@
 //! Draw Rectangle: square, rounded or notched corners.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point, Segment};
-use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point, Segment};
+use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -141,10 +141,10 @@ impl Interactive for DrawRectangle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::geometry::Rect;
-    use aspire_core::testing::{drawn_path, rejection};
+    use cut_craft_core::geometry::Rect;
+    use cut_craft_core::testing::{drawn_path, rejection};
 
-    aspire_core::contract_tests!(DrawRectangle);
+    cut_craft_core::contract_tests!(DrawRectangle);
 
     fn params(corners: Corners) -> Params {
         Params {
@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn a_drag_sets_the_corner_and_size_and_keeps_the_corner_style() {
-        let drag = aspire_core::Drag {
+        let drag = cut_craft_core::Drag {
             start: Point::new(10.0, 20.0),
             end: Point::new(4.0, 2.0),
             from_center: false,

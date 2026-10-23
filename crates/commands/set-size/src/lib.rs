@@ -1,11 +1,11 @@
 //! Set Size.
 
-use aspire_core::document::Document;
-use aspire_core::ensure_positive;
-use aspire_core::geometry::Point;
-use aspire_core::glam::DAffine2;
-use aspire_core::params::Anchor;
-use aspire_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::document::Document;
+use cut_craft_core::ensure_positive;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::DAffine2;
+use cut_craft_core::params::Anchor;
+use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -89,11 +89,11 @@ impl Command for SetSize {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(SetSize);
+    cut_craft_core::contract_tests!(SetSize);
 
-    use aspire_core::testing::{after, sample_document};
+    use cut_craft_core::testing::{after, sample_document};
 
-    fn bounds(p: &Params) -> aspire_core::geometry::Rect {
+    fn bounds(p: &Params) -> cut_craft_core::geometry::Rect {
         after::<SetSize>(p).selection_bounds().unwrap()
     }
 
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn rejects_a_zero_width() {
         assert_eq!(
-            aspire_core::testing::after_err::<SetSize>(&Params {
+            cut_craft_core::testing::after_err::<SetSize>(&Params {
                 width: 0.0,
                 ..Params::default()
             }),

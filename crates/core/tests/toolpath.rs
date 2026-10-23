@@ -1,9 +1,9 @@
-use aspire_core::document::{Document, EntityId};
-use aspire_core::file::{load_job, save_job};
-use aspire_core::geometry::Point;
-use aspire_core::glam::DVec3;
-use aspire_core::toolpath::{Move, MoveKind, Tool, Toolpath, contour_moves, pass_depths};
-use aspire_core::{Change, History};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::file::{load_job, save_job};
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::DVec3;
+use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath, contour_moves, pass_depths};
+use cut_craft_core::{Change, History};
 
 fn toolpath(name: &str) -> Toolpath {
     Toolpath {
@@ -31,7 +31,7 @@ fn toolpath(name: &str) -> Toolpath {
 
 #[test]
 fn toolpaths_are_added_undone_and_ids_never_clash_with_vectors() {
-    let mut doc = aspire_core::testing::sample_document();
+    let mut doc = cut_craft_core::testing::sample_document();
     let mut history = History::default();
     let mut c = Change::builder(&doc);
     let id = c.add_toolpath(toolpath("Profile 1"));
@@ -175,7 +175,7 @@ fn the_job_has_a_clearance_height_that_old_files_default() {
 
 #[test]
 fn selected_paths_filters_the_selection() {
-    let doc = aspire_core::testing::sample_document();
+    let doc = cut_craft_core::testing::sample_document();
     let (ids, paths) = doc.selected_paths(|p| p.closed);
     assert_eq!(ids.len(), 3);
     assert!(paths.iter().all(|p| p.closed));
@@ -183,8 +183,8 @@ fn selected_paths_filters_the_selection() {
 
 #[test]
 fn cut_points_drop_the_repeated_closing_point() {
-    let square = aspire_core::testing::square(0.0, 0.0, 10.0);
-    let pts = aspire_core::toolpath::cut_points(&square);
+    let square = cut_craft_core::testing::square(0.0, 0.0, 10.0);
+    let pts = cut_craft_core::toolpath::cut_points(&square);
     assert_eq!(pts.len(), 4);
     assert_ne!(pts.first(), pts.last());
 }

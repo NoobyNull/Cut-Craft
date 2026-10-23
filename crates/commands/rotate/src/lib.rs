@@ -1,9 +1,9 @@
 //! Rotate.
 
-use aspire_core::document::Document;
-use aspire_core::glam::DAffine2;
-use aspire_core::params::Anchor;
-use aspire_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::document::Document;
+use cut_craft_core::glam::DAffine2;
+use cut_craft_core::params::Anchor;
+use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -56,10 +56,10 @@ impl Command for Rotate {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(Rotate);
+    cut_craft_core::contract_tests!(Rotate);
 
-    use aspire_core::geometry::Point;
-    use aspire_core::testing::{after, sample_document};
+    use cut_craft_core::geometry::Point;
+    use cut_craft_core::testing::{after, sample_document};
 
     #[test]
     fn quarter_turn_about_the_centre_swaps_width_and_height() {

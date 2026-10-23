@@ -1,10 +1,10 @@
 //! 3D Finishing Toolpath: a ball nose rasters over the model, as low as it can go at each
 //! point without cutting into it. The model's top sits at the material surface.
 
-use aspire_core::component::placed_model;
-use aspire_core::document::Document;
-use aspire_core::toolpath::{Tool, ToolDatabase, ToolShape, follow, made_by, zigzag};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::component::placed_model;
+use cut_craft_core::document::Document;
+use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, follow, made_by, zigzag};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -79,13 +79,13 @@ impl Command for FinishingToolpath3d {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::component::model;
-    use aspire_core::geometry::Point;
-    use aspire_core::simulation::Material;
-    use aspire_core::testing::domed;
-    use aspire_core::toolpath::Toolpath;
+    use cut_craft_core::component::model;
+    use cut_craft_core::geometry::Point;
+    use cut_craft_core::simulation::Material;
+    use cut_craft_core::testing::domed;
+    use cut_craft_core::toolpath::Toolpath;
 
-    aspire_core::contract_tests!(FinishingToolpath3d, domed);
+    cut_craft_core::contract_tests!(FinishingToolpath3d, domed);
 
     fn finish(doc: &Document, params: &Params) -> Toolpath {
         let mut doc = doc.clone();
@@ -135,13 +135,13 @@ mod tests {
 
     #[test]
     fn vertical_walls_are_not_gouged() {
-        use aspire_core::component::{Combine, Component};
-        use aspire_core::geometry::Rect;
+        use cut_craft_core::component::{Combine, Component};
+        use cut_craft_core::geometry::Rect;
         let mut doc = domed();
         doc.components.clear();
         let area = Rect::new(Point::new(15.0, 15.0), Point::new(25.0, 25.0));
         let block = Component::from_fn("block", Combine::Add, area, 0.2, |_| Some(6.0));
-        let mut c = aspire_core::Change::builder(&doc);
+        let mut c = cut_craft_core::Change::builder(&doc);
         c.add_component(block);
         let change = c.finish();
         doc.apply(&change).unwrap();

@@ -1,7 +1,7 @@
 //! Layer Properties: rename, hide or lock a layer.
 
-use aspire_core::document::{Document, Layer, LayerId};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_named, existing_layer};
+use cut_craft_core::document::{Document, Layer, LayerId};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -79,9 +79,9 @@ impl Command for LayerProperties {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::testing::{after, rejection, two_layers};
+    use cut_craft_core::testing::{after, rejection, two_layers};
 
-    aspire_core::contract_tests!(LayerProperties);
+    cut_craft_core::contract_tests!(LayerProperties);
 
     fn hidden_and_locked() -> Params {
         Params {

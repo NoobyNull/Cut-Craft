@@ -5,10 +5,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-aspire-core.workspace = true
+cut-craft-core.workspace = true
 
 [dev-dependencies]
-aspire-core = { workspace = true, features = ["testing"] }
+cut-craft-core = { workspace = true, features = ["testing"] }
 
 [lints]
 workspace = true

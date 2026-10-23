@@ -1,6 +1,6 @@
-use aspire_core::document::{Document, EntityId};
-use aspire_core::geometry::{Path, Point, Rect};
-use aspire_core::{Change, History};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::{Path, Point, Rect};
+use cut_craft_core::{Change, History};
 
 fn p(x: f64, y: f64) -> Point {
     Point::new(x, y)

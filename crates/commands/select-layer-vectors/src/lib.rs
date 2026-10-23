@@ -1,7 +1,7 @@
 //! Select Vectors on Layer.
 
-use aspire_core::document::{Document, LayerId};
-use aspire_core::{Change, Command, CommandError, Meta, existing_layer};
+use cut_craft_core::document::{Document, LayerId};
+use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -49,10 +49,10 @@ impl Command for SelectLayerVectors {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::document::EntityId;
-    use aspire_core::testing::{after_err, edit_layer, run_on, two_layers};
+    use cut_craft_core::document::EntityId;
+    use cut_craft_core::testing::{after_err, edit_layer, run_on, two_layers};
 
-    aspire_core::contract_tests!(SelectLayerVectors);
+    cut_craft_core::contract_tests!(SelectLayerVectors);
 
     #[test]
     fn selects_only_the_vectors_on_the_layer() {

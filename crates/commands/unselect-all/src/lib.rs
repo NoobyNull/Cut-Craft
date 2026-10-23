@@ -1,7 +1,7 @@
 //! Unselect All.
 
-use aspire_core::document::Document;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct UnselectAll;
 
@@ -29,12 +29,12 @@ impl Command for UnselectAll {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(UnselectAll);
+    cut_craft_core::contract_tests!(UnselectAll);
 
     #[test]
     fn clears_the_selection() {
         assert!(
-            aspire_core::testing::after::<UnselectAll>(&NoParams {})
+            cut_craft_core::testing::after::<UnselectAll>(&NoParams {})
                 .selection
                 .is_empty()
         );

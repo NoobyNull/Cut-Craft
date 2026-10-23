@@ -1,8 +1,8 @@
 //! Join Vectors.
 
-use aspire_core::document::{Document, EntityId};
-use aspire_core::geometry::{Path, Point, Segment};
-use aspire_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::{Path, Point, Segment};
+use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -109,7 +109,7 @@ fn try_join(a: &Path, b: &Path, tol: f64) -> Option<Path> {
 mod tests {
     use super::*;
 
-    use aspire_core::testing::document_with;
+    use cut_craft_core::testing::document_with;
 
     fn line(a: (f64, f64), b: (f64, f64)) -> Path {
         Path::polyline(&[Point::new(a.0, a.1), Point::new(b.0, b.1)], false)
@@ -172,5 +172,5 @@ mod tests {
         assert_eq!(err, "no open vector ends are within the tolerance");
     }
 
-    aspire_core::contract_tests!(JoinVectors, touching_lines);
+    cut_craft_core::contract_tests!(JoinVectors, touching_lines);
 }

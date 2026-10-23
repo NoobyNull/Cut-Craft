@@ -1,6 +1,6 @@
-use aspire_core::document::Document;
-use aspire_core::geometry::{Path, Point};
-use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, Registry};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, Registry};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +51,7 @@ impl Command for AddSquare {
     }
 }
 
-aspire_core::contract_tests!(AddSquare);
+cut_craft_core::contract_tests!(AddSquare);
 
 #[test]
 fn registry_runs_a_command_from_json_params() {
@@ -109,9 +109,9 @@ fn registering_the_same_id_twice_is_a_bug() {
 
 #[test]
 fn ensure_positive_names_the_parameter() {
-    assert_eq!(aspire_core::ensure_positive("width", 3.0), Ok(()));
+    assert_eq!(cut_craft_core::ensure_positive("width", 3.0), Ok(()));
     assert_eq!(
-        aspire_core::ensure_positive("width", 0.0)
+        cut_craft_core::ensure_positive("width", 0.0)
             .unwrap_err()
             .to_string(),
         "invalid parameters: width must be greater than 0"
@@ -194,7 +194,7 @@ impl Command for CountVectors {
 fn forms_can_start_from_the_document() {
     let mut registry = Registry::default();
     registry.add::<CountVectors>().add::<AddSquare>();
-    let doc = aspire_core::testing::sample_document();
+    let doc = cut_craft_core::testing::sample_document();
     assert_eq!(
         registry.get("count_vectors").unwrap().initial_params(&doc),
         serde_json::json!({ "count": 4 })

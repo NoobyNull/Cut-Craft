@@ -1,8 +1,8 @@
 //! Align Top.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct AlignTop;
 
@@ -28,9 +28,9 @@ impl Command for AlignTop {
 mod tests {
     use super::*;
 
-    aspire_core::contract_tests!(AlignTop);
+    cut_craft_core::contract_tests!(AlignTop);
 
-    use aspire_core::testing::after;
+    use cut_craft_core::testing::after;
 
     #[test]
     fn every_top_edge_meets_the_selection_s() {

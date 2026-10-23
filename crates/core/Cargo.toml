@@ -1,5 +1,5 @@
 [package]
-name = "aspire-core"
+name = "cut-craft-core"
 description = "Document model, invertible changes, and the Command contract every command implements"
 version.workspace = true
 edition.workspace = true
@@ -16,7 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-aspire-core = { path = ".", features = ["testing"] }
+cut-craft-core = { path = ".", features = ["testing"] }
 
 [lints]
 workspace = true
