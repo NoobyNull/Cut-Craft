@@ -167,3 +167,20 @@ fn flattened_cubics_stay_within_tolerance_of_the_curve() {
         );
     }
 }
+
+#[test]
+fn inside_counts_holes_out() {
+    use aspire_core::geometry::inside;
+    let ring = |x: f64, side: f64| {
+        vec![
+            Point::new(x, x),
+            Point::new(x + side, x),
+            Point::new(x + side, x + side),
+            Point::new(x, x + side),
+        ]
+    };
+    let rings = [ring(0.0, 100.0), ring(40.0, 20.0)];
+    assert!(inside(&rings, Point::new(10.0, 50.0)));
+    assert!(!inside(&rings, Point::new(50.0, 50.0)), "in the hole");
+    assert!(!inside(&rings, Point::new(150.0, 50.0)));
+}

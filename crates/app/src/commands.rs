@@ -44,6 +44,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_select_layer_vectors::SelectLayerVectors>();
     r.add::<cmd_layer_properties::LayerProperties>();
     r.add::<cmd_set_current_layer::SetCurrentLayer>();
+    r.add::<cmd_create_shape::CreateShape>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_gcode::ExportGcode>();

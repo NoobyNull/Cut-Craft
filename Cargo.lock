@@ -160,6 +160,7 @@ dependencies = [
  "cmd-center-in-material",
  "cmd-center-vertically",
  "cmd-center-vertically-in-material",
+ "cmd-create-shape",
  "cmd-delete",
  "cmd-delete-layer",
  "cmd-draw-arc",
@@ -529,6 +530,15 @@ name = "cmd-center-vertically-in-material"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
+]
+
+[[package]]
+name = "cmd-create-shape"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

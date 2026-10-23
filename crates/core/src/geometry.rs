@@ -282,6 +282,20 @@ pub fn polar(center: Point, radius: f64, degrees: f64) -> Point {
 }
 
 /// Shortest distance from `at` to the polyline through `points`.
+/// Whether `p` is inside the closed `rings`; a ring inside another is a hole (even-odd).
+pub fn inside(rings: &[Vec<Point>], p: Point) -> bool {
+    let mut inside = false;
+    for ring in rings {
+        for (i, &a) in ring.iter().enumerate() {
+            let b = ring[(i + 1) % ring.len()];
+            if (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y) {
+                inside = !inside;
+            }
+        }
+    }
+    inside
+}
+
 pub fn polyline_distance(points: &[Point], at: Point) -> f64 {
     if let [only] = points {
         return only.distance(at);
