@@ -1,8 +1,10 @@
 //! 3D components: height-map shapes that combine, in the order they were made, into the model.
 
+use crate::CommandError;
 use crate::document::Document;
 use crate::geometry::{Point, Rect};
 use crate::simulation::Material;
+use crate::toolpath::Tool;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -113,4 +115,47 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
         }
     }
     surface
+}
+
+/// Most model cells along the job for a 3D toolpath, however small the tool.
+// ponytail: caps the work on big jobs; a job model resolution setting can replace it
+const MAX_CELLS: usize = 2000;
+
+/// The model as a 3D toolpath machines it: cells a twentieth of `tool` across, its top at
+/// z = 0 (the material surface). It must exist and fit in the material.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a small positive cell count"
+)]
+pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandError> {
+    if doc.components.is_empty() {
+        return Err(CommandError::Failed(
+            "there is no 3D model to machine: create a shape first".into(),
+        ));
+    }
+    let longest = doc.job.width.max(doc.job.height);
+    let cells = ((longest / (tool.diameter / 20.0)).ceil() as usize).clamp(1, MAX_CELLS);
+    let mut surface = model(doc, cells);
+    let top = surface
+        .heights
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    let lowest = surface
+        .heights
+        .iter()
+        .copied()
+        .fold(f64::INFINITY, f64::min);
+    if top - lowest > doc.job.thickness {
+        return Err(CommandError::Failed(format!(
+            "the model is {:.1} mm tall but the material is only {:.1} mm thick",
+            top - lowest,
+            doc.job.thickness
+        )));
+    }
+    for height in &mut surface.heights {
+        *height -= top;
+    }
+    Ok(surface)
 }

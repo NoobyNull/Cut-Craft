@@ -162,3 +162,27 @@ fn a_dropped_tool_rests_on_the_highest_thing_under_it() {
     // out of reach, the tool sits on the flat surface
     assert_eq!(m.drop_tool(&ball, peak + Point::new(4.0, 0.0)), 0.0);
 }
+
+#[test]
+fn zigzag_lines_alternate_merge_level_runs_and_split_dips() {
+    use aspire_core::toolpath::zigzag;
+    let grid = material(); // 100 x 100 in half-millimetre cells
+    let flat = zigzag(&grid, 10.0, 0.01, |_| -1.0);
+    // 10 lines, each reduced to its two ends
+    assert_eq!(flat.len(), 20);
+    assert!(
+        flat[0].x < flat[1].x && flat[2].x > flat[3].x,
+        "there and back"
+    );
+    assert!((flat[2].y - flat[0].y - 10.0).abs() < 1e-12);
+    assert!(flat.iter().all(|p| (p.z + 1.0).abs() < 1e-12));
+    // a narrow ridge is followed exactly where the samples fall, with points added between
+    let ridge = |p: Point| -(p.x - 50.1).abs().min(1.0);
+    let followed = zigzag(&grid, 10.0, 0.01, ridge);
+    assert!(followed.len() > flat.len());
+    assert!(
+        followed
+            .iter()
+            .all(|p| (p.z - ridge(p.truncate())).abs() < 1e-12)
+    );
+}

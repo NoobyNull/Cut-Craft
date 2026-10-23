@@ -108,3 +108,27 @@ fn components_are_saved_and_old_jobs_have_none() {
     let old = load_job(&serde_json::to_vec(&json).unwrap()).unwrap();
     assert!(old.components.is_empty());
 }
+
+#[test]
+fn the_placed_model_has_its_top_at_the_surface_and_must_fit() {
+    use aspire_core::component::placed_model;
+    use aspire_core::toolpath::Tool;
+    let mut doc = small_job();
+    let tool = Tool::default(); // 6 mm: cells of 0.3 mm
+    let why = placed_model(&doc, &tool).unwrap_err().to_string();
+    assert!(why.contains("no 3D model"), "{why}");
+    let mut c = Change::builder(&doc);
+    c.add_component(flat(rect(10.0, 10.0, 30.0, 30.0), 6.0, Combine::Add));
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    let placed = placed_model(&doc, &tool).unwrap();
+    assert!((placed.cell - 0.3).abs() < 0.01);
+    assert_eq!(placed.at(Point::new(20.0, 20.0)), Some(0.0));
+    assert_eq!(placed.at(Point::new(50.0, 50.0)), Some(-6.0));
+    doc.job.thickness = 5.0;
+    let why = placed_model(&doc, &tool).unwrap_err().to_string();
+    assert!(
+        why.contains("6.0 mm tall") && why.contains("5.0 mm thick"),
+        "{why}"
+    );
+}

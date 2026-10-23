@@ -3,6 +3,7 @@
 
 use crate::document::EntityId;
 use crate::geometry::{Path, Point};
+use crate::simulation::Material;
 use crate::{Command, polygon};
 use glam::DVec3;
 use schemars::JsonSchema;
@@ -269,4 +270,111 @@ pub fn cut_points(path: &Path) -> Vec<Point> {
         points.pop();
     }
     points
+}
+
+/// Most times a move between two zigzag samples is halved to stay within the tolerance.
+const HALVINGS: u32 = 6;
+
+/// A zigzag over `grid`: lines along x `step` apart, sampled at each cell centre, each point
+/// at `height` there. A straight move can pass under `height` between two samples (the cutting
+/// edge bulges down between them), so such moves are split until within `tolerance`; points in
+/// the middle of level runs are dropped.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "line counts are small and non-negative"
+)]
+pub fn zigzag(
+    grid: &Material,
+    step: f64,
+    tolerance: f64,
+    height: impl Fn(Point) -> f64,
+) -> Vec<DVec3> {
+    let (first, last) = (
+        grid.centre(0, 0),
+        grid.centre(grid.columns - 1, grid.rows - 1),
+    );
+    let lines = ((last.y - first.y) / step).floor() as usize + 1;
+    let mut points: Vec<DVec3> = vec![];
+    for line in 0..lines {
+        let y = first.y + line as f64 * step;
+        let at = |x: f64| Point::new(x, y).extend(height(Point::new(x, y)));
+        let mut row: Vec<DVec3> = vec![];
+        for column in 0..grid.columns {
+            let next = at(grid.centre(column, 0).x);
+            if let Some(&previous) = row.last() {
+                refine(previous, next, &at, tolerance, HALVINGS, &mut row);
+            }
+            row.push(next);
+        }
+        if line % 2 == 1 {
+            row.reverse();
+        }
+        for point in row {
+            let n = points.len();
+            if n >= 2 && level_run(points[n - 2], points[n - 1], point) {
+                points.pop();
+            }
+            points.push(point);
+        }
+    }
+    points
+}
+
+/// Points between `a` and `b` where a straight move dips more than `tolerance` under `at`;
+/// the dip is most often where the move climbs or falls, and not always halfway.
+fn refine(
+    a: DVec3,
+    b: DVec3,
+    at: &impl Fn(f64) -> DVec3,
+    tolerance: f64,
+    halvings: u32,
+    out: &mut Vec<DVec3>,
+) {
+    // a level move cannot dip: any bump in the height peaks over a sample
+    if halvings == 0 || (b.z - a.z).abs() <= tolerance {
+        return;
+    }
+    let dips = |t: f64, p: DVec3| p.z - (a.z + (b.z - a.z) * t) > tolerance;
+    let along = |t: f64| at(a.x + (b.x - a.x) * t);
+    let middle = along(0.5);
+    if dips(0.5, middle) || dips(0.25, along(0.25)) || dips(0.75, along(0.75)) {
+        refine(a, middle, at, tolerance, halvings - 1, out);
+        out.push(middle);
+        refine(middle, b, at, tolerance, halvings - 1, out);
+    }
+}
+
+/// Three points along one line at one height.
+fn level_run(a: DVec3, b: DVec3, c: DVec3) -> bool {
+    let same = |u: f64, v: f64| (u - v).abs() < 1e-9;
+    same(a.y, b.y) && same(b.y, c.y) && same(a.z, b.z) && same(b.z, c.z)
+}
+
+/// Rapid to above the first point, plunge to it, cut through the rest, rapid back up.
+pub fn follow(points: &[DVec3], safe_z: f64) -> Vec<Move> {
+    let (Some(&first), Some(&last)) = (points.first(), points.last()) else {
+        return vec![];
+    };
+    let above = |p: DVec3| p.truncate().extend(safe_z);
+    let mut moves = vec![
+        Move {
+            kind: MoveKind::Rapid,
+            to: above(first),
+        },
+        Move {
+            kind: MoveKind::Plunge,
+            to: first,
+        },
+    ];
+    moves.extend(points[1..].iter().map(|&to| Move {
+        kind: MoveKind::Cut,
+        to,
+    }));
+    moves.push(Move {
+        kind: MoveKind::Rapid,
+        to: above(last),
+    });
+    moves
 }
