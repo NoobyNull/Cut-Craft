@@ -84,14 +84,19 @@ impl Material {
                 let Some((t0, t1)) = covered(start - centre, along, radius) else {
                     continue;
                 };
+                let edge = |t: f64| {
+                    let tip = a.lerp(b, t);
+                    let r = tip.truncate().distance(centre).min(radius);
+                    tip.z + tool.profile(r).unwrap_or(0.0)
+                };
                 let z = match tool.shape {
                     // z is linear in t, so a flat end is lowest at one end of the covered span
                     ToolShape::EndMill => a.lerp(b, t0).z.min(a.lerp(b, t1).z),
-                    _ => lowest(t0, t1, |t| {
-                        let tip = a.lerp(b, t);
-                        let r = tip.truncate().distance(centre).min(radius);
-                        tip.z + tool.profile(r).unwrap_or(0.0)
-                    }),
+                    // a level move is lowest where it passes closest
+                    _ if (b.z - a.z).abs() < 1e-9 && along != DVec2::ZERO => {
+                        edge((-(start - centre).dot(along) / along.length_squared()).clamp(t0, t1))
+                    }
+                    _ => lowest(t0, t1, edge),
                 }
                 .max(self.bottom);
                 let height = &mut self.heights[row * self.columns + column];

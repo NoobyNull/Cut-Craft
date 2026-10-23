@@ -26,21 +26,37 @@ pub enum Corners {
 }
 
 pub fn union(paths: &[Path]) -> Vec<Path> {
-    overlay(paths, &[], OverlayRule::Union)
+    overlay(paths, &[], OverlayRule::Union, FillRule::NonZero)
 }
 
 /// The regions of `subject` not covered by `clip`.
 pub fn difference(subject: &[Path], clip: &[Path]) -> Vec<Path> {
-    overlay(subject, clip, OverlayRule::Difference)
+    overlay(subject, clip, OverlayRule::Difference, FillRule::NonZero)
 }
 
 /// Where `subject` and `clip` overlap.
 pub fn intersection(subject: &[Path], clip: &[Path]) -> Vec<Path> {
-    overlay(subject, clip, OverlayRule::Intersect)
+    overlay(subject, clip, OverlayRule::Intersect, FillRule::NonZero)
 }
 
 /// Grows (positive `distance`) or shrinks (negative) the closed paths.
 pub fn offset(paths: &[Path], distance: f64, corners: Corners) -> Vec<Path> {
+    outline(&contours(paths), distance, corners)
+}
+
+/// The closed paths as regions where a path inside another is a hole (even-odd), as outlines
+/// running anticlockwise and holes clockwise, for [`offset_regions`].
+pub fn regions(paths: &[Path]) -> Vec<Path> {
+    overlay(paths, &[], OverlayRule::Union, FillRule::EvenOdd)
+}
+
+/// Grows or shrinks [`regions`]: shrinking pulls outlines in and pushes holes out.
+pub fn offset_regions(regions: &[Path], distance: f64, corners: Corners) -> Vec<Path> {
+    let oriented: Vec<Contour> = regions.iter().filter(|p| p.closed).map(contour).collect();
+    outline(&oriented, distance, corners)
+}
+
+fn outline(contours: &[Contour], distance: f64, corners: Corners) -> Vec<Path> {
     let join = match corners {
         // segment angle that keeps each arc chord within TOLERANCE of the true corner arc
         Corners::Round => {
@@ -48,7 +64,7 @@ pub fn offset(paths: &[Path], distance: f64, corners: Corners) -> Vec<Path> {
         }
         Corners::Sharp => LineJoin::Miter(0.01 * PI),
     };
-    to_paths(contours(paths).outline(&OutlineStyle::new(distance).line_join(join)))
+    to_paths(contours.outline(&OutlineStyle::new(distance).line_join(join)))
 }
 
 /// Enclosed area of a closed path (curves flattened).
@@ -56,8 +72,8 @@ pub fn area(path: &Path) -> f64 {
     signed_area(&contour(path)).abs()
 }
 
-fn overlay(subject: &[Path], clip: &[Path], rule: OverlayRule) -> Vec<Path> {
-    to_paths(contours(subject).overlay(&contours(clip), rule, FillRule::NonZero))
+fn overlay(subject: &[Path], clip: &[Path], rule: OverlayRule, fill: FillRule) -> Vec<Path> {
+    to_paths(contours(subject).overlay(&contours(clip), rule, fill))
 }
 
 /// Closed paths as counter-clockwise contours, so each is a filled region whatever its direction.

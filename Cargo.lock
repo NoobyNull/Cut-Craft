@@ -188,6 +188,7 @@ dependencies = [
  "cmd-set-size",
  "cmd-subtract-vectors",
  "cmd-unselect-all",
+ "cmd-vcarve-engrave-toolpath",
  "cmd-weld-vectors",
  "eframe",
  "egui_extras",
@@ -773,6 +774,15 @@ name = "cmd-unselect-all"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
+]
+
+[[package]]
+name = "cmd-vcarve-engrave-toolpath"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

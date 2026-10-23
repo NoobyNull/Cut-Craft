@@ -167,3 +167,27 @@ fn swap_replaces_vectors_with_new_selected_ones() {
     assert_eq!(doc.vectors.len(), 2);
     assert_eq!(doc.selection.len(), 2);
 }
+
+#[test]
+fn regions_make_inner_paths_holes_and_shrinking_grows_the_holes() {
+    use aspire_core::geometry::inside;
+    let regions = polygon::regions(&[square(0.0, 0.0, 100.0), square(40.0, 40.0, 20.0)]);
+    assert_eq!(regions.len(), 2, "outline and hole");
+    let shrunk = polygon::offset_regions(&regions, -5.0, Corners::Sharp);
+    let mut areas: Vec<f64> = shrunk.iter().map(polygon::area).collect();
+    areas.sort_by(f64::total_cmp);
+    assert!(
+        close(areas[0], 900.0, 1e-3) && close(areas[1], 8100.0, 1e-3),
+        "{areas:?}"
+    );
+    let rings: Vec<Vec<Point>> = shrunk.iter().map(|p| p.flatten(0.01)).collect();
+    assert!(inside(&rings, Point::new(20.0, 50.0)));
+    assert!(
+        !inside(&rings, Point::new(37.0, 50.0)),
+        "the hole grew to 35"
+    );
+    assert!(
+        !inside(&rings, Point::new(3.0, 50.0)),
+        "the outline shrank to 5"
+    );
+}

@@ -112,8 +112,9 @@ impl ToolDatabase {
                 end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
                 shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
                 shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
-                shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.2),
-                shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.2),
+                // a V-bit's stepover spaces V-carving passes, so it is small
+                shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
+                shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),
             ],
         }
     }
