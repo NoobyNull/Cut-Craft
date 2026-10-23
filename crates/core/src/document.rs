@@ -8,6 +8,37 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct EntityId(pub u64);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct LayerId(pub u32);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Layer {
+    pub id: LayerId,
+    pub name: String,
+    pub visible: bool,
+    /// Locked layers are drawn but cannot be picked or edited.
+    pub locked: bool,
+}
+
+impl Layer {
+    pub fn new(id: LayerId, name: &str) -> Self {
+        Self {
+            id,
+            name: name.to_owned(),
+            visible: true,
+            locked: false,
+        }
+    }
+}
+
+fn default_layers() -> Vec<Layer> {
+    vec![Layer::new(LayerId(1), "Layer 1")]
+}
+
+fn first_layer() -> LayerId {
+    LayerId(1)
+}
+
 /// Display units. The document always stores millimetres.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
@@ -47,7 +78,7 @@ impl Default for Job {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {
     pub job: Job,
     pub vectors: BTreeMap<EntityId, Path>,
@@ -55,6 +86,29 @@ pub struct Document {
     /// Added after the first job format; older files have none.
     #[serde(default)]
     pub toolpaths: BTreeMap<EntityId, Toolpath>,
+    /// Bottom to top. Older files have none and get the default layer.
+    #[serde(default = "default_layers")]
+    pub layers: Vec<Layer>,
+    /// Where new vectors go.
+    #[serde(default = "first_layer")]
+    pub current_layer: LayerId,
+    /// Which layer each vector is on; vectors not listed are on the first layer.
+    #[serde(default)]
+    pub vector_layers: BTreeMap<EntityId, LayerId>,
+}
+
+impl Default for Document {
+    fn default() -> Self {
+        Self {
+            job: Job::default(),
+            vectors: BTreeMap::new(),
+            selection: BTreeSet::new(),
+            toolpaths: BTreeMap::new(),
+            layers: default_layers(),
+            current_layer: first_layer(),
+            vector_layers: BTreeMap::new(),
+        }
+    }
 }
 
 impl Document {
@@ -66,6 +120,23 @@ impl Document {
             .next_back()
             .max(self.toolpaths.keys().next_back());
         EntityId(last.map_or(1, |id| id.0 + 1))
+    }
+
+    pub fn layer(&self, id: LayerId) -> Option<&Layer> {
+        self.layers.iter().find(|l| l.id == id)
+    }
+
+    pub fn layer_of(&self, id: EntityId) -> LayerId {
+        self.vector_layers
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| self.layers[0].id)
+    }
+
+    /// On a visible, unlocked layer: can be picked and edited.
+    pub fn editable(&self, id: EntityId) -> bool {
+        self.layer(self.layer_of(id))
+            .is_some_and(|l| l.visible && !l.locked)
     }
 
     /// The selected vectors that pass `keep`, as ids and paths in matching order.
@@ -89,6 +160,7 @@ impl Document {
     pub fn pick(&self, at: Point, tolerance: f64) -> Option<EntityId> {
         self.vectors
             .iter()
+            .filter(|(id, _)| self.editable(**id))
             .map(|(&id, path)| (id, polyline_distance(&path.flatten(tolerance / 4.0), at)))
             .filter(|&(_, d)| d <= tolerance)
             .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -101,6 +173,7 @@ impl Document {
         let tolerance = (area.size().length() * 1e-3).max(1e-6);
         self.vectors
             .iter()
+            .filter(|(id, _)| self.editable(**id))
             .filter(|(_, path)| {
                 area.contains_rect(path.bounds())
                     || (crossing && polyline_touches(&path.flatten(tolerance), area))

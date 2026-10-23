@@ -1,7 +1,7 @@
 //! Invertible edits. Every document mutation is a [`Change`]; undo applies its inverse.
 
 use crate::CommandError;
-use crate::document::{Document, EntityId, Job};
+use crate::document::{Document, EntityId, Job, Layer, LayerId};
 use crate::geometry::{Path, Point, Rect};
 use crate::toolpath::Toolpath;
 use glam::DAffine2;
@@ -46,6 +46,28 @@ pub enum Edit {
         before: Box<Toolpath>,
         after: Box<Toolpath>,
     },
+    /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
+    SetLayer {
+        id: EntityId,
+        before: Option<LayerId>,
+        after: Option<LayerId>,
+    },
+    AddLayer {
+        index: usize,
+        layer: Layer,
+    },
+    RemoveLayer {
+        index: usize,
+        layer: Layer,
+    },
+    ReplaceLayer {
+        before: Layer,
+        after: Layer,
+    },
+    SetCurrentLayer {
+        before: LayerId,
+        after: LayerId,
+    },
 }
 
 impl Edit {
@@ -74,6 +96,21 @@ impl Edit {
                 before: after,
                 after: before,
             },
+            Self::SetLayer { id, before, after } => Self::SetLayer {
+                id,
+                before: after,
+                after: before,
+            },
+            Self::AddLayer { index, layer } => Self::RemoveLayer { index, layer },
+            Self::RemoveLayer { index, layer } => Self::AddLayer { index, layer },
+            Self::ReplaceLayer { before, after } => Self::ReplaceLayer {
+                before: after,
+                after: before,
+            },
+            Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
+                before: after,
+                after: before,
+            },
         }
     }
 }
@@ -86,6 +123,11 @@ pub enum ApplyError {
     /// The entity no longer matches what the change was built against.
     Conflict(EntityId),
     JobConflict,
+    MissingLayer(LayerId),
+    LayerExists(LayerId),
+    LayerConflict(LayerId),
+    /// Vectors are still on it, or it is the last layer.
+    LayerInUse(LayerId),
 }
 
 impl fmt::Display for ApplyError {
@@ -95,6 +137,14 @@ impl fmt::Display for ApplyError {
             Self::Exists(id) => write!(f, "entity {} already exists", id.0),
             Self::Conflict(id) => write!(f, "entity {} was changed by something else", id.0),
             Self::JobConflict => f.write_str("the job setup was changed by something else"),
+            Self::MissingLayer(id) => write!(f, "layer {} does not exist", id.0),
+            Self::LayerExists(id) => write!(f, "layer {} already exists", id.0),
+            Self::LayerConflict(id) => write!(f, "layer {} was changed by something else", id.0),
+            Self::LayerInUse(id) => write!(
+                f,
+                "layer {} still has vectors on it, or is the last layer",
+                id.0
+            ),
         }
     }
 }
@@ -118,6 +168,9 @@ impl Change {
             selection: doc.selection.clone(),
             pending: BTreeMap::new(),
             pending_toolpaths: BTreeMap::new(),
+            layers: doc.layers.clone(),
+            current_layer: doc.current_layer,
+            vector_layers: BTreeMap::new(),
             edits: vec![],
         }
     }
@@ -264,6 +317,59 @@ impl Document {
                 }
                 self.job = *after;
             }
+            Edit::SetLayer { id, before, after } => {
+                if self.vector_layers.get(id) != before.as_ref() {
+                    return Err(ApplyError::Conflict(*id));
+                }
+                match after {
+                    Some(layer) if self.layer(*layer).is_none() => {
+                        return Err(ApplyError::MissingLayer(*layer));
+                    }
+                    Some(layer) => {
+                        self.vector_layers.insert(*id, *layer);
+                    }
+                    None => {
+                        self.vector_layers.remove(id);
+                    }
+                }
+            }
+            Edit::AddLayer { index, layer } => {
+                if self.layer(layer.id).is_some() {
+                    return Err(ApplyError::LayerExists(layer.id));
+                }
+                self.layers
+                    .insert((*index).min(self.layers.len()), layer.clone());
+            }
+            Edit::RemoveLayer { index, layer } => {
+                if self.layers.get(*index) != Some(layer) {
+                    return Err(ApplyError::LayerConflict(layer.id));
+                }
+                let first = self.layers[0].id;
+                let holds_vectors = self
+                    .vectors
+                    .keys()
+                    .any(|v| self.vector_layers.get(v).copied().unwrap_or(first) == layer.id);
+                if holds_vectors || self.layers.len() == 1 || self.current_layer == layer.id {
+                    return Err(ApplyError::LayerInUse(layer.id));
+                }
+                self.layers.remove(*index);
+            }
+            Edit::ReplaceLayer { before, after } => {
+                match self.layers.iter_mut().find(|l| l.id == before.id) {
+                    None => return Err(ApplyError::MissingLayer(before.id)),
+                    Some(current) if current != before => {
+                        return Err(ApplyError::LayerConflict(before.id));
+                    }
+                    Some(current) => current.clone_from(after),
+                }
+            }
+            // Like the selection, the current layer is view state: `before` is not checked.
+            Edit::SetCurrentLayer { after, .. } => {
+                if self.layer(*after).is_none() {
+                    return Err(ApplyError::MissingLayer(*after));
+                }
+                self.current_layer = *after;
+            }
         }
         Ok(())
     }
@@ -322,6 +428,10 @@ pub struct ChangeBuilder<'a> {
     /// Paths as this change has left them (`None` = removed), shadowing `doc`.
     pending: BTreeMap<EntityId, Option<Path>>,
     pending_toolpaths: BTreeMap<EntityId, Option<Toolpath>>,
+    /// Layer list, current layer and vector layers as this change has left them.
+    layers: Vec<Layer>,
+    current_layer: LayerId,
+    vector_layers: BTreeMap<EntityId, Option<LayerId>>,
     edits: Vec<Edit>,
 }
 
@@ -339,6 +449,7 @@ impl ChangeBuilder<'_> {
         self.next_id += 1;
         self.pending.insert(id, Some(path.clone()));
         self.edits.push(Edit::Add { id, path });
+        self.set_vector_layer(id, Some(self.current_layer));
         id
     }
 
@@ -355,6 +466,7 @@ impl ChangeBuilder<'_> {
         }
         self.pending.insert(id, None);
         self.edits.push(Edit::Remove { id, path });
+        self.set_vector_layer(id, None);
     }
 
     pub fn replace(&mut self, id: EntityId, after: Path) {
@@ -417,6 +529,71 @@ impl ChangeBuilder<'_> {
             before: Box::new(before),
             after: Box::new(after),
         });
+    }
+
+    fn vector_layer(&self, id: EntityId) -> Option<LayerId> {
+        match self.vector_layers.get(&id) {
+            Some(layer) => *layer,
+            None => self.doc.vector_layers.get(&id).copied(),
+        }
+    }
+
+    fn set_vector_layer(&mut self, id: EntityId, after: Option<LayerId>) {
+        let before = self.vector_layer(id);
+        if before != after {
+            self.vector_layers.insert(id, after);
+            self.edits.push(Edit::SetLayer { id, before, after });
+        }
+    }
+
+    pub fn move_to_layer(&mut self, id: EntityId, layer: LayerId) {
+        self.set_vector_layer(id, Some(layer));
+    }
+
+    /// A new layer on top of the others.
+    pub fn add_layer(&mut self, name: &str) -> LayerId {
+        let id = LayerId(self.layers.iter().map(|l| l.id.0).max().unwrap_or(0) + 1);
+        let layer = Layer::new(id, name);
+        self.edits.push(Edit::AddLayer {
+            index: self.layers.len(),
+            layer: layer.clone(),
+        });
+        self.layers.push(layer);
+        id
+    }
+
+    /// Removes an empty layer, first making another layer current if it was.
+    pub fn remove_layer(&mut self, id: LayerId) {
+        let index = self
+            .layers
+            .iter()
+            .position(|l| l.id == id)
+            .unwrap_or_else(|| panic!("remove_layer: layer {} does not exist", id.0));
+        if self.current_layer == id
+            && let Some(other) = self.layers.iter().find(|l| l.id != id).map(|l| l.id)
+        {
+            self.set_current_layer(other);
+        }
+        let layer = self.layers.remove(index);
+        self.edits.push(Edit::RemoveLayer { index, layer });
+    }
+
+    /// Renames, hides or locks a layer: `after` replaces the layer with the same id.
+    pub fn replace_layer(&mut self, after: Layer) {
+        let current = self
+            .layers
+            .iter_mut()
+            .find(|l| l.id == after.id)
+            .unwrap_or_else(|| panic!("replace_layer: layer {} does not exist", after.id.0));
+        let before = std::mem::replace(current, after.clone());
+        self.edits.push(Edit::ReplaceLayer { before, after });
+    }
+
+    pub fn set_current_layer(&mut self, after: LayerId) {
+        let before = std::mem::replace(&mut self.current_layer, after);
+        if before != after {
+            self.edits.push(Edit::SetCurrentLayer { before, after });
+        }
     }
 
     pub fn set_job(&mut self, after: Job) {
