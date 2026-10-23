@@ -2,8 +2,9 @@
 //! gestures in job coordinates, and painting the document.
 
 use aspire_core::Drag;
-use aspire_core::document::{Document, Job};
+use aspire_core::document::{Document, EntityId, Job};
 use aspire_core::geometry::{Path, Point};
+use aspire_core::toolpath::MoveKind;
 use eframe::egui::{self, Pos2, Rect, Sense, Shape, Stroke, pos2};
 
 #[derive(Clone, Copy, Debug)]
@@ -128,8 +129,15 @@ impl Canvas {
         }
     }
 
-    /// Draws the job, its datum, the vectors (selection dashed) and `overlay`.
-    pub fn paint(&self, ui: &egui::Ui, doc: &Document, overlay: &Overlay) {
+    /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the
+    /// selection colour) and `overlay`.
+    pub fn paint(
+        &self,
+        ui: &egui::Ui,
+        doc: &Document,
+        overlay: &Overlay,
+        highlighted: Option<EntityId>,
+    ) {
         let painter = ui.painter_at(self.area);
         let visuals = ui.visuals();
         let t = self.transform;
@@ -167,6 +175,24 @@ impl Canvas {
                 painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
             } else {
                 painter.add(Shape::line(screen(path), normal));
+            }
+        }
+
+        // toolpaths: their cutting moves seen from above
+        for (id, toolpath) in &doc.toolpaths {
+            let colour = if highlighted == Some(*id) {
+                selected.color
+            } else {
+                visuals.warn_fg_color
+            };
+            let stroke = Stroke::new(datum.width, colour);
+            let mut from = None;
+            for m in &toolpath.moves {
+                let to = t.to_screen(m.to.truncate());
+                if let (Some(from), MoveKind::Cut) = (from, m.kind) {
+                    painter.line_segment([from, to], stroke);
+                }
+                from = Some(to);
             }
         }
 

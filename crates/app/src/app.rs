@@ -15,23 +15,8 @@ use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
-// ponytail: labels only until toolpath commands exist; then they come from the registry
-const TOOLPATH_STRATEGIES: [&str; 12] = [
-    "Profile",
-    "Pocket",
-    "Drilling",
-    "V-Carve",
-    "Quick Engrave",
-    "Fluting",
-    "Prism",
-    "Inlay",
-    "Texture",
-    "Rough Machining",
-    "Finish Machining",
-    "Moulding",
-];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 8] = [
+const BUILT_INS: [&str; 12] = [
     "undo",
     "redo",
     "exit",
@@ -40,6 +25,10 @@ const BUILT_INS: [&str; 8] = [
     "save",
     "save_as",
     "import_vectors_bitmap",
+    "recalculate_toolpath",
+    "recalculate_all_toolpaths",
+    "delete_toolpath",
+    "save_toolpaths",
 ];
 const APP_NAME: &str = "Aspire Clone";
 /// Tool icon edge, in rows of the theme's interactive height.
@@ -77,6 +66,8 @@ struct AspireApp {
     /// How the 2D view mapped the job last frame.
     view_transform: Option<ViewTransform>,
     session: Session,
+    /// Toolpath picked in the Toolpaths panel.
+    selected_toolpath: Option<EntityId>,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -97,6 +88,7 @@ impl AspireApp {
             form: None,
             view_transform: None,
             session: Session::default(),
+            selected_toolpath: None,
             title: String::new(),
         }
     }
@@ -105,6 +97,11 @@ impl AspireApp {
         match id {
             "undo" => self.history.can_undo(),
             "redo" => self.history.can_redo(),
+            "recalculate_toolpath" | "delete_toolpath" => self.selected_toolpath.is_some(),
+            "recalculate_all_toolpaths" => !self.doc.toolpaths.is_empty(),
+            "save_toolpaths" => {
+                !self.doc.toolpaths.is_empty() && self.registry.exporter("export_gcode").is_some()
+            }
             _ => {
                 BUILT_INS.contains(&id)
                     || self.registry.get(id).is_some()
@@ -113,7 +110,8 @@ impl AspireApp {
         }
     }
 
-    /// Menu items, tool buttons and shortcuts all end up here.
+    /// Menu items, tool buttons and shortcuts all end up here: built-in actions first, then
+    /// the command registry.
     fn invoke(&mut self, ctx: &egui::Context, id: &str) {
         match id {
             "undo" => {
@@ -128,6 +126,20 @@ impl AspireApp {
             }
             // closing goes through the close request, which checks for unsaved work
             "exit" => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            "new" | "open" | "save" | "save_as" | "import_vectors_bitmap" => self.file_action(id),
+            "recalculate_toolpath"
+            | "recalculate_all_toolpaths"
+            | "delete_toolpath"
+            | "save_toolpaths" => {
+                self.toolpath_action(id);
+            }
+            id if self.registry.exporter(id).is_some() => self.export(id),
+            _ => self.start_command(id),
+        }
+    }
+
+    fn file_action(&mut self, id: &str) {
+        match id {
             "new" => {
                 if self.confirm_discard() {
                     (self.doc, self.history, self.session, self.form) = Default::default();
@@ -147,7 +159,7 @@ impl AspireApp {
             }
             "save" => match self.session.path.clone() {
                 Some(path) => self.save_to(&path),
-                None => self.invoke(ctx, "save_as"),
+                None => self.file_action("save_as"),
             },
             "save_as" => {
                 if let Some(path) = job_dialog()
@@ -163,45 +175,66 @@ impl AspireApp {
                     dialog = dialog.add_filter(importer.format.label, importer.format.extensions);
                 }
                 if let Some(path) = dialog.pick_file() {
-                    let result =
-                        files::import(&self.registry, &self.doc, &path).and_then(|change| {
-                            self.history
-                                .apply(&mut self.doc, change)
-                                .map_err(|e| e.to_string())
-                        });
-                    self.status.set_message(
-                        &result.map_or_else(|e| e, |()| format!("Imported {}", path.display())),
-                    );
+                    let change = files::import(&self.registry, &self.doc, &path)
+                        .map_err(aspire_core::CommandError::Failed);
+                    self.record(change, &format!("Imported {}", path.display()));
                 }
             }
-            id if self.registry.exporter(id).is_some() => self.export(id),
-            _ => {
-                let Some(cmd) = self.registry.get(id) else {
-                    self.status
-                        .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
-                    return;
-                };
-                let (meta, fields, params) = (
-                    cmd.meta(),
-                    form::fields(&cmd.schema()),
-                    cmd.initial_params(&self.doc),
-                );
-                meta.label.clone_into(&mut self.status.current_tool);
-                if fields.is_empty() {
-                    if let Err(e) = self.apply(cmd.id(), &params) {
-                        self.status.set_message(&e);
-                    }
-                } else {
-                    self.form = Some(OpenForm {
-                        id: cmd.id(),
-                        label: meta.label,
-                        icon: meta.icon,
-                        fields,
-                        params,
-                        error: None,
-                    });
+            _ => unreachable!("not a file action: {id}"),
+        }
+    }
+
+    fn toolpath_action(&mut self, id: &str) {
+        match id {
+            "recalculate_toolpath" => {
+                if let Some(id) = self.selected_toolpath {
+                    let result = self.registry.recalculate(&self.doc, id);
+                    self.record(result, "Toolpath recalculated");
                 }
             }
+            "recalculate_all_toolpaths" => {
+                let result = self.registry.recalculate_all(&self.doc);
+                self.record(result, "All toolpaths recalculated");
+            }
+            "delete_toolpath" => {
+                if let Some(id) = self.selected_toolpath.take() {
+                    let mut c = Change::builder(&self.doc);
+                    c.remove_toolpath(id);
+                    let change = c.finish();
+                    self.record(Ok(change), "Toolpath deleted");
+                }
+            }
+            "save_toolpaths" => self.export("export_gcode"),
+            _ => unreachable!("not a toolpath action: {id}"),
+        }
+    }
+
+    /// Runs a registered command: straight away if it has no settings, else opens its form.
+    fn start_command(&mut self, id: &str) {
+        let Some(cmd) = self.registry.get(id) else {
+            self.status
+                .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
+            return;
+        };
+        let (meta, fields, params) = (
+            cmd.meta(),
+            form::fields(&cmd.schema()),
+            cmd.initial_params(&self.doc),
+        );
+        meta.label.clone_into(&mut self.status.current_tool);
+        if fields.is_empty() {
+            if let Err(e) = self.apply(cmd.id(), &params) {
+                self.status.set_message(&e);
+            }
+        } else {
+            self.form = Some(OpenForm {
+                id: cmd.id(),
+                label: meta.label,
+                icon: meta.icon,
+                fields,
+                params,
+                error: None,
+            });
         }
     }
 
@@ -258,6 +291,17 @@ impl AspireApp {
             rfd::MessageDialogResult::No => true,
             _ => false,
         }
+    }
+
+    /// Applies a computed change for undo, reporting how it went in the status bar.
+    fn record(&mut self, change: Result<Change, aspire_core::CommandError>, done: &str) {
+        let result = change.map_err(|e| e.to_string()).and_then(|c| {
+            self.history
+                .apply(&mut self.doc, c)
+                .map_err(|e| e.to_string())
+        });
+        self.status
+            .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
     }
 
     /// Runs a command and records it for undo.
@@ -348,7 +392,8 @@ impl AspireApp {
         egui::ScrollArea::vertical().show(ui, |ui| {
             self.command_form(ui);
             if DESIGN_TABS[self.design_tab] == "Drawing" {
-                self.tool_groups(ui);
+                let groups = self.toolbar.groups.clone();
+                self.tool_groups(ui, &groups);
             } else {
                 ui.weak(format!(
                     "{} tools not implemented yet",
@@ -390,10 +435,11 @@ impl AspireApp {
         }
     }
 
-    fn tool_groups(&mut self, ui: &mut egui::Ui) {
+    /// Icon buttons for groups of command ids: implemented ones run, the rest are greyed out.
+    fn tool_groups(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup]) {
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
         let mut clicked = None;
-        for group in &self.toolbar.groups {
+        for group in groups {
             egui::CollapsingHeader::new(group.name)
                 .default_open(true)
                 .show(ui, |ui| {
@@ -427,18 +473,33 @@ impl AspireApp {
     }
 
     fn toolpaths_panel(&mut self, ui: &mut egui::Ui) {
-        ui.strong("Toolpath Operations");
-        ui.horizontal_wrapped(|ui| {
-            for strategy in TOOLPATH_STRATEGIES {
-                if ui.button(strategy).clicked() {
-                    self.status
-                        .set_message(&format!("{strategy} toolpath: not implemented yet"));
+        let groups = self.toolbar.toolpath_groups.clone();
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            self.tool_groups(ui, &groups);
+            ui.separator();
+            ui.strong("Toolpath List");
+            if self.doc.toolpaths.is_empty() {
+                ui.weak("No toolpaths yet");
+            }
+            for (&id, toolpath) in &self.doc.toolpaths {
+                let selected = self.selected_toolpath == Some(id);
+                let label = ui
+                    .selectable_label(selected, &toolpath.name)
+                    .on_hover_text(&toolpath.tool.name);
+                if label.clicked() {
+                    self.selected_toolpath = if selected { None } else { Some(id) };
                 }
             }
+            let actions = [gui::ToolGroup {
+                name: "Toolpath List Actions",
+                tools: &[
+                    "recalculate_toolpath",
+                    "recalculate_all_toolpaths",
+                    "delete_toolpath",
+                ],
+            }];
+            self.tool_groups(ui, &actions);
         });
-        ui.separator();
-        ui.strong("Toolpath List");
-        ui.weak("No toolpaths yet");
     }
 
     fn status_bar(&self, ui: &mut egui::Ui) {
@@ -541,7 +602,7 @@ impl AspireApp {
             },
             _ => Overlay::None,
         };
-        canvas.paint(ui, &self.doc, &overlay);
+        canvas.paint(ui, &self.doc, &overlay, self.selected_toolpath);
         self.view_transform = Some(canvas.transform);
         self.cursor = canvas.cursor();
         match (gesture, self.drawing_tool()) {
@@ -829,5 +890,45 @@ mod tests {
             (params["width"].as_f64(), params["height"].as_f64()),
             (Some(50.0), Some(20.0))
         );
+    }
+
+    fn cut_min_x(app: &AspireApp) -> f64 {
+        aspire_core::testing::cut_bounds(app.doc.toolpaths.values().next().unwrap())
+            .min
+            .x
+    }
+
+    #[test]
+    fn toolpaths_follow_their_vectors_when_recalculated() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        let before = cut_min_x(&h.app);
+        let shift =
+            serde_json::json!({ "relative": true, "x": 100.0, "y": 0.0, "anchor": "bottom_left" });
+        h.app.apply("move", &shift).unwrap();
+        h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
+        assert!((cut_min_x(&h.app) - before - 100.0).abs() < 1e-6);
+        h.app.invoke(&h.ctx, "undo");
+        assert!(
+            (cut_min_x(&h.app) - before).abs() < 1e-6,
+            "recalculating is one undo step"
+        );
+    }
+
+    #[test]
+    fn deleting_the_selected_toolpath_is_undoable() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "drilling_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("drilling_toolpath", &params).unwrap();
+        h.app.selected_toolpath = h.app.doc.toolpaths.keys().next().copied();
+        h.app.invoke(&h.ctx, "delete_toolpath");
+        assert!(h.app.doc.toolpaths.is_empty());
+        h.app.invoke(&h.ctx, "undo");
+        assert_eq!(h.app.doc.toolpaths.len(), 1);
     }
 }

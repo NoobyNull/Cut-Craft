@@ -4,87 +4,135 @@
 /// icon; the rest show their humanized id, disabled.
 pub struct Toolbar {
     pub groups: Vec<ToolGroup>,
+    /// The Toolpaths panel, laid out the same way.
+    pub toolpath_groups: Vec<ToolGroup>,
 }
 
+#[derive(Clone, Copy)]
 pub struct ToolGroup {
     pub name: &'static str,
     pub tools: &'static [&'static str],
 }
 
 impl Toolbar {
-    /// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see
-    /// `re/SPEC.md`); which tool sits in which group is inferred from the help topics. Ids match
-    /// the icon file names, so unimplemented tools still show their icon.
     pub fn new() -> Self {
-        let group = |name, tools| ToolGroup { name, tools };
         Self {
-            groups: vec![
-                group(
-                    "File Operations",
-                    &[
-                        "new",
-                        "open",
-                        "save",
-                        "import_vectors_bitmap",
-                        "import_component_3d_model",
-                        "job_setup",
-                    ],
-                ),
-                group(
-                    "2D View Control",
-                    &["pan", "zoom_box", "zoom_to_job", "zoom_selected"],
-                ),
-                group(
-                    "Create Vectors",
-                    &[
-                        "draw_polyline",
-                        "draw_rectangle",
-                        "draw_circle",
-                        "draw_ellipse",
-                        "draw_polygon",
-                        "draw_star",
-                        "draw_arc",
-                        "draw_curve",
-                        "draw_freehand",
-                        "draw_text",
-                        "text_on_a_curve",
-                        "auto_layout_text",
-                        "dimensions",
-                        "create_fillets",
-                        "vector_texture",
-                        "trace_bitmap",
-                    ],
-                ),
-                group(
-                    "Edit Objects",
-                    &[
-                        "select",
-                        "node_edit",
-                        "transform",
-                        "group",
-                        "join_vectors",
-                        "weld_vectors",
-                        "subtract_vectors",
-                        "overlap_intersect",
-                        "interactive_vector_trim",
-                        "close_extend_vector",
-                        "fit_curves_to_vectors",
-                        "vector_validator",
-                        "measure_inspect",
-                    ],
-                ),
-                group(
-                    "Transform Objects",
-                    &["move", "rotate", "set_size", "mirror", "distort_object"],
-                ),
-                group(
-                    "Offset and Layout",
-                    &["offset_vectors", "nest_parts", "copy_along_vectors"],
-                ),
-                group("Array Objects", &["array_copy", "circular_copy"]),
-            ],
+            groups: drawing_groups(),
+            toolpath_groups: toolpath_groups(),
         }
     }
+}
+
+fn group(name: &'static str, tools: &'static [&'static str]) -> ToolGroup {
+    ToolGroup { name, tools }
+}
+
+/// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see
+/// `re/SPEC.md`); which tool sits in which group is inferred from the help topics. Ids match
+/// the icon file names, so unimplemented tools still show their icon.
+fn drawing_groups() -> Vec<ToolGroup> {
+    vec![
+        group(
+            "File Operations",
+            &[
+                "new",
+                "open",
+                "save",
+                "import_vectors_bitmap",
+                "import_component_3d_model",
+                "job_setup",
+            ],
+        ),
+        group(
+            "2D View Control",
+            &["pan", "zoom_box", "zoom_to_job", "zoom_selected"],
+        ),
+        group(
+            "Create Vectors",
+            &[
+                "draw_polyline",
+                "draw_rectangle",
+                "draw_circle",
+                "draw_ellipse",
+                "draw_polygon",
+                "draw_star",
+                "draw_arc",
+                "draw_curve",
+                "draw_freehand",
+                "draw_text",
+                "text_on_a_curve",
+                "auto_layout_text",
+                "dimensions",
+                "create_fillets",
+                "vector_texture",
+                "trace_bitmap",
+            ],
+        ),
+        group(
+            "Edit Objects",
+            &[
+                "select",
+                "node_edit",
+                "transform",
+                "group",
+                "join_vectors",
+                "weld_vectors",
+                "subtract_vectors",
+                "overlap_intersect",
+                "interactive_vector_trim",
+                "close_extend_vector",
+                "fit_curves_to_vectors",
+                "vector_validator",
+                "measure_inspect",
+            ],
+        ),
+        group(
+            "Transform Objects",
+            &["move", "rotate", "set_size", "mirror", "distort_object"],
+        ),
+        group(
+            "Offset and Layout",
+            &["offset_vectors", "nest_parts", "copy_along_vectors"],
+        ),
+        group("Array Objects", &["array_copy", "circular_copy"]),
+    ]
+}
+
+/// The Toolpaths panel, laid out the same way.
+fn toolpath_groups() -> Vec<ToolGroup> {
+    vec![
+        group(
+            "Toolpath Operations",
+            &[
+                "profile_toolpath",
+                "pocket_toolpath",
+                "drilling_toolpath",
+                "quick_engrave",
+                "vcarve_engrave_toolpath",
+                "vcarve_inlay",
+                "chamfer_toolpath",
+                "fluting_toolpath",
+                "prism_carving",
+                "keyhole_toolpath",
+                "moulding_toolpath",
+                "texture_toolpath",
+                "sketch_carving",
+            ],
+        ),
+        group(
+            "3D Toolpaths",
+            &[
+                "3d_roughing_toolpath",
+                "3d_finishing_toolpath",
+                "rounding_toolpath",
+            ],
+        ),
+        group("Laser", &["laser_cut_fill", "laser_picture"]),
+        group(
+            "Output",
+            &["save_toolpaths", "toolpath_summary", "tool_database"],
+        ),
+    ]
 }
 
 /// `"join_vectors"` → `"Join Vectors"`: the label of a tool that is not implemented yet.

@@ -1,9 +1,10 @@
 //! The contract every command implements, and the registry the app runs them through.
 
-use crate::Change;
 use crate::document::Document;
+use crate::document::EntityId;
 use crate::formats::{ExportEntry, Exporter, ImportEntry, Importer};
 use crate::geometry::{Point, Rect};
+use crate::{Change, Edit};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize as _, Serialize};
@@ -264,6 +265,61 @@ impl Registry {
     /// The importer for a file extension (without the dot), case-insensitively.
     pub fn importer_for(&self, extension: &str) -> Option<&ImportEntry> {
         self.importers.iter().find(|i| i.format.matches(extension))
+    }
+
+    /// Re-runs the strategy that made toolpath `id`, with its saved params, on the vectors it was
+    /// made from (whatever is selected now). Unchanged results make an empty change.
+    pub fn recalculate(&self, doc: &Document, id: EntityId) -> Result<Change, CommandError> {
+        let toolpath = doc
+            .toolpaths
+            .get(&id)
+            .ok_or_else(|| CommandError::Failed(format!("toolpath {} does not exist", id.0)))?;
+        let strategy = self.get(&toolpath.strategy).ok_or_else(|| {
+            CommandError::Failed(format!(
+                "{} was made by `{}`, which is not available",
+                toolpath.name, toolpath.strategy
+            ))
+        })?;
+        let mut sources = doc.clone();
+        sources.selection = toolpath
+            .vectors
+            .iter()
+            .copied()
+            .filter(|v| doc.vectors.contains_key(v))
+            .collect();
+        if sources.selection.is_empty() {
+            return Err(CommandError::Failed(format!(
+                "the vectors {} was made from have been deleted",
+                toolpath.name
+            )));
+        }
+        let fresh = strategy
+            .run_json(&sources, &toolpath.params)?
+            .edits
+            .into_iter()
+            .find_map(|e| match e {
+                Edit::AddToolpath { toolpath, .. } => Some(*toolpath),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                CommandError::Failed(format!("`{}` did not make a toolpath", toolpath.strategy))
+            })?;
+        let mut c = Change::builder(doc);
+        if &fresh != toolpath {
+            c.replace_toolpath(id, fresh);
+        }
+        Ok(c.finish())
+    }
+
+    /// Every toolpath recalculated: one [`Registry::recalculate`] each, chained.
+    pub fn recalculate_all(&self, doc: &Document) -> Result<Change, CommandError> {
+        let ids: Vec<EntityId> = doc.toolpaths.keys().copied().collect();
+        let each: Vec<_> = ids
+            .iter()
+            .map(|&id| move |d: &Document| self.recalculate(d, id))
+            .collect();
+        let steps: Vec<crate::Step<'_>> = each.iter().map(|f| f as crate::Step<'_>).collect();
+        Change::chain(doc, &steps)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &dyn DynCommand> {
