@@ -9,6 +9,7 @@ edition = "2024"
 [workspace.dependencies]
 aspire-core = { path = "crates/core" }
 eframe = { version = "0.27", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11"] }
+dxf = "0.6"
 egui_extras = { version = "0.27", default-features = false, features = ["file", "svg"] }
 env_logger = "0.10"
 glam = { version = "0.30", features = ["serde"] }

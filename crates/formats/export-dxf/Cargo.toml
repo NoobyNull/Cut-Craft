@@ -1,0 +1,16 @@
+[package]
+name = "fmt-export-dxf"
+description = "Export vectors as DXF"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+dxf.workspace = true
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+fmt-import-dxf = { path = "../import-dxf" }
+
+[lints]
+workspace = true

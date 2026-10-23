@@ -42,6 +42,8 @@ pub fn registry() -> Registry {
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_gcode::ExportGcode>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
+    r.add_exporter::<fmt_export_dxf::ExportDxf>();
+    r.add_importer::<fmt_import_dxf::ImportDxf>();
     r
 }
 
