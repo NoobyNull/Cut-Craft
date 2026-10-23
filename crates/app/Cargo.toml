@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 aspire-core.workspace = true
+aspire-post = { path = "../post" }
 eframe.workspace = true
 egui_extras.workspace = true
 env_logger.workspace = true

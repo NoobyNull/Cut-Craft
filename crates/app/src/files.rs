@@ -4,6 +4,7 @@
 use aspire_core::document::Document;
 use aspire_core::file::{load_job, save_job};
 use aspire_core::{Change, History, Registry};
+use aspire_post::Post;
 use std::path::{Path, PathBuf};
 
 /// The job file being edited and whether it has unsaved changes.
@@ -66,6 +67,19 @@ pub fn export(registry: &Registry, id: &str, doc: &Document, path: &Path) -> Res
         .ok_or_else(|| format!("no exporter called {id}"))?;
     let bytes = (exporter.export)(doc).map_err(|e| e.to_string())?;
     std::fs::write(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
+/// A `.pp` post-processor, checked as it is read.
+pub fn load_post(path: &Path) -> Result<Post, String> {
+    let text = String::from_utf8(read(path)?)
+        .map_err(|_| format!("{} is not a text file", path.display()))?;
+    Post::parse(&text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Writes the toolpaths as the post's output.
+pub fn save_through(post: &Post, doc: &Document, path: &Path) -> Result<(), String> {
+    let text = post.render(doc)?;
+    std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 fn read(path: &Path) -> Result<Vec<u8>, String> {
@@ -166,5 +180,46 @@ mod tests {
         let path = temp("out.svg");
         export(&registry(), "export_svg", &sample_document(), &path).unwrap();
         assert!(fs::read_to_string(&path).unwrap().contains("<svg"));
+    }
+
+    const POST: &str = "POST_NAME = \"Test post\"\nFILE_EXTENSION = \"tap\"\nVAR X_POSITION = [X|A|X|1.1]\nbegin RAPID_MOVE\n\"G0 [X]\"\nbegin FEED_MOVE\n\"G1 [X]\"\n";
+
+    #[test]
+    fn installing_a_post_reads_it() {
+        let path = temp("good.pp");
+        fs::write(&path, POST).unwrap();
+        assert_eq!(load_post(&path).unwrap().name, "Test post");
+    }
+
+    #[test]
+    fn a_broken_post_names_the_file_and_the_problem() {
+        let path = temp("broken.pp");
+        fs::write(&path, POST.replace("begin FEED_MOVE", "begin NOPE")).unwrap();
+        let err = load_post(&path).unwrap_err();
+        assert!(
+            err.contains("broken.pp") && err.contains("no FEED_MOVE block"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn toolpaths_save_through_the_post() {
+        let post_path = temp("save.pp");
+        fs::write(&post_path, POST).unwrap();
+        let post = load_post(&post_path).unwrap();
+        let mut doc = sample_document();
+        let registry = crate::commands::registry();
+        let made = registry.get("drilling_toolpath").unwrap();
+        let params = made.default_params();
+        let change = made.run_json(&doc, &params).unwrap();
+        doc.apply(&change).unwrap();
+        let out = temp("out.tap");
+        save_through(&post, &doc, &out).unwrap();
+        assert!(
+            fs::read_to_string(&out)
+                .unwrap()
+                .lines()
+                .any(|l| l.starts_with("G0 X"))
+        );
     }
 }

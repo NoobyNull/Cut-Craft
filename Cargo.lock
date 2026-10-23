@@ -148,6 +148,7 @@ name = "aspire-clone"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
+ "aspire-post",
  "cmd-align-bottom",
  "cmd-align-left",
  "cmd-align-right",
@@ -201,6 +202,14 @@ dependencies = [
  "i_overlay",
  "schemars",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aspire-post"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
  "serde_json",
 ]
 

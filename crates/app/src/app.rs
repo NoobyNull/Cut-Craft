@@ -16,7 +16,7 @@ use serde_json::Value;
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 12] = [
+const BUILT_INS: [&str; 13] = [
     "undo",
     "redo",
     "exit",
@@ -29,6 +29,7 @@ const BUILT_INS: [&str; 12] = [
     "recalculate_all_toolpaths",
     "delete_toolpath",
     "save_toolpaths",
+    "install_post_processor",
 ];
 const APP_NAME: &str = "Aspire Clone";
 /// Tool icon edge, in rows of the theme's interactive height.
@@ -68,6 +69,8 @@ struct AspireApp {
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
+    /// Installed post-processor; without one, toolpaths save as generic G-code.
+    post: Option<aspire_post::Post>,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -89,6 +92,7 @@ impl AspireApp {
             view_transform: None,
             session: Session::default(),
             selected_toolpath: None,
+            post: None,
             title: String::new(),
         }
     }
@@ -100,7 +104,8 @@ impl AspireApp {
             "recalculate_toolpath" | "delete_toolpath" => self.selected_toolpath.is_some(),
             "recalculate_all_toolpaths" => !self.doc.toolpaths.is_empty(),
             "save_toolpaths" => {
-                !self.doc.toolpaths.is_empty() && self.registry.exporter("export_gcode").is_some()
+                !self.doc.toolpaths.is_empty()
+                    && (self.post.is_some() || self.registry.exporter("export_gcode").is_some())
             }
             _ => {
                 BUILT_INS.contains(&id)
@@ -126,7 +131,12 @@ impl AspireApp {
             }
             // closing goes through the close request, which checks for unsaved work
             "exit" => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            "new" | "open" | "save" | "save_as" | "import_vectors_bitmap" => self.file_action(id),
+            "new"
+            | "open"
+            | "save"
+            | "save_as"
+            | "import_vectors_bitmap"
+            | "install_post_processor" => self.file_action(id),
             "recalculate_toolpath"
             | "recalculate_all_toolpaths"
             | "delete_toolpath"
@@ -180,6 +190,21 @@ impl AspireApp {
                     self.record(change, &format!("Imported {}", path.display()));
                 }
             }
+            "install_post_processor" => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Post-processor", &["pp"])
+                    .pick_file()
+                {
+                    match files::load_post(&path) {
+                        Ok(post) => {
+                            self.status
+                                .set_message(&format!("Post-processor: {}", post.name));
+                            self.post = Some(post);
+                        }
+                        Err(e) => self.status.set_message(&e),
+                    }
+                }
+            }
             _ => unreachable!("not a file action: {id}"),
         }
     }
@@ -204,7 +229,22 @@ impl AspireApp {
                     self.record(Ok(change), "Toolpath deleted");
                 }
             }
-            "save_toolpaths" => self.export("export_gcode"),
+            "save_toolpaths" => match &self.post {
+                Some(post) => {
+                    let extension = post.extension.clone();
+                    let dialog =
+                        rfd::FileDialog::new().add_filter(&post.name, &[extension.as_str()]);
+                    if let Some(path) = dialog.save_file() {
+                        let path = path.with_extension(&extension);
+                        let result = files::save_through(post, &self.doc, &path);
+                        self.status.set_message(&result.map_or_else(
+                            |e| e,
+                            |()| format!("Saved toolpaths to {}", path.display()),
+                        ));
+                    }
+                }
+                None => self.export("export_gcode"),
+            },
             _ => unreachable!("not a toolpath action: {id}"),
         }
     }
