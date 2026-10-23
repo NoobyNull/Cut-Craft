@@ -1,7 +1,7 @@
 #!/bin/bash
 # Scaffold a command crate whose contract tests fail until it is implemented.
 #   scripts/new-command draw-rectangle "Draw Rectangle" "Create Vectors" drawing/create_vectors/draw_rectangle.svg
-# Then: write behaviour tests in its src/lib.rs, implement run(), and register it in the app.
+# Then: write behaviour tests in its src/lib.rs and implement run(). The app registration is done here.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 name="$1" label="$2" group="$3" icon="${4:-}"
@@ -63,4 +63,7 @@ mod tests {
     aspire_core::contract_tests!($type);
 }
 EOF
-echo "created $dir ($type, id \"$id\")"
+# register it in the app: dependency + one line in src/commands.rs
+sed -i "/^# Commands: one line per crate/a cmd-$name = { path = \"../commands/$name\" }" crates/app/Cargo.toml
+sed -i "s|^    // scripts/new-command adds new commands above this line|    r.add::<cmd_${id}::$type>();\n&|" crates/app/src/commands.rs
+echo "created $dir ($type, id \"$id\") and registered it in crates/app"

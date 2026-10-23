@@ -4,7 +4,7 @@
 use crate::form::{self, Field};
 use crate::gui;
 use crate::icons::Icons;
-use crate::{commands, view2d};
+use crate::{commands, shortcut, view2d};
 use aspire_core::document::Document;
 use aspire_core::geometry::Point;
 use aspire_core::{History, Registry};
@@ -148,15 +148,21 @@ impl AspireApp {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
-        let pressed =
-            |key, mods| ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(mods, key)));
-        if pressed(Key::Z, Modifiers::COMMAND) {
-            self.invoke(ctx, "undo");
+        // single-letter shortcuts must not fire while typing in a form field
+        if !ctx.wants_keyboard_input() {
+            let fired: Vec<String> = self
+                .bindings()
+                .into_iter()
+                .filter(|(_, keys)| ctx.input_mut(|i| i.consume_shortcut(keys)))
+                .map(|(id, _)| id)
+                .collect();
+            for id in fired {
+                self.invoke(ctx, &id);
+            }
         }
-        if pressed(Key::Y, Modifiers::COMMAND) {
-            self.invoke(ctx, "redo");
-        }
-        if pressed(Key::Escape, Modifiers::NONE) {
+        if ctx
+            .input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Escape)))
+        {
             self.form = None;
         }
         ctx.input(|i| {
@@ -169,12 +175,33 @@ impl AspireApp {
         });
     }
 
+    /// Every key binding: each command's own shortcut, plus the built-ins as the menus spell them.
+    fn bindings(&self) -> Vec<(String, KeyboardShortcut)> {
+        let commands = self
+            .registry
+            .iter()
+            .filter_map(|c| Some((c.id().to_owned(), shortcut::parse(c.meta().shortcut)?)));
+        let built_ins = self
+            .menus
+            .items()
+            .into_iter()
+            .filter(|i| BUILT_INS.contains(&i.action.as_str()))
+            .filter_map(|i| Some((i.action.clone(), shortcut::parse(&i.shortcut)?)));
+        commands.chain(built_ins).collect()
+    }
+
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         let mut clicked = None;
         egui::menu::bar(ui, |ui| {
             for menu in &self.menus.menus {
                 ui.menu_button(&menu.name, |ui| {
-                    menu_items(ui, &menu.items, &|id| self.available(id), &mut clicked);
+                    menu_items(
+                        ui,
+                        &menu.items,
+                        &|id| self.available(id),
+                        &|id| self.registry.get(id).map(|c| c.meta().shortcut),
+                        &mut clicked,
+                    );
                 });
             }
         });
@@ -305,6 +332,7 @@ fn menu_items(
     ui: &mut egui::Ui,
     items: &[gui::MenuItem],
     available: &dyn Fn(&str) -> bool,
+    shortcut_of: &dyn Fn(&str) -> Option<&'static str>,
     clicked: &mut Option<String>,
 ) {
     for item in items {
@@ -312,11 +340,11 @@ fn menu_items(
             ui.separator();
         } else if !item.children.is_empty() {
             ui.menu_button(&item.name, |ui| {
-                menu_items(ui, &item.children, available, clicked);
+                menu_items(ui, &item.children, available, shortcut_of, clicked);
             });
         } else {
             let button = egui::Button::new(&item.name)
-                .shortcut_text(&item.shortcut)
+                .shortcut_text(shortcut_of(&item.action).unwrap_or(&item.shortcut))
                 .selected(item.is_checked);
             let response = ui
                 .add_enabled(item.is_enabled && available(&item.action), button)

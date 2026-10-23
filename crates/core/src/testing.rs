@@ -142,3 +142,19 @@ pub fn vertices(path: &Path) -> Vec<Point> {
         .chain(path.segments.iter().map(crate::geometry::Segment::end))
         .collect()
 }
+
+/// Runs a command with `params` on the sample document and returns the result.
+pub fn after<C: Command>(params: &C::Params) -> Document {
+    let mut doc = sample_document();
+    let change = C::run(&doc, params).unwrap_or_else(|e| panic!("{} failed: {e}", C::ID));
+    doc.apply(&change).expect("change applies");
+    doc
+}
+
+/// The error message a command gives for `params` on the sample document.
+pub fn after_err<C: Command>(params: &C::Params) -> String {
+    match C::run(&sample_document(), params) {
+        Ok(_) => panic!("{} accepted parameters it should reject", C::ID),
+        Err(e) => e.to_string(),
+    }
+}

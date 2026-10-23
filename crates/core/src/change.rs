@@ -2,7 +2,8 @@
 
 use crate::CommandError;
 use crate::document::{Document, EntityId, Job};
-use crate::geometry::Path;
+use crate::geometry::{Path, Point, Rect};
+use glam::DAffine2;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -107,6 +108,40 @@ impl Change {
         let id = c.add(path);
         c.select([id]);
         c.finish()
+    }
+
+    /// Transforms each selected path by `f(path)`; the shared core of move, scale, rotate,
+    /// mirror and align. Nothing selected is an error; identity transforms make no edit.
+    pub fn transform_selected(
+        doc: &Document,
+        f: impl Fn(&Path) -> DAffine2,
+    ) -> Result<Self, CommandError> {
+        if doc.selection.is_empty() {
+            return Err(CommandError::NothingSelected);
+        }
+        let mut c = Self::builder(doc);
+        for &id in &doc.selection {
+            let path = &doc.vectors[&id];
+            let t = f(path);
+            if t != DAffine2::IDENTITY {
+                c.replace(id, path.transformed(&t));
+            }
+        }
+        Ok(c.finish())
+    }
+
+    /// Moves each selected path by `offset(its bounds, the selection's bounds)`: every align
+    /// command is one call to this.
+    pub fn align_selected(
+        doc: &Document,
+        offset: impl Fn(Rect, Rect) -> Point,
+    ) -> Result<Self, CommandError> {
+        let sel = doc
+            .selection_bounds()
+            .ok_or(CommandError::NothingSelected)?;
+        Self::transform_selected(doc, |path| {
+            DAffine2::from_translation(offset(path.bounds(), sel))
+        })
     }
 
     pub fn is_empty(&self) -> bool {

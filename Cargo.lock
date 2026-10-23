@@ -148,6 +148,17 @@ name = "aspire-clone"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
+ "cmd-align-bottom",
+ "cmd-align-left",
+ "cmd-align-right",
+ "cmd-align-top",
+ "cmd-center",
+ "cmd-center-horizontally",
+ "cmd-center-horizontally-in-material",
+ "cmd-center-in-material",
+ "cmd-center-vertically",
+ "cmd-center-vertically-in-material",
+ "cmd-delete",
  "cmd-draw-arc",
  "cmd-draw-circle",
  "cmd-draw-ellipse",
@@ -155,6 +166,12 @@ dependencies = [
  "cmd-draw-polyline",
  "cmd-draw-rectangle",
  "cmd-draw-star",
+ "cmd-mirror",
+ "cmd-move",
+ "cmd-rotate",
+ "cmd-select-all-vectors",
+ "cmd-set-size",
+ "cmd-unselect-all",
  "eframe",
  "egui_extras",
  "env_logger",
@@ -371,6 +388,87 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-align-bottom"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-align-left"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-align-right"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-align-top"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-center"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "cmd-center-horizontally",
+ "cmd-center-vertically",
+]
+
+[[package]]
+name = "cmd-center-horizontally"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-center-horizontally-in-material"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-center-in-material"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "cmd-center-horizontally-in-material",
+ "cmd-center-vertically-in-material",
+]
+
+[[package]]
+name = "cmd-center-vertically"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-center-vertically-in-material"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-delete"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
 name = "cmd-draw-arc"
 version = "0.1.0"
 dependencies = [
@@ -431,6 +529,56 @@ dependencies = [
  "aspire-core",
  "schemars",
  "serde",
+]
+
+[[package]]
+name = "cmd-mirror"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-move"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-rotate"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-select-all-vectors"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+]
+
+[[package]]
+name = "cmd-set-size"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-unselect-all"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
 ]
 
 [[package]]

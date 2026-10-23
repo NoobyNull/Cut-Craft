@@ -5,13 +5,31 @@ use aspire_core::Registry;
 
 pub fn registry() -> Registry {
     let mut r = Registry::default();
-    r.add::<cmd_draw_polyline::DrawPolyline>()
-        .add::<cmd_draw_rectangle::DrawRectangle>()
-        .add::<cmd_draw_circle::DrawCircle>()
-        .add::<cmd_draw_ellipse::DrawEllipse>()
-        .add::<cmd_draw_polygon::DrawPolygon>()
-        .add::<cmd_draw_star::DrawStar>()
-        .add::<cmd_draw_arc::DrawArc>();
+    r.add::<cmd_align_bottom::AlignBottom>();
+    r.add::<cmd_align_left::AlignLeft>();
+    r.add::<cmd_align_right::AlignRight>();
+    r.add::<cmd_align_top::AlignTop>();
+    r.add::<cmd_center::Center>();
+    r.add::<cmd_center_horizontally::CenterHorizontally>();
+    r.add::<cmd_center_horizontally_in_material::CenterHorizontallyInMaterial>();
+    r.add::<cmd_center_in_material::CenterInMaterial>();
+    r.add::<cmd_center_vertically::CenterVertically>();
+    r.add::<cmd_center_vertically_in_material::CenterVerticallyInMaterial>();
+    r.add::<cmd_delete::Delete>();
+    r.add::<cmd_draw_arc::DrawArc>();
+    r.add::<cmd_draw_circle::DrawCircle>();
+    r.add::<cmd_draw_ellipse::DrawEllipse>();
+    r.add::<cmd_draw_polygon::DrawPolygon>();
+    r.add::<cmd_draw_polyline::DrawPolyline>();
+    r.add::<cmd_draw_rectangle::DrawRectangle>();
+    r.add::<cmd_draw_star::DrawStar>();
+    r.add::<cmd_mirror::Mirror>();
+    r.add::<cmd_move::Move>();
+    r.add::<cmd_rotate::Rotate>();
+    r.add::<cmd_select_all_vectors::SelectAllVectors>();
+    r.add::<cmd_set_size::SetSize>();
+    r.add::<cmd_unselect_all::UnselectAll>();
+    // scripts/new-command adds new commands above this line
     r
 }
 

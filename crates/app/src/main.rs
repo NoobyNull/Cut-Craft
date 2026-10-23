@@ -5,6 +5,7 @@ mod commands;
 mod form;
 mod gui;
 mod icons;
+mod shortcut;
 mod view2d;
 
 fn main() {

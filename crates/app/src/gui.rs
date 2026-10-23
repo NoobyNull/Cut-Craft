@@ -124,6 +124,26 @@ pub struct MenuSystem {
     pub menus: Vec<Menu>,
 }
 
+impl MenuSystem {
+    /// Every command item, submenus flattened.
+    pub fn items(&self) -> Vec<&MenuItem> {
+        fn walk<'a>(items: &'a [MenuItem], out: &mut Vec<&'a MenuItem>) {
+            for item in items {
+                if item.children.is_empty() {
+                    out.push(item);
+                } else {
+                    walk(&item.children, out);
+                }
+            }
+        }
+        let mut out = vec![];
+        for menu in &self.menus {
+            walk(&menu.items, &mut out);
+        }
+        out
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Menu {
     pub name: String,
@@ -186,6 +206,11 @@ impl MenuSystem {
         let k = MenuItem::new;
         let sub = MenuItem::submenu;
         let sep = MenuItem::separator;
+        // an item whose action is not the slug of its label
+        let a = |name: &str, action: &str| MenuItem {
+            action: action.to_string(),
+            ..MenuItem::new(name, "")
+        };
         let menu = |name: &str, items: Vec<MenuItem>| Menu {
             name: name.to_string(),
             items,
@@ -257,10 +282,10 @@ impl MenuSystem {
                                 i("Center Vertically In Material"),
                                 sep(),
                                 i("Center"),
-                                i("Left"),
-                                i("Right"),
-                                i("Top"),
-                                i("Bottom"),
+                                a("Left", "align_left"),
+                                a("Right", "align_right"),
+                                a("Top", "align_top"),
+                                a("Bottom", "align_bottom"),
                                 i("Center Horizontally"),
                                 i("Center Vertically"),
                                 sep(),
@@ -451,5 +476,34 @@ mod tests {
     fn title_case_capitalizes_each_word() {
         assert_eq!(super::title_case("join_vectors"), "Join Vectors");
         assert_eq!(super::title_case("2d_view"), "2d View");
+    }
+}
+
+#[cfg(test)]
+mod menu_tests {
+    use super::MenuSystem;
+
+    #[test]
+    fn align_submenu_items_run_the_align_commands() {
+        let registry = crate::commands::registry();
+        let menus = MenuSystem::new();
+        let edit = menus.menus.iter().find(|m| m.name == "Edit").unwrap();
+        let align = edit
+            .items
+            .iter()
+            .find(|i| i.name == "Align Selected Objects")
+            .unwrap();
+        for item in align
+            .children
+            .iter()
+            .filter(|i| !i.is_separator() && !i.name.contains(" To "))
+        {
+            assert!(
+                registry.get(&item.action).is_some(),
+                "Align > {} runs `{}`, which is not a command",
+                item.name,
+                item.action
+            );
+        }
     }
 }

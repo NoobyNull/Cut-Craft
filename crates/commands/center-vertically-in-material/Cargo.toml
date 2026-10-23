@@ -1,0 +1,14 @@
+[package]
+name = "cmd-center-vertically-in-material"
+description = "Center Vertically In Material"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

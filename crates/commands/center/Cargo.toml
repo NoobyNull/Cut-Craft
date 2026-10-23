@@ -1,0 +1,18 @@
+[package]
+name = "cmd-center"
+description = "Center"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+
+cmd-center-horizontally = { path = "../center-horizontally" }
+
+cmd-center-vertically = { path = "../center-vertically" }
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

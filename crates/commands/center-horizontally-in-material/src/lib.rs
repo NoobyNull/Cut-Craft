@@ -1,0 +1,52 @@
+//! Center Horizontally In Material.
+
+use aspire_core::document::Document;
+use aspire_core::geometry::Point;
+use aspire_core::{Change, Command, CommandError, Meta, NoParams};
+
+pub struct CenterHorizontallyInMaterial;
+
+impl Command for CenterHorizontallyInMaterial {
+    const ID: &'static str = "center_horizontally_in_material";
+    type Params = NoParams;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Center Horizontally In Material",
+            group: "Align",
+            icon: "drawing/align/center_horizontally_in_material.svg",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
+        let job = doc.job;
+        Change::align_selected(doc, |_, sel| {
+            Point::new(job.width / 2.0 - sel.center().x, 0.0)
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    aspire_core::contract_tests!(CenterHorizontallyInMaterial);
+
+    use aspire_core::testing::after;
+
+    #[test]
+    fn selection_centre_is_on_the_job_s_vertical_centre_line() {
+        let doc = after::<CenterHorizontallyInMaterial>(&NoParams {});
+        let c = doc.selection_bounds().unwrap().center();
+        assert!((c.x - 300.0).abs() < 1e-9, "{c:?}");
+    }
+
+    #[test]
+    fn keeps_the_selection_s_layout() {
+        let before = aspire_core::testing::sample_document();
+        let doc = after::<CenterHorizontallyInMaterial>(&NoParams {});
+        let size = |d: &Document| d.selection_bounds().unwrap().size();
+        assert!((size(&doc) - size(&before)).length() < 1e-9);
+    }
+}

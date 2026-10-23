@@ -1,6 +1,6 @@
 //! Parameter types shared by many commands, so their forms and validation match.
 
-use crate::geometry::Point;
+use crate::geometry::{Point, Rect};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -22,5 +22,38 @@ impl Xy {
 impl From<Xy> for Point {
     fn from(p: Xy) -> Self {
         Point::new(p.x, p.y)
+    }
+}
+
+/// Which point of a bounding box a move or resize is measured from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Anchor {
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    #[default]
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+impl Anchor {
+    pub fn point(self, r: Rect) -> Point {
+        let (fx, fy) = match self {
+            Self::TopLeft => (0.0, 1.0),
+            Self::Top => (0.5, 1.0),
+            Self::TopRight => (1.0, 1.0),
+            Self::Left => (0.0, 0.5),
+            Self::Center => (0.5, 0.5),
+            Self::Right => (1.0, 0.5),
+            Self::BottomLeft => (0.0, 0.0),
+            Self::Bottom => (0.5, 0.0),
+            Self::BottomRight => (1.0, 0.0),
+        };
+        r.min + r.size() * Point::new(fx, fy)
     }
 }

@@ -12,6 +12,17 @@ env_logger.workspace = true
 log.workspace = true
 serde_json.workspace = true
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-align-bottom = { path = "../commands/align-bottom" }
+cmd-align-left = { path = "../commands/align-left" }
+cmd-align-right = { path = "../commands/align-right" }
+cmd-align-top = { path = "../commands/align-top" }
+cmd-center = { path = "../commands/center" }
+cmd-center-horizontally = { path = "../commands/center-horizontally" }
+cmd-center-horizontally-in-material = { path = "../commands/center-horizontally-in-material" }
+cmd-center-in-material = { path = "../commands/center-in-material" }
+cmd-center-vertically = { path = "../commands/center-vertically" }
+cmd-center-vertically-in-material = { path = "../commands/center-vertically-in-material" }
+cmd-delete = { path = "../commands/delete" }
 cmd-draw-arc = { path = "../commands/draw-arc" }
 cmd-draw-circle = { path = "../commands/draw-circle" }
 cmd-draw-ellipse = { path = "../commands/draw-ellipse" }
@@ -19,6 +30,12 @@ cmd-draw-polygon = { path = "../commands/draw-polygon" }
 cmd-draw-polyline = { path = "../commands/draw-polyline" }
 cmd-draw-rectangle = { path = "../commands/draw-rectangle" }
 cmd-draw-star = { path = "../commands/draw-star" }
+cmd-mirror = { path = "../commands/mirror" }
+cmd-move = { path = "../commands/move" }
+cmd-rotate = { path = "../commands/rotate" }
+cmd-select-all-vectors = { path = "../commands/select-all-vectors" }
+cmd-set-size = { path = "../commands/set-size" }
+cmd-unselect-all = { path = "../commands/unselect-all" }
 
 [lints]
 workspace = true
