@@ -4,7 +4,18 @@ description = "Document model, invertible changes, and the Command contract ever
 version.workspace = true
 edition.workspace = true
 
+[features]
+# Shared contract tests and sample documents for command crates' tests.
+testing = []
+
 [dependencies]
+glam.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+aspire-core = { path = ".", features = ["testing"] }
 
 [lints]
 workspace = true
