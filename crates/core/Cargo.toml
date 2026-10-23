@@ -1,0 +1,10 @@
+[package]
+name = "aspire-core"
+description = "Document model, invertible changes, and the Command contract every command implements"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

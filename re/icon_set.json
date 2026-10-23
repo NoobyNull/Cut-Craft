@@ -1,0 +1,1381 @@
+[
+ {
+  "path": "drawing/create_vectors/draw_circle.svg",
+  "label": "Draw Circle",
+  "guess": false,
+  "slot": "slot/35063_00",
+  "source": "png/34530"
+ },
+ {
+  "path": "drawing/create_vectors/draw_ellipse.svg",
+  "label": "Draw Ellipse",
+  "guess": false,
+  "slot": "slot/35063_01",
+  "source": "png/34578"
+ },
+ {
+  "path": "drawing/create_vectors/draw_rectangle.svg",
+  "label": "Draw Rectangle",
+  "guess": false,
+  "slot": "slot/35063_02",
+  "source": "png/34579"
+ },
+ {
+  "path": "drawing/create_vectors/draw_line_polyline.svg",
+  "label": "Draw Line / Polyline",
+  "guess": false,
+  "slot": "slot/35063_03",
+  "source": "png/34723"
+ },
+ {
+  "path": "drawing/create_vectors/draw_freehand.svg",
+  "label": "Draw Freehand",
+  "guess": true,
+  "slot": "slot/35063_04",
+  "source": "slot/35063_04"
+ },
+ {
+  "path": "drawing/create_vectors/draw_arc.svg",
+  "label": "Draw Arc",
+  "guess": false,
+  "slot": "slot/35063_05",
+  "source": "png/34839"
+ },
+ {
+  "path": "drawing/create_vectors/draw_text.svg",
+  "label": "Draw Text",
+  "guess": false,
+  "slot": "slot/35063_06",
+  "source": "png/34638"
+ },
+ {
+  "path": "drawing/create_vectors/rounded_shape_span.svg",
+  "label": "Rounded shape / span",
+  "guess": true,
+  "slot": "slot/35063_07",
+  "source": "png/34580"
+ },
+ {
+  "path": "drawing/create_vectors/edit_text.svg",
+  "label": "Edit Text",
+  "guess": true,
+  "slot": "slot/35063_08",
+  "source": "png/34637"
+ },
+ {
+  "path": "drawing/create_vectors/convert_text_to_curves.svg",
+  "label": "Convert Text to Curves",
+  "guess": true,
+  "slot": "slot/35063_09",
+  "source": "slot/35063_09"
+ },
+ {
+  "path": "drawing/create_vectors/vector_boundary.svg",
+  "label": "Vector Boundary",
+  "guess": true,
+  "slot": "slot/35063_10",
+  "source": "slot/35063_10"
+ },
+ {
+  "path": "drawing/create_vectors/shapes.svg",
+  "label": "Shapes",
+  "guess": true,
+  "slot": "slot/35063_11",
+  "source": "slot/35063_11"
+ },
+ {
+  "path": "drawing/create_vectors/trace_bitmap.svg",
+  "label": "Trace Bitmap",
+  "guess": false,
+  "slot": "slot/35063_12",
+  "source": "png/34656"
+ },
+ {
+  "path": "drawing/create_vectors/dimensions.svg",
+  "label": "Dimensions",
+  "guess": false,
+  "slot": "slot/35063_13",
+  "source": "png/34657"
+ },
+ {
+  "path": "drawing/create_vectors/document_variables.svg",
+  "label": "Document Variables",
+  "guess": true,
+  "slot": "slot/35063_14",
+  "source": "slot/35063_14"
+ },
+ {
+  "path": "drawing/create_vectors/array_copy.svg",
+  "label": "Array Copy",
+  "guess": false,
+  "slot": "slot/35063_15",
+  "source": "png/34694"
+ },
+ {
+  "path": "drawing/create_vectors/text_on_a_curve.svg",
+  "label": "Text on a Curve",
+  "guess": false,
+  "slot": "slot/35063_16",
+  "source": "slot/35063_16"
+ },
+ {
+  "path": "drawing/create_vectors/copy_along_vectors.svg",
+  "label": "Copy Along Vectors",
+  "guess": false,
+  "slot": "slot/35063_17",
+  "source": "png/34724"
+ },
+ {
+  "path": "drawing/create_vectors/draw_polygon.svg",
+  "label": "Draw Polygon",
+  "guess": false,
+  "slot": "slot/35063_18",
+  "source": "png/34725"
+ },
+ {
+  "path": "drawing/create_vectors/draw_star.svg",
+  "label": "Draw Star",
+  "guess": false,
+  "slot": "slot/35063_19",
+  "source": "png/34726"
+ },
+ {
+  "path": "drawing/create_vectors/create_fillets.svg",
+  "label": "Create Fillets",
+  "guess": false,
+  "slot": "slot/35063_20",
+  "source": "png/34727"
+ },
+ {
+  "path": "drawing/create_vectors/auto_layout_text.svg",
+  "label": "Auto Layout Text",
+  "guess": true,
+  "slot": "slot/35063_21",
+  "source": "png/34768"
+ },
+ {
+  "path": "drawing/create_vectors/fit_curves_to_vectors.svg",
+  "label": "Fit Curves to Vectors",
+  "guess": false,
+  "slot": "slot/35063_22",
+  "source": "png/34790"
+ },
+ {
+  "path": "drawing/create_vectors/distort_object.svg",
+  "label": "Distort Object",
+  "guess": false,
+  "slot": "slot/35063_23",
+  "source": "png/34822"
+ },
+ {
+  "path": "drawing/create_vectors/close_extend_vector.svg",
+  "label": "Close / Extend Vector",
+  "guess": true,
+  "slot": "slot/35063_24",
+  "source": "png/34867"
+ },
+ {
+  "path": "drawing/create_vectors/measure_inspect.svg",
+  "label": "Measure / Inspect",
+  "guess": true,
+  "slot": "slot/35063_25",
+  "source": "png/34873"
+ },
+ {
+  "path": "drawing/create_vectors/circular_copy.svg",
+  "label": "Circular Copy",
+  "guess": false,
+  "slot": "slot/35063_26",
+  "source": "png/2199"
+ },
+ {
+  "path": "drawing/create_vectors/group.svg",
+  "label": "Group",
+  "guess": false,
+  "slot": "slot/35063_27",
+  "source": "png/2389"
+ },
+ {
+  "path": "drawing/create_vectors/vector_texture.svg",
+  "label": "Vector Texture",
+  "guess": false,
+  "slot": "slot/35063_28",
+  "source": "png/2476"
+ },
+ {
+  "path": "drawing/create_vectors/vector_validator.svg",
+  "label": "Vector Validator",
+  "guess": true,
+  "slot": "slot/35063_29",
+  "source": "png/33364"
+ },
+ {
+  "path": "drawing/create_vectors/draw_curve.svg",
+  "label": "Draw Curve",
+  "guess": true,
+  "slot": "slot/35063_30",
+  "source": "png/4154"
+ },
+ {
+  "path": "drawing/edit_objects/select.svg",
+  "label": "Select",
+  "guess": false,
+  "slot": "slot/35064_00",
+  "source": "slot/35064_00"
+ },
+ {
+  "path": "drawing/edit_objects/node_edit.svg",
+  "label": "Node Edit",
+  "guess": false,
+  "slot": "slot/35064_01",
+  "source": "slot/35064_01"
+ },
+ {
+  "path": "drawing/edit_objects/move.svg",
+  "label": "Move",
+  "guess": false,
+  "slot": "slot/35064_02",
+  "source": "png/34573"
+ },
+ {
+  "path": "drawing/edit_objects/set_size.svg",
+  "label": "Set Size",
+  "guess": false,
+  "slot": "slot/35064_03",
+  "source": "png/34574"
+ },
+ {
+  "path": "drawing/edit_objects/weld_cross.svg",
+  "label": "Weld (cross)",
+  "guess": true,
+  "slot": "slot/35064_04",
+  "source": "png/34575"
+ },
+ {
+  "path": "drawing/edit_objects/mirror.svg",
+  "label": "Mirror",
+  "guess": false,
+  "slot": "slot/35064_05",
+  "source": "png/34576"
+ },
+ {
+  "path": "drawing/edit_objects/transform.svg",
+  "label": "Transform",
+  "guess": false,
+  "slot": "slot/35064_06",
+  "source": "slot/35064_06"
+ },
+ {
+  "path": "drawing/edit_objects/interactive_vector_trim.svg",
+  "label": "Interactive Vector Trim",
+  "guess": false,
+  "slot": "slot/35064_07",
+  "source": "png/34793"
+ },
+ {
+  "path": "drawing/edit_objects/job_size_and_position.svg",
+  "label": "Job Size and Position",
+  "guess": true,
+  "slot": "slot/35064_08",
+  "source": "png/34882"
+ },
+ {
+  "path": "drawing/edit_objects/edit_picture.svg",
+  "label": "Edit Picture",
+  "guess": false,
+  "slot": "slot/35064_09",
+  "source": "png/34946"
+ },
+ {
+  "path": "drawing/edit_objects/crop_bitmap.svg",
+  "label": "Crop Bitmap",
+  "guess": true,
+  "slot": "slot/35064_10",
+  "source": "slot/35064_10"
+ },
+ {
+  "path": "drawing/edit_objects/rotate.svg",
+  "label": "Rotate",
+  "guess": false,
+  "slot": "slot/35064_11",
+  "source": "png/34951"
+ },
+ {
+  "path": "drawing/weld_and_offset/weld_vectors.svg",
+  "label": "Weld Vectors",
+  "guess": false,
+  "slot": "slot/35065_00",
+  "source": "slot/35065_00"
+ },
+ {
+  "path": "drawing/weld_and_offset/subtract_vectors.svg",
+  "label": "Subtract Vectors",
+  "guess": false,
+  "slot": "slot/35065_01",
+  "source": "slot/35065_01"
+ },
+ {
+  "path": "drawing/weld_and_offset/overlap_intersect.svg",
+  "label": "Overlap / Intersect",
+  "guess": true,
+  "slot": "slot/35065_02",
+  "source": "slot/35065_02"
+ },
+ {
+  "path": "drawing/weld_and_offset/offset_vectors.svg",
+  "label": "Offset Vectors",
+  "guess": false,
+  "slot": "slot/35065_03",
+  "source": "png/34541"
+ },
+ {
+  "path": "drawing/weld_and_offset/vector_texture_fill.svg",
+  "label": "Vector Texture fill",
+  "guess": true,
+  "slot": "slot/35065_04",
+  "source": "png/2462"
+ },
+ {
+  "path": "drawing/join/join_straight_line.svg",
+  "label": "Join: straight line",
+  "guess": false,
+  "slot": "slot/35066_00",
+  "source": "slot/35066_00"
+ },
+ {
+  "path": "drawing/join/join_smooth_curve.svg",
+  "label": "Join: smooth curve",
+  "guess": false,
+  "slot": "slot/35066_01",
+  "source": "slot/35066_01"
+ },
+ {
+  "path": "drawing/join/join_move_end_points.svg",
+  "label": "Join: move end points",
+  "guess": false,
+  "slot": "slot/35066_02",
+  "source": "slot/35066_02"
+ },
+ {
+  "path": "drawing/align/center_in_material.svg",
+  "label": "Align: Center in Material",
+  "guess": false,
+  "slot": "slot/35067_00",
+  "source": "png/34882"
+ },
+ {
+  "path": "drawing/align/center.svg",
+  "label": "Align: Center",
+  "guess": false,
+  "slot": "slot/35067_01",
+  "source": "slot/35067_01"
+ },
+ {
+  "path": "drawing/align/left.svg",
+  "label": "Align: Left",
+  "guess": false,
+  "slot": "slot/35067_02",
+  "source": "slot/35067_02"
+ },
+ {
+  "path": "drawing/align/right.svg",
+  "label": "Align: Right",
+  "guess": false,
+  "slot": "slot/35067_03",
+  "source": "slot/35067_03"
+ },
+ {
+  "path": "drawing/align/top.svg",
+  "label": "Align: Top",
+  "guess": false,
+  "slot": "slot/35067_04",
+  "source": "slot/35067_04"
+ },
+ {
+  "path": "drawing/align/bottom.svg",
+  "label": "Align: Bottom",
+  "guess": false,
+  "slot": "slot/35067_05",
+  "source": "slot/35067_05"
+ },
+ {
+  "path": "drawing/align/center_horizontally_in_material.svg",
+  "label": "Align: Center Horizontally in Material",
+  "guess": false,
+  "slot": "slot/35067_06",
+  "source": "png/34882"
+ },
+ {
+  "path": "drawing/align/center_vertically_in_material.svg",
+  "label": "Align: Center Vertically in Material",
+  "guess": false,
+  "slot": "slot/35067_07",
+  "source": "png/34882"
+ },
+ {
+  "path": "drawing/align/center_horizontally.svg",
+  "label": "Align: Center Horizontally",
+  "guess": false,
+  "slot": "slot/35067_08",
+  "source": "slot/35067_08"
+ },
+ {
+  "path": "drawing/align/center_vertically.svg",
+  "label": "Align: Center Vertically",
+  "guess": false,
+  "slot": "slot/35067_09",
+  "source": "slot/35067_09"
+ },
+ {
+  "path": "drawing/align/top_to_bottom.svg",
+  "label": "Align: Top To Bottom",
+  "guess": true,
+  "slot": "slot/35067_10",
+  "source": "slot/35067_10"
+ },
+ {
+  "path": "drawing/align/bottom_to_top.svg",
+  "label": "Align: Bottom To Top",
+  "guess": true,
+  "slot": "slot/35067_11",
+  "source": "slot/35067_11"
+ },
+ {
+  "path": "drawing/align/left_to_right.svg",
+  "label": "Align: Left To Right",
+  "guess": true,
+  "slot": "slot/35067_12",
+  "source": "slot/35067_12"
+ },
+ {
+  "path": "drawing/align/right_to_left.svg",
+  "label": "Align: Right To Left",
+  "guess": true,
+  "slot": "slot/35067_13",
+  "source": "slot/35067_13"
+ },
+ {
+  "path": "modeling/create_shape.svg",
+  "label": "Create Shape",
+  "guess": true,
+  "slot": "slot/35068_00",
+  "source": "slot/35068_00"
+ },
+ {
+  "path": "modeling/add_zero_plane.svg",
+  "label": "Add Zero Plane",
+  "guess": false,
+  "slot": "slot/35068_01",
+  "source": "png/995"
+ },
+ {
+  "path": "modeling/create_shape_round.svg",
+  "label": "Create Shape: Round",
+  "guess": false,
+  "slot": "slot/35068_02",
+  "source": "png/996"
+ },
+ {
+  "path": "modeling/create_shape_angled.svg",
+  "label": "Create Shape: Angled",
+  "guess": false,
+  "slot": "slot/35068_03",
+  "source": "png/997"
+ },
+ {
+  "path": "modeling/create_shape_smooth.svg",
+  "label": "Create Shape: Smooth",
+  "guess": true,
+  "slot": "slot/35068_04",
+  "source": "png/998"
+ },
+ {
+  "path": "modeling/create_shape_flat.svg",
+  "label": "Create Shape: Flat",
+  "guess": true,
+  "slot": "slot/35068_05",
+  "source": "png/999"
+ },
+ {
+  "path": "modeling/two_rail_sweep.svg",
+  "label": "Two Rail Sweep",
+  "guess": false,
+  "slot": "slot/35068_06",
+  "source": "png/34744"
+ },
+ {
+  "path": "modeling/sculpting.svg",
+  "label": "Sculpting",
+  "guess": false,
+  "slot": "slot/35068_07",
+  "source": "png/34743"
+ },
+ {
+  "path": "modeling/reset_inside_selected_vectors.svg",
+  "label": "Reset Inside Selected Vectors",
+  "guess": false,
+  "slot": "slot/35068_08",
+  "source": "slot/35068_08"
+ },
+ {
+  "path": "modeling/reset_outside_selected_vectors.svg",
+  "label": "Reset Outside Selected Vectors",
+  "guess": false,
+  "slot": "slot/35068_09",
+  "source": "slot/35068_09"
+ },
+ {
+  "path": "modeling/import_component_3d_model.svg",
+  "label": "Import Component / 3D Model",
+  "guess": false,
+  "slot": "slot/35068_10",
+  "source": "png/34513"
+ },
+ {
+  "path": "modeling/create_component_from_visible_model.svg",
+  "label": "Create Component from Visible Model",
+  "guess": true,
+  "slot": "slot/35068_11",
+  "source": "slot/35068_11"
+ },
+ {
+  "path": "modeling/texture.svg",
+  "label": "Texture",
+  "guess": true,
+  "slot": "slot/35068_12",
+  "source": "png/34821"
+ },
+ {
+  "path": "modeling/scale_model_z_height.svg",
+  "label": "Scale Model Z Height",
+  "guess": false,
+  "slot": "slot/35068_13",
+  "source": "png/34765"
+ },
+ {
+  "path": "modeling/slice_model.svg",
+  "label": "Slice Model",
+  "guess": false,
+  "slot": "slot/35068_14",
+  "source": "png/2228"
+ },
+ {
+  "path": "modeling/split_selected_component.svg",
+  "label": "Split Selected Component",
+  "guess": false,
+  "slot": "slot/35068_15",
+  "source": "slot/35068_15"
+ },
+ {
+  "path": "modeling/export_as_stl.svg",
+  "label": "Export as STL",
+  "guess": false,
+  "slot": "slot/35068_16",
+  "source": "png/34766"
+ },
+ {
+  "path": "modeling/create_vector_boundary_around_selected_components.svg",
+  "label": "Create Vector Boundary Around Selected Components",
+  "guess": false,
+  "slot": "slot/35068_17",
+  "source": "slot/35068_17"
+ },
+ {
+  "path": "modeling/bake_components.svg",
+  "label": "Bake Components",
+  "guess": true,
+  "slot": "slot/35068_18",
+  "source": "slot/35068_18"
+ },
+ {
+  "path": "modeling/extrude_and_weave.svg",
+  "label": "Extrude and Weave",
+  "guess": false,
+  "slot": "slot/35068_19",
+  "source": "png/34881"
+ },
+ {
+  "path": "modeling/add_draft_to_model.svg",
+  "label": "Add Draft to Model",
+  "guess": true,
+  "slot": "slot/35068_20",
+  "source": "png/34874"
+ },
+ {
+  "path": "modeling/emboss_component.svg",
+  "label": "Emboss Component",
+  "guess": false,
+  "slot": "slot/35068_21",
+  "source": "png/2388"
+ },
+ {
+  "path": "modeling/create_texture_area.svg",
+  "label": "Create Texture Area",
+  "guess": false,
+  "slot": "slot/35068_22",
+  "source": "png/34567"
+ },
+ {
+  "path": "modeling/turn_and_spin.svg",
+  "label": "Turn and Spin",
+  "guess": false,
+  "slot": "slot/35068_23",
+  "source": "png/34941"
+ },
+ {
+  "path": "modeling/offset_model.svg",
+  "label": "Offset Model",
+  "guess": true,
+  "slot": "slot/35068_24",
+  "source": "png/34932"
+ },
+ {
+  "path": "modeling/component_levels.svg",
+  "label": "Component Levels",
+  "guess": true,
+  "slot": "slot/35068_25",
+  "source": "slot/35068_25"
+ },
+ {
+  "path": "modeling/replace_below.svg",
+  "label": "Replace Below",
+  "guess": false,
+  "slot": "slot/35068_26",
+  "source": "png/34196"
+ },
+ {
+  "path": "modeling/create_cross_section_vector.svg",
+  "label": "Create Cross Section Vector",
+  "guess": true,
+  "slot": "slot/35068_27",
+  "source": "slot/35068_27"
+ },
+ {
+  "path": "file/new.svg",
+  "label": "New",
+  "guess": false,
+  "slot": "slot/35069_00",
+  "source": "slot/35069_00"
+ },
+ {
+  "path": "file/open.svg",
+  "label": "Open",
+  "guess": false,
+  "slot": "slot/35069_01",
+  "source": "slot/35069_01"
+ },
+ {
+  "path": "file/save.svg",
+  "label": "Save",
+  "guess": false,
+  "slot": "slot/35069_02",
+  "source": "slot/35069_02"
+ },
+ {
+  "path": "file/import_vectors_bitmap.svg",
+  "label": "Import Vectors / Bitmap",
+  "guess": false,
+  "slot": "slot/35069_03",
+  "source": "slot/35069_03"
+ },
+ {
+  "path": "file/cut.svg",
+  "label": "Cut",
+  "guess": false,
+  "slot": "slot/35069_04",
+  "source": "slot/35069_04"
+ },
+ {
+  "path": "file/copy.svg",
+  "label": "Copy",
+  "guess": false,
+  "slot": "slot/35069_05",
+  "source": "slot/35069_05"
+ },
+ {
+  "path": "file/paste.svg",
+  "label": "Paste",
+  "guess": false,
+  "slot": "slot/35069_06",
+  "source": "slot/35069_06"
+ },
+ {
+  "path": "file/undo.svg",
+  "label": "Undo",
+  "guess": false,
+  "slot": "slot/35069_07",
+  "source": "slot/35069_07"
+ },
+ {
+  "path": "file/redo.svg",
+  "label": "Redo",
+  "guess": false,
+  "slot": "slot/35069_08",
+  "source": "slot/35069_08"
+ },
+ {
+  "path": "file/job_setup.svg",
+  "label": "Job Setup",
+  "guess": false,
+  "slot": "slot/35069_09",
+  "source": "png/34558"
+ },
+ {
+  "path": "file/import_vectors.svg",
+  "label": "Import Vectors",
+  "guess": true,
+  "slot": "slot/35069_10",
+  "source": "slot/35069_10"
+ },
+ {
+  "path": "file/export_vectors.svg",
+  "label": "Export Vectors",
+  "guess": true,
+  "slot": "slot/35069_11",
+  "source": "slot/35069_11"
+ },
+ {
+  "path": "file/export_as_3d_clipart.svg",
+  "label": "Export as 3D Clipart",
+  "guess": true,
+  "slot": "slot/35069_12",
+  "source": "png/34834"
+ },
+ {
+  "path": "file/paste_in_place.svg",
+  "label": "Paste in Place",
+  "guess": true,
+  "slot": "slot/35069_13",
+  "source": "slot/35069_13"
+ },
+ {
+  "path": "file/open_clipart_folder.svg",
+  "label": "Open Clipart Folder",
+  "guess": true,
+  "slot": "slot/35069_21",
+  "source": "slot/35069_21"
+ },
+ {
+  "path": "file/open_folder.svg",
+  "label": "Open Folder",
+  "guess": true,
+  "slot": "slot/35069_22",
+  "source": "slot/35069_22"
+ },
+ {
+  "path": "file/notes.svg",
+  "label": "Notes",
+  "guess": false,
+  "slot": "slot/35069_27",
+  "source": "slot/35069_27"
+ },
+ {
+  "path": "toolpaths/vcarve_engrave_toolpath.svg",
+  "label": "VCarve / Engrave Toolpath",
+  "guess": false,
+  "slot": "slot/35070_00",
+  "source": "png/34555"
+ },
+ {
+  "path": "toolpaths/delete_toolpath.svg",
+  "label": "Delete Toolpath",
+  "guess": false,
+  "slot": "slot/35070_01",
+  "source": "slot/35070_01"
+ },
+ {
+  "path": "toolpaths/edit_toolpath.svg",
+  "label": "Edit Toolpath",
+  "guess": false,
+  "slot": "slot/35070_02",
+  "source": "slot/35070_02"
+ },
+ {
+  "path": "toolpaths/create_job_sheet.svg",
+  "label": "Create Job Sheet",
+  "guess": true,
+  "slot": "slot/35070_03",
+  "source": "slot/35070_03"
+ },
+ {
+  "path": "toolpaths/save_toolpaths.svg",
+  "label": "Save Toolpaths",
+  "guess": false,
+  "slot": "slot/35070_04",
+  "source": "png/34565"
+ },
+ {
+  "path": "toolpaths/preview_toolpaths.svg",
+  "label": "Preview Toolpaths",
+  "guess": false,
+  "slot": "slot/35070_05",
+  "source": "png/34559"
+ },
+ {
+  "path": "toolpaths/toolpath_summary.svg",
+  "label": "Toolpath Summary",
+  "guess": false,
+  "slot": "slot/35070_06",
+  "source": "png/34572"
+ },
+ {
+  "path": "toolpaths/hide_toolpaths.svg",
+  "label": "Hide toolpaths",
+  "guess": true,
+  "slot": "slot/35070_07",
+  "source": "slot/35070_07"
+ },
+ {
+  "path": "toolpaths/profile_toolpath.svg",
+  "label": "Profile Toolpath",
+  "guess": false,
+  "slot": "slot/35070_08",
+  "source": "png/34627"
+ },
+ {
+  "path": "toolpaths/pocket_toolpath.svg",
+  "label": "Pocket Toolpath",
+  "guess": false,
+  "slot": "slot/35070_09",
+  "source": "png/34626"
+ },
+ {
+  "path": "toolpaths/texture_toolpath.svg",
+  "label": "Texture Toolpath",
+  "guess": false,
+  "slot": "slot/35070_10",
+  "source": "png/34625"
+ },
+ {
+  "path": "toolpaths/drilling_toolpath.svg",
+  "label": "Drilling Toolpath",
+  "guess": false,
+  "slot": "slot/35070_11",
+  "source": "png/34629"
+ },
+ {
+  "path": "toolpaths/quick_engrave.svg",
+  "label": "Quick Engrave",
+  "guess": true,
+  "slot": "slot/35070_12",
+  "source": "png/34722"
+ },
+ {
+  "path": "toolpaths/3d_roughing_toolpath.svg",
+  "label": "3D Roughing Toolpath",
+  "guess": false,
+  "slot": "slot/35070_13",
+  "source": "png/34750"
+ },
+ {
+  "path": "toolpaths/3d_finishing_toolpath.svg",
+  "label": "3D Finishing Toolpath",
+  "guess": false,
+  "slot": "slot/35070_14",
+  "source": "png/34751"
+ },
+ {
+  "path": "toolpaths/recalculate_toolpath.svg",
+  "label": "Recalculate Toolpath",
+  "guess": false,
+  "slot": "slot/35070_15",
+  "source": "slot/35070_15"
+ },
+ {
+  "path": "toolpaths/chamfer_toolpath.svg",
+  "label": "Chamfer Toolpath",
+  "guess": true,
+  "slot": "slot/35070_16",
+  "source": "png/34770"
+ },
+ {
+  "path": "toolpaths/prism_carving.svg",
+  "label": "Prism Carving",
+  "guess": true,
+  "slot": "slot/35070_17",
+  "source": "png/34780"
+ },
+ {
+  "path": "toolpaths/fluting_toolpath.svg",
+  "label": "Fluting Toolpath",
+  "guess": false,
+  "slot": "slot/35070_18",
+  "source": "png/34781"
+ },
+ {
+  "path": "toolpaths/toolpath_tiling.svg",
+  "label": "Toolpath Tiling",
+  "guess": true,
+  "slot": "slot/35070_19",
+  "source": "slot/35070_19"
+ },
+ {
+  "path": "toolpaths/tool_database.svg",
+  "label": "Tool Database",
+  "guess": false,
+  "slot": "slot/35070_20",
+  "source": "slot/35070_20"
+ },
+ {
+  "path": "toolpaths/load_toolpath_template.svg",
+  "label": "Load Toolpath Template",
+  "guess": false,
+  "slot": "slot/35070_21",
+  "source": "slot/35070_21"
+ },
+ {
+  "path": "toolpaths/save_toolpath_template.svg",
+  "label": "Save Toolpath Template",
+  "guess": true,
+  "slot": "slot/35070_22",
+  "source": "slot/35070_22"
+ },
+ {
+  "path": "toolpaths/save_all_as_template.svg",
+  "label": "Save All as Template",
+  "guess": true,
+  "slot": "slot/35070_23",
+  "source": "slot/35070_23"
+ },
+ {
+  "path": "toolpaths/keyhole_toolpath.svg",
+  "label": "Keyhole Toolpath",
+  "guess": true,
+  "slot": "slot/35070_24",
+  "source": "slot/35070_24"
+ },
+ {
+  "path": "toolpaths/merge_toolpaths.svg",
+  "label": "Merge Toolpaths",
+  "guess": true,
+  "slot": "slot/35070_25",
+  "source": "png/34952"
+ },
+ {
+  "path": "toolpaths/laser_engrave_text.svg",
+  "label": "Laser Engrave (text)",
+  "guess": true,
+  "slot": "slot/35070_26",
+  "source": "slot/35070_26"
+ },
+ {
+  "path": "toolpaths/moulding_toolpath.svg",
+  "label": "Moulding Toolpath",
+  "guess": false,
+  "slot": "slot/35070_27",
+  "source": "png/2535"
+ },
+ {
+  "path": "toolpaths/laser_cut_fill.svg",
+  "label": "Laser Cut / Fill",
+  "guess": false,
+  "slot": "slot/35070_28",
+  "source": "png/34953"
+ },
+ {
+  "path": "toolpaths/array_copy_toolpath.svg",
+  "label": "Array Copy Toolpath",
+  "guess": true,
+  "slot": "slot/35070_29",
+  "source": "png/33983"
+ },
+ {
+  "path": "toolpaths/laser_picture.svg",
+  "label": "Laser Picture",
+  "guess": false,
+  "slot": "slot/35070_30",
+  "source": "png/33991"
+ },
+ {
+  "path": "toolpaths/engraving.svg",
+  "label": "Engraving",
+  "guess": true,
+  "slot": "slot/35070_31",
+  "source": "png/34199"
+ },
+ {
+  "path": "toolpaths/circular_pocket.svg",
+  "label": "Circular pocket",
+  "guess": true,
+  "slot": "slot/35070_32",
+  "source": "png/34416"
+ },
+ {
+  "path": "toolpaths/rounding_toolpath.svg",
+  "label": "Rounding Toolpath",
+  "guess": true,
+  "slot": "slot/35070_33",
+  "source": "png/2936"
+ },
+ {
+  "path": "toolpaths/sketch_carving.svg",
+  "label": "Sketch Carving",
+  "guess": false,
+  "slot": "slot/35070_34",
+  "source": "png/5076"
+ },
+ {
+  "path": "toolpaths/keep_out_zones.svg",
+  "label": "Keep-Out Zones",
+  "guess": false,
+  "slot": "slot/35070_35",
+  "source": "png/5085"
+ },
+ {
+  "path": "toolpaths/vcarve_inlay.svg",
+  "label": "VCarve Inlay",
+  "guess": false,
+  "slot": "slot/35070_36",
+  "source": "png/35128"
+ },
+ {
+  "path": "view/2d_view.svg",
+  "label": "2D View",
+  "guess": false,
+  "slot": "ico/35153",
+  "source": "ico/35153"
+ },
+ {
+  "path": "view/3d_view.svg",
+  "label": "3D View",
+  "guess": false,
+  "slot": "ico/35154",
+  "source": "ico/35154"
+ },
+ {
+  "path": "view/pan.svg",
+  "label": "Pan",
+  "guess": false,
+  "slot": "png/35096",
+  "source": "png/35096"
+ },
+ {
+  "path": "view/zoom_box.svg",
+  "label": "Zoom Box",
+  "guess": false,
+  "slot": "png/35097",
+  "source": "png/35097"
+ },
+ {
+  "path": "view/zoom_to_job.svg",
+  "label": "Zoom to Job",
+  "guess": false,
+  "slot": "png/35098",
+  "source": "png/35098"
+ },
+ {
+  "path": "view/2d_toolpath_drawing_on.svg",
+  "label": "2D toolpath drawing (on)",
+  "guess": false,
+  "slot": "png/35091",
+  "source": "png/35091"
+ },
+ {
+  "path": "view/2d_toolpath_drawing_off.svg",
+  "label": "2D toolpath drawing (off)",
+  "guess": false,
+  "slot": "png/35092",
+  "source": "png/35092"
+ },
+ {
+  "path": "view/solid_2d_toolpath_drawing.svg",
+  "label": "Solid 2D toolpath drawing",
+  "guess": false,
+  "slot": "png/35093",
+  "source": "png/35093"
+ },
+ {
+  "path": "view/tile_windows.svg",
+  "label": "Tile windows",
+  "guess": false,
+  "slot": "ico/57651",
+  "source": "ico/57651"
+ },
+ {
+  "path": "view/interface_layout.svg",
+  "label": "Interface layout",
+  "guess": false,
+  "slot": "ico/33848",
+  "source": "ico/33848"
+ },
+ {
+  "path": "view/expand.svg",
+  "label": "Expand",
+  "guess": false,
+  "slot": "png/34562",
+  "source": "png/34562"
+ },
+ {
+  "path": "view/collapse.svg",
+  "label": "Collapse",
+  "guess": false,
+  "slot": "png/34563",
+  "source": "png/34563"
+ },
+ {
+  "path": "snapping/geometry_snapping_on.svg",
+  "label": "Geometry snapping (on)",
+  "guess": false,
+  "slot": "ico/33883",
+  "source": "ico/33883"
+ },
+ {
+  "path": "snapping/geometry_snapping_off.svg",
+  "label": "Geometry snapping (off)",
+  "guess": false,
+  "slot": "ico/33884",
+  "source": "ico/33884"
+ },
+ {
+  "path": "snapping/smart_snapping_on.svg",
+  "label": "Smart snapping (on)",
+  "guess": false,
+  "slot": "ico/33885",
+  "source": "ico/33885"
+ },
+ {
+  "path": "snapping/smart_snapping_off.svg",
+  "label": "Smart snapping (off)",
+  "guess": false,
+  "slot": "ico/33886",
+  "source": "ico/33886"
+ },
+ {
+  "path": "snapping/grid_snapping_on.svg",
+  "label": "Grid snapping (on)",
+  "guess": false,
+  "slot": "ico/33887",
+  "source": "ico/33887"
+ },
+ {
+  "path": "snapping/grid_snapping_off.svg",
+  "label": "Grid snapping (off)",
+  "guess": false,
+  "slot": "ico/33888",
+  "source": "ico/33888"
+ },
+ {
+  "path": "layers/visible.svg",
+  "label": "Visible",
+  "guess": false,
+  "slot": "ico/414",
+  "source": "ico/414"
+ },
+ {
+  "path": "layers/hidden.svg",
+  "label": "Hidden",
+  "guess": false,
+  "slot": "ico/415",
+  "source": "ico/415"
+ },
+ {
+  "path": "layers/locked.svg",
+  "label": "Locked",
+  "guess": false,
+  "slot": "ico/418",
+  "source": "ico/418"
+ },
+ {
+  "path": "layers/unlocked.svg",
+  "label": "Unlocked",
+  "guess": false,
+  "slot": "ico/419",
+  "source": "ico/419"
+ },
+ {
+  "path": "layers/component_hidden.svg",
+  "label": "Component (hidden)",
+  "guess": false,
+  "slot": "png/35146",
+  "source": "png/35146"
+ },
+ {
+  "path": "layers/component_visible.svg",
+  "label": "Component (visible)",
+  "guess": false,
+  "slot": "png/35147",
+  "source": "png/35147"
+ },
+ {
+  "path": "layers/bitmap_hidden.svg",
+  "label": "Bitmap (hidden)",
+  "guess": false,
+  "slot": "png/35148",
+  "source": "png/35148"
+ },
+ {
+  "path": "layers/bitmap_visible.svg",
+  "label": "Bitmap (visible)",
+  "guess": false,
+  "slot": "png/35149",
+  "source": "png/35149"
+ },
+ {
+  "path": "job_setup/xy_datum_bottom_left.svg",
+  "label": "XY datum: bottom-left",
+  "guess": false,
+  "slot": "png/34896",
+  "source": "png/34896"
+ },
+ {
+  "path": "job_setup/xy_datum_bottom_right.svg",
+  "label": "XY datum: bottom-right",
+  "guess": false,
+  "slot": "png/34897",
+  "source": "png/34897"
+ },
+ {
+  "path": "job_setup/xy_datum_centre.svg",
+  "label": "XY datum: centre",
+  "guess": false,
+  "slot": "png/34898",
+  "source": "png/34898"
+ },
+ {
+  "path": "job_setup/xy_datum_top_left.svg",
+  "label": "XY datum: top-left",
+  "guess": false,
+  "slot": "png/34899",
+  "source": "png/34899"
+ },
+ {
+  "path": "job_setup/xy_datum_top_right.svg",
+  "label": "XY datum: top-right",
+  "guess": false,
+  "slot": "png/34900",
+  "source": "png/34900"
+ },
+ {
+  "path": "job_setup/z_zero_material_surface.svg",
+  "label": "Z-zero: material surface",
+  "guess": false,
+  "slot": "png/34556",
+  "source": "png/34556"
+ },
+ {
+  "path": "job_setup/z_zero_machine_bed.svg",
+  "label": "Z-zero: machine bed",
+  "guess": false,
+  "slot": "png/34557",
+  "source": "png/34557"
+ },
+ {
+  "path": "job_setup/single_sided_job.svg",
+  "label": "Single sided job",
+  "guess": false,
+  "slot": "png/2572",
+  "source": "png/2572"
+ },
+ {
+  "path": "job_setup/double_sided_job.svg",
+  "label": "Double sided job",
+  "guess": false,
+  "slot": "png/2573",
+  "source": "png/2573"
+ },
+ {
+  "path": "job_setup/rotary_job.svg",
+  "label": "Rotary job",
+  "guess": false,
+  "slot": "png/2696",
+  "source": "png/2696"
+ },
+ {
+  "path": "job_setup/material_size_xyz.svg",
+  "label": "Material size XYZ",
+  "guess": false,
+  "slot": "png/34905",
+  "source": "png/34905"
+ },
+ {
+  "path": "job_setup/clearance_z1.svg",
+  "label": "Clearance Z1",
+  "guess": false,
+  "slot": "png/34902",
+  "source": "png/34902"
+ },
+ {
+  "path": "job_setup/plunge_z2.svg",
+  "label": "Plunge Z2",
+  "guess": false,
+  "slot": "png/34903",
+  "source": "png/34903"
+ },
+ {
+  "path": "common/save.svg",
+  "label": "Save",
+  "guess": false,
+  "slot": "png/34241",
+  "source": "png/34241"
+ },
+ {
+  "path": "common/open.svg",
+  "label": "Open",
+  "guess": false,
+  "slot": "png/34243",
+  "source": "png/34243"
+ },
+ {
+  "path": "common/edit.svg",
+  "label": "Edit",
+  "guess": false,
+  "slot": "png/34245",
+  "source": "png/34245"
+ },
+ {
+  "path": "common/add.svg",
+  "label": "Add",
+  "guess": false,
+  "slot": "png/34246",
+  "source": "png/34246"
+ },
+ {
+  "path": "common/copy_duplicate.svg",
+  "label": "Copy / Duplicate",
+  "guess": false,
+  "slot": "png/34247",
+  "source": "png/34247"
+ },
+ {
+  "path": "common/delete.svg",
+  "label": "Delete",
+  "guess": false,
+  "slot": "png/34248",
+  "source": "png/34248"
+ },
+ {
+  "path": "common/reset_undo.svg",
+  "label": "Reset / Undo",
+  "guess": false,
+  "slot": "png/34278",
+  "source": "png/34278"
+ },
+ {
+  "path": "common/add_tool.svg",
+  "label": "Add Tool",
+  "guess": false,
+  "slot": "png/34242",
+  "source": "png/34242"
+ },
+ {
+  "path": "common/tool_database.svg",
+  "label": "Tool Database",
+  "guess": false,
+  "slot": "png/35075",
+  "source": "png/35075"
+ },
+ {
+  "path": "common/materials_appearance.svg",
+  "label": "Materials / Appearance",
+  "guess": false,
+  "slot": "png/34829",
+  "source": "png/34829"
+ },
+ {
+  "path": "common/error_close.svg",
+  "label": "Error / close",
+  "guess": false,
+  "slot": "ico/35038",
+  "source": "ico/35038"
+ }
+]

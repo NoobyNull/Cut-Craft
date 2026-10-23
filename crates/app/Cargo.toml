@@ -1,0 +1,13 @@
+[package]
+name = "aspire-clone"
+description = "Desktop UI: panels, menus, forms and tools over the command registry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+eframe.workspace = true
+env_logger.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true

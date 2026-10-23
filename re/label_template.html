@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icon Labeller</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --gap: 0.75rem;
+    --card: 11rem;
+    --target: 64; /* px an icon's longest side is scaled up to */
+    --check: 8px;
+    --line: color-mix(in srgb, CanvasText 20%, transparent);
+    --tile: color-mix(in srgb, CanvasText 8%, transparent);
+    --done: color-mix(in srgb, LinkText 15%, Canvas);
+  }
+  body { margin: 0; font: 14px system-ui, sans-serif; background: Canvas; color: CanvasText; }
+  header { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center;
+           padding: var(--gap); background: Canvas; border-bottom: 1px solid var(--line); }
+  header input[type=search] { flex: 1 1 12rem; }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card), 1fr)); gap: var(--gap); padding: var(--gap); }
+  figure { margin: 0; padding: calc(var(--gap) / 2); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; gap: 4px; }
+  figure.done { background: var(--done); }
+  .img { display: grid; place-items: center; min-height: calc(var(--target) * 1px + 8px); overflow: hidden;
+         background: repeating-conic-gradient(var(--tile) 0 25%, transparent 0 50%) 0 0 / var(--check) var(--check); }
+  img { image-rendering: pixelated; max-width: 100%; }
+  figcaption { font: 12px ui-monospace, monospace; opacity: 0.8; }
+  figure input { width: 100%; box-sizing: border-box; }
+  .hint { opacity: 0.7; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Icon Labeller</strong>
+  <span id="progress"></span>
+  <input type="search" id="filter" placeholder="Filter: id, name or size (e.g. 32x32)">
+  <select id="kind"><option value="">All types</option><option>slot</option><option>png</option><option>bmp</option><option>ico</option></select>
+  <label><input type="checkbox" id="todo"> Unlabelled only</label>
+  <button id="copy">Copy labels as JSON</button>
+  <span class="hint">Type <code>-</code> for icons that aren't tools. Labels save automatically.</span>
+</header>
+<main id="grid"></main>
+<datalist id="names"><!--NAMES--></datalist>
+<script>
+const ITEMS = /*ITEMS*/[];
+const STORE = "aspire-icon-labels";
+let labels = {};
+try { labels = JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) {}
+function save() { try { localStorage.setItem(STORE, JSON.stringify(labels)); } catch (e) {} update(); }
+window.iconLabels = () => labels; // read by Claude through the browser pane
+
+const target = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--target"));
+const grid = document.getElementById("grid");
+for (const it of ITEMS) {
+  const fig = document.createElement("figure");
+  fig.dataset.key = it.key;
+  fig.dataset.size = `${it.w}x${it.h}`;
+  const zoom = Math.max(1, Math.floor(target / Math.max(it.w, it.h)));
+  fig.innerHTML = `<div class="img"><img loading="lazy" alt="${it.key}" src="${it.src}" width="${it.w * zoom}"></div>
+    <figcaption>${it.key} · ${it.w}×${it.h}</figcaption>
+    <input list="names" placeholder="What is this?" aria-label="Name for ${it.key}">`;
+  const input = fig.querySelector("input");
+  input.value = labels[it.key] || "";
+  input.addEventListener("input", () => {
+    const v = input.value.trim();
+    if (v) labels[it.key] = v; else delete labels[it.key];
+    save();
+  });
+  grid.append(fig);
+}
+
+const filter = document.getElementById("filter"), kind = document.getElementById("kind"), todo = document.getElementById("todo");
+function update() {
+  const q = filter.value.trim().toLowerCase();
+  let done = 0;
+  for (const fig of grid.children) {
+    const label = labels[fig.dataset.key] || "";
+    if (label) done++;
+    fig.classList.toggle("done", !!label);
+    const text = `${fig.dataset.key} ${fig.dataset.size} ${label}`.toLowerCase();
+    fig.hidden = (q && !text.includes(q)) || (kind.value && !fig.dataset.key.startsWith(kind.value + "/")) || (todo.checked && label);
+  }
+  document.getElementById("progress").textContent = `${done} / ${ITEMS.length} labelled`;
+}
+for (const el of [filter, kind, todo]) el.addEventListener("input", update);
+document.getElementById("copy").addEventListener("click", async () => {
+  const text = JSON.stringify(labels, null, 1);
+  try { await navigator.clipboard.writeText(text); } catch (e) { prompt("Copy these labels:", text); }
+});
+update();
+</script>
+</body>
+</html>
