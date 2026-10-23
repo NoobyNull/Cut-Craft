@@ -82,8 +82,9 @@ Done:
     commands (add, delete, move to, select on, properties, set current), Layers tab.
 14. ✅ Tool database: shared tools in `~/.config/aspire-clone/tools.json`; toolpath forms
     pick from it and save back; Tool Database window edits and deletes. Toolpaths keep a copy.
+15. ✅ Toolpath preview: material height grid cut by the toolpaths (Preview All = Preview
+    Selected for each); orbitable 3D view of the block, drawn as a lit mesh.
 
 Next:
-15. Toolpath simulation / 3D view.
 16. 3D components (height maps), create shape, combine modes; STL export.
 17. V-carve, fluting, inlay and the other strategies.

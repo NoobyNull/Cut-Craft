@@ -15,6 +15,7 @@ use aspire_core::toolpath::{Tool, ToolDatabase};
 use aspire_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
+use std::f64::consts::{FRAC_PI_2, PI};
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
@@ -40,6 +41,9 @@ const BUILT_INS: [&str; 17] = [
 /// Simulation cells along the longer side of the job.
 // ponytail: one quality until the Preview Simulation Quality menu is wired
 const PREVIEW_CELLS: usize = 1000;
+/// 3D view mesh cells along the longer side of the job.
+// ponytail: fixed until the 3D view has a detail setting
+const MESH_CELLS: usize = 250;
 const APP_NAME: &str = "Aspire Clone";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
@@ -88,7 +92,9 @@ struct AspireApp {
     tool_selected: usize,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
     simulation: Option<Material>,
-    simulation_texture: Option<egui::TextureHandle>,
+    /// `simulation` at the 3D view's mesh resolution.
+    simulation_coarse: Option<Material>,
+    orbit: view3d::Orbit,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -116,7 +122,8 @@ impl AspireApp {
             tool_window: false,
             tool_selected: 0,
             simulation: None,
-            simulation_texture: None,
+            simulation_coarse: None,
+            orbit: view3d::Orbit::default(),
             title: String::new(),
         }
     }
@@ -183,7 +190,7 @@ impl AspireApp {
                     self.preview_toolpath(id);
                 }
             }
-            "reset_preview" => (self.simulation, self.simulation_texture) = (None, None),
+            "reset_preview" => (self.simulation, self.simulation_coarse) = (None, None),
             id if self.registry.exporter(id).is_some() => self.export(id),
             _ => self.start_command(id),
         }
@@ -795,25 +802,36 @@ impl AspireApp {
         self.simulation
             .get_or_insert_with(|| Material::new(&self.doc.job, PREVIEW_CELLS))
             .cut(toolpath);
-        self.simulation_texture = None;
+        self.simulation_coarse = None;
         self.view = View::ThreeD;
         self.status
             .set_message(&format!("Previewed {}", toolpath.name));
     }
 
+    /// The previewed material, turned by dragging sideways and tilted by dragging up/down.
     fn view_3d(&mut self, ui: &mut egui::Ui) {
         let Some(material) = &self.simulation else {
             ui.centered_and_justified(|ui| ui.weak("No preview yet: preview the toolpaths"));
             return;
         };
-        let texture = self.simulation_texture.get_or_insert_with(|| {
-            let image = view3d::shaded(material, ui.visuals().warn_fg_color);
-            ui.ctx()
-                .load_texture("simulation", image, egui::TextureOptions::LINEAR)
-        });
-        let size = texture.size_vec2();
-        let fit = (ui.available_size() / size).min_elem();
-        ui.centered_and_justified(|ui| ui.image((texture.id(), size * fit)));
+        let (area, response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::drag());
+        // dragging across the whole view turns half a turn
+        let delta = response.drag_delta();
+        self.orbit.yaw += f64::from(delta.x / area.width().max(1.0)) * PI;
+        self.orbit.pitch = (self.orbit.pitch + f64::from(delta.y / area.height().max(1.0)) * PI)
+            .clamp(0.0, FRAC_PI_2);
+        // ponytail: rebuilt every frame; cache it with the orbit if frames get slow
+        let shown = self
+            .simulation_coarse
+            .get_or_insert_with(|| view3d::coarse(material, MESH_CELLS));
+        let margin = ui.spacing().item_spacing.x * 2.0;
+        let mesh = view3d::mesh(
+            shown,
+            self.orbit,
+            ui.visuals().warn_fg_color,
+            area.shrink(margin),
+        );
+        ui.painter_at(area).add(mesh);
     }
 
     fn toolpaths_panel(&mut self, ui: &mut egui::Ui) {

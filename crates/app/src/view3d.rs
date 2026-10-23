@@ -1,10 +1,10 @@
-//! The preview: simulated material drawn as a lit relief seen from above.
+//! The 3D view: the simulated material as a lit block, turned and tilted by dragging.
 
-use aspire_core::glam::DVec3;
+use aspire_core::glam::{DVec2, DVec3};
 use aspire_core::simulation::Material;
-use eframe::egui::{Color32, ColorImage, Rgba};
+use eframe::egui::{Color32, Mesh, Pos2, Rect, Rgba};
 
-// ponytail: fixed lighting until the 3D view can orbit and has light settings
+// ponytail: fixed lighting until the 3D view has light settings
 /// Where the light comes from: upper left (-x, +y) and above.
 const LIGHT: DVec3 = DVec3::new(-1.0, 1.0, 1.0);
 /// Brightness of surfaces facing away from the light.
@@ -12,50 +12,192 @@ const AMBIENT: f64 = 0.35;
 /// How much darker the full material thickness down is than the top.
 const DEPTH_SHADE: f64 = 0.5;
 
-/// The material lit from the upper left, darker the deeper it is cut, in shades of `colour`.
+/// Where the view looks from: `yaw` turns the job about the vertical, `pitch` tilts it from
+/// straight down (0) towards side on (a right angle), radians.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Orbit {
+    pub yaw: f64,
+    pub pitch: f64,
+}
+
+impl Default for Orbit {
+    fn default() -> Self {
+        // ponytail: one starting angle until the view menu has standard views
+        Self {
+            yaw: -20f64.to_radians(),
+            pitch: 50f64.to_radians(),
+        }
+    }
+}
+
+impl Orbit {
+    /// `p` on the screen plane (x right, y up) and its distance towards the viewer.
+    pub fn project(self, p: DVec3) -> (DVec2, f64) {
+        let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
+        let (x, y) = (p.x * cos_yaw - p.y * sin_yaw, p.x * sin_yaw + p.y * cos_yaw);
+        let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
+        (
+            DVec2::new(x, y * cos_pitch + p.z * sin_pitch),
+            p.z * cos_pitch - y * sin_pitch,
+        )
+    }
+}
+
+/// Brightness of the surface over a cell, 0 to 1: lit from the upper left, darker deeper.
+#[expect(clippy::cast_precision_loss, reason = "cell steps are 1 or 2")]
+pub fn brightness(material: &Material, column: usize, row: usize) -> f64 {
+    let m = material;
+    let height = |column: usize, row: usize| m.heights[row * m.columns + column];
+    // slope by central differences, one-sided at the edges
+    let slope =
+        |before: usize, after: usize, rise: f64| rise / (m.cell * (after - before).max(1) as f64);
+    let (left, right) = (column.saturating_sub(1), (column + 1).min(m.columns - 1));
+    let (below, above) = (row.saturating_sub(1), (row + 1).min(m.rows - 1));
+    let normal = DVec3::new(
+        -slope(left, right, height(right, row) - height(left, row)),
+        -slope(below, above, height(column, above) - height(column, below)),
+        1.0,
+    );
+    let depth = if m.bottom < 0.0 {
+        height(column, row) / m.bottom
+    } else {
+        0.0
+    };
+    lit(normal) * (1.0 - DEPTH_SHADE * depth)
+}
+
+/// Brightness of a surface facing `normal`.
+fn lit(normal: DVec3) -> f64 {
+    AMBIENT + (1.0 - AMBIENT) * normal.normalize().dot(LIGHT.normalize()).max(0.0)
+}
+
+/// `material` with at most `most` cells along its longer side, each the deepest of the
+/// cells it covers so narrow cuts stay visible.
+#[expect(clippy::cast_precision_loss, reason = "a small step")]
+pub fn coarse(material: &Material, most: usize) -> Material {
+    let m = material;
+    let step = m.columns.max(m.rows).div_ceil(most.max(1)).max(1);
+    let (columns, rows) = (m.columns.div_ceil(step), m.rows.div_ceil(step));
+    let span = |block: usize, count: usize| block * step..((block + 1) * step).min(count);
+    let heights = (0..rows)
+        .flat_map(|row| (0..columns).map(move |column| (column, row)))
+        .map(|(column, row)| {
+            span(row, m.rows)
+                .flat_map(|r| span(column, m.columns).map(move |c| m.heights[r * m.columns + c]))
+                .fold(f64::INFINITY, f64::min)
+        })
+        .collect();
+    Material {
+        columns,
+        rows,
+        cell: m.cell * step as f64,
+        bottom: m.bottom,
+        heights,
+    }
+}
+
+/// The material seen from `orbit`, fitted into `area` and drawn far to near.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
-    reason = "brightness is between 0 and 1; cell steps are 1 or 2"
+    reason = "screen coordinates and brightness fit f32; cell indices fit f64"
 )]
-pub fn shaded(material: &Material, colour: Color32) -> ColorImage {
-    let (columns, rows) = (material.columns, material.rows);
-    let light = LIGHT.normalize();
+pub fn mesh(material: &Material, orbit: Orbit, colour: Color32, area: Rect) -> Mesh {
+    let m = material;
     let base = Rgba::from(colour);
-    let height = |column: usize, row: usize| material.heights[row * columns + column];
-    // slope by central differences, one-sided at the edges
-    let slope = |before: usize, after: usize, rise: f64| {
-        rise / (material.cell * (after - before).max(1) as f64)
+    let shade = |brightness: f64| {
+        let b = brightness as f32;
+        Color32::from(Rgba::from_rgb(base.r() * b, base.g() * b, base.b() * b))
     };
-    let pixels = (0..rows)
-        .rev() // the image starts at the top, the material at y = 0
-        .flat_map(|row| (0..columns).map(move |column| (column, row)))
-        .map(|(column, row)| {
-            let (left, right) = (column.saturating_sub(1), (column + 1).min(columns - 1));
-            let (below, above) = (row.saturating_sub(1), (row + 1).min(rows - 1));
-            let normal = DVec3::new(
-                -slope(left, right, height(right, row) - height(left, row)),
-                -slope(below, above, height(column, above) - height(column, below)),
-                1.0,
+    let top = |column: usize, row: usize| {
+        DVec3::new(
+            (column as f64 + 0.5) * m.cell,
+            (row as f64 + 0.5) * m.cell,
+            m.heights[row * m.columns + column],
+        )
+    };
+    // quads in job space, a colour per corner
+    let mut quads: Vec<([DVec3; 4], [Color32; 4])> = vec![];
+    for row in 1..m.rows {
+        for column in 1..m.columns {
+            let corners = [
+                (column - 1, row - 1),
+                (column, row - 1),
+                (column, row),
+                (column - 1, row),
+            ];
+            quads.push((
+                corners.map(|(c, r)| top(c, r)),
+                corners.map(|(c, r)| shade(brightness(m, c, r))),
+            ));
+        }
+    }
+    // the block's sides that face the viewer, from the surface down to the bottom
+    let (last_column, last_row) = (m.columns - 1, m.rows - 1);
+    let sides: [(DVec3, Vec<(usize, usize)>); 4] = [
+        (DVec3::NEG_Y, (0..m.columns).map(|c| (c, 0)).collect()),
+        (DVec3::Y, (0..m.columns).map(|c| (c, last_row)).collect()),
+        (DVec3::NEG_X, (0..m.rows).map(|r| (0, r)).collect()),
+        (DVec3::X, (0..m.rows).map(|r| (last_column, r)).collect()),
+    ];
+    for (outward, edge) in sides {
+        if orbit.project(outward).1 <= 0.0 {
+            continue;
+        }
+        let colour = shade(lit(outward));
+        for pair in edge.windows(2) {
+            let (a, b) = (top(pair[0].0, pair[0].1), top(pair[1].0, pair[1].1));
+            let down = |p: DVec3| DVec3::new(p.x, p.y, m.bottom);
+            quads.push(([a, b, down(b), down(a)], [colour; 4]));
+        }
+    }
+    // painter's algorithm: far quads first
+    let mut projected: Vec<([DVec2; 4], f64, [Color32; 4])> = quads
+        .into_iter()
+        .map(|(corners, colours)| {
+            let p = corners.map(|c| orbit.project(c));
+            (
+                p.map(|(at, _)| at),
+                p.iter().map(|(_, d)| d).sum::<f64>(),
+                colours,
             )
-            .normalize();
-            let depth = height(column, row) / material.bottom;
-            let lit = (AMBIENT + (1.0 - AMBIENT) * normal.dot(light).max(0.0))
-                * (1.0 - DEPTH_SHADE * depth);
-            let lit = lit as f32;
-            Rgba::from_rgb(base.r() * lit, base.g() * lit, base.b() * lit).into()
         })
         .collect();
-    ColorImage {
-        size: [columns, rows],
-        pixels,
+    projected.sort_by(|a, b| a.1.total_cmp(&b.1));
+    // fit into the area
+    let (lo, hi) = projected
+        .iter()
+        .flat_map(|(corners, ..)| corners)
+        .fold((DVec2::INFINITY, DVec2::NEG_INFINITY), |(lo, hi), &p| {
+            (lo.min(p), hi.max(p))
+        });
+    let size = (hi - lo).max(DVec2::splat(f64::EPSILON));
+    let scale = (f64::from(area.width()) / size.x).min(f64::from(area.height()) / size.y);
+    let middle = (lo + hi) / 2.0;
+    let screen = |p: DVec2| {
+        let offset = (p - middle) * scale;
+        Pos2::new(
+            area.center().x + offset.x as f32,
+            area.center().y - offset.y as f32,
+        )
+    };
+    let mut mesh = Mesh::default();
+    for (corners, _, colours) in projected {
+        let first = u32::try_from(mesh.vertices.len()).expect("mesh fits u32 indices");
+        for (corner, colour) in corners.into_iter().zip(colours) {
+            mesh.colored_vertex(screen(corner), colour);
+        }
+        mesh.add_triangle(first, first + 1, first + 2);
+        mesh.add_triangle(first, first + 2, first + 3);
     }
+    mesh
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use aspire_core::document::Job;
+    use eframe::egui::pos2;
 
     /// 100 x 100 mm in 1 mm cells, with a 5 mm deep slot from x = 40 to 60 running along y.
     fn slotted() -> Material {
@@ -73,39 +215,93 @@ mod tests {
         m
     }
 
-    fn brightness(image: &ColorImage, x: usize, y: usize) -> u8 {
-        image.pixels[y * image.width() + x].r()
-    }
-
     #[test]
     fn walls_facing_the_light_are_brighter_than_flat_and_the_far_ones_darker() {
-        let image = shaded(&slotted(), Color32::WHITE);
-        assert_eq!(image.size, [100, 100]);
-        let flat = brightness(&image, 10, 50);
+        let m = slotted();
+        let flat = brightness(&m, 10, 50);
         assert!(
-            brightness(&image, 60, 50) > flat,
+            brightness(&m, 60, 50) > flat,
             "the wall rising towards +x faces the light"
         );
         assert!(
-            brightness(&image, 39, 50) < flat,
+            brightness(&m, 39, 50) < flat,
             "the wall dropping towards +x faces away"
+        );
+        assert!(
+            brightness(&m, 50, 50) < flat,
+            "the slot floor is deeper so darker"
         );
     }
 
     #[test]
-    fn deeper_is_darker_and_the_top_row_is_the_far_edge() {
+    fn coarse_cells_keep_the_deepest_point() {
         let mut m = slotted();
-        for column in 0..m.columns {
-            m.heights[(m.rows - 1) * m.columns + column] = -10.0;
-        }
-        let image = shaded(&m, Color32::WHITE);
-        assert!(
-            brightness(&image, 50, 50) < brightness(&image, 10, 50),
-            "the slot floor is darker"
+        m.heights[5 * m.columns + 7] = -9.0;
+        let c = coarse(&m, 30);
+        assert_eq!(
+            (c.columns, c.rows),
+            (25, 25),
+            "4 mm cells: the step that fits 30"
         );
-        assert!(
-            brightness(&image, 10, 0) < brightness(&image, 10, 50),
-            "y = top is drawn at the top"
+        assert!((c.cell - 4.0).abs() < 1e-12);
+        assert_eq!(c.heights[c.columns + 1], -9.0);
+        assert_eq!(
+            c.heights[12 * c.columns + 12],
+            -5.0,
+            "x 48 to 52 is in the slot"
         );
+        assert_eq!(c.bottom, m.bottom);
+    }
+
+    #[test]
+    fn from_straight_above_the_projection_is_the_plan() {
+        let top = Orbit {
+            yaw: 0.0,
+            pitch: 0.0,
+        };
+        let (p, depth) = top.project(DVec3::new(30.0, 40.0, -2.0));
+        assert!(p.abs_diff_eq(DVec2::new(30.0, 40.0), 1e-12));
+        assert!((depth + 2.0).abs() < 1e-12, "deeper is further away");
+    }
+
+    #[test]
+    fn tilting_raises_the_far_edge_and_puts_it_behind() {
+        let tilted = Orbit {
+            yaw: 0.0,
+            pitch: 60f64.to_radians(),
+        };
+        let (front, front_depth) = tilted.project(DVec3::ZERO);
+        let (back, back_depth) = tilted.project(DVec3::new(0.0, 100.0, 0.0));
+        assert!(back.y > front.y);
+        assert!(back_depth < front_depth);
+    }
+
+    #[test]
+    fn the_mesh_fits_the_area_and_is_drawn_far_to_near() {
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let orbit = Orbit {
+            yaw: 0.0,
+            pitch: 60f64.to_radians(),
+        };
+        let mesh = mesh(&slotted(), orbit, Color32::WHITE, area);
+        assert_ne!(mesh.indices.len(), 0);
+        assert!(
+            mesh.vertices
+                .iter()
+                .all(|v| area.expand(1e-3).contains(v.pos)),
+            "inside the area"
+        );
+        let centre_y = |triangle: &[u32]| -> f32 {
+            triangle
+                .iter()
+                .map(|&i| mesh.vertices[i as usize].pos.y)
+                .sum::<f32>()
+                / 3.0
+        };
+        let (first, last) = (
+            centre_y(&mesh.indices[..3]),
+            centre_y(&mesh.indices[mesh.indices.len() - 3..]),
+        );
+        assert!(first < last, "far (higher on screen) first, near last");
     }
 }
