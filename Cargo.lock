@@ -150,6 +150,7 @@ dependencies = [
  "aspire-core",
  "aspire-post",
  "cmd-3d-finishing-toolpath",
+ "cmd-3d-roughing-toolpath",
  "cmd-add-layer",
  "cmd-align-bottom",
  "cmd-align-left",
@@ -454,6 +455,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-3d-finishing-toolpath"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-3d-roughing-toolpath"
 version = "0.1.0"
 dependencies = [
  "aspire-core",

@@ -90,7 +90,9 @@ Done:
     in the preview; ✅ V-Carve / Engrave (concentric offsets, holes respected, flat depth);
     ✅ 3D Finishing (zigzag raster, drop cutter, adaptive refinement so straight moves stay
     within 0.01 mm of the model; refuses models taller than the material).
+18. ✅ 3D Roughing (levels by pass depth, vertical allowance). Both 3D toolpaths share a
+    zigzag that checks every move exactly against the model (the simulation's own
+    lowest-edge maths), halving or lifting moves that would cut in.
 
 Next:
-18. 3D Roughing (z-level clearing above the model).
 19. Fluting, V-carve inlay, prism, texture and the other strategies; job model resolution.

@@ -240,3 +240,30 @@ pub fn cut_bounds(toolpath: &crate::toolpath::Toolpath) -> crate::geometry::Rect
         .reduce(crate::geometry::Rect::union)
         .expect("the toolpath cuts something")
 }
+
+/// A 40 x 40 x 10 mm job holding an 8 mm high hemisphere in the middle, for 3D toolpaths.
+pub fn domed() -> Document {
+    use crate::component::{Combine, Component};
+    use crate::document::Job;
+    use crate::geometry::Rect;
+    let mut doc = Document {
+        job: Job {
+            width: 40.0,
+            height: 40.0,
+            thickness: 10.0,
+            ..Job::default()
+        },
+        ..Document::default()
+    };
+    let middle = Point::new(20.0, 20.0);
+    let area = Rect::new(Point::new(12.0, 12.0), Point::new(28.0, 28.0));
+    let dome = Component::from_fn("dome", Combine::Add, area, 0.2, |p| {
+        let r = p.distance(middle);
+        (r < 8.0).then(|| (64.0 - r * r).sqrt())
+    });
+    let mut c = Change::builder(&doc);
+    c.add_component(dome);
+    let change = c.finish();
+    doc.apply(&change).expect("a component applies");
+    doc
+}

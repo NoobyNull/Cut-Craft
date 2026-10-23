@@ -275,22 +275,17 @@ pub fn cut_points(path: &Path) -> Vec<Point> {
 /// Most times a move between two zigzag samples is halved to stay within the tolerance.
 const HALVINGS: u32 = 6;
 
-/// A zigzag over `grid`: lines along x `step` apart, sampled at each cell centre, each point
-/// at `height` there. A straight move can pass under `height` between two samples (the cutting
-/// edge bulges down between them), so such moves are split until within `tolerance`; points in
-/// the middle of level runs are dropped.
+/// A zigzag of `tool` over `grid`: lines along x `step` apart, sampled at each cell centre,
+/// each point as low as the tool goes there without touching `grid`, and never below `floor`.
+/// Every move is checked: one that would cut more than `tolerance` into `grid` is halved, and
+/// one too short to halve is lifted over. Points in the middle of level runs are dropped.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_precision_loss,
     reason = "line counts are small and non-negative"
 )]
-pub fn zigzag(
-    grid: &Material,
-    step: f64,
-    tolerance: f64,
-    height: impl Fn(Point) -> f64,
-) -> Vec<DVec3> {
+pub fn zigzag(grid: &Material, tool: &Tool, step: f64, tolerance: f64, floor: f64) -> Vec<DVec3> {
     let (first, last) = (
         grid.centre(0, 0),
         grid.centre(grid.columns - 1, grid.rows - 1),
@@ -299,12 +294,21 @@ pub fn zigzag(
     let mut points: Vec<DVec3> = vec![];
     for line in 0..lines {
         let y = first.y + line as f64 * step;
-        let at = |x: f64| Point::new(x, y).extend(height(Point::new(x, y)));
+        let at = |x: f64| {
+            let p = Point::new(x, y);
+            p.extend(grid.drop_tool(tool, p).max(floor))
+        };
         let mut row: Vec<DVec3> = vec![];
         for column in 0..grid.columns {
             let next = at(grid.centre(column, 0).x);
             if let Some(&previous) = row.last() {
-                refine(previous, next, &at, tolerance, HALVINGS, &mut row);
+                Refine {
+                    grid,
+                    tool,
+                    tolerance,
+                    at: &at,
+                }
+                .between(previous, next, HALVINGS, &mut row);
             }
             row.push(next);
         }
@@ -322,27 +326,35 @@ pub fn zigzag(
     points
 }
 
-/// Points between `a` and `b` where a straight move dips more than `tolerance` under `at`;
-/// the dip is most often where the move climbs or falls, and not always halfway.
-fn refine(
-    a: DVec3,
-    b: DVec3,
-    at: &impl Fn(f64) -> DVec3,
+/// Keeps the moves along one zigzag line from cutting into the grid.
+struct Refine<'a, F> {
+    grid: &'a Material,
+    tool: &'a Tool,
     tolerance: f64,
-    halvings: u32,
-    out: &mut Vec<DVec3>,
-) {
-    // a level move cannot dip: any bump in the height peaks over a sample
-    if halvings == 0 || (b.z - a.z).abs() <= tolerance {
-        return;
-    }
-    let dips = |t: f64, p: DVec3| p.z - (a.z + (b.z - a.z) * t) > tolerance;
-    let along = |t: f64| at(a.x + (b.x - a.x) * t);
-    let middle = along(0.5);
-    if dips(0.5, middle) || dips(0.25, along(0.25)) || dips(0.75, along(0.75)) {
-        refine(a, middle, at, tolerance, halvings - 1, out);
+    /// The point on the line at an x, as low as the tool goes there.
+    at: &'a F,
+}
+
+impl<F: Fn(f64) -> DVec3> Refine<'_, F> {
+    /// Points to put between `a` and `b` so the moves through them stay out of the grid.
+    fn between(&self, a: DVec3, b: DVec3, halvings: u32, out: &mut Vec<DVec3>) {
+        if self.grid.overcut(self.tool, a, b) <= self.tolerance {
+            return;
+        }
+        if halvings == 0 {
+            // too short to halve again: up, across level, and down
+            let level = a.z.max(b.z);
+            let across = |z: f64| (a.truncate().extend(z), b.truncate().extend(z));
+            let (from, to) = across(level);
+            let lifted = level + self.grid.overcut(self.tool, from, to).max(0.0);
+            let (from, to) = across(lifted);
+            out.extend([from, to]);
+            return;
+        }
+        let middle = (self.at)(f64::midpoint(a.x, b.x));
+        self.between(a, middle, halvings - 1, out);
         out.push(middle);
-        refine(middle, b, at, tolerance, halvings - 1, out);
+        self.between(middle, b, halvings - 1, out);
     }
 }
 

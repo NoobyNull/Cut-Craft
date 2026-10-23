@@ -164,10 +164,23 @@ fn a_dropped_tool_rests_on_the_highest_thing_under_it() {
 }
 
 #[test]
-fn zigzag_lines_alternate_merge_level_runs_and_split_dips() {
+fn overcut_is_how_far_a_move_would_cut_below_the_surface() {
+    let mut m = material();
+    m.heights[100 * m.columns + 100] = 5.0; // one tall cell at (50.25, 50.25)
+    let tool = Tool::default(); // 6 mm end mill
+    let at = |x: f64, z: f64| DVec3::new(x, 50.25, z);
+    assert!((m.overcut(&tool, at(40.0, 1.0), at(60.0, 1.0)) - 4.0).abs() < 1e-12);
+    assert!(m.overcut(&tool, at(40.0, 6.0), at(60.0, 6.0)) <= -1.0 + 1e-12);
+    // climbing from 0 to 6 over 20 mm, the end mill reaches the cell at x = 47.25: z 2.175
+    let climb = m.overcut(&tool, at(40.0, 0.0), at(60.0, 6.0));
+    assert!((climb - (5.0 - 2.175)).abs() < 1e-9, "{climb}");
+}
+
+#[test]
+fn zigzag_lines_alternate_merge_level_runs_and_never_overcut() {
     use aspire_core::toolpath::zigzag;
-    let grid = material(); // 100 x 100 in half-millimetre cells
-    let flat = zigzag(&grid, 10.0, 0.01, |_| -1.0);
+    let tool = Tool::default();
+    let flat = zigzag(&material(), &tool, 10.0, 0.01, f64::NEG_INFINITY);
     // 10 lines, each reduced to its two ends
     assert_eq!(flat.len(), 20);
     assert!(
@@ -175,14 +188,27 @@ fn zigzag_lines_alternate_merge_level_runs_and_split_dips() {
         "there and back"
     );
     assert!((flat[2].y - flat[0].y - 10.0).abs() < 1e-12);
-    assert!(flat.iter().all(|p| (p.z + 1.0).abs() < 1e-12));
-    // a narrow ridge is followed exactly where the samples fall, with points added between
-    let ridge = |p: Point| -(p.x - 50.1).abs().min(1.0);
-    let followed = zigzag(&grid, 10.0, 0.01, ridge);
-    assert!(followed.len() > flat.len());
+    assert!(flat.iter().all(|p| p.z.abs() < 1e-12));
+    let floored = zigzag(&material(), &tool, 10.0, 0.01, 2.0);
     assert!(
-        followed
-            .iter()
-            .all(|p| (p.z - ridge(p.truncate())).abs() < 1e-12)
+        floored.iter().all(|p| (p.z - 2.0).abs() < 1e-12),
+        "nothing below the floor"
+    );
+    // a 5 mm block with vertical sides from x = 50 to 60
+    let mut m = material();
+    for row in 0..m.rows {
+        for column in 100..120 {
+            m.heights[row * m.columns + column] = 5.0;
+        }
+    }
+    let points = zigzag(&m, &tool, 10.0, 0.01, f64::NEG_INFINITY);
+    assert!(
+        points
+            .windows(2)
+            .all(|w| m.overcut(&tool, w[0], w[1]) <= 0.01)
+    );
+    assert!(
+        points.iter().any(|p| (p.z - 5.0).abs() < 1e-12),
+        "it goes over the block"
     );
 }

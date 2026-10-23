@@ -56,9 +56,13 @@ impl Command for FinishingToolpath3d {
         }
         let surface = placed_model(doc, tool)?;
         // at each point as low as the tool goes without touching the model
-        let points = zigzag(&surface, tool.stepover * tool.diameter, GOUGE, |at| {
-            surface.drop_tool(tool, at)
-        });
+        let points = zigzag(
+            &surface,
+            tool,
+            tool.stepover * tool.diameter,
+            GOUGE,
+            f64::NEG_INFINITY,
+        );
         let moves = follow(&points, doc.job.clearance);
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
@@ -75,35 +79,11 @@ impl Command for FinishingToolpath3d {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspire_core::component::{Combine, Component, model};
-    use aspire_core::document::Job;
-    use aspire_core::geometry::{Point, Rect};
+    use aspire_core::component::model;
+    use aspire_core::geometry::Point;
     use aspire_core::simulation::Material;
+    use aspire_core::testing::domed;
     use aspire_core::toolpath::Toolpath;
-
-    /// A 40 x 40 x 10 mm job with an 8 mm high hemisphere in the middle.
-    fn domed() -> Document {
-        let mut doc = Document {
-            job: Job {
-                width: 40.0,
-                height: 40.0,
-                thickness: 10.0,
-                ..Job::default()
-            },
-            ..Document::default()
-        };
-        let middle = Point::new(20.0, 20.0);
-        let area = Rect::new(Point::new(12.0, 12.0), Point::new(28.0, 28.0));
-        let dome = Component::from_fn("dome", Combine::Add, area, 0.2, |p| {
-            let r = p.distance(middle);
-            (r < 8.0).then(|| (64.0 - r * r).sqrt())
-        });
-        let mut c = aspire_core::Change::builder(&doc);
-        c.add_component(dome);
-        let change = c.finish();
-        doc.apply(&change).unwrap();
-        doc
-    }
 
     aspire_core::contract_tests!(FinishingToolpath3d, domed);
 
@@ -151,6 +131,39 @@ mod tests {
                 "({x}, {y}) left at {z}, model at {model_z}"
             );
         }
+    }
+
+    #[test]
+    fn vertical_walls_are_not_gouged() {
+        use aspire_core::component::{Combine, Component};
+        use aspire_core::geometry::Rect;
+        let mut doc = domed();
+        doc.components.clear();
+        let area = Rect::new(Point::new(15.0, 15.0), Point::new(25.0, 25.0));
+        let block = Component::from_fn("block", Combine::Add, area, 0.2, |_| Some(6.0));
+        let mut c = aspire_core::Change::builder(&doc);
+        c.add_component(block);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let params = Params {
+            tool: ToolDatabase::starter()
+                .get("6 mm Ball Nose")
+                .unwrap()
+                .clone(),
+            ..Params::default()
+        };
+        let toolpath = finish(&doc, &params);
+        let cells = 134;
+        let mut cut = Material::new(&doc.job, cells);
+        cut.cut(&toolpath);
+        let shape = model(&doc, cells);
+        let gouges = cut
+            .heights
+            .iter()
+            .zip(&shape.heights)
+            .filter(|&(&z, &h)| z < h - 6.0 - 0.01)
+            .count();
+        assert_eq!(gouges, 0, "cells cut more than 0.01 mm below the model");
     }
 
     #[test]

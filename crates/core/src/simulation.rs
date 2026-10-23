@@ -4,6 +4,7 @@ use crate::document::Job;
 use crate::geometry::Point;
 use crate::toolpath::{Tool, ToolShape, Toolpath};
 use glam::{DVec2, DVec3};
+use std::ops::Range;
 
 /// The material seen from above: a grid of square cells, each holding the height of the
 /// surface over it (0 is the top of the material, `bottom` its underside).
@@ -56,7 +57,7 @@ impl Material {
     }
 
     /// Indices of the cells from `lo` to `hi` mm along a side `count` cells long.
-    fn cells(&self, lo: f64, hi: f64, count: usize) -> std::ops::Range<usize> {
+    fn cells(&self, lo: f64, hi: f64, count: usize) -> Range<usize> {
         ((lo / self.cell).floor().max(0.0) as usize)
             ..((hi / self.cell).ceil().max(0.0) as usize).min(count)
     }
@@ -91,41 +92,66 @@ impl Material {
     /// Lowers each cell the tool passes over from `a` to `b` to the lowest its cutting edge
     /// reaches there, at the cell centre.
     fn sweep(&mut self, a: DVec3, b: DVec3, tool: &Tool) {
-        let radius = tool.diameter / 2.0;
         if a.z >= 0.0 && b.z >= 0.0 {
             return;
         }
-        let (start, along) = (a.truncate(), (b - a).truncate());
-        let (lo, hi) = (
-            start.min(start + along) - radius,
-            start.max(start + along) + radius,
-        );
-        for row in self.cells(lo.y, hi.y, self.rows) {
-            for column in self.cells(lo.x, hi.x, self.columns) {
-                let centre = self.centre(column, row);
-                let Some((t0, t1)) = covered(start - centre, along, radius) else {
-                    continue;
-                };
-                let edge = |t: f64| {
-                    let tip = a.lerp(b, t);
-                    let r = tip.truncate().distance(centre).min(radius);
-                    tip.z + tool.profile(r).unwrap_or(0.0)
-                };
-                let z = match tool.shape {
-                    // z is linear in t, so a flat end is lowest at one end of the covered span
-                    ToolShape::EndMill => a.lerp(b, t0).z.min(a.lerp(b, t1).z),
-                    // a level move is lowest where it passes closest
-                    _ if (b.z - a.z).abs() < 1e-9 && along != DVec2::ZERO => {
-                        edge((-(start - centre).dot(along) / along.length_squared()).clamp(t0, t1))
-                    }
-                    _ => lowest(t0, t1, edge),
+        let (columns, rows) = self.swept(a, b, tool);
+        for row in rows {
+            for column in columns.clone() {
+                if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
+                    let height = &mut self.heights[row * self.columns + column];
+                    *height = height.min(z.max(self.bottom));
                 }
-                .max(self.bottom);
-                let height = &mut self.heights[row * self.columns + column];
-                *height = height.min(z);
             }
         }
     }
+
+    /// How far below the surface the tool would cut going straight from `a` to `b`, at the
+    /// deepest cell centre it passes over; zero or less when it clears everything.
+    pub fn overcut(&self, tool: &Tool, a: DVec3, b: DVec3) -> f64 {
+        let (columns, rows) = self.swept(a, b, tool);
+        rows.flat_map(|row| columns.clone().map(move |column| (column, row)))
+            .filter_map(|(column, row)| {
+                let z = lowest_edge(tool, a, b, self.centre(column, row))?;
+                Some(self.heights[row * self.columns + column] - z)
+            })
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    /// The columns and rows under the tool's footprint anywhere from `a` to `b`.
+    fn swept(&self, a: DVec3, b: DVec3, tool: &Tool) -> (Range<usize>, Range<usize>) {
+        let radius = tool.diameter / 2.0;
+        let (lo, hi) = (
+            a.truncate().min(b.truncate()) - radius,
+            a.truncate().max(b.truncate()) + radius,
+        );
+        (
+            self.cells(lo.x, hi.x, self.columns),
+            self.cells(lo.y, hi.y, self.rows),
+        )
+    }
+}
+
+/// The lowest the cutting edge of `tool` reaches over `centre` while its tip moves straight
+/// from `a` to `b`; `None` if the tool never covers it.
+fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
+    let radius = tool.diameter / 2.0;
+    let (start, along) = (a.truncate(), (b - a).truncate());
+    let (t0, t1) = covered(start - centre, along, radius)?;
+    let edge = |t: f64| {
+        let tip = a.lerp(b, t);
+        let r = tip.truncate().distance(centre).min(radius);
+        tip.z + tool.profile(r).unwrap_or(0.0)
+    };
+    Some(match tool.shape {
+        // z is linear in t, so a flat end is lowest at one end of the covered span
+        ToolShape::EndMill => a.lerp(b, t0).z.min(a.lerp(b, t1).z),
+        // a level move is lowest where it passes closest
+        _ if (b.z - a.z).abs() < 1e-9 && along != DVec2::ZERO => {
+            edge((-(start - centre).dot(along) / along.length_squared()).clamp(t0, t1))
+        }
+        _ => lowest(t0, t1, edge),
+    })
 }
 
 /// The least of a convex `f` over `[lo, hi]`, by golden-section search; the ends are checked

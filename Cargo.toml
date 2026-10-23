@@ -32,6 +32,10 @@ must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
+# geometry-heavy code (toolpaths, simulation) is far too slow unoptimised, in tests and runs
+[profile.dev]
+opt-level = 1
+
 [profile.release]
 opt-level = 3
 strip = true
