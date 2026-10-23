@@ -149,6 +149,7 @@ version = "0.1.0"
 dependencies = [
  "aspire-core",
  "aspire-post",
+ "cmd-3d-finishing-toolpath",
  "cmd-add-layer",
  "cmd-align-bottom",
  "cmd-align-left",
@@ -449,6 +450,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "052af7878466feccda12ba7a6a67d019d712f296809559b47c12c8cc196d3a9a"
 dependencies = [
  "error-code",
+]
+
+[[package]]
+name = "cmd-3d-finishing-toolpath"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

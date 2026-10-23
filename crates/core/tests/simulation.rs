@@ -143,3 +143,22 @@ fn a_v_bit_groove_is_as_wide_as_it_is_deep_at_90_degrees() {
         "past where the cone leaves the surface"
     );
 }
+
+#[test]
+fn a_dropped_tool_rests_on_the_highest_thing_under_it() {
+    let mut m = material(); // half-millimetre cells
+    let peak = Point::new(50.25, 50.25); // a cell centre
+    let i = 100 * m.columns + 100;
+    m.heights[i] = 5.0;
+    let ball = shaped(ToolShape::BallNose); // 6 mm
+    let end_mill = Tool::default();
+    // straight over the peak every tool sits on it
+    assert_eq!(m.drop_tool(&end_mill, peak), 5.0);
+    assert_eq!(m.drop_tool(&ball, peak), 5.0);
+    // 2 mm to the side the flat end still sits on it; the ball's curve is lower there
+    let beside = peak + Point::new(2.0, 0.0);
+    assert_eq!(m.drop_tool(&end_mill, beside), 5.0);
+    assert!((m.drop_tool(&ball, beside) - (5.0 - (3.0 - 5f64.sqrt()))).abs() < 1e-12);
+    // out of reach, the tool sits on the flat surface
+    assert_eq!(m.drop_tool(&ball, peak + Point::new(4.0, 0.0)), 0.0);
+}

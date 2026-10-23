@@ -55,6 +55,32 @@ impl Material {
             .then(|| self.heights[row * self.columns + column])
     }
 
+    /// Indices of the cells from `lo` to `hi` mm along a side `count` cells long.
+    fn cells(&self, lo: f64, hi: f64, count: usize) -> std::ops::Range<usize> {
+        ((lo / self.cell).floor().max(0.0) as usize)
+            ..((hi / self.cell).ceil().max(0.0) as usize).min(count)
+    }
+
+    /// How low the tool's tip can go over `at` before its cutting edge touches the surface
+    /// at any cell centre it covers ("drop cutter").
+    pub fn drop_tool(&self, tool: &Tool, at: Point) -> f64 {
+        let radius = tool.diameter / 2.0;
+        let mut tip = f64::NEG_INFINITY;
+        for row in self.cells(at.y - radius, at.y + radius, self.rows) {
+            for column in self.cells(at.x - radius, at.x + radius, self.columns) {
+                if let Some(rise) = tool.profile(self.centre(column, row).distance(at)) {
+                    tip = tip.max(self.heights[row * self.columns + column] - rise);
+                }
+            }
+        }
+        // a tool narrower than a cell may cover no centre: rest on the cell under it
+        if tip.is_finite() {
+            tip
+        } else {
+            self.at(at).unwrap_or(0.0)
+        }
+    }
+
     /// Removes what the tool following `toolpath` cuts away.
     pub fn cut(&mut self, toolpath: &Toolpath) {
         for pair in toolpath.moves.windows(2) {
@@ -74,12 +100,8 @@ impl Material {
             start.min(start + along) - radius,
             start.max(start + along) + radius,
         );
-        let cells = |lo: f64, hi: f64, count: usize| {
-            ((lo / self.cell).floor().max(0.0) as usize)
-                ..((hi / self.cell).ceil().max(0.0) as usize).min(count)
-        };
-        for row in cells(lo.y, hi.y, self.rows) {
-            for column in cells(lo.x, hi.x, self.columns) {
+        for row in self.cells(lo.y, hi.y, self.rows) {
+            for column in self.cells(lo.x, hi.x, self.columns) {
                 let centre = self.centre(column, row);
                 let Some((t0, t1)) = covered(start - centre, along, radius) else {
                     continue;
@@ -106,18 +128,27 @@ impl Material {
     }
 }
 
-/// The least of a convex `f` over `[lo, hi]`, by ternary search; the ends are checked exactly.
+/// The least of a convex `f` over `[lo, hi]`, by golden-section search; the ends are checked
+/// exactly.
 fn lowest(lo: f64, hi: f64, f: impl Fn(f64) -> f64) -> f64 {
-    let (mut a, mut b) = (lo, hi);
-    for _ in 0..60 {
-        let (third, two_thirds) = (a + (b - a) / 3.0, b - (b - a) / 3.0);
-        if f(third) < f(two_thirds) {
-            b = two_thirds;
+    const SHRINK: f64 = 0.618_033_988_749_894_9; // 1 / golden ratio
+    // the bracket, and two probes inside it with their values
+    let (mut start, mut end) = (lo, hi);
+    let mut left = (end - SHRINK * (end - start), 0.0);
+    let mut right = (start + SHRINK * (end - start), 0.0);
+    (left.1, right.1) = (f(left.0), f(right.0));
+    for _ in 0..40 {
+        if left.1 < right.1 {
+            (end, right) = (right.0, left);
+            left.0 = end - SHRINK * (end - start);
+            left.1 = f(left.0);
         } else {
-            a = third;
+            (start, left) = (left.0, right);
+            right.0 = start + SHRINK * (end - start);
+            right.1 = f(right.0);
         }
     }
-    f(lo).min(f(hi)).min(f(f64::midpoint(a, b)))
+    f(lo).min(f(hi)).min(left.1).min(right.1)
 }
 
 /// The span of t in [0, 1] where `|from + t * along| <= radius`.

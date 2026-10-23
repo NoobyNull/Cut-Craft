@@ -86,6 +86,11 @@ Done:
     Selected for each); orbitable 3D view of the block, drawn as a lit mesh.
 16. ✅ 3D components (height grids; add / subtract / merge / low / multiply) combined into the
     model; Create Shape (round / angular / flat); Modeling tab; model in the 3D view; STL export.
+17. Strategies, part 1: ✅ tool shapes (end mill, ball nose, V-bit) cut with their own profile
+    in the preview; ✅ V-Carve / Engrave (concentric offsets, holes respected, flat depth);
+    ✅ 3D Finishing (zigzag raster, drop cutter, adaptive refinement so straight moves stay
+    within 0.01 mm of the model; refuses models taller than the material).
 
 Next:
-17. V-carve, fluting, inlay and the other strategies.
+18. 3D Roughing (z-level clearing above the model).
+19. Fluting, V-carve inlay, prism, texture and the other strategies; job model resolution.
