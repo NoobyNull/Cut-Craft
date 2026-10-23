@@ -30,6 +30,11 @@ pub fn registry() -> Registry {
     r.add::<cmd_set_size::SetSize>();
     r.add::<cmd_unselect_all::UnselectAll>();
     r.add::<cmd_job_setup::JobSetup>();
+    r.add::<cmd_weld_vectors::WeldVectors>();
+    r.add::<cmd_subtract_vectors::SubtractVectors>();
+    r.add::<cmd_overlap_intersect::OverlapIntersect>();
+    r.add::<cmd_offset_vectors::OffsetVectors>();
+    r.add::<cmd_join_vectors::JoinVectors>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

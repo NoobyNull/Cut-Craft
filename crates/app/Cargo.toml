@@ -16,6 +16,11 @@ serde_json.workspace = true
 fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-svg = { path = "../formats/import-svg" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-join-vectors = { path = "../commands/join-vectors" }
+cmd-offset-vectors = { path = "../commands/offset-vectors" }
+cmd-overlap-intersect = { path = "../commands/overlap-intersect" }
+cmd-subtract-vectors = { path = "../commands/subtract-vectors" }
+cmd-weld-vectors = { path = "../commands/weld-vectors" }
 cmd-job-setup = { path = "../commands/job-setup" }
 cmd-align-bottom = { path = "../commands/align-bottom" }
 cmd-align-left = { path = "../commands/align-left" }

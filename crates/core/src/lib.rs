@@ -7,6 +7,7 @@ pub mod file;
 mod formats;
 pub mod geometry;
 pub mod params;
+pub mod polygon;
 #[cfg(feature = "testing")]
 pub mod testing;
 

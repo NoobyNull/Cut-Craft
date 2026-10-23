@@ -150,6 +150,22 @@ impl Change {
         })
     }
 
+    /// Replaces `remove` with `add`, selecting what was added: the shape of every boolean,
+    /// offset or join result.
+    pub fn swap(
+        doc: &Document,
+        remove: impl IntoIterator<Item = EntityId>,
+        add: Vec<Path>,
+    ) -> Self {
+        let mut c = Self::builder(doc);
+        for id in remove {
+            c.remove(id);
+        }
+        let ids: Vec<EntityId> = add.into_iter().map(|p| c.add(p)).collect();
+        c.select(ids);
+        c.finish()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.edits.is_empty()
     }

@@ -198,6 +198,34 @@ impl Path {
         points
     }
 
+    /// The same path walked from its end back to its start.
+    #[must_use]
+    pub fn reversed(&self) -> Self {
+        let mut points = vec![self.start];
+        points.extend(self.segments.iter().map(Segment::end));
+        let end = points.pop().expect("a path has a start");
+        let segments = self
+            .segments
+            .iter()
+            .zip(points)
+            .rev()
+            .map(|(s, to)| match *s {
+                Segment::Line { .. } => Segment::Line { to },
+                Segment::Arc { center, ccw, .. } => Segment::Arc {
+                    to,
+                    center,
+                    ccw: !ccw,
+                },
+                Segment::Cubic { c1, c2, .. } => Segment::Cubic { c1: c2, c2: c1, to },
+            })
+            .collect();
+        Self {
+            start: end,
+            segments,
+            closed: self.closed,
+        }
+    }
+
     /// The path under `t`. Arcs survive similarity transforms (mirrors flip their direction);
     /// any other transform turns them into cubics, which stay exact under affine maps.
     #[must_use]

@@ -60,30 +60,33 @@ pub fn schema_describes_an_object<C: Command>() {
     );
 }
 
-pub fn runs_on_the_sample_document<C: Command>() -> Change {
-    C::run(&sample_document(), &C::Params::default())
-        .unwrap_or_else(|e| panic!("{} failed on the sample document: {e}", C::ID))
+pub fn runs_on<C: Command>(doc: &Document) -> Change {
+    C::run(doc, &C::Params::default())
+        .unwrap_or_else(|e| panic!("{} failed on its contract document: {e}", C::ID))
 }
 
-pub fn inverse_restores_the_document<C: Command>() {
-    let original = sample_document();
-    let change = runs_on_the_sample_document::<C>();
+pub fn inverse_restores<C: Command>(original: &Document) {
+    let change = runs_on::<C>(original);
     let mut doc = original.clone();
     doc.apply(&change)
         .expect("a command's change applies to the document it was built from");
     doc.apply(&change.inverse()).expect("the inverse applies");
     assert_eq!(
-        doc,
+        &doc,
         original,
         "{}: undo did not restore the document",
         C::ID
     );
 }
 
-/// Generates the shared contract tests for a command type.
+/// Generates the shared contract tests for a command type, run on the sample document or on
+/// `$doc()` for commands whose preconditions the sample does not meet.
 #[macro_export]
 macro_rules! contract_tests {
     ($cmd:ty) => {
+        $crate::contract_tests!($cmd, $crate::testing::sample_document);
+    };
+    ($cmd:ty, $doc:expr) => {
         mod contract {
             #[allow(unused_imports)]
             use super::*;
@@ -104,16 +107,38 @@ macro_rules! contract_tests {
             }
 
             #[test]
-            fn runs_on_the_sample_document() {
-                $crate::testing::runs_on_the_sample_document::<$cmd>();
+            fn runs_on_its_contract_document() {
+                $crate::testing::runs_on::<$cmd>(&$doc());
             }
 
             #[test]
             fn inverse_restores_the_document() {
-                $crate::testing::inverse_restores_the_document::<$cmd>();
+                $crate::testing::inverse_restores::<$cmd>(&$doc());
             }
         }
     };
+}
+
+/// A document holding `paths`, all selected.
+pub fn document_with(paths: Vec<Path>) -> Document {
+    let mut doc = Document::default();
+    doc.apply(&Change::swap(&doc, [], paths))
+        .expect("new paths always apply");
+    doc
+}
+
+/// An axis-aligned square with its lower-left corner at (`x`, `y`).
+pub fn square(x: f64, y: f64, side: f64) -> Path {
+    let p = Point::new;
+    Path::polyline(
+        &[
+            p(x, y),
+            p(x + side, y),
+            p(x + side, y + side),
+            p(x, y + side),
+        ],
+        true,
+    )
 }
 
 /// Runs a drawing command on an empty document; asserts it added exactly one path and
