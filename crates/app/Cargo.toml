@@ -5,9 +5,20 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+aspire-core.workspace = true
 eframe.workspace = true
+egui_extras.workspace = true
 env_logger.workspace = true
 log.workspace = true
+serde_json.workspace = true
+# Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-draw-arc = { path = "../commands/draw-arc" }
+cmd-draw-circle = { path = "../commands/draw-circle" }
+cmd-draw-ellipse = { path = "../commands/draw-ellipse" }
+cmd-draw-polygon = { path = "../commands/draw-polygon" }
+cmd-draw-polyline = { path = "../commands/draw-polyline" }
+cmd-draw-rectangle = { path = "../commands/draw-rectangle" }
+cmd-draw-star = { path = "../commands/draw-star" }
 
 [lints]
 workspace = true

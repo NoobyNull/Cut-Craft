@@ -1,126 +1,103 @@
 //! Static UI data: Drawing tab tool groups, the main menu, status bar text.
 
-/// Drawing tab tool groups
+/// Drawing tab layout: groups of command ids. Implemented commands supply their own label and
+/// icon; the rest show their humanized id, disabled.
 pub struct Toolbar {
     pub groups: Vec<ToolGroup>,
 }
 
-/// A titled group of tools on the Drawing tab
-#[derive(Debug, Clone)]
 pub struct ToolGroup {
-    pub name: String,
-    pub tools: Vec<String>,
+    pub name: &'static str,
+    pub tools: &'static [&'static str],
 }
 
 impl Toolbar {
-    /// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see `re/SPEC.md`);
-    /// which tool sits in which group is inferred from the help topics.
+    /// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see
+    /// `re/SPEC.md`); which tool sits in which group is inferred from the help topics. Ids match
+    /// the icon file names, so unimplemented tools still show their icon.
     pub fn new() -> Self {
-        let group = |name: &str, tools: &[&str]| ToolGroup {
-            name: name.to_string(),
-            tools: tools.iter().map(ToString::to_string).collect(),
-        };
+        let group = |name, tools| ToolGroup { name, tools };
         Self {
             groups: vec![
                 group(
                     "File Operations",
                     &[
-                        "New",
-                        "Open",
-                        "Save",
-                        "Import Vectors / Bitmap",
-                        "Import Component / 3D Model",
-                        "Job Setup",
+                        "new",
+                        "open",
+                        "save",
+                        "import_vectors_bitmap",
+                        "import_component_3d_model",
+                        "job_setup",
                     ],
                 ),
                 group(
                     "2D View Control",
-                    &["Pan", "Zoom Box", "Zoom to Job", "Zoom Selected"],
+                    &["pan", "zoom_box", "zoom_to_job", "zoom_selected"],
                 ),
                 group(
                     "Create Vectors",
                     &[
-                        "Line / Polyline",
-                        "Rectangle",
-                        "Circle",
-                        "Ellipse",
-                        "Polygon",
-                        "Star",
-                        "Arc",
-                        "Freehand",
-                        "Text",
-                        "Text on a Curve",
-                        "Dimensions",
-                        "Fillets",
-                        "Vector Texture",
-                        "Trace Bitmap",
+                        "draw_polyline",
+                        "draw_rectangle",
+                        "draw_circle",
+                        "draw_ellipse",
+                        "draw_polygon",
+                        "draw_star",
+                        "draw_arc",
+                        "draw_curve",
+                        "draw_freehand",
+                        "draw_text",
+                        "text_on_a_curve",
+                        "auto_layout_text",
+                        "dimensions",
+                        "create_fillets",
+                        "vector_texture",
+                        "trace_bitmap",
                     ],
                 ),
                 group(
                     "Edit Objects",
                     &[
-                        "Select",
-                        "Node Edit",
-                        "Transform",
-                        "Group",
-                        "Ungroup",
-                        "Join",
-                        "Weld",
-                        "Subtract",
-                        "Trim",
-                        "Overlap",
-                        "Extend",
-                        "Fit Curves",
-                        "Vector Validator",
-                        "Measure",
+                        "select",
+                        "node_edit",
+                        "transform",
+                        "group",
+                        "join_vectors",
+                        "weld_vectors",
+                        "subtract_vectors",
+                        "overlap_intersect",
+                        "interactive_vector_trim",
+                        "close_extend_vector",
+                        "fit_curves_to_vectors",
+                        "vector_validator",
+                        "measure_inspect",
                     ],
                 ),
                 group(
                     "Transform Objects",
-                    &[
-                        "Move",
-                        "Rotate",
-                        "Set Size",
-                        "Mirror",
-                        "Align",
-                        "Distort",
-                        "Vector Unwrapper",
-                    ],
+                    &["move", "rotate", "set_size", "mirror", "distort_object"],
                 ),
                 group(
                     "Offset and Layout",
-                    &["Offset", "Nest Parts", "Copy Along Vectors"],
+                    &["offset_vectors", "nest_parts", "copy_along_vectors"],
                 ),
-                group("Array Objects", &["Array Copy", "Circular Copy"]),
+                group("Array Objects", &["array_copy", "circular_copy"]),
             ],
         }
     }
 }
 
-/// Editable properties of the selected object (replaced by generated command forms)
-pub struct PropertyPanel {
-    pub properties: Vec<Property>,
-}
-
-pub struct Property {
-    pub name: String,
-    pub value: String,
-}
-
-impl PropertyPanel {
-    pub fn new() -> Self {
-        let prop = |name: &str, value: &str| Property {
-            name: name.to_string(),
-            value: value.to_string(),
-        };
-        Self {
-            properties: vec![
-                prop("Name", "Untitled"),
-                prop("Position X", "0.0"),
-                prop("Position Y", "0.0"),
-            ],
-        }
-    }
+/// `"join_vectors"` → `"Join Vectors"`: the label of a tool that is not implemented yet.
+pub fn title_case(id: &str) -> String {
+    id.split('_')
+        .map(|w| {
+            let mut c = w.chars();
+            c.next()
+                .map(|f| f.to_uppercase().chain(c).collect::<String>())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Status bar text
@@ -465,5 +442,14 @@ impl MenuSystem {
                 ),
             ],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn title_case_capitalizes_each_word() {
+        assert_eq!(super::title_case("join_vectors"), "Join Vectors");
+        assert_eq!(super::title_case("2d_view"), "2d View");
     }
 }

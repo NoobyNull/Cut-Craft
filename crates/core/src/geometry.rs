@@ -153,6 +153,43 @@ impl Path {
         bounds
     }
 
+    /// Points along the path whose connecting chords stay within `tolerance` of it.
+    pub fn flatten(&self, tolerance: f64) -> Vec<Point> {
+        let mut from = self.start;
+        let mut points = vec![from];
+        for &s in &self.segments {
+            match s {
+                Segment::Line { to } => points.push(to),
+                Segment::Arc { to, center, ccw } => {
+                    let r = from.distance(center);
+                    let total = sweep(from, to, center, ccw);
+                    // chord sag r(1 - cos(step/2)) <= tolerance
+                    let max_step = 2.0 * (1.0 - (tolerance / r).min(1.0)).acos();
+                    let n = pieces(total.abs() / max_step);
+                    let a0 = angle(from - center);
+                    let step = total / f64::from(n);
+                    points.extend(
+                        (1..n).map(|i| center + r * DVec2::from_angle(a0 + step * f64::from(i))),
+                    );
+                    points.push(to);
+                }
+                Segment::Cubic { c1, c2, to } => {
+                    // uniform steps: error <= 3/4 * max|second difference| / n^2
+                    let m = (from - 2.0 * c1 + c2)
+                        .length()
+                        .max((c1 - 2.0 * c2 + to).length());
+                    let n = pieces((0.75 * m / tolerance).sqrt());
+                    points.extend(
+                        (1..n).map(|i| cubic_at(from, c1, c2, to, f64::from(i) / f64::from(n))),
+                    );
+                    points.push(to);
+                }
+            }
+            from = s.end();
+        }
+        points
+    }
+
     /// The path under `t`. Arcs survive similarity transforms (mirrors flip their direction);
     /// any other transform turns them into cubics, which stay exact under affine maps.
     #[must_use]
@@ -261,6 +298,18 @@ pub fn arc_to_cubics(from: Point, to: Point, center: Point, ccw: bool) -> Vec<Se
             }
         })
         .collect()
+}
+
+/// Number of pieces needed (at least 1), from a fractional estimate.
+fn pieces(estimate: f64) -> u32 {
+    // ponytail: capped so a degenerate tolerance cannot allocate unboundedly
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to 1..=10_000"
+    )]
+    let n = estimate.ceil().clamp(1.0, 10_000.0) as u32;
+    n
 }
 
 fn cubic_at(p0: Point, p1: Point, p2: Point, p3: Point, t: f64) -> Point {

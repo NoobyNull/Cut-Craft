@@ -115,3 +115,55 @@ fn rect_union_and_centre() {
     assert_eq!(r.center(), p(2.0, 0.5));
     assert_eq!(r.size(), glam::DVec2::new(4.0, 3.0));
 }
+
+#[test]
+fn flattening_lines_returns_exactly_the_vertices() {
+    let pts = [p(0.0, 0.0), p(4.0, 0.0), p(4.0, 3.0)];
+    assert_eq!(Path::polyline(&pts, false).flatten(0.01), pts);
+}
+
+#[test]
+fn flattened_arcs_lie_on_the_circle_and_chords_stay_within_tolerance() {
+    let tol = 0.01;
+    let pts = Path::circle(p(0.0, 0.0), 10.0).flatten(tol);
+    assert!(pts.iter().all(|q| (q.length() - 10.0).abs() < 1e-9));
+    assert!(
+        pts.windows(2)
+            .all(|w| 10.0 - ((w[0] + w[1]) / 2.0).length() <= tol),
+        "a chord sags more than {tol}"
+    );
+    assert!(
+        pts.first().unwrap().distance(*pts.last().unwrap()) < 1e-9,
+        "closed path returns to start"
+    );
+}
+
+#[test]
+fn flattened_cubics_stay_within_tolerance_of_the_curve() {
+    let tol = 0.05;
+    let (p0, c1, c2, p3) = (p(0.0, 0.0), p(0.0, 40.0), p(40.0, 40.0), p(40.0, 0.0));
+    let curve = Path {
+        start: p0,
+        segments: vec![Segment::Cubic { c1, c2, to: p3 }],
+        closed: false,
+    };
+    let pts = curve.flatten(tol);
+    let dense: Vec<Point> = (0..=2000)
+        .map(|i| {
+            let t = f64::from(i) / 2000.0;
+            let u = 1.0 - t;
+            u * u * u * p0 + 3.0 * u * u * t * c1 + 3.0 * u * t * t * c2 + t * t * t * p3
+        })
+        .collect();
+    for w in pts.windows(2) {
+        let mid = (w[0] + w[1]) / 2.0;
+        let gap = dense
+            .iter()
+            .map(|q| q.distance(mid))
+            .fold(f64::MAX, f64::min);
+        assert!(
+            gap <= tol * 1.01,
+            "chord midpoint {mid:?} is {gap} from the curve"
+        );
+    }
+}
