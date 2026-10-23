@@ -3,7 +3,7 @@
 use aspire_core::document::Document;
 use aspire_core::geometry::{Path, polar};
 use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +67,16 @@ impl Command for DrawPolygon {
     }
 }
 
+impl Interactive for DrawPolygon {
+    fn from_drag(drag: Drag, current: &Params) -> Params {
+        Params {
+            center: Xy::new(drag.start.x, drag.start.y),
+            radius: drag.start.distance(drag.end),
+            ..current.clone()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,5 +120,23 @@ mod tests {
             }),
             "invalid parameters: a polygon needs at least 3 sides"
         );
+    }
+
+    #[test]
+    fn a_drag_sets_the_centre_and_radius_and_keeps_the_sides() {
+        let drag = aspire_core::Drag {
+            start: Point::new(5.0, 5.0),
+            end: Point::new(8.0, 9.0),
+            from_center: false,
+            constrain: false,
+        };
+        let p = DrawPolygon::from_drag(
+            drag,
+            &Params {
+                sides: 8,
+                ..Params::default()
+            },
+        );
+        assert_eq!((p.center, p.radius, p.sides), (Xy::new(5.0, 5.0), 5.0, 8));
     }
 }

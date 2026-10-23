@@ -2,7 +2,7 @@
 
 use aspire_core::document::Document;
 use aspire_core::geometry::{Path, Point, Segment};
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -125,6 +125,19 @@ fn outline(p: &Params) -> Path {
     }
 }
 
+impl Interactive for DrawRectangle {
+    fn from_drag(drag: Drag, current: &Params) -> Params {
+        let r = drag.rect();
+        Params {
+            x: r.min.x,
+            y: r.min.y,
+            width: r.size().x,
+            height: r.size().y,
+            ..current.clone()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,5 +238,26 @@ mod tests {
             radius: 1000.0,
             ..Params::default()
         });
+    }
+
+    #[test]
+    fn a_drag_sets_the_corner_and_size_and_keeps_the_corner_style() {
+        let drag = aspire_core::Drag {
+            start: Point::new(10.0, 20.0),
+            end: Point::new(4.0, 2.0),
+            from_center: false,
+            constrain: false,
+        };
+        let p = DrawRectangle::from_drag(
+            drag,
+            &Params {
+                corners: Corners::Rounded,
+                ..Params::default()
+            },
+        );
+        assert_eq!(
+            (p.x, p.y, p.width, p.height, p.corners),
+            (4.0, 2.0, 6.0, 18.0, Corners::Rounded)
+        );
     }
 }

@@ -3,7 +3,7 @@
 use aspire_core::document::Document;
 use aspire_core::geometry::Path;
 use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +47,15 @@ impl Command for DrawCircle {
     }
 }
 
+impl Interactive for DrawCircle {
+    fn from_drag(drag: Drag, _: &Params) -> Params {
+        Params {
+            center: Xy::new(drag.start.x, drag.start.y),
+            radius: drag.start.distance(drag.end),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,5 +83,17 @@ mod tests {
             }),
             "invalid parameters: radius must be greater than 0"
         );
+    }
+
+    #[test]
+    fn a_drag_goes_from_the_centre_out_to_the_radius() {
+        let drag = aspire_core::Drag {
+            start: Point::new(5.0, 5.0),
+            end: Point::new(8.0, 9.0),
+            from_center: false,
+            constrain: false,
+        };
+        let p = DrawCircle::from_drag(drag, &Params::default());
+        assert_eq!((p.center, p.radius), (Xy::new(5.0, 5.0), 5.0));
     }
 }

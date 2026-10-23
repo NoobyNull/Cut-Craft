@@ -2,6 +2,7 @@
 
 use crate::Change;
 use crate::document::Document;
+use crate::geometry::{Point, Rect};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize as _, Serialize};
@@ -62,6 +63,40 @@ pub trait Command: 'static {
     fn run(doc: &Document, params: &Self::Params) -> Result<Change, CommandError>;
 }
 
+/// A pointer drag in job coordinates, with the modifier meanings Aspire uses.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Drag {
+    pub start: Point,
+    pub end: Point,
+    /// Alt held: the start point is the centre.
+    pub from_center: bool,
+    /// Ctrl held: keep it square.
+    pub constrain: bool,
+}
+
+impl Drag {
+    /// The box the drag describes, honouring both modifiers.
+    pub fn rect(&self) -> Rect {
+        let mut d = self.end - self.start;
+        if self.constrain {
+            let side = d.x.abs().max(d.y.abs());
+            d = Point::new(side.copysign(d.x), side.copysign(d.y));
+        }
+        if self.from_center {
+            Rect::new(self.start - d, self.start + d)
+        } else {
+            Rect::new(self.start, self.start + d)
+        }
+    }
+}
+
+/// A command that can also be drawn with the mouse. Lives in the command's own crate, so
+/// changing how a tool drags means editing only that crate.
+pub trait Interactive: Command {
+    /// Parameters for `drag`; anything the drag does not decide comes from `current`.
+    fn from_drag(drag: Drag, current: &Self::Params) -> Self::Params;
+}
+
 /// Parameters for commands that take none.
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct NoParams {}
@@ -73,9 +108,24 @@ pub trait DynCommand {
     fn schema(&self) -> Value;
     fn default_params(&self) -> Value;
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError>;
+    /// Whether the command can be drawn with the mouse.
+    fn interactive(&self) -> bool;
+    /// The params a drag describes; an error for commands that are not interactive.
+    fn drag_params(&self, drag: Drag, current: &Value) -> Result<Value, CommandError>;
 }
 
-struct Erased<C>(PhantomData<fn() -> C>);
+type DragFn = fn(Drag, &Value) -> Result<Value, CommandError>;
+
+struct Erased<C> {
+    drag: Option<DragFn>,
+    command: PhantomData<fn() -> C>,
+}
+
+fn drag_json<C: Interactive>(drag: Drag, current: &Value) -> Result<Value, CommandError> {
+    let current =
+        C::Params::deserialize(current).map_err(|e| CommandError::InvalidParams(e.to_string()))?;
+    Ok(serde_json::to_value(C::from_drag(drag, &current)).expect("command params must serialize"))
+}
 
 impl<C: Command> DynCommand for Erased<C> {
     fn id(&self) -> &'static str {
@@ -100,6 +150,17 @@ impl<C: Command> DynCommand for Erased<C> {
             .map_err(|e| CommandError::InvalidParams(e.to_string()))?;
         C::run(doc, &params)
     }
+
+    fn interactive(&self) -> bool {
+        self.drag.is_some()
+    }
+
+    fn drag_params(&self, drag: Drag, current: &Value) -> Result<Value, CommandError> {
+        let to_params = self.drag.ok_or_else(|| {
+            CommandError::Failed(format!("{} cannot be drawn with the mouse", C::ID))
+        })?;
+        to_params(drag, current)
+    }
 }
 
 /// Every command the app knows, looked up by id.
@@ -110,12 +171,27 @@ pub struct Registry {
 
 impl Registry {
     pub fn add<C: Command>(&mut self) -> &mut Self {
+        self.insert(Erased::<C> {
+            drag: None,
+            command: PhantomData,
+        })
+    }
+
+    /// Registers a command that can also be drawn with the mouse.
+    pub fn add_interactive<C: Interactive>(&mut self) -> &mut Self {
+        self.insert(Erased::<C> {
+            drag: Some(drag_json::<C>),
+            command: PhantomData,
+        })
+    }
+
+    fn insert<C: Command>(&mut self, command: Erased<C>) -> &mut Self {
         assert!(
             self.get(C::ID).is_none(),
             "command `{}` registered twice",
             C::ID
         );
-        self.commands.push(Box::new(Erased::<C>(PhantomData)));
+        self.commands.push(Box::new(command));
         self
     }
 

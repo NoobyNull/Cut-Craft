@@ -4,10 +4,11 @@
 use crate::form::{self, Field};
 use crate::gui;
 use crate::icons::Icons;
-use crate::{commands, shortcut, view2d};
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
-use aspire_core::{History, Registry};
+use crate::view2d::{Canvas, Gesture, Overlay, ViewTransform};
+use crate::{commands, shortcut};
+use aspire_core::document::{Document, EntityId};
+use aspire_core::geometry::{Path, Point, Rect};
+use aspire_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 
@@ -61,6 +62,8 @@ struct AspireApp {
     view: View,
     cursor: Option<Point>,
     form: Option<OpenForm>,
+    /// How the 2D view mapped the job last frame.
+    view_transform: Option<ViewTransform>,
 }
 
 impl AspireApp {
@@ -77,6 +80,7 @@ impl AspireApp {
             view: View::TwoD,
             cursor: None,
             form: None,
+            view_transform: None,
         }
     }
 
@@ -359,6 +363,13 @@ fn menu_items(
 
 impl eframe::App for AspireApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.ui(ctx);
+    }
+}
+
+impl AspireApp {
+    /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
+    fn ui(&mut self, ctx: &egui::Context) {
         self.shortcuts(ctx);
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| self.menu_bar(ui));
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));
@@ -370,14 +381,112 @@ impl eframe::App for AspireApp {
                 ui.selectable_value(&mut self.view, View::ThreeD, "3D View (F3)");
             });
             ui.separator();
-            self.cursor = match self.view {
-                View::TwoD => view2d::paint(ui, &self.doc),
+            match self.view {
+                View::TwoD => self.view_2d(ui),
                 View::ThreeD => {
                     ui.centered_and_justified(|ui| ui.weak("3D view: not implemented yet"));
-                    None
+                    self.cursor = None;
                 }
-            };
+            }
         });
+    }
+
+    fn view_2d(&mut self, ui: &mut egui::Ui) {
+        let canvas = Canvas::new(ui, &self.doc.job);
+        let gesture = canvas.gesture(ui);
+        let overlay = match gesture {
+            Some(Gesture::Dragging(drag)) => match self.drawing_tool() {
+                Some(id) => Overlay::Preview(self.preview(id, drag)),
+                None => Overlay::Window {
+                    start: drag.start,
+                    end: drag.end,
+                    crossing: drag.end.x < drag.start.x,
+                },
+            },
+            _ => Overlay::None,
+        };
+        canvas.paint(ui, &self.doc, &overlay);
+        self.view_transform = Some(canvas.transform);
+        self.cursor = canvas.cursor();
+        match (gesture, self.drawing_tool()) {
+            (Some(Gesture::Dropped { drag, .. }), Some(id)) => self.draw(id, drag),
+            (Some(Gesture::Dropped { drag, shift }), None) => {
+                let ids = self
+                    .doc
+                    .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);
+                self.select(ids, shift);
+            }
+            (Some(Gesture::Click { at, shift }), None) => {
+                let hit = self.doc.pick(at, canvas.pick_tolerance(ui));
+                if shift {
+                    let mut ids = self.doc.selection.clone();
+                    if let Some(id) = hit
+                        && !ids.remove(&id)
+                    {
+                        ids.insert(id);
+                    }
+                    self.select(ids, false);
+                } else {
+                    self.select(hit, false);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The open form's command, if it can be drawn with the mouse.
+    fn drawing_tool(&self) -> Option<&'static str> {
+        let form = self.form.as_ref()?;
+        self.registry
+            .get(form.id)
+            .filter(|c| c.interactive())
+            .map(aspire_core::DynCommand::id)
+    }
+
+    /// Paths `id` would create for `drag`, by running the command itself.
+    fn preview(&self, id: &str, drag: Drag) -> Vec<Path> {
+        let (Some(cmd), Some(form)) = (self.registry.get(id), &self.form) else {
+            return vec![];
+        };
+        cmd.drag_params(drag, &form.params)
+            .and_then(|params| cmd.run_json(&self.doc, &params))
+            .map(|change| change.added().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Finishes a drag with a drawing tool: the form shows the dragged values, then they apply.
+    fn draw(&mut self, id: &'static str, drag: Drag) {
+        let Some(cmd) = self.registry.get(id) else {
+            return;
+        };
+        let Some(current) = self.form.as_ref().map(|f| f.params.clone()) else {
+            return;
+        };
+        let result = cmd
+            .drag_params(drag, &current)
+            .map_err(|e| e.to_string())
+            .and_then(|params| {
+                if let Some(form) = &mut self.form {
+                    form.params.clone_from(&params);
+                }
+                self.apply(id, &params)
+            });
+        if let Some(form) = &mut self.form {
+            form.error = result.err();
+        }
+    }
+
+    /// Selection is view state: applied directly, never recorded for undo.
+    fn select(&mut self, ids: impl IntoIterator<Item = EntityId>, add: bool) {
+        let mut c = Change::builder(&self.doc);
+        if add {
+            c.select(self.doc.selection.iter().copied().chain(ids));
+        } else {
+            c.select(ids);
+        }
+        self.doc
+            .apply(&c.finish())
+            .expect("picked ids come from the document");
     }
 }
 
@@ -406,4 +515,171 @@ pub fn run(title: &str) {
         }),
     )
     .expect("event loop error");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
+
+    /// Drives the real UI headlessly, one frame per call, with synthetic pointer input.
+    struct Harness {
+        ctx: egui::Context,
+        app: AspireApp,
+        time: f64,
+    }
+
+    impl Harness {
+        fn new() -> Self {
+            let mut h = Self {
+                ctx: egui::Context::default(),
+                app: AspireApp::new(),
+                time: 0.0,
+            };
+            h.frame(vec![]);
+            h.frame(vec![]);
+            h
+        }
+
+        fn frame(&mut self, events: Vec<Event>) {
+            self.frame_holding(Modifiers::NONE, events);
+        }
+
+        /// One frame with `modifiers` held, as the windowing layer reports them every frame.
+        fn frame_holding(&mut self, modifiers: Modifiers, events: Vec<Event>) {
+            self.time += 0.1;
+            let input = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+                time: Some(self.time),
+                modifiers,
+                events,
+                ..Default::default()
+            };
+            let _ = self.ctx.run(input, |ctx| self.app.ui(ctx));
+        }
+
+        /// Screen position of a job coordinate in the 2D view.
+        fn at(&self, x: f64, y: f64) -> Pos2 {
+            self.app
+                .view_transform
+                .expect("the 2D view has been drawn")
+                .to_screen(Point::new(x, y))
+        }
+
+        fn press(&mut self, pos: Pos2, pressed: bool, modifiers: Modifiers) {
+            let button = Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers,
+            };
+            self.frame_holding(modifiers, vec![button]);
+        }
+
+        fn drag(&mut self, from: Pos2, to: Pos2) {
+            self.frame(vec![Event::PointerMoved(from)]);
+            self.press(from, true, Modifiers::NONE);
+            self.frame(vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+            self.frame(vec![Event::PointerMoved(to)]);
+            self.press(to, false, Modifiers::NONE);
+            self.frame(vec![]);
+        }
+
+        /// A click with `modifiers` held for the whole gesture, as a held key would be.
+        fn click(&mut self, at: Pos2, modifiers: Modifiers) {
+            self.frame_holding(modifiers, vec![Event::PointerMoved(at)]);
+            self.press(at, true, modifiers);
+            self.press(at, false, modifiers);
+            self.frame_holding(modifiers, vec![]);
+        }
+
+        /// Draws a rectangle through the command, then closes its form.
+        fn rectangle(&mut self, x: f64, y: f64, width: f64, height: f64) {
+            let params = serde_json::json!({ "x": x, "y": y, "width": width, "height": height, "corners": "square", "radius": 0.0 });
+            self.app.apply("draw_rectangle", &params).unwrap();
+            self.app.form = None;
+            self.frame(vec![]);
+        }
+    }
+
+    fn near(a: Point, b: Point) -> bool {
+        // one screen pixel is under a millimetre at this window size
+        a.distance(b) < 2.0
+    }
+
+    #[test]
+    fn dragging_with_the_rectangle_tool_draws_that_rectangle() {
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "draw_rectangle");
+        h.frame(vec![]);
+        let (from, to) = (h.at(100.0, 100.0), h.at(300.0, 200.0));
+        h.drag(from, to);
+        assert_eq!(h.app.doc.vectors.len(), 1);
+        let b = h.app.doc.vectors.values().next().unwrap().bounds();
+        assert!(
+            near(b.min, Point::new(100.0, 100.0)) && near(b.max, Point::new(300.0, 200.0)),
+            "{b:?}"
+        );
+        assert!(h.app.history.can_undo());
+        let width = h.app.form.as_ref().unwrap().params["width"]
+            .as_f64()
+            .unwrap();
+        assert!(
+            (width - 200.0).abs() < 2.0,
+            "the form shows the dragged size, got {width}"
+        );
+    }
+
+    #[test]
+    fn clicking_selects_without_adding_undo_steps() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.click(h.at(500.0, 300.0), Modifiers::NONE);
+        assert!(
+            h.app.doc.selection.is_empty(),
+            "clicking empty space clears the selection"
+        );
+        h.click(h.at(60.0, 35.0), Modifiers::NONE);
+        assert_eq!(
+            h.app.doc.selection.len(),
+            1,
+            "clicking the right edge selects it"
+        );
+        assert!(h.app.history.undo(&mut h.app.doc));
+        assert!(
+            h.app.doc.vectors.is_empty(),
+            "the last undo step is the draw, not a click"
+        );
+    }
+
+    #[test]
+    fn shift_click_adds_and_removes() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.rectangle(100.0, 10.0, 50.0, 50.0);
+        h.click(h.at(10.0, 35.0), Modifiers::NONE);
+        h.click(h.at(150.0, 35.0), Modifiers::SHIFT);
+        assert_eq!(h.app.doc.selection.len(), 2);
+        h.click(h.at(10.0, 35.0), Modifiers::SHIFT);
+        assert_eq!(h.app.doc.selection.len(), 1);
+    }
+
+    #[test]
+    fn left_to_right_windows_and_right_to_left_crosses() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.rectangle(100.0, 10.0, 50.0, 50.0);
+        h.drag(h.at(0.0, 0.0), h.at(120.0, 80.0));
+        assert_eq!(
+            h.app.doc.selection.len(),
+            1,
+            "only the first rectangle is fully inside"
+        );
+        h.drag(h.at(120.0, 80.0), h.at(0.0, 0.0));
+        assert_eq!(
+            h.app.doc.selection.len(),
+            2,
+            "crossing also takes the one it touches"
+        );
+    }
 }

@@ -149,3 +149,11 @@ fn add_and_select_makes_the_new_path_the_only_selection() {
         [EntityId(2)]
     );
 }
+
+#[test]
+fn added_lists_the_paths_a_change_creates() {
+    let doc = Document::default();
+    let change = add_squares(&doc, &[0.0, 5.0]);
+    let added: Vec<&Path> = change.added().collect();
+    assert_eq!(added, [&square(0.0), &square(5.0)]);
+}

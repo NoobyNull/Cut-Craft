@@ -4,7 +4,7 @@ use aspire_core::document::Document;
 use aspire_core::geometry::Path;
 use aspire_core::glam::{DAffine2, DVec2};
 use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -54,6 +54,17 @@ impl Command for DrawEllipse {
     }
 }
 
+impl Interactive for DrawEllipse {
+    fn from_drag(drag: Drag, _: &Params) -> Params {
+        let r = drag.rect();
+        Params {
+            center: Xy::new(r.center().x, r.center().y),
+            width: r.size().x,
+            height: r.size().y,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,6 +105,21 @@ mod tests {
                 ..Params::default()
             }),
             "invalid parameters: height must be greater than 0"
+        );
+    }
+
+    #[test]
+    fn a_drag_box_sets_the_centre_and_size() {
+        let drag = aspire_core::Drag {
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 4.0),
+            from_center: false,
+            constrain: false,
+        };
+        let p = DrawEllipse::from_drag(drag, &Params::default());
+        assert_eq!(
+            (p.center, p.width, p.height),
+            (Xy::new(5.0, 2.0), 10.0, 4.0)
         );
     }
 }

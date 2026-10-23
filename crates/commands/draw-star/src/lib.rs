@@ -3,7 +3,7 @@
 use aspire_core::document::Document;
 use aspire_core::geometry::{Path, polar};
 use aspire_core::params::Xy;
-use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -78,6 +78,20 @@ impl Command for DrawStar {
     }
 }
 
+impl Interactive for DrawStar {
+    /// Keeps the inner/outer ratio, so the points stay the same depth as the star grows.
+    fn from_drag(drag: Drag, current: &Params) -> Params {
+        let outer = drag.start.distance(drag.end);
+        let ratio = current.inner_radius / current.outer_radius;
+        Params {
+            center: Xy::new(drag.start.x, drag.start.y),
+            outer_radius: outer,
+            inner_radius: outer * ratio,
+            ..current.clone()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +137,22 @@ mod tests {
                 ..Params::default()
             }),
             "invalid parameters: a star needs at least 3 points"
+        );
+    }
+
+    #[test]
+    fn a_drag_sets_the_outer_radius_and_keeps_the_point_depth() {
+        let drag = aspire_core::Drag {
+            start: Point::new(0.0, 0.0),
+            end: Point::new(0.0, 60.0),
+            from_center: false,
+            constrain: false,
+        };
+        let p = DrawStar::from_drag(drag, &Params::default());
+        assert_eq!((p.center, p.outer_radius), (Xy::new(0.0, 0.0), 60.0));
+        assert!(
+            (p.inner_radius - 24.0).abs() < 1e-9,
+            "12/30 of the outer radius"
         );
     }
 }

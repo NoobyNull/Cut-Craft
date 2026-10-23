@@ -11,4 +11,6 @@ pub mod testing;
 pub use glam;
 
 pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Step};
-pub use command::{Command, CommandError, DynCommand, Meta, NoParams, Registry, ensure_positive};
+pub use command::{
+    Command, CommandError, Drag, DynCommand, Interactive, Meta, NoParams, Registry, ensure_positive,
+};

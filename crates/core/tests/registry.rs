@@ -1,6 +1,6 @@
 use aspire_core::document::Document;
 use aspire_core::geometry::{Path, Point};
-use aspire_core::{Change, Command, CommandError, Meta, Registry};
+use aspire_core::{Change, Command, CommandError, Drag, Interactive, Meta, Registry};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -116,4 +116,44 @@ fn ensure_positive_names_the_parameter() {
             .to_string(),
         "invalid parameters: width must be greater than 0"
     );
+}
+
+impl Interactive for AddSquare {
+    fn from_drag(drag: Drag, _: &SquareParams) -> SquareParams {
+        let d = (drag.end - drag.start).abs();
+        SquareParams { size: d.x.max(d.y) }
+    }
+}
+
+#[test]
+fn interactive_commands_turn_a_drag_into_params() {
+    let mut registry = Registry::default();
+    registry.add_interactive::<AddSquare>();
+    let cmd = registry.get("add_square").unwrap();
+    assert!(cmd.interactive());
+    let drag = Drag {
+        start: Point::ZERO,
+        end: Point::new(3.0, -4.0),
+        from_center: false,
+        constrain: false,
+    };
+    assert_eq!(
+        cmd.drag_params(drag, &cmd.default_params()).unwrap(),
+        serde_json::json!({ "size": 4.0 })
+    );
+}
+
+#[test]
+fn plain_commands_are_not_interactive() {
+    let mut registry = Registry::default();
+    registry.add::<AddSquare>();
+    let cmd = registry.get("add_square").unwrap();
+    assert!(!cmd.interactive());
+    let drag = Drag {
+        start: Point::ZERO,
+        end: Point::ZERO,
+        from_center: false,
+        constrain: false,
+    };
+    assert!(cmd.drag_params(drag, &cmd.default_params()).is_err());
 }

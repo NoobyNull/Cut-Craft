@@ -17,12 +17,12 @@ pub fn registry() -> Registry {
     r.add::<cmd_center_vertically_in_material::CenterVerticallyInMaterial>();
     r.add::<cmd_delete::Delete>();
     r.add::<cmd_draw_arc::DrawArc>();
-    r.add::<cmd_draw_circle::DrawCircle>();
-    r.add::<cmd_draw_ellipse::DrawEllipse>();
-    r.add::<cmd_draw_polygon::DrawPolygon>();
+    r.add_interactive::<cmd_draw_circle::DrawCircle>();
+    r.add_interactive::<cmd_draw_ellipse::DrawEllipse>();
+    r.add_interactive::<cmd_draw_polygon::DrawPolygon>();
     r.add::<cmd_draw_polyline::DrawPolyline>();
-    r.add::<cmd_draw_rectangle::DrawRectangle>();
-    r.add::<cmd_draw_star::DrawStar>();
+    r.add_interactive::<cmd_draw_rectangle::DrawRectangle>();
+    r.add_interactive::<cmd_draw_star::DrawStar>();
     r.add::<cmd_mirror::Mirror>();
     r.add::<cmd_move::Move>();
     r.add::<cmd_rotate::Rotate>();

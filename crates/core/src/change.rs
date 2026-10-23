@@ -64,7 +64,6 @@ pub enum ApplyError {
     Exists(EntityId),
     /// The entity no longer matches what the change was built against.
     Conflict(EntityId),
-    SelectionConflict,
     JobConflict,
 }
 
@@ -74,7 +73,6 @@ impl fmt::Display for ApplyError {
             Self::Missing(id) => write!(f, "entity {} does not exist", id.0),
             Self::Exists(id) => write!(f, "entity {} already exists", id.0),
             Self::Conflict(id) => write!(f, "entity {} was changed by something else", id.0),
-            Self::SelectionConflict => f.write_str("the selection was changed by something else"),
             Self::JobConflict => f.write_str("the job setup was changed by something else"),
         }
     }
@@ -141,6 +139,14 @@ impl Change {
             .ok_or(CommandError::NothingSelected)?;
         Self::transform_selected(doc, |path| {
             DAffine2::from_translation(offset(path.bounds(), sel))
+        })
+    }
+
+    /// Paths this change creates, e.g. to preview a command before applying it.
+    pub fn added(&self) -> impl Iterator<Item = &Path> {
+        self.edits.iter().filter_map(|e| match e {
+            Edit::Add { path, .. } => Some(path),
+            _ => None,
         })
     }
 
@@ -211,10 +217,9 @@ impl Document {
                 Some(current) if current != before => return Err(ApplyError::Conflict(*id)),
                 Some(current) => current.clone_from(after),
             },
-            Edit::Select { before, after } => {
-                if &self.selection != before {
-                    return Err(ApplyError::SelectionConflict);
-                }
+            // Selection is view state: it may have been changed outside the history (clicks),
+            // so `before` is not checked; only that everything selected exists.
+            Edit::Select { after, .. } => {
                 if let Some(id) = after.iter().find(|id| !self.vectors.contains_key(id)) {
                     return Err(ApplyError::Missing(*id));
                 }

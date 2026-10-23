@@ -40,6 +40,14 @@ impl Rect {
         self.union(Self::point(p))
     }
 
+    pub fn contains(self, p: Point) -> bool {
+        p.cmpge(self.min).all() && p.cmple(self.max).all()
+    }
+
+    pub fn contains_rect(self, other: Self) -> bool {
+        self.contains(other.min) && self.contains(other.max)
+    }
+
     pub fn center(self) -> Point {
         (self.min + self.max) / 2.0
     }
@@ -243,6 +251,61 @@ impl Path {
 /// The point `radius` from `center` at `degrees` counter-clockwise from +X.
 pub fn polar(center: Point, radius: f64, degrees: f64) -> Point {
     center + radius * DVec2::from_angle(degrees.to_radians())
+}
+
+/// Shortest distance from `at` to the polyline through `points`.
+pub fn polyline_distance(points: &[Point], at: Point) -> f64 {
+    if let [only] = points {
+        return only.distance(at);
+    }
+    points
+        .windows(2)
+        .map(|w| {
+            let (a, d) = (w[0], w[1] - w[0]);
+            let t = if d.length_squared() > 0.0 {
+                ((at - a).dot(d) / d.length_squared()).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            (a + d * t).distance(at)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// Does any part of the polyline through `points` lie inside or on `r`?
+pub fn polyline_touches(points: &[Point], r: Rect) -> bool {
+    points.iter().any(|&p| r.contains(p))
+        || points.windows(2).any(|w| segment_touches(w[0], w[1], r))
+}
+
+/// Liang–Barsky: clips the segment against `area`; it touches if any of it survives.
+fn segment_touches(from: Point, to: Point, area: Rect) -> bool {
+    let along = to - from;
+    let (mut enter, mut leave) = (0.0_f64, 1.0_f64);
+    // (rate the segment approaches an edge, distance inside that edge at the start)
+    for (rate, inside) in [
+        (-along.x, from.x - area.min.x),
+        (along.x, area.max.x - from.x),
+        (-along.y, from.y - area.min.y),
+        (along.y, area.max.y - from.y),
+    ] {
+        if rate == 0.0 {
+            if inside < 0.0 {
+                return false;
+            }
+        } else {
+            let crossing = inside / rate;
+            if rate < 0.0 {
+                enter = enter.max(crossing);
+            } else {
+                leave = leave.min(crossing);
+            }
+            if enter > leave {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 fn angle(v: DVec2) -> f64 {

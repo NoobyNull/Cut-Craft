@@ -1,7 +1,9 @@
-//! The 2D view: job coordinates (mm, y up) ↔ screen points (pixels, y down).
+//! The 2D view: job coordinates (mm, y up) ↔ screen points (pixels, y down), pointer
+//! gestures in job coordinates, and painting the document.
 
-use aspire_core::document::Document;
-use aspire_core::geometry::Point;
+use aspire_core::Drag;
+use aspire_core::document::{Document, Job};
+use aspire_core::geometry::{Path, Point};
 use eframe::egui::{self, Pos2, Rect, Sense, Shape, Stroke, pos2};
 
 #[derive(Clone, Copy, Debug)]
@@ -40,47 +42,162 @@ impl ViewTransform {
     }
 }
 
-/// Draws the job and its vectors; returns the pointer position in job coordinates.
-pub fn paint(ui: &mut egui::Ui, doc: &Document) -> Option<Point> {
-    let (area, response) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
-    let painter = ui.painter_at(area);
-    let visuals = ui.visuals();
-    let spacing = ui.spacing();
-    let t = ViewTransform::fit(area, spacing.interact_size.y, doc.job.width, doc.job.height);
+/// What the pointer did on the canvas this frame.
+#[derive(Clone, Copy, Debug)]
+pub enum Gesture {
+    Click { at: Point, shift: bool },
+    Dragging(Drag),
+    Dropped { drag: Drag, shift: bool },
+}
 
-    let job = Rect::from_two_pos(
-        t.to_screen(Point::ZERO),
-        t.to_screen(Point::new(doc.job.width, doc.job.height)),
-    );
-    painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
+/// Drawn over the document while a gesture is in progress.
+pub enum Overlay {
+    None,
+    /// What the active drawing tool would create.
+    Preview(Vec<Path>),
+    /// A selection box in job coordinates; crossing boxes are drawn dashed.
+    Window {
+        start: Point,
+        end: Point,
+        crossing: bool,
+    },
+}
 
-    let (dash, gap) = (spacing.item_spacing.x, spacing.item_spacing.x / 2.0);
-    let datum = visuals.widgets.noninteractive.fg_stroke;
-    let o = t.origin;
-    for line in [
-        [pos2(area.left(), o.y), pos2(area.right(), o.y)],
-        [pos2(o.x, area.top()), pos2(o.x, area.bottom())],
-    ] {
-        painter.extend(Shape::dashed_line(&line, datum, dash, gap));
-    }
+pub struct Canvas {
+    pub transform: ViewTransform,
+    area: Rect,
+    response: egui::Response,
+}
 
-    // chords within half a physical pixel of the true curve
-    let tolerance = f64::from(0.5 / (ui.ctx().pixels_per_point() * t.scale));
-    let normal = Stroke::new(datum.width, visuals.text_color());
-    let selected = visuals.selection.stroke;
-    for (id, path) in &doc.vectors {
-        let points: Vec<Pos2> = path
-            .flatten(tolerance)
-            .into_iter()
-            .map(|p| t.to_screen(p))
-            .collect();
-        if doc.selection.contains(id) {
-            painter.extend(Shape::dashed_line(&points, selected, dash, gap));
-        } else {
-            painter.add(Shape::line(points, normal));
+impl Canvas {
+    pub fn new(ui: &mut egui::Ui, job: &Job) -> Self {
+        let (area, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+        let transform =
+            ViewTransform::fit(area, ui.spacing().interact_size.y, job.width, job.height);
+        Self {
+            transform,
+            area,
+            response,
         }
     }
-    response.hover_pos().map(|p| t.to_job(p))
+
+    pub fn cursor(&self) -> Option<Point> {
+        self.response.hover_pos().map(|p| self.transform.to_job(p))
+    }
+
+    /// Pick radius in millimetres: half the theme's interactive height, on screen.
+    pub fn pick_tolerance(&self, ui: &egui::Ui) -> f64 {
+        f64::from(ui.spacing().interact_size.y / 2.0 / self.transform.scale)
+    }
+
+    pub fn gesture(&self, ui: &egui::Ui) -> Option<Gesture> {
+        let modifiers = ui.input(|i| i.modifiers);
+        let t = self.transform;
+        if self.response.clicked() {
+            let at = t.to_job(self.response.interact_pointer_pos()?);
+            return Some(Gesture::Click {
+                at,
+                shift: modifiers.shift,
+            });
+        }
+        // egui forgets where a press started on the frame it is released, so remember it
+        let id = self.response.id;
+        if self.response.drag_started()
+            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        {
+            ui.data_mut(|d| d.insert_temp(id, origin));
+        }
+        let start: Pos2 = ui.data(|d| d.get_temp(id))?;
+        let end = ui.input(|i| i.pointer.latest_pos())?;
+        let drag = Drag {
+            start: t.to_job(start),
+            end: t.to_job(end),
+            from_center: modifiers.alt,
+            constrain: modifiers.command,
+        };
+        if self.response.drag_stopped() {
+            ui.data_mut(|d| d.remove::<Pos2>(id));
+            Some(Gesture::Dropped {
+                drag,
+                shift: modifiers.shift,
+            })
+        } else if self.response.dragged() {
+            Some(Gesture::Dragging(drag))
+        } else {
+            None
+        }
+    }
+
+    /// Draws the job, its datum, the vectors (selection dashed) and `overlay`.
+    pub fn paint(&self, ui: &egui::Ui, doc: &Document, overlay: &Overlay) {
+        let painter = ui.painter_at(self.area);
+        let visuals = ui.visuals();
+        let t = self.transform;
+        let (dash, gap) = (
+            ui.spacing().item_spacing.x,
+            ui.spacing().item_spacing.x / 2.0,
+        );
+
+        let job = Rect::from_two_pos(
+            t.to_screen(Point::ZERO),
+            t.to_screen(Point::new(doc.job.width, doc.job.height)),
+        );
+        painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
+        let datum = visuals.widgets.noninteractive.fg_stroke;
+        let (o, area) = (t.origin, self.area);
+        for line in [
+            [pos2(area.left(), o.y), pos2(area.right(), o.y)],
+            [pos2(o.x, area.top()), pos2(o.x, area.bottom())],
+        ] {
+            painter.extend(Shape::dashed_line(&line, datum, dash, gap));
+        }
+
+        // chords within half a physical pixel of the true curve
+        let tolerance = f64::from(0.5 / (ui.ctx().pixels_per_point() * t.scale));
+        let screen = |path: &Path| -> Vec<Pos2> {
+            path.flatten(tolerance)
+                .into_iter()
+                .map(|p| t.to_screen(p))
+                .collect()
+        };
+        let normal = Stroke::new(datum.width, visuals.text_color());
+        let selected = visuals.selection.stroke;
+        for (id, path) in &doc.vectors {
+            if doc.selection.contains(id) {
+                painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
+            } else {
+                painter.add(Shape::line(screen(path), normal));
+            }
+        }
+
+        match overlay {
+            Overlay::None => {}
+            Overlay::Preview(paths) => {
+                for path in paths {
+                    painter.add(Shape::line(screen(path), selected));
+                }
+            }
+            Overlay::Window {
+                start,
+                end,
+                crossing,
+            } => {
+                let r = Rect::from_two_pos(t.to_screen(*start), t.to_screen(*end));
+                if *crossing {
+                    let corners = [
+                        r.left_top(),
+                        r.right_top(),
+                        r.right_bottom(),
+                        r.left_bottom(),
+                        r.left_top(),
+                    ];
+                    painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
+                } else {
+                    painter.rect_stroke(r, 0.0, selected);
+                }
+            }
+        }
+    }
 }
 
 /// Job coordinates are f64 millimetres; the screen is f32 pixels.
