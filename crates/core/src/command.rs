@@ -1,7 +1,6 @@
 //! The contract every command implements, and the registry the app runs them through.
 
-use crate::document::Document;
-use crate::document::EntityId;
+use crate::document::{Document, EntityId, Layer, LayerId};
 use crate::formats::{ExportEntry, Exporter, ImportEntry, Importer};
 use crate::geometry::{Point, Rect};
 use crate::{Change, Edit};
@@ -50,6 +49,22 @@ pub fn ensure_positive(name: &str, value: f64) -> Result<(), CommandError> {
         Err(CommandError::InvalidParams(format!(
             "{name} must be greater than 0"
         )))
+    }
+}
+
+/// The layer a command names, or the error the user sees when it is gone.
+pub fn existing_layer(doc: &Document, id: LayerId) -> Result<&Layer, CommandError> {
+    doc.layer(id)
+        .ok_or_else(|| CommandError::InvalidParams(format!("layer {} does not exist", id.0)))
+}
+
+/// Names (of layers, toolpaths...) must have something in them; returns the trimmed name.
+pub fn ensure_named(name: &str) -> Result<String, CommandError> {
+    let name = name.trim();
+    if name.is_empty() {
+        Err(CommandError::InvalidParams("the name is empty".into()))
+    } else {
+        Ok(name.to_owned())
     }
 }
 

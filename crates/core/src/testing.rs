@@ -168,12 +168,41 @@ pub fn vertices(path: &Path) -> Vec<Point> {
         .collect()
 }
 
+/// Runs a command with `params` on `doc` and applies what it made.
+pub fn run_on<C: Command>(doc: &mut Document, params: &C::Params) {
+    let change = C::run(doc, params).unwrap_or_else(|e| panic!("{} failed: {e}", C::ID));
+    doc.apply(&change).expect("change applies");
+}
+
 /// Runs a command with `params` on the sample document and returns the result.
 pub fn after<C: Command>(params: &C::Params) -> Document {
     let mut doc = sample_document();
-    let change = C::run(&doc, params).unwrap_or_else(|e| panic!("{} failed: {e}", C::ID));
-    doc.apply(&change).expect("change applies");
+    run_on::<C>(&mut doc, params);
     doc
+}
+
+/// The sample document with an empty "Layer 2" on top; layer 1 stays current.
+pub fn two_layers() -> Document {
+    let mut doc = sample_document();
+    let mut c = Change::builder(&doc);
+    c.add_layer("Layer 2");
+    let change = c.finish();
+    doc.apply(&change).expect("adding a layer applies");
+    doc
+}
+
+/// `doc` with layer `id` replaced by `edit` of it.
+pub fn edit_layer(
+    doc: &mut Document,
+    id: crate::document::LayerId,
+    edit: impl FnOnce(&mut crate::document::Layer),
+) {
+    let mut layer = doc.layer(id).expect("layer exists").clone();
+    edit(&mut layer);
+    let mut c = Change::builder(doc);
+    c.replace_layer(layer);
+    let change = c.finish();
+    doc.apply(&change).expect("replacing a layer applies");
 }
 
 /// The error message a command gives for `params` on the sample document.

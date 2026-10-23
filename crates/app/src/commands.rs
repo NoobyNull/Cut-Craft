@@ -38,6 +38,12 @@ pub fn registry() -> Registry {
     r.add::<cmd_profile_toolpath::ProfileToolpath>();
     r.add::<cmd_pocket_toolpath::PocketToolpath>();
     r.add::<cmd_drilling_toolpath::DrillingToolpath>();
+    r.add::<cmd_add_layer::AddLayer>();
+    r.add::<cmd_delete_layer::DeleteLayer>();
+    r.add::<cmd_move_to_layer::MoveToLayer>();
+    r.add::<cmd_select_layer_vectors::SelectLayerVectors>();
+    r.add::<cmd_layer_properties::LayerProperties>();
+    r.add::<cmd_set_current_layer::SetCurrentLayer>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_gcode::ExportGcode>();

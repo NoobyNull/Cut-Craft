@@ -16,6 +16,7 @@ pub use glam;
 
 pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Step};
 pub use command::{
-    Command, CommandError, Drag, DynCommand, Interactive, Meta, NoParams, Registry, ensure_positive,
+    Command, CommandError, Drag, DynCommand, Interactive, Meta, NoParams, Registry, ensure_named,
+    ensure_positive, existing_layer,
 };
 pub use formats::{ExportEntry, Exporter, FileFormat, ImportEntry, Importer};

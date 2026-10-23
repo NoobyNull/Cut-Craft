@@ -149,6 +149,7 @@ version = "0.1.0"
 dependencies = [
  "aspire-core",
  "aspire-post",
+ "cmd-add-layer",
  "cmd-align-bottom",
  "cmd-align-left",
  "cmd-align-right",
@@ -160,6 +161,7 @@ dependencies = [
  "cmd-center-vertically",
  "cmd-center-vertically-in-material",
  "cmd-delete",
+ "cmd-delete-layer",
  "cmd-draw-arc",
  "cmd-draw-circle",
  "cmd-draw-ellipse",
@@ -170,14 +172,18 @@ dependencies = [
  "cmd-drilling-toolpath",
  "cmd-job-setup",
  "cmd-join-vectors",
+ "cmd-layer-properties",
  "cmd-mirror",
  "cmd-move",
+ "cmd-move-to-layer",
  "cmd-offset-vectors",
  "cmd-overlap-intersect",
  "cmd-pocket-toolpath",
  "cmd-profile-toolpath",
  "cmd-rotate",
  "cmd-select-all-vectors",
+ "cmd-select-layer-vectors",
+ "cmd-set-current-layer",
  "cmd-set-size",
  "cmd-subtract-vectors",
  "cmd-unselect-all",
@@ -442,6 +448,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-add-layer"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-align-bottom"
 version = "0.1.0"
 dependencies = [
@@ -520,6 +535,15 @@ name = "cmd-delete"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
+]
+
+[[package]]
+name = "cmd-delete-layer"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]
@@ -613,6 +637,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-layer-properties"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-mirror"
 version = "0.1.0"
 dependencies = [
@@ -623,6 +656,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-move"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-move-to-layer"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
@@ -678,6 +720,24 @@ name = "cmd-select-all-vectors"
 version = "0.1.0"
 dependencies = [
  "aspire-core",
+]
+
+[[package]]
+name = "cmd-select-layer-vectors"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-set-current-layer"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

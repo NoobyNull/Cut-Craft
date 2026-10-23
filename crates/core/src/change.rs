@@ -344,11 +344,7 @@ impl Document {
                 if self.layers.get(*index) != Some(layer) {
                     return Err(ApplyError::LayerConflict(layer.id));
                 }
-                let first = self.layers[0].id;
-                let holds_vectors = self
-                    .vectors
-                    .keys()
-                    .any(|v| self.vector_layers.get(v).copied().unwrap_or(first) == layer.id);
+                let holds_vectors = self.vectors_on(layer.id).next().is_some();
                 if holds_vectors || self.layers.len() == 1 || self.current_layer == layer.id {
                     return Err(ApplyError::LayerInUse(layer.id));
                 }

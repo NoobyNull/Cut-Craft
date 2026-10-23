@@ -20,6 +20,12 @@ fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-set-current-layer = { path = "../commands/set-current-layer" }
+cmd-layer-properties = { path = "../commands/layer-properties" }
+cmd-select-layer-vectors = { path = "../commands/select-layer-vectors" }
+cmd-move-to-layer = { path = "../commands/move-to-layer" }
+cmd-delete-layer = { path = "../commands/delete-layer" }
+cmd-add-layer = { path = "../commands/add-layer" }
 cmd-drilling-toolpath = { path = "../commands/drilling-toolpath" }
 cmd-pocket-toolpath = { path = "../commands/pocket-toolpath" }
 cmd-profile-toolpath = { path = "../commands/profile-toolpath" }

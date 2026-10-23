@@ -2,14 +2,24 @@
 
 use crate::geometry::{Path, Point, Rect, polyline_distance, polyline_touches};
 use crate::toolpath::Toolpath;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct EntityId(pub u64);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
 pub struct LayerId(pub u32);
+
+/// The first layer of a new document.
+impl Default for LayerId {
+    fn default() -> Self {
+        first_layer()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Layer {
@@ -131,6 +141,13 @@ impl Document {
             .get(&id)
             .copied()
             .unwrap_or_else(|| self.layers[0].id)
+    }
+
+    pub fn vectors_on(&self, layer: LayerId) -> impl Iterator<Item = EntityId> + '_ {
+        self.vectors
+            .keys()
+            .copied()
+            .filter(move |&id| self.layer_of(id) == layer)
     }
 
     /// On a visible, unlocked layer: can be picked and edited.
