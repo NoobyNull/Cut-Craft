@@ -1,0 +1,16 @@
+[package]
+name = "cmd-draw-polygon"
+description = "Draw Polygon"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

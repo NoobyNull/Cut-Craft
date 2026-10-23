@@ -338,6 +338,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-draw-arc"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-draw-circle"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-draw-ellipse"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-draw-polygon"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-draw-polyline"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-draw-rectangle"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-draw-star"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cocoa"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

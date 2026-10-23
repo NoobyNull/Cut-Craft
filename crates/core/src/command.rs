@@ -39,6 +39,17 @@ impl fmt::Display for CommandError {
 
 impl std::error::Error for CommandError {}
 
+/// Uniform validation for lengths, radii and counts: fails unless `value > 0` (NaN fails).
+pub fn ensure_positive(name: &str, value: f64) -> Result<(), CommandError> {
+    if value > 0.0 {
+        Ok(())
+    } else {
+        Err(CommandError::InvalidParams(format!(
+            "{name} must be greater than 0"
+        )))
+    }
+}
+
 /// One operation: typed parameters in, an invertible [`Change`] out. It never mutates the
 /// document itself, so undo, scripting, macros and tests all go through the same path.
 pub trait Command: 'static {

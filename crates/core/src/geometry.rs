@@ -203,6 +203,11 @@ impl Path {
     }
 }
 
+/// The point `radius` from `center` at `degrees` counter-clockwise from +X.
+pub fn polar(center: Point, radius: f64, degrees: f64) -> Point {
+    center + radius * DVec2::from_angle(degrees.to_radians())
+}
+
 fn angle(v: DVec2) -> f64 {
     v.y.atan2(v.x)
 }

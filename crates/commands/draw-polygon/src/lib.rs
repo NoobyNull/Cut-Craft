@@ -1,0 +1,114 @@
+//! Draw Polygon: a regular polygon with its first vertex straight up (before rotation).
+
+use aspire_core::document::Document;
+use aspire_core::geometry::{Path, polar};
+use aspire_core::params::Xy;
+use aspire_core::{Change, Command, CommandError, Meta, ensure_positive};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+pub struct DrawPolygon;
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Params {
+    pub center: Xy,
+    /// Centre to vertex
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub radius: f64,
+    #[schemars(range(min = 3, max = 100))]
+    pub sides: u32,
+    /// Counter-clockwise
+    #[schemars(extend("x-unit" = "deg"))]
+    pub rotation: f64,
+}
+
+impl Default for Params {
+    fn default() -> Self {
+        Self {
+            center: Xy::new(60.0, 60.0),
+            radius: 30.0,
+            sides: 6,
+            rotation: 0.0,
+        }
+    }
+}
+
+impl Command for DrawPolygon {
+    const ID: &'static str = "draw_polygon";
+    type Params = Params;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Draw Polygon",
+            group: "Create Vectors",
+            icon: "drawing/create_vectors/draw_polygon.svg",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        if p.sides < 3 {
+            return Err(CommandError::InvalidParams(
+                "a polygon needs at least 3 sides".into(),
+            ));
+        }
+        ensure_positive("radius", p.radius)?;
+        let step = 360.0 / f64::from(p.sides);
+        let points: Vec<_> = (0..p.sides)
+            .map(|k| {
+                polar(
+                    p.center.into(),
+                    p.radius,
+                    90.0 + p.rotation + step * f64::from(k),
+                )
+            })
+            .collect();
+        Ok(Change::add_and_select(doc, Path::polyline(&points, true)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aspire_core::geometry::Point;
+    use aspire_core::testing::{drawn_path, rejection, vertices};
+
+    aspire_core::contract_tests!(DrawPolygon);
+
+    #[test]
+    fn every_vertex_is_on_the_radius_and_the_first_points_up() {
+        let path = drawn_path::<DrawPolygon>(&Params::default());
+        let v = vertices(&path);
+        assert!(path.closed);
+        assert_eq!(
+            v.len(),
+            7,
+            "6 vertices plus the closing return to the start"
+        );
+        assert!(
+            v.iter()
+                .all(|q| (q.distance(Point::new(60.0, 60.0)) - 30.0).abs() < 1e-9)
+        );
+        assert!(v[0].distance(Point::new(60.0, 90.0)) < 1e-9);
+    }
+
+    #[test]
+    fn rotation_turns_the_first_vertex_counter_clockwise() {
+        let v = vertices(&drawn_path::<DrawPolygon>(&Params {
+            rotation: 90.0,
+            ..Params::default()
+        }));
+        assert!(v[0].distance(Point::new(30.0, 60.0)) < 1e-9, "{:?}", v[0]);
+    }
+
+    #[test]
+    fn rejects_fewer_than_three_sides() {
+        assert_eq!(
+            rejection::<DrawPolygon>(&Params {
+                sides: 2,
+                ..Params::default()
+            }),
+            "invalid parameters: a polygon needs at least 3 sides"
+        );
+    }
+}

@@ -136,3 +136,16 @@ fn document_round_trips_through_json() {
     let json = serde_json::to_string(&doc).unwrap();
     assert_eq!(serde_json::from_str::<Document>(&json).unwrap(), doc);
 }
+
+#[test]
+fn add_and_select_makes_the_new_path_the_only_selection() {
+    let mut doc = Document::default();
+    let first = add_squares(&doc, &[0.0]);
+    doc.apply(&first).unwrap();
+    let change = Change::add_and_select(&doc, square(5.0));
+    doc.apply(&change).unwrap();
+    assert_eq!(
+        doc.selection.iter().copied().collect::<Vec<_>>(),
+        [EntityId(2)]
+    );
+}

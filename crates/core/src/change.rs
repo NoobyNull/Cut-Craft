@@ -101,6 +101,14 @@ impl Change {
         }
     }
 
+    /// Adds `path` and makes it the whole selection: what every drawing command does.
+    pub fn add_and_select(doc: &Document, path: Path) -> Self {
+        let mut c = Self::builder(doc);
+        let id = c.add(path);
+        c.select([id]);
+        c.finish()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.edits.is_empty()
     }

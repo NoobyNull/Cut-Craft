@@ -115,3 +115,30 @@ macro_rules! contract_tests {
         }
     };
 }
+
+/// Runs a drawing command on an empty document; asserts it added exactly one path and
+/// selected it; returns that path.
+pub fn drawn_path<C: Command>(params: &C::Params) -> Path {
+    let empty = Document::default();
+    let change = C::run(&empty, params).unwrap_or_else(|e| panic!("{} failed: {e}", C::ID));
+    let mut doc = empty.clone();
+    doc.apply(&change).expect("change applies");
+    assert_eq!(doc.vectors.len(), 1, "{} must add exactly one path", C::ID);
+    assert_eq!(doc.selection.len(), 1, "{} must select what it drew", C::ID);
+    doc.vectors.into_values().next().unwrap()
+}
+
+/// The error message a command gives for `params` on an empty document.
+pub fn rejection<C: Command>(params: &C::Params) -> String {
+    match C::run(&Document::default(), params) {
+        Ok(_) => panic!("{} accepted parameters it should reject", C::ID),
+        Err(e) => e.to_string(),
+    }
+}
+
+/// Every vertex of a path made only of lines (start plus each segment end).
+pub fn vertices(path: &Path) -> Vec<Point> {
+    std::iter::once(path.start)
+        .chain(path.segments.iter().map(crate::geometry::Segment::end))
+        .collect()
+}

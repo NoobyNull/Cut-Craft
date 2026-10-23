@@ -106,3 +106,14 @@ fn registering_the_same_id_twice_is_a_bug() {
     registry.add::<AddSquare>();
     registry.add::<AddSquare>();
 }
+
+#[test]
+fn ensure_positive_names_the_parameter() {
+    assert_eq!(aspire_core::ensure_positive("width", 3.0), Ok(()));
+    assert_eq!(
+        aspire_core::ensure_positive("width", 0.0)
+            .unwrap_err()
+            .to_string(),
+        "invalid parameters: width must be greater than 0"
+    );
+}

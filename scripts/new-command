@@ -1,0 +1,66 @@
+#!/bin/bash
+# Scaffold a command crate whose contract tests fail until it is implemented.
+#   scripts/new-command draw-rectangle "Draw Rectangle" "Create Vectors" drawing/create_vectors/draw_rectangle.svg
+# Then: write behaviour tests in its src/lib.rs, implement run(), and register it in the app.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+name="$1" label="$2" group="$3" icon="${4:-}"
+dir="crates/commands/$name"
+[[ -e $dir ]] && { echo "$dir already exists" >&2; exit 1; }
+id="${name//-/_}"
+type=$(sed -E 's/(^|-)([a-z0-9])/\U\2/g' <<<"$name")
+mkdir -p "$dir/src"
+
+cat >"$dir/Cargo.toml" <<EOF
+[package]
+name = "cmd-$name"
+description = "$label"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true
+EOF
+
+cat >"$dir/src/lib.rs" <<EOF
+//! $label.
+
+use aspire_core::document::Document;
+use aspire_core::{Change, Command, CommandError, Meta};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+pub struct $type;
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct Params {}
+
+impl Command for $type {
+    const ID: &'static str = "$id";
+    type Params = Params;
+
+    fn meta() -> Meta {
+        Meta { label: "$label", group: "$group", icon: "$icon", shortcut: "" }
+    }
+
+    fn run(_doc: &Document, _params: &Params) -> Result<Change, CommandError> {
+        todo!("write the behaviour tests first")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    aspire_core::contract_tests!($type);
+}
+EOF
+echo "created $dir ($type, id \"$id\")"
