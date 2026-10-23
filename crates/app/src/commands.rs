@@ -40,6 +40,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_drilling_toolpath::DrillingToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
+    r.add_exporter::<fmt_export_gcode::ExportGcode>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
     r
 }
