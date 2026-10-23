@@ -1,4 +1,4 @@
-use aspire_core::toolpath::{Tool, ToolDatabase};
+use aspire_core::toolpath::{Tool, ToolDatabase, ToolShape};
 
 fn tool(name: &str, diameter: f64) -> Tool {
     Tool {
@@ -34,4 +34,42 @@ fn the_database_round_trips_through_json() {
     let back = ToolDatabase::from_json(&db.to_json()).unwrap();
     assert_eq!(back, db);
     assert!(ToolDatabase::from_json(b"not json").is_err());
+}
+
+#[test]
+fn the_starter_database_has_each_shape_of_tool() {
+    let db = ToolDatabase::starter();
+    for shape in [ToolShape::EndMill, ToolShape::BallNose, ToolShape::VBit] {
+        assert!(db.tools.iter().any(|t| t.shape == shape), "{shape:?}");
+    }
+}
+
+#[test]
+fn tool_profiles_rise_from_the_tip() {
+    let tool = |shape| Tool {
+        shape,
+        diameter: 6.0,
+        angle: 60.0,
+        ..Tool::default()
+    };
+    assert_eq!(tool(ToolShape::EndMill).profile(2.0), Some(0.0));
+    let ball = tool(ToolShape::BallNose).profile(3.0).unwrap();
+    assert!((ball - 3.0).abs() < 1e-12, "a ball's edge is a radius up");
+    let v = tool(ToolShape::VBit).profile(1.0).unwrap();
+    assert!((v - 1.0 / 30f64.to_radians().tan()).abs() < 1e-12);
+    assert_eq!(
+        tool(ToolShape::EndMill).profile(3.5),
+        None,
+        "beyond the tool"
+    );
+}
+
+#[test]
+fn tools_saved_before_shapes_existed_are_end_mills() {
+    let mut json = serde_json::to_value(Tool::default()).unwrap();
+    let fields = json.as_object_mut().unwrap();
+    fields.remove("shape");
+    fields.remove("angle");
+    let tool: Tool = serde_json::from_value(json).unwrap();
+    assert_eq!(tool.shape, ToolShape::EndMill);
 }

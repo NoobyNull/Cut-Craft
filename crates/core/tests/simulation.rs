@@ -2,7 +2,7 @@ use aspire_core::document::Job;
 use aspire_core::geometry::Point;
 use aspire_core::glam::DVec3;
 use aspire_core::simulation::Material;
-use aspire_core::toolpath::{Move, MoveKind, Tool, Toolpath};
+use aspire_core::toolpath::{Move, MoveKind, Tool, ToolShape, Toolpath};
 
 /// A 100 x 100 x 20 mm job in half-millimetre cells.
 fn material() -> Material {
@@ -14,13 +14,17 @@ fn material() -> Material {
     Material::new(&job, 200)
 }
 
-/// A 6 mm tool following `points` (x, y, z) in order.
+/// A 6 mm end mill following `points` (x, y, z) in order.
 fn toolpath(points: &[(f64, f64, f64)]) -> Toolpath {
+    with_tool(Tool::default(), points)
+}
+
+fn with_tool(tool: Tool, points: &[(f64, f64, f64)]) -> Toolpath {
     Toolpath {
         name: "test".into(),
         strategy: "test".into(),
         params: serde_json::Value::Null,
-        tool: Tool::default(),
+        tool,
         vectors: vec![],
         moves: points
             .iter()
@@ -100,4 +104,42 @@ fn moves_above_the_material_cut_nothing() {
     let mut m = material();
     m.cut(&toolpath(&[(10.0, 10.0, 5.0), (90.0, 90.0, 5.0)]));
     assert!(m.heights.iter().all(|&z| z == 0.0));
+}
+
+fn shaped(shape: ToolShape) -> Tool {
+    Tool {
+        shape,
+        angle: 90.0,
+        ..Tool::default()
+    }
+}
+
+#[test]
+fn a_ball_nose_plunge_leaves_a_round_dimple() {
+    let mut m = material();
+    let plunge = [(50.0, 50.0, 5.0), (50.0, 50.0, -3.0), (50.0, 50.0, 5.0)];
+    m.cut(&with_tool(shaped(ToolShape::BallNose), &plunge));
+    assert!((depth_at(&m, 50.0, 50.0) + 3.0).abs() < 0.05);
+    // the cell centred 2.25 mm out (and 0.25 up): 3 - sqrt(9 - r^2) above the tip
+    let r = (2.25f64.powi(2) + 0.25f64.powi(2)).sqrt();
+    let expected = -3.0 + 3.0 - (9.0 - r * r).sqrt();
+    assert!((depth_at(&m, 52.0, 50.0) - expected).abs() < 1e-9);
+    assert_eq!(depth_at(&m, 54.0, 50.0), 0.0);
+}
+
+#[test]
+fn a_v_bit_groove_is_as_wide_as_it_is_deep_at_90_degrees() {
+    let mut m = material();
+    m.cut(&with_tool(
+        shaped(ToolShape::VBit),
+        &[(10.0, 50.0, -2.0), (90.0, 50.0, -2.0)],
+    ));
+    // cell centres 0.25 mm above y: the 90 degree cone rises 1 mm per mm out
+    assert!((depth_at(&m, 50.0, 50.0) + 1.75).abs() < 1e-9);
+    assert!((depth_at(&m, 50.0, 51.0) + 0.75).abs() < 1e-9);
+    assert_eq!(
+        depth_at(&m, 50.0, 53.0),
+        0.0,
+        "past where the cone leaves the surface"
+    );
 }

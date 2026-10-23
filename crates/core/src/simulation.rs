@@ -2,7 +2,7 @@
 
 use crate::document::Job;
 use crate::geometry::Point;
-use crate::toolpath::Toolpath;
+use crate::toolpath::{Tool, ToolShape, Toolpath};
 use glam::{DVec2, DVec3};
 
 /// The material seen from above: a grid of square cells, each holding the height of the
@@ -56,17 +56,16 @@ impl Material {
     }
 
     /// Removes what the tool following `toolpath` cuts away.
-    // ponytail: flat end mills only; ball nose and V-bit profiles when those tools exist
     pub fn cut(&mut self, toolpath: &Toolpath) {
-        let radius = toolpath.tool.diameter / 2.0;
         for pair in toolpath.moves.windows(2) {
-            self.sweep(pair[0].to, pair[1].to, radius);
+            self.sweep(pair[0].to, pair[1].to, &toolpath.tool);
         }
     }
 
-    /// Lowers each cell the tool end passes over from `a` to `b` to the lowest z it reaches
-    /// there; exact at cell centres for a flat end.
-    fn sweep(&mut self, a: DVec3, b: DVec3, radius: f64) {
+    /// Lowers each cell the tool passes over from `a` to `b` to the lowest its cutting edge
+    /// reaches there, at the cell centre.
+    fn sweep(&mut self, a: DVec3, b: DVec3, tool: &Tool) {
+        let radius = tool.diameter / 2.0;
         if a.z >= 0.0 && b.z >= 0.0 {
             return;
         }
@@ -85,13 +84,35 @@ impl Material {
                 let Some((t0, t1)) = covered(start - centre, along, radius) else {
                     continue;
                 };
-                // z is linear in t, so the lowest point is at one end of the covered span
-                let z = a.lerp(b, t0).z.min(a.lerp(b, t1).z).max(self.bottom);
+                let z = match tool.shape {
+                    // z is linear in t, so a flat end is lowest at one end of the covered span
+                    ToolShape::EndMill => a.lerp(b, t0).z.min(a.lerp(b, t1).z),
+                    _ => lowest(t0, t1, |t| {
+                        let tip = a.lerp(b, t);
+                        let r = tip.truncate().distance(centre).min(radius);
+                        tip.z + tool.profile(r).unwrap_or(0.0)
+                    }),
+                }
+                .max(self.bottom);
                 let height = &mut self.heights[row * self.columns + column];
                 *height = height.min(z);
             }
         }
     }
+}
+
+/// The least of a convex `f` over `[lo, hi]`, by ternary search; the ends are checked exactly.
+fn lowest(lo: f64, hi: f64, f: impl Fn(f64) -> f64) -> f64 {
+    let (mut a, mut b) = (lo, hi);
+    for _ in 0..60 {
+        let (third, two_thirds) = (a + (b - a) / 3.0, b - (b - a) / 3.0);
+        if f(third) < f(two_thirds) {
+            b = two_thirds;
+        } else {
+            a = third;
+        }
+    }
+    f(lo).min(f(hi)).min(f(f64::midpoint(a, b)))
 }
 
 /// The span of t in [0, 1] where `|from + t * along| <= radius`.

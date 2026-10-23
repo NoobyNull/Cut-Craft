@@ -8,9 +8,27 @@ use glam::DVec3;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolShape {
+    /// Flat bottomed
+    #[default]
+    EndMill,
+    /// Round bottomed, for 3D finishing
+    BallNose,
+    /// Pointed, for V-carving
+    VBit,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Tool {
     pub name: String,
+    #[serde(default)]
+    pub shape: ToolShape,
+    /// Included angle of a V-bit's point
+    #[serde(default = "default_angle")]
+    #[schemars(extend("x-unit" = "°"), range(min = 1, max = 179))]
+    pub angle: f64,
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub diameter: f64,
     /// Depth cut on each pass
@@ -27,10 +45,28 @@ pub struct Tool {
     pub spindle_speed: f64,
 }
 
+fn default_angle() -> f64 {
+    90.0
+}
+
+impl Tool {
+    /// How far above its tip the cutting edge is at `r` from the axis; `None` beyond the tool.
+    pub fn profile(&self, r: f64) -> Option<f64> {
+        let radius = self.diameter / 2.0;
+        (r <= radius).then(|| match self.shape {
+            ToolShape::EndMill => 0.0,
+            ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
+            ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
+        })
+    }
+}
+
 impl Default for Tool {
     fn default() -> Self {
         Self {
             name: "6 mm End Mill".into(),
+            shape: ToolShape::EndMill,
+            angle: default_angle(),
             diameter: 6.0,
             pass_depth: 3.0,
             stepover: 0.4,
@@ -49,7 +85,7 @@ pub struct ToolDatabase {
 }
 
 impl ToolDatabase {
-    /// What a first run starts with: common end mills.
+    /// What a first run starts with: common end mills, ball noses and V-bits.
     pub fn starter() -> Self {
         let end_mill =
             |name: &str, diameter: f64, pass_depth: f64, feed_rate: f64, plunge_rate: f64| Tool {
@@ -60,6 +96,13 @@ impl ToolDatabase {
                 plunge_rate,
                 ..Tool::default()
             };
+        let shaped =
+            |name: &str, shape: ToolShape, diameter: f64, angle: f64, stepover: f64| Tool {
+                shape,
+                angle,
+                stepover,
+                ..end_mill(name, diameter, 3.0, 1500.0, 500.0)
+            };
         Self {
             tools: vec![
                 end_mill("3 mm End Mill", 3.0, 1.5, 800.0, 250.0),
@@ -67,6 +110,10 @@ impl ToolDatabase {
                 end_mill("12 mm End Mill", 12.0, 4.0, 2000.0, 500.0),
                 end_mill("1/8 in End Mill", 3.175, 1.5, 800.0, 250.0),
                 end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
+                shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
+                shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
+                shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.2),
+                shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.2),
             ],
         }
     }
