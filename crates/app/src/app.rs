@@ -15,6 +15,7 @@ use aspire_core::toolpath::{Tool, ToolDatabase};
 use aspire_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
+use std::borrow::Cow;
 use std::f64::consts::{FRAC_PI_2, PI};
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
@@ -479,16 +480,20 @@ impl AspireApp {
         ui.separator();
         egui::ScrollArea::vertical().show(ui, |ui| {
             self.command_form(ui);
-            if DESIGN_TABS[self.design_tab] == "Drawing" {
-                let groups = self.toolbar.groups.clone();
-                self.tool_groups(ui, &groups);
-            } else if DESIGN_TABS[self.design_tab] == "Layers" {
-                self.layers_panel(ui);
-            } else {
-                ui.weak(format!(
-                    "{} tools not implemented yet",
-                    DESIGN_TABS[self.design_tab]
-                ));
+            match DESIGN_TABS[self.design_tab] {
+                "Drawing" => {
+                    let groups = self.toolbar.groups.clone();
+                    self.tool_groups(ui, &groups);
+                }
+                "Modeling" => {
+                    let groups = self.toolbar.modeling_groups.clone();
+                    self.tool_groups(ui, &groups);
+                    self.component_list(ui);
+                }
+                "Layers" => self.layers_panel(ui),
+                tab => {
+                    ui.weak(format!("{tab} tools not implemented yet"));
+                }
             }
         });
     }
@@ -808,30 +813,51 @@ impl AspireApp {
             .set_message(&format!("Previewed {}", toolpath.name));
     }
 
-    /// The previewed material, turned by dragging sideways and tilted by dragging up/down.
+    /// Components top first: the model is built from the bottom of the list up.
+    fn component_list(&self, ui: &mut egui::Ui) {
+        ui.separator();
+        ui.strong("Components");
+        if self.doc.components.is_empty() {
+            ui.weak("No components yet");
+        }
+        for component in self.doc.components.values().rev() {
+            ui.label(format!("{} ({:?})", component.name, component.combine));
+        }
+    }
+
+    /// What the 3D view shows: the toolpath preview if there is one, else the model.
+    // ponytail: the model is rebuilt on every call; cache it on the history revision if slow
+    fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
+        if let Some(material) = &self.simulation {
+            return Some(Cow::Borrowed(
+                self.simulation_coarse
+                    .get_or_insert_with(|| view3d::coarse(material, MESH_CELLS)),
+            ));
+        }
+        (!self.doc.components.is_empty())
+            .then(|| Cow::Owned(aspire_core::component::model(&self.doc, MESH_CELLS)))
+    }
+
+    /// The preview or model as a block, turned by dragging sideways and tilted up/down.
     fn view_3d(&mut self, ui: &mut egui::Ui) {
-        let Some(material) = &self.simulation else {
-            ui.centered_and_justified(|ui| ui.weak("No preview yet: preview the toolpaths"));
+        if self.simulation.is_none() && self.doc.components.is_empty() {
+            ui.centered_and_justified(|ui| {
+                ui.weak("Nothing in 3D yet: create a shape or preview the toolpaths")
+            });
             return;
-        };
+        }
         let (area, response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::drag());
         // dragging across the whole view turns half a turn
         let delta = response.drag_delta();
         self.orbit.yaw += f64::from(delta.x / area.width().max(1.0)) * PI;
         self.orbit.pitch = (self.orbit.pitch + f64::from(delta.y / area.height().max(1.0)) * PI)
             .clamp(0.0, FRAC_PI_2);
-        // ponytail: rebuilt every frame; cache it with the orbit if frames get slow
-        let shown = self
-            .simulation_coarse
-            .get_or_insert_with(|| view3d::coarse(material, MESH_CELLS));
-        let margin = ui.spacing().item_spacing.x * 2.0;
-        let mesh = view3d::mesh(
-            shown,
-            self.orbit,
-            ui.visuals().warn_fg_color,
-            area.shrink(margin),
-        );
-        ui.painter_at(area).add(mesh);
+        let (orbit, colour) = (self.orbit, ui.visuals().warn_fg_color);
+        let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
+        if let Some(surface) = self.surface_3d() {
+            ui.painter_at(area)
+                .add(view3d::mesh(&surface, orbit, colour, fit));
+        }
     }
 
     fn toolpaths_panel(&mut self, ui: &mut egui::Ui) {
@@ -1388,6 +1414,37 @@ mod tests {
             h.app.invoke(&h.ctx, "preview_toolpath");
         }
         assert_eq!(h.app.simulation, Some(all));
+    }
+
+    #[test]
+    fn the_3d_view_shows_the_model_until_there_is_a_preview() {
+        let mut h = Harness::new();
+        h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Modeling").unwrap();
+        assert!(
+            h.app
+                .toolbar
+                .modeling_groups
+                .iter()
+                .any(|g| g.tools.contains(&"create_shape"))
+        );
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        let shape = h.app.registry.get("create_shape").unwrap().default_params();
+        h.app.apply("create_shape", &shape).unwrap();
+        h.app.view = View::ThreeD;
+        h.frame(vec![]);
+        let raised =
+            |app: &mut AspireApp| app.surface_3d().unwrap().heights.iter().any(|&z| z > 0.0);
+        assert!(raised(&mut h.app), "the model");
+        let profile = h
+            .app
+            .registry
+            .get("profile_toolpath")
+            .unwrap()
+            .default_params();
+        h.app.apply("profile_toolpath", &profile).unwrap();
+        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        h.frame(vec![]);
+        assert!(!raised(&mut h.app), "the preview, cut down from the top");
     }
 
     #[test]

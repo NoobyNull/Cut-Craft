@@ -17,6 +17,7 @@ serde_json.workspace = true
 # File formats: one line per crate in crates/formats, registered in src/commands.rs
 fmt-export-dxf = { path = "../formats/export-dxf" }
 fmt-export-gcode = { path = "../formats/export-gcode" }
+fmt-export-as-stl = { path = "../formats/export-as-stl" }
 fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }

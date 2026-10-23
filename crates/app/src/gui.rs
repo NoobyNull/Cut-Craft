@@ -6,6 +6,8 @@ pub struct Toolbar {
     pub groups: Vec<ToolGroup>,
     /// The Toolpaths panel, laid out the same way.
     pub toolpath_groups: Vec<ToolGroup>,
+    /// The Modeling tab.
+    pub modeling_groups: Vec<ToolGroup>,
 }
 
 #[derive(Clone, Copy)]
@@ -19,6 +21,7 @@ impl Toolbar {
         Self {
             groups: drawing_groups(),
             toolpath_groups: toolpath_groups(),
+            modeling_groups: modeling_groups(),
         }
     }
 }
@@ -95,6 +98,40 @@ fn drawing_groups() -> Vec<ToolGroup> {
             &["offset_vectors", "nest_parts", "copy_along_vectors"],
         ),
         group("Array Objects", &["array_copy", "circular_copy"]),
+    ]
+}
+
+/// The Modeling tab, laid out the same way.
+fn modeling_groups() -> Vec<ToolGroup> {
+    vec![
+        group(
+            "Shape Creation",
+            &[
+                "create_shape",
+                "extrude_and_weave",
+                "two_rail_sweep",
+                "turn_and_spin",
+                "texture_area",
+                "zero_plane",
+                "create_from_bitmap",
+            ],
+        ),
+        group(
+            "Shape Editing",
+            &[
+                "sculpt",
+                "smooth",
+                "emboss",
+                "distort",
+                "offset_model",
+                "slice",
+                "add_draft",
+                "scale_z_height",
+                "replace_below",
+                "split",
+                "bake",
+            ],
+        ),
     ]
 }
 

@@ -68,6 +68,7 @@ fn the_model_combines_components_in_the_order_they_were_made() {
         (Combine::Subtract, 6.0, -4.0),
         (Combine::Merge, 10.0, 4.0),
         (Combine::Low, 4.0, 0.0),
+        (Combine::Multiply, 40.0, 0.0),
     ];
     for (combine, overlap, alone) in cases {
         let mut doc = small_job();

@@ -84,7 +84,8 @@ Done:
     pick from it and save back; Tool Database window edits and deletes. Toolpaths keep a copy.
 15. ✅ Toolpath preview: material height grid cut by the toolpaths (Preview All = Preview
     Selected for each); orbitable 3D view of the block, drawn as a lit mesh.
+16. ✅ 3D components (height grids; add / subtract / merge / low / multiply) combined into the
+    model; Create Shape (round / angular / flat); Modeling tab; model in the 3D view; STL export.
 
 Next:
-16. 3D components (height maps), create shape, combine modes; STL export.
 17. V-carve, fluting, inlay and the other strategies.

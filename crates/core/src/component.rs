@@ -19,6 +19,8 @@ pub enum Combine {
     Merge,
     /// The lower of the two
     Low,
+    /// The two multiplied: a 0 to 1 component fades what is under it
+    Multiply,
 }
 
 impl Combine {
@@ -28,6 +30,7 @@ impl Combine {
             Self::Subtract => under - height,
             Self::Merge => under.max(height),
             Self::Low => under.min(height),
+            Self::Multiply => under * height,
         }
     }
 }

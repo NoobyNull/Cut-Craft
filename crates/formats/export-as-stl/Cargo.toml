@@ -1,0 +1,14 @@
+[package]
+name = "fmt-export-as-stl"
+description = "Export the 3D model as STL"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aspire-core.workspace = true
+
+[dev-dependencies]
+aspire-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true
