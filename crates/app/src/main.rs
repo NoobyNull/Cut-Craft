@@ -8,6 +8,7 @@ mod gui;
 mod icons;
 mod shortcut;
 mod view2d;
+mod view3d;
 
 fn main() {
     env_logger::init();

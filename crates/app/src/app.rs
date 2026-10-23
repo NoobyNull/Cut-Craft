@@ -6,10 +6,11 @@ use crate::form::{self, Field};
 use crate::gui;
 use crate::icons::Icons;
 use crate::view2d::{Canvas, Gesture, Overlay, ViewTransform};
-use crate::{commands, shortcut};
+use crate::{commands, shortcut, view3d};
 use aspire_core::document::{Document, EntityId, LayerId};
 use aspire_core::file::JOB_EXTENSION;
 use aspire_core::geometry::{Path, Point, Rect};
+use aspire_core::simulation::Material;
 use aspire_core::toolpath::{Tool, ToolDatabase};
 use aspire_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
@@ -17,7 +18,7 @@ use serde_json::Value;
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 14] = [
+const BUILT_INS: [&str; 17] = [
     "undo",
     "redo",
     "exit",
@@ -32,7 +33,13 @@ const BUILT_INS: [&str; 14] = [
     "save_toolpaths",
     "install_post_processor",
     "tool_database",
+    "preview_toolpath",
+    "preview_all_toolpaths",
+    "reset_preview",
 ];
+/// Simulation cells along the longer side of the job.
+// ponytail: one quality until the Preview Simulation Quality menu is wired
+const PREVIEW_CELLS: usize = 1000;
 const APP_NAME: &str = "Aspire Clone";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
@@ -79,6 +86,9 @@ struct AspireApp {
     tool_window: bool,
     /// The tool shown in the Tool Database window.
     tool_selected: usize,
+    /// The material as cut by the previewed toolpaths, and its picture once drawn.
+    simulation: Option<Material>,
+    simulation_texture: Option<egui::TextureHandle>,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -105,6 +115,8 @@ impl AspireApp {
             tools_path: None,
             tool_window: false,
             tool_selected: 0,
+            simulation: None,
+            simulation_texture: None,
             title: String::new(),
         }
     }
@@ -113,8 +125,11 @@ impl AspireApp {
         match id {
             "undo" => self.history.can_undo(),
             "redo" => self.history.can_redo(),
-            "recalculate_toolpath" | "delete_toolpath" => self.selected_toolpath.is_some(),
-            "recalculate_all_toolpaths" => !self.doc.toolpaths.is_empty(),
+            "recalculate_toolpath" | "delete_toolpath" | "preview_toolpath" => {
+                self.selected_toolpath.is_some()
+            }
+            "recalculate_all_toolpaths" | "preview_all_toolpaths" => !self.doc.toolpaths.is_empty(),
+            "reset_preview" => self.simulation.is_some(),
             "save_toolpaths" => {
                 !self.doc.toolpaths.is_empty()
                     && (self.post.is_some() || self.registry.exporter("export_gcode").is_some())
@@ -156,6 +171,19 @@ impl AspireApp {
             | "save_toolpaths" => {
                 self.toolpath_action(id);
             }
+            "preview_toolpath" => {
+                if let Some(id) = self.selected_toolpath {
+                    self.preview_toolpath(id);
+                }
+            }
+            // the cascade: start again from uncut material, then preview each toolpath
+            "preview_all_toolpaths" => {
+                self.simulation = None;
+                for id in self.doc.toolpaths.keys().copied().collect::<Vec<_>>() {
+                    self.preview_toolpath(id);
+                }
+            }
+            "reset_preview" => (self.simulation, self.simulation_texture) = (None, None),
             id if self.registry.exporter(id).is_some() => self.export(id),
             _ => self.start_command(id),
         }
@@ -759,6 +787,35 @@ impl AspireApp {
         }
     }
 
+    /// Cuts the toolpath from the previewed material (uncut material if there is none yet).
+    fn preview_toolpath(&mut self, id: EntityId) {
+        let Some(toolpath) = self.doc.toolpaths.get(&id) else {
+            return;
+        };
+        self.simulation
+            .get_or_insert_with(|| Material::new(&self.doc.job, PREVIEW_CELLS))
+            .cut(toolpath);
+        self.simulation_texture = None;
+        self.view = View::ThreeD;
+        self.status
+            .set_message(&format!("Previewed {}", toolpath.name));
+    }
+
+    fn view_3d(&mut self, ui: &mut egui::Ui) {
+        let Some(material) = &self.simulation else {
+            ui.centered_and_justified(|ui| ui.weak("No preview yet: preview the toolpaths"));
+            return;
+        };
+        let texture = self.simulation_texture.get_or_insert_with(|| {
+            let image = view3d::shaded(material, ui.visuals().warn_fg_color);
+            ui.ctx()
+                .load_texture("simulation", image, egui::TextureOptions::LINEAR)
+        });
+        let size = texture.size_vec2();
+        let fit = (ui.available_size() / size).min_elem();
+        ui.centered_and_justified(|ui| ui.image((texture.id(), size * fit)));
+    }
+
     fn toolpaths_panel(&mut self, ui: &mut egui::Ui) {
         let groups = self.toolbar.toolpath_groups.clone();
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -783,6 +840,9 @@ impl AspireApp {
                     "recalculate_toolpath",
                     "recalculate_all_toolpaths",
                     "delete_toolpath",
+                    "preview_toolpath",
+                    "preview_all_toolpaths",
+                    "reset_preview",
                 ],
             }];
             self.tool_groups(ui, &actions);
@@ -869,7 +929,7 @@ impl AspireApp {
             match self.view {
                 View::TwoD => self.view_2d(ui),
                 View::ThreeD => {
-                    ui.centered_and_justified(|ui| ui.weak("3D view: not implemented yet"));
+                    self.view_3d(ui);
                     self.cursor = None;
                 }
             }
@@ -1288,6 +1348,28 @@ mod tests {
         h.app.delete_tool(0);
         h.frame(vec![]);
         assert_eq!(h.app.tools.tools.len(), count - 1);
+    }
+
+    #[test]
+    fn previewing_all_toolpaths_is_previewing_each_in_turn() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        for id in ["drilling_toolpath", "profile_toolpath"] {
+            h.app.invoke(&h.ctx, id);
+            let params = h.app.form.as_ref().unwrap().params.clone();
+            h.app.apply(id, &params).unwrap();
+        }
+        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        assert!(h.app.view == View::ThreeD, "previewing shows the 3D view");
+        h.frame(vec![]);
+        let all = h.app.simulation.clone().expect("a preview");
+        h.app.invoke(&h.ctx, "reset_preview");
+        assert!(h.app.simulation.is_none());
+        for id in h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>() {
+            h.app.selected_toolpath = Some(id);
+            h.app.invoke(&h.ctx, "preview_toolpath");
+        }
+        assert_eq!(h.app.simulation, Some(all));
     }
 
     #[test]
