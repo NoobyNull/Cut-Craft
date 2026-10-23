@@ -184,7 +184,7 @@ impl AspireApp {
                 let (meta, fields, params) = (
                     cmd.meta(),
                     form::fields(&cmd.schema()),
-                    cmd.default_params(),
+                    cmd.initial_params(&self.doc),
                 );
                 meta.label.clone_into(&mut self.status.current_tool);
                 if fields.is_empty() {
@@ -816,6 +816,18 @@ mod tests {
             h.app.doc.selection.len(),
             2,
             "crossing also takes the one it touches"
+        );
+    }
+
+    #[test]
+    fn forms_open_with_values_from_the_document() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 20.0);
+        h.app.invoke(&h.ctx, "set_size");
+        let params = &h.app.form.as_ref().unwrap().params;
+        assert_eq!(
+            (params["width"].as_f64(), params["height"].as_f64()),
+            (Some(50.0), Some(20.0))
         );
     }
 }

@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct EntityId(pub u64);
 
 /// Display units. The document always stores millimetres.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
 pub enum Units {
     #[default]
     Mm,

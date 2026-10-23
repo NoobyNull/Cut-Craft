@@ -61,6 +61,13 @@ pub trait Command: 'static {
     type Params: Serialize + DeserializeOwned + JsonSchema + Default + Clone;
 
     fn meta() -> Meta;
+
+    /// What the settings form starts with: by default `Params::default()`; commands that edit
+    /// something existing (job setup, set size) start from the document instead.
+    fn initial_params(_doc: &Document) -> Self::Params {
+        Self::Params::default()
+    }
+
     fn run(doc: &Document, params: &Self::Params) -> Result<Change, CommandError>;
 }
 
@@ -108,6 +115,7 @@ pub trait DynCommand {
     fn meta(&self) -> Meta;
     fn schema(&self) -> Value;
     fn default_params(&self) -> Value;
+    fn initial_params(&self, doc: &Document) -> Value;
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError>;
     /// Whether the command can be drawn with the mouse.
     fn interactive(&self) -> bool;
@@ -144,6 +152,10 @@ impl<C: Command> DynCommand for Erased<C> {
 
     fn default_params(&self) -> Value {
         serde_json::to_value(C::Params::default()).expect("command params must serialize")
+    }
+
+    fn initial_params(&self, doc: &Document) -> Value {
+        serde_json::to_value(C::initial_params(doc)).expect("command params must serialize")
     }
 
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError> {

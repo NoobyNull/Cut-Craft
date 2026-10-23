@@ -166,6 +166,7 @@ dependencies = [
  "cmd-draw-polyline",
  "cmd-draw-rectangle",
  "cmd-draw-star",
+ "cmd-job-setup",
  "cmd-mirror",
  "cmd-move",
  "cmd-rotate",
@@ -536,6 +537,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-draw-star"
+version = "0.1.0"
+dependencies = [
+ "aspire-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-job-setup"
 version = "0.1.0"
 dependencies = [
  "aspire-core",

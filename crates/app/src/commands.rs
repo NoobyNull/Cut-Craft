@@ -29,6 +29,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_select_all_vectors::SelectAllVectors>();
     r.add::<cmd_set_size::SetSize>();
     r.add::<cmd_unselect_all::UnselectAll>();
+    r.add::<cmd_job_setup::JobSetup>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

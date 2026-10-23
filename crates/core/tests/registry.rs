@@ -157,3 +157,51 @@ fn plain_commands_are_not_interactive() {
     };
     assert!(cmd.drag_params(drag, &cmd.default_params()).is_err());
 }
+
+/// Test command whose form starts from the document: the number of vectors.
+struct CountVectors;
+
+#[derive(Clone, Default, Serialize, Deserialize, JsonSchema)]
+struct CountParams {
+    count: usize,
+}
+
+impl Command for CountVectors {
+    const ID: &'static str = "count_vectors";
+    type Params = CountParams;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Count",
+            group: "Test",
+            icon: "",
+            shortcut: "",
+        }
+    }
+
+    fn initial_params(doc: &Document) -> CountParams {
+        CountParams {
+            count: doc.vectors.len(),
+        }
+    }
+
+    fn run(_: &Document, _: &CountParams) -> Result<Change, CommandError> {
+        Ok(Change::default())
+    }
+}
+
+#[test]
+fn forms_can_start_from_the_document() {
+    let mut registry = Registry::default();
+    registry.add::<CountVectors>().add::<AddSquare>();
+    let doc = aspire_core::testing::sample_document();
+    assert_eq!(
+        registry.get("count_vectors").unwrap().initial_params(&doc),
+        serde_json::json!({ "count": 4 })
+    );
+    assert_eq!(
+        registry.get("add_square").unwrap().initial_params(&doc),
+        serde_json::json!({ "size": 10.0 }),
+        "commands that do not say otherwise start from their defaults"
+    );
+}

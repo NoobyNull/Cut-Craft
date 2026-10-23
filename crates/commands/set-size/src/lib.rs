@@ -47,6 +47,16 @@ impl Command for SetSize {
         }
     }
 
+    /// Starts from the selection's current size, so only the changed value needs typing.
+    fn initial_params(doc: &Document) -> Params {
+        doc.selection_bounds()
+            .map_or_else(Params::default, |b| Params {
+                width: b.size().x,
+                height: b.size().y,
+                ..Params::default()
+            })
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("width", p.width)?;
         if !p.keep_proportions {
@@ -132,6 +142,15 @@ mod tests {
                 ..Params::default()
             }),
             "invalid parameters: width must be greater than 0"
+        );
+    }
+
+    #[test]
+    fn the_form_starts_from_the_selection_size() {
+        let p = SetSize::initial_params(&sample_document());
+        assert!(
+            (p.width - 215.0).abs() < 1e-9 && (p.height - 115.0).abs() < 1e-9,
+            "{p:?}"
         );
     }
 }
