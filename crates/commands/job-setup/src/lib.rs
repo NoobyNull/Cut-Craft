@@ -20,6 +20,9 @@ pub struct Params {
     pub thickness: f64,
     /// Units shown in the interface; the job is always stored in millimetres
     pub units: Units,
+    /// Safe height above the material for rapid moves
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub clearance: f64,
 }
 
 impl Default for Params {
@@ -30,6 +33,7 @@ impl Default for Params {
             height: job.height,
             thickness: job.thickness,
             units: job.units,
+            clearance: job.clearance,
         }
     }
 }
@@ -54,6 +58,7 @@ impl Command for JobSetup {
             height: job.height,
             thickness: job.thickness,
             units: job.units,
+            clearance: job.clearance,
         }
     }
 
@@ -61,12 +66,14 @@ impl Command for JobSetup {
         ensure_positive("width", p.width)?;
         ensure_positive("height", p.height)?;
         ensure_positive("thickness", p.thickness)?;
+        ensure_positive("clearance", p.clearance)?;
         let mut c = Change::builder(doc);
         c.set_job(Job {
             width: p.width,
             height: p.height,
             thickness: p.thickness,
             units: p.units,
+            clearance: p.clearance,
         });
         Ok(c.finish())
     }

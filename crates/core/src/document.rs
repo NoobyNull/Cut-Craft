@@ -1,6 +1,7 @@
 //! The job being edited. Only [`Document::apply`](crate::Change) changes it.
 
 use crate::geometry::{Path, Point, Rect, polyline_distance, polyline_touches};
+use crate::toolpath::Toolpath;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -24,6 +25,13 @@ pub struct Job {
     pub height: f64,
     pub thickness: f64,
     pub units: Units,
+    /// Safe height above the material for rapid moves (added after the first job format).
+    #[serde(default = "default_clearance")]
+    pub clearance: f64,
+}
+
+fn default_clearance() -> f64 {
+    Job::default().clearance
 }
 
 impl Default for Job {
@@ -34,6 +42,7 @@ impl Default for Job {
             height: 400.0,
             thickness: 20.0,
             units: Units::Mm,
+            clearance: 5.0,
         }
     }
 }
@@ -43,12 +52,29 @@ pub struct Document {
     pub job: Job,
     pub vectors: BTreeMap<EntityId, Path>,
     pub selection: BTreeSet<EntityId>,
+    /// Added after the first job format; older files have none.
+    #[serde(default)]
+    pub toolpaths: BTreeMap<EntityId, Toolpath>,
 }
 
 impl Document {
     /// First id not used by any entity.
     pub fn next_id(&self) -> EntityId {
-        EntityId(self.vectors.keys().next_back().map_or(1, |id| id.0 + 1))
+        let last = self
+            .vectors
+            .keys()
+            .next_back()
+            .max(self.toolpaths.keys().next_back());
+        EntityId(last.map_or(1, |id| id.0 + 1))
+    }
+
+    /// The selected vectors that pass `keep`, as ids and paths in matching order.
+    pub fn selected_paths(&self, keep: impl Fn(&Path) -> bool) -> (Vec<EntityId>, Vec<Path>) {
+        self.selection
+            .iter()
+            .filter(|id| keep(&self.vectors[id]))
+            .map(|&id| (id, self.vectors[&id].clone()))
+            .unzip()
     }
 
     /// Bounds of everything selected, or `None` when nothing is.

@@ -1,7 +1,6 @@
 //! Overlap.
 
-use aspire_core::document::{Document, EntityId};
-use aspire_core::geometry::Path;
+use aspire_core::document::Document;
 use aspire_core::polygon;
 use aspire_core::{Change, Command, CommandError, Meta, NoParams};
 
@@ -21,7 +20,7 @@ impl Command for OverlapIntersect {
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
-        let (ids, paths) = selected_closed(doc);
+        let (ids, paths) = doc.selected_paths(|p| p.closed);
         if ids.len() < 2 {
             return Err(CommandError::Failed(
                 "select at least two closed vectors to overlap".into(),
@@ -37,15 +36,6 @@ impl Command for OverlapIntersect {
         }
         Ok(Change::swap(doc, ids, common))
     }
-}
-
-/// The selected closed vectors: open ones are left alone.
-fn selected_closed(doc: &Document) -> (Vec<EntityId>, Vec<Path>) {
-    doc.selection
-        .iter()
-        .filter(|id| doc.vectors[id].closed)
-        .map(|&id| (id, doc.vectors[&id].clone()))
-        .unzip()
 }
 
 #[cfg(test)]

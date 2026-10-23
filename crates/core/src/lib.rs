@@ -10,6 +10,7 @@ pub mod params;
 pub mod polygon;
 #[cfg(feature = "testing")]
 pub mod testing;
+pub mod toolpath;
 
 pub use glam;
 

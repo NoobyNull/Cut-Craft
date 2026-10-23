@@ -1,7 +1,6 @@
 //! Offset Vectors.
 
 use aspire_core::document::Document;
-use aspire_core::geometry::Path;
 use aspire_core::polygon::{self, Corners};
 use aspire_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
@@ -46,12 +45,7 @@ impl Command for OffsetVectors {
         if p.distance == 0.0 {
             return Err(CommandError::InvalidParams("distance must not be 0".into()));
         }
-        let (ids, paths): (Vec<_>, Vec<Path>) = doc
-            .selection
-            .iter()
-            .filter(|id| doc.vectors[id].closed)
-            .map(|&id| (id, doc.vectors[&id].clone()))
-            .unzip();
+        let (ids, paths) = doc.selected_paths(|p| p.closed);
         if ids.is_empty() {
             return Err(CommandError::Failed(
                 "select closed vectors to offset".into(),

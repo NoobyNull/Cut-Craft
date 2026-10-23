@@ -3,6 +3,7 @@
 use crate::CommandError;
 use crate::document::{Document, EntityId, Job};
 use crate::geometry::{Path, Point, Rect};
+use crate::toolpath::Toolpath;
 use glam::DAffine2;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -32,6 +33,19 @@ pub enum Edit {
         before: Job,
         after: Job,
     },
+    AddToolpath {
+        id: EntityId,
+        toolpath: Box<Toolpath>,
+    },
+    RemoveToolpath {
+        id: EntityId,
+        toolpath: Box<Toolpath>,
+    },
+    ReplaceToolpath {
+        id: EntityId,
+        before: Box<Toolpath>,
+        after: Box<Toolpath>,
+    },
 }
 
 impl Edit {
@@ -50,6 +64,13 @@ impl Edit {
                 after: before,
             },
             Self::SetJob { before, after } => Self::SetJob {
+                before: after,
+                after: before,
+            },
+            Self::AddToolpath { id, toolpath } => Self::RemoveToolpath { id, toolpath },
+            Self::RemoveToolpath { id, toolpath } => Self::AddToolpath { id, toolpath },
+            Self::ReplaceToolpath { id, before, after } => Self::ReplaceToolpath {
+                id,
                 before: after,
                 after: before,
             },
@@ -96,6 +117,7 @@ impl Change {
             next_id: doc.next_id().0,
             selection: doc.selection.clone(),
             pending: BTreeMap::new(),
+            pending_toolpaths: BTreeMap::new(),
             edits: vec![],
         }
     }
@@ -214,25 +236,20 @@ impl Document {
 
     fn apply_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
-            Edit::Add { id, path } => {
-                if self.vectors.contains_key(id) {
-                    return Err(ApplyError::Exists(*id));
-                }
-                self.vectors.insert(*id, path.clone());
+            Edit::Add { id, path } => insert_new(&mut self.vectors, *id, path.clone())?,
+            Edit::Remove { id, path } => remove_matching(&mut self.vectors, *id, path)?,
+            Edit::Replace { id, before, after } => {
+                replace_matching(&mut self.vectors, *id, before, after)?;
             }
-            Edit::Remove { id, path } => {
-                match self.vectors.get(id) {
-                    None => return Err(ApplyError::Missing(*id)),
-                    Some(current) if current != path => return Err(ApplyError::Conflict(*id)),
-                    Some(_) => {}
-                }
-                self.vectors.remove(id);
+            Edit::AddToolpath { id, toolpath } => {
+                insert_new(&mut self.toolpaths, *id, (**toolpath).clone())?;
             }
-            Edit::Replace { id, before, after } => match self.vectors.get_mut(id) {
-                None => return Err(ApplyError::Missing(*id)),
-                Some(current) if current != before => return Err(ApplyError::Conflict(*id)),
-                Some(current) => current.clone_from(after),
-            },
+            Edit::RemoveToolpath { id, toolpath } => {
+                remove_matching(&mut self.toolpaths, *id, toolpath)?;
+            }
+            Edit::ReplaceToolpath { id, before, after } => {
+                replace_matching(&mut self.toolpaths, *id, before, after)?;
+            }
             // Selection is view state: it may have been changed outside the history (clicks),
             // so `before` is not checked; only that everything selected exists.
             Edit::Select { after, .. } => {
@@ -252,6 +269,51 @@ impl Document {
     }
 }
 
+fn insert_new<T>(
+    map: &mut BTreeMap<EntityId, T>,
+    id: EntityId,
+    value: T,
+) -> Result<(), ApplyError> {
+    if map.contains_key(&id) {
+        return Err(ApplyError::Exists(id));
+    }
+    map.insert(id, value);
+    Ok(())
+}
+
+/// Removes `id` only if it still holds `expected`.
+fn remove_matching<T: PartialEq>(
+    map: &mut BTreeMap<EntityId, T>,
+    id: EntityId,
+    expected: &T,
+) -> Result<(), ApplyError> {
+    match map.get(&id) {
+        None => Err(ApplyError::Missing(id)),
+        Some(current) if current != expected => Err(ApplyError::Conflict(id)),
+        Some(_) => {
+            map.remove(&id);
+            Ok(())
+        }
+    }
+}
+
+/// Replaces `id` only if it still holds `before`.
+fn replace_matching<T: PartialEq + Clone>(
+    map: &mut BTreeMap<EntityId, T>,
+    id: EntityId,
+    before: &T,
+    after: &T,
+) -> Result<(), ApplyError> {
+    match map.get_mut(&id) {
+        None => Err(ApplyError::Missing(id)),
+        Some(current) if current != before => Err(ApplyError::Conflict(id)),
+        Some(current) => {
+            current.clone_from(after);
+            Ok(())
+        }
+    }
+}
+
 /// Builds a [`Change`] against a document, tracking ids and state across its own edits.
 pub struct ChangeBuilder<'a> {
     doc: &'a Document,
@@ -259,6 +321,7 @@ pub struct ChangeBuilder<'a> {
     selection: BTreeSet<EntityId>,
     /// Paths as this change has left them (`None` = removed), shadowing `doc`.
     pending: BTreeMap<EntityId, Option<Path>>,
+    pending_toolpaths: BTreeMap<EntityId, Option<Toolpath>>,
     edits: Vec<Edit>,
 }
 
@@ -310,6 +373,50 @@ impl ChangeBuilder<'_> {
             let before = std::mem::replace(&mut self.selection, after.clone());
             self.edits.push(Edit::Select { before, after });
         }
+    }
+
+    pub fn add_toolpath(&mut self, toolpath: Toolpath) -> EntityId {
+        let id = EntityId(self.next_id);
+        self.next_id += 1;
+        self.pending_toolpaths.insert(id, Some(toolpath.clone()));
+        self.edits.push(Edit::AddToolpath {
+            id,
+            toolpath: Box::new(toolpath),
+        });
+        id
+    }
+
+    /// Current toolpath `id` as seen by this change so far.
+    pub fn toolpath(&self, id: EntityId) -> Option<&Toolpath> {
+        match self.pending_toolpaths.get(&id) {
+            Some(t) => t.as_ref(),
+            None => self.doc.toolpaths.get(&id),
+        }
+    }
+
+    pub fn remove_toolpath(&mut self, id: EntityId) {
+        let toolpath = self
+            .toolpath(id)
+            .unwrap_or_else(|| panic!("remove_toolpath: {} does not exist", id.0))
+            .clone();
+        self.pending_toolpaths.insert(id, None);
+        self.edits.push(Edit::RemoveToolpath {
+            id,
+            toolpath: Box::new(toolpath),
+        });
+    }
+
+    pub fn replace_toolpath(&mut self, id: EntityId, after: Toolpath) {
+        let before = self
+            .toolpath(id)
+            .unwrap_or_else(|| panic!("replace_toolpath: {} does not exist", id.0))
+            .clone();
+        self.pending_toolpaths.insert(id, Some(after.clone()));
+        self.edits.push(Edit::ReplaceToolpath {
+            id,
+            before: Box::new(before),
+            after: Box::new(after),
+        });
     }
 
     pub fn set_job(&mut self, after: Job) {
