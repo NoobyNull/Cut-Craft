@@ -113,3 +113,20 @@ fn a_layer_cannot_be_removed_while_vectors_are_on_it() {
     doc.apply(&c.finish()).unwrap();
     assert_eq!(doc.layers.len(), 1);
 }
+
+#[test]
+fn locked_vectors_are_shown_but_hidden_ones_are_not() {
+    let mut doc = Document::default();
+    let id = add(&mut doc, 0.0);
+    assert!(doc.shown(id));
+    for (visible, locked, shown) in [(true, true, true), (false, false, false)] {
+        let mut layer = doc.layers[0].clone();
+        layer.visible = visible;
+        layer.locked = locked;
+        let mut c = Change::builder(&doc);
+        c.replace_layer(layer);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        assert_eq!(doc.shown(id), shown);
+    }
+}

@@ -170,7 +170,7 @@ impl Canvas {
         };
         let normal = Stroke::new(datum.width, visuals.text_color());
         let selected = visuals.selection.stroke;
-        for (id, path) in &doc.vectors {
+        for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
             if doc.selection.contains(id) {
                 painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
             } else {

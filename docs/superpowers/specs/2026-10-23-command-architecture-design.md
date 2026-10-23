@@ -77,11 +77,12 @@ Done:
 9. ✅ Job setup form (forms start from the document).
 10. ✅ Toolpaths: profile, pocket, drilling; toolpath panel, preview, recalculate / recalculate-all cascade.
 11. ✅ G-code: generic exporter; `.pp` post-processors (`crates/post`).
+12. ✅ DXF import/export (lines, arcs, bulged polylines, ellipses, splines).
+13. ✅ Layers: current layer, hidden/locked layers (not drawn / not pickable), layer
+    commands (add, delete, move to, select on, properties, set current), Layers tab.
 
 Next:
-12. DXF import/export; STL export.
-13. Layers.
 14. Tool database (shared tools instead of per-toolpath tool settings).
 15. Toolpath simulation / 3D view.
-16. 3D components (height maps), create shape, combine modes.
+16. 3D components (height maps), create shape, combine modes; STL export.
 17. V-carve, fluting, inlay and the other strategies.

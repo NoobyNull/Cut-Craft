@@ -150,6 +150,11 @@ impl Document {
             .filter(move |&id| self.layer_of(id) == layer)
     }
 
+    /// On a visible layer: drawn in the views.
+    pub fn shown(&self, id: EntityId) -> bool {
+        self.layer(self.layer_of(id)).is_some_and(|l| l.visible)
+    }
+
     /// On a visible, unlocked layer: can be picked and edited.
     pub fn editable(&self, id: EntityId) -> bool {
         self.layer(self.layer_of(id))

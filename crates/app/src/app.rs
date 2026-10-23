@@ -7,7 +7,7 @@ use crate::gui;
 use crate::icons::Icons;
 use crate::view2d::{Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut};
-use aspire_core::document::{Document, EntityId};
+use aspire_core::document::{Document, EntityId, LayerId};
 use aspire_core::file::JOB_EXTENSION;
 use aspire_core::geometry::{Path, Point, Rect};
 use aspire_core::{Change, Drag, History, Registry};
@@ -434,6 +434,8 @@ impl AspireApp {
             if DESIGN_TABS[self.design_tab] == "Drawing" {
                 let groups = self.toolbar.groups.clone();
                 self.tool_groups(ui, &groups);
+            } else if DESIGN_TABS[self.design_tab] == "Layers" {
+                self.layers_panel(ui);
             } else {
                 ui.weak(format!(
                     "{} tools not implemented yet",
@@ -489,13 +491,9 @@ impl AspireApp {
                             let label = cmd
                                 .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned());
                             let explicit = cmd.map_or("", |c| c.meta().icon);
-                            let button = match self.icons.find(explicit, id) {
-                                Some(path) => egui::Button::image(
-                                    Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)),
-                                ),
-                                None => egui::Button::new(&label),
-                            }
-                            .selected(self.status.current_tool == label);
+                            let button = self
+                                .icon_button(explicit, id, &label, edge)
+                                .selected(self.status.current_tool == label);
                             let response = ui
                                 .add_enabled(self.available(id), button)
                                 .on_hover_text(&label)
@@ -509,6 +507,117 @@ impl AspireApp {
         }
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), id);
+        }
+    }
+
+    /// An icon button, or a text one when the icon is missing.
+    fn icon_button(&self, icon: &str, id: &str, label: &str, edge: f32) -> egui::Button<'static> {
+        match self.icons.find(icon, id) {
+            Some(path) => {
+                egui::Button::image(Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)))
+            }
+            None => egui::Button::new(label.to_owned()),
+        }
+    }
+
+    /// Layers, top first: visibility and lock toggles, the current layer highlighted, and a
+    /// context menu of layer commands.
+    fn layers_panel(&mut self, ui: &mut egui::Ui) {
+        let edge = ui.spacing().interact_size.y;
+        let label = |id: &str| self.registry.get(id).map_or("", |c| c.meta().label);
+        let mut clicked: Option<(LayerId, &str)> = None;
+        for layer in self.doc.layers.iter().rev() {
+            ui.horizontal(|ui| {
+                let (eye, eye_tip) = if layer.visible {
+                    ("layers/visible.svg", "Hide")
+                } else {
+                    ("layers/hidden.svg", "Show")
+                };
+                let (lock, lock_tip) = if layer.locked {
+                    ("layers/locked.svg", "Unlock")
+                } else {
+                    ("layers/unlocked.svg", "Lock")
+                };
+                if ui
+                    .add(self.icon_button(eye, "", eye_tip, edge))
+                    .on_hover_text(eye_tip)
+                    .clicked()
+                {
+                    clicked = Some((layer.id, "toggle_visible"));
+                }
+                if ui
+                    .add(self.icon_button(lock, "", lock_tip, edge))
+                    .on_hover_text(lock_tip)
+                    .clicked()
+                {
+                    clicked = Some((layer.id, "toggle_locked"));
+                }
+                let count = self.doc.vectors_on(layer.id).count();
+                let row = ui
+                    .selectable_label(self.doc.current_layer == layer.id, &layer.name)
+                    .on_hover_text(format!("{count} vectors"));
+                if row.clicked() {
+                    clicked = Some((layer.id, "set_current_layer"));
+                }
+                if row.double_clicked() {
+                    clicked = Some((layer.id, "layer_properties"));
+                }
+                row.context_menu(|ui| {
+                    for id in [
+                        "layer_properties",
+                        "select_layer_vectors",
+                        "move_to_layer",
+                        "delete_layer",
+                    ] {
+                        if ui.button(label(id)).clicked() {
+                            clicked = Some((layer.id, id));
+                            ui.close_menu();
+                        }
+                    }
+                });
+            });
+        }
+        let add = ui.button(label("add_layer")).clicked();
+        if let Some((layer, action)) = clicked {
+            self.layer_action(ui.ctx(), layer, action);
+        }
+        if add {
+            self.invoke(ui.ctx(), "add_layer");
+        }
+    }
+
+    /// A layer-panel action: the toggles and menu commands are undoable; choosing a layer is
+    /// view state like the selection, so it is not.
+    fn layer_action(&mut self, ctx: &egui::Context, layer: LayerId, action: &str) {
+        let Some(l) = self.doc.layer(layer).cloned() else {
+            return;
+        };
+        let properties = |visible: bool, locked: bool| serde_json::json!({ "layer": l.id, "name": l.name, "visible": visible, "locked": locked });
+        let just_layer = serde_json::json!({ "layer": layer });
+        let result = match action {
+            "toggle_visible" => self.apply("layer_properties", &properties(!l.visible, l.locked)),
+            "toggle_locked" => self.apply("layer_properties", &properties(l.visible, !l.locked)),
+            "set_current_layer" => self
+                .registry
+                .get(action)
+                .expect("set_current_layer is registered")
+                .run_json(&self.doc, &just_layer)
+                .map_err(|e| e.to_string())
+                .map(|change| {
+                    self.doc
+                        .apply(&change)
+                        .expect("the panel lists existing layers");
+                }),
+            // the properties form starts from the current layer
+            "layer_properties" => {
+                self.layer_action(ctx, layer, "set_current_layer");
+                self.invoke(ctx, action);
+                Ok(())
+            }
+            _ => self.apply(action, &just_layer),
+        };
+        if let Err(e) = result {
+            self.status.set_message(&e);
         }
     }
 
@@ -955,6 +1064,59 @@ mod tests {
         assert!(
             (cut_min_x(&h.app) - before).abs() < 1e-6,
             "recalculating is one undo step"
+        );
+    }
+
+    #[test]
+    fn hiding_a_layer_from_the_panel_is_undoable_and_stops_picking() {
+        let mut h = Harness::new();
+        h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Layers").unwrap();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.layer_action(&h.ctx, LayerId(1), "toggle_visible");
+        h.frame(vec![]);
+        h.click(h.at(60.0, 35.0), Modifiers::NONE);
+        assert!(h.app.doc.selection.is_empty());
+        h.app.invoke(&h.ctx, "undo");
+        assert!(h.app.doc.layers[0].visible);
+    }
+
+    #[test]
+    fn choosing_a_layer_makes_it_current_without_an_undo_step() {
+        let mut h = Harness::new();
+        h.app
+            .apply("add_layer", &serde_json::json!({ "name": "Top" }))
+            .unwrap();
+        h.app.layer_action(&h.ctx, LayerId(1), "set_current_layer");
+        assert_eq!(h.app.doc.current_layer, LayerId(1));
+        h.app.invoke(&h.ctx, "undo");
+        assert_eq!(
+            h.app.doc.layers.len(),
+            1,
+            "the last undo step added the layer"
+        );
+    }
+
+    #[test]
+    fn layer_menu_actions_act_on_that_layer() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app
+            .apply("add_layer", &serde_json::json!({ "name": "Top" }))
+            .unwrap();
+        h.app.layer_action(&h.ctx, LayerId(2), "move_to_layer");
+        assert!(
+            h.app
+                .doc
+                .vectors
+                .keys()
+                .all(|&id| h.app.doc.layer_of(id) == LayerId(2))
+        );
+        h.app.layer_action(&h.ctx, LayerId(1), "delete_layer");
+        assert_eq!(h.app.doc.layers.len(), 1);
+        assert_eq!(
+            h.app.doc.vectors.len(),
+            1,
+            "the vector was not on the deleted layer"
         );
     }
 
