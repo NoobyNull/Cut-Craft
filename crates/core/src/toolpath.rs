@@ -29,7 +29,6 @@ pub struct Tool {
 
 impl Default for Tool {
     fn default() -> Self {
-        // ponytail: one built-in tool until the tool database exists
         Self {
             name: "6 mm End Mill".into(),
             diameter: 6.0,
@@ -39,6 +38,57 @@ impl Default for Tool {
             plunge_rate: 300.0,
             spindle_speed: 18000.0,
         }
+    }
+}
+
+/// The shared tools. A toolpath copies its tool, so editing the database never changes
+/// toolpaths already made.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ToolDatabase {
+    pub tools: Vec<Tool>,
+}
+
+impl ToolDatabase {
+    /// What a first run starts with: common end mills.
+    pub fn starter() -> Self {
+        let end_mill =
+            |name: &str, diameter: f64, pass_depth: f64, feed_rate: f64, plunge_rate: f64| Tool {
+                name: name.into(),
+                diameter,
+                pass_depth,
+                feed_rate,
+                plunge_rate,
+                ..Tool::default()
+            };
+        Self {
+            tools: vec![
+                end_mill("3 mm End Mill", 3.0, 1.5, 800.0, 250.0),
+                Tool::default(),
+                end_mill("12 mm End Mill", 12.0, 4.0, 2000.0, 500.0),
+                end_mill("1/8 in End Mill", 3.175, 1.5, 800.0, 250.0),
+                end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
+            ],
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Tool> {
+        self.tools.iter().find(|t| t.name == name)
+    }
+
+    /// Replaces the tool with the same name, or adds it at the end.
+    pub fn put(&mut self, tool: Tool) {
+        match self.tools.iter_mut().find(|t| t.name == tool.name) {
+            Some(existing) => *existing = tool,
+            None => self.tools.push(tool),
+        }
+    }
+
+    pub fn to_json(&self) -> Vec<u8> {
+        serde_json::to_vec_pretty(self).expect("tools always serialize")
+    }
+
+    pub fn from_json(bytes: &[u8]) -> Result<Self, serde_json::Error> {
+        serde_json::from_slice(bytes)
     }
 }
 

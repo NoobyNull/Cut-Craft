@@ -10,13 +10,14 @@ use crate::{commands, shortcut};
 use aspire_core::document::{Document, EntityId, LayerId};
 use aspire_core::file::JOB_EXTENSION;
 use aspire_core::geometry::{Path, Point, Rect};
+use aspire_core::toolpath::{Tool, ToolDatabase};
 use aspire_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 13] = [
+const BUILT_INS: [&str; 14] = [
     "undo",
     "redo",
     "exit",
@@ -30,6 +31,7 @@ const BUILT_INS: [&str; 13] = [
     "delete_toolpath",
     "save_toolpaths",
     "install_post_processor",
+    "tool_database",
 ];
 const APP_NAME: &str = "Aspire Clone";
 /// Tool icon edge, in rows of the theme's interactive height.
@@ -71,6 +73,12 @@ struct AspireApp {
     selected_toolpath: Option<EntityId>,
     /// Installed post-processor; without one, toolpaths save as generic G-code.
     post: Option<aspire_post::Post>,
+    tools: ToolDatabase,
+    /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
+    tools_path: Option<std::path::PathBuf>,
+    tool_window: bool,
+    /// The tool shown in the Tool Database window.
+    tool_selected: usize,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -93,6 +101,10 @@ impl AspireApp {
             session: Session::default(),
             selected_toolpath: None,
             post: None,
+            tools: ToolDatabase::starter(),
+            tools_path: None,
+            tool_window: false,
+            tool_selected: 0,
             title: String::new(),
         }
     }
@@ -137,6 +149,7 @@ impl AspireApp {
             | "save_as"
             | "import_vectors_bitmap"
             | "install_post_processor" => self.file_action(id),
+            "tool_database" => self.tool_window = true,
             "recalculate_toolpath"
             | "recalculate_all_toolpaths"
             | "delete_toolpath"
@@ -456,6 +469,25 @@ impl AspireApp {
             }
             ui.strong(open.label);
         });
+        let (mut chosen, mut save_tool) = (None, false);
+        if open.params.get("tool").is_some_and(Value::is_object) {
+            let current = open.params["tool"]["name"].as_str().unwrap_or_default();
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_label("Tool database")
+                    .selected_text(current)
+                    .show_ui(ui, |ui| {
+                        for tool in &self.tools.tools {
+                            if ui
+                                .selectable_label(tool.name == current, &tool.name)
+                                .clicked()
+                            {
+                                chosen = Some(tool.name.clone());
+                            }
+                        }
+                    });
+                save_tool = ui.button("Save to database").clicked();
+            });
+        }
         form::show(ui, &open.fields, &mut open.params);
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
@@ -474,6 +506,112 @@ impl AspireApp {
         }
         if close {
             self.form = None;
+        }
+        if let Some(name) = chosen {
+            self.choose_tool(&name);
+        }
+        if save_tool {
+            self.save_form_tool();
+        }
+    }
+
+    /// Reads the user's tool database; a broken one is reported and left untouched on disk.
+    fn load_tools(&mut self) {
+        self.tools_path = files::tool_database_path();
+        if let Some(path) = &self.tools_path {
+            match files::load_tools(path) {
+                Ok(tools) => self.tools = tools,
+                Err(e) => {
+                    self.status
+                        .set_message(&format!("{e}; tool changes will not be saved"));
+                    self.tools_path = None;
+                }
+            }
+        }
+    }
+
+    /// Copies a database tool into the open form.
+    fn choose_tool(&mut self, name: &str) {
+        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.get(name)) {
+            form.params["tool"] = serde_json::to_value(tool).expect("tools serialize");
+        }
+    }
+
+    /// Stores the open form's tool in the database, replacing one of the same name.
+    fn save_form_tool(&mut self) {
+        let tool = self
+            .form
+            .as_ref()
+            .and_then(|f| serde_json::from_value::<Tool>(f.params["tool"].clone()).ok());
+        match tool {
+            Some(tool) => {
+                let done = format!("Saved {} to the tool database", tool.name);
+                self.tools.put(tool);
+                self.tools_changed(&done);
+            }
+            None => self
+                .status
+                .set_message("the form has no valid tool to save"),
+        }
+    }
+
+    fn delete_tool(&mut self, index: usize) {
+        if index < self.tools.tools.len() {
+            let tool = self.tools.tools.remove(index);
+            self.tools_changed(&format!("Deleted {} from the tool database", tool.name));
+        }
+    }
+
+    /// Writes the tool database, if it has a file, and reports `done` or the failure.
+    fn tools_changed(&mut self, done: &str) {
+        let result = self
+            .tools_path
+            .as_deref()
+            .map_or(Ok(()), |path| files::save_tools(&self.tools, path));
+        self.status
+            .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
+    }
+
+    /// Pick a tool to edit or delete; edits are saved as they are made.
+    fn tool_database_window(&mut self, ctx: &egui::Context) {
+        let (mut open, mut delete, mut edited) = (self.tool_window, None, false);
+        egui::Window::new("Tool Database")
+            .open(&mut open)
+            .show(ctx, |ui| {
+                let Some(last) = self.tools.tools.len().checked_sub(1) else {
+                    ui.weak("No tools: save one from a toolpath form");
+                    return;
+                };
+                self.tool_selected = self.tool_selected.min(last);
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_source("tool_database_tools")
+                        .selected_text(&self.tools.tools[self.tool_selected].name)
+                        .show_ui(ui, |ui| {
+                            for (i, tool) in self.tools.tools.iter().enumerate() {
+                                ui.selectable_value(&mut self.tool_selected, i, &tool.name);
+                            }
+                        });
+                    if ui.button("Delete").clicked() {
+                        delete = Some(self.tool_selected);
+                    }
+                });
+                let fields = form::fields(
+                    &serde_json::to_value(schemars::schema_for!(Tool)).expect("schemas serialize"),
+                );
+                let tool = &mut self.tools.tools[self.tool_selected];
+                let mut value = serde_json::to_value(&*tool).expect("tools serialize");
+                if form::show(ui, &fields, &mut value)
+                    && let Ok(changed) = serde_json::from_value(value)
+                {
+                    *tool = changed;
+                    edited = true;
+                }
+            });
+        self.tool_window = open;
+        if let Some(index) = delete {
+            self.delete_tool(index);
+        } else if edited {
+            self.tools_changed("Tool database saved");
         }
     }
 
@@ -721,6 +859,7 @@ impl AspireApp {
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));
         egui::SidePanel::left("design_panel").show(ctx, |ui| self.design_panel(ui));
         egui::SidePanel::right("toolpaths_panel").show(ctx, |ui| self.toolpaths_panel(ui));
+        self.tool_database_window(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
@@ -857,7 +996,9 @@ pub fn run(title: &str) {
                     info.driver
                 );
             }
-            Box::new(AspireApp::new())
+            let mut app = AspireApp::new();
+            app.load_tools();
+            Box::new(app)
         }),
     )
     .expect("event loop error");
@@ -1118,6 +1259,35 @@ mod tests {
             1,
             "the vector was not on the deleted layer"
         );
+    }
+
+    #[test]
+    fn toolpath_forms_take_tools_from_the_database_and_save_them_back() {
+        let mut h = Harness::new();
+        let path =
+            std::env::temp_dir().join(format!("aspire-tools-{}/tools.json", std::process::id()));
+        h.app.tools_path = Some(path.clone());
+        h.app.invoke(&h.ctx, "pocket_toolpath");
+        h.app.choose_tool("3 mm End Mill");
+        h.frame(vec![]);
+        let params = &mut h.app.form.as_mut().unwrap().params;
+        assert_eq!(params["tool"]["diameter"], 3.0);
+        params["tool"]["name"] = "Mine".into();
+        h.app.save_form_tool();
+        assert_eq!(h.app.tools.get("Mine").map(|t| t.diameter), Some(3.0));
+        assert_eq!(files::load_tools(&path).unwrap(), h.app.tools);
+    }
+
+    #[test]
+    fn the_tool_database_window_lists_and_deletes_tools() {
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "tool_database");
+        h.frame(vec![]);
+        assert!(h.app.tool_window);
+        let count = h.app.tools.tools.len();
+        h.app.delete_tool(0);
+        h.frame(vec![]);
+        assert_eq!(h.app.tools.tools.len(), count - 1);
     }
 
     #[test]

@@ -80,9 +80,10 @@ Done:
 12. ✅ DXF import/export (lines, arcs, bulged polylines, ellipses, splines).
 13. ✅ Layers: current layer, hidden/locked layers (not drawn / not pickable), layer
     commands (add, delete, move to, select on, properties, set current), Layers tab.
+14. ✅ Tool database: shared tools in `~/.config/aspire-clone/tools.json`; toolpath forms
+    pick from it and save back; Tool Database window edits and deletes. Toolpaths keep a copy.
 
 Next:
-14. Tool database (shared tools instead of per-toolpath tool settings).
 15. Toolpath simulation / 3D view.
 16. 3D components (height maps), create shape, combine modes; STL export.
 17. V-carve, fluting, inlay and the other strategies.

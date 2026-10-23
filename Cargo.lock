@@ -198,6 +198,7 @@ dependencies = [
  "fmt-import-svg",
  "log",
  "rfd",
+ "schemars",
  "serde_json",
 ]
 

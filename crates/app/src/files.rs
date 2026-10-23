@@ -3,6 +3,7 @@
 
 use aspire_core::document::Document;
 use aspire_core::file::{load_job, save_job};
+use aspire_core::toolpath::ToolDatabase;
 use aspire_core::{Change, History, Registry};
 use aspire_post::Post;
 use std::path::{Path, PathBuf};
@@ -82,6 +83,32 @@ pub fn save_through(post: &Post, doc: &Document, path: &Path) -> Result<(), Stri
     std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
+/// Where the tool database lives: `$XDG_CONFIG_HOME/aspire-clone/tools.json`, else under
+/// `~/.config`.
+// ponytail: XDG only; add the Windows/macOS config folders when those builds exist
+pub fn tool_database_path() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+        .map(|dir| dir.join("aspire-clone").join("tools.json"))
+}
+
+/// The tool database at `path`; the starter tools when there is none yet.
+pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
+    if !path.exists() {
+        return Ok(ToolDatabase::starter());
+    }
+    ToolDatabase::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
+    let written = match path.parent() {
+        Some(dir) => std::fs::create_dir_all(dir).and_then(|()| std::fs::write(path, db.to_json())),
+        None => std::fs::write(path, db.to_json()),
+    };
+    written.map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
 fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))
 }
@@ -90,6 +117,7 @@ fn read(path: &Path) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
     use aspire_core::testing::sample_document;
+    use aspire_core::toolpath::ToolDatabase;
     use std::fs;
 
     fn temp(name: &str) -> PathBuf {
@@ -183,6 +211,31 @@ mod tests {
     }
 
     const POST: &str = "POST_NAME = \"Test post\"\nFILE_EXTENSION = \"tap\"\nVAR X_POSITION = [X|A|X|1.1]\nbegin RAPID_MOVE\n\"G0 [X]\"\nbegin FEED_MOVE\n\"G1 [X]\"\n";
+
+    #[test]
+    fn a_missing_tool_database_starts_with_the_starter_tools() {
+        assert_eq!(
+            load_tools(&temp("none/tools.json")).unwrap(),
+            ToolDatabase::starter()
+        );
+    }
+
+    #[test]
+    fn saved_tools_load_back_into_a_new_folder() {
+        let path = temp("new-folder/tools.json");
+        let mut db = ToolDatabase::starter();
+        db.tools.truncate(1);
+        save_tools(&db, &path).unwrap();
+        assert_eq!(load_tools(&path).unwrap(), db);
+    }
+
+    #[test]
+    fn a_broken_tool_database_names_the_file() {
+        let path = temp("broken-tools.json");
+        fs::write(&path, "{").unwrap();
+        let err = load_tools(&path).unwrap_err();
+        assert!(err.contains("broken-tools.json"), "{err}");
+    }
 
     #[test]
     fn installing_a_post_reads_it() {
