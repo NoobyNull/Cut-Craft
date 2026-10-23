@@ -65,19 +65,23 @@ variants — existing commands are untouched.
   implemented inside each command crate; the app only forwards pointer/key events.
 
 ## Backlog (in order; each item = failing tests → code → hook green → commit)
-1. Workspace, lints, hook; move existing app into `crates/app`; delete placeholders.
-2. Core: geometry, Document, Edit/Change/History, Command/Registry, contract tests.
-3. Create vectors: rectangle, circle, ellipse, polygon, star, line/polyline, arc.
-4. App: registry wiring, Drawing tab from metadata + icons, generated forms,
-   2D rendering of vectors, undo/redo (Ctrl+Z/Y).
-5. Edit: select all / unselect, delete, move, set size, rotate, mirror,
-   align family (centre-in-material = centre-H + centre-V cascade).
-6. Interactive: drag-to-draw rectangle/circle/ellipse + quick keys; click-select,
-   window/crossing select.
-7. Files: save/open job (JSON), export SVG, import SVG.
-8. Vector ops: join, offset, weld, subtract, intersect (polygon booleans).
-9. Layers and job setup form.
-10. Toolpaths: profile, pocket, drilling + tool database; preview / preview-all cascade.
-11. Post-processors: `.pp` parser and G-code output.
-12. DXF import/export, STL export.
-13. 3D components (height maps), create shape, combine modes.
+Done:
+1. ✅ Workspace, lints, hook; app moved into `crates/app`; placeholders deleted.
+2. ✅ Core: geometry, Document, Edit/Change/History, Command/Registry, contract tests.
+3. ✅ Create vectors: rectangle, circle, ellipse, polygon, star, line/polyline, arc.
+4. ✅ App: registry wiring, Drawing tab from metadata + icons, generated forms, 2D view, undo/redo.
+5. ✅ Edit: select all / unselect, delete, move, set size, rotate, mirror, align family (cascades).
+6. ✅ Interactive: drag-to-draw; click, shift-click, window and crossing selection.
+7. ✅ Files: versioned job save/open, SVG import/export, unsaved-work checks.
+8. ✅ Vector ops: weld, subtract, overlap, offset, join (i_overlay in core).
+9. ✅ Job setup form (forms start from the document).
+10. ✅ Toolpaths: profile, pocket, drilling; toolpath panel, preview, recalculate / recalculate-all cascade.
+11. ✅ G-code: generic exporter; `.pp` post-processors (`crates/post`).
+
+Next:
+12. DXF import/export; STL export.
+13. Layers.
+14. Tool database (shared tools instead of per-toolpath tool settings).
+15. Toolpath simulation / 3D view.
+16. 3D components (height maps), create shape, combine modes.
+17. V-carve, fluting, inlay and the other strategies.
