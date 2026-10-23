@@ -1,6 +1,7 @@
 //! Invertible edits. Every document mutation is a [`Change`]; undo applies its inverse.
 
 use crate::CommandError;
+use crate::component::Component;
 use crate::document::{Document, EntityId, Job, Layer, LayerId};
 use crate::geometry::{Path, Point, Rect};
 use crate::toolpath::Toolpath;
@@ -45,6 +46,19 @@ pub enum Edit {
         id: EntityId,
         before: Box<Toolpath>,
         after: Box<Toolpath>,
+    },
+    AddComponent {
+        id: EntityId,
+        component: Box<Component>,
+    },
+    RemoveComponent {
+        id: EntityId,
+        component: Box<Component>,
+    },
+    ReplaceComponent {
+        id: EntityId,
+        before: Box<Component>,
+        after: Box<Component>,
     },
     /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
     SetLayer {
@@ -92,6 +106,13 @@ impl Edit {
             Self::AddToolpath { id, toolpath } => Self::RemoveToolpath { id, toolpath },
             Self::RemoveToolpath { id, toolpath } => Self::AddToolpath { id, toolpath },
             Self::ReplaceToolpath { id, before, after } => Self::ReplaceToolpath {
+                id,
+                before: after,
+                after: before,
+            },
+            Self::AddComponent { id, component } => Self::RemoveComponent { id, component },
+            Self::RemoveComponent { id, component } => Self::AddComponent { id, component },
+            Self::ReplaceComponent { id, before, after } => Self::ReplaceComponent {
                 id,
                 before: after,
                 after: before,
@@ -168,6 +189,7 @@ impl Change {
             selection: doc.selection.clone(),
             pending: BTreeMap::new(),
             pending_toolpaths: BTreeMap::new(),
+            pending_components: BTreeMap::new(),
             layers: doc.layers.clone(),
             current_layer: doc.current_layer,
             vector_layers: BTreeMap::new(),
@@ -317,6 +339,15 @@ impl Document {
                 }
                 self.job = *after;
             }
+            Edit::AddComponent { id, component } => {
+                insert_new(&mut self.components, *id, (**component).clone())?;
+            }
+            Edit::RemoveComponent { id, component } => {
+                remove_matching(&mut self.components, *id, component)?;
+            }
+            Edit::ReplaceComponent { id, before, after } => {
+                replace_matching(&mut self.components, *id, before, after)?;
+            }
             Edit::SetLayer { id, before, after } => {
                 if self.vector_layers.get(id) != before.as_ref() {
                     return Err(ApplyError::Conflict(*id));
@@ -383,6 +414,18 @@ fn insert_new<T>(
     Ok(())
 }
 
+/// `id` as a change has left it (`pending`, where `None` is removed), else as in `doc`.
+fn shadowed<'a, T>(
+    pending: &'a BTreeMap<EntityId, Option<T>>,
+    doc: &'a BTreeMap<EntityId, T>,
+    id: EntityId,
+) -> Option<&'a T> {
+    match pending.get(&id) {
+        Some(value) => value.as_ref(),
+        None => doc.get(&id),
+    }
+}
+
 /// Removes `id` only if it still holds `expected`.
 fn remove_matching<T: PartialEq>(
     map: &mut BTreeMap<EntityId, T>,
@@ -424,6 +467,7 @@ pub struct ChangeBuilder<'a> {
     /// Paths as this change has left them (`None` = removed), shadowing `doc`.
     pending: BTreeMap<EntityId, Option<Path>>,
     pending_toolpaths: BTreeMap<EntityId, Option<Toolpath>>,
+    pending_components: BTreeMap<EntityId, Option<Component>>,
     /// Layer list, current layer and vector layers as this change has left them.
     layers: Vec<Layer>,
     current_layer: LayerId,
@@ -434,10 +478,7 @@ pub struct ChangeBuilder<'a> {
 impl ChangeBuilder<'_> {
     /// Current path of `id` as seen by this change so far.
     pub fn path(&self, id: EntityId) -> Option<&Path> {
-        match self.pending.get(&id) {
-            Some(p) => p.as_ref(),
-            None => self.doc.vectors.get(&id),
-        }
+        shadowed(&self.pending, &self.doc.vectors, id)
     }
 
     pub fn add(&mut self, path: Path) -> EntityId {
@@ -496,10 +537,7 @@ impl ChangeBuilder<'_> {
 
     /// Current toolpath `id` as seen by this change so far.
     pub fn toolpath(&self, id: EntityId) -> Option<&Toolpath> {
-        match self.pending_toolpaths.get(&id) {
-            Some(t) => t.as_ref(),
-            None => self.doc.toolpaths.get(&id),
-        }
+        shadowed(&self.pending_toolpaths, &self.doc.toolpaths, id)
     }
 
     pub fn remove_toolpath(&mut self, id: EntityId) {
@@ -521,6 +559,47 @@ impl ChangeBuilder<'_> {
             .clone();
         self.pending_toolpaths.insert(id, Some(after.clone()));
         self.edits.push(Edit::ReplaceToolpath {
+            id,
+            before: Box::new(before),
+            after: Box::new(after),
+        });
+    }
+
+    pub fn add_component(&mut self, component: Component) -> EntityId {
+        let id = EntityId(self.next_id);
+        self.next_id += 1;
+        self.pending_components.insert(id, Some(component.clone()));
+        self.edits.push(Edit::AddComponent {
+            id,
+            component: Box::new(component),
+        });
+        id
+    }
+
+    /// Current component `id` as seen by this change so far.
+    pub fn component(&self, id: EntityId) -> Option<&Component> {
+        shadowed(&self.pending_components, &self.doc.components, id)
+    }
+
+    pub fn remove_component(&mut self, id: EntityId) {
+        let component = self
+            .component(id)
+            .unwrap_or_else(|| panic!("remove_component: {} does not exist", id.0))
+            .clone();
+        self.pending_components.insert(id, None);
+        self.edits.push(Edit::RemoveComponent {
+            id,
+            component: Box::new(component),
+        });
+    }
+
+    pub fn replace_component(&mut self, id: EntityId, after: Component) {
+        let before = self
+            .component(id)
+            .unwrap_or_else(|| panic!("replace_component: {} does not exist", id.0))
+            .clone();
+        self.pending_components.insert(id, Some(after.clone()));
+        self.edits.push(Edit::ReplaceComponent {
             id,
             before: Box::new(before),
             after: Box::new(after),

@@ -1,5 +1,6 @@
 //! The job being edited. Only [`Document::apply`](crate::Change) changes it.
 
+use crate::component::Component;
 use crate::geometry::{Path, Point, Rect, polyline_distance, polyline_touches};
 use crate::toolpath::Toolpath;
 use schemars::JsonSchema;
@@ -105,6 +106,9 @@ pub struct Document {
     /// Which layer each vector is on; vectors not listed are on the first layer.
     #[serde(default)]
     pub vector_layers: BTreeMap<EntityId, LayerId>,
+    /// 3D shapes, combined in id order into the model.
+    #[serde(default)]
+    pub components: BTreeMap<EntityId, Component>,
 }
 
 impl Default for Document {
@@ -117,6 +121,7 @@ impl Default for Document {
             layers: default_layers(),
             current_layer: first_layer(),
             vector_layers: BTreeMap::new(),
+            components: BTreeMap::new(),
         }
     }
 }
@@ -128,7 +133,8 @@ impl Document {
             .vectors
             .keys()
             .next_back()
-            .max(self.toolpaths.keys().next_back());
+            .max(self.toolpaths.keys().next_back())
+            .max(self.components.keys().next_back());
         EntityId(last.map_or(1, |id| id.0 + 1))
     }
 

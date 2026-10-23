@@ -39,6 +39,11 @@ impl Material {
         }
     }
 
+    /// Middle of a cell, job mm.
+    pub fn centre(&self, column: usize, row: usize) -> Point {
+        Point::new(column as f64 + 0.5, row as f64 + 0.5) * self.cell
+    }
+
     /// Height of the surface over `p`, or `None` off the material.
     pub fn at(&self, p: Point) -> Option<f64> {
         let (column, row) = (p.x / self.cell, p.y / self.cell);
@@ -76,10 +81,7 @@ impl Material {
         };
         for row in cells(lo.y, hi.y, self.rows) {
             for column in cells(lo.x, hi.x, self.columns) {
-                let centre = DVec2::new(
-                    (column as f64 + 0.5) * self.cell,
-                    (row as f64 + 0.5) * self.cell,
-                );
+                let centre = self.centre(column, row);
                 let Some((t0, t1)) = covered(start - centre, along, radius) else {
                     continue;
                 };

@@ -2,6 +2,7 @@
 
 mod change;
 mod command;
+pub mod component;
 pub mod document;
 pub mod file;
 mod formats;
