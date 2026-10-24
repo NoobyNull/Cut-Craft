@@ -199,3 +199,31 @@ fn toolpaths_start_visible_and_old_ones_load_visible() {
     let old: Toolpath = serde_json::from_value(json).unwrap();
     assert!(old.visible);
 }
+
+#[test]
+fn chip_load_is_the_feed_per_tooth() {
+    let tool = Tool {
+        feed_rate: 3600.0,
+        spindle_speed: 18000.0,
+        flutes: 2,
+        ..Tool::default()
+    };
+    // 3600 mm/min over 18000 rpm x 2 teeth
+    assert!((tool.chip_load().unwrap() - 0.1).abs() < 1e-12);
+    let stopped = Tool {
+        spindle_speed: 0.0,
+        ..tool.clone()
+    };
+    assert_eq!(stopped.chip_load(), None, "no spindle, no chip load");
+}
+
+#[test]
+fn tools_saved_before_flutes_have_two() {
+    let mut json = serde_json::to_value(Tool::default()).unwrap();
+    json.as_object_mut()
+        .unwrap()
+        .remove("flutes")
+        .expect("flutes are saved");
+    let old: Tool = serde_json::from_value(json).unwrap();
+    assert_eq!(old.flutes, 2);
+}

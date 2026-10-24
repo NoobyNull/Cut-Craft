@@ -1223,6 +1223,12 @@ impl CutCraftApp {
                     *tool = changed;
                     edited = true;
                 }
+                // Aspire shows the feed per tooth beside the feeds, to check against the maker's
+                if let Some(load) = tool.chip_load() {
+                    let (per, unit) = form::shown_in("mm", look.units).unwrap_or((1.0, "mm"));
+                    let places = if unit == "mm" { 3 } else { 4 };
+                    ui.label(format!("Chip load: {:.places$} {unit}", load / per));
+                }
             });
         self.tool_window = open;
         if let Some(index) = delete {
@@ -2427,6 +2433,22 @@ mod tests {
         h.app.delete_tool(0);
         h.frame(vec![]);
         assert_eq!(h.app.tools.tools.len(), count - 1);
+    }
+
+    #[test]
+    fn the_tool_database_window_shows_the_chip_load() {
+        let mut h = Harness::new();
+        h.app.tools = ToolDatabase {
+            tools: vec![Tool::default()],
+        };
+        h.app.invoke(&h.ctx, "tool_database");
+        h.frame(vec![]);
+        h.frame(vec![]);
+        // 1000 mm/min over 18000 rpm x 2 flutes
+        assert!(
+            h.text_at("Chip load: 0.028 mm").is_some(),
+            "the window shows the feed per tooth"
+        );
     }
 
     #[test]

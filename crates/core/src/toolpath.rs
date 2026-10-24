@@ -44,13 +44,28 @@ pub struct Tool {
     pub plunge_rate: f64,
     #[schemars(extend("x-unit" = "rpm"), range(min = 0))]
     pub spindle_speed: f64,
+    /// Cutting edges, for the chip load (added after the first tool format)
+    #[serde(default = "default_flutes")]
+    #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
+    pub flutes: u32,
 }
 
 fn default_angle() -> f64 {
     90.0
 }
 
+fn default_flutes() -> u32 {
+    2
+}
+
 impl Tool {
+    /// How much each flute cuts per turn (mm): the feed rate over the spindle speed and
+    /// flutes, to compare with the cutter maker's figure. `None` with no spindle or flutes.
+    pub fn chip_load(&self) -> Option<f64> {
+        let teeth_per_minute = self.spindle_speed * f64::from(self.flutes);
+        (teeth_per_minute > 0.0).then(|| self.feed_rate / teeth_per_minute)
+    }
+
     /// How far above its tip the cutting edge is at `r` from the axis; `None` beyond the tool.
     pub fn profile(&self, r: f64) -> Option<f64> {
         let radius = self.diameter / 2.0;
@@ -74,6 +89,7 @@ impl Default for Tool {
             feed_rate: 1000.0,
             plunge_rate: 300.0,
             spindle_speed: 18000.0,
+            flutes: default_flutes(),
         }
     }
 }
