@@ -71,6 +71,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_laser_picture_toolpath::LaserPictureToolpath>();
     r.add::<cmd_array_copy_toolpath::ArrayCopyToolpath>();
     r.add::<cmd_merged_toolpath::MergedToolpath>();
+    r.add::<cmd_inlay_toolpath::InlayToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

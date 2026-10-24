@@ -134,6 +134,7 @@ say "not implemented yet".
   them when recalculated.
 - Merged: the visible toolpaths with one tool as one, in the list's order or nearest-first,
   whichever travels less.
+- Inlay: male straight or stepped, female pocket or hole, corners rounded to the tool, allowance.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -173,8 +174,7 @@ say "not implemented yet".
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area, Zero Plane,
   from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
   Below, Split, Bake.
-- Toolpaths tab: Inlay (pocket/plug, not V-carve),
-  Toolpath Summary.
+- Toolpaths tab:  Toolpath Summary.
 
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
   (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).

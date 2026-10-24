@@ -643,6 +643,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-inlay-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-job-setup"
 version = "0.1.0"
 dependencies = [
@@ -1150,6 +1159,7 @@ dependencies = [
  "cmd-draw-star",
  "cmd-drilling-toolpath",
  "cmd-fluting-toolpath",
+ "cmd-inlay-toolpath",
  "cmd-job-setup",
  "cmd-join-vectors",
  "cmd-keyhole-toolpath",

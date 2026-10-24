@@ -266,6 +266,12 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Merged:** merges all visible toolpaths that use the same tool into one, trying several orderings and keeping the quickest; **Merge By Part** cuts each part's contours together, respecting the toolpath list's order; feeds and speeds change part-way as needed.
 - **[inf]** Cut Craft: an array toolpath per source (the tool-grouped order), each recalculated from its source. Merged refuses toolpaths with different tools, splits them into their plunge-to-retract cuts, and keeps the toolpath list's order or a nearest-next order, whichever travels less; Merge By Part is not done.
 
+### Inlay (pocket / plug) [obs] (help: Inlay Toolpath)
+- Profile or pocket toolpaths that compensate for the tool radius so a cut-out part fits its cavity; both halves must use the same (finishing) tool. A cut-out leaves inside corners rounded and a pocket leaves outside corners rounded, so the inlay rounds both.
+- **Male:** Straight (a profile outside only, external corners rounded) or Stepped (push-through: a Step Depth from the start down and a Step Width out from the vector, forming a shelf). **Female:** Pocket (standard pocket options, two tools allowed, internal corners rounded) or Hole (a profile inside only).
+- **Allowance:** an offset on either side so the parts fit (0.25–0.5 mm typical), usually on the female side.
+- **[inf]** Cut Craft: the inlay shape is the shapes opened then closed by the tool radius; the male is cut round it (shrunk by the allowance), the female pocket or hole grown by it.
+
 ---
 
 ## P5 — Directories and configuration
