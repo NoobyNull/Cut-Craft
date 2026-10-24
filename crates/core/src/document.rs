@@ -74,9 +74,31 @@ pub enum ZZero {
     #[default]
     #[schemars(title = "Material Surface")]
     MaterialSurface,
-    /// The tool is zeroed on the machine bed under the material
+    /// The tool is zeroed under the material: on the machine bed, or on a rotary job's
+    /// cylinder axis
     #[schemars(title = "Machine Bed")]
     MachineBed,
+}
+
+/// A rotary job: a cylinder turned by a rotary axis, worked on as its surface unrolled flat.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Rotary {
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub diameter: f64,
+    /// The direction of the cylinder's axis; the other direction goes round it
+    pub along: Along,
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Along {
+    #[default]
+    #[schemars(title = "Along X Axis")]
+    X,
+    #[schemars(title = "Along Y Axis")]
+    Y,
 }
 
 /// The point of the material the machine's X0, Y0 is.
@@ -158,6 +180,9 @@ pub struct Job {
     /// The material's colour in the 3D view.
     #[serde(default = "default_colour")]
     pub colour: [u8; 3],
+    /// Set for a rotary job (added with rotary jobs; flat jobs leave it out).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotary: Option<Rotary>,
 }
 
 fn default_clearance() -> f64 {
@@ -169,6 +194,23 @@ fn default_colour() -> [u8; 3] {
 }
 
 impl Job {
+    /// A cylinder `length` long and `diameter` across, unrolled: `length` along its axis, the
+    /// circumference the other way, and its radius deep, so Z zero under it is the axis.
+    pub fn rotary(length: f64, diameter: f64, along: Along) -> Self {
+        let round = std::f64::consts::PI * diameter;
+        let (width, height) = match along {
+            Along::X => (length, round),
+            Along::Y => (round, length),
+        };
+        Self {
+            width,
+            height,
+            thickness: diameter / 2.0,
+            rotary: Some(Rotary { diameter, along }),
+            ..Self::default()
+        }
+    }
+
     /// The material in job coordinates.
     pub fn area(&self) -> Rect {
         let size = Point::new(self.width, self.height);
@@ -205,6 +247,7 @@ impl Default for Job {
             resolution: Resolution::Standard,
             // ponytail: one wood colour until a Materials dialog offers textures
             colour: [214, 160, 102],
+            rotary: None,
         }
     }
 }

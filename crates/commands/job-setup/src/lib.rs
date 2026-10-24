@@ -1,7 +1,7 @@
 //! Job Setup: the material block, where the machine's zero is on it, how finely the model is
 //! worked out and how the material looks, laid out in sections as Aspire's form is.
 
-use cut_craft_core::document::{Datum, Document, Job, Resolution, Units, ZZero};
+use cut_craft_core::document::{Along, Datum, Document, Job, Resolution, Rotary, Units, ZZero};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -19,8 +19,17 @@ pub enum JobType {
     /// Not supported yet
     #[schemars(title = "Double Sided")]
     DoubleSided,
-    /// Not supported yet
+    /// A cylinder turned by a rotary axis
     Rotary,
+}
+
+/// For a rotary job: its length is the Width (along X) or the Height (along Y)
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RotarySize {
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub diameter: f64,
+    /// The direction the cylinder's axis runs
+    pub orientation: Along,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -75,6 +84,8 @@ pub struct Params {
         extend("x-icon" = "job_setup/xy_datum_{position}.svg")
     )]
     pub datum: DatumPosition,
+    #[schemars(title = "Rotary", extend("x-section" = true))]
+    pub rotary: RotarySize,
     /// How finely 3D shapes are worked out over the job; Standard suits most parts
     #[schemars(
         title = "Modeling Resolution",
@@ -102,8 +113,17 @@ pub struct Params {
 
 impl From<&Job> for Params {
     fn from(job: &Job) -> Self {
+        // ponytail: a new rotary job starts as a 50 mm cylinder along X
+        let rotary = job.rotary.unwrap_or(Rotary {
+            diameter: 50.0,
+            along: Along::X,
+        });
         Self {
-            job_type: JobType::SingleSided,
+            job_type: if job.rotary.is_some() {
+                JobType::Rotary
+            } else {
+                JobType::SingleSided
+            },
             size: Size {
                 width: job.width,
                 height: job.height,
@@ -116,6 +136,10 @@ impl From<&Job> for Params {
                 use_offset: job.offset != Point::ZERO,
                 x: job.offset.x,
                 y: job.offset.y,
+            },
+            rotary: RotarySize {
+                diameter: rotary.diameter,
+                orientation: rotary.along,
             },
             resolution: job.resolution,
             colour: job.colour,
@@ -148,19 +172,36 @@ impl Command for JobSetup {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        if p.job_type != JobType::SingleSided {
-            return Err(CommandError::InvalidParams(
-                "double-sided and rotary jobs are not supported yet".into(),
-            ));
-        }
-        ensure_positive("width", p.size.width)?;
-        ensure_positive("height", p.size.height)?;
-        ensure_positive("thickness", p.size.thickness)?;
         ensure_positive("clearance", p.clearance)?;
+        let shape = match p.job_type {
+            JobType::DoubleSided => {
+                return Err(CommandError::InvalidParams(
+                    "double-sided jobs are not supported yet".into(),
+                ));
+            }
+            JobType::Rotary => {
+                let along = p.rotary.orientation;
+                let length = match along {
+                    Along::X => p.size.width,
+                    Along::Y => p.size.height,
+                };
+                ensure_positive("length", length)?;
+                ensure_positive("diameter", p.rotary.diameter)?;
+                Job::rotary(length, p.rotary.diameter, along)
+            }
+            JobType::SingleSided => {
+                ensure_positive("width", p.size.width)?;
+                ensure_positive("height", p.size.height)?;
+                ensure_positive("thickness", p.size.thickness)?;
+                Job {
+                    width: p.size.width,
+                    height: p.size.height,
+                    thickness: p.size.thickness,
+                    ..Job::default()
+                }
+            }
+        };
         let job = Job {
-            width: p.size.width,
-            height: p.size.height,
-            thickness: p.size.thickness,
             units: p.size.units,
             clearance: p.clearance,
             z_zero: p.z_zero,
@@ -172,6 +213,7 @@ impl Command for JobSetup {
             },
             resolution: p.resolution,
             colour: p.colour,
+            ..shape
         };
         let mut c = Change::builder(doc);
         // a new datum or offset moves the coordinates, not the design on the material
@@ -332,9 +374,41 @@ mod tests {
     }
 
     #[test]
-    fn only_single_sided_jobs_for_now() {
-        let why = after_err::<JobSetup>(&with(|p| p.job_type = JobType::Rotary));
+    fn double_sided_jobs_are_not_supported_yet() {
+        let why = after_err::<JobSetup>(&with(|p| p.job_type = JobType::DoubleSided));
         assert!(why.contains("not supported yet"), "{why}");
+    }
+
+    #[test]
+    fn a_rotary_job_unrolls_the_cylinder_round_the_axis_chosen() {
+        use cut_craft_core::document::{Along, Rotary};
+        let doc = after::<JobSetup>(&with(|p| {
+            p.job_type = JobType::Rotary;
+            p.size.width = 300.0;
+            p.rotary.diameter = 50.0;
+            p.rotary.orientation = Along::X;
+            p.z_zero = ZZero::MachineBed;
+        }));
+        let job = doc.job;
+        assert_eq!(
+            job.rotary,
+            Some(Rotary {
+                diameter: 50.0,
+                along: Along::X
+            })
+        );
+        assert!(
+            (job.width - 300.0).abs() < 1e-12
+                && (job.height - 50.0 * std::f64::consts::PI).abs() < 1e-9
+                && (job.thickness - 25.0).abs() < 1e-12,
+            "300 long, round the 50 mm circumference, the radius deep: {job:?}"
+        );
+        assert_eq!(job.z_zero, ZZero::MachineBed);
+        let reopened = Params::from(&job);
+        assert_eq!(
+            (reopened.job_type, reopened.rotary.diameter),
+            (JobType::Rotary, 50.0)
+        );
     }
 
     #[test]

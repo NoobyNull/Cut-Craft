@@ -1,4 +1,4 @@
-use cut_craft_core::document::{Datum, Document, Job, Resolution, ZZero};
+use cut_craft_core::document::{Along, Datum, Document, Job, Resolution, Rotary, ZZero};
 use cut_craft_core::file::{load_job, save_job};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::simulation::Material;
@@ -51,6 +51,39 @@ fn z_zero_on_the_machine_bed_lifts_every_height_by_the_thickness() {
         ..Job::default()
     };
     assert!((bed.machine_z(-3.0) - (surface.thickness - 3.0)).abs() < 1e-12);
+}
+
+#[test]
+fn a_rotary_job_is_its_cylinder_unrolled_with_the_axis_under_it() {
+    use std::f64::consts::PI;
+    let along_x = Job::rotary(100.0, 40.0, Along::X);
+    assert_eq!(
+        along_x.rotary,
+        Some(Rotary {
+            diameter: 40.0,
+            along: Along::X
+        })
+    );
+    assert!((along_x.width - 100.0).abs() < 1e-12 && (along_x.height - 40.0 * PI).abs() < 1e-9);
+    assert!(
+        (along_x.thickness - 20.0).abs() < 1e-12,
+        "the depth to the axis is the radius"
+    );
+    let along_y = Job::rotary(100.0, 40.0, Along::Y);
+    assert!((along_y.width - 40.0 * PI).abs() < 1e-9 && (along_y.height - 100.0).abs() < 1e-12);
+    let axis = Job {
+        z_zero: ZZero::MachineBed,
+        ..along_x
+    };
+    assert!(
+        (axis.machine_z(-2.0) - 18.0).abs() < 1e-12,
+        "zeroed on the axis, 2 mm into a 20 mm radius is 18 up"
+    );
+    assert_eq!(
+        Job::default().rotary,
+        None,
+        "jobs are flat unless set up rotary"
+    );
 }
 
 #[test]
