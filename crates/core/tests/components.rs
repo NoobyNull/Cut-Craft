@@ -167,3 +167,26 @@ fn components_saved_before_visibility_load_visible() {
     let old = load_job(&serde_json::to_vec(&json).unwrap()).unwrap();
     assert!(old.components.values().all(|c| c.visible));
 }
+
+#[test]
+fn the_placed_model_is_no_finer_than_the_job_resolution() {
+    use cut_craft_core::component::placed_model;
+    use cut_craft_core::document::Resolution;
+    use cut_craft_core::toolpath::Tool;
+    let mut doc = small_job();
+    doc.job.width = 2000.0;
+    doc.job.height = 1000.0;
+    let mut c = Change::builder(&doc);
+    c.add_component(flat(rect(10.0, 10.0, 30.0, 30.0), 6.0, Combine::Add));
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    let tool = Tool::default();
+    let mut cell = |resolution| {
+        doc.job.resolution = resolution;
+        placed_model(&doc, &tool).unwrap().cell
+    };
+    // 2 m² over a million points is cells of about 1.41 mm, coarser than the tool's 0.3
+    let standard = cell(Resolution::Standard);
+    assert!((standard - 2f64.sqrt()).abs() < 0.01, "{standard}");
+    assert!(cell(Resolution::Highest) < standard / 2.0);
+}

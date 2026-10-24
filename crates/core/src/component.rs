@@ -128,13 +128,9 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
     surface
 }
 
-/// Most model cells along the job for a 3D toolpath, however small the tool.
-// ponytail: caps the work on big jobs; the job's modeling resolution (`Job::model_cell`) could
-// replace it
-const MAX_CELLS: usize = 2000;
-
-/// The model as a 3D toolpath machines it: cells a twentieth of `tool` across, its top at
-/// z = 0 (the material surface). It must exist and fit in the material.
+/// The model as a 3D toolpath machines it: cells a twentieth of `tool` across, but no finer
+/// than the job's modeling resolution, its top at z = 0 (the material surface). It must
+/// exist and fit in the material.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -147,7 +143,8 @@ pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandErro
         ));
     }
     let longest = doc.job.width.max(doc.job.height);
-    let cells = ((longest / (tool.diameter / 20.0)).ceil() as usize).clamp(1, MAX_CELLS);
+    let cell = (tool.diameter / 20.0).max(doc.job.model_cell());
+    let cells = ((longest / cell).ceil() as usize).max(1);
     let mut surface = model(doc, cells);
     let top = surface
         .heights
