@@ -821,6 +821,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-thread-milling-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-toolpath-properties"
 version = "0.1.0"
 dependencies = [
@@ -1082,6 +1091,7 @@ dependencies = [
  "cmd-show-hide",
  "cmd-subtract-vectors",
  "cmd-texture-toolpath",
+ "cmd-thread-milling-toolpath",
  "cmd-toolpath-properties",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",

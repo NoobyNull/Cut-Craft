@@ -228,6 +228,12 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Chamfer Type:** inside or outside the vector, sloping down or up away from it (outside-down usually with a clearance pocket outside, outside-up with one inside). Cut direction climb / conventional; optional vector selection order.
 - **[inf]** Cut Craft: a V-bit's point runs W + overcut out (down) or the overcut back (up), at start + C + overcut / tan A; a ball nose touches the slope at points a stepover apart. End mills are refused.
 
+### Thread Milling [obs] (help: Thread Milling Toolpath)
+- A helix round the centre of each selected vector, for internal (nut) or external (bolt) threads. **Start Depth**; **Max Depth (M)** below it; **Thread Length (L)** is derived from M, the tool's tooth offset and the pitch, and is less than M.
+- Tools: single point (a triangular tooth; Size S, Height H, Diameter D tip to tip, Angle A, Offset O from the tool bottom to the tooth tip, at least S/2) cuts one thread per turn as a helix; multi point also has a threaded length and cuts every thread in one turn at its own pitch.
+- **Pitch** (presets: ISO metric / Unified), **Diameter** (major), **Fit Tolerance** (positive cuts deeper; presets fill one for external threads), **Create Circles for Internal Threads** (a circle to pocket out the middle). Thread direction right / left handed; cut direction spiralling down or up. Threads follow the ISO profile (60° tools give flat crests).
+- **[inf]** Cut Craft: L = M − O; the tooth reaches the major diameter (internal) or the ISO external minor diameter d − 1.22687 P (external), widened by the tolerance; a right-hand thread climbs anticlockwise. Single point only, the tooth offset on the toolpath form; no presets or circles yet.
+
 ---
 
 ## P5 — Directories and configuration

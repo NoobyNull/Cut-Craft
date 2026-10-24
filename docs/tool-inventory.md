@@ -119,6 +119,8 @@ say "not implemented yet".
 - Keyhole (slot direction, depth, length, preview outlines) and Drag Knife (blade offset,
   tolerance angle, swivel depth, passes) toolpaths.
 - Chamfer: inside / outside, down / up, width, overcut, climb / conventional; V-bit or ball nose.
+- Thread Milling: internal / external, pitch, diameter, fit tolerance, hand, up / down
+  (single-point tool; tooth offset on the form).
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:

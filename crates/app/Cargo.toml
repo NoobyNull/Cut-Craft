@@ -22,6 +22,7 @@ fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-thread-milling-toolpath = { path = "../commands/thread-milling-toolpath" }
 cmd-chamfer-toolpath = { path = "../commands/chamfer-toolpath" }
 cmd-drag-knife-toolpath = { path = "../commands/drag-knife-toolpath" }
 cmd-keyhole-toolpath = { path = "../commands/keyhole-toolpath" }

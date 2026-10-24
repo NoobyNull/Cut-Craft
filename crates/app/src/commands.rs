@@ -62,6 +62,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_keyhole_toolpath::KeyholeToolpath>();
     r.add::<cmd_drag_knife_toolpath::DragKnifeToolpath>();
     r.add::<cmd_chamfer_toolpath::ChamferToolpath>();
+    r.add::<cmd_thread_milling_toolpath::ThreadMillingToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
