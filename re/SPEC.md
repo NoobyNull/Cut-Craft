@@ -199,6 +199,11 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - The pocket form later allows a Start Depth (into an existing pocket). Optional clearance tools clear the flat areas, leaving an allowance for the V-bit.
 - **[inf]** Geometry Cut Craft uses: pocket = V-carve to flat depth D; plug = V-carve of (boundary − mirrored shapes) starting at D − glue gap, going a further surface clearance down. Turned over, its walls then lie on the pocket's. Cut Craft has one sheet, so it mirrors across the job's centre line; clearance tools are not done yet.
 
+### Prism Carving [obs] (help: Prism Carving Toolpath)
+- An angled tool profiles round the selected shapes at the Start Depth plus Prism Depth, leaving a raised bevel ("hand carved" look). Usually paired with a profile or pocket to cut round the shapes.
+- If the prism depth is too shallow the top is flat (truncated). **Set Depth for Full Prism** sets the least depth for a point, from the widest point W and the tool angle A: **[inf]** (W/2) / tan(A/2).
+- Cut Direction: conventional or climb. **[inf]** Cut Craft runs on the line itself (the cone makes both slopes) and refuses a full prism wider than the V-bit.
+
 ---
 
 ## P5 — Directories and configuration

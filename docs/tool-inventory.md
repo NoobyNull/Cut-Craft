@@ -112,6 +112,7 @@ say "not implemented yet".
 - Fluting: ramps at start, both ends or the whole length, by length or %, linear or smooth.
 - V-Carve: Start Depth. V-Carve Inlay: pocket plus mirrored plug (glue gap, surface clearance,
   vector-offset or sheet-limit boundary) as two V-carvings.
+- Prism Carving: start and prism depth, depth for a full prism, climb / conventional.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -151,7 +152,7 @@ say "not implemented yet".
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area, Zero Plane,
   from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
   Below, Split, Bake.
-- Toolpaths tab: Quick Engrave, Inlay (pocket/plug, not V-carve), Chamfer, Prism, Keyhole, Moulding, Texture,
+- Toolpaths tab: Quick Engrave, Inlay (pocket/plug, not V-carve), Chamfer, Keyhole, Moulding, Texture,
   Sketch, Rounding, Laser Cut / Fill, Laser Picture, Toolpath Summary.
 
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
