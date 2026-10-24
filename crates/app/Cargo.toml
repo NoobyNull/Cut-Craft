@@ -23,6 +23,7 @@ fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-sketch-carving-toolpath = { path = "../commands/sketch-carving-toolpath" }
 cmd-photo-vcarve-toolpath = { path = "../commands/photo-vcarve-toolpath" }
 cmd-rounding-toolpath = { path = "../commands/rounding-toolpath" }
 cmd-moulding-toolpath = { path = "../commands/moulding-toolpath" }

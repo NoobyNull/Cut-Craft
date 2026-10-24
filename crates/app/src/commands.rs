@@ -66,6 +66,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_moulding_toolpath::MouldingToolpath>();
     r.add::<cmd_rounding_toolpath::RoundingToolpath>();
     r.add::<cmd_photo_vcarve_toolpath::PhotoVcarveToolpath>();
+    r.add::<cmd_sketch_carving_toolpath::SketchCarvingToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

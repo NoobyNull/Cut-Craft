@@ -126,6 +126,7 @@ say "not implemented yet".
   sharp corners, boundary offset.
 - Rounding (rotary jobs): square or round blank, radial / raster / optimized raster, allowance.
 - Photo V-Carve: raster, hatch or along selected vectors; line spacing and angle, stepover retract.
+- Sketch Carving: from the bitmap or 3D model, line thickness, bitmap or vector boundary.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -166,7 +167,7 @@ say "not implemented yet".
   from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
   Below, Split, Bake.
 - Toolpaths tab: Inlay (pocket/plug, not V-carve),
-  Sketch, Rounding, Laser Cut / Fill, Laser Picture, Toolpath Summary.
+  Laser Cut / Fill, Laser Picture, Toolpath Summary.
 
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
   (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).

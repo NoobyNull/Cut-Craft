@@ -250,6 +250,10 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - Strategy: **Raster** (one set of lines), **Hatch** (two sets at 90°, denser, twice the time), **Selected Vectors** (along them, e.g. from Vector Texture). **Line Spacing** is a percentage of the tool's width at the max depth: 100 % gives knife-edge ridges in the darkest parts; more leaves flats on the surface. **Line Angle**: 0 horizontal, 90 vertical. Optional projection onto the 3D model.
 - **[inf]** Cut Craft: depth = start + max depth × darkness; lines run back and forth; the newest bitmap is carved (bitmaps cannot be selected yet).
 
+### Sketch Carving [obs] (help: Sketch Carving)
+- Carves a sketch-style outline from the contrast in a bitmap or a 3D model. **Start Depth**, **Cut Depth**, a tool. **Machine Limit Boundary:** the bitmap's (or model's) edge, a selected vector (Shift-click after the source), or a component level; plus a **Boundary Offset**. **Line Thickness** 0–100: heavier lines with less detail as it rises. The form previews the area to be cut in green.
+- **[inf]** Cut Craft: a cell is on a line where it is darker (or, for the model, lower) than the mean of its surroundings by 4 %, the surroundings 1–9 cells across by line thickness, cells a stepover apart; the lines are cut flat at the depth in rows. The newest bitmap is used; no component-level boundary.
+
 ---
 
 ## P5 — Directories and configuration

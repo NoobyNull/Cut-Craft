@@ -832,6 +832,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-sketch-carving-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-subtract-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1125,6 +1134,7 @@ dependencies = [
  "cmd-set-current-layer",
  "cmd-set-size",
  "cmd-show-hide",
+ "cmd-sketch-carving-toolpath",
  "cmd-subtract-vectors",
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",
