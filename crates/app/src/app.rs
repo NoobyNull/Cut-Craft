@@ -20,7 +20,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 17] = [
+const BUILT_INS: [&str; 18] = [
     "undo",
     "redo",
     "exit",
@@ -34,6 +34,7 @@ const BUILT_INS: [&str; 17] = [
     "delete_toolpath",
     "save_toolpaths",
     "install_post_processor",
+    "close",
     "tool_database",
     "preview_toolpath",
     "preview_all_toolpaths",
@@ -45,6 +46,11 @@ const PREVIEW_CELLS: usize = 1000;
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
+/// The Cut Craft mark, shown with no job open.
+const LOGO: &str = "assets/cut-craft.svg";
+/// How much of the middle of the window the mark takes, by its shorter side.
+// ponytail: fixed share until there is a preferences dialog
+const SPLASH_SHARE: f32 = 1.0 / 3.0;
 const APP_NAME: &str = "Cut Craft";
 /// How the desktop knows the window: the same name as the launcher, `cut-craft.desktop`
 /// (see `scripts/install-launcher`), so the taskbar shows its icon.
@@ -52,6 +58,16 @@ const APP_ID: &str = "cut-craft";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const TOOL_ICON_ROWS: f32 = 1.75;
+
+/// What the window shows: Aspire's start page, Job Setup for a new job, or the job.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Screen {
+    /// No job open: the startup tasks and recently opened files.
+    Start,
+    /// Job Setup for a new job; OK makes it, Cancel goes back to the start page.
+    NewJob,
+    Job,
+}
 
 #[derive(PartialEq)]
 enum View {
@@ -67,14 +83,19 @@ struct OpenForm {
     fields: Vec<Field>,
     params: Value,
     error: Option<String>,
+    /// Job Setup for a new job: OK and Cancel instead of Apply and Close.
+    new_job: bool,
 }
 
 struct CutCraftApp {
+    screen: Screen,
     doc: Document,
     history: History,
     registry: Registry,
     icons: Icons,
     menus: gui::MenuSystem,
+    /// The menus with no job open.
+    start_menus: gui::MenuSystem,
     toolbar: gui::Toolbar,
     status: gui::StatusBar,
     design_tab: usize,
@@ -99,18 +120,25 @@ struct CutCraftApp {
     /// `simulation` at the 3D view's mesh resolution.
     simulation_coarse: Option<Material>,
     orbit: view3d::Orbit,
+    /// Jobs opened or saved lately, newest first.
+    recent: Vec<std::path::PathBuf>,
+    /// Where `recent` is saved; `None` keeps it in memory (tests).
+    recent_path: Option<std::path::PathBuf>,
     /// Window title last sent to the viewport.
     title: String,
 }
 
 impl CutCraftApp {
     fn new() -> Self {
+        let menus = gui::MenuSystem::new();
         Self {
+            screen: Screen::Start,
+            start_menus: menus.without_job(),
             doc: Document::default(),
             history: History::default(),
             registry: commands::registry(),
             icons: Icons::load(&Icons::default_dir()),
-            menus: gui::MenuSystem::new(),
+            menus,
             toolbar: gui::Toolbar::new(),
             status: gui::StatusBar::new(),
             design_tab: 0,
@@ -128,6 +156,8 @@ impl CutCraftApp {
             simulation: None,
             simulation_coarse: None,
             orbit: view3d::Orbit::default(),
+            recent: vec![],
+            recent_path: None,
             title: String::new(),
         }
     }
@@ -135,6 +165,8 @@ impl CutCraftApp {
     fn available(&self, id: &str) -> bool {
         match id {
             "undo" => self.history.can_undo(),
+            "close" => self.screen != Screen::Start,
+            id if id.starts_with("open_recent:") => true,
             "redo" => self.history.can_redo(),
             "recalculate_toolpath" | "delete_toolpath" | "preview_toolpath" => {
                 self.selected_toolpath.is_some()
@@ -171,6 +203,7 @@ impl CutCraftApp {
             "exit" => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             "new"
             | "open"
+            | "close"
             | "save"
             | "save_as"
             | "import_vectors_bitmap"
@@ -195,6 +228,11 @@ impl CutCraftApp {
                 }
             }
             "reset_preview" => (self.simulation, self.simulation_coarse) = (None, None),
+            id if id.starts_with("open_recent:") => {
+                if let Ok(index) = id["open_recent:".len()..].parse() {
+                    self.open_recent(index);
+                }
+            }
             id if self.registry.exporter(id).is_some() => self.export(id),
             _ => self.start_command(id),
         }
@@ -202,21 +240,28 @@ impl CutCraftApp {
 
     fn file_action(&mut self, id: &str) {
         match id {
+            // a new job starts in Job Setup, as Aspire's does
             "new" => {
                 if self.confirm_discard() {
-                    (self.doc, self.history, self.session, self.form) = Default::default();
+                    self.reset_job();
+                    self.start_command("job_setup");
+                    if let Some(form) = &mut self.form {
+                        form.new_job = true;
+                    }
+                    self.screen = Screen::NewJob;
                 }
             }
             "open" => {
                 if self.confirm_discard()
                     && let Some(path) = job_dialog().pick_file()
                 {
-                    match self.session.open(&path) {
-                        Ok((doc, history)) => {
-                            (self.doc, self.history, self.form) = (doc, history, None);
-                        }
-                        Err(e) => self.status.set_message(&e),
-                    }
+                    self.open_path(&path);
+                }
+            }
+            "close" => {
+                if self.confirm_discard() {
+                    self.reset_job();
+                    self.screen = Screen::Start;
                 }
             }
             "save" => match self.session.path.clone() {
@@ -326,17 +371,110 @@ impl CutCraftApp {
                 fields,
                 params,
                 error: None,
+                new_job: false,
             });
         }
     }
 
     fn save_to(&mut self, path: &std::path::Path) {
         match self.session.save(&self.doc, &self.history, path) {
-            Ok(()) => self
-                .status
-                .set_message(&format!("Saved {}", path.display())),
+            Ok(()) => {
+                self.status
+                    .set_message(&format!("Saved {}", path.display()));
+                self.remember(path);
+            }
             Err(e) => self.status.set_message(&e),
         }
+    }
+
+    /// Opens a job file in place of whatever is open (already confirmed); whether it opened.
+    fn open_path(&mut self, path: &std::path::Path) -> bool {
+        let mut session = Session::default();
+        match session.open(path) {
+            Ok((doc, history)) => {
+                self.reset_job();
+                (self.doc, self.history, self.session) = (doc, history, session);
+                self.screen = Screen::Job;
+                self.remember(path);
+                true
+            }
+            Err(e) => {
+                self.status.set_message(&e);
+                false
+            }
+        }
+    }
+
+    /// Opens one of the recent files; one that no longer opens leaves the list.
+    fn open_recent(&mut self, index: usize) {
+        let Some(path) = self.recent.get(index).cloned() else {
+            return;
+        };
+        if self.confirm_discard() && !self.open_path(&path) {
+            self.recent.retain(|p| p != &path);
+            self.save_recent();
+        }
+    }
+
+    fn remember(&mut self, path: &std::path::Path) {
+        files::remember(&mut self.recent, path);
+        self.save_recent();
+    }
+
+    fn save_recent(&mut self) {
+        if let Some(path) = &self.recent_path
+            && let Err(e) = files::save_recent(&self.recent, path)
+        {
+            self.status.set_message(&e);
+        }
+    }
+
+    fn load_recent(&mut self) {
+        self.recent_path = files::recent_files_path();
+        if let Some(path) = &self.recent_path {
+            self.recent = files::load_recent(path);
+        }
+    }
+
+    /// Back to nothing: no job, no form, no preview.
+    fn reset_job(&mut self) {
+        (self.doc, self.history, self.session, self.form) = Default::default();
+        (
+            self.selected_toolpath,
+            self.simulation,
+            self.simulation_coarse,
+        ) = (None, None, None);
+    }
+
+    /// OK in Job Setup for a new job: the job is made, with nothing to undo yet.
+    fn job_setup_ok(&mut self) {
+        let Some(mut form) = self.form.take() else {
+            return;
+        };
+        let cmd = self
+            .registry
+            .get(form.id)
+            .expect("only registered commands have forms");
+        let made = cmd
+            .run_json(&self.doc, &form.params)
+            .map_err(|e| e.to_string())
+            .and_then(|change| self.doc.apply(&change).map_err(|e| e.to_string()));
+        match made {
+            Ok(()) => {
+                (self.history, self.session) = Default::default();
+                self.screen = Screen::Job;
+                self.status.set_message("New job created");
+            }
+            Err(e) => {
+                form.error = Some(e);
+                self.form = Some(form);
+            }
+        }
+    }
+
+    fn job_setup_cancel(&mut self) {
+        self.reset_job();
+        self.screen = Screen::Start;
     }
 
     fn export(&mut self, id: &str) {
@@ -414,9 +552,11 @@ impl CutCraftApp {
     fn shortcuts(&mut self, ctx: &egui::Context) {
         // single-letter shortcuts must not fire while typing in a form field
         if !ctx.wants_keyboard_input() {
+            let job = self.screen == Screen::Job;
             let fired: Vec<String> = self
                 .bindings()
                 .into_iter()
+                .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
                 .filter(|(_, keys)| ctx.input_mut(|i| i.consume_shortcut(keys)))
                 .map(|(id, _)| id)
                 .collect();
@@ -427,6 +567,9 @@ impl CutCraftApp {
         if ctx
             .input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Escape)))
         {
+            if self.screen == Screen::NewJob {
+                self.job_setup_cancel();
+            }
             self.form = None;
         }
         ctx.input(|i| {
@@ -456,14 +599,25 @@ impl CutCraftApp {
 
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         let mut clicked = None;
+        let recent: Vec<gui::MenuItem> = self
+            .recent
+            .iter()
+            .enumerate()
+            .map(|(i, path)| {
+                gui::MenuItem::with_action(&file_name(path), &format!("open_recent:{i}"))
+            })
+            .collect();
         egui::menu::bar(ui, |ui| {
-            for menu in &self.menus.menus {
+            for menu in &self.current_menus().menus {
                 ui.menu_button(&menu.name, |ui| {
                     menu_items(
                         ui,
                         &menu.items,
-                        &|id| self.available(id),
-                        &|id| self.registry.get(id).map(|c| c.meta().shortcut),
+                        &Menus {
+                            available: &|id| self.available(id),
+                            shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
+                            recent: &recent,
+                        },
                         &mut clicked,
                     );
                 });
@@ -472,6 +626,81 @@ impl CutCraftApp {
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), &id);
         }
+    }
+
+    /// The menu bar with or without a job open.
+    fn current_menus(&self) -> &gui::MenuSystem {
+        if self.screen == Screen::Start {
+            &self.start_menus
+        } else {
+            &self.menus
+        }
+    }
+
+    #[cfg(test)]
+    fn menu_names(&self) -> Vec<&str> {
+        self.current_menus()
+            .menus
+            .iter()
+            .map(|m| m.name.as_str())
+            .collect()
+    }
+
+    /// No job open: Aspire's startup tasks and the jobs opened lately.
+    fn start_page(&mut self, ui: &mut egui::Ui) {
+        let edge = ui.spacing().interact_size.y;
+        let mut clicked = None;
+        ui.strong("Startup Tasks");
+        for (id, label) in [
+            ("new", "Create a new file"),
+            ("new_from_template", "New file from template"),
+            ("open", "Open an existing file"),
+        ] {
+            let button = match self.icons.find("", id) {
+                Some(path) => egui::Button::image_and_text(
+                    Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)),
+                    label,
+                ),
+                None => egui::Button::new(label),
+            }
+            .frame(false);
+            let response = ui
+                .add_enabled(self.available(id), button)
+                .on_disabled_hover_text(format!("{label}: not implemented yet"));
+            if response.clicked() {
+                clicked = Some(id.to_owned());
+            }
+        }
+        ui.separator();
+        ui.strong("Recently opened files");
+        if self.recent.is_empty() {
+            ui.weak("None yet");
+        }
+        for (i, path) in self.recent.iter().enumerate() {
+            let link = ui
+                .link(file_name(path))
+                .on_hover_text(path.display().to_string());
+            if link.clicked() {
+                clicked = Some(format!("open_recent:{i}"));
+            }
+        }
+        if let Some(id) = clicked {
+            self.invoke(ui.ctx(), &id);
+        }
+    }
+
+    /// The middle of the window with no job open: the Cut Craft mark.
+    fn splash(ui: &mut egui::Ui) {
+        let logo = std::path::Path::new(LOGO);
+        let space = ui.available_size();
+        let edge = space.min_elem() * SPLASH_SHARE;
+        ui.vertical_centered(|ui| {
+            ui.add_space((space.y - edge) / 2.0);
+            if logo.exists() {
+                ui.add(Icons::image(logo).fit_to_exact_size(egui::vec2(edge, edge)));
+            }
+            ui.heading(APP_NAME);
+        });
     }
 
     fn design_panel(&mut self, ui: &mut egui::Ui) {
@@ -535,12 +764,22 @@ impl CutCraftApp {
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
+        let new_job = open.new_job;
+        let (apply_label, close_label) = if new_job {
+            ("OK", "Cancel")
+        } else {
+            ("Apply", "Close")
+        };
         ui.horizontal(|ui| {
-            apply = ui.button("Apply").clicked();
-            close = ui.button("Close").clicked();
+            apply = ui.button(apply_label).clicked();
+            close = ui.button(close_label).clicked();
         });
         ui.separator();
-        if apply {
+        if apply && new_job {
+            self.job_setup_ok();
+        } else if close && new_job {
+            self.job_setup_cancel();
+        } else if apply {
             let (id, params) = (open.id, open.params.clone());
             let result = self.apply(id, &params);
             if let Some(open) = &mut self.form {
@@ -914,27 +1153,40 @@ fn job_dialog() -> rfd::FileDialog {
     rfd::FileDialog::new().add_filter("Cut Craft job", &[JOB_EXTENSION, OLD_JOB_EXTENSION])
 }
 
+/// What drawing the menus needs from the app.
+struct Menus<'a> {
+    available: &'a dyn Fn(&str) -> bool,
+    shortcut_of: &'a dyn Fn(&str) -> Option<&'static str>,
+    /// Filled in where the menus have a Recent Files entry.
+    recent: &'a [gui::MenuItem],
+}
+
 /// Menu entries, recursing into submenus. Sets `clicked` to the chosen item's action.
 fn menu_items(
     ui: &mut egui::Ui,
     items: &[gui::MenuItem],
-    available: &dyn Fn(&str) -> bool,
-    shortcut_of: &dyn Fn(&str) -> Option<&'static str>,
+    menus: &Menus,
     clicked: &mut Option<String>,
 ) {
     for item in items {
         if item.is_separator() {
             ui.separator();
+        } else if item.action == "recent_files" {
+            ui.add_enabled_ui(!menus.recent.is_empty(), |ui| {
+                ui.menu_button(&item.name, |ui| {
+                    menu_items(ui, menus.recent, menus, clicked);
+                });
+            });
         } else if !item.children.is_empty() {
             ui.menu_button(&item.name, |ui| {
-                menu_items(ui, &item.children, available, shortcut_of, clicked);
+                menu_items(ui, &item.children, menus, clicked);
             });
         } else {
             let button = egui::Button::new(&item.name)
-                .shortcut_text(shortcut_of(&item.action).unwrap_or(&item.shortcut))
+                .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
                 .selected(item.is_checked);
             let response = ui
-                .add_enabled(item.is_enabled && available(&item.action), button)
+                .add_enabled(item.is_enabled && (menus.available)(&item.action), button)
                 .on_disabled_hover_text("Not implemented yet");
             if response.clicked() {
                 *clicked = Some(item.action.clone());
@@ -942,6 +1194,14 @@ fn menu_items(
             }
         }
     }
+}
+
+/// A path as the menus and start page list it: just the file name.
+fn file_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
 }
 
 impl eframe::App for CutCraftApp {
@@ -956,7 +1216,10 @@ impl CutCraftApp {
         if ctx.input(|i| i.viewport().close_requested()) && !self.confirm_discard() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
-        let title = self.session.title(APP_NAME, &self.history);
+        let title = match self.screen {
+            Screen::Start => APP_NAME.to_owned(),
+            _ => self.session.title(APP_NAME, &self.history),
+        };
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
@@ -964,9 +1227,24 @@ impl CutCraftApp {
         self.shortcuts(ctx);
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| self.menu_bar(ui));
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));
-        egui::SidePanel::left("design_panel").show(ctx, |ui| self.design_panel(ui));
-        egui::SidePanel::right("toolpaths_panel").show(ctx, |ui| self.toolpaths_panel(ui));
         self.tool_database_window(ctx);
+        match self.screen {
+            Screen::Start => {
+                egui::SidePanel::left("start_page").show(ctx, |ui| self.start_page(ui));
+                egui::CentralPanel::default().show(ctx, Self::splash);
+                (self.view_transform, self.cursor) = (None, None);
+                return;
+            }
+            Screen::NewJob => {
+                egui::SidePanel::left("design_panel").show(ctx, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+                });
+            }
+            Screen::Job => {
+                egui::SidePanel::left("design_panel").show(ctx, |ui| self.design_panel(ui));
+                egui::SidePanel::right("toolpaths_panel").show(ctx, |ui| self.toolpaths_panel(ui));
+            }
+        }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
@@ -1107,6 +1385,7 @@ pub fn run(title: &str) {
             }
             let mut app = CutCraftApp::new();
             app.load_tools();
+            app.load_recent();
             Box::new(app)
         }),
     )
@@ -1126,12 +1405,23 @@ mod tests {
     }
 
     impl Harness {
-        fn new() -> Self {
+        /// The app as it starts: the start page, no job open.
+        fn at_start() -> Self {
             let mut h = Self {
                 ctx: egui::Context::default(),
                 app: CutCraftApp::new(),
                 time: 0.0,
             };
+            h.frame(vec![]);
+            h.frame(vec![]);
+            h
+        }
+
+        /// A new job made the way a user makes one: New, then OK in Job Setup.
+        fn new() -> Self {
+            let mut h = Self::at_start();
+            h.app.invoke(&h.ctx, "new");
+            h.app.job_setup_ok();
             h.frame(vec![]);
             h.frame(vec![]);
             h
@@ -1456,6 +1746,90 @@ mod tests {
     fn the_window_is_titled_cut_craft() {
         let h = Harness::new();
         assert_eq!(h.app.title, "Untitled - Cut Craft");
+    }
+
+    #[test]
+    fn it_starts_on_the_start_page_with_the_no_job_menus() {
+        let h = Harness::at_start();
+        assert_eq!(h.app.screen, Screen::Start);
+        assert_eq!(h.app.title, "Cut Craft", "no job, so no file name");
+        assert_eq!(
+            h.app.menu_names(),
+            ["File", "Edit", "Machine", "Toolpaths", "Gadgets", "Help"]
+        );
+        assert!(
+            h.app.view_transform.is_none(),
+            "no 2D view before there is a job"
+        );
+    }
+
+    #[test]
+    fn create_a_new_file_goes_through_job_setup_to_the_job() {
+        let mut h = Harness::at_start();
+        h.app.invoke(&h.ctx, "new");
+        h.frame(vec![]);
+        assert_eq!(h.app.screen, Screen::NewJob);
+        let form = h.app.form.as_mut().expect("the Job Setup form");
+        assert_eq!(form.id, "job_setup");
+        form.params["width"] = 300.0.into();
+        h.app.job_setup_ok();
+        h.frame(vec![]);
+        assert_eq!(h.app.screen, Screen::Job);
+        assert!(h.app.form.is_none());
+        assert!((h.app.doc.job.width - 300.0).abs() < 1e-9);
+        assert!(
+            !h.app.history.can_undo(),
+            "a new job starts with nothing to undo"
+        );
+        assert!(h.app.menu_names().contains(&"Model"));
+        assert!(h.app.view_transform.is_some());
+    }
+
+    #[test]
+    fn cancelling_job_setup_goes_back_to_the_start_page() {
+        let mut h = Harness::at_start();
+        h.app.invoke(&h.ctx, "new");
+        h.app.job_setup_cancel();
+        h.frame(vec![]);
+        assert_eq!(h.app.screen, Screen::Start);
+        assert!(h.app.form.is_none());
+    }
+
+    #[test]
+    fn closing_the_job_goes_back_to_the_start_page() {
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "close");
+        h.frame(vec![]);
+        assert_eq!(h.app.screen, Screen::Start);
+    }
+
+    #[test]
+    fn saved_and_opened_jobs_are_listed_as_recent_files() {
+        let mut h = Harness::new();
+        let dir = std::env::temp_dir().join(format!("cut-craft-recent-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        h.app.recent_path = Some(dir.join("recent.json"));
+        let job = dir.join("first.ccjob");
+        h.app.save_to(&job);
+        assert_eq!(h.app.recent, std::slice::from_ref(&job));
+        assert_eq!(
+            files::load_recent(&dir.join("recent.json")),
+            std::slice::from_ref(&job)
+        );
+        h.app.invoke(&h.ctx, "close");
+        h.app.invoke(&h.ctx, "open_recent:0");
+        assert_eq!(h.app.screen, Screen::Job);
+        assert_eq!(h.app.session.path.as_deref(), Some(job.as_path()));
+    }
+
+    #[test]
+    fn a_recent_file_that_has_gone_is_dropped() {
+        let mut h = Harness::at_start();
+        h.app.recent = vec![std::env::temp_dir().join("cut-craft-gone.ccjob")];
+        h.app.invoke(&h.ctx, "open_recent:0");
+        assert_eq!(h.app.screen, Screen::Start);
+        assert_eq!(h.app.recent, Vec::<std::path::PathBuf>::new());
+        assert!(h.app.status.message.contains("cut-craft-gone.ccjob"));
     }
 
     #[test]

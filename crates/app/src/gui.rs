@@ -265,6 +265,14 @@ impl MenuItem {
         }
     }
 
+    /// An item whose action is not the slug of its name.
+    pub fn with_action(name: &str, action: &str) -> Self {
+        Self {
+            action: action.to_string(),
+            ..Self::new(name, "")
+        }
+    }
+
     fn submenu(name: &str, children: Vec<MenuItem>) -> Self {
         Self {
             children,
@@ -291,11 +299,7 @@ impl MenuSystem {
         let k = MenuItem::new;
         let sub = MenuItem::submenu;
         let sep = MenuItem::separator;
-        // an item whose action is not the slug of its label
-        let a = |name: &str, action: &str| MenuItem {
-            action: action.to_string(),
-            ..MenuItem::new(name, "")
-        };
+        let a = MenuItem::with_action;
         let menu = |name: &str, items: Vec<MenuItem>| Menu {
             name: name.to_string(),
             items,
@@ -339,6 +343,8 @@ impl MenuSystem {
                         ),
                         sep(),
                         i("Open Application Data Folder"),
+                        sep(),
+                        i("Recent Files"),
                         sep(),
                         i("Exit"),
                     ],
@@ -556,6 +562,51 @@ impl MenuSystem {
                         i("About Cut Craft"),
                     ],
                 ),
+            ],
+        }
+    }
+
+    /// The menus with no job open (`Resources_ENU.dll` MENU 128): files, options, machines,
+    /// tools and help. Machine, Gadgets and Help are the same as with a job.
+    pub fn without_job(&self) -> Self {
+        let i = |name: &str| MenuItem::new(name, "");
+        let k = MenuItem::new;
+        let sep = MenuItem::separator;
+        let menu = |name: &str, items: Vec<MenuItem>| Menu {
+            name: name.to_string(),
+            items,
+        };
+        let same = |name: &str| {
+            self.menus
+                .iter()
+                .find(|m| m.name == name)
+                .cloned()
+                .unwrap_or_else(|| panic!("there is a {name} menu"))
+        };
+        Self {
+            menus: vec![
+                menu(
+                    "File",
+                    vec![
+                        k("New", "Ctrl+N"),
+                        i("New from Template..."),
+                        k("Open...", "Ctrl+O"),
+                        i("Open Application Data Folder"),
+                        sep(),
+                        i("Recent Files"),
+                        sep(),
+                        i("Close"),
+                        i("Exit"),
+                    ],
+                ),
+                menu("Edit", vec![i("Options")]),
+                same("Machine"),
+                menu(
+                    "Toolpaths",
+                    vec![i("Materials..."), sep(), i("Tool Database...")],
+                ),
+                same("Gadgets"),
+                same("Help"),
             ],
         }
     }

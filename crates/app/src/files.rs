@@ -83,14 +83,21 @@ pub fn save_through(post: &Post, doc: &Document, path: &Path) -> Result<(), Stri
     std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// Where the tool database lives: `$XDG_CONFIG_HOME/cut-craft/tools.json`, else under
-/// `~/.config`.
+/// Where Cut Craft keeps its settings: `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
 // ponytail: XDG only; add the Windows/macOS config folders when those builds exist
-pub fn tool_database_path() -> Option<PathBuf> {
+fn config_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .map(|dir| dir.join("cut-craft").join("tools.json"))
+        .map(|dir| dir.join("cut-craft"))
+}
+
+pub fn tool_database_path() -> Option<PathBuf> {
+    config_dir().map(|dir| dir.join("tools.json"))
+}
+
+pub fn recent_files_path() -> Option<PathBuf> {
+    config_dir().map(|dir| dir.join("recent.json"))
 }
 
 /// The tool database at `path`; the starter tools when there is none yet.
@@ -102,9 +109,39 @@ pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
 }
 
 pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
+    write_creating(path, &db.to_json())
+}
+
+/// How many jobs the start page lists.
+pub const RECENT_COUNT: usize = 4;
+
+/// Puts `path` first in `recent`, once, keeping the latest [`RECENT_COUNT`].
+pub fn remember(recent: &mut Vec<PathBuf>, path: &Path) {
+    recent.retain(|p| p != path);
+    recent.insert(0, path.to_path_buf());
+    recent.truncate(RECENT_COUNT);
+}
+
+/// The recent files list; a missing or unreadable one is empty, as there is nothing to lose.
+pub fn load_recent(path: &Path) -> Vec<PathBuf> {
+    std::fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_recent(recent: &[PathBuf], path: &Path) -> Result<(), String> {
+    write_creating(
+        path,
+        &serde_json::to_vec_pretty(recent).expect("paths serialize"),
+    )
+}
+
+/// Writes `bytes` to `path`, making its folder first.
+fn write_creating(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let written = match path.parent() {
-        Some(dir) => std::fs::create_dir_all(dir).and_then(|()| std::fs::write(path, db.to_json())),
-        None => std::fs::write(path, db.to_json()),
+        Some(dir) => std::fs::create_dir_all(dir).and_then(|()| std::fs::write(path, bytes)),
+        None => std::fs::write(path, bytes),
     };
     written.map_err(|e| format!("could not write {}: {e}", path.display()))
 }
@@ -211,6 +248,32 @@ mod tests {
     }
 
     const POST: &str = "POST_NAME = \"Test post\"\nFILE_EXTENSION = \"tap\"\nVAR X_POSITION = [X|A|X|1.1]\nbegin RAPID_MOVE\n\"G0 [X]\"\nbegin FEED_MOVE\n\"G1 [X]\"\n";
+
+    #[test]
+    fn recent_files_put_the_latest_first_once_and_keep_four() {
+        let mut recent = vec![];
+        for name in ["a", "b", "c", "a", "d", "e"] {
+            remember(&mut recent, Path::new(name));
+        }
+        assert_eq!(recent, ["e", "d", "a", "c"].map(PathBuf::from));
+    }
+
+    #[test]
+    fn recent_files_survive_a_restart_and_a_broken_list_is_empty() {
+        let path = temp("recent/recent.json");
+        let list = [PathBuf::from("/jobs/a.ccjob")];
+        save_recent(&list, &path).unwrap();
+        assert_eq!(load_recent(&path), list);
+        fs::write(&path, "{").unwrap();
+        assert_eq!(load_recent(&path), Vec::<PathBuf>::new());
+        assert_eq!(load_recent(&temp("no-recent.json")), Vec::<PathBuf>::new());
+        let config = recent_files_path().expect("HOME is set");
+        assert!(
+            config.ends_with("cut-craft/recent.json"),
+            "{}",
+            config.display()
+        );
+    }
 
     #[test]
     fn the_tool_database_lives_in_the_cut_craft_config_folder() {

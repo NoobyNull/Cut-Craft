@@ -51,6 +51,13 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Help prompts:** an on-screen panel that follows the active tool, with a `?` on every form linking to its help topic.
 - **[unk]** Status bar contents: no evidence found yet.
 
+### Startup sequence [obs] (help: how-to-get-started, create-a-new-file, Job Setup Single; MENU 128; screenshots)
+- **Start page, no job open:** the left panel holds *Startup Tasks*: Create a new file, New file from template, Open an existing file. Below them is *Recently opened files*, a rolling list of the last 4 jobs, empty on a first run. The rest of the panel is vendor links (tutorial videos, online resources, social media, clipart shop), which are out of scope. The centre shows the product splash. There are no Drawing or Toolpaths panels, and no 2D/3D view.
+- **No-job menu (MENU 128):** File (New, New from template, Open, Open Application Data Folder, Recent files, Close, Exit), Edit (Options only), Machine (as with a job), Toolpaths (Materials, Tool Database), Gadgets, Help. Model and View are absent.
+- **Create a new file → Job Setup:** the form fills the left panel, with OK and Cancel at the bottom. The 2D view (rulers, zoom buttons) appears beside it, and the full menu bar is back. Sections, top down: Job Type, Job Size + Units, Z Zero Position, XY Datum Position (+ Use Offset X/Y), Modeling Resolution, Material Settings.
+- **OK** creates the new empty job: a grey rectangle in the 2D view, with dotted lines through X0 and Y0. **[inf]** Cancel abandons the new job and goes back to the start page; File ▸ Close closes the job and goes back to the start page too.
+- **Open an existing file** takes native jobs and importable 2D vector files (DXF, EPS, AI, PDF). Opening a 2D file starts a job at the drawing's size (see Import).
+
 ### Menus [obs] (resource MENU 129 = job open, 128 = no job)
 - **File:** New (Ctrl+N), New from template, Open (Ctrl+O), Close, Save (Ctrl+S), Save As, Save As Template, Save To Version ▸ 11.0, Increment and Save (Ctrl+Alt+S), Print / Preview / Setup.
   - Import ▸ Vectors/Bitmap (Ctrl+I), Component/3D Model, PhotoVCarve/Machinist/Cut3D toolpaths.
