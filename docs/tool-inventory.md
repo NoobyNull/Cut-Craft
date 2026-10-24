@@ -1,9 +1,10 @@
 # Tool inventory
 
-Date: 2026-10-23. What every tool is built from, what it is reused by, and whether it works.
+Date: 2026-10-24. What every tool is built from, what it is reused by, and whether it works.
 "Works" is checked by `every_enabled_control_works` (crates/app): it builds a small job (two
-overlapping squares, a toolpath, a 3D shape) and runs every enabled menu item and tool button
-through the app as a click would, failing on a panic or a dead end. Each command crate also
+overlapping squares, a toolpath, a 3D shape) and runs every enabled menu item, tool button and
+right-click menu item through the app as a click would, failing on a panic or a dead end
+(92 controls today). Each command crate also
 runs the shared contract tests and its own behaviour tests.
 
 ## How the tools stack
@@ -65,18 +66,32 @@ single item's visibility, name or mode. ✅ built · ⬜ to build.
 
 | Family | Items | On (Aspire menu) | Subordinate per kind |
 |---|---|---|---|
-| Show / Hide | Show This, Show Only This, Show All But This, Show All, Hide This, Hide All | layers (967), toolpaths (968, 669), components (613), levels (1046) | Layer Properties ✅ · Toolpath Properties ⬜ · Component Properties ⬜ |
-| Delete | This, Visible, Invisible, Empty, All | layers (967), toolpaths (968) | Delete Layer ✅ · Delete Toolpath ✅ · Delete Component ⬜ |
-| Combine Mode | Add, Subtract, Merge, Low, Multiply | component, several components, active component, 3D view, levels (613, 615, 616, 619, 1046) | Component Properties ⬜ |
-| Recalculate | This, Visible, All | toolpaths (968) | Recalculate ✅ |
+| Show / Hide | Show This, Show Only This, Show All But This, Show All, Hide This, Hide All | layers (967), toolpaths (968, 669), components (613), levels (1046) | Layer Properties ✅ · Toolpath Properties ✅ · Component Properties ✅ |
+| Delete | This, Visible, Invisible, Empty, All | layers (967), toolpaths (968) | Delete Layer ✅ · Delete Toolpath ✅ · Delete Component ✅ |
+| Combine Mode | Add, Subtract, Merge, Low, Multiply | component, several components, active component, 3D view, levels (613, 615, 616, 619, 1046) | Component Properties ✅ |
+| Recalculate | This, Visible, All | toolpaths (968) | Recalculate ✅ (Visible: Recalculate over each shown toolpath) |
 | Rename, Properties | - | every kind | each kind's properties form |
 | Activate | - | layers (967), sheets (5030) | Set Current Layer ✅ |
 | Insert New | - | layers (967, 982), levels (1046, 1048), sheets (5030) | Add Layer ✅ |
 | Selection (2D) | Undo, Redo, Cut, Copy, Paste, Delete, Move to Front / Back, Ungroup, Properties | 2D view (318) | Undo, Redo, Delete ✅; the rest ⬜ |
 | Node editing | span to line / arc / curve, insert / delete point, cut, close, join | node edit (142, 317, 635, 636) | ⬜ (no node editing yet) |
 
-Today the Layers panel has a right-click menu (Properties, Select Vectors on Layer, Move to
-Layer, Delete Layer); the toolpath list, the component list and the 2D view have none.
+Built, in `crates/app/src/gui.rs`, as menu data rendered by the main menu's own code. An
+item either runs a tool by id or is `run:<command>:<json>` (apply it with those params) or
+`form:<command>:<json>` (open its form filled in); none has logic of its own.
+- **Layers panel (967):** Activate, Show ▸, Hide ▸, Lock / Unlock (the one that applies),
+  Insert New Layer, Delete ▸ This / Visible / Invisible / Empty, Rename, Select Layer Vectors,
+  Move Selection Here. Merge Visible is greyed.
+- **Toolpath list (968):** right-click selects the row. Show ▸, Hide ▸, Rename, Recalculate ▸
+  This / Visible / All, Preview, Delete ▸ This / Invisible / Visible / All.
+- **Component list (613):** Combine Mode ▸ (current one ticked), Delete, Rename, Show ▸,
+  Hide ▸, Properties.
+- **2D view (318, plus ours):** Undo, Redo, Cut / Copy / Paste (greyed), Delete, Move to
+  Layer ▸ each layer, Weld, Subtract, Overlap, Join, Align ▸. Object Properties is greyed.
+
+Not built from Aspire's menus yet: toolpath Edit, Duplicate, groups, Activate Sheet, Show All
+With This Tool; component 2D preview order, Export as 3D Clipart, Re-Import, Copy, Duplicate,
+Ungroup; Move to Front / Back; the no-item menus (layers 982, components 614).
 
 ## Status, top down
 

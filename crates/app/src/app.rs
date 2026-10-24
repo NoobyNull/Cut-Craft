@@ -2895,6 +2895,20 @@ mod tests {
             ids.extend(group.tools.iter().map(|&t| t.to_owned()));
         }
         ids.extend(VIEW_BUTTONS.iter().map(|(id, ..)| (*id).to_owned()));
+        // the right-click menus, on each thing they open on
+        let doc = &h.app.doc;
+        let mut popups = h.app.menus.selection_menu(doc);
+        for layer in &doc.layers {
+            popups.extend(gui::layer_menu(doc, layer));
+        }
+        for (&id, toolpath) in &doc.toolpaths {
+            popups.extend(gui::toolpath_menu(id, toolpath));
+        }
+        for (&id, component) in &doc.components {
+            popups.extend(gui::component_menu(id, component));
+        }
+        let enabled = gui::leaves(&popups).into_iter().filter(|i| i.is_enabled);
+        ids.extend(enabled.map(|i| i.action.clone()));
         ids.sort();
         ids.dedup();
         let start = (h.app.doc.clone(), h.app.selected_toolpath);
@@ -2920,7 +2934,7 @@ mod tests {
             assert!(!said.contains("not implemented"), "{id}: {said}");
             ran += 1;
         }
-        assert!(ran >= 49, "only {ran} controls ran");
+        assert!(ran >= 92, "only {ran} controls ran");
     }
 
     #[test]

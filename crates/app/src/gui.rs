@@ -270,21 +270,22 @@ impl MenuSystem {
 
     /// Every command item, submenus flattened.
     pub fn items(&self) -> Vec<&MenuItem> {
-        fn walk<'a>(items: &'a [MenuItem], out: &mut Vec<&'a MenuItem>) {
-            for item in items {
-                if item.children.is_empty() {
-                    out.push(item);
-                } else {
-                    walk(&item.children, out);
-                }
-            }
-        }
-        let mut out = vec![];
-        for menu in &self.menus {
-            walk(&menu.items, &mut out);
-        }
-        out
+        self.menus.iter().flat_map(|m| leaves(&m.items)).collect()
     }
+}
+
+/// Every command item of `items`, submenus flattened.
+pub fn leaves(items: &[MenuItem]) -> Vec<&MenuItem> {
+    items
+        .iter()
+        .flat_map(|item| {
+            if item.children.is_empty() {
+                vec![item]
+            } else {
+                leaves(&item.children)
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
