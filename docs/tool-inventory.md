@@ -132,6 +132,8 @@ say "not implemented yet".
   spacing in kerfs). Output needs a post with LASER_SUPPORT and the JET_TOOL blocks.
 - Array Copy: rows and columns of copies of the visible toolpaths, by offset or gap; follows
   them when recalculated.
+- Merged: the visible toolpaths with one tool as one, in the list's order or nearest-first,
+  whichever travels less.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:

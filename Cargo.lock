@@ -699,6 +699,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-merged-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-mirror"
 version = "0.1.0"
 dependencies = [
@@ -1147,6 +1156,7 @@ dependencies = [
  "cmd-laser-cut-fill-toolpath",
  "cmd-laser-picture-toolpath",
  "cmd-layer-properties",
+ "cmd-merged-toolpath",
  "cmd-mirror",
  "cmd-moulding-toolpath",
  "cmd-move",

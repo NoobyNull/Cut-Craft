@@ -23,6 +23,7 @@ fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-merged-toolpath = { path = "../commands/merged-toolpath" }
 cmd-array-copy-toolpath = { path = "../commands/array-copy-toolpath" }
 cmd-laser-picture-toolpath = { path = "../commands/laser-picture-toolpath" }
 cmd-laser-cut-fill-toolpath = { path = "../commands/laser-cut-fill-toolpath" }

@@ -95,4 +95,4 @@ Done:
     lowest-edge maths), halving or lifting moves that would cut in.
 
 Next:
-19. ✅ Fluting; ✅ V-carve inlay (and V-Carve Start Depth); ✅ prism; ✅ texture; ✅ 3D toolpaths use the job model resolution; ✅ quick engrave; ✅ keyhole; ✅ drag knife; ✅ chamfer; ✅ thread milling; ✅ moulding; ✅ rounding; ✅ bitmaps; ✅ photo V-carve; ✅ sketch carving; ✅ lasers (cut / fill, picture, post blocks); ✅ array copy. Next: the other strategies.
+19. ✅ Fluting; ✅ V-carve inlay (and V-Carve Start Depth); ✅ prism; ✅ texture; ✅ 3D toolpaths use the job model resolution; ✅ quick engrave; ✅ keyhole; ✅ drag knife; ✅ chamfer; ✅ thread milling; ✅ moulding; ✅ rounding; ✅ bitmaps; ✅ photo V-carve; ✅ sketch carving; ✅ lasers (cut / fill, picture, post blocks); ✅ array copy; ✅ merged. Next: the other strategies.
