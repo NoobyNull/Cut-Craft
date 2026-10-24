@@ -210,6 +210,11 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Use selected vectors as pattern:** the vectors themselves are cut at random depths; **Ramp at start and end** cuts each as a fluting move, otherwise a profile move.
 - **[inf]** Cut Craft: each scallop is a half sine; a Seed makes the random pattern repeatable so it recalculates the same. Nothing selected textures the whole material.
 
+### Quick Engrave [obs] (help: Quick Engrave; dialog strings in `Resources_ENU.dll`)
+- Ctrl+Q. Depth to engrave (a diamond drag tool uses a Pressure instead, its preview depth from its angle and line width). Stepover is set on the form, not from the tool database.
+- Strategy: **Outline** (the tip runs on the lines) or **Fill**, with the patterns **Offset, Hatch, Cross Hatch**. **Use Nose Cone** (the cutter sticks out of a sprung cone by the depth; the preview uses the depth as given). **Number of Passes** runs the pattern several times. Immediate Output saves or sends the toolpath from the form; quick engrave toolpaths cannot be output with other strategies.
+- **[inf]** Cut Craft: hatch lines run along X, cross hatch adds Y; a fill also runs the outline. Diamond drag tools, nose cone and immediate output are not done.
+
 ---
 
 ## P5 — Directories and configuration

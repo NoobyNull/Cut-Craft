@@ -331,3 +331,34 @@ fn a_zigzag_within_areas_cuts_only_inside_them() {
         "each line is two runs, one per strip"
     );
 }
+
+#[test]
+fn hatch_lines_cross_the_regions_leaving_holes_out() {
+    use cut_craft_core::geometry::{Path, Point};
+    use cut_craft_core::toolpath::hatch_lines;
+    let square = |x: f64, s: f64| {
+        Path::polyline(
+            &[
+                Point::new(x, x),
+                Point::new(x + s, x),
+                Point::new(x + s, x + s),
+                Point::new(x, x + s),
+            ],
+            true,
+        )
+    };
+    let regions = cut_craft_core::polygon::regions(&[square(0.0, 10.0), square(4.0, 2.0)]);
+    let rows = hatch_lines(&regions, 1.0, 0.0);
+    assert_eq!(rows.len(), 10);
+    assert_eq!(rows[0].len(), 1, "below the hole: one piece");
+    let through = &rows[5]; // y = 5.5
+    assert_eq!(through.len(), 2, "either side of the hole: {through:?}");
+    assert!((through[0].1.x - 4.0).abs() < 1e-9 && (through[1].0.x - 6.0).abs() < 1e-9);
+    let upright = hatch_lines(&regions, 1.0, 90.0);
+    let (a, b) = upright[0][0];
+    assert!(
+        (a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() > 9.0,
+        "{:?}",
+        upright[0]
+    );
+}

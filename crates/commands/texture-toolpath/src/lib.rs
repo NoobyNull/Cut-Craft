@@ -5,7 +5,9 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Move, Tool, contour_moves, cut_points, follow, made_by};
+use cut_craft_core::toolpath::{
+    Move, Tool, contour_moves, cut_points, follow, hatch_lines, made_by,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -106,22 +108,6 @@ fn dip(a: Point, b: Point, depth: f64) -> impl Iterator<Item = DVec3> {
     })
 }
 
-/// Where the line `y` crosses the rings (each a closed polygon), as (enter, leave) x pairs.
-fn spans(rings: &[Vec<Point>], y: f64) -> Vec<(f64, f64)> {
-    let mut xs: Vec<f64> = rings
-        .iter()
-        .flat_map(|ring| {
-            let n = ring.len();
-            (0..n).filter_map(move |i| {
-                let (a, b) = (ring[i], ring[(i + 1) % n]);
-                ((a.y <= y) != (b.y <= y)).then(|| a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x))
-            })
-        })
-        .collect();
-    xs.sort_by(f64::total_cmp);
-    xs.as_chunks::<2>().0.iter().map(|&[a, b]| (a, b)).collect()
-}
-
 impl Params {
     fn validate(&self) -> Result<(), CommandError> {
         ensure_positive("max cut depth", self.max_cut_depth)?;
@@ -135,46 +121,31 @@ impl Params {
 
     /// Rows of scallops across `regions`, in rows `stepover` apart at the angle.
     fn scallops(&self, regions: &[Path], random: &mut Random, safe: f64) -> Vec<Move> {
-        let turn = Point::from_angle(self.angle.to_radians());
-        // work with the rows along x, turning the shapes the other way first
-        let level = |p: Point| Point::new(turn.x * p.x + turn.y * p.y, turn.x * p.y - turn.y * p.x);
-        let back = |p: Point| turn.rotate(p);
-        let rings: Vec<Vec<Point>> = regions
-            .iter()
-            .map(|r| cut_points(r).into_iter().map(level).collect())
-            .collect();
-        let (low, high) = rings
-            .iter()
-            .flatten()
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), p| {
-                (l.min(p.y), h.max(p.y))
-            });
         let mut moves = vec![];
-        let mut y = low + self.stepover / 2.0;
-        while y < high {
-            for (start, end) in spans(&rings, y) {
-                let mut row = vec![];
-                let mut x = start;
-                while end - x > 1e-6 {
-                    let length = random.between(self.min_length_percent, self.max_cut_length);
-                    let to = (x + length).min(end);
-                    let depth = random.between(self.min_depth_percent, self.max_cut_depth);
-                    let a = back(Point::new(x, y));
-                    let b = back(Point::new(to, y));
-                    row.extend(dip(a, b, depth));
-                    let overlap = self.max_cut_length * self.max_overlap_percent / 100.0
-                        * self.overlap_variation_percent
-                        / 100.0
-                        * random.next();
-                    // always move on, by at least a tenth of this scallop
-                    x = (to - overlap).max(x + (to - x) / 10.0).max(x + 1e-3);
-                    if x < to {
-                        row.push(back(Point::new(x, y)).extend(0.0));
-                    }
+        for (start, end) in hatch_lines(regions, self.stepover, self.angle)
+            .into_iter()
+            .flatten()
+        {
+            let along = |s: f64| start.lerp(end, s / start.distance(end));
+            let span = start.distance(end);
+            let mut row = vec![];
+            let mut x = 0.0;
+            while span - x > 1e-6 {
+                let length = random.between(self.min_length_percent, self.max_cut_length);
+                let to = (x + length).min(span);
+                let depth = random.between(self.min_depth_percent, self.max_cut_depth);
+                row.extend(dip(along(x), along(to), depth));
+                let overlap = self.max_cut_length * self.max_overlap_percent / 100.0
+                    * self.overlap_variation_percent
+                    / 100.0
+                    * random.next();
+                // always move on, by at least a tenth of this scallop
+                x = (to - overlap).max(x + (to - x) / 10.0).max(x + 1e-3);
+                if x < to {
+                    row.push(along(x).extend(0.0));
                 }
-                moves.extend(follow(&row, safe));
             }
-            y += self.stepover;
+            moves.extend(follow(&row, safe));
         }
         moves
     }

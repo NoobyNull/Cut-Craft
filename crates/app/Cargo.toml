@@ -22,6 +22,7 @@ fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-quick-engrave-toolpath = { path = "../commands/quick-engrave-toolpath" }
 cmd-texture-toolpath = { path = "../commands/texture-toolpath" }
 cmd-prism-toolpath = { path = "../commands/prism-toolpath" }
 cmd-vcarve-inlay-toolpath = { path = "../commands/vcarve-inlay-toolpath" }

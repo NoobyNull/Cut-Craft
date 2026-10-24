@@ -470,3 +470,45 @@ pub fn follow(points: &[DVec3], safe_z: f64) -> Vec<Move> {
     });
     moves
 }
+
+/// Parallel lines `step` apart at `angle` degrees from the x axis, clipped to `regions`
+/// (holes left out): each row's pieces as (start, end), rows in order across the regions.
+pub fn hatch_lines(regions: &[Path], step: f64, angle: f64) -> Vec<Vec<(Point, Point)>> {
+    let turn = Point::from_angle(angle.to_radians());
+    // work with the rows along x: turn the shapes the other way, and back at the end
+    let level = |p: Point| Point::new(turn.x * p.x + turn.y * p.y, turn.x * p.y - turn.y * p.x);
+    let rings: Vec<Vec<Point>> = regions
+        .iter()
+        .map(|r| cut_points(r).into_iter().map(level).collect())
+        .collect();
+    let (low, high) = rings
+        .iter()
+        .flatten()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), p| {
+            (l.min(p.y), h.max(p.y))
+        });
+    let mut rows = vec![];
+    let mut y = low + step / 2.0;
+    while y < high {
+        let mut xs: Vec<f64> = rings
+            .iter()
+            .flat_map(|ring| {
+                let n = ring.len();
+                (0..n).filter_map(move |i| {
+                    let (a, b) = (ring[i], ring[(i + 1) % n]);
+                    ((a.y <= y) != (b.y <= y)).then(|| a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x))
+                })
+            })
+            .collect();
+        xs.sort_by(f64::total_cmp);
+        rows.push(
+            xs.as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&[a, b]| (turn.rotate(Point::new(a, y)), turn.rotate(Point::new(b, y))))
+                .collect(),
+        );
+        y += step;
+    }
+    rows
+}

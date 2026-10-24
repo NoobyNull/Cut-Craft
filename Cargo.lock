@@ -714,6 +714,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-quick-engrave-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-rotate"
 version = "0.1.0"
 dependencies = [
@@ -1034,6 +1043,7 @@ dependencies = [
  "cmd-pocket-toolpath",
  "cmd-prism-toolpath",
  "cmd-profile-toolpath",
+ "cmd-quick-engrave-toolpath",
  "cmd-rotate",
  "cmd-select-all-vectors",
  "cmd-select-layer-vectors",
