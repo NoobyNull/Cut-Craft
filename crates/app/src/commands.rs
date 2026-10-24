@@ -56,7 +56,6 @@ pub fn registry() -> Registry {
     r.add::<cmd_delete_items::DeleteItems>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
-    r.add_exporter::<fmt_export_gcode::ExportGcode>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
     r.add_exporter::<fmt_export_dxf::ExportDxf>();
     r.add_exporter::<fmt_export_as_stl::ExportStl>();

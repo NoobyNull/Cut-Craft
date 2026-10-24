@@ -172,7 +172,7 @@ struct CutCraftApp {
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
-    /// Installed post-processor; without one, toolpaths save as generic G-code.
+    /// Installed post-processor; without one, toolpaths save through Cut Craft's default.
     post: Option<cut_craft_post::Post>,
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
@@ -244,13 +244,11 @@ impl CutCraftApp {
             "recalculate_toolpath" | "delete_toolpath" | "preview_toolpath" => {
                 self.selected_toolpath.is_some()
             }
-            "recalculate_all_toolpaths" | "preview_all_toolpaths" => !self.doc.toolpaths.is_empty(),
+            "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
+                !self.doc.toolpaths.is_empty()
+            }
             "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
             "reset_preview" => self.simulation.is_some(),
-            "save_toolpaths" => {
-                !self.doc.toolpaths.is_empty()
-                    && (self.post.is_some() || self.registry.exporter("export_gcode").is_some())
-            }
             _ => {
                 BUILT_INS.contains(&id)
                     || self.registry.get(id).is_some()
@@ -443,25 +441,33 @@ impl CutCraftApp {
                     self.status.set_message(&e);
                 }
             }
-            "save_toolpaths" => match &self.post {
-                Some(post) => {
-                    let extension = post.extension.clone();
-                    let dialog =
-                        rfd::FileDialog::new().add_filter(&post.name, &[extension.as_str()]);
-                    if let Some(path) = dialog.save_file() {
-                        let path = path.with_extension(&extension);
-                        let job = self.session.path.as_deref();
-                        let result = files::save_through(post, &self.doc, &path, job);
-                        self.status.set_message(&result.map_or_else(
+            "save_toolpaths" => {
+                let post = self.output_post();
+                let extension = post.extension.clone();
+                let dialog = rfd::FileDialog::new().add_filter(&post.name, &[extension.as_str()]);
+                if let Some(path) = dialog.save_file() {
+                    let path = path.with_extension(&extension);
+                    let job = self.session.path.as_deref();
+                    let result = files::save_through(&post, &self.doc, &path, job);
+                    self.status.set_message(
+                        &result.map_or_else(
                             |e| e,
                             |()| format!("Saved toolpaths to {}", path.display()),
-                        ));
-                    }
+                        ),
+                    );
                 }
-                None => self.export("export_gcode"),
-            },
+            }
             _ => unreachable!("not a toolpath action: {id}"),
         }
+    }
+
+    /// The post toolpaths are saved through: the installed one, else Cut Craft's `FluidNC` post
+    /// for this kind of job.
+    fn output_post(&self) -> Cow<'_, cut_craft_post::Post> {
+        self.post.as_ref().map_or_else(
+            || Cow::Owned(cut_craft_post::Post::default_for(&self.doc.job)),
+            Cow::Borrowed,
+        )
     }
 
     /// Runs a registered command: straight away if it has no settings, else opens its form.
@@ -2844,6 +2850,21 @@ mod tests {
             ("layer_properties", Some("Renamed"))
         );
         assert!(!h.app.available("run:no_such_command:{}"));
+    }
+
+    #[test]
+    fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
+        use cut_craft_core::document::{Along, Job};
+        let mut h = Harness::new();
+        assert_eq!(
+            h.app.output_post().name,
+            "Cut Craft FluidNC ATC (mm) (*.nc)"
+        );
+        h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
+        assert_eq!(
+            h.app.output_post().name,
+            "Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)"
+        );
     }
 
     /// Controls that wait on a person: the system's file dialogs, the save-changes question

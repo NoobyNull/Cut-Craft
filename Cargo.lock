@@ -1013,7 +1013,6 @@ dependencies = [
  "env_logger",
  "fmt-export-as-stl",
  "fmt-export-dxf",
- "fmt-export-gcode",
  "fmt-export-svg",
  "fmt-import-dxf",
  "fmt-import-svg",
@@ -1415,14 +1414,6 @@ dependencies = [
  "cut-craft-core",
  "dxf",
  "fmt-import-dxf",
-]
-
-[[package]]
-name = "fmt-export-gcode"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
- "serde_json",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@
 //! and `begin BLOCK` templates (see `re/SPEC.md`). `Post::parse` reads one; `Post::render`
 //! writes a document's toolpaths through it.
 
-use cut_craft_core::document::{Datum, Document, Job, ZZero};
+use cut_craft_core::document::{Along, Datum, Document, Job, ZZero};
 use cut_craft_core::toolpath::MoveKind;
 use std::collections::HashMap;
 use std::path::Path;
@@ -63,6 +63,10 @@ const WRITTEN: [&str; 11] = [
 // ponytail: toolpaths are straight moves, so arc, helical, tape splitting and jet (laser)
 // blocks are never written; posts using unknown variables in written blocks are refused
 
+/// Cut Craft's own posts, used until one is installed (`crates/post/posts/`).
+const DEFAULT_FLAT: &str = include_str!("../posts/fluidnc_atc_mm.pp");
+const DEFAULT_ROTARY: &str = include_str!("../posts/fluidnc_atc_wrap_a_mm.pp");
+
 /// The file being written, for the variables that describe it.
 pub struct File<'a> {
     pub path: &'a Path,
@@ -72,7 +76,7 @@ pub struct File<'a> {
     pub made: chrono::NaiveDateTime,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Post {
     pub name: String,
     pub extension: String,
@@ -223,6 +227,20 @@ impl Format {
 }
 
 impl Post {
+    /// Cut Craft's default post for `job`: grbl / `FluidNC` with a tool changer, wrapping the
+    /// side that goes round onto A (in inverse time) for a rotary job.
+    pub fn default_for(job: &Job) -> Self {
+        let Some(rotary) = job.rotary else {
+            return Self::parse(DEFAULT_FLAT).expect("the default post parses");
+        };
+        let mut post = Self::parse(DEFAULT_ROTARY).expect("the default rotary post parses");
+        // Y goes round a cylinder along X; X goes round one along Y
+        if rotary.along == Along::Y {
+            post.wrap = Some(("X", "A".into()));
+        }
+        post
+    }
+
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut post = Self {
             name: String::new(),
@@ -959,6 +977,62 @@ begin FOOTER
         let post = BASIC.replace("begin HEADER\n", "INVERSE_TIME_MODE = YES\nbegin HEADER\n");
         let why = Post::parse(&post).unwrap_err();
         assert!(why.contains("INVERSE_TIME_MODE"), "{why}");
+    }
+
+    /// Renders through the default post for `job`.
+    fn render_default(job: cut_craft_core::document::Job, toolpaths: Vec<Toolpath>) -> String {
+        let mut doc = Document {
+            job,
+            ..Document::default()
+        };
+        let mut c = Change::builder(&doc);
+        for t in toolpaths {
+            c.add_toolpath(t);
+        }
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let file = File {
+            path: std::path::Path::new("/out.nc"),
+            job: None,
+            made: chrono::NaiveDateTime::default(),
+        };
+        Post::default_for(&doc.job).render(&doc, &file).unwrap()
+    }
+
+    #[test]
+    fn the_default_post_is_fluidnc_with_a_tool_changer() {
+        let g = render_default(
+            cut_craft_core::document::Job::default(),
+            vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")],
+        );
+        assert!(g.contains("M6 T1") && g.contains("M6 T2"), "{g}");
+        assert!(g.contains("F1000.0") && !g.contains("G93"), "{g}");
+    }
+
+    #[test]
+    fn rotary_jobs_get_the_default_post_wrapped_onto_a() {
+        use cut_craft_core::document::Along;
+        let round = |along| {
+            let job = cut_craft_core::document::Job::rotary(300.0, 50.0, along);
+            render_default(job, vec![toolpath("P", "T")])
+        };
+        // 25.4 mm round a 50 mm cylinder is 58.213 degrees
+        let along_x = round(Along::X);
+        assert!(
+            along_x.contains("G93") && along_x.contains("G94"),
+            "{along_x}"
+        );
+        assert!(
+            along_x.contains("X25.400") && along_x.contains("A58.213"),
+            "Y goes round a cylinder along X: {along_x}"
+        );
+        let along_y = round(Along::Y);
+        assert!(
+            along_y.contains("Y25.400")
+                && along_y.contains("A58.213")
+                && !along_y.contains("X25.400"),
+            "X goes round a cylinder along Y: {along_y}"
+        );
     }
 
     #[test]
