@@ -760,7 +760,9 @@ impl CutCraftApp {
                 save_tool = ui.button("Save to database").clicked();
             });
         }
-        form::show(ui, &open.fields, &mut open.params);
+        // a form that sets the units (Job Setup) shows its lengths in them as they change
+        let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
+        form::show(ui, &open.fields, &mut open.params, units);
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
@@ -882,7 +884,7 @@ impl CutCraftApp {
                 );
                 let tool = &mut self.tools.tools[self.tool_selected];
                 let mut value = serde_json::to_value(&*tool).expect("tools serialize");
-                if form::show(ui, &fields, &mut value)
+                if form::show(ui, &fields, &mut value, self.doc.job.units)
                     && let Ok(changed) = serde_json::from_value(value)
                 {
                     *tool = changed;
