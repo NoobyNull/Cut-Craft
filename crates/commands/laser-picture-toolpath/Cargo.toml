@@ -1,0 +1,17 @@
+[package]
+name = "cmd-laser-picture-toolpath"
+description = "Laser Picture"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+cmd-laser-cut-fill-toolpath = { path = "../laser-cut-fill-toolpath" }
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

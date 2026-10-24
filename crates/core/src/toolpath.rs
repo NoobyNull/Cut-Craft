@@ -214,6 +214,10 @@ pub struct Toolpath {
     /// Hidden toolpaths are not drawn or previewed (added after the first job format).
     #[serde(default = "shown")]
     pub visible: bool,
+    /// A laser toolpath's power (percent of the laser's maximum) for each move; empty for
+    /// a router or mill (added with lasers).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub power: Vec<f64>,
 }
 
 fn shown() -> bool {
@@ -308,6 +312,7 @@ pub fn made_by<C: Command>(
         vectors,
         moves,
         visible: true,
+        power: vec![],
     }
 }
 

@@ -342,6 +342,7 @@ mod tests {
                 to: Point::new(10.0, 10.0).extend(-1.0),
             }],
             visible: true,
+            power: vec![],
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

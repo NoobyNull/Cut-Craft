@@ -254,6 +254,13 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - Carves a sketch-style outline from the contrast in a bitmap or a 3D model. **Start Depth**, **Cut Depth**, a tool. **Machine Limit Boundary:** the bitmap's (or model's) edge, a selected vector (Shift-click after the source), or a component level; plus a **Boundary Offset**. **Line Thickness** 0–100: heavier lines with less detail as it rises. The form previews the area to be cut in green.
 - **[inf]** Cut Craft: a cell is on a line where it is darker (or, for the model, lower) than the mean of its surroundings by 4 %, the surroundings 1–9 cells across by line thickness, cells a stepover apart; the lines are cut flat at the depth in rows. The newest bitmap is used; no component-level boundary.
 
+### Lasers [obs] (help: Laser Cut - Fill, Laser Picture, Adapting a post-processor for Lasers)
+- Laser tools come from the tool database's laser settings: **Power** (% of the machine's maximum), **Move Speed**, **No. Passes**, and a kerf.
+- **Laser Cut / Fill:** Cut Outside / Right and Cut Inside / Left (offset by the kerf so the part or hole is the drawn size, plus an **Allowance**), Cut On, Hatch Fill (**Stepover**, **Hatch Angle**, **Cross Hatch**, **Outline**, Fill Together / Fill Regionally).
+- **Laser Picture:** burns the selected bitmap along Raster, Hatch or Selected vectors; power follows the tones, or **Dither Image** uses only burnt / unburnt; **Line Spacing** from the kerf (densest) to 30 × the kerf; **Line Angle**.
+- **Posts:** `LASER_SUPPORT = "YES"` marks a laser post; power prints through `VAR POWER` (`[P]`, 1–100 %, e.g. `[P|C|S|1.0|10.0]` for grbl's 0–1000), blocks `JET_TOOL_ON` (e.g. `M4[P]`), `JET_TOOL_POWER` (`[P]`), `JET_TOOL_OFF` (`M5`); the laser comes on only once it is at its Z, never during a plunge.
+- **[inf]** Cut Craft: a laser toolpath holds a power per move (0 on rapids); the post turns the jet on before the first feed move after a rapid, prints JET_TOOL_POWER when the power changes, and off before rapids and at the end; a post without LASER_SUPPORT refuses laser toolpaths. Cut Craft's own FluidNC posts are not laser posts. Passes repeat at the surface; Fill Regionally is not done.
+
 ---
 
 ## P5 — Directories and configuration

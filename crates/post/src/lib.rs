@@ -10,9 +10,9 @@ use std::path::Path;
 const MM_PER_INCH: f64 = 25.4;
 /// Numeric values a post can print; the ones in `LENGTHS` become inches for inch posts
 /// (feed rates are lengths per minute).
-const NUMBERS: [&str; 25] = [
+const NUMBERS: [&str; 26] = [
     "X", "Y", "Z", "F", "FC", "FP", "S", "T", "N", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH",
-    "ZLENGTH", "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA", "WRAP_DIA", "FI",
+    "ZLENGTH", "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA", "WRAP_DIA", "FI", "P",
 ];
 const LENGTHS: [&str; 21] = [
     "X", "Y", "Z", "F", "FC", "FP", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH", "ZLENGTH",
@@ -47,7 +47,10 @@ const TEXTS: [&str; 18] = [
 /// Texts that are lists: a template line holding one is written once per item.
 const LISTS: [&str; 2] = ["TOOLS_USED", "TOOLPATHS_OUTPUT"];
 /// The blocks Cut Craft writes; a post may define others (arcs, lasers...) that it never uses.
-const WRITTEN: [&str; 11] = [
+const WRITTEN: [&str; 14] = [
+    "JET_TOOL_ON",
+    "JET_TOOL_POWER",
+    "JET_TOOL_OFF",
     "HEADER",
     "FOOTER",
     "TOOLCHANGE",
@@ -60,8 +63,8 @@ const WRITTEN: [&str; 11] = [
     "FIRST_FEED_MOVE",
     "FEED_MOVE",
 ];
-// ponytail: toolpaths are straight moves, so arc, helical, tape splitting and jet (laser)
-// blocks are never written; posts using unknown variables in written blocks are refused
+// ponytail: toolpaths are straight moves, so arc, helical and tape splitting blocks are
+// never written; posts using unknown variables in written blocks are refused
 
 /// Cut Craft's own posts, used until one is installed (`crates/post/posts/`).
 const DEFAULT_FLAT: &str = include_str!("../posts/fluidnc_atc_mm.pp");
@@ -91,6 +94,8 @@ pub struct Post {
     wrap: Option<(&'static str, String)>,
     /// Feed moves print `[FI]`, one over their time in minutes (G93).
     inverse_time: bool,
+    /// Laser toolpaths may be written (`LASER_SUPPORT = "YES"`).
+    laser: bool,
     formats: HashMap<String, Format>,
     blocks: HashMap<String, Vec<String>>,
 }
@@ -255,6 +260,7 @@ impl Post {
             substitute: vec![],
             wrap: None,
             inverse_time: false,
+            laser: false,
             formats: HashMap::new(),
             blocks: HashMap::new(),
         };
@@ -325,6 +331,7 @@ impl Post {
             "ROTARY_WRAP_X" => self.wrap = Some(("X", unquote(value))),
             "ROTARY_WRAP_Y" => self.wrap = Some(("Y", unquote(value))),
             "INVERSE_TIME_MODE" => self.inverse_time = unquote(value).eq_ignore_ascii_case("YES"),
+            "LASER_SUPPORT" => self.laser = unquote(value).eq_ignore_ascii_case("YES"),
             // other globals (DIRECT_OUTPUT, TAPE_SPLITTING, ...) do not change the text
             _ => {}
         }
@@ -361,12 +368,8 @@ impl Post {
         let Some(first) = toolpaths.first() else {
             return Err("there are no toolpaths to save".into());
         };
-        let mut tools: Vec<&str> = vec![];
-        for t in &toolpaths {
-            if !tools.contains(&t.tool.name.as_str()) {
-                tools.push(&t.tool.name);
-            }
-        }
+        let tools = tools_used(&toolpaths);
+        self.can_write(doc, &toolpaths)?;
         let mut out = Output {
             post: self,
             text: String::new(),
@@ -374,13 +377,6 @@ impl Post {
             line_number: self.numbering.start,
         };
         let rotary = doc.job.rotary;
-        if let Some((axis, letter)) = &self.wrap
-            && rotary.is_none()
-        {
-            return Err(format!(
-                "this post wraps {axis} onto {letter}: set the job up as rotary in Job Setup"
-            ));
-        }
         // a wrapped axis prints degrees round the cylinder
         let round = rotary.map_or(1.0, |r| std::f64::consts::PI * r.diameter);
         let wrapped = |label: &str, flat: f64| match &self.wrap {
@@ -418,7 +414,10 @@ impl Post {
                 None => {}
             }
             previous_tool = Some(&toolpath.tool.name);
-            for m in &toolpath.moves {
+            let laser = !toolpath.power.is_empty();
+            // the laser's power while it is on
+            let mut burning: Option<f64> = None;
+            for (i, m) in toolpath.moves.iter().enumerate() {
                 let length = m.to.distance(at);
                 at = m.to;
                 if self.inverse_time && m.kind != MoveKind::Rapid && length == 0.0 {
@@ -428,6 +427,11 @@ impl Post {
                 v.numbers.insert("X", wrapped("X", m.to.x));
                 v.numbers.insert("Y", wrapped("Y", m.to.y));
                 v.numbers.insert("Z", doc.job.machine_z(m.to.z));
+                if laser {
+                    let power = toolpath.power.get(i).copied().unwrap_or(0.0);
+                    v.numbers.insert("P", power);
+                    out.jet(&v, m.kind, power, &mut burning);
+                }
                 let block = if m.kind == MoveKind::Rapid {
                     feeding = None;
                     let initial = std::mem::replace(&mut first_rapid, false);
@@ -448,9 +452,38 @@ impl Post {
                 };
                 out.block(block, &v);
             }
+            if burning.is_some() {
+                out.block("JET_TOOL_OFF", &v);
+            }
         }
         out.block("FOOTER", &v);
         Ok(out.text)
+    }
+
+    /// Refuses what this post cannot write: a flat job for a rotary post, lasers without
+    /// laser support.
+    fn can_write(
+        &self,
+        doc: &Document,
+        toolpaths: &[&cut_craft_core::toolpath::Toolpath],
+    ) -> Result<(), String> {
+        if let Some((axis, letter)) = &self.wrap
+            && doc.job.rotary.is_none()
+        {
+            return Err(format!(
+                "this post wraps {axis} onto {letter}: set the job up as rotary in Job Setup"
+            ));
+        }
+        if let Some(t) = toolpaths
+            .iter()
+            .find(|t| !t.power.is_empty() && !self.laser)
+        {
+            return Err(format!(
+                "{} is a laser toolpath, but this post does not support lasers (LASER_SUPPORT)",
+                t.name
+            ));
+        }
+        Ok(())
     }
 
     /// The block for a feed move: plunges have their own if the post does, and a new rate
@@ -573,6 +606,17 @@ impl Values {
     }
 }
 
+/// Each tool's name once, in the order the toolpaths use them.
+fn tools_used<'a>(toolpaths: &[&'a cut_craft_core::toolpath::Toolpath]) -> Vec<&'a str> {
+    let mut tools: Vec<&str> = vec![];
+    for t in toolpaths {
+        if !tools.contains(&t.tool.name.as_str()) {
+            tools.push(&t.tool.name);
+        }
+    }
+    tools
+}
+
 /// Text being written, with the state that modal (`C`) variables and line numbers need.
 struct Output<'a> {
     post: &'a Post,
@@ -583,6 +627,27 @@ struct Output<'a> {
 }
 
 impl Output<'_> {
+    /// Switches a laser on, to a new power or off for the move about to be written, given
+    /// the power it is `burning` at (`None`: off).
+    fn jet(&mut self, v: &Values, kind: MoveKind, power: f64, burning: &mut Option<f64>) {
+        match (kind, *burning) {
+            (MoveKind::Rapid, Some(_)) => {
+                self.block("JET_TOOL_OFF", v);
+                *burning = None;
+            }
+            (MoveKind::Rapid, None) => {}
+            (_, None) => {
+                self.block("JET_TOOL_ON", v);
+                *burning = Some(power);
+            }
+            (_, Some(was)) if (was - power).abs() > 1e-9 => {
+                self.block("JET_TOOL_POWER", v);
+                *burning = Some(power);
+            }
+            _ => {}
+        }
+    }
+
     fn block(&mut self, name: &str, v: &Values) {
         let Some(lines) = self.post.blocks.get(name) else {
             return;
@@ -762,6 +827,7 @@ begin FOOTER
                 name: tool.into(),
                 ..Tool::default()
             },
+            power: vec![],
             vectors: vec![],
             moves: vec![
                 mv(MoveKind::Rapid, 0.0, 0.0, 5.0),
@@ -806,6 +872,53 @@ begin FOOTER
             .filter(|l| !l.is_empty())
             .map(String::from)
             .collect()
+    }
+
+    #[test]
+    fn laser_toolpaths_turn_the_jet_on_after_moving_and_off_before_rapids() {
+        let post = BASIC.replace(
+            "begin HEADER",
+            "LASER_SUPPORT = \"YES\"\nVAR POWER = [P|C|S|1.0|10.0]\n\
+             begin JET_TOOL_ON\n\"M4 [P]\"\nbegin JET_TOOL_POWER\n\"[P]\"\n\
+             begin JET_TOOL_OFF\n\"M5\"\nbegin HEADER",
+        );
+        let mut laser = toolpath("Burn", "Laser");
+        laser.power = vec![0.0, 50.0, 50.0, 80.0, 0.0];
+        let lines = render(&post, vec![laser]);
+        let at = |text: &str| {
+            lines
+                .iter()
+                .position(|l| l == text)
+                .unwrap_or_else(|| panic!("{text} in {lines:?}"))
+        };
+        let on = at("M4 S500");
+        assert!(on > at("G0 X0.000 Y0.000 Z5.000"), "on once it is in place");
+        assert!(at("S800") > on, "a new power prints on its own");
+        assert!(lines[at("S800") + 1].starts_with("G1 X25.400 Y25.400"));
+        let off = lines.iter().rposition(|l| l == "M5").unwrap();
+        assert!(
+            lines.iter().position(|l| l == "M5").unwrap() < at("G0 X25.400 Y25.400 Z5.000"),
+            "off before the rapid"
+        );
+        assert!(off > on);
+    }
+
+    #[test]
+    fn a_post_without_laser_support_refuses_laser_toolpaths() {
+        let mut laser = toolpath("Burn", "Laser");
+        laser.power = vec![0.0, 50.0, 50.0, 50.0, 0.0];
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(laser);
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let file = File {
+            path: Path::new("x.nc"),
+            job: None,
+            made: chrono::NaiveDateTime::default(),
+        };
+        let why = Post::parse(BASIC).unwrap().render(&doc, &file).unwrap_err();
+        assert!(why.contains("LASER_SUPPORT"), "{why}");
     }
 
     #[test]

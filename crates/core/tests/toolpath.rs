@@ -27,6 +27,7 @@ fn toolpath(name: &str) -> Toolpath {
             },
         ],
         visible: true,
+        power: vec![],
     }
 }
 

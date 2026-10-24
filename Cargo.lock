@@ -662,6 +662,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-laser-cut-fill-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-laser-picture-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cmd-laser-cut-fill-toolpath",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-layer-properties"
 version = "0.1.0"
 dependencies = [
@@ -1115,6 +1134,8 @@ dependencies = [
  "cmd-job-setup",
  "cmd-join-vectors",
  "cmd-keyhole-toolpath",
+ "cmd-laser-cut-fill-toolpath",
+ "cmd-laser-picture-toolpath",
  "cmd-layer-properties",
  "cmd-mirror",
  "cmd-moulding-toolpath",

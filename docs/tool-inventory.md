@@ -127,6 +127,9 @@ say "not implemented yet".
 - Rounding (rotary jobs): square or round blank, radial / raster / optimized raster, allowance.
 - Photo V-Carve: raster, hatch or along selected vectors; line spacing and angle, stepover retract.
 - Sketch Carving: from the bitmap or 3D model, line thickness, bitmap or vector boundary.
+- Lasers: Laser Cut / Fill (outside, inside, on, hatch fill with cross hatch and outline;
+  kerf, allowance, power, passes) and Laser Picture (raster, hatch, selected; dither; line
+  spacing in kerfs). Output needs a post with LASER_SUPPORT and the JET_TOOL blocks.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -167,7 +170,7 @@ say "not implemented yet".
   from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
   Below, Split, Bake.
 - Toolpaths tab: Inlay (pocket/plug, not V-carve),
-  Laser Cut / Fill, Laser Picture, Toolpath Summary.
+  Toolpath Summary.
 
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
   (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).
