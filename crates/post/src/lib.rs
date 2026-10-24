@@ -2,7 +2,7 @@
 //! and `begin BLOCK` templates (see `re/SPEC.md`). `Post::parse` reads one; `Post::render`
 //! writes a document's toolpaths through it.
 
-use cut_craft_core::document::{Datum, Document, ZZero};
+use cut_craft_core::document::{Datum, Document, Job, ZZero};
 use cut_craft_core::toolpath::MoveKind;
 use std::collections::HashMap;
 use std::path::Path;
@@ -10,19 +10,19 @@ use std::path::Path;
 const MM_PER_INCH: f64 = 25.4;
 /// Numeric values a post can print; the ones in `LENGTHS` become inches for inch posts
 /// (feed rates are lengths per minute).
-const NUMBERS: [&str; 23] = [
+const NUMBERS: [&str; 25] = [
     "X", "Y", "Z", "F", "FC", "FP", "S", "T", "N", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH",
-    "ZLENGTH", "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA",
+    "ZLENGTH", "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA", "WRAP_DIA", "FI",
 ];
-const LENGTHS: [&str; 20] = [
+const LENGTHS: [&str; 21] = [
     "X", "Y", "Z", "F", "FC", "FP", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH", "ZLENGTH",
-    "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA",
+    "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA", "WRAP_DIA",
 ];
 /// Numbers Aspire prints to three places when a post gives no `VAR` format; the rest print
 /// whole (`re/SPEC.md`, the vocabulary table).
-const THREE_PLACES: [&str; 17] = [
+const THREE_PLACES: [&str; 19] = [
     "X", "Y", "Z", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH", "ZLENGTH", "XMIN", "XMAX",
-    "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA",
+    "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA", "WRAP_DIA", "FI",
 ];
 const TEXTS: [&str; 18] = [
     "TOOLNAME",
@@ -82,6 +82,11 @@ pub struct Post {
     numbering: Numbering,
     /// (original, replacement) characters applied to text values.
     substitute: Vec<(char, char)>,
+    /// A rotary post: the flat axis (`"X"` or `"Y"`) wrapped round the cylinder, and the
+    /// letter its angle prints with.
+    wrap: Option<(&'static str, String)>,
+    /// Feed moves print `[FI]`, one over their time in minutes (G93).
+    inverse_time: bool,
     formats: HashMap<String, Format>,
     blocks: HashMap<String, Vec<String>>,
 }
@@ -230,6 +235,8 @@ impl Post {
                 maximum: f64::MAX,
             },
             substitute: vec![],
+            wrap: None,
+            inverse_time: false,
             formats: HashMap::new(),
             blocks: HashMap::new(),
         };
@@ -297,6 +304,9 @@ impl Post {
                     .map(|p| (p[0], p[1]))
                     .collect();
             }
+            "ROTARY_WRAP_X" => self.wrap = Some(("X", unquote(value))),
+            "ROTARY_WRAP_Y" => self.wrap = Some(("Y", unquote(value))),
+            "INVERSE_TIME_MODE" => self.inverse_time = unquote(value).eq_ignore_ascii_case("YES"),
             // other globals (DIRECT_OUTPUT, TAPE_SPLITTING, ...) do not change the text
             _ => {}
         }
@@ -304,6 +314,12 @@ impl Post {
     }
 
     fn check(&self) -> Result<(), String> {
+        if self.inverse_time && self.wrap.is_none() {
+            return Err(
+                "INVERSE_TIME_MODE can only be used when wrapping is on (ROTARY_WRAP_X or _Y)"
+                    .into(),
+            );
+        }
         for required in ["RAPID_MOVE", "FEED_MOVE"] {
             if !self.blocks.contains_key(required) {
                 return Err(format!("the post has no {required} block"));
@@ -339,6 +355,20 @@ impl Post {
             last: HashMap::new(),
             line_number: self.numbering.start,
         };
+        let rotary = doc.job.rotary;
+        if let Some((axis, letter)) = &self.wrap
+            && rotary.is_none()
+        {
+            return Err(format!(
+                "this post wraps {axis} onto {letter}: set the job up as rotary in Job Setup"
+            ));
+        }
+        // a wrapped axis prints degrees round the cylinder
+        let round = rotary.map_or(1.0, |r| std::f64::consts::PI * r.diameter);
+        let wrapped = |label: &str, flat: f64| match &self.wrap {
+            Some((axis, _)) if *axis == label => flat / round * 360.0,
+            _ => flat,
+        };
         let mut v = self.job_values(doc, file);
         v.lists
             .insert("TOOLS_USED", tools.iter().map(|&t| t.to_owned()).collect());
@@ -356,6 +386,7 @@ impl Post {
         // the rate of the feed moves since the last rapid: a new one starts a FIRST_ block,
         // which is where most posts print it
         let mut feeding: Option<f64> = None;
+        let mut at = cut_craft_core::glam::DVec3::new(0.0, 0.0, doc.job.clearance);
         for toolpath in &toolpaths {
             v.texts.insert("TOOLPATH_NAME", toolpath.name.clone());
             v.texts.insert("TOOLNAME", toolpath.tool.name.clone());
@@ -370,49 +401,53 @@ impl Post {
             }
             previous_tool = Some(&toolpath.tool.name);
             for m in &toolpath.moves {
-                v.numbers.insert("X", m.to.x);
-                v.numbers.insert("Y", m.to.y);
+                let length = m.to.distance(at);
+                at = m.to;
+                if self.inverse_time && m.kind != MoveKind::Rapid && length == 0.0 {
+                    // a move that goes nowhere has no time to invert
+                    continue;
+                }
+                v.numbers.insert("X", wrapped("X", m.to.x));
+                v.numbers.insert("Y", wrapped("Y", m.to.y));
                 v.numbers.insert("Z", doc.job.machine_z(m.to.z));
-                let block = match m.kind {
-                    MoveKind::Rapid => {
-                        feeding = None;
-                        let initial = std::mem::replace(&mut first_rapid, false);
-                        if initial && self.blocks.contains_key("INITIAL_RAPID_MOVE") {
-                            "INITIAL_RAPID_MOVE"
-                        } else {
-                            "RAPID_MOVE"
-                        }
+                let block = if m.kind == MoveKind::Rapid {
+                    feeding = None;
+                    let initial = std::mem::replace(&mut first_rapid, false);
+                    if initial && self.blocks.contains_key("INITIAL_RAPID_MOVE") {
+                        "INITIAL_RAPID_MOVE"
+                    } else {
+                        "RAPID_MOVE"
                     }
-                    MoveKind::Plunge if self.blocks.contains_key("PLUNGE_MOVE") => {
-                        let rate = toolpath.tool.plunge_rate;
-                        v.numbers.insert("F", rate);
-                        let start = feeding.replace(rate) != Some(rate);
-                        if start && self.blocks.contains_key("FIRST_PLUNGE_MOVE") {
-                            "FIRST_PLUNGE_MOVE"
-                        } else {
-                            "PLUNGE_MOVE"
-                        }
-                    }
-                    kind => {
-                        let rate = if kind == MoveKind::Plunge {
-                            toolpath.tool.plunge_rate
-                        } else {
-                            toolpath.tool.feed_rate
-                        };
-                        v.numbers.insert("F", rate);
-                        let start = feeding.replace(rate) != Some(rate);
-                        if start && self.blocks.contains_key("FIRST_FEED_MOVE") {
-                            "FIRST_FEED_MOVE"
-                        } else {
-                            "FEED_MOVE"
-                        }
-                    }
+                } else {
+                    let rate = if m.kind == MoveKind::Plunge {
+                        toolpath.tool.plunge_rate
+                    } else {
+                        toolpath.tool.feed_rate
+                    };
+                    v.numbers.insert("F", rate);
+                    v.numbers.insert("FI", rate / length);
+                    self.feed_block(m.kind, feeding.replace(rate) != Some(rate))
                 };
                 out.block(block, &v);
             }
         }
         out.block("FOOTER", &v);
         Ok(out.text)
+    }
+
+    /// The block for a feed move: plunges have their own if the post does, and a new rate
+    /// (`start`) begins with the FIRST_ one.
+    fn feed_block(&self, kind: MoveKind, start: bool) -> &'static str {
+        let (first, then) = if kind == MoveKind::Plunge && self.blocks.contains_key("PLUNGE_MOVE") {
+            ("FIRST_PLUNGE_MOVE", "PLUNGE_MOVE")
+        } else {
+            ("FIRST_FEED_MOVE", "FEED_MOVE")
+        };
+        if start && self.blocks.contains_key(first) {
+            first
+        } else {
+            then
+        }
     }
 
     /// What stays the same through the file: the material, the file, the time and the
@@ -439,6 +474,7 @@ impl Post {
             ("YMAX", area.max.y),
             ("ZMIN", job.machine_z(-job.thickness)),
             ("ZMAX", job.machine_z(0.0)),
+            ("WRAP_DIA", job.rotary.map_or(0.0, |r| r.diameter)),
         ] {
             v.numbers.insert(label, value);
         }
@@ -453,7 +489,7 @@ impl Post {
             ("FILE_PATHNAME", shown(file.job)),
             ("DATE", Some(file.made.format("%A %B %d %Y").to_string())),
             ("TIME", Some(file.made.format("%I:%M %p").to_string())),
-            ("Z_ORIGIN", Some(z_origin(job.z_zero).into())),
+            ("Z_ORIGIN", Some(z_origin(job).into())),
             ("XY_ORIGIN", Some(xy_origin(job.datum).into())),
             (
                 "UNITS",
@@ -475,10 +511,12 @@ impl Post {
     }
 }
 
-fn z_origin(z_zero: ZZero) -> &'static str {
-    match z_zero {
-        ZZero::MaterialSurface => "Material Surface",
-        ZZero::MachineBed => "Machine Bed",
+fn z_origin(job: &Job) -> &'static str {
+    match (job.z_zero, job.rotary) {
+        (ZZero::MaterialSurface, _) => "Material Surface",
+        (ZZero::MachineBed, None) => "Machine Bed",
+        // under an unrolled cylinder is its axis
+        (ZZero::MachineBed, Some(_)) => "Cylinder Axis",
     }
 }
 
@@ -596,17 +634,26 @@ impl Output<'_> {
         } else {
             v.numbers.get(label).copied().unwrap_or_default()
         };
-        let value = if self.post.inches && LENGTHS.contains(&label) {
+        // a wrapped axis (and its home) is in degrees, printed with the wrap letter
+        let wrap = self
+            .post
+            .wrap
+            .as_ref()
+            .filter(|(axis, _)| label == *axis || label.strip_suffix('H') == Some(*axis));
+        let value = if self.post.inches && LENGTHS.contains(&label) && wrap.is_none() {
             raw / MM_PER_INCH
         } else {
             raw
         };
-        let format = self
+        let mut format = self
             .post
             .formats
             .get(label)
             .cloned()
             .unwrap_or_else(|| Format::default_for(label));
+        if let Some((axis, letter)) = wrap {
+            format.prefix = format.prefix.replace(axis, letter);
+        }
         let text = format.number(value);
         if format.only_changes {
             if self.last.get(label) == Some(&text) {
@@ -846,6 +893,72 @@ begin FOOTER
             Post::parse(&post).unwrap_err(),
             "the post uses [I], which is not supported yet"
         );
+    }
+
+    /// A rotary job 100 mm round (so 1 mm is 3.6 degrees), zeroed on its axis.
+    fn hundred_round() -> cut_craft_core::document::Job {
+        use cut_craft_core::document::{Along, Job, ZZero};
+        Job {
+            z_zero: ZZero::MachineBed,
+            ..Job::rotary(300.0, 100.0 / std::f64::consts::PI, Along::X)
+        }
+    }
+
+    #[test]
+    fn wrapping_y_prints_it_as_degrees_round_the_cylinder() {
+        let post = BASIC.replace(
+            "begin HEADER\n",
+            "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n\"([WRAP_DIA] [Z_ORIGIN])\"\n",
+        );
+        let lines = render_for(&post, hundred_round(), vec![toolpath("P", "T")]);
+        assert_eq!(lines[0], "(31.831 Cylinder Axis)");
+        assert!(
+            lines.contains(&"G1 X25.400 A91.440 Z12.915".to_owned()),
+            "25.4 mm round is 91.44 degrees, 3 mm into a 15.915 radius: {lines:#?}"
+        );
+    }
+
+    #[test]
+    fn inverse_time_feeds_are_the_rate_over_the_move_length() {
+        let post = BASIC
+            .replace(
+                "begin HEADER\n",
+                "ROTARY_WRAP_Y = \"A\"\nINVERSE_TIME_MODE = YES\nVAR INVERSE_TIME = [FI|A|F|1.3]\nbegin HEADER\n",
+            )
+            .replace("[Z] [F]\"", "[Z] [FI]\"");
+        let lines = render_for(&post, hundred_round(), vec![toolpath("P", "T")]);
+        assert!(
+            lines.contains(&"G1 X0.000 A0.000 Z12.915 F37.500".to_owned()),
+            "an 8 mm plunge at 300 mm/min takes 1/37.5 minutes: {lines:#?}"
+        );
+        assert!(
+            lines.contains(&"G1 X25.400 A0.000 Z12.915 F39.370".to_owned()),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn a_wrapping_post_needs_a_rotary_job() {
+        let post = BASIC.replace("begin HEADER\n", "ROTARY_WRAP_Y = \"A\"\nbegin HEADER\n");
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(toolpath("P", "T"));
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let file = File {
+            path: std::path::Path::new("/out.nc"),
+            job: None,
+            made: chrono::NaiveDateTime::default(),
+        };
+        let why = Post::parse(&post).unwrap().render(&doc, &file).unwrap_err();
+        assert!(why.contains("rotary"), "{why}");
+    }
+
+    #[test]
+    fn inverse_time_needs_wrapping() {
+        let post = BASIC.replace("begin HEADER\n", "INVERSE_TIME_MODE = YES\nbegin HEADER\n");
+        let why = Post::parse(&post).unwrap_err();
+        assert!(why.contains("INVERSE_TIME_MODE"), "{why}");
     }
 
     #[test]
