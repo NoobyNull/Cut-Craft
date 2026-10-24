@@ -222,6 +222,52 @@ pub struct MenuSystem {
 }
 
 impl MenuSystem {
+    fn menu(&self, name: &str) -> &Menu {
+        self.menus
+            .iter()
+            .find(|m| m.name == name)
+            .unwrap_or_else(|| panic!("there is a {name} menu"))
+    }
+
+    /// The 2D view's right-click menu: Aspire's selection menu (MENU 318), plus Move to Layer,
+    /// the vector booleans and Align. Edit menu items are reused as they are.
+    pub fn selection_menu(&self, doc: &Document) -> Vec<MenuItem> {
+        let edit = |name: &str| {
+            let items = &self.menu("Edit").items;
+            let item = items.iter().find(|i| i.name == name);
+            item.cloned()
+                .unwrap_or_else(|| panic!("there is an Edit ▸ {name}"))
+        };
+        let layers = doc.layers.iter().map(|l| {
+            MenuItem::run::<cmd_move_to_layer::MoveToLayer>(
+                &l.name,
+                &cmd_move_to_layer::Params { layer: l.id },
+            )
+        });
+        vec![
+            edit("Undo"),
+            edit("Redo"),
+            MenuItem::separator(),
+            edit("Cut"),
+            edit("Copy"),
+            edit("Paste"),
+            edit("Delete"),
+            MenuItem::separator(),
+            MenuItem::submenu("Move to Layer", layers.collect()),
+            MenuItem::separator(),
+            MenuItem::with_action("Weld", "weld_vectors"),
+            MenuItem::with_action("Subtract", "subtract_vectors"),
+            MenuItem::with_action("Overlap", "overlap_intersect"),
+            edit("Join Vectors"),
+            MenuItem {
+                name: "Align".into(),
+                ..edit("Align Selected Objects")
+            },
+            MenuItem::separator(),
+            MenuItem::with_action("Object Properties", "object_properties"),
+        ]
+    }
+
     /// Every command item, submenus flattened.
     pub fn items(&self) -> Vec<&MenuItem> {
         fn walk<'a>(items: &'a [MenuItem], out: &mut Vec<&'a MenuItem>) {
@@ -798,13 +844,7 @@ impl MenuSystem {
             name: name.to_string(),
             items,
         };
-        let same = |name: &str| {
-            self.menus
-                .iter()
-                .find(|m| m.name == name)
-                .cloned()
-                .unwrap_or_else(|| panic!("there is a {name} menu"))
-        };
+        let same = |name: &str| self.menu(name).clone();
         Self {
             menus: vec![
                 menu(

@@ -1762,6 +1762,10 @@ impl CutCraftApp {
             );
         }
         canvas.rulers(ui, job.units);
+        let selection_menu = || self.menus.selection_menu(&self.doc);
+        if let Some(action) = self.popup(canvas.response(), selection_menu) {
+            self.invoke(ui.ctx(), &action);
+        }
         self.view_buttons(ui, area);
         self.view_transform = Some(canvas.transform);
         self.view_area = Some(area);
@@ -1931,6 +1935,8 @@ mod tests {
         ctx: egui::Context,
         app: CutCraftApp,
         time: f64,
+        /// What the last frame drew.
+        shapes: Vec<egui::epaint::ClippedShape>,
     }
 
     impl Harness {
@@ -1940,6 +1946,7 @@ mod tests {
                 ctx: egui::Context::default(),
                 app: CutCraftApp::new(),
                 time: 0.0,
+                shapes: vec![],
             };
             h.frame(vec![]);
             h.frame(vec![]);
@@ -1970,7 +1977,31 @@ mod tests {
                 events,
                 ..Default::default()
             };
-            let _ = self.ctx.run(input, |ctx| self.app.ui(ctx));
+            self.shapes = self.ctx.run(input, |ctx| self.app.ui(ctx)).shapes;
+        }
+
+        /// The middle of `text` where the last frame drew it.
+        fn text_at(&self, text: &str) -> Option<Pos2> {
+            self.shapes.iter().find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(t) if t.galley.text() == text => {
+                    Some(t.pos + t.galley.size() / 2.0)
+                }
+                _ => None,
+            })
+        }
+
+        fn right_click(&mut self, at: Pos2) {
+            self.frame(vec![Event::PointerMoved(at)]);
+            for pressed in [true, false] {
+                let button = Event::PointerButton {
+                    pos: at,
+                    button: PointerButton::Secondary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                };
+                self.frame(vec![button]);
+            }
+            self.frame(vec![]);
         }
 
         /// Screen position of a job coordinate in the 2D view.
@@ -2299,6 +2330,66 @@ mod tests {
         );
         h.choose(menu, &["Delete"]);
         assert!(h.app.doc.components.is_empty());
+    }
+
+    #[test]
+    fn the_selection_menu_runs_edit_tools_on_the_selection() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.rectangle(30.0, 30.0, 40.0, 40.0);
+        h.app
+            .apply("add_layer", &serde_json::json!({ "name": "Top" }))
+            .unwrap();
+        h.app.invoke(&h.ctx, "select_all_vectors");
+        let menu = |app: &CutCraftApp| app.menus.selection_menu(&app.doc);
+        h.choose(menu, &["Move to Layer", "Top"]);
+        let doc = &h.app.doc;
+        assert!(doc.vectors.keys().all(|&id| doc.layer_of(id) == LayerId(2)));
+        h.choose(menu, &["Weld"]);
+        assert_eq!(h.app.doc.vectors.len(), 1);
+        h.choose(menu, &["Undo"]);
+        assert_eq!(h.app.doc.vectors.len(), 2);
+        h.choose(menu, &["Align", "Left"]);
+        let left: Vec<f64> = h
+            .app
+            .doc
+            .vectors
+            .values()
+            .map(|v| v.bounds().min.x)
+            .collect();
+        assert!((left[0] - left[1]).abs() < 1e-9, "{left:?}");
+        let cut = leaf(&menu(&h.app), &["Cut"]).action.clone();
+        assert!(!h.app.available(&cut), "Cut is greyed until it is built");
+    }
+
+    #[test]
+    fn right_clicking_the_view_opens_the_selection_menu() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.rectangle(30.0, 30.0, 40.0, 40.0);
+        h.app.invoke(&h.ctx, "select_all_vectors");
+        h.right_click(h.at(90.0, 90.0));
+        let weld = h.text_at("Weld").expect("the selection menu is open");
+        h.click(weld, Modifiers::NONE);
+        assert_eq!(h.app.doc.vectors.len(), 1, "{}", h.app.status.message);
+    }
+
+    #[test]
+    fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        let params = h.app.registry.get("profile_toolpath").unwrap();
+        let params = params.initial_params(&h.app.doc);
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.invoke(&h.ctx, "machining_layout");
+        h.frame(vec![]);
+        let (&id, toolpath) = h.app.doc.toolpaths.iter().next().unwrap();
+        let row = h
+            .text_at(&toolpath.name.clone())
+            .expect("the toolpath is listed");
+        h.right_click(row);
+        assert_eq!(h.app.selected_toolpath, Some(id));
+        assert!(h.text_at("Recalculate").is_some(), "its menu is open");
     }
 
     #[test]

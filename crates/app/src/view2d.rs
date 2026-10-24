@@ -140,6 +140,11 @@ impl Canvas {
     }
 
     /// Where the pointer is over the view, on screen.
+    /// The view's response, for its right-click menu.
+    pub fn response(&self) -> &egui::Response {
+        &self.response
+    }
+
     pub fn hover(&self) -> Option<Pos2> {
         self.response.hover_pos()
     }
