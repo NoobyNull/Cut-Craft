@@ -607,6 +607,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-fluting-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-job-setup"
 version = "0.1.0"
 dependencies = [
@@ -985,6 +994,7 @@ dependencies = [
  "cmd-draw-rectangle",
  "cmd-draw-star",
  "cmd-drilling-toolpath",
+ "cmd-fluting-toolpath",
  "cmd-job-setup",
  "cmd-join-vectors",
  "cmd-layer-properties",

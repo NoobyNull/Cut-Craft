@@ -109,6 +109,7 @@ say "not implemented yet".
   changer; rotary jobs wrapped onto A in inverse time).
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
 - 3D Finishing: rest machining after earlier tools (Minimum Detail, Boundary Offset).
+- Fluting: ramps at start, both ends or the whole length, by length or %, linear or smooth.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -148,7 +149,7 @@ say "not implemented yet".
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area, Zero Plane,
   from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
   Below, Split, Bake.
-- Toolpaths tab: Quick Engrave, Inlay, Chamfer, Fluting, Prism, Keyhole, Moulding, Texture,
+- Toolpaths tab: Quick Engrave, Inlay, Chamfer, Prism, Keyhole, Moulding, Texture,
   Sketch, Rounding, Laser Cut / Fill, Laser Picture, Toolpath Summary.
 
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool

@@ -185,6 +185,13 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Boundary Offset**: every unmachined area is grown by this before it is machined; small values give many small areas, large values fewer, larger ones.
 - Finishing is always one pass at full depth (it ignores pass depth); the usual tool is a ball nose with an 8–12 % stepover.
 
+### Fluting [obs] (help: Fluting Toolpath; `Aspire.exe` strings)
+- Cuts along each selected vector from its start point. **Start Depth** is where it begins (0 at the surface, or a pocket floor); **Flute Depth** is added below it.
+- **Flute Type:** ramp over the complete length (start depth at the start → full depth at the end); ramp at start (then full depth to the end); ramp at start and end.
+- **Ramp Length** is capped at the longest possible ramp (the vector's length, or half of it for start and end). **Ramp %** is a percentage of that longest ramp; **[dec]** it must be greater than 0 and less than 100 ("Ramp % is invalid").
+- **Ramp Type:** Linear, or Smooth, which curves and transitions smoothly into full depth. **[unk]** the curve itself: no code reference to the fluting strings was found (no LEA or pointer to them); Cut Craft uses a quarter sine, level at full depth.
+- **[unk]** whether it cuts in several passes; Cut Craft cuts one pass. Project onto 3D Model is not yet done.
+
 ---
 
 ## P5 — Directories and configuration
