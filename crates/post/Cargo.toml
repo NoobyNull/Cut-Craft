@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+chrono.workspace = true
 cut-craft-core.workspace = true
 
 [dev-dependencies]

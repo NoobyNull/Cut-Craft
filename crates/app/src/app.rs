@@ -450,7 +450,8 @@ impl CutCraftApp {
                         rfd::FileDialog::new().add_filter(&post.name, &[extension.as_str()]);
                     if let Some(path) = dialog.save_file() {
                         let path = path.with_extension(&extension);
-                        let result = files::save_through(post, &self.doc, &path);
+                        let job = self.session.path.as_deref();
+                        let result = files::save_through(post, &self.doc, &path, job);
                         self.status.set_message(&result.map_or_else(
                             |e| e,
                             |()| format!("Saved toolpaths to {}", path.display()),

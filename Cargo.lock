@@ -956,6 +956,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 name = "cut-craft"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "cmd-3d-finishing-toolpath",
  "cmd-3d-roughing-toolpath",
  "cmd-add-layer",
@@ -1038,6 +1039,7 @@ dependencies = [
 name = "cut-craft-post"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "cut-craft-core",
  "serde_json",
 ]

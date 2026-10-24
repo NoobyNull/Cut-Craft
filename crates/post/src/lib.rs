@@ -2,20 +2,75 @@
 //! and `begin BLOCK` templates (see `re/SPEC.md`). `Post::parse` reads one; `Post::render`
 //! writes a document's toolpaths through it.
 
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Datum, Document, ZZero};
 use cut_craft_core::toolpath::MoveKind;
 use std::collections::HashMap;
+use std::path::Path;
 
 const MM_PER_INCH: f64 = 25.4;
 /// Numeric values a post can print; the ones in `LENGTHS` become inches for inch posts
 /// (feed rates are lengths per minute).
-const NUMBERS: [&str; 13] = [
-    "X", "Y", "Z", "F", "FC", "FP", "S", "T", "N", "SAFEZ", "XH", "YH", "ZH",
+const NUMBERS: [&str; 23] = [
+    "X", "Y", "Z", "F", "FC", "FP", "S", "T", "N", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH",
+    "ZLENGTH", "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA",
 ];
-const LENGTHS: [&str; 10] = ["X", "Y", "Z", "F", "FC", "FP", "SAFEZ", "XH", "YH", "ZH"];
-const TEXTS: [&str; 2] = ["TOOLNAME", "TOOLPATH_NAME"];
-// ponytail: arcs, helical moves, DATE/TIME, file names, tape splitting and jet (laser) blocks
-// are not supported yet; posts using their variables are refused at parse time
+const LENGTHS: [&str; 20] = [
+    "X", "Y", "Z", "F", "FC", "FP", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH", "ZLENGTH",
+    "XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA",
+];
+/// Numbers Aspire prints to three places when a post gives no `VAR` format; the rest print
+/// whole (`re/SPEC.md`, the vocabulary table).
+const THREE_PLACES: [&str; 17] = [
+    "X", "Y", "Z", "SAFEZ", "XH", "YH", "ZH", "XLENGTH", "YLENGTH", "ZLENGTH", "XMIN", "XMAX",
+    "YMIN", "YMAX", "ZMIN", "ZMAX", "TDIA",
+];
+const TEXTS: [&str; 18] = [
+    "TOOLNAME",
+    "TOOLPATH_NAME",
+    "TP_FILENAME",
+    "TP_DIR",
+    "TP_EXT",
+    "PATHNAME",
+    "FILE_NAME",
+    "FILE_PATHNAME",
+    "DATE",
+    "TIME",
+    "Z_ORIGIN",
+    "XY_ORIGIN",
+    "UNITS",
+    "PRODUCT",
+    "POST_NAME",
+    "FILE_NOTES",
+    "TOOLPATH_NOTES",
+    "TOOL_NOTES",
+];
+/// Texts that are lists: a template line holding one is written once per item.
+const LISTS: [&str; 2] = ["TOOLS_USED", "TOOLPATHS_OUTPUT"];
+/// The blocks Cut Craft writes; a post may define others (arcs, lasers...) that it never uses.
+const WRITTEN: [&str; 11] = [
+    "HEADER",
+    "FOOTER",
+    "TOOLCHANGE",
+    "SPINDLE_ON",
+    "NEW_SEGMENT",
+    "INITIAL_RAPID_MOVE",
+    "RAPID_MOVE",
+    "FIRST_PLUNGE_MOVE",
+    "PLUNGE_MOVE",
+    "FIRST_FEED_MOVE",
+    "FEED_MOVE",
+];
+// ponytail: toolpaths are straight moves, so arc, helical, tape splitting and jet (laser)
+// blocks are never written; posts using unknown variables in written blocks are refused
+
+/// The file being written, for the variables that describe it.
+pub struct File<'a> {
+    pub path: &'a Path,
+    /// The job it comes from, once saved.
+    pub job: Option<&'a Path>,
+    /// When it was made, local time.
+    pub made: chrono::NaiveDateTime,
+}
 
 #[derive(Debug)]
 pub struct Post {
@@ -58,7 +113,7 @@ struct Format {
 }
 
 impl Default for Format {
-    /// The documented default, `[X|A||1.0]`.
+    /// A whole number, `[S|A||1.0]`.
     fn default() -> Self {
         Self {
             only_changes: false,
@@ -76,6 +131,14 @@ impl Default for Format {
 }
 
 impl Format {
+    /// How `label` prints when the post gives it no `VAR` line.
+    fn default_for(label: &str) -> Self {
+        Self {
+            decimals: if THREE_PLACES.contains(&label) { 3 } else { 0 },
+            ..Self::default()
+        }
+    }
+
     fn parse(spec: &str) -> Result<(String, Self), String> {
         let inner = spec.trim().trim_start_matches('[').trim_end_matches(']');
         let parts: Vec<&str> = inner.split('|').collect();
@@ -246,9 +309,10 @@ impl Post {
                 return Err(format!("the post has no {required} block"));
             }
         }
-        for line in self.blocks.values().flatten() {
+        let written = WRITTEN.iter().filter_map(|name| self.blocks.get(*name));
+        for line in written.flatten() {
             for label in labels(line) {
-                if !NUMBERS.contains(&label) && !TEXTS.contains(&label) {
+                if !NUMBERS.contains(&label) && !TEXTS.contains(&label) && !LISTS.contains(&label) {
                     return Err(format!(
                         "the post uses [{label}], which is not supported yet"
                     ));
@@ -258,7 +322,7 @@ impl Post {
         Ok(())
     }
 
-    pub fn render(&self, doc: &Document) -> Result<String, String> {
+    pub fn render(&self, doc: &Document, file: &File) -> Result<String, String> {
         let toolpaths: Vec<_> = doc.toolpaths.values().collect();
         let Some(first) = toolpaths.first() else {
             return Err("there are no toolpaths to save".into());
@@ -269,27 +333,21 @@ impl Post {
                 tools.push(&t.tool.name);
             }
         }
-        let safe = doc.job.machine_z(doc.job.clearance);
         let mut out = Output {
             post: self,
             text: String::new(),
             last: HashMap::new(),
             line_number: self.numbering.start,
         };
-        let mut v = Values::default();
+        let mut v = self.job_values(doc, file);
+        v.lists
+            .insert("TOOLS_USED", tools.iter().map(|&t| t.to_owned()).collect());
+        v.lists.insert(
+            "TOOLPATHS_OUTPUT",
+            toolpaths.iter().map(|t| t.name.clone()).collect(),
+        );
         v.texts.insert("TOOLPATH_NAME", first.name.clone());
         v.texts.insert("TOOLNAME", first.tool.name.clone());
-        for (label, value) in [
-            ("XH", 0.0),
-            ("YH", 0.0),
-            ("ZH", safe),
-            ("SAFEZ", safe),
-            ("X", 0.0),
-            ("Y", 0.0),
-            ("Z", safe),
-        ] {
-            v.numbers.insert(label, value);
-        }
         v.tool(&first.tool, &tools);
         out.block("HEADER", &v);
 
@@ -353,13 +411,92 @@ impl Post {
         out.block("FOOTER", &v);
         Ok(out.text)
     }
+
+    /// What stays the same through the file: the material, the file, the time and the
+    /// starting position.
+    fn job_values(&self, doc: &Document, file: &File) -> Values {
+        let job = &doc.job;
+        let safe = job.machine_z(job.clearance);
+        let area = job.area();
+        let mut v = Values::default();
+        for (label, value) in [
+            ("XH", 0.0),
+            ("YH", 0.0),
+            ("ZH", safe),
+            ("SAFEZ", safe),
+            ("X", 0.0),
+            ("Y", 0.0),
+            ("Z", safe),
+            ("XLENGTH", job.width),
+            ("YLENGTH", job.height),
+            ("ZLENGTH", job.thickness),
+            ("XMIN", area.min.x),
+            ("XMAX", area.max.x),
+            ("YMIN", area.min.y),
+            ("YMAX", area.max.y),
+            ("ZMIN", job.machine_z(-job.thickness)),
+            ("ZMAX", job.machine_z(0.0)),
+        ] {
+            v.numbers.insert(label, value);
+        }
+        let text = |s: Option<&std::ffi::OsStr>| s.map(|s| s.to_string_lossy().into_owned());
+        let shown = |p: Option<&Path>| p.map(|p| p.display().to_string());
+        for (label, value) in [
+            ("TP_FILENAME", text(file.path.file_stem())),
+            ("TP_DIR", shown(file.path.parent())),
+            ("TP_EXT", text(file.path.extension())),
+            ("PATHNAME", shown(Some(file.path))),
+            ("FILE_NAME", text(file.job.and_then(Path::file_stem))),
+            ("FILE_PATHNAME", shown(file.job)),
+            ("DATE", Some(file.made.format("%A %B %d %Y").to_string())),
+            ("TIME", Some(file.made.format("%I:%M %p").to_string())),
+            ("Z_ORIGIN", Some(z_origin(job.z_zero).into())),
+            ("XY_ORIGIN", Some(xy_origin(job.datum).into())),
+            (
+                "UNITS",
+                Some(if self.inches { "INCHES" } else { "MM" }.into()),
+            ),
+            (
+                "PRODUCT",
+                Some(concat!("Cut Craft ", env!("CARGO_PKG_VERSION")).into()),
+            ),
+            ("POST_NAME", Some(self.name.clone())),
+            // Cut Craft has no notes yet
+            ("FILE_NOTES", None),
+            ("TOOLPATH_NOTES", None),
+            ("TOOL_NOTES", None),
+        ] {
+            v.texts.insert(label, value.unwrap_or_default());
+        }
+        v
+    }
+}
+
+fn z_origin(z_zero: ZZero) -> &'static str {
+    match z_zero {
+        ZZero::MaterialSurface => "Material Surface",
+        ZZero::MachineBed => "Machine Bed",
+    }
+}
+
+/// Aspire's own wording is not known (`re/SPEC.md`); these are ours.
+fn xy_origin(datum: Datum) -> &'static str {
+    match datum {
+        Datum::BottomLeft => "Bottom Left Corner",
+        Datum::TopLeft => "Top Left Corner",
+        Datum::TopRight => "Top Right Corner",
+        Datum::BottomRight => "Bottom Right Corner",
+        Datum::Centre => "Center",
+    }
 }
 
 /// The values variables print from at one point in the output.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Values {
     numbers: HashMap<&'static str, f64>,
     texts: HashMap<&'static str, String>,
+    /// Lists, each item written on its own copy of the line (`LISTS`).
+    lists: HashMap<&'static str, Vec<String>>,
 }
 
 impl Values {
@@ -373,6 +510,7 @@ impl Values {
         self.numbers.insert("S", tool.spindle_speed);
         self.numbers.insert("FC", tool.feed_rate);
         self.numbers.insert("FP", tool.plunge_rate);
+        self.numbers.insert("TDIA", tool.diameter);
     }
 }
 
@@ -391,33 +529,49 @@ impl Output<'_> {
             return;
         };
         for template in lines {
-            let mut line = String::new();
-            let mut rest = template.as_str();
-            let mut numbered = false;
-            while let Some(open) = rest.find('[') {
-                let Some(close) = rest[open..].find(']') else {
-                    break;
-                };
-                line.push_str(&rest[..open]);
-                let label = &rest[open + 1..open + close];
-                numbered |= label == "N";
-                line.push_str(&self.value(label, v));
-                rest = &rest[open + close + 1..];
+            let list = v
+                .lists
+                .iter()
+                .find(|(label, _)| template.contains(&format!("[{label}]")));
+            if let Some((&label, items)) = list {
+                for item in items {
+                    let mut one = v.clone();
+                    one.texts.insert(label, item.clone());
+                    self.line(template, &one);
+                }
+            } else {
+                self.line(template, v);
             }
-            line.push_str(rest);
-            if numbered {
-                let n = self.post.numbering;
-                self.line_number = if self.line_number + n.increment > n.maximum {
-                    n.start
-                } else {
-                    self.line_number + n.increment
-                };
-            }
-            let line = line.trim_end();
-            if !line.is_empty() {
-                self.text.push_str(line);
-                self.text.push_str(&self.post.line_ending);
-            }
+        }
+    }
+
+    fn line(&mut self, template: &str, v: &Values) {
+        let mut line = String::new();
+        let mut rest = template;
+        let mut numbered = false;
+        while let Some(open) = rest.find('[') {
+            let Some(close) = rest[open..].find(']') else {
+                break;
+            };
+            line.push_str(&rest[..open]);
+            let label = &rest[open + 1..open + close];
+            numbered |= label == "N";
+            line.push_str(&self.value(label, v));
+            rest = &rest[open + close + 1..];
+        }
+        line.push_str(rest);
+        if numbered {
+            let n = self.post.numbering;
+            self.line_number = if self.line_number + n.increment > n.maximum {
+                n.start
+            } else {
+                self.line_number + n.increment
+            };
+        }
+        let line = line.trim_end();
+        if !line.is_empty() {
+            self.text.push_str(line);
+            self.text.push_str(&self.post.line_ending);
         }
     }
 
@@ -444,7 +598,12 @@ impl Output<'_> {
         } else {
             raw
         };
-        let format = self.post.formats.get(label).cloned().unwrap_or_default();
+        let format = self
+            .post
+            .formats
+            .get(label)
+            .cloned()
+            .unwrap_or_else(|| Format::default_for(label));
         let text = format.number(value);
         if format.only_changes {
             if self.last.get(label) == Some(&text) {
@@ -565,7 +724,15 @@ begin FOOTER
             c.add_toolpath(t);
         }
         doc.apply(&c.finish()).unwrap();
-        let text = Post::parse(post).unwrap().render(&doc).unwrap();
+        let made = chrono::NaiveDate::from_ymd_opt(2026, 10, 24)
+            .and_then(|d| d.and_hms_opt(9, 37, 0))
+            .unwrap();
+        let file = File {
+            path: std::path::Path::new("/jobs/sign/front.nc"),
+            job: Some(std::path::Path::new("/jobs/sign.ccjob")),
+            made,
+        };
+        let text = Post::parse(post).unwrap().render(&doc, &file).unwrap();
         assert!(text.ends_with("\r\n"), "LINE_ENDING is honoured");
         text.split("\r\n")
             .filter(|l| !l.is_empty())
@@ -671,10 +838,84 @@ begin FOOTER
 
     #[test]
     fn unsupported_variables_are_named_not_ignored() {
-        let post = BASIC.replace("\"G21 G90\"", "\"G21 G90 ([DATE])\"");
+        let post = BASIC.replace("\"G1 [X] [Y] [Z] [F]\"", "\"G1 [X] [Y] [Z] [I] [F]\"");
         assert_eq!(
             Post::parse(&post).unwrap_err(),
-            "the post uses [DATE], which is not supported yet"
+            "the post uses [I], which is not supported yet"
+        );
+    }
+
+    #[test]
+    fn posts_may_define_blocks_cut_craft_never_writes() {
+        let post = format!(
+            "{BASIC}\nVAR ARC_CENTRE_I_INC_POSITION = [I|A|I|1.3]\nbegin CW_ARC_MOVE\n\"G2 [X] [Y] [I] [J] [F]\"\nbegin REVISION_COMMENT\n\"(revision [REVISION])\"\n"
+        );
+        let lines = render(&post, vec![toolpath("P", "T")]);
+        assert!(
+            lines
+                .iter()
+                .all(|l| !l.starts_with("G2 ") && !l.starts_with("(revision")),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn variables_without_a_var_line_print_in_aspires_default_formats() {
+        let post = "POST_NAME = \"Bare\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\nLINE_ENDING = \"[13][10]\"\nbegin HEADER\n\"[S] M3 [XLENGTH]\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\nbegin FEED_MOVE\n\"G1 [X] [Y] [Z] [F]\"\n";
+        let lines = render(post, vec![toolpath("P", "T")]);
+        assert_eq!(
+            lines[0], "18000 M3 600.000",
+            "rates whole, lengths to 3 places"
+        );
+        assert!(
+            lines.contains(&"G1 25.400 0.000 -3.000 1000".to_owned()),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn header_variables_describe_the_job_the_file_and_the_time() {
+        let post = BASIC.replace(
+            "begin HEADER\n",
+            "begin HEADER\n\"([TP_FILENAME]|[TP_DIR]|[TP_EXT]|[PATHNAME]|[FILE_NAME]|[FILE_PATHNAME])\"\n\"([DATE] - [TIME])\"\n\"([XLENGTH] [YLENGTH] [ZLENGTH] [XMIN] [XMAX] [YMIN] [YMAX] [ZMIN] [ZMAX])\"\n\"([Z_ORIGIN] / [XY_ORIGIN] / [UNITS] / [TDIA])\"\n\"([PRODUCT] / [POST_NAME] / [FILE_NOTES][TOOLPATH_NOTES][TOOL_NOTES])\"\n",
+        );
+        let lines = render(&post, vec![toolpath("P", "T")]);
+        assert_eq!(
+            lines[..5],
+            [
+                "(front|/jobs/sign|nc|/jobs/sign/front.nc|sign|/jobs/sign.ccjob)",
+                "(Saturday October 24 2026 - 09:37 AM)",
+                "(600.000 400.000 20.000 0.000 600.000 0.000 400.000 -20.000 0.000)",
+                "(Material Surface / Bottom Left Corner / MM / 6.000)",
+                &format!(
+                    "(Cut Craft {} / Test G-code (mm) (*.nc) / )",
+                    env!("CARGO_PKG_VERSION")
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn tools_used_and_toolpaths_output_list_one_line_each_in_order_of_use() {
+        let post = BASIC.replace(
+            "begin HEADER\n",
+            "begin HEADER\n\"(tool [TOOLS_USED])\"\n\"(path [TOOLPATHS_OUTPUT])\"\n",
+        );
+        let toolpaths = vec![
+            toolpath("A", "6 mm"),
+            toolpath("B", "3 mm"),
+            toolpath("C", "6 mm"),
+        ];
+        let lines = render(&post, toolpaths);
+        assert_eq!(
+            lines[..5],
+            [
+                "(tool 6 mm)",
+                "(tool 3 mm)",
+                "(path A)",
+                "(path B)",
+                "(path C)"
+            ]
         );
     }
 

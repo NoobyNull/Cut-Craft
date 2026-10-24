@@ -8,6 +8,7 @@ edition = "2024"
 
 [workspace.dependencies]
 cut-craft-core = { path = "crates/core" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 eframe = { version = "0.27", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11"] }
 dxf = "0.6"
 egui_extras = { version = "0.27", default-features = false, features = ["file", "svg"] }
