@@ -269,7 +269,7 @@ impl Post {
                 tools.push(&t.tool.name);
             }
         }
-        let safe = doc.job.clearance;
+        let safe = doc.job.machine_z(doc.job.clearance);
         let mut out = Output {
             post: self,
             text: String::new(),
@@ -312,7 +312,7 @@ impl Post {
             for m in &toolpath.moves {
                 v.numbers.insert("X", m.to.x);
                 v.numbers.insert("Y", m.to.y);
-                v.numbers.insert("Z", m.to.z);
+                v.numbers.insert("Z", doc.job.machine_z(m.to.z));
                 let block = match m.kind {
                     MoveKind::Rapid => {
                         feeding = false;
@@ -547,7 +547,18 @@ begin FOOTER
     }
 
     fn render(post: &str, toolpaths: Vec<Toolpath>) -> Vec<String> {
-        let mut doc = Document::default();
+        render_for(post, cut_craft_core::document::Job::default(), toolpaths)
+    }
+
+    fn render_for(
+        post: &str,
+        job: cut_craft_core::document::Job,
+        toolpaths: Vec<Toolpath>,
+    ) -> Vec<String> {
+        let mut doc = Document {
+            job,
+            ..Document::default()
+        };
         let mut c = Change::builder(&doc);
         for t in toolpaths {
             c.add_toolpath(t);
@@ -559,6 +570,20 @@ begin FOOTER
             .filter(|l| !l.is_empty())
             .map(String::from)
             .collect()
+    }
+
+    #[test]
+    fn z_zero_on_the_machine_bed_raises_every_z_by_the_thickness() {
+        use cut_craft_core::document::{Job, ZZero};
+        let job = Job {
+            z_zero: ZZero::MachineBed,
+            thickness: 20.0,
+            ..Job::default()
+        };
+        let surface = render(BASIC, vec![toolpath("P", "T")]);
+        let bed = render_for(BASIC, job, vec![toolpath("P", "T")]);
+        assert!(surface.contains(&"G0 Z5.000".to_owned()), "{surface:?}");
+        assert!(bed.contains(&"G0 Z25.000".to_owned()), "{bed:?}");
     }
 
     #[test]

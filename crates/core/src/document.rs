@@ -56,11 +56,82 @@ fn first_layer() -> LayerId {
 )]
 pub enum Units {
     #[default]
+    #[schemars(title = "mm")]
     Mm,
+    #[schemars(title = "inches")]
     Inch,
 }
 
-/// The material block, in millimetres.
+/// Where Z = 0 is.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ZZero {
+    /// The tool is zeroed on the top of the material
+    #[default]
+    #[schemars(title = "Material Surface")]
+    MaterialSurface,
+    /// The tool is zeroed on the machine bed under the material
+    #[schemars(title = "Machine Bed")]
+    MachineBed,
+}
+
+/// The point of the material the machine's X0, Y0 is.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Datum {
+    #[default]
+    BottomLeft,
+    TopLeft,
+    TopRight,
+    BottomRight,
+    Centre,
+}
+
+impl Datum {
+    /// Where this datum is on a material of `size`, from its bottom-left corner.
+    fn on(self, size: Point) -> Point {
+        match self {
+            Self::BottomLeft => Point::ZERO,
+            Self::TopLeft => Point::new(0.0, size.y),
+            Self::TopRight => size,
+            Self::BottomRight => Point::new(size.x, 0.0),
+            Self::Centre => size / 2.0,
+        }
+    }
+}
+
+/// How finely the 3D model is worked out over the job.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Resolution {
+    #[default]
+    #[schemars(title = "Standard (fastest)")]
+    Standard,
+    #[schemars(title = "High (3x slower)")]
+    High,
+    #[schemars(title = "Highest (7x slower)")]
+    Highest,
+}
+
+impl Resolution {
+    /// Model points spread over the whole job.
+    pub fn points(self) -> f64 {
+        match self {
+            Self::Standard => 1e6,
+            Self::High => 3e6,
+            Self::Highest => 7e6,
+        }
+    }
+}
+
+/// The material block, in millimetres. Job coordinates are the machine's: the datum is at
+/// `offset` (0, 0 unless an offset is used), so the material lies where [`Job::area`] says.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Job {
     pub width: f64,
@@ -70,10 +141,48 @@ pub struct Job {
     /// Safe height above the material for rapid moves (added after the first job format).
     #[serde(default = "default_clearance")]
     pub clearance: f64,
+    // added with the full Job Setup form; older files get the defaults
+    #[serde(default)]
+    pub z_zero: ZZero,
+    #[serde(default)]
+    pub datum: Datum,
+    #[serde(default)]
+    pub offset: Point,
+    #[serde(default)]
+    pub resolution: Resolution,
+    /// The material's colour in the 3D view.
+    #[serde(default = "default_colour")]
+    pub colour: [u8; 3],
 }
 
 fn default_clearance() -> f64 {
     Job::default().clearance
+}
+
+fn default_colour() -> [u8; 3] {
+    Job::default().colour
+}
+
+impl Job {
+    /// The material in job coordinates.
+    pub fn area(&self) -> Rect {
+        let size = Point::new(self.width, self.height);
+        let min = self.offset - self.datum.on(size);
+        Rect::new(min, min + size)
+    }
+
+    /// A toolpath height (from the material surface) as the machine is told it.
+    pub fn machine_z(&self, z: f64) -> f64 {
+        match self.z_zero {
+            ZZero::MaterialSurface => z,
+            ZZero::MachineBed => z + self.thickness,
+        }
+    }
+
+    /// Edge of one 3D model cell: the resolution's points spread over the job.
+    pub fn model_cell(&self) -> f64 {
+        (self.width * self.height / self.resolution.points()).sqrt()
+    }
 }
 
 impl Default for Job {
@@ -85,6 +194,12 @@ impl Default for Job {
             thickness: 20.0,
             units: Units::Mm,
             clearance: 5.0,
+            z_zero: ZZero::MaterialSurface,
+            datum: Datum::BottomLeft,
+            offset: Point::ZERO,
+            resolution: Resolution::Standard,
+            // ponytail: one wood colour until a Materials dialog offers textures
+            colour: [214, 160, 102],
         }
     }
 }

@@ -10,10 +10,6 @@ use serde::{Deserialize, Serialize};
 
 pub struct CreateShape;
 
-/// Component cells along the longer side of the selection.
-// ponytail: fixed detail until job setup has a model resolution
-const CELLS_ACROSS: f64 = 200.0;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Profile {
@@ -90,7 +86,7 @@ impl Command for CreateShape {
                 "select the closed vectors to shape".into(),
             ));
         };
-        let cell = bounds.size().max_element() / CELLS_ACROSS;
+        let cell = doc.job.model_cell();
         let rings: Vec<Vec<Point>> = paths.iter().map(|path| path.flatten(cell / 4.0)).collect();
         // first each cell's distance in from the edge, then the profile over it
         let mut component = Component::from_fn(&name, p.combine, bounds, cell, |at| {
@@ -234,6 +230,20 @@ mod tests {
         .unwrap();
         assert_eq!(c.height_at(Point::new(50.0, 50.0)), None);
         assert_eq!(c.combine, Combine::Subtract);
+    }
+
+    #[test]
+    fn shapes_are_as_fine_as_the_job_modeling_resolution() {
+        use cut_craft_core::document::Resolution;
+        let cell = |resolution| {
+            let mut doc = document_with(vec![square(0.0, 0.0, 100.0)]);
+            doc.job.resolution = resolution;
+            cut_craft_core::testing::run_on::<CreateShape>(&mut doc, &Params::default());
+            doc.components.into_values().next().unwrap().cell
+        };
+        let standard = cell(Resolution::Standard);
+        assert!((standard - cut_craft_core::document::Job::default().model_cell()).abs() < 1e-12);
+        assert!((cell(Resolution::High) - standard / 3f64.sqrt()).abs() < 1e-12);
     }
 
     #[test]

@@ -3,7 +3,7 @@
 
 use cut_craft_core::Drag;
 use cut_craft_core::document::{Document, EntityId, Job};
-use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::geometry::{Path, Point, Rect as JobRect};
 use cut_craft_core::toolpath::MoveKind;
 use eframe::egui::{self, Pos2, Rect, Sense, Shape, Stroke, pos2};
 
@@ -17,13 +17,17 @@ pub struct ViewTransform {
 
 impl ViewTransform {
     /// Fits a `width` × `height` job inside `area` with `margin` pixels to spare, centred.
-    pub fn fit(area: Rect, margin: f32, width: f64, height: f64) -> Self {
+    /// Fits the material, wherever the datum puts it, into the middle of `area`.
+    pub fn fit(area: Rect, margin: f32, job: JobRect) -> Self {
         let inner = area.shrink(margin);
-        let (w, h) = (to_f32(width), to_f32(height));
-        let scale = (inner.width() / w).min(inner.height() / h);
-        let c = inner.center();
+        let size = job.size();
+        let scale = (inner.width() / to_f32(size.x)).min(inner.height() / to_f32(size.y));
+        let (c, middle) = (inner.center(), job.center());
         Self {
-            origin: pos2(c.x - w * scale / 2.0, c.y + h * scale / 2.0),
+            origin: pos2(
+                c.x - to_f32(middle.x) * scale,
+                c.y + to_f32(middle.y) * scale,
+            ),
             scale,
         }
     }
@@ -66,19 +70,21 @@ pub enum Overlay {
 
 pub struct Canvas {
     pub transform: ViewTransform,
-    area: Rect,
+    pub area: Rect,
     response: egui::Response,
+    /// The material, in job coordinates.
+    job: JobRect,
 }
 
 impl Canvas {
     pub fn new(ui: &mut egui::Ui, job: &Job) -> Self {
         let (area, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-        let transform =
-            ViewTransform::fit(area, ui.spacing().interact_size.y, job.width, job.height);
+        let transform = ViewTransform::fit(area, ui.spacing().interact_size.y, job.area());
         Self {
             transform,
             area,
             response,
+            job: job.area(),
         }
     }
 
@@ -146,10 +152,7 @@ impl Canvas {
             ui.spacing().item_spacing.x / 2.0,
         );
 
-        let job = Rect::from_two_pos(
-            t.to_screen(Point::ZERO),
-            t.to_screen(Point::new(doc.job.width, doc.job.height)),
-        );
+        let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
         painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
         let datum = visuals.widgets.noninteractive.fg_stroke;
         let (o, area) = (t.origin, self.area);
@@ -241,9 +244,24 @@ mod tests {
     use eframe::egui::{pos2, vec2};
 
     #[test]
+    fn a_job_centred_on_its_datum_is_still_fitted_in_the_middle() {
+        let area = Rect::from_min_size(pos2(0.0, 0.0), vec2(500.0, 300.0));
+        let job = Job {
+            datum: cut_craft_core::document::Datum::Centre,
+            ..Job::default()
+        };
+        let t = ViewTransform::fit(area, 10.0, job.area());
+        let middle = t.to_screen(Point::ZERO);
+        assert!(
+            (middle.x - 250.0).abs() < 1e-3 && (middle.y - 150.0).abs() < 1e-3,
+            "{middle:?}"
+        );
+    }
+
+    #[test]
     fn fit_keeps_the_aspect_ratio_and_centres_the_job() {
         let area = Rect::from_min_size(pos2(0.0, 0.0), vec2(500.0, 300.0));
-        let t = ViewTransform::fit(area, 10.0, 600.0, 400.0);
+        let t = ViewTransform::fit(area, 10.0, Job::default().area());
         assert!(
             (t.scale - 0.7).abs() < 1e-6,
             "limited by height: (300-20)/400"

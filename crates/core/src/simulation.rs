@@ -10,6 +10,8 @@ use std::ops::Range;
 /// surface over it (0 is the top of the material, `bottom` its underside).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Material {
+    /// The lower-left corner of the grid, in job coordinates.
+    pub origin: Point,
     pub columns: usize,
     pub rows: usize,
     /// Edge of one cell, mm.
@@ -32,6 +34,7 @@ impl Material {
         let count = |length: f64| ((length / cell).round() as usize).max(1);
         let (columns, rows) = (count(job.width), count(job.height));
         Self {
+            origin: job.area().min,
             columns,
             rows,
             cell,
@@ -42,12 +45,15 @@ impl Material {
 
     /// Middle of a cell, job mm.
     pub fn centre(&self, column: usize, row: usize) -> Point {
-        Point::new(column as f64 + 0.5, row as f64 + 0.5) * self.cell
+        self.origin + Point::new(column as f64 + 0.5, row as f64 + 0.5) * self.cell
     }
 
     /// Height of the surface over `p`, or `None` off the material.
     pub fn at(&self, p: Point) -> Option<f64> {
-        let (column, row) = (p.x / self.cell, p.y / self.cell);
+        let (column, row) = (
+            (p.x - self.origin.x) / self.cell,
+            (p.y - self.origin.y) / self.cell,
+        );
         if column < 0.0 || row < 0.0 {
             return None;
         }
@@ -56,8 +62,18 @@ impl Material {
             .then(|| self.heights[row * self.columns + column])
     }
 
-    /// Indices of the cells from `lo` to `hi` mm along a side `count` cells long.
-    fn cells(&self, lo: f64, hi: f64, count: usize) -> Range<usize> {
+    /// The columns covering x from `lo` to `hi`.
+    fn columns_between(&self, lo: f64, hi: f64) -> Range<usize> {
+        self.span(lo - self.origin.x, hi - self.origin.x, self.columns)
+    }
+
+    /// The rows covering y from `lo` to `hi`.
+    fn rows_between(&self, lo: f64, hi: f64) -> Range<usize> {
+        self.span(lo - self.origin.y, hi - self.origin.y, self.rows)
+    }
+
+    /// Indices of the cells from `lo` to `hi` mm along a side `count` cells long, from its start.
+    fn span(&self, lo: f64, hi: f64, count: usize) -> Range<usize> {
         ((lo / self.cell).floor().max(0.0) as usize)
             ..((hi / self.cell).ceil().max(0.0) as usize).min(count)
     }
@@ -67,8 +83,8 @@ impl Material {
     pub fn drop_tool(&self, tool: &Tool, at: Point) -> f64 {
         let radius = tool.diameter / 2.0;
         let mut tip = f64::NEG_INFINITY;
-        for row in self.cells(at.y - radius, at.y + radius, self.rows) {
-            for column in self.cells(at.x - radius, at.x + radius, self.columns) {
+        for row in self.rows_between(at.y - radius, at.y + radius) {
+            for column in self.columns_between(at.x - radius, at.x + radius) {
                 if let Some(rise) = tool.profile(self.centre(column, row).distance(at)) {
                     tip = tip.max(self.heights[row * self.columns + column] - rise);
                 }
@@ -126,8 +142,8 @@ impl Material {
             a.truncate().max(b.truncate()) + radius,
         );
         (
-            self.cells(lo.x, hi.x, self.columns),
-            self.cells(lo.y, hi.y, self.rows),
+            self.columns_between(lo.x, hi.x),
+            self.rows_between(lo.y, hi.y),
         )
     }
 }

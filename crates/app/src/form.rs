@@ -16,6 +16,17 @@ pub struct Field {
     /// Doc comment of the parameter, shown on hover.
     pub help: Option<String>,
     pub kind: Kind,
+    /// Marked `x-section`: drawn as a framed block with a heading, as Aspire's forms are.
+    pub section: bool,
+    /// `x-icon`: the section's picture, which may follow its value (see [`icon_path`]).
+    pub icon: Option<String>,
+}
+
+/// How a form looks: the units lengths are shown in, and the pictures sections show.
+pub struct Look<'a> {
+    pub units: Units,
+    /// A picture by icon path, sized for a section; `None` when the icon is missing.
+    pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -29,10 +40,8 @@ pub enum Kind {
     Bool,
     Text,
     Choice(Vec<Choice>),
-    /// A nested object, e.g. a point, edited inline.
+    /// A nested object, e.g. a point.
     Group(Vec<Field>),
-    /// A nested object marked `x-section`: a framed block with a heading, as Aspire's forms have.
-    Section(Vec<Field>),
     /// An `[r, g, b]` array marked `x-kind: colour`.
     Colour,
     /// A list whose items all have this shape.
@@ -48,46 +57,55 @@ pub struct Choice {
     pub help: Option<String>,
 }
 
-/// Edits `params` through its fields, lengths shown in `units`; true when anything changed.
-pub fn show(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, units: Units) -> bool {
+/// Edits `params` through its fields; true when anything changed.
+pub fn show(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look) -> bool {
     let mut changed = false;
     // runs of ordinary fields share a grid; each section is a framed block of its own
     let mut rest = fields;
     while !rest.is_empty() {
-        let run = rest
-            .iter()
-            .position(|f| matches!(f.kind, Kind::Section(_)))
-            .unwrap_or(rest.len());
+        let run = rest.iter().position(|f| f.section).unwrap_or(rest.len());
         let (plain, after) = rest.split_at(run);
         if !plain.is_empty() {
-            changed |= grid(ui, plain, params, units);
+            changed |= grid(ui, plain, params, look);
         }
-        if let Some((section, after)) = after.split_first() {
-            if let Kind::Section(inner) = &section.kind {
-                changed |= ui
-                    .group(|ui| {
-                        ui.set_width(ui.available_width());
-                        hover(ui.strong(&section.label), section.help.as_ref());
-                        show(ui, inner, &mut params[&section.key], units)
+        let Some((section, after)) = after.split_first() else {
+            break;
+        };
+        changed |= ui
+            .group(|ui| {
+                ui.set_width(ui.available_width());
+                hover(ui.strong(&section.label), section.help.as_ref());
+                let value = &mut params[&section.key];
+                let picture = section
+                    .icon
+                    .as_ref()
+                    .and_then(|template| (look.picture)(&icon_path(template, value)));
+                ui.horizontal(|ui| {
+                    if let Some(picture) = picture {
+                        ui.add(picture);
+                    }
+                    ui.vertical(|ui| match &section.kind {
+                        Kind::Group(inner) => show(ui, inner, value, look),
+                        kind => edit(ui, kind, value, look),
                     })
-                    .inner;
-            }
-            rest = after;
-        } else {
-            rest = after;
-        }
+                    .inner
+                })
+                .inner
+            })
+            .inner;
+        rest = after;
     }
     changed
 }
 
-fn grid(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, units: Units) -> bool {
+fn grid(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look) -> bool {
     let mut changed = false;
     egui::Grid::new(ui.next_auto_id())
         .num_columns(2)
         .show(ui, |ui| {
             for f in fields {
                 hover(ui.label(&f.label), f.help.as_ref());
-                changed |= edit(ui, &f.kind, &mut params[&f.key], units);
+                changed |= edit(ui, &f.kind, &mut params[&f.key], look);
                 ui.end_row();
             }
         });
@@ -109,6 +127,19 @@ pub fn shown_in(unit: &str, units: Units) -> Option<(f64, &'static str)> {
     }
 }
 
+/// A section's picture for its value: `{}` stands for the value, `{name}` for its field `name`.
+pub fn icon_path(template: &str, value: &Value) -> String {
+    let mut path = template.replace("{}", value.as_str().unwrap_or_default());
+    if let Some(fields) = value.as_object() {
+        for (name, v) in fields {
+            if let Some(v) = v.as_str() {
+                path = path.replace(&format!("{{{name}}}"), v);
+            }
+        }
+    }
+    path
+}
+
 /// The units a form itself sets (Job Setup's), found anywhere in its params.
 pub fn units_chosen(params: &Value) -> Option<Units> {
     match params {
@@ -120,7 +151,7 @@ pub fn units_chosen(params: &Value) -> Option<Units> {
     }
 }
 
-fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, units: Units) -> bool {
+fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool {
     match kind {
         Kind::Number {
             unit,
@@ -128,7 +159,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, units: Units) -> bool
             max,
             integer,
         } => {
-            let (factor, unit) = match unit.as_deref().map(|u| (u, shown_in(u, units))) {
+            let (factor, unit) = match unit.as_deref().map(|u| (u, shown_in(u, look.units))) {
                 Some((_, Some((factor, shown)))) => (factor, Some(shown.to_owned())),
                 Some((stored, None)) => (1.0, Some(stored.to_owned())),
                 None => (1.0, None),
@@ -171,10 +202,8 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, units: Units) -> bool
             changed
         }
         Kind::Choice(options) => choose(ui, options, value),
-        Kind::Group(inner) | Kind::Section(inner) => {
-            ui.vertical(|ui| show(ui, inner, value, units)).inner
-        }
-        Kind::List(item) => ui.vertical(|ui| edit_list(ui, item, value, units)).inner,
+        Kind::Group(inner) => ui.vertical(|ui| show(ui, inner, value, look)).inner,
+        Kind::List(item) => ui.vertical(|ui| edit_list(ui, item, value, look)).inner,
         Kind::Colour => {
             let mut rgb = [0, 1, 2].map(|i| {
                 value[i]
@@ -195,12 +224,13 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, units: Units) -> bool
     }
 }
 
-/// Radio buttons for a few options, a drop-down for more.
+/// Radio buttons, one under another, for a few options; a drop-down for more.
 fn choose(ui: &mut egui::Ui, options: &[Choice], value: &mut Value) -> bool {
     let current = value.as_str().unwrap_or_default().to_owned();
     let mut picked = None;
     if options.len() <= MOST_RADIOS {
-        ui.horizontal_wrapped(|ui| {
+        // stacked, so their size does not depend on the width the layout gives them
+        ui.vertical(|ui| {
             for o in options {
                 let radio = ui.radio(o.value == current, &o.label);
                 if radio.clicked() {
@@ -233,7 +263,7 @@ fn choose(ui: &mut egui::Ui, options: &[Choice], value: &mut Value) -> bool {
     }
 }
 
-fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, units: Units) -> bool {
+fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> bool {
     let Some(items) = value.as_array_mut() else {
         return false;
     };
@@ -241,7 +271,7 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, units: Units) ->
     let mut remove = None;
     for (i, it) in items.iter_mut().enumerate() {
         ui.horizontal(|ui| {
-            changed |= edit(ui, item, it, units);
+            changed |= edit(ui, item, it, look);
             if ui.small_button("✕").on_hover_text("Remove").clicked() {
                 remove = Some(i);
             }
@@ -287,6 +317,12 @@ fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
                 .or_else(|| resolve(root, s)["description"].as_str())
                 .map(String::from),
             kind: kind(root, s),
+            section: s.get("x-section") == Some(&Value::Bool(true))
+                || resolve(root, s).get("x-section") == Some(&Value::Bool(true)),
+            icon: s["x-icon"]
+                .as_str()
+                .or_else(|| resolve(root, s)["x-icon"].as_str())
+                .map(String::from),
         })
         .collect()
 }
@@ -308,9 +344,6 @@ fn kind(root: &Value, property: &Value) -> Kind {
     }
     if let Some(options) = choices(s) {
         return Kind::Choice(options);
-    }
-    if s["type"] == "object" && marked("x-section") == Some(&Value::Bool(true)) {
-        return Kind::Section(object_fields(root, s));
     }
     match s["type"].as_str() {
         Some(t @ ("number" | "integer")) => Kind::Number {
@@ -418,12 +451,43 @@ mod tests {
             }
         });
         let f = fields(&schema);
-        assert!(matches!(&field(&f, "size").kind, Kind::Section(inner) if inner.len() == 1));
-        assert!(
-            matches!(&field(&f, "at").kind, Kind::Group(_)),
-            "unmarked groups stay inline"
-        );
+        assert!(field(&f, "size").section);
+        assert!(matches!(&field(&f, "size").kind, Kind::Group(inner) if inner.len() == 1));
+        assert!(!field(&f, "at").section, "unmarked groups stay inline");
         assert_eq!(field(&f, "colour").kind, Kind::Colour);
+    }
+
+    #[test]
+    fn section_pictures_follow_the_choice_made() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "z_zero": { "enum": ["material_surface", "machine_bed"], "x-icon": "job_setup/z_zero_{}.svg" }
+            }
+        });
+        assert_eq!(
+            field(&fields(&schema), "z_zero").icon.as_deref(),
+            Some("job_setup/z_zero_{}.svg")
+        );
+        let pick = |template, value| icon_path(template, &value);
+        assert_eq!(
+            pick("job_setup/z_zero_{}.svg", serde_json::json!("machine_bed")),
+            "job_setup/z_zero_machine_bed.svg"
+        );
+        assert_eq!(
+            pick(
+                "job_setup/xy_datum_{position}.svg",
+                serde_json::json!({ "position": "centre" })
+            ),
+            "job_setup/xy_datum_centre.svg"
+        );
+        assert_eq!(
+            pick(
+                "job_setup/material_size_xyz.svg",
+                serde_json::json!({ "width": 1 })
+            ),
+            "job_setup/material_size_xyz.svg"
+        );
     }
 
     #[test]

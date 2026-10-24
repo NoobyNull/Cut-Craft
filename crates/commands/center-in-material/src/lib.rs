@@ -49,6 +49,15 @@ mod tests {
     use cut_craft_core::testing::after;
 
     #[test]
+    fn the_material_centre_is_wherever_the_datum_puts_it() {
+        let mut doc = cut_craft_core::testing::sample_document();
+        doc.job.datum = cut_craft_core::document::Datum::TopRight;
+        cut_craft_core::testing::run_on::<CenterInMaterial>(&mut doc, &NoParams {});
+        let c = doc.selection_bounds().unwrap().center();
+        assert!(c.distance(doc.job.area().center()) < 1e-9, "{c:?}");
+    }
+
+    #[test]
     fn selection_centre_is_the_job_centre() {
         let c = after::<CenterInMaterial>(&NoParams {})
             .selection_bounds()

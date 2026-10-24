@@ -46,6 +46,25 @@ const PREVIEW_CELLS: usize = 1000;
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
+/// Aspire's startup tasks: action, label and icon.
+const STARTUP_TASKS: [(&str, &str, &str); 3] = [
+    ("new", "Create a new file", "file/new.svg"),
+    (
+        "new_from_template",
+        "New file from template",
+        "toolpaths/load_toolpath_template.svg",
+    ),
+    ("open", "Open an existing file", "file/open.svg"),
+];
+/// Beside each recently opened file.
+const RECENT_FILE_ICON: &str = "file/new.svg";
+/// The design panel's starting width, in the theme's interactive widths: room for Job Setup's
+/// pictures beside its choices.
+// ponytail: fixed until panel widths are saved with the window layout
+const DESIGN_PANEL_WIDTHS: f32 = 7.0;
+/// Size of a form section's picture, in rows of the theme's interactive height.
+// ponytail: fixed ratio until a preferences dialog exists
+const SECTION_PICTURE_ROWS: f32 = 3.0;
 /// The Cut Craft mark, shown with no job open.
 const LOGO: &str = "assets/cut-craft.svg";
 /// How much of the middle of the window the mark takes, by its shorter side.
@@ -651,12 +670,8 @@ impl CutCraftApp {
         let edge = ui.spacing().interact_size.y;
         let mut clicked = None;
         ui.strong("Startup Tasks");
-        for (id, label) in [
-            ("new", "Create a new file"),
-            ("new_from_template", "New file from template"),
-            ("open", "Open an existing file"),
-        ] {
-            let button = match self.icons.find("", id) {
+        for (id, label, icon) in STARTUP_TASKS {
+            let button = match self.icons.find(icon, id) {
                 Some(path) => egui::Button::image_and_text(
                     Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)),
                     label,
@@ -676,11 +691,22 @@ impl CutCraftApp {
         if self.recent.is_empty() {
             ui.weak("None yet");
         }
+        let glyph = self.icons.find(RECENT_FILE_ICON, "");
         for (i, path) in self.recent.iter().enumerate() {
-            let link = ui
-                .link(file_name(path))
-                .on_hover_text(path.display().to_string());
-            if link.clicked() {
+            let name = file_name(path);
+            let button = match glyph {
+                Some(glyph) => egui::Button::image_and_text(
+                    Icons::image(glyph).fit_to_exact_size(egui::vec2(edge, edge)),
+                    name,
+                ),
+                None => egui::Button::new(name),
+            }
+            .frame(false);
+            if ui
+                .add(button)
+                .on_hover_text(path.display().to_string())
+                .clicked()
+            {
                 clicked = Some(format!("open_recent:{i}"));
             }
         }
@@ -761,8 +787,17 @@ impl CutCraftApp {
             });
         }
         // a form that sets the units (Job Setup) shows its lengths in them as they change
-        let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
-        form::show(ui, &open.fields, &mut open.params, units);
+        let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
+        let picture = |path: &str| {
+            self.icons
+                .find(path, "")
+                .map(|p| Icons::image(p).fit_to_exact_size(egui::vec2(edge, edge)))
+        };
+        let look = form::Look {
+            units: form::units_chosen(&open.params).unwrap_or(self.doc.job.units),
+            picture: &picture,
+        };
+        form::show(ui, &open.fields, &mut open.params, &look);
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
@@ -884,7 +919,11 @@ impl CutCraftApp {
                 );
                 let tool = &mut self.tools.tools[self.tool_selected];
                 let mut value = serde_json::to_value(&*tool).expect("tools serialize");
-                if form::show(ui, &fields, &mut value, self.doc.job.units)
+                let look = form::Look {
+                    units: self.doc.job.units,
+                    picture: &|_| None,
+                };
+                if form::show(ui, &fields, &mut value, &look)
                     && let Ok(changed) = serde_json::from_value(value)
                 {
                     *tool = changed;
@@ -1096,7 +1135,8 @@ impl CutCraftApp {
         self.orbit.yaw += f64::from(delta.x / area.width().max(1.0)) * PI;
         self.orbit.pitch = (self.orbit.pitch + f64::from(delta.y / area.height().max(1.0)) * PI)
             .clamp(0.0, FRAC_PI_2);
-        let (orbit, colour) = (self.orbit, ui.visuals().warn_fg_color);
+        let [r, g, b] = self.shown_job().colour;
+        let (orbit, colour) = (self.orbit, egui::Color32::from_rgb(r, g, b));
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         if let Some(surface) = self.surface_3d() {
             ui.painter_at(area)
@@ -1238,12 +1278,16 @@ impl CutCraftApp {
                 return;
             }
             Screen::NewJob => {
-                egui::SidePanel::left("design_panel").show(ctx, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
-                });
+                egui::SidePanel::left("design_panel")
+                    .default_width(DESIGN_PANEL_WIDTHS * ctx.style().spacing.interact_size.x)
+                    .show(ctx, |ui| {
+                        egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+                    });
             }
             Screen::Job => {
-                egui::SidePanel::left("design_panel").show(ctx, |ui| self.design_panel(ui));
+                egui::SidePanel::left("design_panel")
+                    .default_width(DESIGN_PANEL_WIDTHS * ctx.style().spacing.interact_size.x)
+                    .show(ctx, |ui| self.design_panel(ui));
                 egui::SidePanel::right("toolpaths_panel").show(ctx, |ui| self.toolpaths_panel(ui));
             }
         }
@@ -1263,8 +1307,19 @@ impl CutCraftApp {
         });
     }
 
+    /// The job the views show: while Job Setup is open, the one being set up.
+    fn shown_job(&self) -> cut_craft_core::document::Job {
+        self.form
+            .as_ref()
+            .filter(|f| f.id == "job_setup")
+            .and_then(|f| self.registry.get(f.id)?.run_json(&self.doc, &f.params).ok())
+            .and_then(|change| change.job().copied())
+            .unwrap_or(self.doc.job)
+    }
+
     fn view_2d(&mut self, ui: &mut egui::Ui) {
-        let canvas = Canvas::new(ui, &self.doc.job);
+        let job = self.shown_job();
+        let canvas = Canvas::new(ui, &job);
         let gesture = canvas.gesture(ui);
         let overlay = match gesture {
             Some(Gesture::Dragging(drag)) => match self.drawing_tool() {
@@ -1278,6 +1333,16 @@ impl CutCraftApp {
             _ => Overlay::None,
         };
         canvas.paint(ui, &self.doc, &overlay, self.selected_toolpath);
+        // while Job Setup is open a red square marks the datum, as in Aspire
+        if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {
+            let edge = ui.spacing().interact_size.y / 2.0;
+            let at = canvas.transform.to_screen(job.offset);
+            ui.painter_at(canvas.area).rect_filled(
+                egui::Rect::from_center_size(at, egui::vec2(edge, edge)),
+                0.0,
+                ui.visuals().error_fg_color,
+            );
+        }
         self.view_transform = Some(canvas.transform);
         self.cursor = canvas.cursor();
         match (gesture, self.drawing_tool()) {
@@ -1773,7 +1838,11 @@ mod tests {
         assert_eq!(h.app.screen, Screen::NewJob);
         let form = h.app.form.as_mut().expect("the Job Setup form");
         assert_eq!(form.id, "job_setup");
-        form.params["width"] = 300.0.into();
+        form.params["size"]["width"] = 300.0.into();
+        assert!(
+            (h.app.shown_job().width - 300.0).abs() < 1e-9,
+            "the 2D view shows the job being set up"
+        );
         h.app.job_setup_ok();
         h.frame(vec![]);
         assert_eq!(h.app.screen, Screen::Job);
@@ -1795,6 +1864,62 @@ mod tests {
         h.frame(vec![]);
         assert_eq!(h.app.screen, Screen::Start);
         assert!(h.app.form.is_none());
+    }
+
+    /// The icons are made from Aspire's and not in git; their manifest is.
+    fn icon_set() -> std::collections::HashSet<String> {
+        let manifest = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../re/icon_set.json"
+        ))
+        .expect("re/icon_set.json");
+        serde_json::from_slice::<Vec<Value>>(&manifest)
+            .unwrap()
+            .iter()
+            .map(|e| e["path"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn start_page_and_job_setup_icons_are_in_the_icon_set() {
+        let known = icon_set();
+        for (_, _, icon) in STARTUP_TASKS {
+            assert!(known.contains(icon), "{icon}");
+        }
+        assert!(known.contains(RECENT_FILE_ICON));
+        // every picture a Job Setup section can show, whatever is chosen
+        let fields = form::fields(&commands::registry().get("job_setup").unwrap().schema());
+        let mut pictures = 0;
+        for f in &fields {
+            let Some(template) = &f.icon else { continue };
+            let choices = |kind: &form::Kind| match kind {
+                form::Kind::Choice(options) => options.iter().map(|o| o.value.clone()).collect(),
+                _ => vec![],
+            };
+            let values: Vec<Value> = match &f.kind {
+                form::Kind::Choice(_) => choices(&f.kind).into_iter().map(Value::from).collect(),
+                form::Kind::Group(inner) => inner
+                    .iter()
+                    .flat_map(|i| {
+                        choices(&i.kind)
+                            .into_iter()
+                            .map(|c| serde_json::json!({ i.key.as_str(): c }))
+                    })
+                    .collect(),
+                _ => vec![Value::Null],
+            };
+            for value in values {
+                let path = form::icon_path(template, &value);
+                if !path.contains('{') {
+                    assert!(known.contains(&path), "{} shows {path}", f.key);
+                    pictures += 1;
+                }
+            }
+        }
+        assert!(
+            pictures >= 9,
+            "job type, size, Z zero and datum pictures: {pictures}"
+        );
     }
 
     #[test]

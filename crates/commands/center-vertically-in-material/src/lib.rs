@@ -22,7 +22,7 @@ impl Command for CenterVerticallyInMaterial {
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
         let job = doc.job;
         Change::align_selected(doc, |_, sel| {
-            Point::new(0.0, job.height / 2.0 - sel.center().y)
+            Point::new(0.0, job.area().center().y - sel.center().y)
         })
     }
 }

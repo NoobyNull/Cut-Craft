@@ -17,11 +17,14 @@ impl Exporter for ExportSvg {
 
     fn export(doc: &Document) -> Result<Vec<u8>, CommandError> {
         let (w, h) = (doc.job.width, doc.job.height);
-        // Coordinates stay in job millimetres; the group flips y so the drawing reads upright.
+        // the material fills the page wherever the datum is: shift its left edge to x = 0 and
+        // flip y down from its top edge, so the drawing reads upright in millimetres
+        let area = doc.job.area();
+        let (left, top) = (0.0 - area.min.x, area.max.y);
         let mut svg = format!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
              <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}mm\" height=\"{h}mm\" viewBox=\"0 0 {w} {h}\">\n\
-             <g transform=\"matrix(1 0 0 -1 0 {h})\" fill=\"none\" stroke=\"black\" stroke-width=\"0.25\">\n"
+             <g transform=\"matrix(1 0 0 -1 {left} {top})\" fill=\"none\" stroke=\"black\" stroke-width=\"0.25\">\n"
         );
         for path in doc.vectors.values() {
             let _ = writeln!(svg, "<path d=\"{}\"/>", path_data(path));
@@ -81,6 +84,18 @@ mod tests {
 
     fn svg() -> String {
         String::from_utf8(ExportSvg::export(&sample_document()).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn the_material_fills_the_page_wherever_the_datum_is() {
+        let mut doc = sample_document();
+        doc.job.datum = cut_craft_core::document::Datum::Centre;
+        let svg = String::from_utf8(ExportSvg::export(&doc).unwrap()).unwrap();
+        // x from the left edge (-300) and y flipped down from the top edge (200)
+        assert!(
+            svg.contains(r#"transform="matrix(1 0 0 -1 300 200)""#),
+            "{svg}"
+        );
     }
 
     #[test]

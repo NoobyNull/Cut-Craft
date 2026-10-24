@@ -267,6 +267,14 @@ impl Change {
         self.edits.is_empty()
     }
 
+    /// The job this change sets, if it sets one: lets a view show a job before it is applied.
+    pub fn job(&self) -> Option<&Job> {
+        self.edits.iter().rev().find_map(|e| match e {
+            Edit::SetJob { after, .. } => Some(after),
+            _ => None,
+        })
+    }
+
     #[must_use]
     pub fn inverse(&self) -> Self {
         Self {

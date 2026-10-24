@@ -37,7 +37,8 @@ impl Exporter for ExportGcode {
             ));
             out.line(&format!("S{:.0} M3", toolpath.tool.spindle_speed));
             for m in &toolpath.moves {
-                let xyz = format!("X{} Y{} Z{}", coord(m.to.x), coord(m.to.y), coord(m.to.z));
+                let z = doc.job.machine_z(m.to.z);
+                let xyz = format!("X{} Y{} Z{}", coord(m.to.x), coord(m.to.y), coord(z));
                 match m.kind {
                     MoveKind::Rapid => out.line(&format!("G0 {xyz}")),
                     MoveKind::Plunge => out.feed(&xyz, toolpath.tool.plunge_rate),
@@ -45,7 +46,10 @@ impl Exporter for ExportGcode {
                 }
             }
         }
-        out.line(&format!("G0 Z{}", coord(doc.job.clearance)));
+        out.line(&format!(
+            "G0 Z{}",
+            coord(doc.job.machine_z(doc.job.clearance))
+        ));
         out.line("M5");
         out.line("M30");
         Ok(out.text.into_bytes())
@@ -123,7 +127,14 @@ mod tests {
     }
 
     fn gcode(toolpaths: Vec<Toolpath>) -> Vec<String> {
-        let mut doc = Document::default();
+        gcode_for(cut_craft_core::document::Job::default(), toolpaths)
+    }
+
+    fn gcode_for(job: cut_craft_core::document::Job, toolpaths: Vec<Toolpath>) -> Vec<String> {
+        let mut doc = Document {
+            job,
+            ..Document::default()
+        };
         let mut c = Change::builder(&doc);
         for t in toolpaths {
             c.add_toolpath(t);
@@ -134,6 +145,25 @@ mod tests {
             .lines()
             .map(String::from)
             .collect()
+    }
+
+    #[test]
+    fn z_zero_on_the_machine_bed_raises_every_z_by_the_thickness() {
+        use cut_craft_core::document::{Job, ZZero};
+        let job = Job {
+            z_zero: ZZero::MachineBed,
+            thickness: 20.0,
+            ..Job::default()
+        };
+        let lines = gcode_for(job, vec![toolpath("Profile", "6 mm End Mill")]);
+        assert!(
+            lines.contains(&"G1 X0.000 Y0.000 Z17.000 F300.0".to_owned()),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(&"G0 Z25.000".to_owned()),
+            "the clearance too: {lines:?}"
+        );
     }
 
     #[test]

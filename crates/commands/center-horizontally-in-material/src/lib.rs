@@ -22,7 +22,7 @@ impl Command for CenterHorizontallyInMaterial {
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
         let job = doc.job;
         Change::align_selected(doc, |_, sel| {
-            Point::new(job.width / 2.0 - sel.center().x, 0.0)
+            Point::new(job.area().center().x - sel.center().x, 0.0)
         })
     }
 }

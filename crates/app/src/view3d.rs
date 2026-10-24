@@ -88,6 +88,7 @@ pub fn coarse(material: &Material, most: usize) -> Material {
         })
         .collect();
     Material {
+        origin: m.origin,
         columns,
         rows,
         cell: m.cell * step as f64,
