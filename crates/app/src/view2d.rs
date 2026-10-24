@@ -2,10 +2,17 @@
 //! gestures in job coordinates, and painting the document.
 
 use cut_craft_core::Drag;
-use cut_craft_core::document::{Document, EntityId, Job};
+use cut_craft_core::document::{Document, EntityId, Job, Units};
 use cut_craft_core::geometry::{Path, Point, Rect as JobRect};
 use cut_craft_core::toolpath::MoveKind;
-use eframe::egui::{self, Pos2, Rect, Sense, Shape, Stroke, pos2};
+use eframe::egui::{self, PointerButton, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2};
+use std::f32::consts::FRAC_PI_2;
+
+/// Ruler labels stay at least this many rows of the theme's interactive height apart.
+// ponytail: fixed spacing until a preferences dialog exists
+const RULER_LABEL_ROWS: f32 = 3.0;
+/// Minor ruler ticks per labelled step.
+const RULER_MINOR_TICKS: f64 = 5.0;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ViewTransform {
@@ -32,6 +39,24 @@ impl ViewTransform {
         }
     }
 
+    /// Zoomed by `factor` about the screen point `at`, which stays over the same job point.
+    #[must_use]
+    pub fn zoomed_about(self, at: Pos2, factor: f32) -> Self {
+        Self {
+            origin: at + (self.origin - at) * factor,
+            scale: self.scale * factor,
+        }
+    }
+
+    /// Moved on screen by `by`.
+    #[must_use]
+    pub fn panned(self, by: Vec2) -> Self {
+        Self {
+            origin: self.origin + by,
+            ..self
+        }
+    }
+
     pub fn to_screen(self, p: Point) -> Pos2 {
         pos2(
             self.origin.x + to_f32(p.x) * self.scale,
@@ -45,6 +70,30 @@ impl ViewTransform {
             f64::from((self.origin.y - p.y) / self.scale),
         )
     }
+}
+
+/// The spacing of ruler labels: the smallest 1, 2 or 5 times a power of ten that puts them at
+/// least `min_gap` pixels apart at `pixels_per_unit`.
+pub fn ruler_step(pixels_per_unit: f64, min_gap: f64) -> f64 {
+    let raw = min_gap / pixels_per_unit;
+    let power = 10f64.powf(raw.log10().floor());
+    [1.0, 2.0, 5.0, 10.0]
+        .into_iter()
+        .map(|m| m * power)
+        .find(|&step| step >= raw)
+        .unwrap_or(10.0 * power)
+}
+
+/// The multiples of `step` from `lo` to `hi`.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "tick counts are small"
+)]
+pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
+    ((lo / step).ceil() as i64..=(hi / step).floor() as i64)
+        .map(|k| k as f64 * step)
+        .collect()
 }
 
 /// What the pointer did on the canvas this frame.
@@ -77,15 +126,29 @@ pub struct Canvas {
 }
 
 impl Canvas {
-    pub fn new(ui: &mut egui::Ui, job: &Job) -> Self {
+    /// The view of `job`: as `camera` has it when the user has zoomed or panned, else fitted.
+    pub fn new(ui: &mut egui::Ui, job: &Job, camera: Option<ViewTransform>) -> Self {
         let (area, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-        let transform = ViewTransform::fit(area, ui.spacing().interact_size.y, job.area());
+        let transform = camera
+            .unwrap_or_else(|| ViewTransform::fit(area, ui.spacing().interact_size.y, job.area()));
         Self {
             transform,
             area,
             response,
             job: job.area(),
         }
+    }
+
+    /// Where the pointer is over the view, on screen.
+    pub fn hover(&self) -> Option<Pos2> {
+        self.response.hover_pos()
+    }
+
+    /// How far a drag with `button` moved this frame.
+    pub fn dragged_by(&self, button: PointerButton) -> Option<Vec2> {
+        self.response
+            .dragged_by(button)
+            .then(|| self.response.drag_delta())
     }
 
     pub fn cursor(&self) -> Option<Point> {
@@ -109,7 +172,7 @@ impl Canvas {
         }
         // egui forgets where a press started on the frame it is released, so remember it
         let id = self.response.id;
-        if self.response.drag_started()
+        if self.response.drag_started_by(PointerButton::Primary)
             && let Some(origin) = ui.input(|i| i.pointer.press_origin())
         {
             ui.data_mut(|d| d.insert_temp(id, origin));
@@ -122,13 +185,13 @@ impl Canvas {
             from_center: modifiers.alt,
             constrain: modifiers.command,
         };
-        if self.response.drag_stopped() {
+        if self.response.drag_stopped_by(PointerButton::Primary) {
             ui.data_mut(|d| d.remove::<Pos2>(id));
             Some(Gesture::Dropped {
                 drag,
                 shift: modifiers.shift,
             })
-        } else if self.response.dragged() {
+        } else if self.response.dragged_by(PointerButton::Primary) {
             Some(Gesture::Dragging(drag))
         } else {
             None
@@ -137,6 +200,98 @@ impl Canvas {
 
     /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the
     /// selection colour) and `overlay`.
+    /// Rulers along the top and left, in the job's units, as Aspire's 2D view has.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a few decimals"
+    )]
+    pub fn rulers(&self, ui: &egui::Ui, units: Units) {
+        let (area, t) = (self.area, self.transform);
+        let visuals = ui.visuals();
+        let painter = ui.painter_at(area);
+        let thick = ui.spacing().interact_size.y;
+        let gap = ui.spacing().item_spacing.x / 2.0;
+        let top = Rect::from_min_size(area.min, vec2(area.width(), thick));
+        let left = Rect::from_min_size(area.min, vec2(thick, area.height()));
+        let (line, colour) = (
+            visuals.widgets.noninteractive.fg_stroke,
+            visuals.text_color(),
+        );
+        for strip in [top, left] {
+            painter.rect_filled(strip, 0.0, visuals.extreme_bg_color);
+        }
+        painter.line_segment([top.left_bottom(), top.right_bottom()], line);
+        painter.line_segment([left.right_top(), left.right_bottom()], line);
+        let unit = match units {
+            Units::Mm => 1.0,
+            Units::Inch => 25.4,
+        };
+        let step = ruler_step(
+            f64::from(t.scale) * unit,
+            f64::from(thick * RULER_LABEL_ROWS),
+        );
+        let decimals = if step >= 1.0 {
+            0
+        } else {
+            (-step.log10()).ceil() as usize
+        };
+        let font = egui::TextStyle::Small.resolve(ui.style());
+        let label = |v: f64| format!("{v:.decimals$}");
+        let minor = thick / 3.0;
+        // across the top
+        let (x0, x1) = (
+            t.to_job(top.left_top()).x / unit,
+            t.to_job(top.right_top()).x / unit,
+        );
+        for v in ruler_ticks(x0, x1, step / RULER_MINOR_TICKS) {
+            let x = t.to_screen(Point::new(v * unit, 0.0)).x;
+            if x > left.right() {
+                painter.line_segment([pos2(x, top.bottom() - minor), pos2(x, top.bottom())], line);
+            }
+        }
+        for v in ruler_ticks(x0, x1, step) {
+            let x = t.to_screen(Point::new(v * unit, 0.0)).x;
+            if x > left.right() {
+                painter.line_segment([pos2(x, top.top()), pos2(x, top.bottom())], line);
+                painter.text(
+                    pos2(x + gap, top.top()),
+                    egui::Align2::LEFT_TOP,
+                    label(v),
+                    font.clone(),
+                    colour,
+                );
+            }
+        }
+        // down the left, labels turned to read up the ruler
+        let (y0, y1) = (
+            t.to_job(left.left_bottom()).y / unit,
+            t.to_job(left.left_top()).y / unit,
+        );
+        for v in ruler_ticks(y0, y1, step / RULER_MINOR_TICKS) {
+            let y = t.to_screen(Point::new(0.0, v * unit)).y;
+            if y > top.bottom() {
+                painter.line_segment([pos2(left.right() - minor, y), pos2(left.right(), y)], line);
+            }
+        }
+        for v in ruler_ticks(y0, y1, step) {
+            let y = t.to_screen(Point::new(0.0, v * unit)).y;
+            if y > top.bottom() {
+                painter.line_segment([pos2(left.left(), y), pos2(left.right(), y)], line);
+                let galley = painter.layout_no_wrap(label(v), font.clone(), colour);
+                painter.add(
+                    egui::epaint::TextShape::new(pos2(left.left(), y - gap), galley, colour)
+                        .with_angle(-FRAC_PI_2),
+                );
+            }
+        }
+        painter.rect_filled(
+            Rect::from_min_size(area.min, vec2(thick, thick)),
+            0.0,
+            visuals.extreme_bg_color,
+        );
+    }
+
     pub fn paint(
         &self,
         ui: &egui::Ui,
@@ -242,6 +397,51 @@ fn to_f32(v: f64) -> f32 {
 mod tests {
     use super::*;
     use eframe::egui::{pos2, vec2};
+
+    #[test]
+    fn zooming_keeps_the_point_under_the_cursor_still() {
+        let t = ViewTransform {
+            origin: pos2(100.0, 400.0),
+            scale: 2.0,
+        };
+        let cursor = pos2(250.0, 180.0);
+        let zoomed = t.zoomed_about(cursor, 1.5);
+        assert!((zoomed.scale - 3.0).abs() < 1e-6);
+        assert!(zoomed.to_job(cursor).distance(t.to_job(cursor)) < 1e-4);
+    }
+
+    #[test]
+    fn panning_moves_everything_with_the_drag() {
+        let t = ViewTransform {
+            origin: pos2(100.0, 400.0),
+            scale: 2.0,
+        };
+        let p = Point::new(10.0, 20.0);
+        let moved = t.panned(vec2(30.0, -5.0));
+        assert!((moved.to_screen(p) - t.to_screen(p) - vec2(30.0, -5.0)).length() < 1e-4);
+    }
+
+    #[test]
+    fn ruler_steps_go_one_two_five_and_never_crowd_their_labels() {
+        let step = |pixels_per_unit| ruler_step(pixels_per_unit, 50.0);
+        for (ppu, expected) in [
+            (0.5, 100.0),
+            (3.0, 20.0),
+            (12.0, 5.0),
+            (60.0, 1.0),
+            (600.0, 0.1),
+        ] {
+            assert!(
+                (step(ppu) - expected).abs() < 1e-9,
+                "{ppu} px per unit: {}",
+                step(ppu)
+            );
+        }
+        assert_eq!(
+            ruler_ticks(-35.0, 120.0, 20.0),
+            [-20.0, 0.0, 20.0, 40.0, 60.0, 80.0, 100.0, 120.0]
+        );
+    }
 
     #[test]
     fn a_job_centred_on_its_datum_is_still_fitted_in_the_middle() {

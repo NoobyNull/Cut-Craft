@@ -543,7 +543,7 @@
   "label": "Texture",
   "guess": true,
   "slot": "slot/35068_12",
-  "source": "png/34821"
+  "source": "png/34764"
  },
  {
   "path": "modeling/scale_model_z_height.svg",
@@ -1062,6 +1062,13 @@
   "guess": false,
   "slot": "png/35098",
   "source": "png/35098"
+ },
+ {
+  "path": "view/zoom_selected.svg",
+  "label": "Zoom Selected",
+  "guess": false,
+  "slot": "png/35099",
+  "source": "png/35099"
  },
  {
   "path": "view/2d_toolpath_drawing_on.svg",

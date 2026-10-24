@@ -20,7 +20,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 18] = [
+const BUILT_INS: [&str; 23] = [
     "undo",
     "redo",
     "exit",
@@ -35,6 +35,11 @@ const BUILT_INS: [&str; 18] = [
     "save_toolpaths",
     "install_post_processor",
     "close",
+    "pan",
+    "zoom_box",
+    "zoom_to_job",
+    "zoom_to_drawing",
+    "zoom_selected",
     "tool_database",
     "preview_toolpath",
     "preview_all_toolpaths",
@@ -46,6 +51,19 @@ const PREVIEW_CELLS: usize = 1000;
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
+/// The zoom buttons over the 2D view: action, label and icon.
+const VIEW_BUTTONS: [(&str, &str, &str); 3] = [
+    ("zoom_box", "Zoom Box", "view/zoom_box.svg"),
+    ("zoom_to_job", "Zoom to Job", "view/zoom_to_job.svg"),
+    (
+        "zoom_selected",
+        "Zoom to Selection",
+        "view/zoom_selected.svg",
+    ),
+];
+/// Scrolling a view's height divided by this doubles the zoom.
+// ponytail: fixed rate until a preferences dialog exists
+const VIEW_ZOOM_QUARTERS: f32 = 4.0;
 /// Aspire's startup tasks: action, label and icon.
 const STARTUP_TASKS: [(&str, &str, &str); 3] = [
     ("new", "Create a new file", "file/new.svg"),
@@ -88,6 +106,14 @@ enum Screen {
     Job,
 }
 
+/// A 2D view tool that takes the left button from drawing and selecting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ViewTool {
+    Pan,
+    /// One box, then back to selecting.
+    ZoomBox,
+}
+
 #[derive(PartialEq)]
 enum View {
     TwoD,
@@ -123,6 +149,11 @@ struct CutCraftApp {
     form: Option<OpenForm>,
     /// How the 2D view mapped the job last frame.
     view_transform: Option<ViewTransform>,
+    /// Where the 2D view was on screen last frame.
+    view_area: Option<egui::Rect>,
+    /// The user's zoom and pan; `None` fits the job to the view.
+    camera: Option<ViewTransform>,
+    view_tool: Option<ViewTool>,
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
@@ -165,6 +196,9 @@ impl CutCraftApp {
             cursor: None,
             form: None,
             view_transform: None,
+            view_area: None,
+            camera: None,
+            view_tool: None,
             session: Session::default(),
             selected_toolpath: None,
             post: None,
@@ -185,6 +219,7 @@ impl CutCraftApp {
         match id {
             "undo" => self.history.can_undo(),
             "close" => self.screen != Screen::Start,
+            "zoom_selected" => !self.doc.selection.is_empty(),
             id if id.starts_with("open_recent:") => true,
             "redo" => self.history.can_redo(),
             "recalculate_toolpath" | "delete_toolpath" | "preview_toolpath" => {
@@ -228,6 +263,9 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "install_post_processor" => self.file_action(id),
             "tool_database" => self.tool_window = true,
+            "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected" => {
+                self.view_action(ctx, id);
+            }
             "recalculate_toolpath"
             | "recalculate_all_toolpaths"
             | "delete_toolpath"
@@ -378,6 +416,7 @@ impl CutCraftApp {
             cmd.initial_params(&self.doc),
         );
         meta.label.clone_into(&mut self.status.current_tool);
+        self.view_tool = None;
         if fields.is_empty() {
             if let Err(e) = self.apply(cmd.id(), &params) {
                 self.status.set_message(&e);
@@ -458,6 +497,7 @@ impl CutCraftApp {
     /// Back to nothing: no job, no form, no preview.
     fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
+        (self.camera, self.view_tool) = (None, None);
         (
             self.selected_toolpath,
             self.simulation,
@@ -483,6 +523,7 @@ impl CutCraftApp {
                 (self.history, self.session) = Default::default();
                 self.screen = Screen::Job;
                 self.status.set_message("New job created");
+                "Select".clone_into(&mut self.status.current_tool);
             }
             Err(e) => {
                 form.error = Some(e);
@@ -493,6 +534,7 @@ impl CutCraftApp {
 
     fn job_setup_cancel(&mut self) {
         self.reset_job();
+        "Select".clone_into(&mut self.status.current_tool);
         self.screen = Screen::Start;
     }
 
@@ -590,6 +632,7 @@ impl CutCraftApp {
                 self.job_setup_cancel();
             }
             self.form = None;
+            self.view_tool = None;
         }
         ctx.input(|i| {
             if i.key_pressed(Key::F2) {
@@ -1328,18 +1371,73 @@ impl CutCraftApp {
             .unwrap_or(self.doc.job)
     }
 
+    /// Zoom and pan: Aspire's 2D view controls.
+    fn view_action(&mut self, ctx: &egui::Context, id: &str) {
+        let label = match id {
+            "pan" => {
+                self.view_tool = Some(ViewTool::Pan);
+                "Pan"
+            }
+            "zoom_box" => {
+                self.view_tool = Some(ViewTool::ZoomBox);
+                "Zoom Box"
+            }
+            "zoom_selected" => {
+                let margin = ctx.style().spacing.interact_size.y;
+                match (self.doc.selection_bounds(), self.view_area) {
+                    (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
+                        self.camera = Some(ViewTransform::fit(area, margin, bounds));
+                    }
+                    _ => self.status.set_message("select something to zoom to"),
+                }
+                return;
+            }
+            // zoom to job, zoom to drawing (F6)
+            _ => {
+                self.camera = None;
+                return;
+            }
+        };
+        label.clone_into(&mut self.status.current_tool);
+    }
+
     fn view_2d(&mut self, ui: &mut egui::Ui) {
         let job = self.shown_job();
-        let canvas = Canvas::new(ui, &job);
+        let mut canvas = Canvas::new(ui, &job, self.camera);
+        let area = canvas.area;
+        // the wheel zooms about the cursor: a quarter of the view's height doubles the zoom
+        if let Some(at) = canvas.hover() {
+            let scroll = ui.input(|i| i.raw_scroll_delta.y);
+            if scroll != 0.0 {
+                let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
+                canvas.transform = canvas.transform.zoomed_about(at, factor);
+                self.camera = Some(canvas.transform);
+            }
+        }
+        let pan = match self.view_tool {
+            Some(ViewTool::Pan) => canvas.dragged_by(egui::PointerButton::Primary),
+            _ => None,
+        }
+        .or_else(|| canvas.dragged_by(egui::PointerButton::Middle));
+        if let Some(by) = pan {
+            canvas.transform = canvas.transform.panned(by);
+            self.camera = Some(canvas.transform);
+        }
         let gesture = canvas.gesture(ui);
-        let overlay = match gesture {
-            Some(Gesture::Dragging(drag)) => match self.drawing_tool() {
-                Some(id) => Overlay::Preview(self.preview(id, drag)),
-                None => Overlay::Window {
-                    start: drag.start,
-                    end: drag.end,
-                    crossing: drag.end.x < drag.start.x,
-                },
+        let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
+            (Some(Gesture::Dragging(drag)), Some(ViewTool::ZoomBox), _) => Overlay::Window {
+                start: drag.start,
+                end: drag.end,
+                crossing: false,
+            },
+            (_, Some(ViewTool::Pan), _) => Overlay::None,
+            (Some(Gesture::Dragging(drag)), _, Some(id)) => {
+                Overlay::Preview(self.preview(id, drag))
+            }
+            (Some(Gesture::Dragging(drag)), _, None) => Overlay::Window {
+                start: drag.start,
+                end: drag.end,
+                crossing: drag.end.x < drag.start.x,
             },
             _ => Overlay::None,
         };
@@ -1348,23 +1446,39 @@ impl CutCraftApp {
         if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {
             let edge = ui.spacing().interact_size.y / 2.0;
             let at = canvas.transform.to_screen(job.offset);
-            ui.painter_at(canvas.area).rect_filled(
+            ui.painter_at(area).rect_filled(
                 egui::Rect::from_center_size(at, egui::vec2(edge, edge)),
                 0.0,
                 ui.visuals().error_fg_color,
             );
         }
+        canvas.rulers(ui, job.units);
+        self.view_buttons(ui, area);
         self.view_transform = Some(canvas.transform);
+        self.view_area = Some(area);
         self.cursor = canvas.cursor();
-        match (gesture, self.drawing_tool()) {
-            (Some(Gesture::Dropped { drag, .. }), Some(id)) => self.draw(id, drag),
-            (Some(Gesture::Dropped { drag, shift }), None) => {
+        match (gesture, self.view_tool, self.drawing_tool()) {
+            (Some(Gesture::Dropped { drag, .. }), Some(ViewTool::ZoomBox), _) => {
+                let size = drag.end - drag.start;
+                if size.x.abs() > 0.0 && size.y.abs() > 0.0 {
+                    let margin = ui.spacing().interact_size.y;
+                    self.camera = Some(ViewTransform::fit(
+                        area,
+                        margin,
+                        Rect::new(drag.start, drag.end),
+                    ));
+                }
+                self.view_tool = None;
+                "Select".clone_into(&mut self.status.current_tool);
+            }
+            (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
+            (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 let ids = self
                     .doc
                     .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);
                 self.select(ids, shift);
             }
-            (Some(Gesture::Click { at, shift }), None) => {
+            (Some(Gesture::Click { at, shift }), None, None) => {
                 let hit = self.doc.pick(at, canvas.pick_tolerance(ui));
                 if shift {
                     let mut ids = self.doc.selection.clone();
@@ -1379,6 +1493,34 @@ impl CutCraftApp {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Aspire's zoom buttons over the top-left of the 2D view, inside the rulers.
+    fn view_buttons(&mut self, ui: &mut egui::Ui, area: egui::Rect) {
+        let row = ui.spacing().interact_size.y;
+        let edge = TOOL_ICON_ROWS * row;
+        let corner = area.min + egui::vec2(row, row) + ui.spacing().item_spacing;
+        let room = egui::Rect::from_min_size(corner, area.max - corner);
+        let mut clicked = None;
+        ui.allocate_ui_at_rect(room, |ui| {
+            ui.horizontal(|ui| {
+                for (id, label, icon) in VIEW_BUTTONS {
+                    let button = self
+                        .icon_button(icon, id, label, edge)
+                        .selected(id == "zoom_box" && self.view_tool == Some(ViewTool::ZoomBox));
+                    let response = ui
+                        .add_enabled(self.available(id), button)
+                        .on_hover_text(label)
+                        .on_disabled_hover_text(format!("{label}: select something first"));
+                    if response.clicked() {
+                        clicked = Some(id);
+                    }
+                }
+            });
+        });
+        if let Some(id) = clicked {
+            self.invoke(ui.ctx(), id);
         }
     }
 
@@ -1863,6 +2005,10 @@ mod tests {
             !h.app.history.can_undo(),
             "a new job starts with nothing to undo"
         );
+        assert_eq!(
+            h.app.status.current_tool, "Select",
+            "Job Setup is done with"
+        );
         assert!(h.app.menu_names().contains(&"Model"));
         assert!(h.app.view_transform.is_some());
     }
@@ -1968,6 +2114,102 @@ mod tests {
         assert_eq!(h.app.screen, Screen::Start);
         assert_eq!(h.app.recent, Vec::<std::path::PathBuf>::new());
         assert!(h.app.status.message.contains("cut-craft-gone.ccjob"));
+    }
+
+    /// The middle of the 2D view on screen.
+    fn view_middle(h: &Harness) -> Pos2 {
+        h.app
+            .view_area
+            .expect("the 2D view has been drawn")
+            .center()
+    }
+
+    #[test]
+    fn the_wheel_zooms_about_the_cursor() {
+        let mut h = Harness::new();
+        let at = view_middle(&h) + vec2(40.0, -30.0);
+        let (before, under) = {
+            let t = h.app.view_transform.unwrap();
+            (t.scale, t.to_job(at))
+        };
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.frame(vec![Event::Scroll(vec2(0.0, 120.0))]);
+        h.frame(vec![]);
+        let t = h.app.view_transform.unwrap();
+        assert!(t.scale > before, "scrolling up zooms in");
+        assert!(t.to_job(at).distance(under) < 0.01, "about the cursor");
+    }
+
+    #[test]
+    fn the_middle_button_and_the_pan_tool_pan() {
+        let mut h = Harness::new();
+        let p = Point::new(100.0, 100.0);
+        let before = h.app.view_transform.unwrap().to_screen(p);
+        let from = view_middle(&h);
+        h.frame(vec![Event::PointerMoved(from)]);
+        let middle = |pressed: bool| Event::PointerButton {
+            pos: from + vec2(40.0, 10.0) * f32::from(u8::from(!pressed)),
+            button: PointerButton::Middle,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        h.frame(vec![middle(true)]);
+        h.frame(vec![Event::PointerMoved(from + vec2(20.0, 5.0))]);
+        h.frame(vec![Event::PointerMoved(from + vec2(40.0, 10.0))]);
+        h.frame(vec![middle(false)]);
+        h.frame(vec![]);
+        let after = h.app.view_transform.unwrap().to_screen(p);
+        assert!(
+            (after - before - vec2(40.0, 10.0)).length() < 1.0,
+            "{before:?} → {after:?}"
+        );
+        // the Pan tool does the same with the left button, and draws nothing
+        h.app.invoke(&h.ctx, "pan");
+        let before = h.app.view_transform.unwrap().to_screen(p);
+        h.drag(from, from + vec2(-30.0, 0.0));
+        let after = h.app.view_transform.unwrap().to_screen(p);
+        assert!(
+            (after - before - vec2(-30.0, 0.0)).length() < 1.0,
+            "{before:?} → {after:?}"
+        );
+        assert!(h.app.doc.vectors.is_empty() && h.app.doc.selection.is_empty());
+    }
+
+    #[test]
+    fn zoom_box_zoom_to_selection_and_zoom_to_job() {
+        let mut h = Harness::new();
+        let fitted = h.app.view_transform.unwrap().scale;
+        h.app.invoke(&h.ctx, "zoom_box");
+        h.drag(h.at(100.0, 100.0), h.at(200.0, 150.0));
+        let boxed = h.app.view_transform.unwrap();
+        assert!(boxed.scale > 3.0 * fitted, "the box fills the view");
+        assert!(h.app.doc.selection.is_empty(), "zooming selects nothing");
+        let area = h.app.view_area.unwrap();
+        assert!(area.contains(boxed.to_screen(Point::new(150.0, 125.0))));
+        h.rectangle(400.0, 300.0, 20.0, 10.0);
+        h.app.invoke(&h.ctx, "zoom_selected");
+        h.frame(vec![]);
+        let t = h.app.view_transform.unwrap();
+        let (a, b) = (
+            t.to_screen(Point::new(400.0, 300.0)),
+            t.to_screen(Point::new(420.0, 310.0)),
+        );
+        assert!(area.contains(a) && area.contains(b));
+        assert!(
+            (b.x - a.x) > area.width() / 2.0,
+            "the selection fills the view"
+        );
+        h.app.invoke(&h.ctx, "zoom_to_job");
+        h.frame(vec![]);
+        assert!((h.app.view_transform.unwrap().scale - fitted).abs() < 1e-3);
+    }
+
+    #[test]
+    fn the_view_buttons_are_the_view_actions() {
+        for (id, _, icon) in VIEW_BUTTONS {
+            assert!(icon_set().contains(icon), "{icon}");
+            assert!(BUILT_INS.contains(&id), "{id}");
+        }
     }
 
     #[test]
