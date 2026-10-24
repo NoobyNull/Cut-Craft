@@ -204,6 +204,12 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - If the prism depth is too shallow the top is flat (truncated). **Set Depth for Full Prism** sets the least depth for a point, from the widest point W and the tool angle A: **[inf]** (W/2) / tan(A/2).
 - Cut Direction: conventional or climb. **[inf]** Cut Craft runs on the line itself (the cone makes both slopes) and refuses a full prism wider than the V-bit.
 
+### Texture [obs] (help: Texture Toolpath)
+- By default a random pattern of scallops in parallel rows, clipped by any selected vectors. Rows are Stepover apart at an Angle from the X axis; Boundary Vector Offset keeps it in from the boundary (up to the tool radius in a recess).
+- Scallop depth is random between Min. Depth (% of Max) and Max. Cut Depth; length random between Min Length (% of Max) and Max. Cut Length; each may overlap the one before by up to Max. Overlap % of the max length, the overlap varying by Variation % (1 % ≈ constant pattern).
+- **Use selected vectors as pattern:** the vectors themselves are cut at random depths; **Ramp at start and end** cuts each as a fluting move, otherwise a profile move.
+- **[inf]** Cut Craft: each scallop is a half sine; a Seed makes the random pattern repeatable so it recalculates the same. Nothing selected textures the whole material.
+
 ---
 
 ## P5 — Directories and configuration

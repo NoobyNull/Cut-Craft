@@ -57,6 +57,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_fluting_toolpath::FlutingToolpath>();
     r.add::<cmd_vcarve_inlay_toolpath::VcarveInlayToolpath>();
     r.add::<cmd_prism_toolpath::PrismToolpath>();
+    r.add::<cmd_texture_toolpath::TextureToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
