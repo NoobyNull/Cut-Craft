@@ -723,6 +723,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-photo-vcarve-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-pocket-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -1104,6 +1113,7 @@ dependencies = [
  "cmd-move-to-layer",
  "cmd-offset-vectors",
  "cmd-overlap-intersect",
+ "cmd-photo-vcarve-toolpath",
  "cmd-pocket-toolpath",
  "cmd-prism-toolpath",
  "cmd-profile-toolpath",

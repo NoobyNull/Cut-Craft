@@ -125,6 +125,7 @@ say "not implemented yet".
 - Moulding: an open profile swept along drive rails (outside closed rails, right of open ones),
   sharp corners, boundary offset.
 - Rounding (rotary jobs): square or round blank, radial / raster / optimized raster, allowance.
+- Photo V-Carve: raster, hatch or along selected vectors; line spacing and angle, stepover retract.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:

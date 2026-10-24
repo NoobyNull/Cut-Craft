@@ -245,6 +245,11 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - Methods: **Radial** (a full turn round, step along by the stepover, turn back), **Raster** (along the cylinder, index round by the stepover, back), **Optimized Raster** (square blanks only: only where there is material). The tool database tool sets stepover, step down and feeds.
 - **[inf]** Cut Craft: levels from the blank's outer radius (half the diagonal of a square) down in equal steps of the pass depth; the stepover round the cylinder is measured on the finished surface.
 
+### Photo V-Carve [obs] (help: Photo V-Carve Toolpath)
+- A V-bit etches the selected bitmap (prepared with Crop Bitmap / Edit Picture). **Start Depth**; **Max Carving Depth** (also limits how many lines fit); **Stepover Retract** (lift between lines: enough to move safely, as little as possible).
+- Strategy: **Raster** (one set of lines), **Hatch** (two sets at 90°, denser, twice the time), **Selected Vectors** (along them, e.g. from Vector Texture). **Line Spacing** is a percentage of the tool's width at the max depth: 100 % gives knife-edge ridges in the darkest parts; more leaves flats on the surface. **Line Angle**: 0 horizontal, 90 vertical. Optional projection onto the 3D model.
+- **[inf]** Cut Craft: depth = start + max depth × darkness; lines run back and forth; the newest bitmap is carved (bitmaps cannot be selected yet).
+
 ---
 
 ## P5 — Directories and configuration
