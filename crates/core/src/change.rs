@@ -291,10 +291,20 @@ impl Change {
     /// Runs `steps` in order, each seeing the document as left by the previous ones, and
     /// returns their combined change. This is how a command cascades from smaller commands.
     pub fn chain(doc: &Document, steps: &[Step<'_>]) -> Result<Self, CommandError> {
+        Self::chain_over(doc, steps, |scratch, step| step(scratch))
+    }
+
+    /// Runs `step` for each of `items` in turn, each seeing the document as the previous one
+    /// left it: a cascade over many items (Show Only This, Delete Visible...).
+    pub fn chain_over<T>(
+        doc: &Document,
+        items: &[T],
+        step: impl Fn(&Document, &T) -> Result<Self, CommandError>,
+    ) -> Result<Self, CommandError> {
         let mut scratch = doc.clone();
         let mut total = Self::default();
-        for step in steps {
-            let change = step(&scratch)?;
+        for item in items {
+            let change = step(&scratch, item)?;
             scratch
                 .apply(&change)
                 .map_err(|e| CommandError::Failed(e.to_string()))?;

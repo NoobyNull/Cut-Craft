@@ -57,3 +57,24 @@ impl Anchor {
         r.min + r.size() * Point::new(fx, fy)
     }
 }
+
+/// The kinds of item the right-click families (Show / Hide, Delete) act on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Items {
+    #[default]
+    Layers,
+    Toolpaths,
+    Components,
+}
+
+impl Items {
+    /// One of them, as messages name it: "layer 9 does not exist".
+    pub fn one(self) -> &'static str {
+        match self {
+            Self::Layers => "layer",
+            Self::Toolpaths => "toolpath",
+            Self::Components => "component",
+        }
+    }
+}

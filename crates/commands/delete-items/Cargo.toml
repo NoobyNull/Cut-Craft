@@ -1,0 +1,19 @@
+[package]
+name = "cmd-delete-items"
+description = "Delete Items"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+cmd-delete-layer = { path = "../delete-layer" }
+cmd-delete-toolpath = { path = "../delete-toolpath" }
+cmd-delete-component = { path = "../delete-component" }
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

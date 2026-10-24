@@ -269,6 +269,28 @@ impl Document {
             .unwrap_or_else(|| self.layers[0].id)
     }
 
+    /// Every item of a kind, by id, with whether it is shown.
+    pub fn items(&self, kind: crate::params::Items) -> Vec<(u64, bool)> {
+        use crate::params::Items;
+        match kind {
+            Items::Layers => self
+                .layers
+                .iter()
+                .map(|l| (u64::from(l.id.0), l.visible))
+                .collect(),
+            Items::Toolpaths => self
+                .toolpaths
+                .iter()
+                .map(|(id, t)| (id.0, t.visible))
+                .collect(),
+            Items::Components => self
+                .components
+                .iter()
+                .map(|(id, c)| (id.0, c.visible))
+                .collect(),
+        }
+    }
+
     pub fn vectors_on(&self, layer: LayerId) -> impl Iterator<Item = EntityId> + '_ {
         self.vectors
             .keys()

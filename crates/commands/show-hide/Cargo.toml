@@ -1,0 +1,19 @@
+[package]
+name = "cmd-show-hide"
+description = "Show / Hide"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+cmd-layer-properties = { path = "../layer-properties" }
+cmd-toolpath-properties = { path = "../toolpath-properties" }
+cmd-component-properties = { path = "../component-properties" }
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

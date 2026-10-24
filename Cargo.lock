@@ -505,6 +505,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-delete-items"
+version = "0.1.0"
+dependencies = [
+ "cmd-delete-component",
+ "cmd-delete-layer",
+ "cmd-delete-toolpath",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-delete-layer"
 version = "0.1.0"
 dependencies = [
@@ -721,6 +733,18 @@ dependencies = [
 name = "cmd-set-size"
 version = "0.1.0"
 dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-show-hide"
+version = "0.1.0"
+dependencies = [
+ "cmd-component-properties",
+ "cmd-layer-properties",
+ "cmd-toolpath-properties",
  "cut-craft-core",
  "schemars",
  "serde",
@@ -949,6 +973,7 @@ dependencies = [
  "cmd-create-shape",
  "cmd-delete",
  "cmd-delete-component",
+ "cmd-delete-items",
  "cmd-delete-layer",
  "cmd-delete-toolpath",
  "cmd-draw-arc",
@@ -974,6 +999,7 @@ dependencies = [
  "cmd-select-layer-vectors",
  "cmd-set-current-layer",
  "cmd-set-size",
+ "cmd-show-hide",
  "cmd-subtract-vectors",
  "cmd-toolpath-properties",
  "cmd-unselect-all",

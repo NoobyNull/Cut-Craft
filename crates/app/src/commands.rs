@@ -52,6 +52,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_component_properties::ComponentProperties>();
     r.add::<cmd_delete_toolpath::DeleteToolpath>();
     r.add::<cmd_delete_component::DeleteComponent>();
+    r.add::<cmd_show_hide::ShowHide>();
+    r.add::<cmd_delete_items::DeleteItems>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_gcode::ExportGcode>();
