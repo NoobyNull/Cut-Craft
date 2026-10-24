@@ -353,7 +353,9 @@ impl Post {
 
         let mut previous_tool: Option<&str> = None;
         let mut first_rapid = true;
-        let mut feeding = false;
+        // the rate of the feed moves since the last rapid: a new one starts a FIRST_ block,
+        // which is where most posts print it
+        let mut feeding: Option<f64> = None;
         for toolpath in &toolpaths {
             v.texts.insert("TOOLPATH_NAME", toolpath.name.clone());
             v.texts.insert("TOOLNAME", toolpath.tool.name.clone());
@@ -373,7 +375,7 @@ impl Post {
                 v.numbers.insert("Z", doc.job.machine_z(m.to.z));
                 let block = match m.kind {
                     MoveKind::Rapid => {
-                        feeding = false;
+                        feeding = None;
                         let initial = std::mem::replace(&mut first_rapid, false);
                         if initial && self.blocks.contains_key("INITIAL_RAPID_MOVE") {
                             "INITIAL_RAPID_MOVE"
@@ -382,8 +384,9 @@ impl Post {
                         }
                     }
                     MoveKind::Plunge if self.blocks.contains_key("PLUNGE_MOVE") => {
-                        v.numbers.insert("F", toolpath.tool.plunge_rate);
-                        let start = !std::mem::replace(&mut feeding, true);
+                        let rate = toolpath.tool.plunge_rate;
+                        v.numbers.insert("F", rate);
+                        let start = feeding.replace(rate) != Some(rate);
                         if start && self.blocks.contains_key("FIRST_PLUNGE_MOVE") {
                             "FIRST_PLUNGE_MOVE"
                         } else {
@@ -397,7 +400,7 @@ impl Post {
                             toolpath.tool.feed_rate
                         };
                         v.numbers.insert("F", rate);
-                        let start = !std::mem::replace(&mut feeding, true);
+                        let start = feeding.replace(rate) != Some(rate);
                         if start && self.blocks.contains_key("FIRST_FEED_MOVE") {
                             "FIRST_FEED_MOVE"
                         } else {
@@ -842,6 +845,20 @@ begin FOOTER
         assert_eq!(
             Post::parse(&post).unwrap_err(),
             "the post uses [I], which is not supported yet"
+        );
+    }
+
+    #[test]
+    fn a_new_feed_rate_starts_with_the_first_feed_move_block() {
+        // like most real posts, only FIRST_FEED_MOVE prints the rate
+        let post = BASIC.replace(
+            "begin FEED_MOVE\n\"G1 [X] [Y] [Z] [F]\"",
+            "begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"",
+        );
+        let lines = render(&post, vec![toolpath("P", "T")]);
+        assert!(
+            lines.contains(&"G1 X25.400 Y0.000 Z-3.000 F1000.0".to_owned()),
+            "after plunging at 300 the cut prints its own 1000: {lines:#?}"
         );
     }
 
