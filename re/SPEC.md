@@ -215,6 +215,13 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - Strategy: **Outline** (the tip runs on the lines) or **Fill**, with the patterns **Offset, Hatch, Cross Hatch**. **Use Nose Cone** (the cutter sticks out of a sprung cone by the depth; the preview uses the depth as given). **Number of Passes** runs the pattern several times. Immediate Output saves or sends the toolpath from the form; quick engrave toolpaths cannot be output with other strategies.
 - **[inf]** Cut Craft: hatch lines run along X, cross hatch adds Y; a fill also runs the outline. Diamond drag tools, nose cone and immediate output are not done.
 
+### Keyhole and Drag Knife [obs] (help; VCarve Pro 12.5 gadgets `Keyhole_Toolpath`, `Dragknife_Toolpath`, read for behaviour only)
+- **Keyhole:** select vectors (usually circles); each one's centre is a plunge point. The tool plunges to the Slot Depth, runs the Slot Length in one of four directions (bottom→top, top→bottom, left→right, right→left), retraces and lifts out at the plunge point. Optional preview vectors outline the surface: an entry hole of its diameter and a round-ended slot of the slot diameter, on a named layer. Any end mill supplies the feed rates. Length and depth must be more than 0.
+- **Drag Knife:** a centre-line cut along the selected vectors, spindle off. Inputs: Blade Offset (pivot to tip), Tolerance Angle, Cut Depth (default: the material thickness), Swivel Depth (less than the cut depth), Passes (equal steps), Use Vector Start Points. The blade is taken to start facing +X.
+  - At a corner turning more than the tolerance: cut on past the corner by the blade offset, lift to the swivel depth, arc (radius = blade offset, centred on the corner) to the blade offset along the next span, plunge back to the cut depth, carry on.
+  - First cut on a contour not along the blade's direction: an arc at swivel depth, centred the blade offset behind the start, ending at the start; then plunge.
+  - **[inf]** Cut Craft always uses the vector start points.
+
 ---
 
 ## P5 — Directories and configuration

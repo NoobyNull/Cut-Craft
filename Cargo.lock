@@ -535,6 +535,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-drag-knife-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-draw-arc"
 version = "0.1.0"
 dependencies = [
@@ -627,6 +636,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-join-vectors"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-keyhole-toolpath"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1023,6 +1041,7 @@ dependencies = [
  "cmd-delete-items",
  "cmd-delete-layer",
  "cmd-delete-toolpath",
+ "cmd-drag-knife-toolpath",
  "cmd-draw-arc",
  "cmd-draw-circle",
  "cmd-draw-ellipse",
@@ -1034,6 +1053,7 @@ dependencies = [
  "cmd-fluting-toolpath",
  "cmd-job-setup",
  "cmd-join-vectors",
+ "cmd-keyhole-toolpath",
  "cmd-layer-properties",
  "cmd-mirror",
  "cmd-move",
