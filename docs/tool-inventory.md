@@ -118,6 +118,7 @@ say "not implemented yet".
 - Quick Engrave (Ctrl+Q): outline or fill (offset, hatch, cross hatch), number of passes.
 - Keyhole (slot direction, depth, length, preview outlines) and Drag Knife (blade offset,
   tolerance angle, swivel depth, passes) toolpaths.
+- Chamfer: inside / outside, down / up, width, overcut, climb / conventional; V-bit or ball nose.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -157,7 +158,7 @@ say "not implemented yet".
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area, Zero Plane,
   from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
   Below, Split, Bake.
-- Toolpaths tab: Inlay (pocket/plug, not V-carve), Chamfer, Moulding,
+- Toolpaths tab: Inlay (pocket/plug, not V-carve), Moulding,
   Sketch, Rounding, Laser Cut / Fill, Laser Picture, Toolpath Summary.
 
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool

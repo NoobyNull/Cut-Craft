@@ -296,6 +296,14 @@ pub fn inside(rings: &[Vec<Point>], p: Point) -> bool {
     inside
 }
 
+/// Twice the signed area of a closed ring: positive when it runs anticlockwise.
+pub fn winding(points: &[Point]) -> f64 {
+    let n = points.len();
+    (0..n)
+        .map(|i| points[i].perp_dot(points[(i + 1) % n]))
+        .sum()
+}
+
 pub fn polyline_distance(points: &[Point], at: Point) -> f64 {
     if let [only] = points {
         return only.distance(at);

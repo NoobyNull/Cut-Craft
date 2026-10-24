@@ -471,6 +471,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-chamfer-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-component-properties"
 version = "0.1.0"
 dependencies = [
@@ -1034,6 +1043,7 @@ dependencies = [
  "cmd-center-in-material",
  "cmd-center-vertically",
  "cmd-center-vertically-in-material",
+ "cmd-chamfer-toolpath",
  "cmd-component-properties",
  "cmd-create-shape",
  "cmd-delete",

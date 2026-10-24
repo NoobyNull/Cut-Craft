@@ -222,6 +222,12 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   - First cut on a contour not along the blade's direction: an arc at swivel depth, centred the blade offset behind the start, ending at the start; then plunge.
   - **[inf]** Cut Craft always uses the vector start points.
 
+### Chamfer [obs] (help: Chamfer Toolpath)
+- An angled edge along the selected vectors. **Start Depth** is the top of the chamfer. **Angle (A)** from vertical: a V-bit fixes it at half its angle; a round-nosed tool takes it from the form and approximates the slope with a series of fine cuts. **Width (W)** and **Cut Depth (C)** are linked by the angle (C = W / tan A); Max Cut Depth (read only) shows how deep the tool actually goes.
+- **Overcut** (V-bit): moves the tool's point off the part so its side cuts, avoiding a witness mark; it cuts deeper.
+- **Chamfer Type:** inside or outside the vector, sloping down or up away from it (outside-down usually with a clearance pocket outside, outside-up with one inside). Cut direction climb / conventional; optional vector selection order.
+- **[inf]** Cut Craft: a V-bit's point runs W + overcut out (down) or the overcut back (up), at start + C + overcut / tan A; a ball nose touches the slope at points a stepover apart. End mills are refused.
+
 ---
 
 ## P5 — Directories and configuration

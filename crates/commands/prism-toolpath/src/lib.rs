@@ -2,7 +2,7 @@
 //! that its sloping sides leave each shape standing as a raised, ridged bevel.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
     Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
@@ -80,14 +80,6 @@ pub fn widest_half(paths: &[Path]) -> f64 {
     inside
 }
 
-/// Twice the signed area of a closed ring: positive when it runs anticlockwise.
-fn winding(points: &[Point]) -> f64 {
-    let n = points.len();
-    (0..n)
-        .map(|i| points[i].perp_dot(points[(i + 1) % n]))
-        .sum()
-}
-
 impl Command for PrismToolpath {
     const ID: &'static str = "prism_toolpath";
     type Params = Params;
@@ -158,6 +150,7 @@ impl Command for PrismToolpath {
 mod tests {
     use super::*;
     use cut_craft_core::document::Job;
+    use cut_craft_core::geometry::Point;
     use cut_craft_core::simulation::Material;
     use cut_craft_core::testing::made_toolpath;
     use cut_craft_core::toolpath::{MoveKind, Toolpath};
