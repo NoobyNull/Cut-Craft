@@ -4,7 +4,7 @@ Static analysis of the installed Vectric Aspire 12.0.0.9 (`~/Desktop/Aspire 12.0
 This file describes **behaviour** to reimplement. Don't copy Vectric code, icons, `.vfont` fonts, help text or `.pp`
 files into this repo. Write our own implementations from this description.
 
-Confidence tags: **[obs]** read directly from a shipped file · **[inf]** inferred from several observations · **[unk]** not established.
+Confidence tags: **[obs]** read directly from a shipped file · **[dec]** read from `Aspire.exe`'s data or decompiled code (Ghidra, `re/ghidra_scripts/`) · **[inf]** inferred from several observations · **[unk]** not established.
 
 ## Sources
 
@@ -14,6 +14,7 @@ Confidence tags: **[obs]** read directly from a shipped file · **[inf]** inferr
 | `Language/Lang/*/LC_MESSAGES/*.mo` | English UI strings split into 35 subsystem catalogs | `re/mo.py` (stdlib gettext) |
 | `Language/ENU/Help/{form,page}/*/index.html` | 241 help topics = full feature list and behaviour | `re/help2txt.py` |
 | `x64/`, `Language/ENU/Help/third-party/` | dependency and architecture map | file inventory |
+| `x64/Aspire.exe` | the post-processor vocabulary table, unit labels, date formats | Ghidra 12.1.2 project `re/extracted/ghidra/` (gitignored, about 2 h to analyse); `re/ghidra_scripts/` decompiles one function, finds a string's users, or dumps everything (`dump-decompiled`, about 50 min on 12 processes) |
 
 Regenerate the raw dumps:
 ```bash
@@ -170,6 +171,13 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Strategies:** Profile, Pocket, Drilling, V-Carve, Quick Engrave (Ctrl+Q), Inlay / V-Carve Inlay, Fluting, Prism, Chamfer, Keyhole, Thread Milling, Drag Knife, Moulding/Extruded, Texture, Rough and Finish Machining (3D), Rounding, PhotoVCarve, Sketch Carving, Laser Cut/Fill and Laser Picture, Array Copy, Merged.
 - **Support:** Tool Database (with remote databases), Materials, Templates, Tabs, Keep-Out Zones, Toolpath Tiling, Preview (simulation), Job Sheet, Summary.
 
+### Tool database: feeds and speeds [obs] (help: Tool Database)
+- **Tool types:** V-Bit, Engraving, Tapered Ball Nose, Ball Nose, End Mill, Radiused End Mill (a toroidal or bull-nose cutter: flat bottom, rounded corners of a tip radius), Form Cutters (profile imported from vectors), Diamond Drag, Drills.
+- **Geometry vs cutting data:** a tool's geometry (diameter, tip radius, angle…) is one record; its cutting data (pass depth, stepover, spindle speed, feed rate, plunge rate) is kept **per machine and per material**, and the active machine / material picks which set a toolpath gets. The tool number is per machine only. Copying a tool copies its geometry without cutting data.
+- **Fields:** Number of Flutes; Pass Depth (sets the number of Z passes, e.g. 25.4 deep at 6.35 per pass = 4 passes); Stepover (stepovers over 50 % add "tail" moves in corners of offset strategies; V-bits have Final Pass and Clearance Pass stepovers instead); Spindle Speed in rpm; Feed Rate and Plunge Rate (plunge also used for ramping); Maximum Burn Rate (lasers, simulation only); Notes.
+- **Rate units** are chosen per tool: distance per second or per minute. **[dec]** The labels offered are mm/sec, mm/min, m/min, inches/sec, inches/min and feet/min.
+- **Chip Load** is shown, calculated from flutes, spindle speed and feed rate (feed per tooth: feed ÷ (rpm × flutes)), to compare with the maker's recommendation.
+
 ---
 
 ## P5 — Directories and configuration
@@ -269,7 +277,16 @@ A plain-text, line-based format. Supporting it lets users reuse the `.pp` file f
   - INITIAL_RAPID_MOVE, RAPID_MOVE, FIRST_FEED_MOVE, FEED_MOVE, FIRST_PLUNGE_MOVE, PLUNGE_MOVE, RETRACT_MOVE, DWELL_MOVE.
   - FIRST_CW_ARC_MOVE, CW_ARC_MOVE, FIRST_CCW_ARC_MOVE, CCW_ARC_MOVE, and the `*_HELICAL_ARC_MOVE` / `*_HELICAL_ARC_PLUNGE_MOVE` variants.
   - JET_TOOL_POWER / ON / OFF (lasers).
-- **[unk]** Internal feed-rate units: `Lua/ppVariables.lua` comments say mm/s or in/s, but the documented examples use a `0.01666` (=1/60) multiplier. Check the direction of that conversion against a real `.pp` and its G-code output before relying on it.
+- **Feed units [obs]** (help: post-processor-editing): a post prints feed rates **per minute** (mm/min or inches/min, by `UNITS`) unless its variable has a multiplier. The help's examples multiply by `0.01666` to convert "from inches per minute to inches per second" and "from mm per minute to mm per second". Real grbl / FluidNC posts use multiplier 1 (mm/min). `Lua/ppVariables.lua` says "mm/sec or inches / sec"; that only matters to Lua-scripted posts, which we don't run.
+- **Inverse time [obs]:** `INVERSE_TIME_MODE = YES` makes feed moves print `[FI]` instead of a rate: the move takes 1/F minutes (G93; G94 is units per minute), so F = feed rate ÷ move length. **[dec]** It is refused unless wrapping is on ("INVERSE_TIME_MODE directive can only be used when wrapping is enabled!").
+- **The full vocabulary [dec]** (`Aspire.exe` keeps one table of `NAME [LABEL|A||default format]`):
+  - Numbers, with their default formats: `POWER [P|A||1.0]`, `SPINDLE_SPEED [S|A||1.0]`, `PLUNGE_RATE [FP|A||1.0]`, `FEED_RATE [F|A||1.0]`, `ROTARY_FEED_RATE [FW|A||1.0]`, `INVERSE_TIME [FI|A||1.3]`, `CUT_RATE [FC|A||1.0]`, `LINE_NUMBER [N|A||1.0]`, `X/Y/Z_POSITION [X|A||1.3]…`, `X/Y/Z_HOME_POSITION [XH|A||1.3]…`, `SAFE_Z_HEIGHT [SAFEZ|A||1.3]`, `DWELL_TIME [DWELL|A||1.0]`, `X/Y/Z_MIN`, `X/Y/Z_MAX`, `X/Y/Z_LENGTH` (all `1.3`), `WRAP_DIAMETER [WRAP_DIA|A||1.3]`, `X/Y_ORIGIN_POS [X_ORIGIN_POS|A||1.3]…`, `TOOL_NUMBER [T|A||1.0]`, `PREVIOUS_TOOL_NUMBER [TP|A||1.0]`, `TOOL_DIAMETER [TDIA|A||1.3]`, the arc values (`ArcStartX/Y`, `ArcMidX/Y`, `ArcMidXI/YI`, `I`, `J`, `IA`, `JA`, `Radius`, `Angle`, all `1.3`), `A_POSITION [A|A||1.3]`, `A_HOME_POSITION [AH|A||1.3]`.
+  - Text: `Z_ORIGIN`, `XY_ORIGIN`, `TOOL_NAME` (`TOOLNAME`), `TOOLPATH_NAME`, `TOOLPATH_PATHNAME` (`PATHNAME`), `TOOLPATH_FILENAME` (`TP_FILENAME`), `TOOLPATH_DIR` (`TP_DIR`), `TOOLPATH_EXTENSION` (`TP_EXT`), `FILE_NAME`, `FILE_PATHNAME`, `FILE_NOTES`, `TOOLPATH_NOTES`, `TOOL_NOTES`, `TOOLS_USED`, `TOOLPATHS_OUTPUT`, `SIDE_FLIP_DIRECTION`, `TIME`, `DATE`, `POST_NAME`, `UNITS`, `PRODUCT`, `REVISION`.
+  - Global statements beyond those above: `POST_BASE` (refused as no longer supported), `LINE_NUMBER_START`, `SCRIPT`, `ROTARY_SUPPORT`, `RUN_SCRIPT_AFTER`, `RUN_EXE_AFTER`, `RAPID_SPEED`; templates may use `%IF` / `%ELSE` / `%ENDIF`.
+  - Blocks beyond those above: `ROTARY_A_INDEX`, `FIRST_RAPID_MOVE`, `INITIAL_STRAIGHT_RAPID_MOVE` / `FIRST_STRAIGHT_RAPID_MOVE` / `STRAIGHT_RAPID_MOVE`, `POST_INFO`, `TOOLS_USED_LINE` (the template for each line of `[TOOLS_USED]`), `REVISION_COMMENT`.
+  - Parse errors name what is required: `UNITS` (MM or INCHES), `POST_NAME`, `FILE_EXTENSION` and a `FEED_MOVE` block; `MIN/MAX_ARC_RADIUS` need arc support; wrap text needs a wrap axis.
+- **Meanings [obs]** (help table): `XLENGTH` etc. are the material size; `Z_ORIGIN` is "Table or Material Surface" (**[obs]** the UI words are "Material Surface" and "Machine Bed"); `XY_ORIGIN` is the X, Y origin; `TOOLS_USED` and `TOOLPATHS_OUTPUT` list the tools / toolpaths in order of use; `DATE` / `TIME` are when the file was made; `PRODUCT` is the program name and version; `DWELL` is seconds when drilling; `WRAP_DIA` is the cylinder's diameter.
+- **[inf]** Date and time read like "Saturday October 24 2026" and "09:37 AM": `Aspire.exe` holds the formats `%A %B %d %Y` and `%I:%M %p`, but the code using them is not traced yet.
 
 ---
 

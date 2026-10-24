@@ -1,0 +1,39 @@
+#!/bin/bash
+# Decompiles every function of the analysed Aspire.exe into re/extracted/ghidra/decompiled (see
+# DumpDecompiled.java), with N Ghidra processes. One process locks a project, so each works on
+# its own reflinked copy of it. Already written functions are skipped, so it can be re-run to
+# resume. usage: re/ghidra_scripts/dump-decompiled [processes]
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+workers=${1:-12}
+project=re/extracted/ghidra
+out=$project/decompiled
+work=$project/workers
+# ponytail: heap and decompiler threads per process sized for 12 processes on a 32-thread,
+# 64 GB machine; Java feeding the decompiler is the bottleneck, one core per process
+heap=4G
+threads=3
+progress_every=30
+
+mkdir -p "$work" "$out"
+for k in $(seq 0 $((workers - 1))); do
+	rm -rf "${work:?}/$k"
+	mkdir -p "$work/$k"
+	cp -r --reflink=auto "$project/Aspire.gpr" "$project/Aspire.rep" "$work/$k/"
+	GHIDRA_HEADLESS_MAXMEM=$heap /opt/ghidra/support/analyzeHeadless "$work/$k" Aspire \
+		-process Aspire.exe -noanalysis -readOnly -max-cpu $threads \
+		-scriptPath re/ghidra_scripts -postScript DumpDecompiled.java "$out" "$k" "$workers" \
+		>"$work/$k.log" 2>&1 &
+done
+while [ -n "$(jobs -r)" ]; do
+	sleep $progress_every
+	echo "$(date +%T) $(find "$out" -name '*.c' | wc -l) functions written"
+done
+# a failed process leaves its share unwritten; re-running picks it up
+wait || echo "a Ghidra process failed: see $work/*.log, then re-run to finish"
+grep -h 'decompiled, ' "$work"/*.log | sed 's/ (GhidraScript).*//' || true
+# keep the copies and logs while any process did not finish
+if ! grep -L 'decompiled, ' "$work"/*.log | grep -q .; then
+	rm -rf "$work"
+fi
+echo "done: $(find "$out" -name '*.c' | wc -l) functions in $out"
