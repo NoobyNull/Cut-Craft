@@ -1,0 +1,17 @@
+[package]
+name = "cmd-vcarve-inlay-toolpath"
+description = "V-Carve Inlay Toolpath"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+cmd-vcarve-engrave-toolpath = { path = "../vcarve-engrave-toolpath" }
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

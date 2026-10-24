@@ -55,6 +55,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_show_hide::ShowHide>();
     r.add::<cmd_delete_items::DeleteItems>();
     r.add::<cmd_fluting_toolpath::FlutingToolpath>();
+    r.add::<cmd_vcarve_inlay_toolpath::VcarveInlayToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

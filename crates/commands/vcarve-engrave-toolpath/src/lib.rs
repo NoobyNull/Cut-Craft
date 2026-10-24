@@ -5,7 +5,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
-    Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
+    Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -16,7 +16,12 @@ pub struct VcarveEngraveToolpath;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
-    /// Deepest the bit goes; wider parts are cut flat at this depth (0: as deep as it can)
+    /// Below the material surface where carving starts (the floor of an earlier pocket)
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub start_depth: f64,
+    /// Deepest the bit goes below the start depth; wider parts are cut flat there (0: as
+    /// deep as it can)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub flat_depth: f64,
     /// A V-bit; its stepover sets how close together the carving passes are
@@ -27,6 +32,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             name: "V-Carve".into(),
+            start_depth: 0.0,
             flat_depth: 0.0,
             tool: ToolDatabase::starter()
                 .tools
@@ -70,26 +76,39 @@ impl Command for VcarveEngraveToolpath {
                 "select the closed vectors to carve".into(),
             ));
         }
-        // how far the cone reaches sideways for each millimetre down
-        let spread = (tool.angle.to_radians() / 2.0).tan();
-        // further in than this the cone cannot reach the edges, so the bottom is cut flat
-        let reach = match p.flat_depth {
-            limit if limit > 0.0 => (tool.diameter / 2.0).min(limit * spread),
-            _ => tool.diameter / 2.0,
-        };
-        let step = tool.stepover * tool.diameter;
-        let safe = doc.job.clearance;
-        let mut moves = vec![];
-        for (offset, rings) in inward_offsets(&polygon::regions(&paths), step) {
-            let depths = pass_depths(offset.min(reach) / spread, tool.pass_depth);
-            for ring in &rings {
-                moves.extend(contour_moves(&cut_points(ring), true, &depths, safe));
-            }
+        if p.start_depth < 0.0 {
+            return Err(CommandError::InvalidParams(
+                "start depth cannot be negative".into(),
+            ));
         }
+        let moves = carve(&paths, p, doc.job.clearance);
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(p, p.name.clone(), tool.clone(), ids, moves));
         Ok(c.finish())
     }
+}
+
+/// The moves that V-carve the regions `paths` enclose (holes left standing) with `p`'s V-bit.
+/// The edges are cut at the start depth; further in it goes deeper until the cone is as
+/// wide as the bit or reaches the flat depth.
+pub fn carve(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
+    let tool = &p.tool;
+    // how far the cone reaches sideways for each millimetre down
+    let spread = (tool.angle.to_radians() / 2.0).tan();
+    // further in than this the cone cannot reach the edges, so the bottom is cut flat
+    let reach = match p.flat_depth {
+        limit if limit > 0.0 => (tool.diameter / 2.0).min(limit * spread),
+        _ => tool.diameter / 2.0,
+    };
+    let step = tool.stepover * tool.diameter;
+    let mut moves = vec![];
+    for (offset, rings) in inward_offsets(&polygon::regions(paths), step) {
+        let depths = pass_depths(p.start_depth + offset.min(reach) / spread, tool.pass_depth);
+        for ring in &rings {
+            moves.extend(contour_moves(&cut_points(ring), true, &depths, safe));
+        }
+    }
+    moves
 }
 
 /// The regions shrunk by `step`, `2 step`, ... until nothing is left, plus about where the
@@ -203,6 +222,26 @@ mod tests {
         let t = carve(vec![rectangle(100.0, 10.0)], &params);
         assert!(deepest(&t) >= -2.0 - 1e-9);
         assert!(deepest(&t) <= -2.0 + 1e-9, "and it does reach it");
+    }
+
+    #[test]
+    fn a_start_depth_lowers_the_whole_carving() {
+        let params = Params {
+            start_depth: 3.0,
+            flat_depth: 2.0,
+            ..Params::default()
+        };
+        let t = carve(vec![rectangle(100.0, 10.0)], &params);
+        assert!((deepest(&t) + 5.0).abs() < 1e-9, "{}", deepest(&t));
+        let job = Job {
+            width: 100.0,
+            height: 10.0,
+            ..Job::default()
+        };
+        // the edge is cut at the start depth, sloping down from there
+        let step = t.tool.stepover * t.tool.diameter;
+        let z = carved(&t, &job).at(Point::new(50.0, 1.0)).unwrap();
+        assert!((z + 4.0).abs() <= step + 0.25, "{z}");
     }
 
     #[test]

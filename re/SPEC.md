@@ -192,6 +192,13 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Ramp Type:** Linear, or Smooth, which curves and transitions smoothly into full depth. **[unk]** the curve itself: no code reference to the fluting strings was found (no LEA or pointer to them); Cut Craft uses a quarter sine, level at full depth.
 - **[unk]** whether it cuts in several passes; Cut Craft cuts one pass. Project onto 3D Model is not yet done.
 
+### V-Carve Inlay [obs] (help: VCarve Inlay Toolpath, -Pocket, -Plug)
+- Makes two toolpaths with one V-bit: a Pocket carving the shapes, and a Plug carving mirrored copies; after calculation they are separate (editing one does not change the other). Plug vectors are added to the job.
+- **Pocket Depth** is the most the pocket goes down. **Glue Gap**: between the plug's top and the pocket floor once fitted; more than 0 and less than the pocket depth. **Surface Clearance**: between the plug's material and the pocket's surface; more than 0 and less than the material thickness.
+- **Plug Outer Boundary:** Sheet Limits (cut to the sheet edge) or Vector Offset (only round the shapes), widened by a Boundary Offset (negative ignored). **Plug Destination Sheet:** the same sheet places the plug mirrored; another sheet mirrors and centres it there.
+- The pocket form later allows a Start Depth (into an existing pocket). Optional clearance tools clear the flat areas, leaving an allowance for the V-bit.
+- **[inf]** Geometry Cut Craft uses: pocket = V-carve to flat depth D; plug = V-carve of (boundary − mirrored shapes) starting at D − glue gap, going a further surface clearance down. Turned over, its walls then lie on the pocket's. Cut Craft has one sheet, so it mirrors across the job's centre line; clearance tools are not done yet.
+
 ---
 
 ## P5 — Directories and configuration

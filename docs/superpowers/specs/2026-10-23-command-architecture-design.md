@@ -95,4 +95,4 @@ Done:
     lowest-edge maths), halving or lifting moves that would cut in.
 
 Next:
-19. ✅ Fluting. Next: V-carve inlay, prism, texture and the other strategies; job model resolution.
+19. ✅ Fluting; ✅ V-carve inlay (and V-Carve Start Depth). Next: prism, texture and the other strategies; job model resolution.

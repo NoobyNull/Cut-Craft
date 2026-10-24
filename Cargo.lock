@@ -792,6 +792,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-vcarve-inlay-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cmd-vcarve-engrave-toolpath",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-weld-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1015,6 +1025,7 @@ dependencies = [
  "cmd-toolpath-properties",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
+ "cmd-vcarve-inlay-toolpath",
  "cmd-weld-vectors",
  "cut-craft-core",
  "cut-craft-post",
