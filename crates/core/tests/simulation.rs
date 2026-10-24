@@ -247,3 +247,87 @@ fn a_ramping_radiused_end_mill_cuts_where_its_edge_reaches_lowest() {
         );
     }
 }
+
+/// `material` with a groove along y from x = 50 to `50 + width`, 2 mm deep.
+fn grooved(width: f64) -> Material {
+    let mut m = material();
+    for row in 0..m.rows {
+        for column in 0..m.columns {
+            let x = m.centre(column, row).x;
+            if (50.0..50.0 + width).contains(&x) {
+                m.heights[row * m.columns + column] = -2.0;
+            }
+        }
+    }
+    m
+}
+
+#[test]
+fn a_tool_leaves_what_its_cutting_edge_cannot_reach() {
+    let model = grooved(1.0);
+    let end_mill = Tool::default(); // 6 mm
+    let left = model.left_by(&end_mill);
+    assert_eq!(depth_at(&left, 20.0, 20.0), 0.0, "the flat is finished");
+    assert_eq!(
+        depth_at(&left, 50.25, 20.0),
+        0.0,
+        "a 1 mm groove is out of reach"
+    );
+    let wide = grooved(10.0);
+    let left = wide.left_by(&end_mill);
+    assert_eq!(
+        depth_at(&left, 55.25, 20.0),
+        -2.0,
+        "a 10 mm groove's middle is reached"
+    );
+}
+
+#[test]
+fn rest_areas_ignore_small_spots_and_grow_by_the_boundary_offset() {
+    use cut_craft_core::simulation::rest_areas;
+    let model = material(); // half-millimetre cells
+    let mut left = material();
+    // material left over a 10 mm square and a 1.5 mm spot
+    for row in 0..left.rows {
+        for column in 0..left.columns {
+            let p = left.centre(column, row);
+            let square = (20.0..30.0).contains(&p.x) && (20.0..30.0).contains(&p.y);
+            let spot = (70.0..71.5).contains(&p.x) && (70.0..71.5).contains(&p.y);
+            if square || spot {
+                left.heights[row * left.columns + column] = 1.0;
+            }
+        }
+    }
+    let rest = rest_areas(&model, &left, 2.0, 1.0);
+    let inside = |x: f64, y: f64| rest(Point::new(x, y));
+    assert!(inside(25.0, 25.0), "the square");
+    assert!(inside(19.25, 25.0) && inside(30.75, 25.0), "grown by 1 mm");
+    assert!(!inside(17.75, 25.0), "but not 2 mm");
+    assert!(
+        !inside(70.75, 70.75),
+        "the spot is under the 2 mm minimum detail"
+    );
+}
+
+#[test]
+fn a_zigzag_within_areas_cuts_only_inside_them() {
+    use cut_craft_core::toolpath::zigzag_within;
+    let flat = material();
+    let tool = Tool::default();
+    // two strips: x under 30, and x from 60 to 70
+    let inside = |p: Point| p.x < 30.0 || (60.0..70.0).contains(&p.x);
+    let runs = zigzag_within(&flat, &tool, 3.0, 0.002, f64::NEG_INFINITY, &inside);
+    assert_ne!(runs.len(), 0);
+    for run in &runs {
+        assert!(run.iter().all(|p| inside(p.truncate())), "{run:?}");
+    }
+    let lines = runs
+        .iter()
+        .filter(|run| run.iter().all(|p| p.x < 30.0))
+        .count();
+    assert_eq!(
+        lines * 2,
+        runs.len(),
+        "each line is two runs, one per strip"
+    );
+}

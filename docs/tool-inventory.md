@@ -107,7 +107,8 @@ say "not implemented yet".
 - Job Setup: single-sided and rotary jobs.
 - Save Toolpaths: through the installed post, else Cut Craft's own FluidNC posts (tool
   changer; rotary jobs wrapped onto A in inverse time).
-- Tool Database: flutes and chip load.
+- Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
+- 3D Finishing: rest machining after earlier tools (Minimum Detail, Boundary Offset).
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -153,6 +154,8 @@ say "not implemented yet".
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
   (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).
 - Job Setup: double-sided jobs.
+- 3D Finishing's several-tools form: one toolpath per tool made in one go (today each
+  rest-machining toolpath is made on its own, naming the tools that ran before it).
 
 ## Differences from Aspire 12 seen on screen
 

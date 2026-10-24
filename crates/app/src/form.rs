@@ -384,7 +384,9 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
         items.remove(i);
         changed = true;
     }
-    if ui.small_button("+").on_hover_text("Add another").clicked() {
+    // "+" copies the last item; an empty list of objects has nothing to copy
+    let copyable = !items.is_empty() || !matches!(item, Kind::Group(_));
+    if copyable && ui.small_button("+").on_hover_text("Add another").clicked() {
         items.push(items.last().cloned().unwrap_or(Value::Null));
         changed = true;
     }

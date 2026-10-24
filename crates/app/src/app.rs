@@ -1114,6 +1114,19 @@ impl CutCraftApp {
                 save_tool = ui.button("Save to database").clicked();
             });
         }
+        // rest machining: the tools that ran before this one, picked from the database
+        let mut earlier = None;
+        if open.params.get("after").is_some_and(Value::is_array) {
+            egui::ComboBox::from_label("Add an earlier tool (rest machining)")
+                .selected_text("")
+                .show_ui(ui, |ui| {
+                    for tool in &self.tools.tools {
+                        if ui.selectable_label(false, &tool.name).clicked() {
+                            earlier = Some(tool.name.clone());
+                        }
+                    }
+                });
+        }
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
         let picture = |path: &str| {
@@ -1139,6 +1152,18 @@ impl CutCraftApp {
         }
         if save_tool {
             self.save_form_tool();
+        }
+        if let Some(name) = earlier {
+            self.add_earlier_tool(&name);
+        }
+    }
+
+    /// Adds a database tool to the open form's rest-machining list.
+    fn add_earlier_tool(&mut self, name: &str) {
+        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.get(name))
+            && let Some(after) = form.params.get_mut("after").and_then(Value::as_array_mut)
+        {
+            after.push(serde_json::to_value(tool).expect("tools serialize"));
         }
     }
 
@@ -2468,6 +2493,15 @@ mod tests {
         h.app.delete_tool(0);
         h.frame(vec![]);
         assert_eq!(h.app.tools.tools.len(), count - 1);
+    }
+
+    #[test]
+    fn rest_machining_takes_earlier_tools_from_the_database() {
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "3d_finishing_toolpath");
+        h.app.add_earlier_tool("6 mm Ball Nose");
+        let form = h.app.form.as_ref().unwrap();
+        assert_eq!(form.params["after"][0]["name"], "6 mm Ball Nose");
     }
 
     #[test]

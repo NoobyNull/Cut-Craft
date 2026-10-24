@@ -98,6 +98,36 @@ impl Material {
         }
     }
 
+    /// The surface `tool` leaves after finishing everywhere over this one, from every cell
+    /// centre as low as it goes: what its cutting edge cannot reach stays.
+    #[must_use]
+    pub fn left_by(&self, tool: &Tool) -> Self {
+        let radius = tool.diameter / 2.0;
+        let tips: Vec<f64> = (0..self.rows)
+            .flat_map(|row| (0..self.columns).map(move |column| (column, row)))
+            .map(|(column, row)| self.drop_tool(tool, self.centre(column, row)))
+            .collect();
+        let mut left = self.clone();
+        for row in 0..self.rows {
+            for column in 0..self.columns {
+                let at = self.centre(column, row);
+                let mut lowest = f64::INFINITY;
+                for r in self.rows_between(at.y - radius, at.y + radius) {
+                    for c in self.columns_between(at.x - radius, at.x + radius) {
+                        if let Some(rise) = tool.profile(self.centre(c, r).distance(at)) {
+                            lowest = lowest.min(tips[r * self.columns + c] + rise);
+                        }
+                    }
+                }
+                let height = &mut left.heights[row * self.columns + column];
+                if lowest.is_finite() {
+                    *height = lowest.max(*height);
+                }
+            }
+        }
+        left
+    }
+
     /// Removes what the tool following `toolpath` cuts away.
     pub fn cut(&mut self, toolpath: &Toolpath) {
         for pair in toolpath.moves.windows(2) {
@@ -213,4 +243,119 @@ fn covered(from: DVec2, along: DVec2, radius: f64) -> Option<(f64, f64)> {
         ((-half_b + root) / a).min(1.0),
     );
     (t0 <= t1).then_some((t0, t1))
+}
+
+/// How far above the model what was left must stand to count as unmachined.
+// ponytail: one fixed tolerance; a setting if finishes need finer or coarser rest areas
+const REST_TOLERANCE: f64 = 0.05;
+
+/// Rest machining's areas on `model`'s grid: where the surface `left` (on any grid) stands
+/// above the model, leaving out areas smaller across than `minimum_detail`, and grown by
+/// `offset`. True for a point inside them.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_wrap,
+    reason = "cell counts and indices are small and non-negative"
+)]
+pub fn rest_areas(
+    model: &Material,
+    left: &Material,
+    minimum_detail: f64,
+    offset: f64,
+) -> impl Fn(Point) -> bool + use<> {
+    let (columns, rows) = (model.columns, model.rows);
+    let height = |c: usize, r: usize| model.heights[r * columns + c];
+    // how steep the model is: tool positions only at cell centres make `left` up to about
+    // slope x cell too high there, which is not material left behind
+    let slope = |c: usize, r: usize| {
+        let along = |lo: usize, hi: usize, h: &dyn Fn(usize) -> f64| {
+            if hi > lo {
+                (h(hi) - h(lo)) / ((hi - lo) as f64 * model.cell)
+            } else {
+                0.0
+            }
+        };
+        let dx = along(c.saturating_sub(1), (c + 1).min(columns - 1), &|c| {
+            height(c, r)
+        });
+        let dy = along(r.saturating_sub(1), (r + 1).min(rows - 1), &|r| {
+            height(c, r)
+        });
+        dx.hypot(dy)
+    };
+    let unmachined: Vec<bool> = (0..rows * columns)
+        .map(|i| {
+            let (c, r) = (i % columns, i / columns);
+            let here = height(c, r);
+            let allowed = REST_TOLERANCE + slope(c, r) * model.cell;
+            left.at(model.centre(c, r)).unwrap_or(here) - here > allowed
+        })
+        .collect();
+    // keep the areas at least the minimum detail across
+    let mut kept = vec![false; rows * columns];
+    let mut seen = vec![false; rows * columns];
+    for start in 0..rows * columns {
+        if !unmachined[start] || seen[start] {
+            continue;
+        }
+        seen[start] = true;
+        let (mut area, mut next) = (vec![], vec![start]);
+        while let Some(i) = next.pop() {
+            area.push(i);
+            let (c, r) = (i % columns, i / columns);
+            let neighbours = [
+                (c > 0).then(|| i - 1),
+                (c + 1 < columns).then_some(i + 1),
+                (r > 0).then(|| i - columns),
+                (r + 1 < rows).then_some(i + columns),
+            ];
+            for n in neighbours.into_iter().flatten() {
+                if unmachined[n] && !seen[n] {
+                    seen[n] = true;
+                    next.push(n);
+                }
+            }
+        }
+        let across = span_in(&area, |i| i % columns).max(span_in(&area, |i| i / columns));
+        if across as f64 * model.cell >= minimum_detail {
+            for i in area {
+                kept[i] = true;
+            }
+        }
+    }
+    // grown by the offset
+    let reach = (offset / model.cell).floor() as isize;
+    let mut grown = kept.clone();
+    for i in (0..rows * columns).filter(|&i| kept[i]) {
+        let (c, r) = ((i % columns) as isize, (i / columns) as isize);
+        for dr in -reach..=reach {
+            for dc in -reach..=reach {
+                let (cc, rr) = (c + dc, r + dr);
+                if dc * dc + dr * dr <= reach * reach
+                    && (0..columns as isize).contains(&cc)
+                    && (0..rows as isize).contains(&rr)
+                {
+                    grown[rr as usize * columns + cc as usize] = true;
+                }
+            }
+        }
+    }
+    let (origin, cell) = (model.origin, model.cell);
+    move |p: Point| {
+        let (x, y) = ((p.x - origin.x) / cell, (p.y - origin.y) / cell);
+        x >= 0.0
+            && y >= 0.0
+            && (x as usize) < columns
+            && (y as usize) < rows
+            && grown[y as usize * columns + x as usize]
+    }
+}
+
+/// How many distinct values `of` takes over `area`'s cells, end to end.
+fn span_in(area: &[usize], of: impl Fn(usize) -> usize) -> usize {
+    let lo = area.iter().map(|&i| of(i)).min().unwrap_or(0);
+    let hi = area.iter().map(|&i| of(i)).max().unwrap_or(0);
+    hi - lo + 1
 }

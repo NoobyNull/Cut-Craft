@@ -328,51 +328,82 @@ const HALVINGS: u32 = 6;
 /// each point as low as the tool goes there without touching `grid`, and never below `floor`.
 /// Every move is checked: one that would cut more than `tolerance` into `grid` is halved, and
 /// one too short to halve is lifted over. Points in the middle of level runs are dropped.
+pub fn zigzag(grid: &Material, tool: &Tool, step: f64, tolerance: f64, floor: f64) -> Vec<DVec3> {
+    zigzag_within(grid, tool, step, tolerance, floor, &|_| true).concat()
+}
+
+/// [`zigzag`] over only the points `inside` says: each line split into runs where it leaves
+/// them, in cutting order (every other line reversed).
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_precision_loss,
     reason = "line counts are small and non-negative"
 )]
-pub fn zigzag(grid: &Material, tool: &Tool, step: f64, tolerance: f64, floor: f64) -> Vec<DVec3> {
+pub fn zigzag_within(
+    grid: &Material,
+    tool: &Tool,
+    step: f64,
+    tolerance: f64,
+    floor: f64,
+    inside: &dyn Fn(Point) -> bool,
+) -> Vec<Vec<DVec3>> {
     let (first, last) = (
         grid.centre(0, 0),
         grid.centre(grid.columns - 1, grid.rows - 1),
     );
     let lines = ((last.y - first.y) / step).floor() as usize + 1;
-    let mut points: Vec<DVec3> = vec![];
+    let mut runs: Vec<Vec<DVec3>> = vec![];
     for line in 0..lines {
         let y = first.y + line as f64 * step;
         let at = |x: f64| {
             let p = Point::new(x, y);
             p.extend(grid.drop_tool(tool, p).max(floor))
         };
-        let mut row: Vec<DVec3> = vec![];
+        let mut line_runs: Vec<Vec<DVec3>> = vec![];
+        let mut run: Vec<DVec3> = vec![];
         for column in 0..grid.columns {
-            let next = at(grid.centre(column, 0).x);
-            if let Some(&previous) = row.last() {
+            let x = grid.centre(column, 0).x;
+            if !inside(Point::new(x, y)) {
+                if !run.is_empty() {
+                    line_runs.push(std::mem::take(&mut run));
+                }
+                continue;
+            }
+            let next = at(x);
+            if let Some(&previous) = run.last() {
                 Refine {
                     grid,
                     tool,
                     tolerance,
                     at: &at,
                 }
-                .between(previous, next, HALVINGS, &mut row);
+                .between(previous, next, HALVINGS, &mut run);
             }
-            row.push(next);
+            run.push(next);
+        }
+        if !run.is_empty() {
+            line_runs.push(run);
         }
         if line % 2 == 1 {
-            row.reverse();
-        }
-        for point in row {
-            let n = points.len();
-            if n >= 2 && level_run(points[n - 2], points[n - 1], point) {
-                points.pop();
+            line_runs.reverse();
+            for run in &mut line_runs {
+                run.reverse();
             }
-            points.push(point);
+        }
+        for run in line_runs {
+            let mut points: Vec<DVec3> = vec![];
+            for point in run {
+                let n = points.len();
+                if n >= 2 && level_run(points[n - 2], points[n - 1], point) {
+                    points.pop();
+                }
+                points.push(point);
+            }
+            runs.push(points);
         }
     }
-    points
+    runs
 }
 
 /// Keeps the moves along one zigzag line from cutting into the grid.
