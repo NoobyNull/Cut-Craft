@@ -1201,29 +1201,28 @@ impl CutCraftApp {
     fn tool_groups(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup], page: Page) {
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
         let mut clicked = None;
+        // plain sections, as Aspire's tool pages have: a heading over its tools
         for group in groups {
-            egui::CollapsingHeader::new(group.name)
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        for &id in group.tools {
-                            let cmd = self.registry.get(id);
-                            let label = cmd
-                                .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned());
-                            let explicit = cmd.map_or("", |c| c.meta().icon);
-                            let button = self
-                                .icon_button(explicit, id, &label, edge)
-                                .selected(self.status.current_tool == label);
-                            let response = ui
-                                .add_enabled(self.available(id), button)
-                                .on_hover_text(&label)
-                                .on_disabled_hover_text(format!("{label}: not implemented yet"));
-                            if response.clicked() {
-                                clicked = Some(id);
-                            }
-                        }
-                    });
-                });
+            ui.strong(group.name);
+            ui.horizontal_wrapped(|ui| {
+                for &id in group.tools {
+                    let cmd = self.registry.get(id);
+                    let label =
+                        cmd.map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned());
+                    let explicit = cmd.map_or("", |c| c.meta().icon);
+                    let button = self
+                        .icon_button(explicit, id, &label, edge)
+                        .selected(self.status.current_tool == label);
+                    let response = ui
+                        .add_enabled(self.available(id), button)
+                        .on_hover_text(&label)
+                        .on_disabled_hover_text(format!("{label}: not implemented yet"));
+                    if response.clicked() {
+                        clicked = Some(id);
+                    }
+                }
+            });
+            ui.add_space(ui.spacing().item_spacing.y);
         }
         if let Some(id) = clicked {
             self.pick(ui.ctx(), page, id);
