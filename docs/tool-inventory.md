@@ -99,7 +99,8 @@ What works and what does not, by menu and tab; items not built yet are greyed an
 say "not implemented yet".
 
 **Working.**
-- File: New, Open, Close, Save, Save As, Recent Files, Import Vectors / Bitmap, Export DXF / SVG, Exit.
+- File: New, Open, Close, Save, Save As, Recent Files, Import Vectors / Bitmap (bitmaps:
+  PNG, JPEG, GIF, BMP, TIFF in grey, shown in the 2D view), Export DXF / SVG, Exit.
 - Edit: Undo, Redo, Delete, Select All Vectors, Select All Vectors On Current Layer, Unselect
   All, the ten Align commands, Join Vectors, Job Size and Position.
 - Model: Export as STL.

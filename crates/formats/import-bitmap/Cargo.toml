@@ -1,0 +1,15 @@
+[package]
+name = "fmt-import-bitmap"
+description = "Import a bitmap picture"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+image.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

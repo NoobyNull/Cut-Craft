@@ -21,6 +21,7 @@ fmt-export-as-stl = { path = "../formats/export-as-stl" }
 fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
+fmt-import-bitmap = { path = "../formats/import-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
 cmd-rounding-toolpath = { path = "../commands/rounding-toolpath" }
 cmd-moulding-toolpath = { path = "../commands/moulding-toolpath" }

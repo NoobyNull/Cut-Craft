@@ -1,6 +1,7 @@
 //! Invertible edits. Every document mutation is a [`Change`]; undo applies its inverse.
 
 use crate::CommandError;
+use crate::bitmap::Bitmap;
 use crate::component::Component;
 use crate::document::{Document, EntityId, Job, Layer, LayerId};
 use crate::geometry::{Path, Point, Rect};
@@ -60,6 +61,14 @@ pub enum Edit {
         before: Box<Component>,
         after: Box<Component>,
     },
+    AddBitmap {
+        id: EntityId,
+        bitmap: Box<Bitmap>,
+    },
+    RemoveBitmap {
+        id: EntityId,
+        bitmap: Box<Bitmap>,
+    },
     /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
     SetLayer {
         id: EntityId,
@@ -112,6 +121,8 @@ impl Edit {
             },
             Self::AddComponent { id, component } => Self::RemoveComponent { id, component },
             Self::RemoveComponent { id, component } => Self::AddComponent { id, component },
+            Self::AddBitmap { id, bitmap } => Self::RemoveBitmap { id, bitmap },
+            Self::RemoveBitmap { id, bitmap } => Self::AddBitmap { id, bitmap },
             Self::ReplaceComponent { id, before, after } => Self::ReplaceComponent {
                 id,
                 before: after,
@@ -363,6 +374,12 @@ impl Document {
             Edit::RemoveComponent { id, component } => {
                 remove_matching(&mut self.components, *id, component)?;
             }
+            Edit::AddBitmap { id, bitmap } => {
+                insert_new(&mut self.bitmaps, *id, (**bitmap).clone())?;
+            }
+            Edit::RemoveBitmap { id, bitmap } => {
+                remove_matching(&mut self.bitmaps, *id, bitmap)?;
+            }
             Edit::ReplaceComponent { id, before, after } => {
                 replace_matching(&mut self.components, *id, before, after)?;
             }
@@ -590,6 +607,16 @@ impl ChangeBuilder<'_> {
         self.edits.push(Edit::AddComponent {
             id,
             component: Box::new(component),
+        });
+        id
+    }
+
+    pub fn add_bitmap(&mut self, bitmap: Bitmap) -> EntityId {
+        let id = EntityId(self.next_id);
+        self.next_id += 1;
+        self.edits.push(Edit::AddBitmap {
+            id,
+            bitmap: Box::new(bitmap),
         });
         id
     }

@@ -314,6 +314,25 @@ impl Canvas {
 
         let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
         painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
+        for (id, bitmap) in &doc.bitmaps {
+            let key = egui::Id::new(("bitmap", id.0, bitmap.columns, bitmap.rows));
+            let ctx = ui.ctx();
+            // uploaded once; kept while the bitmap is the same size
+            let texture = ctx
+                .data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
+                .unwrap_or_else(|| {
+                    let texture = ctx.load_texture(
+                        format!("bitmap {}", id.0),
+                        egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey),
+                        egui::TextureOptions::LINEAR,
+                    );
+                    ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
+                    texture
+                });
+            let at = Rect::from_two_pos(t.to_screen(bitmap.rect.min), t.to_screen(bitmap.rect.max));
+            let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+            painter.image(texture.id(), at, whole, egui::Color32::WHITE);
+        }
         let datum = visuals.widgets.noninteractive.fg_stroke;
         let (o, area) = (t.origin, self.area);
         for line in [

@@ -1,5 +1,6 @@
 //! The job being edited. Only [`Document::apply`](crate::Change) changes it.
 
+use crate::bitmap::Bitmap;
 use crate::component::Component;
 use crate::geometry::{Path, Point, Rect, polyline_distance, polyline_touches};
 use crate::toolpath::Toolpath;
@@ -272,6 +273,9 @@ pub struct Document {
     /// 3D shapes, combined in id order into the model.
     #[serde(default)]
     pub components: BTreeMap<EntityId, Component>,
+    /// Imported pictures (added with bitmap strategies; older files have none).
+    #[serde(default)]
+    pub bitmaps: BTreeMap<EntityId, Bitmap>,
 }
 
 impl Default for Document {
@@ -285,6 +289,7 @@ impl Default for Document {
             current_layer: first_layer(),
             vector_layers: BTreeMap::new(),
             components: BTreeMap::new(),
+            bitmaps: BTreeMap::new(),
         }
     }
 }
@@ -297,7 +302,8 @@ impl Document {
             .keys()
             .next_back()
             .max(self.toolpaths.keys().next_back())
-            .max(self.components.keys().next_back());
+            .max(self.components.keys().next_back())
+            .max(self.bitmaps.keys().next_back());
         EntityId(last.map_or(1, |id| id.0 + 1))
     }
 
