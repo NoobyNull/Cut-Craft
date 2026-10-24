@@ -425,6 +425,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-array-copy-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-center"
 version = "0.1.0"
 dependencies = [
@@ -1107,6 +1116,7 @@ dependencies = [
  "cmd-align-left",
  "cmd-align-right",
  "cmd-align-top",
+ "cmd-array-copy-toolpath",
  "cmd-center",
  "cmd-center-horizontally",
  "cmd-center-horizontally-in-material",

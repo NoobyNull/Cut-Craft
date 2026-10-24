@@ -130,6 +130,8 @@ say "not implemented yet".
 - Lasers: Laser Cut / Fill (outside, inside, on, hatch fill with cross hatch and outline;
   kerf, allowance, power, passes) and Laser Picture (raster, hatch, selected; dither; line
   spacing in kerfs). Output needs a post with LASER_SUPPORT and the JET_TOOL blocks.
+- Array Copy: rows and columns of copies of the visible toolpaths, by offset or gap; follows
+  them when recalculated.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:

@@ -261,6 +261,11 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Posts:** `LASER_SUPPORT = "YES"` marks a laser post; power prints through `VAR POWER` (`[P]`, 1–100 %, e.g. `[P|C|S|1.0|10.0]` for grbl's 0–1000), blocks `JET_TOOL_ON` (e.g. `M4[P]`), `JET_TOOL_POWER` (`[P]`), `JET_TOOL_OFF` (`M5`); the laser comes on only once it is at its Z, never during a plunge.
 - **[inf]** Cut Craft: a laser toolpath holds a power per move (0 on rapids); the post turns the jet on before the first feed move after a rapid, prints JET_TOOL_POWER when the power changes, and off before rapids and at the end; a post without LASER_SUPPORT refuses laser toolpaths. Cut Craft's own FluidNC posts are not laser posts. Passes repeat at the surface; Fill Regionally is not done.
 
+### Array Copy and Merged toolpaths [obs] (help: Array Copy Toolpath, Merged Toolpath)
+- **Array Copy:** a grid of Rows (Y) × Columns (X) copies of the visible toolpaths, above and to the right of them, spaced by **Offset** (start to start) or **Gap** (between extents). Editing a source updates its copies; sources show under the array in the toolpath list, and hiding a source leaves its copies out when saving. Each copy is normally cut whole before the next; **Minimize tool changes** (several tools) groups each tool's work across the copies.
+- **Merged:** merges all visible toolpaths that use the same tool into one, trying several orderings and keeping the quickest; **Merge By Part** cuts each part's contours together, respecting the toolpath list's order; feeds and speeds change part-way as needed.
+- **[inf]** Cut Craft: an array toolpath per source (the tool-grouped order), each recalculated from its source.
+
 ---
 
 ## P5 — Directories and configuration
