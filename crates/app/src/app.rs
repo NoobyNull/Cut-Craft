@@ -19,7 +19,8 @@ use serde_json::Value;
 use std::borrow::Cow;
 use std::f64::consts::{FRAC_PI_2, PI};
 
-const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
+/// Aspire 12's side tabs: Design holds the drawing and modeling tools.
+const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
 const BUILT_INS: [&str; 31] = [
     "undo",
@@ -62,8 +63,9 @@ const PREVIEW_CELLS: usize = 1000;
 const MESH_CELLS: usize = 250;
 /// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
 const LAYOUT_KEYS: [(&str, &str); 2] = [("design_layout", "F11"), ("machining_layout", "F12")];
-/// The zoom buttons over the 2D view: action, label and icon.
-const VIEW_BUTTONS: [(&str, &str, &str); 3] = [
+/// The view buttons over the top right of the 2D view: action, label and icon.
+const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
+    ("pan", "Pan", "view/pan.svg"),
     ("zoom_box", "Zoom Box", "view/zoom_box.svg"),
     ("zoom_to_job", "Zoom to Job", "view/zoom_to_job.svg"),
     (
@@ -858,21 +860,33 @@ impl CutCraftApp {
                 self.command_form(ui);
             }
             match DESIGN_TABS[self.design_tab] {
-                "Drawing" => {
-                    let groups = self.toolbar.groups.clone();
+                "Design" => {
+                    let groups = self.design_groups("Design");
                     self.tool_groups(ui, &groups, Page::Design);
-                }
-                "Modeling" => {
-                    let groups = self.toolbar.modeling_groups.clone();
-                    self.tool_groups(ui, &groups, Page::Design);
-                    self.component_list(ui);
                 }
                 "Layers" => self.layers_panel(ui),
+                "Components" => self.component_list(ui),
                 tab => {
                     ui.weak(format!("{tab} tools not implemented yet"));
                 }
             }
         });
+    }
+
+    /// The tool groups a design tab shows: Design has the drawing then the modeling tools.
+    fn design_groups(&self, tab: &str) -> Vec<gui::ToolGroup> {
+        match tab {
+            "Design" => {
+                let toolbar = &self.toolbar;
+                toolbar
+                    .groups
+                    .iter()
+                    .chain(&toolbar.modeling_groups)
+                    .copied()
+                    .collect()
+            }
+            _ => vec![],
+        }
     }
 
     /// A page's title with its push-pin and Aspire's Switch Layout button.
@@ -1409,8 +1423,6 @@ impl CutCraftApp {
     /// Components top first: the model is built from the bottom of the list up. Aspire's
     /// component menu on a right-click.
     fn component_list(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
-        ui.strong("Components");
         if self.doc.components.is_empty() {
             ui.weak("No components yet");
         }
@@ -1823,19 +1835,28 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's zoom buttons over the top-left of the 2D view, inside the rulers.
+    /// Aspire's view buttons over the top right of the 2D view, below the ruler.
     fn view_buttons(&mut self, ui: &mut egui::Ui, area: egui::Rect) {
         let row = ui.spacing().interact_size.y;
         let edge = TOOL_ICON_ROWS * row;
-        let corner = area.min + egui::vec2(row, row) + ui.spacing().item_spacing;
-        let room = egui::Rect::from_min_size(corner, area.max - corner);
+        let gap = ui.spacing().item_spacing;
+        let room = egui::Rect::from_min_max(
+            area.min + egui::vec2(row, row) + gap,
+            egui::pos2(area.max.x - gap.x, area.max.y),
+        );
+        let in_hand = |id: &str| match self.view_tool {
+            Some(ViewTool::Pan) => id == "pan",
+            Some(ViewTool::ZoomBox) => id == "zoom_box",
+            None => false,
+        };
         let mut clicked = None;
         ui.allocate_ui_at_rect(room, |ui| {
-            ui.horizontal(|ui| {
-                for (id, label, icon) in VIEW_BUTTONS {
+            // laid out from the right, so the first button is the leftmost
+            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                for (id, label, icon) in VIEW_BUTTONS.into_iter().rev() {
                     let button = self
                         .icon_button(icon, id, label, edge)
-                        .selected(id == "zoom_box" && self.view_tool == Some(ViewTool::ZoomBox));
+                        .selected(in_hand(id));
                     let response = ui
                         .add_enabled(self.available(id), button)
                         .on_hover_text(label)
@@ -1992,6 +2013,20 @@ mod tests {
                 ..Default::default()
             };
             self.shapes = self.ctx.run(input, |ctx| self.app.ui(ctx)).shapes;
+        }
+
+        /// Every place the last frame drew `text`.
+        fn texts_at(&self, text: &str) -> Vec<Pos2> {
+            let drawn = self
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(t) if t.galley.text() == text => {
+                        Some(t.pos + t.galley.size() / 2.0)
+                    }
+                    _ => None,
+                });
+            drawn.collect()
         }
 
         /// The middle of `text` where the last frame drew it.
@@ -2476,7 +2511,7 @@ mod tests {
     #[test]
     fn the_3d_view_shows_the_model_until_there_is_a_preview() {
         let mut h = Harness::new();
-        h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Modeling").unwrap();
+        h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Design").unwrap();
         assert!(
             h.app
                 .toolbar
@@ -2744,6 +2779,59 @@ mod tests {
         h.app.invoke(&h.ctx, "zoom_to_job");
         h.frame(vec![]);
         assert!((h.app.view_transform.unwrap().scale - fitted).abs() < 1e-3);
+    }
+
+    #[test]
+    fn the_side_tabs_are_aspire_12s_with_drawing_and_modeling_on_design() {
+        assert_eq!(
+            DESIGN_TABS,
+            ["Design", "Sheets", "Layers", "Components", "Clipart"]
+        );
+        let h = Harness::new();
+        let names: Vec<&str> = h
+            .app
+            .design_groups("Design")
+            .iter()
+            .map(|g| g.name)
+            .collect();
+        assert!(
+            names.contains(&"Create Vectors") && names.contains(&"Shape Creation"),
+            "{names:?}"
+        );
+        assert!(h.app.design_groups("Components").is_empty());
+    }
+
+    #[test]
+    fn the_components_tab_is_the_component_list() {
+        let mut h = Harness::new();
+        h.app.pages = Pages::design_layout();
+        h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Components").unwrap();
+        h.frame(vec![]);
+        assert!(h.text_at("No components yet").is_some());
+    }
+
+    #[test]
+    fn the_view_buttons_sit_at_the_top_right_of_the_2d_view_starting_with_pan() {
+        let mut h = Harness::new();
+        // text buttons, as where the icons are missing
+        h.app.icons = Icons::load(std::path::Path::new("/no/icons"));
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let area = h.app.view_area.unwrap();
+        let over_view = |at: &Pos2| area.contains(*at);
+        let pan = *h
+            .texts_at("Pan")
+            .iter()
+            .find(|p| over_view(p))
+            .expect("Pan over the view");
+        let selection = h.text_at("Zoom to Selection").unwrap();
+        assert!(
+            pan.x > area.center().x && selection.x > pan.x,
+            "on the right, Pan first: {pan:?} {selection:?} in {area:?}"
+        );
+        assert!(pan.y < area.center().y, "along the top: {pan:?}");
+        h.click(pan, Modifiers::NONE);
+        assert_eq!(h.app.view_tool, Some(ViewTool::Pan));
     }
 
     #[test]

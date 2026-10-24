@@ -156,10 +156,5 @@ say "not implemented yet".
 
 ## Differences from Aspire 12 seen on screen
 
-- Aspire 12's side tabs are Design, Sheets, Layers, Components, Clipart (drawing and modeling
-  tools together on Design; the component tree on its own tab); ours are still Drawing,
-  Modeling, Sheets, Layers, Clipart.
-- Aspire's view buttons (Pan, Zoom Box, Zoom to Job, Zoom to Selection) sit at the top right
-  of the 2D view; ours are at the top left, without Pan.
 - Aspire's rotary Job Setup calls its Z zero under the material "Cylinder Axis"; ours reuses
   "Machine Bed" (posts print "Cylinder Axis").
