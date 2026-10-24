@@ -48,7 +48,13 @@ fn drawing_groups() -> Vec<ToolGroup> {
         ),
         group(
             "2D View Control",
-            &["pan", "zoom_box", "zoom_to_job", "zoom_selected"],
+            &[
+                "pan",
+                "zoom_box",
+                "zoom_to_job",
+                "zoom_selected",
+                "interface_layout",
+            ],
         ),
         group(
             "Create Vectors",

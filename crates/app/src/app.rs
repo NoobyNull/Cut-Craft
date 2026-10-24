@@ -5,6 +5,7 @@ use crate::files::{self, Session};
 use crate::form::{self, Field};
 use crate::gui;
 use crate::icons::Icons;
+use crate::pages::{Page, Pages, Shown};
 use crate::view2d::{Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
 use cut_craft_core::document::{Document, EntityId, LayerId};
@@ -20,7 +21,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 23] = [
+const BUILT_INS: [&str; 26] = [
     "undo",
     "redo",
     "exit",
@@ -35,6 +36,9 @@ const BUILT_INS: [&str; 23] = [
     "save_toolpaths",
     "install_post_processor",
     "close",
+    "design_layout",
+    "machining_layout",
+    "interface_layout",
     "pan",
     "zoom_box",
     "zoom_to_job",
@@ -51,6 +55,8 @@ const PREVIEW_CELLS: usize = 1000;
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
+/// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
+const LAYOUT_KEYS: [(&str, &str); 2] = [("design_layout", "F11"), ("machining_layout", "F12")];
 /// The zoom buttons over the 2D view: action, label and icon.
 const VIEW_BUTTONS: [(&str, &str, &str); 3] = [
     ("zoom_box", "Zoom Box", "view/zoom_box.svg"),
@@ -130,6 +136,8 @@ struct OpenForm {
     error: Option<String>,
     /// Job Setup for a new job: OK and Cancel instead of Apply and Close.
     new_job: bool,
+    /// The tool page it shows in: Toolpaths for toolpath strategies, else Design.
+    page: Page,
 }
 
 struct CutCraftApp {
@@ -154,6 +162,8 @@ struct CutCraftApp {
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
     view_tool: Option<ViewTool>,
+    /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
+    pages: Pages,
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
@@ -199,6 +209,7 @@ impl CutCraftApp {
             view_area: None,
             camera: None,
             view_tool: None,
+            pages: Pages::default(),
             session: Session::default(),
             selected_toolpath: None,
             post: None,
@@ -263,6 +274,9 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "install_post_processor" => self.file_action(id),
             "tool_database" => self.tool_window = true,
+            "design_layout" => self.pages = Pages::design_layout(),
+            "machining_layout" => self.pages = Pages::machining_layout(),
+            "interface_layout" => self.pages.switch_layout(),
             "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected" => {
                 self.view_action(ctx, id);
             }
@@ -410,6 +424,7 @@ impl CutCraftApp {
                 .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
             return;
         };
+        let page = self.page_of(cmd.id());
         let (meta, fields, params) = (
             cmd.meta(),
             form::fields(&cmd.schema()),
@@ -430,7 +445,12 @@ impl CutCraftApp {
                 params,
                 error: None,
                 new_job: false,
+                page,
             });
+            // a form shows in its page, so bring an auto-hidden page out
+            if self.pages.shown(page) == Shown::Hidden {
+                self.pages.open(page);
+            }
         }
     }
 
@@ -633,6 +653,8 @@ impl CutCraftApp {
             }
             self.form = None;
             self.view_tool = None;
+            self.pages.done_with(Page::Design);
+            self.pages.done_with(Page::Toolpaths);
         }
         ctx.input(|i| {
             if i.key_pressed(Key::F2) {
@@ -656,7 +678,10 @@ impl CutCraftApp {
             .into_iter()
             .filter(|i| BUILT_INS.contains(&i.action.as_str()))
             .filter_map(|i| Some((i.action.clone(), shortcut::parse(&i.shortcut)?)));
-        commands.chain(built_ins).collect()
+        let layouts = LAYOUT_KEYS
+            .iter()
+            .filter_map(|&(id, keys)| Some((id.to_owned(), shortcut::parse(keys)?)));
+        commands.chain(built_ins).chain(layouts).collect()
     }
 
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
@@ -772,23 +797,21 @@ impl CutCraftApp {
         });
     }
 
-    fn design_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            for (i, tab) in DESIGN_TABS.iter().enumerate() {
-                ui.selectable_value(&mut self.design_tab, i, *tab);
-            }
-        });
-        ui.separator();
+    /// The Design page: the chosen design tab's tools, under any form opened from them.
+    fn design_page(&mut self, ui: &mut egui::Ui) {
+        self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
         egui::ScrollArea::vertical().show(ui, |ui| {
-            self.command_form(ui);
+            if self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
+                self.command_form(ui);
+            }
             match DESIGN_TABS[self.design_tab] {
                 "Drawing" => {
                     let groups = self.toolbar.groups.clone();
-                    self.tool_groups(ui, &groups);
+                    self.tool_groups(ui, &groups, Page::Design);
                 }
                 "Modeling" => {
                     let groups = self.toolbar.modeling_groups.clone();
-                    self.tool_groups(ui, &groups);
+                    self.tool_groups(ui, &groups, Page::Design);
                     self.component_list(ui);
                 }
                 "Layers" => self.layers_panel(ui),
@@ -797,6 +820,168 @@ impl CutCraftApp {
                 }
             }
         });
+    }
+
+    /// A page's title with its push-pin and Aspire's Switch Layout button.
+    fn page_header(&mut self, ui: &mut egui::Ui, page: Page, title: &str) {
+        let row = ui.spacing().interact_size.y;
+        let (mut pin, mut switch) = (false, false);
+        ui.horizontal(|ui| {
+            ui.strong(title);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let pinned = self.pages.pinned(page);
+                pin = ui
+                    .selectable_label(pinned, "📌")
+                    .on_hover_text(if pinned {
+                        "Unpin: hide this page to its side tab"
+                    } else {
+                        "Pin this page open"
+                    })
+                    .clicked();
+                switch = ui
+                    .add(self.icon_button("view/interface_layout.svg", "", "Switch Layout", row))
+                    .on_hover_text("Switch Layout (F11 designing, F12 machining)")
+                    .clicked();
+            });
+        });
+        ui.separator();
+        if pin {
+            let pinned = self.pages.pinned(page);
+            self.pages.set_pinned(page, !pinned);
+        }
+        if switch {
+            self.pages.switch_layout();
+        }
+    }
+
+    /// The side tabs and the docked pages around the view; flown-out pages over it.
+    fn job_pages(&mut self, ctx: &egui::Context) {
+        let style = ctx.style();
+        let (row, margin) = (style.spacing.interact_size.y, style.spacing.item_spacing.y);
+        let width = DESIGN_PANEL_WIDTHS * style.spacing.interact_size.x;
+        let strip = || egui::Frame::side_top_panel(&style).inner_margin(margin);
+        let left_tabs = egui::SidePanel::left("design_tabs")
+            .resizable(false)
+            .exact_width(row + 2.0 * margin)
+            .frame(strip())
+            .show(ctx, |ui| self.design_tabs(ui))
+            .response
+            .rect;
+        let right_tabs = egui::SidePanel::right("toolpath_tabs")
+            .resizable(false)
+            .exact_width(row + 2.0 * margin)
+            .frame(strip())
+            .show(ctx, |ui| self.toolpath_tabs(ui))
+            .response
+            .rect;
+        if self.pages.shown(Page::Design) == Shown::Docked {
+            egui::SidePanel::left("design_panel")
+                .default_width(width)
+                .show(ctx, |ui| self.design_page(ui));
+        }
+        if self.pages.shown(Page::Toolpaths) == Shown::Docked {
+            egui::SidePanel::right("toolpaths_panel")
+                .default_width(width)
+                .show(ctx, |ui| self.toolpaths_page(ui));
+        }
+        let room = ctx.available_rect();
+        // a click on the view puts a flown-out page away, unless its form is open
+        let pressed = ctx.input(|i| {
+            i.pointer
+                .primary_pressed()
+                .then(|| i.pointer.interact_pos())
+                .flatten()
+        });
+        for (page, tabs) in [(Page::Design, left_tabs), (Page::Toolpaths, right_tabs)] {
+            if self.pages.shown(page) != Shown::Flyout {
+                continue;
+            }
+            let out = self.flyout(ctx, page, room);
+            let form_here = self.form.as_ref().is_some_and(|f| f.page == page);
+            let on_view = |at: egui::Pos2| {
+                room.contains(at)
+                    && ctx.layer_id_at(at).map(|l| l.order) != Some(egui::Order::Foreground)
+            };
+            if let Some(at) = pressed
+                && on_view(at)
+                && !out.contains(at)
+                && !tabs.contains(at)
+                && !form_here
+            {
+                self.pages.done_with(page);
+            }
+        }
+    }
+
+    /// The tool page a command's form shows in.
+    fn page_of(&self, id: &str) -> Page {
+        let toolpaths = self
+            .toolbar
+            .toolpath_groups
+            .iter()
+            .any(|g| g.tools.contains(&id));
+        if toolpaths {
+            Page::Toolpaths
+        } else {
+            Page::Design
+        }
+    }
+
+    /// A tool picked from a page: a page that flew out for it goes away again, unless the
+    /// tool opened a form there.
+    fn pick(&mut self, ctx: &egui::Context, page: Page, id: &str) {
+        self.invoke(ctx, id);
+        if self.form.is_none() {
+            self.pages.done_with(page);
+        }
+    }
+
+    /// Aspire's design tabs, down the left edge.
+    fn design_tabs(&mut self, ui: &mut egui::Ui) {
+        let shown = self.pages.shown(Page::Design) != Shown::Hidden;
+        let (hovered, clicked) = side_tabs(ui, &DESIGN_TABS, shown.then_some(self.design_tab));
+        // an auto-hidden page comes out on hover; a docked one changes tab on click
+        let unpinned = !self.pages.pinned(Page::Design);
+        if let Some(tab) = clicked.or(hovered.filter(|_| unpinned)) {
+            self.design_tab = tab;
+            self.pages.open(Page::Design);
+        }
+    }
+
+    /// The Toolpaths tab, down the right edge.
+    fn toolpath_tabs(&mut self, ui: &mut egui::Ui) {
+        let shown = self.pages.shown(Page::Toolpaths) != Shown::Hidden;
+        let (hovered, clicked) = side_tabs(ui, &["Toolpaths"], shown.then_some(0));
+        let unpinned = !self.pages.pinned(Page::Toolpaths);
+        if clicked.or(hovered.filter(|_| unpinned)).is_some() {
+            self.pages.open(Page::Toolpaths);
+        }
+    }
+
+    /// An auto-hidden page flown out over the view from its side; returns where it is.
+    fn flyout(&mut self, ctx: &egui::Context, page: Page, room: egui::Rect) -> egui::Rect {
+        let width = DESIGN_PANEL_WIDTHS * ctx.style().spacing.interact_size.x;
+        let frame = egui::Frame::side_top_panel(&ctx.style());
+        let height = room.height() - frame.inner_margin.sum().y - frame.outer_margin.sum().y;
+        let left = match page {
+            Page::Design => room.left(),
+            Page::Toolpaths => room.right() - width - frame.inner_margin.sum().x,
+        };
+        egui::Area::new(egui::Id::new(("flyout", page)))
+            .fixed_pos(egui::pos2(left, room.top()))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                frame.show(ui, |ui| {
+                    ui.set_width(width);
+                    ui.set_height(height);
+                    match page {
+                        Page::Design => self.design_page(ui),
+                        Page::Toolpaths => self.toolpaths_page(ui),
+                    }
+                });
+            })
+            .response
+            .rect
     }
 
     /// The open form's buttons: OK and Cancel for a new job's setup, else Apply and Close.
@@ -825,7 +1010,11 @@ impl CutCraftApp {
                     open.error = result.err();
                 }
             }
-            (false, _, true) => self.form = None,
+            (false, _, true) => {
+                let page = open.page;
+                self.form = None;
+                self.pages.done_with(page);
+            }
             _ => {}
         }
     }
@@ -991,7 +1180,7 @@ impl CutCraftApp {
     }
 
     /// Icon buttons for groups of command ids: implemented ones run, the rest are greyed out.
-    fn tool_groups(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup]) {
+    fn tool_groups(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup], page: Page) {
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
         let mut clicked = None;
         for group in groups {
@@ -1019,7 +1208,7 @@ impl CutCraftApp {
                 });
         }
         if let Some(id) = clicked {
-            self.invoke(ui.ctx(), id);
+            self.pick(ui.ctx(), page, id);
         }
     }
 
@@ -1196,10 +1385,19 @@ impl CutCraftApp {
         }
     }
 
-    fn toolpaths_panel(&mut self, ui: &mut egui::Ui) {
+    /// The Toolpaths page: strategies, any form opened from them, and the toolpath list.
+    fn toolpaths_page(&mut self, ui: &mut egui::Ui) {
+        self.page_header(ui, Page::Toolpaths, "Toolpaths");
         let groups = self.toolbar.toolpath_groups.clone();
         egui::ScrollArea::vertical().show(ui, |ui| {
-            self.tool_groups(ui, &groups);
+            if self
+                .form
+                .as_ref()
+                .is_some_and(|f| f.page == Page::Toolpaths)
+            {
+                self.command_form(ui);
+            }
+            self.tool_groups(ui, &groups, Page::Toolpaths);
             ui.separator();
             ui.strong("Toolpath List");
             if self.doc.toolpaths.is_empty() {
@@ -1225,7 +1423,7 @@ impl CutCraftApp {
                     "reset_preview",
                 ],
             }];
-            self.tool_groups(ui, &actions);
+            self.tool_groups(ui, &actions, Page::Toolpaths);
         });
     }
 
@@ -1290,6 +1488,46 @@ fn menu_items(
     }
 }
 
+/// Tabs down a side of the window, text reading downwards as Aspire's side tabs do; the tab
+/// hovered and the tab clicked this frame.
+fn side_tabs(
+    ui: &mut egui::Ui,
+    labels: &[&str],
+    current: Option<usize>,
+) -> (Option<usize>, Option<usize>) {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let pad = ui.spacing().button_padding;
+    let (mut hovered, mut clicked) = (None, None);
+    for (i, label) in labels.iter().enumerate() {
+        let galley = ui.painter().layout_no_wrap(
+            (*label).to_owned(),
+            font.clone(),
+            ui.visuals().text_color(),
+        );
+        let text = galley.size();
+        let size = egui::vec2(ui.available_width(), text.x + 2.0 * pad.x);
+        let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+        let look = ui
+            .style()
+            .interact_selectable(&response, current == Some(i));
+        ui.painter()
+            .rect(rect, look.rounding, look.weak_bg_fill, look.bg_stroke);
+        // turned a quarter clockwise about its top-left corner, so it reads downwards
+        let at = egui::pos2(rect.center().x + text.y / 2.0, rect.top() + pad.x);
+        let mut shape = egui::epaint::TextShape::new(at, galley, look.text_color())
+            .with_angle(std::f32::consts::FRAC_PI_2);
+        shape.override_text_color = Some(look.text_color());
+        ui.painter().add(shape);
+        if response.hovered() {
+            hovered = Some(i);
+        }
+        if response.clicked() {
+            clicked = Some(i);
+        }
+    }
+    (hovered, clicked)
+}
+
 /// A path as the menus and start page list it: just the file name.
 fn file_name(path: &std::path::Path) -> String {
     path.file_name().map_or_else(
@@ -1338,12 +1576,7 @@ impl CutCraftApp {
                         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
                     });
             }
-            Screen::Job => {
-                egui::SidePanel::left("design_panel")
-                    .default_width(DESIGN_PANEL_WIDTHS * ctx.style().spacing.interact_size.x)
-                    .show(ctx, |ui| self.design_panel(ui));
-                egui::SidePanel::right("toolpaths_panel").show(ctx, |ui| self.toolpaths_panel(ui));
-            }
+            Screen::Job => self.job_pages(ctx),
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -2210,6 +2443,72 @@ mod tests {
             assert!(icon_set().contains(icon), "{icon}");
             assert!(BUILT_INS.contains(&id), "{id}");
         }
+    }
+
+    fn key(key: Key) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn f11_designs_f12_machines_and_switch_layout_swaps() {
+        let mut h = Harness::new();
+        assert_eq!(h.app.pages, Pages::design_layout());
+        h.frame(vec![key(Key::F12)]);
+        assert_eq!(h.app.pages, Pages::machining_layout());
+        h.frame(vec![key(Key::F11)]);
+        assert_eq!(h.app.pages, Pages::design_layout());
+        h.app.invoke(&h.ctx, "interface_layout");
+        assert_eq!(
+            h.app.pages,
+            Pages::machining_layout(),
+            "the Switch Layout button"
+        );
+    }
+
+    #[test]
+    fn a_tool_from_a_flown_out_page_hides_it_unless_it_opens_a_form() {
+        let mut h = Harness::new();
+        h.app.pages = Pages::machining_layout();
+        h.app.pages.open(Page::Design);
+        h.app.pick(&h.ctx, Page::Design, "draw_rectangle");
+        assert_eq!(
+            h.app.pages.shown(Page::Design),
+            Shown::Flyout,
+            "its form shows there"
+        );
+        h.app.form = None;
+        h.app.pick(&h.ctx, Page::Design, "select_all_vectors");
+        assert_eq!(h.app.pages.shown(Page::Design), Shown::Hidden);
+    }
+
+    #[test]
+    fn toolpath_forms_open_in_the_toolpaths_page() {
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        assert_eq!(h.app.form.as_ref().unwrap().page, Page::Toolpaths);
+        assert_eq!(
+            h.app.pages.shown(Page::Toolpaths),
+            Shown::Flyout,
+            "brought out to show its form"
+        );
+        h.app.invoke(&h.ctx, "draw_circle");
+        assert_eq!(h.app.form.as_ref().unwrap().page, Page::Design);
+    }
+
+    #[test]
+    fn clicking_the_view_puts_a_flown_out_page_away() {
+        let mut h = Harness::new();
+        h.app.pages.open(Page::Toolpaths);
+        h.frame(vec![]);
+        h.click(h.at(20.0, 200.0), Modifiers::NONE);
+        assert_eq!(h.app.pages.shown(Page::Toolpaths), Shown::Hidden);
+        assert_eq!(h.app.pages.shown(Page::Design), Shown::Docked);
     }
 
     #[test]

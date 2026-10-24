@@ -6,6 +6,7 @@ mod files;
 mod form;
 mod gui;
 mod icons;
+mod pages;
 mod shortcut;
 mod view2d;
 mod view3d;
