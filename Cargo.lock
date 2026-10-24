@@ -768,6 +768,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-rounding-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-select-all-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1094,6 +1103,7 @@ dependencies = [
  "cmd-profile-toolpath",
  "cmd-quick-engrave-toolpath",
  "cmd-rotate",
+ "cmd-rounding-toolpath",
  "cmd-select-all-vectors",
  "cmd-select-layer-vectors",
  "cmd-set-current-layer",

@@ -123,6 +123,7 @@ say "not implemented yet".
   (single-point tool; tooth offset on the form).
 - Moulding: an open profile swept along drive rails (outside closed rails, right of open ones),
   sharp corners, boundary offset.
+- Rounding (rotary jobs): square or round blank, radial / raster / optimized raster, allowance.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
