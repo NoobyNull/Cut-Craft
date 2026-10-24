@@ -756,10 +756,39 @@ impl CutCraftApp {
         });
     }
 
+    /// The open form's buttons: OK and Cancel for a new job's setup, else Apply and Close.
+    fn form_buttons(&mut self, ui: &mut egui::Ui) {
+        let Some(open) = &self.form else { return };
+        let new_job = open.new_job;
+        let (apply_label, close_label) = if new_job {
+            ("OK", "Cancel")
+        } else {
+            ("Apply", "Close")
+        };
+        let (mut apply, mut close) = (false, false);
+        ui.horizontal(|ui| {
+            apply = ui.button(apply_label).clicked();
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                close = ui.button(close_label).clicked();
+            });
+        });
+        match (new_job, apply, close) {
+            (true, true, _) => self.job_setup_ok(),
+            (true, _, true) => self.job_setup_cancel(),
+            (false, true, _) => {
+                let (id, params) = (open.id, open.params.clone());
+                let result = self.apply(id, &params);
+                if let Some(open) = &mut self.form {
+                    open.error = result.err();
+                }
+            }
+            (false, _, true) => self.form = None,
+            _ => {}
+        }
+    }
+
     fn command_form(&mut self, ui: &mut egui::Ui) {
         let Some(open) = &mut self.form else { return };
-        let mut apply = false;
-        let mut close = false;
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
                 let edge = ui.spacing().interact_size.y;
@@ -801,30 +830,10 @@ impl CutCraftApp {
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
-        let new_job = open.new_job;
-        let (apply_label, close_label) = if new_job {
-            ("OK", "Cancel")
-        } else {
-            ("Apply", "Close")
-        };
-        ui.horizontal(|ui| {
-            apply = ui.button(apply_label).clicked();
-            close = ui.button(close_label).clicked();
-        });
-        ui.separator();
-        if apply && new_job {
-            self.job_setup_ok();
-        } else if close && new_job {
-            self.job_setup_cancel();
-        } else if apply {
-            let (id, params) = (open.id, open.params.clone());
-            let result = self.apply(id, &params);
-            if let Some(open) = &mut self.form {
-                open.error = result.err();
-            }
-        }
-        if close {
-            self.form = None;
+        // Job Setup for a new job keeps its buttons pinned under the panel instead
+        if !open.new_job {
+            self.form_buttons(ui);
+            ui.separator();
         }
         if let Some(name) = chosen {
             self.choose_tool(&name);
@@ -1281,6 +1290,8 @@ impl CutCraftApp {
                 egui::SidePanel::left("design_panel")
                     .default_width(DESIGN_PANEL_WIDTHS * ctx.style().spacing.interact_size.x)
                     .show(ctx, |ui| {
+                        egui::TopBottomPanel::bottom("form_buttons")
+                            .show_inside(ui, |ui| self.form_buttons(ui));
                         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
                     });
             }
@@ -1893,11 +1904,11 @@ mod tests {
         for f in &fields {
             let Some(template) = &f.icon else { continue };
             let choices = |kind: &form::Kind| match kind {
-                form::Kind::Choice(options) => options.iter().map(|o| o.value.clone()).collect(),
+                form::Kind::Choice(options, _) => options.iter().map(|o| o.value.clone()).collect(),
                 _ => vec![],
             };
             let values: Vec<Value> = match &f.kind {
-                form::Kind::Choice(_) => choices(&f.kind).into_iter().map(Value::from).collect(),
+                form::Kind::Choice(..) => choices(&f.kind).into_iter().map(Value::from).collect(),
                 form::Kind::Group(inner) => inner
                     .iter()
                     .flat_map(|i| {

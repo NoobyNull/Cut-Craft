@@ -110,11 +110,14 @@ impl Datum {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum Resolution {
+    /// 1 million points
     #[default]
     #[schemars(title = "Standard (fastest)")]
     Standard,
+    /// 3 million points
     #[schemars(title = "High (3x slower)")]
     High,
+    /// 7 million points
     #[schemars(title = "Highest (7x slower)")]
     Highest,
 }

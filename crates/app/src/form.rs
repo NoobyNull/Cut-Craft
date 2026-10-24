@@ -5,8 +5,10 @@ use eframe::egui;
 use serde_json::Value;
 
 /// Choices with this many options or fewer are radio buttons; more make a drop-down.
-// ponytail: fixed threshold; a per-field hint when a form needs otherwise
 const MOST_RADIOS: usize = 5;
+/// The corner picker's size, in rows of the theme's interactive height.
+// ponytail: fixed ratio until a preferences dialog exists
+const CORNER_PICKER_ROWS: f32 = 3.0;
 
 #[derive(Debug, PartialEq)]
 pub struct Field {
@@ -39,7 +41,7 @@ pub enum Kind {
     },
     Bool,
     Text,
-    Choice(Vec<Choice>),
+    Choice(Vec<Choice>, Widget),
     /// A nested object, e.g. a point.
     Group(Vec<Field>),
     /// An `[r, g, b]` array marked `x-kind: colour`.
@@ -48,6 +50,20 @@ pub enum Kind {
     List(Box<Kind>),
     /// Anything the form cannot edit yet; shown read-only.
     Other,
+}
+
+/// How a choice is drawn (`x-widget`); Aspire's forms use each of these.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Widget {
+    /// Radio buttons, one under another, for a few options; a drop-down for more.
+    #[default]
+    Auto,
+    /// Radio buttons side by side (`row`).
+    Row,
+    /// A drop-down with the chosen option's description under it (`drop-down`).
+    DropDown,
+    /// A square with a spot at each corner and the centre, as the XY datum picker (`corners`).
+    Corners,
 }
 
 #[derive(Debug, PartialEq)]
@@ -201,7 +217,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
             }
             changed
         }
-        Kind::Choice(options) => choose(ui, options, value),
+        Kind::Choice(options, widget) => choose(ui, options, *widget, value),
         Kind::Group(inner) => ui.vertical(|ui| show(ui, inner, value, look)).inner,
         Kind::List(item) => ui.vertical(|ui| edit_list(ui, item, value, look)).inner,
         Kind::Colour => {
@@ -224,36 +240,32 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
     }
 }
 
-/// Radio buttons, one under another, for a few options; a drop-down for more.
-fn choose(ui: &mut egui::Ui, options: &[Choice], value: &mut Value) -> bool {
+fn choose(ui: &mut egui::Ui, options: &[Choice], widget: Widget, value: &mut Value) -> bool {
     let current = value.as_str().unwrap_or_default().to_owned();
-    let mut picked = None;
-    if options.len() <= MOST_RADIOS {
-        // stacked, so their size does not depend on the width the layout gives them
-        ui.vertical(|ui| {
-            for o in options {
-                let radio = ui.radio(o.value == current, &o.label);
-                if radio.clicked() {
-                    picked = Some(o.value.clone());
+    let picked = match widget {
+        Widget::Auto if options.len() <= MOST_RADIOS => {
+            // stacked, so their size does not depend on the width the layout gives them
+            ui.vertical(|ui| radios(ui, options, &current)).inner
+        }
+        Widget::Row => ui.horizontal(|ui| radios(ui, options, &current)).inner,
+        Widget::Auto => drop_down(ui, options, &current),
+        Widget::DropDown => {
+            ui.vertical(|ui| {
+                let picked = drop_down(ui, options, &current);
+                let shown = picked.as_deref().unwrap_or(&current);
+                if let Some(help) = options
+                    .iter()
+                    .find(|o| o.value == shown)
+                    .and_then(|o| o.help.as_ref())
+                {
+                    ui.weak(help);
                 }
-                hover(radio, o.help.as_ref());
-            }
-        });
-    } else {
-        let shown = options
-            .iter()
-            .find(|o| o.value == current)
-            .map_or(current.clone(), |o| o.label.clone());
-        egui::ComboBox::from_id_source(ui.next_auto_id())
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
-                for o in options {
-                    if ui.selectable_label(o.value == current, &o.label).clicked() {
-                        picked = Some(o.value.clone());
-                    }
-                }
-            });
-    }
+                picked
+            })
+            .inner
+        }
+        Widget::Corners => corners(ui, options, &current),
+    };
     match picked {
         Some(v) if v != current => {
             *value = Value::String(v);
@@ -261,6 +273,97 @@ fn choose(ui: &mut egui::Ui, options: &[Choice], value: &mut Value) -> bool {
         }
         _ => false,
     }
+}
+
+fn radios(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
+    let mut picked = None;
+    for o in options {
+        let radio = ui.radio(o.value == current, &o.label);
+        if radio.clicked() {
+            picked = Some(o.value.clone());
+        }
+        hover(radio, o.help.as_ref());
+    }
+    picked
+}
+
+fn drop_down(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
+    let mut picked = None;
+    let shown = options
+        .iter()
+        .find(|o| o.value == current)
+        .map_or(current.to_owned(), |o| o.label.clone());
+    egui::ComboBox::from_id_source(ui.next_auto_id())
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            for o in options {
+                if ui.selectable_label(o.value == current, &o.label).clicked() {
+                    picked = Some(o.value.clone());
+                }
+            }
+        });
+    picked
+}
+
+/// Aspire's XY datum picker: the material as a square, a spot at each corner and the centre.
+fn corners(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
+    let row = ui.spacing().interact_size.y;
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(row, row) * CORNER_PICKER_ROWS,
+        egui::Sense::click(),
+    );
+    let spot = row / 4.0;
+    let square = rect.shrink(spot);
+    let visuals = ui.visuals();
+    let painter = ui.painter_at(rect);
+    painter.rect_stroke(square, 0.0, visuals.widgets.inactive.fg_stroke);
+    for o in options {
+        if let Some(at) = corner_spot(&o.value) {
+            let fill = if o.value == current {
+                visuals.selection.bg_fill
+            } else {
+                visuals.extreme_bg_color
+            };
+            painter.circle(
+                square.min + at * square.size(),
+                spot,
+                fill,
+                visuals.widgets.inactive.fg_stroke,
+            );
+        }
+    }
+    let label = options
+        .iter()
+        .find(|o| o.value == current)
+        .map(|o| o.label.as_str());
+    let response = response.on_hover_text(label.unwrap_or_default());
+    let at = response
+        .interact_pointer_pos()
+        .filter(|_| response.clicked())?;
+    let across = (at - square.min) / square.size();
+    nearest_corner(options, across).map(|o| o.value.clone())
+}
+
+/// Where a corner choice sits in the picker, as fractions across and down the square.
+pub fn corner_spot(value: &str) -> Option<egui::Vec2> {
+    let (x, y) = match value {
+        "top_left" => (0.0, 0.0),
+        "top_right" => (1.0, 0.0),
+        "bottom_left" => (0.0, 1.0),
+        "bottom_right" => (1.0, 1.0),
+        "centre" | "center" => (0.5, 0.5),
+        _ => return None,
+    };
+    Some(egui::vec2(x, y))
+}
+
+/// The option whose spot is closest to `at` (fractions across and down).
+pub fn nearest_corner(options: &[Choice], at: egui::Vec2) -> Option<&Choice> {
+    options
+        .iter()
+        .filter_map(|o| corner_spot(&o.value).map(|spot| (o, (spot - at).length_sq())))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(o, _)| o)
 }
 
 fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> bool {
@@ -343,7 +446,13 @@ fn kind(root: &Value, property: &Value) -> Kind {
         return Kind::Colour;
     }
     if let Some(options) = choices(s) {
-        return Kind::Choice(options);
+        let widget = match marked("x-widget").and_then(Value::as_str) {
+            Some("row") => Widget::Row,
+            Some("drop-down") => Widget::DropDown,
+            Some("corners") => Widget::Corners,
+            _ => Widget::Auto,
+        };
+        return Kind::Choice(options, widget);
     }
     match s["type"].as_str() {
         Some(t @ ("number" | "integer")) => Kind::Number {
@@ -429,7 +538,7 @@ mod tests {
         });
         let f = fields(&schema);
         assert_eq!(field(&f, "width").label, "Width (X)");
-        let Kind::Choice(options) = &field(&f, "z_zero").kind else {
+        let Kind::Choice(options, _) = &field(&f, "z_zero").kind else {
             panic!("a choice")
         };
         assert_eq!(options[0].label, "Material Surface");
@@ -455,6 +564,48 @@ mod tests {
         assert!(matches!(&field(&f, "size").kind, Kind::Group(inner) if inner.len() == 1));
         assert!(!field(&f, "at").section, "unmarked groups stay inline");
         assert_eq!(field(&f, "colour").kind, Kind::Colour);
+    }
+
+    #[test]
+    fn choices_take_a_widget_hint() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "units": { "enum": ["mm", "inch"], "x-widget": "row" },
+                "resolution": { "enum": ["standard", "high"], "x-widget": "drop-down" },
+                "datum": { "enum": ["bottom_left", "centre"], "x-widget": "corners" },
+                "side": { "enum": ["inside", "outside"] }
+            }
+        });
+        let f = fields(&schema);
+        let widget = |key| match &field(&f, key).kind {
+            Kind::Choice(_, widget) => *widget,
+            other => panic!("{key} is {other:?}"),
+        };
+        assert_eq!(widget("units"), Widget::Row);
+        assert_eq!(widget("resolution"), Widget::DropDown);
+        assert_eq!(widget("datum"), Widget::Corners);
+        assert_eq!(widget("side"), Widget::Auto);
+    }
+
+    #[test]
+    fn the_corner_picker_puts_each_datum_where_it_is() {
+        use eframe::egui::vec2;
+        assert_eq!(corner_spot("top_right"), Some(vec2(1.0, 0.0)));
+        assert_eq!(corner_spot("bottom_left"), Some(vec2(0.0, 1.0)));
+        assert_eq!(corner_spot("centre"), Some(vec2(0.5, 0.5)));
+        assert_eq!(corner_spot("middle_left"), None);
+        let options: Vec<Choice> = ["bottom_left", "top_right", "centre"]
+            .map(|v| Choice {
+                value: v.into(),
+                label: v.into(),
+                help: None,
+            })
+            .into();
+        let nearest = |x, y| nearest_corner(&options, vec2(x, y)).map(|c| c.value.as_str());
+        assert_eq!(nearest(0.9, 0.2), Some("top_right"));
+        assert_eq!(nearest(0.4, 0.6), Some("centre"));
+        assert_eq!(nearest(0.1, 0.8), Some("bottom_left"));
     }
 
     #[test]
@@ -525,7 +676,7 @@ mod tests {
     #[test]
     fn enums_become_choices_with_readable_labels() {
         let f = fields(&schema("draw_rectangle"));
-        let Kind::Choice(options) = &field(&f, "corners").kind else {
+        let Kind::Choice(options, _) = &field(&f, "corners").kind else {
             panic!("corners should be a choice")
         };
         let labels: Vec<&str> = options.iter().map(|c| c.label.as_str()).collect();

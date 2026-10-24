@@ -32,12 +32,14 @@ pub struct Size {
     #[schemars(title = "Thickness (Z)", extend("x-unit" = "mm"), range(min = 0))]
     pub thickness: f64,
     /// Lengths are shown in these; the job is always stored in millimetres
+    #[schemars(extend("x-widget" = "row"))]
     pub units: Units,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DatumPosition {
     /// The point of the material at the machine's X0, Y0
+    #[schemars(extend("x-widget" = "corners"))]
     pub position: Datum,
     /// Give that point coordinates other than 0, 0
     pub use_offset: bool,
@@ -74,17 +76,27 @@ pub struct Params {
     )]
     pub datum: DatumPosition,
     /// How finely 3D shapes are worked out over the job; Standard suits most parts
-    #[schemars(title = "Modeling Resolution", extend("x-section" = true))]
+    #[schemars(
+        title = "Modeling Resolution",
+        extend("x-section" = true),
+        extend("x-widget" = "drop-down")
+    )]
     pub resolution: Resolution,
     /// The material's colour in the 3D view
     #[schemars(
-        title = "Material Colour",
+        title = "Material Settings",
         extend("x-section" = true),
         extend("x-kind" = "colour")
     )]
     pub colour: [u8; 3],
     /// Safe height above the material for rapid moves
-    #[schemars(title = "Rapid Clearance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Clearance (Z1)",
+        extend("x-section" = true),
+        extend("x-icon" = "job_setup/clearance_z1.svg"),
+        extend("x-unit" = "mm"),
+        range(min = 0)
+    )]
     pub clearance: f64,
 }
 
