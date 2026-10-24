@@ -1393,15 +1393,24 @@ impl CutCraftApp {
             .set_message(&format!("Previewed {}", toolpath.name));
     }
 
-    /// Components top first: the model is built from the bottom of the list up.
-    fn component_list(&self, ui: &mut egui::Ui) {
+    /// Components top first: the model is built from the bottom of the list up. Aspire's
+    /// component menu on a right-click.
+    fn component_list(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         ui.strong("Components");
         if self.doc.components.is_empty() {
             ui.weak("No components yet");
         }
-        for component in self.doc.components.values().rev() {
-            ui.label(format!("{} ({:?})", component.name, component.combine));
+        let mut chosen = None;
+        for (&id, component) in self.doc.components.iter().rev() {
+            let text = format!("{} ({:?})", component.name, component.combine);
+            let row = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
+            if let Some(action) = self.popup(&row, || gui::component_menu(id, component)) {
+                chosen = Some(action);
+            }
+        }
+        if let Some(action) = chosen {
+            self.invoke(ui.ctx(), &action);
         }
     }
 
@@ -2261,6 +2270,35 @@ mod tests {
             h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>(),
             [second]
         );
+    }
+
+    #[test]
+    fn the_component_menu_acts_on_the_component_clicked() {
+        use cut_craft_core::component::Combine;
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        let params = h.app.registry.get("create_shape").unwrap();
+        let params = params.initial_params(&h.app.doc);
+        h.app.apply("create_shape", &params).unwrap();
+        let menu = |app: &CutCraftApp| {
+            let (&id, component) = app.doc.components.iter().next().unwrap();
+            gui::component_menu(id, component)
+        };
+        let component = |app: &CutCraftApp| app.doc.components.values().next().unwrap().clone();
+        assert!(leaf(&menu(&h.app), &["Combine Mode", "Add"]).is_checked);
+        h.choose(menu, &["Combine Mode", "Subtract"]);
+        assert_eq!(component(&h.app).combine, Combine::Subtract);
+        assert!(leaf(&menu(&h.app), &["Combine Mode", "Subtract"]).is_checked);
+        h.choose(menu, &["Hide", "This"]);
+        assert!(!component(&h.app).visible);
+        h.choose(menu, &["Properties"]);
+        let form = h.app.form.take().unwrap();
+        assert_eq!(
+            (form.id, form.params["combine"].as_str()),
+            ("component_properties", Some("subtract"))
+        );
+        h.choose(menu, &["Delete"]);
+        assert!(h.app.doc.components.is_empty());
     }
 
     #[test]

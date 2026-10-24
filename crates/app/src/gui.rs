@@ -1,6 +1,7 @@
 //! Static UI data: Drawing tab tool groups, the main menu, right-click menus, status bar text.
 
 use cut_craft_core::Command;
+use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::{Document, EntityId, Layer};
 use cut_craft_core::params::Items;
 use cut_craft_core::toolpath::Toolpath;
@@ -323,6 +324,15 @@ impl MenuItem {
             ..self
         }
     }
+
+    /// Ticked when `on`.
+    #[must_use]
+    pub fn checked(self, on: bool) -> Self {
+        Self {
+            is_checked: on,
+            ..self
+        }
+    }
 }
 
 /// Show ▸ and Hide ▸ for one layer, toolpath or component: Aspire's Show / Hide family.
@@ -398,6 +408,47 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
                 ("All", Which::All),
             ],
         ),
+    ]
+}
+
+/// Aspire's component menu (MENU 613) for component `id`, its combine mode ticked.
+pub fn component_menu(id: EntityId, component: &Component) -> Vec<MenuItem> {
+    use cmd_component_properties::{ComponentProperties, Params};
+    let properties = Params {
+        component: id,
+        name: component.name.clone(),
+        combine: component.combine,
+        visible: component.visible,
+    };
+    let mode = |name: &str, combine| {
+        let params = Params {
+            combine,
+            ..properties.clone()
+        };
+        MenuItem::run::<ComponentProperties>(name, &params).checked(component.combine == combine)
+    };
+    let [show, hide] = show_hide(Items::Components, id.0);
+    vec![
+        MenuItem::submenu(
+            "Combine Mode",
+            vec![
+                mode("Add", Combine::Add),
+                mode("Subtract", Combine::Subtract),
+                mode("Merge", Combine::Merge),
+                mode("Low", Combine::Low),
+                mode("Multiply", Combine::Multiply),
+            ],
+        ),
+        MenuItem::separator(),
+        MenuItem::run::<cmd_delete_component::DeleteComponent>(
+            "Delete",
+            &cmd_delete_component::Params { component: id },
+        ),
+        MenuItem::form::<ComponentProperties>("Rename", &properties),
+        show,
+        hide,
+        MenuItem::separator(),
+        MenuItem::form::<ComponentProperties>("Properties", &properties),
     ]
 }
 
