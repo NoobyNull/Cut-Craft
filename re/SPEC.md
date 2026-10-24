@@ -58,6 +58,22 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **OK** creates the new empty job: a grey rectangle in the 2D view, with dotted lines through X0 and Y0. **[inf]** Cancel abandons the new job and goes back to the start page; File ▸ Close closes the job and goes back to the start page too.
 - **Open an existing file** takes native jobs and importable 2D vector files (DXF, EPS, AI, PDF). Opening a 2D file starts a job at the drawing's size (see Import).
 
+### Right-click menus [obs] (popup MENU resources in `Resources_ENU.dll`)
+- **Families that repeat across kinds of item:**
+  - **Show / Hide:** Show This, Show Only This, Show All But This, Show All; Hide This, Hide All. On layers (967), toolpaths (968, 669; toolpaths also have Show All With This Tool), components (613) and levels (1046).
+  - **Delete:** This, Visible, Invisible, Empty, All. On layers and toolpaths.
+  - **Combine Mode:** Add, Subtract, Merge, Low, Multiply. On a component (613), several components (615), the active component (616), a component in the 3D view (619) and levels (1046).
+  - **Rename, Properties:** on every kind.
+- **Layers (967, 982):** Activate, Show / Hide, Lock, Unlock, Insert New Layer, Delete (This, Visible, Invisible, Empty), Rename, Merge Visible, Select Layer Vectors. With no layer under the pointer: New Layer.
+- **Toolpaths (968):** Show / Hide, Activate Sheet, Edit, Rename, Duplicate, Recalculate (This, Visible, All), Create an Empty Group, Group Visible, Ungroup, Delete (This, All Invisible, All Visible, All).
+- **Components (613, 614, 615):**
+  - On a component: Combine Mode, 2D preview order, Export as 3D Clipart, Save as Sculpting Brush, Re-Import, Copy, Duplicate, Copy / Move to other side, Ungroup, Delete, Rename, Show / Hide, Properties.
+  - With no component under the pointer: Paste, Import, Show All, Hide All.
+- **Levels (1046, 1048):** Combine Mode, Show / Hide, Select Components, Clipping, Mirror Mode, Wrapping, Insert New Level, Delete Level, Rename Level, Export as 3D Clipart.
+- **2D selection (318):** Undo, Redo, Cut, Copy, Paste, Delete, Move to Front / Back, Ungroup Component, Object Properties.
+- **Node editing (142, 317, 635, 636, 245):** span to Line / Bezier / Arc, insert / delete / smooth point, cut vector, make start point, mirror, close or join with a line / curve / moved end points, reverse direction, exit node editing.
+- **Also:** sheets (5030), post-processor list (5093: make default), clipart library (1050).
+
 ### Menus [obs] (resource MENU 129 = job open, 128 = no job)
 - **File:** New (Ctrl+N), New from template, Open (Ctrl+O), Close, Save (Ctrl+S), Save As, Save As Template, Save To Version ▸ 11.0, Increment and Save (Ctrl+Alt+S), Print / Preview / Setup.
   - Import ▸ Vectors/Bitmap (Ctrl+I), Component/3D Model, PhotoVCarve/Machinist/Cut3D toolpaths.

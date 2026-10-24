@@ -21,7 +21,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 26] = [
+const BUILT_INS: [&str; 30] = [
     "undo",
     "redo",
     "exit",
@@ -36,6 +36,10 @@ const BUILT_INS: [&str; 26] = [
     "save_toolpaths",
     "install_post_processor",
     "close",
+    "select",
+    "select_all_vectors_on_current_layer",
+    "job_size_and_position",
+    "show_toolpaths_tab",
     "design_layout",
     "machining_layout",
     "interface_layout",
@@ -274,6 +278,20 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "install_post_processor" => self.file_action(id),
             "tool_database" => self.tool_window = true,
+            // the Select tool: put away whatever tool is in hand
+            "select" => {
+                (self.form, self.view_tool) = (None, None);
+                "Select".clone_into(&mut self.status.current_tool);
+            }
+            // menu items that are an existing tool reached another way
+            "select_all_vectors_on_current_layer" => {
+                let layer = serde_json::json!({ "layer": self.doc.current_layer });
+                if let Err(e) = self.apply("select_layer_vectors", &layer) {
+                    self.status.set_message(&e);
+                }
+            }
+            "job_size_and_position" => self.start_command("job_setup"),
+            "show_toolpaths_tab" => self.pages.open(Page::Toolpaths),
             "design_layout" => self.pages = Pages::design_layout(),
             "machining_layout" => self.pages = Pages::machining_layout(),
             "interface_layout" => self.pages.switch_layout(),
@@ -2509,6 +2527,113 @@ mod tests {
         h.click(h.at(20.0, 200.0), Modifiers::NONE);
         assert_eq!(h.app.pages.shown(Page::Toolpaths), Shown::Hidden);
         assert_eq!(h.app.pages.shown(Page::Design), Shown::Docked);
+    }
+
+    #[test]
+    fn menu_items_that_reuse_existing_tools() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 20.0);
+        h.app
+            .apply("add_layer", &serde_json::json!({ "name": "Top" }))
+            .unwrap();
+        h.rectangle(50.0, 10.0, 20.0, 20.0);
+        let on_top = *h.app.doc.selection.iter().next().unwrap();
+        h.app.invoke(&h.ctx, "select_all_vectors");
+        h.app.invoke(&h.ctx, "select_all_vectors_on_current_layer");
+        assert_eq!(
+            h.app.doc.selection,
+            [on_top].into(),
+            "Select Vectors on Layer, current layer"
+        );
+        h.app.invoke(&h.ctx, "job_size_and_position");
+        assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("job_setup"));
+        h.app.invoke(&h.ctx, "show_toolpaths_tab");
+        assert_ne!(h.app.pages.shown(Page::Toolpaths), Shown::Hidden);
+        h.app.invoke(&h.ctx, "zoom_box");
+        h.app.invoke(&h.ctx, "select");
+        assert!(
+            h.app.form.is_none() && h.app.view_tool.is_none(),
+            "the Select tool"
+        );
+    }
+
+    /// Controls that wait on a person: the system's file dialogs, the save-changes question
+    /// (the smoke test's job has unsaved work) and quitting.
+    fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
+        const ASKS: [&str; 10] = [
+            "new",
+            "open",
+            "close",
+            "save",
+            "save_as",
+            "import_vectors_bitmap",
+            "install_post_processor",
+            "save_toolpaths",
+            "exit",
+            "recent_files",
+        ];
+        ASKS.contains(&id) || app.registry.exporter(id).is_some()
+    }
+
+    /// Every enabled menu item and tool button, run through the app as a click would be on a
+    /// small job with vectors, a toolpath and a 3D shape: none may panic or be a dead end.
+    #[test]
+    fn every_enabled_control_works() {
+        let mut h = Harness::new();
+        h.app.doc.job.width = 100.0;
+        h.app.doc.job.height = 100.0;
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.rectangle(30.0, 30.0, 40.0, 40.0);
+        h.app.invoke(&h.ctx, "select_all_vectors");
+        for id in ["profile_toolpath", "create_shape"] {
+            let params = h.app.registry.get(id).unwrap().initial_params(&h.app.doc);
+            h.app.apply(id, &params).unwrap();
+        }
+        h.app.selected_toolpath = h.app.doc.toolpaths.keys().next().copied();
+        h.frame(vec![]);
+        let toolbar = &h.app.toolbar;
+        let mut ids: Vec<String> = h
+            .app
+            .menus
+            .items()
+            .iter()
+            .map(|i| i.action.clone())
+            .collect();
+        for group in toolbar
+            .groups
+            .iter()
+            .chain(&toolbar.modeling_groups)
+            .chain(&toolbar.toolpath_groups)
+        {
+            ids.extend(group.tools.iter().map(|&t| t.to_owned()));
+        }
+        ids.extend(VIEW_BUTTONS.iter().map(|(id, ..)| (*id).to_owned()));
+        ids.sort();
+        ids.dedup();
+        let start = (h.app.doc.clone(), h.app.selected_toolpath);
+        let mut ran = 0;
+        for id in ids {
+            if !h.app.available(&id) || needs_a_person(&h.app, &id) {
+                continue;
+            }
+            (h.app.doc, h.app.selected_toolpath) = start.clone();
+            h.app.history = History::default();
+            (h.app.form, h.app.view_tool) = (None, None);
+            h.app.status.set_message("");
+            h.app.invoke(&h.ctx, &id);
+            // a tool with a form runs with what the form starts with
+            if let Some(form) = h.app.form.take() {
+                let outcome = h.app.apply(form.id, &form.params);
+                if let Err(why) = outcome {
+                    assert!(!why.contains("not implemented"), "{id}: {why}");
+                }
+            }
+            h.frame(vec![]);
+            let said = &h.app.status.message;
+            assert!(!said.contains("not implemented"), "{id}: {said}");
+            ran += 1;
+        }
+        assert!(ran >= 49, "only {ran} controls ran");
     }
 
     #[test]
