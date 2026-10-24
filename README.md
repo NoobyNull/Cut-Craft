@@ -5,7 +5,8 @@ A personal educational project to create an open-source alternative to Vectric A
 ## Features
 
 - Cross-platform 3D modeling and CNC toolpath generation
-- Linux port of Vectric Aspire 12.0
+- Works the way Vectric Aspire 12 does, built clean-room from a behaviour spec (`re/SPEC.md`);
+  no Vectric code or assets are in this repository
 - Built with Rust for performance and safety
 - AMD graphics support enabled
 
@@ -20,11 +21,15 @@ A personal educational project to create an open-source alternative to Vectric A
 ```
 crates/core/              document model, invertible changes, the Command contract
 crates/commands/<name>/   one crate per command: params, run(), tests
+crates/formats/<name>/    one crate per file importer or exporter
+crates/post/              post-processors: toolpaths to machine G-code
 crates/app/               the desktop UI (cut-craft binary)
+scripts/                  new-command scaffolding, the desktop launcher
 re/                       reverse-engineering notes and scripts (re/SPEC.md)
-docs/superpowers/specs/   design docs, including the backlog
+docs/                     the tool inventory, the handoff, design docs
 ```
 
+What every tool is built from and what is still to build: `docs/tool-inventory.md`.
 Architecture and backlog: `docs/superpowers/specs/2026-10-23-command-architecture-design.md`.
 
 ## Checks

@@ -129,7 +129,8 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
 }
 
 /// Most model cells along the job for a 3D toolpath, however small the tool.
-// ponytail: caps the work on big jobs; a job model resolution setting can replace it
+// ponytail: caps the work on big jobs; the job's modeling resolution (`Job::model_cell`) could
+// replace it
 const MAX_CELLS: usize = 2000;
 
 /// The model as a 3D toolpath machines it: cells a twentieth of `tool` across, its top at

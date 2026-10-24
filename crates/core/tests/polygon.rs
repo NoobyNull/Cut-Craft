@@ -2,19 +2,8 @@ use cut_craft_core::Change;
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Segment};
 use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::testing::square;
 use std::f64::consts::PI;
-
-fn square(x: f64, y: f64, side: f64) -> Path {
-    Path::polyline(
-        &[
-            Point::new(x, y),
-            Point::new(x + side, y),
-            Point::new(x + side, y + side),
-            Point::new(x, y + side),
-        ],
-        true,
-    )
-}
 
 fn total_area(paths: &[Path]) -> f64 {
     paths.iter().map(polygon::area).sum()

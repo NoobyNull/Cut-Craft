@@ -107,33 +107,9 @@ impl Command for DeleteItems {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cut_craft_core::document::EntityId;
-    use cut_craft_core::testing::{after_err, domed, run_on, two_layers, with_toolpath};
+    use cut_craft_core::testing::{after_err, run_on, three_toolpaths, two_components, two_layers};
 
     cut_craft_core::contract_tests!(DeleteItems);
-
-    /// `with_toolpath` plus two more toolpaths: ids 1, 2, 3.
-    fn three_toolpaths() -> Document {
-        let mut doc = with_toolpath();
-        let first = doc.toolpaths[&EntityId(1)].clone();
-        let mut c = Change::builder(&doc);
-        c.add_toolpath(first.clone());
-        c.add_toolpath(first);
-        let change = c.finish();
-        doc.apply(&change).unwrap();
-        doc
-    }
-
-    /// `domed` plus a second component: ids 1, 2.
-    fn two_components() -> Document {
-        let mut doc = domed();
-        let first = doc.components[&EntityId(1)].clone();
-        let mut c = Change::builder(&doc);
-        c.add_component(first);
-        let change = c.finish();
-        doc.apply(&change).unwrap();
-        doc
-    }
 
     fn delete(doc: &mut Document, items: Items, item: u64, which: Which) {
         run_on::<DeleteItems>(doc, &Params { items, item, which });

@@ -286,3 +286,26 @@ pub fn with_toolpath() -> Document {
     doc.apply(&change).expect("a toolpath applies");
     doc
 }
+
+/// `with_toolpath` plus two more toolpaths: ids 1, 2, 3.
+pub fn three_toolpaths() -> Document {
+    let mut doc = with_toolpath();
+    let first = doc.toolpaths[&crate::document::EntityId(1)].clone();
+    let mut c = Change::builder(&doc);
+    c.add_toolpath(first.clone());
+    c.add_toolpath(first);
+    let change = c.finish();
+    doc.apply(&change).expect("toolpaths apply");
+    doc
+}
+
+/// `domed` plus a second component: ids 1, 2.
+pub fn two_components() -> Document {
+    let mut doc = domed();
+    let first = doc.components[&crate::document::EntityId(1)].clone();
+    let mut c = Change::builder(&doc);
+    c.add_component(first);
+    let change = c.finish();
+    doc.apply(&change).expect("a component applies");
+    doc
+}

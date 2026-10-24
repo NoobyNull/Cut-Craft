@@ -95,7 +95,7 @@ Ungroup; Move to Front / Back; the no-item menus (layers 982, components 614).
 
 ## Status, top down
 
-70 of the 226 menu items and tool buttons work (some appear in both); the rest are greyed and
+What works and what does not, by menu and tab; items not built yet are greyed and
 say "not implemented yet".
 
 **Working.**

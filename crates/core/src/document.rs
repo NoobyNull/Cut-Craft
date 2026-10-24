@@ -192,7 +192,7 @@ impl Job {
 
 impl Default for Job {
     fn default() -> Self {
-        // ponytail: fixed default until the Job Setup form / preferences exist
+        // ponytail: what Job Setup starts a new job with; preferences could remember the last one
         Self {
             width: 600.0,
             height: 400.0,

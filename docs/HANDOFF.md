@@ -1,7 +1,7 @@
 ---
-status: waiting
+status: read
 created: 2026-10-24
-focus: Keep building Cut Craft — next the right-click menus (designed, not coded), then down the tool inventory
+focus: Keep building Cut Craft — right-click menus done; next match Aspire 12's layout, then down the tool inventory
 ---
 
 # Handoff: Cut Craft (Rust, Vectric Aspire-style CNC CAD/CAM)
@@ -62,34 +62,9 @@ focus: Keep building Cut Craft — next the right-click menus (designed, not cod
 
 ## To do next, in order
 
-1. **Right-click menus.** Designed, no code yet. User's emphasis: reuse parent/subordinate
-   tools, no new logic in surfaces.
-   - **Menus as data:** build `gui::MenuItem` trees per click and render them with the existing
-     `menu_items()` in `crates/app/src/app.rs`. Make `MenuItem::submenu` / `separator` `pub`.
-   - **New actions:** `run:<command>:<json params>` applies a command with those params;
-     `form:<command>:<json>` opens its form prefilled. Route both in `invoke`; in `available`
-     they are enabled when the command is registered.
-   - **Layer menu** (Aspire MENU 967), replacing the current one in `layers_panel`: Activate,
-     Show ▸ This / Only This / All But This / All, Hide ▸ This / All, Lock / Unlock (disable
-     whichever doesn't apply), Insert New Layer, Delete ▸ This / Visible / Invisible / Empty
-     (`delete_items`), Rename (form `layer_properties`), Merge Visible (greyed), Select Layer
-     Vectors, Move Selection Here.
-   - **Toolpath menu** (968), on the toolpath list rows in `toolpaths_page`. Right-click
-     selects the row.
-     - Show / Hide (`show_hide`) and Rename (form `toolpath_properties`).
-     - Recalculate ▸ This / Visible / All. Visible is a new built-in: `Change::chain_over` with
-       `Registry::recalculate`.
-     - Preview, and Delete ▸ This / Invisible / Visible / All.
-   - **Component menu** (613), on `component_list` rows:
-     - Combine Mode ▸ Add / Subtract / Merge / Low / Multiply (`component_properties`, tick
-       the current one).
-     - Show / Hide, Delete, Rename, Properties.
-   - **2D selection menu** (318 plus ours), via a new `Canvas::context_menu`:
-     - Undo, Redo, Delete; Cut / Copy / Paste greyed for now.
-     - Move to Layer ▸ one entry per layer.
-     - Weld, Subtract, Overlap, Join; Align ▸.
-     - Object Properties greyed.
-   - **Smoke test:** extend `every_enabled_control_works` to run every leaf of these menus.
+1. **Right-click menus.** Done 2026-10-24 (`1b15d6e`…`52c6f51`): layer, toolpath, component
+   and 2D selection menus as `gui::MenuItem` data, with `run:` / `form:` actions; see the
+   right-click section of `docs/tool-inventory.md`.
 2. **Match Aspire 12, from the user's screenshots.**
    - Side tabs should be Design, Sheets, Layers, Components, Clipart. Design holds the drawing
      and modeling tools; Components is the component tree.
@@ -145,5 +120,7 @@ focus: Keep building Cut Craft — next the right-click menus (designed, not cod
 - `superpowers:verification-before-completion`: before claiming anything done.
 - `superpowers:brainstorming`: before big new tools (text, node editing, nesting).
 - `reverse-engineer-anything` (REA): only on the local machine, where the Aspire install
-  exists; static analysis only.
+  exists; static analysis only. REA uses Ghidra 12.1.2 (`/opt/ghidra`). Its `--snapshot` keeps
+  only answers already given, not Ghidra's analysis; the analysed `Aspire.exe` is kept in the
+  permanent Ghidra project `re/extracted/ghidra/Aspire.gpr` (gitignored).
 - `ponytail`: the user's default style.

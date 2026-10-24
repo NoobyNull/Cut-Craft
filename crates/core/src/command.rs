@@ -341,12 +341,7 @@ impl Registry {
     /// Every toolpath recalculated: one [`Registry::recalculate`] each, chained.
     pub fn recalculate_all(&self, doc: &Document) -> Result<Change, CommandError> {
         let ids: Vec<EntityId> = doc.toolpaths.keys().copied().collect();
-        let each: Vec<_> = ids
-            .iter()
-            .map(|&id| move |d: &Document| self.recalculate(d, id))
-            .collect();
-        let steps: Vec<crate::Step<'_>> = each.iter().map(|f| f as crate::Step<'_>).collect();
-        Change::chain(doc, &steps)
+        Change::chain_over(doc, &ids, |d, &id| self.recalculate(d, id))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &dyn DynCommand> {

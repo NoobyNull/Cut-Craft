@@ -1415,7 +1415,8 @@ impl CutCraftApp {
     }
 
     /// What the 3D view shows: the toolpath preview if there is one, else the model.
-    // ponytail: the model is rebuilt on every call; cache it on the history revision if slow
+    // ponytail: rebuilt on every call, measured at about 0.1 ms of a 7.5 ms frame; cache it on
+    // the history revision if that grows
     fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
         if let Some(material) = &self.simulation {
             return Some(Cow::Borrowed(

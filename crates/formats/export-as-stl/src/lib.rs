@@ -9,7 +9,8 @@ use cut_craft_core::{CommandError, Exporter, FileFormat};
 pub struct ExportStl;
 
 /// Model cells along the longer side of the job.
-// ponytail: fixed detail until job setup has a model resolution
+// ponytail: fixed detail; following the job's modeling resolution (`Job::model_cell`) is the
+// upgrade, at about 6x the file size for a Standard 600 x 400 job
 const CELLS_ACROSS: usize = 500;
 
 impl Exporter for ExportStl {
