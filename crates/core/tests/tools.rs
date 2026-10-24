@@ -39,7 +39,12 @@ fn the_database_round_trips_through_json() {
 #[test]
 fn the_starter_database_has_each_shape_of_tool() {
     let db = ToolDatabase::starter();
-    for shape in [ToolShape::EndMill, ToolShape::BallNose, ToolShape::VBit] {
+    for shape in [
+        ToolShape::EndMill,
+        ToolShape::BallNose,
+        ToolShape::VBit,
+        ToolShape::RadiusedEndMill,
+    ] {
         assert!(db.tools.iter().any(|t| t.shape == shape), "{shape:?}");
     }
 }
@@ -72,4 +77,32 @@ fn tools_saved_before_shapes_existed_are_end_mills() {
     fields.remove("angle");
     let tool: Tool = serde_json::from_value(json).unwrap();
     assert_eq!(tool.shape, ToolShape::EndMill);
+}
+
+#[test]
+fn a_radiused_end_mill_is_flat_then_rounds_up_by_its_tip_radius() {
+    let tool = Tool {
+        shape: ToolShape::RadiusedEndMill,
+        diameter: 6.0,
+        tip_radius: 1.0,
+        ..Tool::default()
+    };
+    assert_eq!(tool.profile(1.5), Some(0.0), "flat across 4 mm");
+    let half = tool.profile(2.5).unwrap();
+    assert!((half - (1.0 - 0.75f64.sqrt())).abs() < 1e-12, "{half}");
+    assert!(
+        (tool.profile(3.0).unwrap() - 1.0).abs() < 1e-12,
+        "a tip radius up at the edge"
+    );
+}
+
+#[test]
+fn tools_saved_before_tip_radii_get_one_millimetre() {
+    let mut json = serde_json::to_value(Tool::default()).unwrap();
+    json.as_object_mut()
+        .unwrap()
+        .remove("tip_radius")
+        .expect("tip radius is saved");
+    let tool: Tool = serde_json::from_value(json).unwrap();
+    assert!((tool.tip_radius - 1.0).abs() < 1e-12);
 }

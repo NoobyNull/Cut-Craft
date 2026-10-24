@@ -19,6 +19,10 @@ pub enum ToolShape {
     BallNose,
     /// Pointed, for V-carving
     VBit,
+    /// Flat bottomed with rounded corners (a bull nose, or toroidal cutter): stronger than an
+    /// end mill, leaves less cusp than one when 3D roughing or finishing
+    #[schemars(title = "Radiused End Mill")]
+    RadiusedEndMill,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -26,6 +30,10 @@ pub struct Tool {
     pub name: String,
     #[serde(default)]
     pub shape: ToolShape,
+    /// Radius of a radiused end mill's rounded corners
+    #[serde(default = "default_tip_radius")]
+    #[schemars(title = "Tip Radius", extend("x-unit" = "mm"), range(min = 0))]
+    pub tip_radius: f64,
     /// Included angle of a V-bit's point
     #[serde(default = "default_angle")]
     #[schemars(extend("x-unit" = "°"), range(min = 1, max = 179))]
@@ -58,6 +66,10 @@ fn default_flutes() -> u32 {
     2
 }
 
+fn default_tip_radius() -> f64 {
+    1.0
+}
+
 impl Tool {
     /// How much each flute cuts per turn (mm): the feed rate over the spindle speed and
     /// flutes, to compare with the cutter maker's figure. `None` with no spindle or flutes.
@@ -73,6 +85,11 @@ impl Tool {
             ToolShape::EndMill => 0.0,
             ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
             ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
+            ToolShape::RadiusedEndMill => {
+                let tip = self.tip_radius.clamp(0.0, radius);
+                let past_flat = (r - (radius - tip)).max(0.0);
+                tip - (tip * tip - past_flat * past_flat).max(0.0).sqrt()
+            }
         })
     }
 }
@@ -82,6 +99,7 @@ impl Default for Tool {
         Self {
             name: "6 mm End Mill".into(),
             shape: ToolShape::EndMill,
+            tip_radius: default_tip_radius(),
             angle: default_angle(),
             diameter: 6.0,
             pass_depth: 3.0,
@@ -129,6 +147,13 @@ impl ToolDatabase {
                 end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
                 shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
                 shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
+                shaped(
+                    "6 mm Radiused End Mill",
+                    ToolShape::RadiusedEndMill,
+                    6.0,
+                    90.0,
+                    0.2,
+                ),
                 // a V-bit's stepover spaces V-carving passes, so it is small
                 shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
                 shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),

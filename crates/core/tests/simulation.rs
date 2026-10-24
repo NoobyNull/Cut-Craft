@@ -213,3 +213,37 @@ fn zigzag_lines_alternate_merge_level_runs_and_never_overcut() {
         "it goes over the block"
     );
 }
+
+#[test]
+fn a_ramping_radiused_end_mill_cuts_where_its_edge_reaches_lowest() {
+    let mut m = material(); // half-millimetre cells
+    let tool = Tool {
+        shape: ToolShape::RadiusedEndMill,
+        diameter: 6.0,
+        tip_radius: 1.0,
+        ..Tool::default()
+    };
+    // ramping down along y = 50.25, from z -1 at x = 20 to z -5 at x = 80
+    let ramp = |x: f64| -1.0 - 4.0 * (x - 20.0) / 60.0;
+    m.cut(&with_tool(
+        tool.clone(),
+        &[(20.0, 50.25, -1.0), (80.0, 50.25, -5.0)],
+    ));
+    // by brute force: the lowest the tool's edge reaches over a spot, tip sampled every micron
+    let reference = |x: f64, y: f64| {
+        (20_000..=80_000)
+            .map(|i| f64::from(i) / 1000.0)
+            .filter_map(|tip| {
+                let d = Point::new(tip, 50.25).distance(Point::new(x, y));
+                tool.profile(d).map(|rise| ramp(tip) + rise)
+            })
+            .fold(f64::INFINITY, f64::min)
+    };
+    for y in [50.25, 51.75, 52.75, 53.25] {
+        let (cut, expected) = (depth_at(&m, 50.25, y), reference(50.25, y));
+        assert!(
+            (cut - expected).abs() < 1e-3,
+            "y {y}: cut {cut}, expected {expected}"
+        );
+    }
+}

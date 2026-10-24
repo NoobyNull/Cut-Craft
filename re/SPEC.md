@@ -177,6 +177,13 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Fields:** Number of Flutes; Pass Depth (sets the number of Z passes, e.g. 25.4 deep at 6.35 per pass = 4 passes); Stepover (stepovers over 50 % add "tail" moves in corners of offset strategies; V-bits have Final Pass and Clearance Pass stepovers instead); Spindle Speed in rpm; Feed Rate and Plunge Rate (plunge also used for ramping); Maximum Burn Rate (lasers, simulation only); Notes.
 - **Rate units** are chosen per tool: distance per second or per minute. **[dec]** The labels offered are mm/sec, mm/min, m/min, inches/sec, inches/min and feet/min.
 - **Chip Load** is shown, calculated from flutes, spindle speed and feed rate (feed per tooth: feed ÷ (rpm × flutes)), to compare with the maker's recommendation.
+- **Radiused End Mill [obs]** has a Tip Radius (its name template offers `{Tip Radius}` and `{Flat Diameter}`). **[inf]** The shape is a torus: flat across `diameter − 2 × tip radius`, then a quarter circle of the tip radius up to the full diameter, so its edge rises `tip − √(tip² − d²)` at `d` past the flat.
+
+### 3D Finishing: several tools (rest machining) [obs] (help: Finish Machining Toolpath)
+- Any number of tools can be chosen, in the order they will run. The first removes as much as it can; each later one removes only material the earlier ones left ("previously unmachined areas"). An allowance may be left for the last tool.
+- **Minimum Detail** (value and slider): unmachined areas smaller than this are ignored by that tool — a trade between detail and machining time.
+- **Boundary Offset**: every unmachined area is grown by this before it is machined; small values give many small areas, large values fewer, larger ones.
+- Finishing is always one pass at full depth (it ignores pass depth); the usual tool is a ball nose with an 8–12 % stepover.
 
 ---
 
