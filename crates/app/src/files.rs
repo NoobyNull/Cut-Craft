@@ -164,10 +164,43 @@ mod tests {
     use cut_craft_core::toolpath::ToolDatabase;
     use std::fs;
 
-    fn temp(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("cut-craft-files-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        dir.join(name)
+    /// `name` in a temporary folder of its own, removed when this is dropped.
+    struct Temp {
+        root: PathBuf,
+        path: PathBuf,
+    }
+
+    impl std::ops::Deref for Temp {
+        type Target = Path;
+        fn deref(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl AsRef<Path> for Temp {
+        fn as_ref(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for Temp {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn temp(name: &str) -> Temp {
+        let folder = format!(
+            "cut-craft-files-{}-{}",
+            std::process::id(),
+            name.replace('/', "-")
+        );
+        let root = std::env::temp_dir().join(folder);
+        fs::create_dir_all(&root).unwrap();
+        Temp {
+            path: root.join(name),
+            root,
+        }
     }
 
     fn registry() -> Registry {
