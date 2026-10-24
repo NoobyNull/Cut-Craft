@@ -471,6 +471,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-component-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-create-shape"
 version = "0.1.0"
 dependencies = [
@@ -487,7 +496,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-delete-component"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-delete-layer"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-delete-toolpath"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -707,6 +734,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-toolpath-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-unselect-all"
 version = "0.1.0"
 dependencies = [
@@ -909,9 +945,12 @@ dependencies = [
  "cmd-center-in-material",
  "cmd-center-vertically",
  "cmd-center-vertically-in-material",
+ "cmd-component-properties",
  "cmd-create-shape",
  "cmd-delete",
+ "cmd-delete-component",
  "cmd-delete-layer",
+ "cmd-delete-toolpath",
  "cmd-draw-arc",
  "cmd-draw-circle",
  "cmd-draw-ellipse",
@@ -936,6 +975,7 @@ dependencies = [
  "cmd-set-current-layer",
  "cmd-set-size",
  "cmd-subtract-vectors",
+ "cmd-toolpath-properties",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
  "cmd-weld-vectors",

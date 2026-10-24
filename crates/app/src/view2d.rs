@@ -337,7 +337,7 @@ impl Canvas {
         }
 
         // toolpaths: their cutting moves seen from above
-        for (id, toolpath) in &doc.toolpaths {
+        for (id, toolpath) in doc.toolpaths.iter().filter(|(_, t)| t.visible) {
             let colour = if highlighted == Some(*id) {
                 selected.color
             } else {

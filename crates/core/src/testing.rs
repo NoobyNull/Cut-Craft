@@ -267,3 +267,22 @@ pub fn domed() -> Document {
     doc.apply(&change).expect("a component applies");
     doc
 }
+
+/// A document whose first entity is a toolpath (id 1), for toolpath commands' contract tests.
+pub fn with_toolpath() -> Document {
+    use crate::toolpath::{Tool, Toolpath};
+    let mut doc = Document::default();
+    let mut c = Change::builder(&doc);
+    c.add_toolpath(Toolpath {
+        name: "Profile".into(),
+        strategy: "profile_toolpath".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![],
+        moves: vec![],
+        visible: true,
+    });
+    let change = c.finish();
+    doc.apply(&change).expect("a toolpath applies");
+    doc
+}

@@ -33,6 +33,7 @@ fn with_tool(tool: Tool, points: &[(f64, f64, f64)]) -> Toolpath {
                 to: DVec3::new(x, y, z),
             })
             .collect(),
+        visible: true,
     }
 }
 

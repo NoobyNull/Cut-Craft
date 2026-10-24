@@ -543,6 +543,7 @@ begin FOOTER
                 mv(MoveKind::Cut, 25.4, 25.4, -3.0),
                 mv(MoveKind::Rapid, 25.4, 25.4, 5.0),
             ],
+            visible: true,
         }
     }
 

@@ -26,6 +26,7 @@ fn toolpath(name: &str) -> Toolpath {
                 to: DVec3::new(10.0, 0.0, -3.0),
             },
         ],
+        visible: true,
     }
 }
 
@@ -187,4 +188,14 @@ fn cut_points_drop_the_repeated_closing_point() {
     let pts = cut_craft_core::toolpath::cut_points(&square);
     assert_eq!(pts.len(), 4);
     assert_ne!(pts.first(), pts.last());
+}
+
+#[test]
+fn toolpaths_start_visible_and_old_ones_load_visible() {
+    let t = toolpath("t");
+    assert!(t.visible);
+    let mut json = serde_json::to_value(&t).unwrap();
+    json.as_object_mut().unwrap().remove("visible");
+    let old: Toolpath = serde_json::from_value(json).unwrap();
+    assert!(old.visible);
 }

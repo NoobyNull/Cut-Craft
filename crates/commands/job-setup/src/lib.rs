@@ -299,6 +299,7 @@ mod tests {
                 kind: MoveKind::Cut,
                 to: Point::new(10.0, 10.0).extend(-1.0),
             }],
+            visible: true,
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

@@ -123,6 +123,7 @@ mod tests {
                 mv(MoveKind::Cut, 10.0, 10.0, -3.0),
                 mv(MoveKind::Rapid, 10.0, 10.0, 5.0),
             ],
+            visible: true,
         }
     }
 

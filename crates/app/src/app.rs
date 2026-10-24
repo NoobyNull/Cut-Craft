@@ -312,7 +312,8 @@ impl CutCraftApp {
             // the cascade: start again from uncut material, then preview each toolpath
             "preview_all_toolpaths" => {
                 self.simulation = None;
-                for id in self.doc.toolpaths.keys().copied().collect::<Vec<_>>() {
+                let visible = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
+                for id in visible.map(|(&id, _)| id).collect::<Vec<_>>() {
                     self.preview_toolpath(id);
                 }
             }
@@ -407,12 +408,13 @@ impl CutCraftApp {
                 let result = self.registry.recalculate_all(&self.doc);
                 self.record(result, "All toolpaths recalculated");
             }
+            // the toolpath list's button: the Delete Toolpath command on the selected one
             "delete_toolpath" => {
-                if let Some(id) = self.selected_toolpath.take() {
-                    let mut c = Change::builder(&self.doc);
-                    c.remove_toolpath(id);
-                    let change = c.finish();
-                    self.record(Ok(change), "Toolpath deleted");
+                if let Some(id) = self.selected_toolpath.take()
+                    && let Err(e) =
+                        self.apply("delete_toolpath", &serde_json::json!({ "toolpath": id }))
+                {
+                    self.status.set_message(&e);
                 }
             }
             "save_toolpaths" => match &self.post {
@@ -2633,6 +2635,24 @@ mod tests {
             ran += 1;
         }
         assert!(ran >= 49, "only {ran} controls ran");
+    }
+
+    #[test]
+    fn preview_all_leaves_hidden_toolpaths_out() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        for id in ["drilling_toolpath", "profile_toolpath"] {
+            let params = h.app.registry.get(id).unwrap().initial_params(&h.app.doc);
+            h.app.apply(id, &params).unwrap();
+        }
+        let profile = *h.app.doc.toolpaths.keys().last().unwrap();
+        h.app.selected_toolpath = Some(profile);
+        h.app.invoke(&h.ctx, "preview_toolpath");
+        let only_profile = h.app.simulation.clone();
+        let drilling = *h.app.doc.toolpaths.keys().next().unwrap();
+        h.app.doc.toolpaths.get_mut(&drilling).unwrap().visible = false;
+        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        assert_eq!(h.app.simulation, only_profile);
     }
 
     #[test]

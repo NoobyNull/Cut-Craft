@@ -58,6 +58,18 @@ pub fn existing_layer(doc: &Document, id: LayerId) -> Result<&Layer, CommandErro
         .ok_or_else(|| CommandError::InvalidParams(format!("layer {} does not exist", id.0)))
 }
 
+/// The item a command names by id (a toolpath, a component...), or the error the user sees
+/// when it is gone; `what` names the kind of item.
+pub fn existing<'a, T>(
+    items: &'a std::collections::BTreeMap<EntityId, T>,
+    id: EntityId,
+    what: &str,
+) -> Result<&'a T, CommandError> {
+    items
+        .get(&id)
+        .ok_or_else(|| CommandError::InvalidParams(format!("{what} {} does not exist", id.0)))
+}
+
 /// Names (of layers, toolpaths...) must have something in them; returns the trimmed name.
 pub fn ensure_named(name: &str) -> Result<String, CommandError> {
     let name = name.trim();

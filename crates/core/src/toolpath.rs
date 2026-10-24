@@ -170,6 +170,13 @@ pub struct Toolpath {
     #[serde(default)]
     pub vectors: Vec<EntityId>,
     pub moves: Vec<Move>,
+    /// Hidden toolpaths are not drawn or previewed (added after the first job format).
+    #[serde(default = "shown")]
+    pub visible: bool,
+}
+
+fn shown() -> bool {
+    true
 }
 
 /// Depth of each pass (negative z) down to `depth`, in equal steps no deeper than `pass_depth`.
@@ -259,6 +266,7 @@ pub fn made_by<C: Command>(
         tool,
         vectors,
         moves,
+        visible: true,
     }
 }
 

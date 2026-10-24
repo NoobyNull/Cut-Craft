@@ -22,6 +22,10 @@ fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-delete-component = { path = "../commands/delete-component" }
+cmd-delete-toolpath = { path = "../commands/delete-toolpath" }
+cmd-component-properties = { path = "../commands/component-properties" }
+cmd-toolpath-properties = { path = "../commands/toolpath-properties" }
 cmd-3d-roughing-toolpath = { path = "../commands/3d-roughing-toolpath" }
 cmd-3d-finishing-toolpath = { path = "../commands/3d-finishing-toolpath" }
 cmd-vcarve-engrave-toolpath = { path = "../commands/vcarve-engrave-toolpath" }

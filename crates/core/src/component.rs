@@ -50,6 +50,13 @@ pub struct Component {
     /// Row by row from the bottom; `None` where the component has no shape.
     // ponytail: plain JSON numbers; a packed encoding if job files grow too big
     pub heights: Vec<Option<f64>>,
+    /// Hidden components are left out of the model (added after the first job format).
+    #[serde(default = "shown")]
+    pub visible: bool,
+}
+
+fn shown() -> bool {
+    true
 }
 
 #[expect(
@@ -83,6 +90,7 @@ impl Component {
             columns,
             rows,
             heights,
+            visible: true,
         }
     }
 
@@ -107,8 +115,11 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
     for row in 0..surface.rows {
         for column in 0..surface.columns {
             let centre = surface.centre(column, row);
-            surface.heights[row * surface.columns + column] =
-                doc.components.values().fold(0.0, |under, c| {
+            surface.heights[row * surface.columns + column] = doc
+                .components
+                .values()
+                .filter(|c| c.visible)
+                .fold(0.0, |under, c| {
                     c.height_at(centre)
                         .map_or(under, |height| c.combine.apply(under, height))
                 });

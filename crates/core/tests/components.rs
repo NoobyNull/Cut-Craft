@@ -132,3 +132,38 @@ fn the_placed_model_has_its_top_at_the_surface_and_must_fit() {
         "{why}"
     );
 }
+
+#[test]
+fn hidden_components_are_left_out_of_the_model() {
+    let mut doc = small_job();
+    let mut c = Change::builder(&doc);
+    let shown = c.add_component(flat(rect(0.0, 0.0, 50.0, 50.0), 10.0, Combine::Add));
+    let hidden = Component {
+        visible: false,
+        ..flat(rect(0.0, 0.0, 50.0, 50.0), 4.0, Combine::Add)
+    };
+    c.add_component(hidden);
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    assert_eq!(model(&doc, 100).at(Point::new(20.0, 20.0)), Some(10.0));
+    assert!(doc.components[&shown].visible, "components start visible");
+}
+
+#[test]
+fn components_saved_before_visibility_load_visible() {
+    let mut doc = small_job();
+    let mut c = Change::builder(&doc);
+    c.add_component(flat(rect(0.0, 0.0, 3.0, 2.0), 1.0, Combine::Add));
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    let mut json: serde_json::Value = serde_json::from_slice(&save_job(&doc)).unwrap();
+    for component in json["document"]["components"]
+        .as_object_mut()
+        .unwrap()
+        .values_mut()
+    {
+        component.as_object_mut().unwrap().remove("visible");
+    }
+    let old = load_job(&serde_json::to_vec(&json).unwrap()).unwrap();
+    assert!(old.components.values().all(|c| c.visible));
+}
