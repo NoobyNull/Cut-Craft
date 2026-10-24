@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Cut Craft</title>
+  <defs>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0b066"/>
+      <stop offset="1" stop-color="#d98d3f"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7d8894"/>
+      <stop offset="0.45" stop-color="#f1f4f7"/>
+      <stop offset="1" stop-color="#5f6974"/>
+    </linearGradient>
+    <linearGradient id="flute" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9aa5b1"/>
+      <stop offset="0.5" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#727d89"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="#232830"/>
+  <!-- the block of material -->
+  <polygon points="28,160 128,122 228,160 128,198" fill="url(#top)"/>
+  <polygon points="28,160 128,198 128,226 28,188" fill="#b8702d"/>
+  <polygon points="128,198 228,160 228,188 128,226" fill="#9a5a20"/>
+  <!-- the groove being carved -->
+  <path d="M66 166 C 88 150, 108 146, 128 158" fill="none" stroke="#7a4214" stroke-width="10" stroke-linecap="round"/>
+  <path d="M66 166 C 88 150, 108 146, 128 158" fill="none" stroke="#5c2f0c" stroke-width="3" stroke-linecap="round"/>
+  <!-- the V-bit -->
+  <rect x="113" y="22" width="30" height="62" rx="4" fill="url(#steel)" stroke="#1b1f25" stroke-width="3"/>
+  <rect x="109" y="80" width="38" height="12" rx="3" fill="#4a535d"/>
+  <polygon points="110,92 146,92 128,156" fill="url(#flute)" stroke="#1b1f25" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="128,92 146,92 128,156" fill="#000" fill-opacity="0.18"/>
+  <!-- chips -->
+  <path d="M150 150 q 8 -10 16 -2" fill="none" stroke="#f0b066" stroke-width="5" stroke-linecap="round"/>
+  <path d="M160 132 q 6 -8 13 -2" fill="none" stroke="#e9a35a" stroke-width="4" stroke-linecap="round"/>
+</svg>

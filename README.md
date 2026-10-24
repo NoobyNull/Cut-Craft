@@ -45,6 +45,13 @@ cargo build
 cargo run
 ```
 
+To start it from the desktop's application menu, build it for release and install a launcher
+(re-run after pulling changes; `--remove` takes the launcher out again):
+
+```bash
+scripts/install-launcher
+```
+
 ## AMD Graphics Support
 
 This project is designed to work with AMD graphics cards through:

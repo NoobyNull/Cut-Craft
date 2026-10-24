@@ -46,6 +46,9 @@ const PREVIEW_CELLS: usize = 1000;
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
 const APP_NAME: &str = "Cut Craft";
+/// How the desktop knows the window: the same name as the launcher, `cut-craft.desktop`
+/// (see `scripts/install-launcher`), so the taskbar shows its icon.
+const APP_ID: &str = "cut-craft";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const TOOL_ICON_ROWS: f32 = 1.75;
@@ -1082,7 +1085,9 @@ impl CutCraftApp {
 /// Opens the main window and runs until it is closed.
 pub fn run(title: &str) {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_title(title),
+        viewport: egui::ViewportBuilder::default()
+            .with_title(title)
+            .with_app_id(APP_ID),
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
