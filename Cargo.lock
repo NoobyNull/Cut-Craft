@@ -680,6 +680,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-moulding-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-move"
 version = "0.1.0"
 dependencies = [
@@ -1075,6 +1084,7 @@ dependencies = [
  "cmd-keyhole-toolpath",
  "cmd-layer-properties",
  "cmd-mirror",
+ "cmd-moulding-toolpath",
  "cmd-move",
  "cmd-move-to-layer",
  "cmd-offset-vectors",

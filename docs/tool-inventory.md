@@ -121,6 +121,8 @@ say "not implemented yet".
 - Chamfer: inside / outside, down / up, width, overcut, climb / conventional; V-bit or ball nose.
 - Thread Milling: internal / external, pitch, diameter, fit tolerance, hand, up / down
   (single-point tool; tooth offset on the form).
+- Moulding: an open profile swept along drive rails (outside closed rails, right of open ones),
+  sharp corners, boundary offset.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -160,7 +162,7 @@ say "not implemented yet".
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area, Zero Plane,
   from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
   Below, Split, Bake.
-- Toolpaths tab: Inlay (pocket/plug, not V-carve), Moulding,
+- Toolpaths tab: Inlay (pocket/plug, not V-carve),
   Sketch, Rounding, Laser Cut / Fill, Laser Picture, Toolpath Summary.
 
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool

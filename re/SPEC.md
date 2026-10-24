@@ -234,6 +234,12 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Pitch** (presets: ISO metric / Unified), **Diameter** (major), **Fit Tolerance** (positive cuts deeper; presets fill one for external threads), **Create Circles for Internal Threads** (a circle to pocket out the middle). Thread direction right / left handed; cut direction spiralling down or up. Threads follow the ISO profile (60° tools give flat crests).
 - **[inf]** Cut Craft: L = M − O; the tooth reaches the major diameter (internal) or the ISO external minor diameter d − 1.22687 P (external), widened by the tolerance; a right-hand thread climbs anticlockwise. Single point only, the tooth offset on the toolpath form; no presets or circles yet.
 
+### Moulding [obs] (help: Moulding Toolpath)
+- Extrudes an open cross-section profile along one or more drive rails (2.5D, no 3D model). Select the rails, then the profile last. The profile's start point hangs on the rail's start; on a closed rail the profile is always outside (the rail is the inside edge of a frame). Reverse Rail / Reverse Profile change direction and start.
+- The profile's height sets the toolpath's Z; one taller than the material must be fixed by the user. Passes follow the rail a stepover apart; at the end of an open rail it lifts at least a stepover, steps over and comes back the other way.
+- Options: Vary Stepover (closer passes on steep parts), Use Larger Area Clearance Tool (a "[Clear]" Z-level roughing toolpath first, with Machining Allowance, Machine Flat Regions, Ramp Plunge Moves; the finish can Skip Flat Regions), Create Sharp Corners (mitred rather than rolled), Boundary Offset (carry the tool past the profile's ends; or automatic).
+- **[inf]** Cut Craft: the profile is the newest selected open vector (the selection has no order); passes lie on the right of an open rail; each pass is the tool as low as it can go without cutting the profile (flat beyond its ends), limited to the material bottom; it lifts to the safe height between passes. No clearance tool or vary stepover yet.
+
 ---
 
 ## P5 — Directories and configuration
