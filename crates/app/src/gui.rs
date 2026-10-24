@@ -1,8 +1,9 @@
 //! Static UI data: Drawing tab tool groups, the main menu, right-click menus, status bar text.
 
 use cut_craft_core::Command;
-use cut_craft_core::document::{Document, Layer};
+use cut_craft_core::document::{Document, EntityId, Layer};
 use cut_craft_core::params::Items;
+use cut_craft_core::toolpath::Toolpath;
 
 /// Drawing tab layout: groups of command ids. Implemented commands supply their own label and
 /// icon; the rest show their humanized id, disabled.
@@ -361,6 +362,43 @@ fn delete(items: Items, item: u64, which: &[(&str, cmd_delete_items::Which)]) ->
         MenuItem::run::<DeleteItems>(name, &Params { items, item, which })
     };
     MenuItem::submenu("Delete", which.iter().map(run).collect())
+}
+
+/// Aspire's toolpath menu (MENU 968) for toolpath `id`. Right-clicking a toolpath selects it,
+/// so Recalculate ▸ This and Preview act on it.
+pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
+    use cmd_delete_items::Which;
+    let [show, hide] = show_hide(Items::Toolpaths, id.0);
+    let properties = cmd_toolpath_properties::Params {
+        toolpath: id,
+        name: toolpath.name.clone(),
+        visible: toolpath.visible,
+    };
+    vec![
+        show,
+        hide,
+        MenuItem::form::<cmd_toolpath_properties::ToolpathProperties>("Rename", &properties),
+        MenuItem::separator(),
+        MenuItem::submenu(
+            "Recalculate",
+            vec![
+                MenuItem::with_action("This", "recalculate_toolpath"),
+                MenuItem::with_action("Visible", "recalculate_visible_toolpaths"),
+                MenuItem::with_action("All", "recalculate_all_toolpaths"),
+            ],
+        ),
+        MenuItem::with_action("Preview", "preview_toolpath"),
+        delete(
+            Items::Toolpaths,
+            id.0,
+            &[
+                ("This", Which::This),
+                ("Invisible", Which::Invisible),
+                ("Visible", Which::Visible),
+                ("All", Which::All),
+            ],
+        ),
+    ]
 }
 
 /// Aspire's layer menu (MENU 967) for `layer`.

@@ -21,7 +21,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 const DESIGN_TABS: [&str; 5] = ["Drawing", "Modeling", "Sheets", "Layers", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 30] = [
+const BUILT_INS: [&str; 31] = [
     "undo",
     "redo",
     "exit",
@@ -31,6 +31,7 @@ const BUILT_INS: [&str; 30] = [
     "save_as",
     "import_vectors_bitmap",
     "recalculate_toolpath",
+    "recalculate_visible_toolpaths",
     "recalculate_all_toolpaths",
     "delete_toolpath",
     "save_toolpaths",
@@ -244,6 +245,7 @@ impl CutCraftApp {
                 self.selected_toolpath.is_some()
             }
             "recalculate_all_toolpaths" | "preview_all_toolpaths" => !self.doc.toolpaths.is_empty(),
+            "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
             "reset_preview" => self.simulation.is_some(),
             "save_toolpaths" => {
                 !self.doc.toolpaths.is_empty()
@@ -314,6 +316,7 @@ impl CutCraftApp {
                 self.view_action(ctx, id);
             }
             "recalculate_toolpath"
+            | "recalculate_visible_toolpaths"
             | "recalculate_all_toolpaths"
             | "delete_toolpath"
             | "save_toolpaths" => {
@@ -418,6 +421,14 @@ impl CutCraftApp {
                     let result = self.registry.recalculate(&self.doc, id);
                     self.record(result, "Toolpath recalculated");
                 }
+            }
+            // the cascade: Recalculate on each shown toolpath
+            "recalculate_visible_toolpaths" => {
+                let shown = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
+                let ids: Vec<EntityId> = shown.map(|(&id, _)| id).collect();
+                let result =
+                    Change::chain_over(&self.doc, &ids, |d, &id| self.registry.recalculate(d, id));
+                self.record(result, "Visible toolpaths recalculated");
             }
             "recalculate_all_toolpaths" => {
                 let result = self.registry.recalculate_all(&self.doc);
@@ -1448,6 +1459,7 @@ impl CutCraftApp {
             if self.doc.toolpaths.is_empty() {
                 ui.weak("No toolpaths yet");
             }
+            let mut chosen = None;
             for (&id, toolpath) in &self.doc.toolpaths {
                 let selected = self.selected_toolpath == Some(id);
                 let label = ui
@@ -1456,6 +1468,16 @@ impl CutCraftApp {
                 if label.clicked() {
                     self.selected_toolpath = if selected { None } else { Some(id) };
                 }
+                // Aspire's toolpath menu acts on the row right-clicked, so it selects it
+                if label.secondary_clicked() {
+                    self.selected_toolpath = Some(id);
+                }
+                if let Some(action) = self.popup(&label, || gui::toolpath_menu(id, toolpath)) {
+                    chosen = Some(action);
+                }
+            }
+            if let Some(action) = chosen {
+                self.invoke(ui.ctx(), &action);
             }
             let actions = [gui::ToolGroup {
                 name: "Toolpath List Actions",
@@ -2193,6 +2215,52 @@ mod tests {
         h.choose(layer(0), &["Delete", "Empty"]);
         let names: Vec<&str> = h.app.doc.layers.iter().map(|l| l.name.as_str()).collect();
         assert_eq!(names, ["Top"], "the first layer had nothing left on it");
+    }
+
+    #[test]
+    fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        for _ in 0..2 {
+            let params = h.app.registry.get("profile_toolpath").unwrap();
+            let params = params.initial_params(&h.app.doc);
+            h.app.apply("profile_toolpath", &params).unwrap();
+        }
+        let toolpath = |i: usize| {
+            move |app: &CutCraftApp| {
+                let (&id, t) = app.doc.toolpaths.iter().nth(i).unwrap();
+                gui::toolpath_menu(id, t)
+            }
+        };
+        let min_x = |app: &CutCraftApp| -> Vec<f64> {
+            let bounds = app.doc.toolpaths.values();
+            bounds
+                .map(|t| cut_craft_core::testing::cut_bounds(t).min.x)
+                .collect()
+        };
+        h.choose(toolpath(0), &["Hide", "This"]);
+        let visible: Vec<bool> = h.app.doc.toolpaths.values().map(|t| t.visible).collect();
+        assert_eq!(visible, [false, true]);
+        let before = min_x(&h.app);
+        let shift =
+            serde_json::json!({ "relative": true, "x": 100.0, "y": 0.0, "anchor": "bottom_left" });
+        h.app.apply("move", &shift).unwrap();
+        h.choose(toolpath(1), &["Recalculate", "Visible"]);
+        let after = min_x(&h.app);
+        assert!(
+            (after[0] - before[0]).abs() < 1e-6 && (after[1] - before[1] - 100.0).abs() < 1e-6,
+            "only the shown toolpath follows its vectors: {before:?} → {after:?}"
+        );
+        let second = *h.app.doc.toolpaths.keys().nth(1).unwrap();
+        h.choose(toolpath(1), &["Rename"]);
+        let form = h.app.form.take().unwrap();
+        assert_eq!(form.id, "toolpath_properties");
+        assert_eq!(form.params["toolpath"], serde_json::json!(second));
+        h.choose(toolpath(1), &["Delete", "Invisible"]);
+        assert_eq!(
+            h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>(),
+            [second]
+        );
     }
 
     #[test]
