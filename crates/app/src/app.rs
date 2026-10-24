@@ -231,6 +231,9 @@ impl CutCraftApp {
     }
 
     fn available(&self, id: &str) -> bool {
+        if let Some((_, command, _)) = gui::command_action(id) {
+            return self.registry.get(command).is_some();
+        }
         match id {
             "undo" => self.history.can_undo(),
             "close" => self.screen != Screen::Start,
@@ -257,6 +260,18 @@ impl CutCraftApp {
     /// Menu items, tool buttons and shortcuts all end up here: built-in actions first, then
     /// the command registry.
     fn invoke(&mut self, ctx: &egui::Context, id: &str) {
+        // right-click menu items: a command with params chosen by the menu
+        if let Some((form, command, params)) = gui::command_action(id) {
+            if form {
+                self.start_command(command);
+                if let Some(open) = self.form.as_mut().filter(|f| f.id == command) {
+                    open.params = params;
+                }
+            } else if let Err(e) = self.apply(command, &params) {
+                self.status.set_message(&e);
+            }
+            return;
+        }
         match id {
             "undo" => {
                 if self.history.undo(&mut self.doc) {
@@ -1241,12 +1256,13 @@ impl CutCraftApp {
         }
     }
 
-    /// Layers, top first: visibility and lock toggles, the current layer highlighted, and a
-    /// context menu of layer commands.
+    /// Layers, top first: visibility and lock toggles, the current layer highlighted, and
+    /// Aspire's layer menu on a right-click.
     fn layers_panel(&mut self, ui: &mut egui::Ui) {
         let edge = ui.spacing().interact_size.y;
         let label = |id: &str| self.registry.get(id).map_or("", |c| c.meta().label);
         let mut clicked: Option<(LayerId, &str)> = None;
+        let mut chosen = None;
         for layer in self.doc.layers.iter().rev() {
             ui.horizontal(|ui| {
                 let (eye, eye_tip) = if layer.visible {
@@ -1283,19 +1299,9 @@ impl CutCraftApp {
                 if row.double_clicked() {
                     clicked = Some((layer.id, "layer_properties"));
                 }
-                row.context_menu(|ui| {
-                    for id in [
-                        "layer_properties",
-                        "select_layer_vectors",
-                        "move_to_layer",
-                        "delete_layer",
-                    ] {
-                        if ui.button(label(id)).clicked() {
-                            clicked = Some((layer.id, id));
-                            ui.close_menu();
-                        }
-                    }
-                });
+                if let Some(id) = self.popup(&row, || gui::layer_menu(&self.doc, layer)) {
+                    chosen = Some(id);
+                }
             });
         }
         let add = ui.button(label("add_layer")).clicked();
@@ -1305,16 +1311,36 @@ impl CutCraftApp {
         if add {
             self.invoke(ui.ctx(), "add_layer");
         }
+        if let Some(id) = chosen {
+            self.invoke(ui.ctx(), &id);
+        }
     }
 
-    /// A layer-panel action: the toggles and menu commands are undoable; choosing a layer is
-    /// view state like the selection, so it is not.
+    /// A right-click menu on `response`, built when it opens: the action chosen, if any.
+    fn popup(
+        &self,
+        response: &egui::Response,
+        menu: impl FnOnce() -> Vec<gui::MenuItem>,
+    ) -> Option<String> {
+        let mut clicked = None;
+        response.context_menu(|ui| {
+            let menus = Menus {
+                available: &|id| self.available(id),
+                shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
+                recent: &[],
+            };
+            menu_items(ui, &menu(), &menus, &mut clicked);
+        });
+        clicked
+    }
+
+    /// A layer-panel action: the toggles are undoable; choosing a layer is view state like the
+    /// selection, so it is not.
     fn layer_action(&mut self, ctx: &egui::Context, layer: LayerId, action: &str) {
         let Some(l) = self.doc.layer(layer).cloned() else {
             return;
         };
         let properties = |visible: bool, locked: bool| serde_json::json!({ "layer": l.id, "name": l.name, "visible": visible, "locked": locked });
-        let just_layer = serde_json::json!({ "layer": layer });
         let result = match action {
             "toggle_visible" => self.apply("layer_properties", &properties(!l.visible, l.locked)),
             "toggle_locked" => self.apply("layer_properties", &properties(l.visible, !l.locked)),
@@ -1322,7 +1348,7 @@ impl CutCraftApp {
                 .registry
                 .get(action)
                 .expect("set_current_layer is registered")
-                .run_json(&self.doc, &just_layer)
+                .run_json(&self.doc, &serde_json::json!({ "layer": layer }))
                 .map_err(|e| e.to_string())
                 .map(|change| {
                     self.doc
@@ -1335,7 +1361,7 @@ impl CutCraftApp {
                 self.invoke(ctx, action);
                 Ok(())
             }
-            _ => self.apply(action, &just_layer),
+            _ => unreachable!("not a layer panel action: {action}"),
         };
         if let Err(e) = result {
             self.status.set_message(&e);
@@ -1951,12 +1977,37 @@ mod tests {
             self.frame_holding(modifiers, vec![]);
         }
 
+        /// Clicks the item at `path` (names, top down) of the right-click menu `menu` builds.
+        fn choose(&mut self, menu: impl Fn(&CutCraftApp) -> Vec<gui::MenuItem>, path: &[&str]) {
+            let items = menu(&self.app);
+            let item = leaf(&items, path);
+            assert!(
+                item.is_enabled && self.app.available(&item.action),
+                "{path:?} is greyed"
+            );
+            self.app.invoke(&self.ctx, &item.action);
+        }
+
         /// Draws a rectangle through the command, then closes its form.
         fn rectangle(&mut self, x: f64, y: f64, width: f64, height: f64) {
             let params = serde_json::json!({ "x": x, "y": y, "width": width, "height": height, "corners": "square", "radius": 0.0 });
             self.app.apply("draw_rectangle", &params).unwrap();
             self.app.form = None;
             self.frame(vec![]);
+        }
+    }
+
+    /// The item at `path` (names, top down) of a menu.
+    fn leaf<'a>(menu: &'a [gui::MenuItem], path: &[&str]) -> &'a gui::MenuItem {
+        let (name, rest) = path.split_first().expect("a path to an item");
+        let item = menu
+            .iter()
+            .find(|i| i.name == *name)
+            .unwrap_or_else(|| panic!("no {name} in the menu"));
+        if rest.is_empty() {
+            item
+        } else {
+            leaf(&item.children, rest)
         }
     }
 
@@ -2109,13 +2160,15 @@ mod tests {
     }
 
     #[test]
-    fn layer_menu_actions_act_on_that_layer() {
+    fn the_layer_menu_acts_on_the_layer_clicked() {
         let mut h = Harness::new();
         h.rectangle(10.0, 10.0, 50.0, 50.0);
         h.app
             .apply("add_layer", &serde_json::json!({ "name": "Top" }))
             .unwrap();
-        h.app.layer_action(&h.ctx, LayerId(2), "move_to_layer");
+        let layer =
+            |i: usize| move |app: &CutCraftApp| gui::layer_menu(&app.doc, &app.doc.layers[i]);
+        h.choose(layer(1), &["Move Selection Here"]);
         assert!(
             h.app
                 .doc
@@ -2123,13 +2176,23 @@ mod tests {
                 .keys()
                 .all(|&id| h.app.doc.layer_of(id) == LayerId(2))
         );
-        h.app.layer_action(&h.ctx, LayerId(1), "delete_layer");
-        assert_eq!(h.app.doc.layers.len(), 1);
+        h.choose(layer(0), &["Activate"]);
+        assert_eq!(h.app.doc.current_layer, LayerId(1));
+        h.choose(layer(0), &["Show", "Only This"]);
+        let visible: Vec<bool> = h.app.doc.layers.iter().map(|l| l.visible).collect();
+        assert_eq!(visible, [true, false]);
+        h.choose(layer(0), &["Lock"]);
+        let locked = layer(0)(&h.app);
+        assert!(!leaf(&locked, &["Lock"]).is_enabled && leaf(&locked, &["Unlock"]).is_enabled);
+        h.choose(layer(1), &["Rename"]);
+        let form = h.app.form.take().unwrap();
         assert_eq!(
-            h.app.doc.vectors.len(),
-            1,
-            "the vector was not on the deleted layer"
+            (form.id, form.params["name"].as_str()),
+            ("layer_properties", Some("Top"))
         );
+        h.choose(layer(0), &["Delete", "Empty"]);
+        let names: Vec<&str> = h.app.doc.layers.iter().map(|l| l.name.as_str()).collect();
+        assert_eq!(names, ["Top"], "the first layer had nothing left on it");
     }
 
     #[test]
@@ -2556,6 +2619,32 @@ mod tests {
             h.app.form.is_none() && h.app.view_tool.is_none(),
             "the Select tool"
         );
+    }
+
+    #[test]
+    fn run_and_form_items_apply_or_open_a_command_with_their_params() {
+        let mut h = Harness::new();
+        let add = gui::MenuItem::run::<cmd_add_layer::AddLayer>(
+            "Add",
+            &cmd_add_layer::Params { name: "Top".into() },
+        );
+        assert!(h.app.available(&add.action));
+        h.app.invoke(&h.ctx, &add.action);
+        assert_eq!(
+            h.app.doc.layers.last().map(|l| l.name.as_str()),
+            Some("Top")
+        );
+        let mut rename: cmd_layer_properties::Params = h.app.doc.layers[0].clone().into();
+        rename.name = "Renamed".into();
+        let rename =
+            gui::MenuItem::form::<cmd_layer_properties::LayerProperties>("Rename", &rename);
+        h.app.invoke(&h.ctx, &rename.action);
+        let form = h.app.form.as_ref().unwrap();
+        assert_eq!(
+            (form.id, form.params["name"].as_str()),
+            ("layer_properties", Some("Renamed"))
+        );
+        assert!(!h.app.available("run:no_such_command:{}"));
     }
 
     /// Controls that wait on a person: the system's file dialogs, the save-changes question

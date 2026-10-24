@@ -1,4 +1,8 @@
-//! Static UI data: Drawing tab tool groups, the main menu, status bar text.
+//! Static UI data: Drawing tab tool groups, the main menu, right-click menus, status bar text.
+
+use cut_craft_core::Command;
+use cut_craft_core::document::{Document, Layer};
+use cut_craft_core::params::Items;
 
 /// Drawing tab layout: groups of command ids. Implemented commands supply their own label and
 /// icon; the rest show their humanized id, disabled.
@@ -279,7 +283,22 @@ impl MenuItem {
         }
     }
 
-    fn submenu(name: &str, children: Vec<MenuItem>) -> Self {
+    /// Runs command `C` with `params`: `run:<id>:<json>`.
+    pub fn run<C: Command>(name: &str, params: &C::Params) -> Self {
+        Self::command::<C>(name, "run", params)
+    }
+
+    /// Opens command `C`'s form filled in with `params`: `form:<id>:<json>`.
+    pub fn form<C: Command>(name: &str, params: &C::Params) -> Self {
+        Self::command::<C>(name, "form", params)
+    }
+
+    fn command<C: Command>(name: &str, how: &str, params: &C::Params) -> Self {
+        let params = serde_json::to_string(params).expect("command params serialize");
+        Self::with_action(name, &format!("{how}:{}:{params}", C::ID))
+    }
+
+    pub fn submenu(name: &str, children: Vec<MenuItem>) -> Self {
         Self {
             children,
             ..Self::new(name, "")
@@ -287,13 +306,121 @@ impl MenuItem {
     }
 
     /// A separator is an item with an empty name.
-    fn separator() -> Self {
+    pub fn separator() -> Self {
         Self::new("", "")
     }
 
     pub fn is_separator(&self) -> bool {
         self.name.is_empty()
     }
+
+    /// Greyed out unless `on`.
+    #[must_use]
+    pub fn enabled(self, on: bool) -> Self {
+        Self {
+            is_enabled: on,
+            ..self
+        }
+    }
+}
+
+/// Show ▸ and Hide ▸ for one layer, toolpath or component: Aspire's Show / Hide family.
+fn show_hide(items: Items, item: u64) -> [MenuItem; 2] {
+    use cmd_show_hide::{Action, Params, ShowHide};
+    let run = |name: &str, action| {
+        MenuItem::run::<ShowHide>(
+            name,
+            &Params {
+                items,
+                item,
+                action,
+            },
+        )
+    };
+    [
+        MenuItem::submenu(
+            "Show",
+            vec![
+                run("This", Action::ShowThis),
+                run("Only This", Action::ShowOnlyThis),
+                run("All But This", Action::ShowAllButThis),
+                run("All", Action::ShowAll),
+            ],
+        ),
+        MenuItem::submenu(
+            "Hide",
+            vec![run("This", Action::HideThis), run("All", Action::HideAll)],
+        ),
+    ]
+}
+
+/// Delete ▸ for one layer, toolpath or component: Aspire's Delete family.
+fn delete(items: Items, item: u64, which: &[(&str, cmd_delete_items::Which)]) -> MenuItem {
+    use cmd_delete_items::{DeleteItems, Params};
+    let run = |&(name, which): &(&str, _)| {
+        MenuItem::run::<DeleteItems>(name, &Params { items, item, which })
+    };
+    MenuItem::submenu("Delete", which.iter().map(run).collect())
+}
+
+/// Aspire's layer menu (MENU 967) for `layer`.
+pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
+    use cmd_delete_items::Which;
+    use cmd_layer_properties::LayerProperties;
+    let id = layer.id;
+    let lock = |name: &str, locked: bool| {
+        let params = cmd_layer_properties::Params {
+            locked,
+            ..layer.clone().into()
+        };
+        MenuItem::run::<LayerProperties>(name, &params).enabled(layer.locked != locked)
+    };
+    let [show, hide] = show_hide(Items::Layers, u64::from(id.0));
+    vec![
+        MenuItem::run::<cmd_set_current_layer::SetCurrentLayer>(
+            "Activate",
+            &cmd_set_current_layer::Params { layer: id },
+        ),
+        show,
+        hide,
+        lock("Lock", true),
+        lock("Unlock", false),
+        MenuItem::separator(),
+        MenuItem::with_action("Insert New Layer", "add_layer"),
+        delete(
+            Items::Layers,
+            u64::from(id.0),
+            &[
+                ("This", Which::This),
+                ("Visible", Which::Visible),
+                ("Invisible", Which::Invisible),
+                ("Empty", Which::Empty),
+            ],
+        ),
+        MenuItem::form::<LayerProperties>("Rename", &layer.clone().into()),
+        MenuItem::with_action("Merge Visible", "merge_visible_layers").enabled(false),
+        MenuItem::separator(),
+        MenuItem::run::<cmd_select_layer_vectors::SelectLayerVectors>(
+            "Select Layer Vectors",
+            &cmd_select_layer_vectors::Params { layer: id },
+        ),
+        MenuItem::run::<cmd_move_to_layer::MoveToLayer>(
+            "Move Selection Here",
+            &cmd_move_to_layer::Params { layer: id },
+        )
+        .enabled(!doc.selection.is_empty()),
+    ]
+}
+
+/// A `run:` or `form:` action taken apart: whether it opens the form, the command id, its params.
+pub fn command_action(action: &str) -> Option<(bool, &str, serde_json::Value)> {
+    let (form, rest) = match action.split_once(':')? {
+        ("run", rest) => (false, rest),
+        ("form", rest) => (true, rest),
+        _ => return None,
+    };
+    let (id, params) = rest.split_once(':')?;
+    Some((form, id, serde_json::from_str(params).ok()?))
 }
 
 impl MenuSystem {
