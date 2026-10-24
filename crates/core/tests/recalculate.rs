@@ -128,3 +128,13 @@ fn deleted_source_vectors_and_unknown_strategies_are_explained() {
         "Centres was made by `centres`, which is not available"
     );
 }
+
+#[test]
+fn a_toolpath_made_from_no_vectors_recalculates() {
+    // as 3D, rotary and picture toolpaths are: Centres with nothing selected makes no moves
+    let mut doc = Document::default();
+    doc.apply(&Centres::run(&doc, &NoParams {}).unwrap())
+        .unwrap();
+    let id = *doc.toolpaths.keys().next().unwrap();
+    assert!(registry().recalculate(&doc, id).is_ok());
+}

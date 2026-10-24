@@ -314,7 +314,8 @@ impl Registry {
             .copied()
             .filter(|v| doc.vectors.contains_key(v))
             .collect();
-        if sources.selection.is_empty() {
+        // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
+        if sources.selection.is_empty() && !toolpath.vectors.is_empty() {
             return Err(CommandError::Failed(format!(
                 "the vectors {} was made from have been deleted",
                 toolpath.name
