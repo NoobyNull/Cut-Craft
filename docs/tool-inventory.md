@@ -103,7 +103,11 @@ say "not implemented yet".
 - Edit: Undo, Redo, Delete, Select All Vectors, Select All Vectors On Current Layer, Unselect
   All, the ten Align commands, Join Vectors, Job Size and Position.
 - Model: Export as STL.
-- Machine: Install Post-Processor.
+- Machine: Install Post-Processor (real grbl / FluidNC posts load, rotary G93 ones included).
+- Job Setup: single-sided and rotary jobs.
+- Save Toolpaths: through the installed post, else Cut Craft's own FluidNC posts (tool
+  changer; rotary jobs wrapped onto A in inverse time).
+- Tool Database: flutes and chip load.
 - Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
 - View: Zoom to Drawing (F6).
 - Drawing tab:
@@ -146,6 +150,10 @@ say "not implemented yet".
 - Toolpaths tab: Quick Engrave, Inlay, Chamfer, Fluting, Prism, Keyhole, Moulding, Texture,
   Sketch, Rounding, Laser Cut / Fill, Laser Picture, Toolpath Summary.
 
+- Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
+  (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).
+- Job Setup: double-sided jobs.
+
 ## Differences from Aspire 12 seen on screen
 
 - Aspire 12's side tabs are Design, Sheets, Layers, Components, Clipart (drawing and modeling
@@ -153,3 +161,5 @@ say "not implemented yet".
   Modeling, Sheets, Layers, Clipart.
 - Aspire's view buttons (Pan, Zoom Box, Zoom to Job, Zoom to Selection) sit at the top right
   of the 2D view; ours are at the top left, without Pan.
+- Aspire's rotary Job Setup calls its Z zero under the material "Cylinder Axis"; ours reuses
+  "Machine Bed" (posts print "Cylinder Axis").
