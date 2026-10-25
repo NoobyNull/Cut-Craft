@@ -136,6 +136,9 @@ say "not implemented yet".
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;
     Ungroup turns it into curves.
+  - Text in a Box (Draw Text's other mode): the text scaled to fit a box at the anchor,
+    inside a None / Normal / Wide margin, centred (dialog 279; its stretch options are not
+    done).
   - Text on a Curve: one line of text laid along a selected curve, kept or scaled to fill
     it, with spacing, above / on / below, other side, offset, alignment, turned or upright
     (dialog 426). The result is plain curves (Aspire keeps it editable).
@@ -223,7 +226,7 @@ say "not implemented yet".
 - Gadgets; Help Contents.
 - Drawing tab:
   - Node Edit, Transform, Trim, Measure.
-  - Curve, Freehand, Text in a Box, Auto Layout Text,
+  - Curve, Freehand, Auto Layout Text,
     Vector Texture.
   - Distort.
 - Modeling tab: Sculpt,
