@@ -137,6 +137,9 @@ say "not implemented yet".
     The text is a group; Ungroup turns it into curves.
   - Fit Curves to Vectors (Edit ▸ Curve Fit Vectors): arcs, Béziers or lines within a
     tolerance, sharp corners kept past a max angle, replacing or beside the originals.
+  - Array Copy (rows and columns by gap or offset, alternate row / column displacement,
+    group copies; dialog 2516) and Circular Copy (round a centre by total or step angle,
+    rotated or upright, group copies). Array Copy's symmetry buttons are not done.
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
     corner fit, noise filter and grouping (dialog 347).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
@@ -184,7 +187,7 @@ say "not implemented yet".
   - Node Edit, Transform, Trim, Close / Extend, Validator, Measure.
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture.
-  - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
+  - Nest, Copy Along Vectors, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin; Sculpt,
   Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,

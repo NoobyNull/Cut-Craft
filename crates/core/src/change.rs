@@ -266,6 +266,31 @@ impl Change {
         Ok(c.finish())
     }
 
+    /// Adds a copy of the selection under each of `places`, selecting the copies; `group`
+    /// makes them one group.
+    pub fn copy_selected(
+        doc: &Document,
+        places: &[DAffine2],
+        group: bool,
+    ) -> Result<Self, CommandError> {
+        if doc.selection.is_empty() {
+            return Err(CommandError::NothingSelected);
+        }
+        let group = group.then(|| doc.next_group());
+        let mut c = Self::builder(doc);
+        let mut copies = Vec::new();
+        for t in places {
+            for id in &doc.selection {
+                copies.push(c.add(doc.vectors[id].transformed(t)));
+            }
+        }
+        for &id in &copies {
+            c.set_group(id, group);
+        }
+        c.select(copies);
+        Ok(c.finish())
+    }
+
     /// Moves each selected path by `offset(its bounds, the selection's bounds)`: every align
     /// command is one call to this.
     pub fn align_selected(

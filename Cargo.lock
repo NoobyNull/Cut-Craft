@@ -443,6 +443,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-array-copy"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-array-copy-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -517,6 +526,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-chamfer-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-circular-copy"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1388,6 +1406,7 @@ dependencies = [
  "cmd-align-left",
  "cmd-align-right",
  "cmd-align-top",
+ "cmd-array-copy",
  "cmd-array-copy-toolpath",
  "cmd-bake-components",
  "cmd-bitmap-properties",
@@ -1398,6 +1417,7 @@ dependencies = [
  "cmd-center-vertically",
  "cmd-center-vertically-in-material",
  "cmd-chamfer-toolpath",
+ "cmd-circular-copy",
  "cmd-component-boundary",
  "cmd-component-properties",
  "cmd-create-component-from-bitmap",
