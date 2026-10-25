@@ -142,6 +142,10 @@ say "not implemented yet".
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
+- File ▸ Import ▸ Import Component / 3D Model (and the Design tab button): binary and ASCII
+  STL, seen from above at the job's modeling resolution, centred, lowest point on the zero
+  plane, shrunk to fit the job. No Orientate 3D Model step yet (size, position, depth
+  below top); no OBJ.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the
@@ -156,8 +160,7 @@ say "not implemented yet".
   Preview, Preview All, Reset Preview.
 
 **Not built yet.**
-- File: New from Template, Save As Template, Print, Print Preview, Import Component / 3D
-  Model, Import Toolpaths, Export EPS / AI / PDF.
+- File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths, Export EPS / AI / PDF.
 - Edit: Vector Selector, Nest, Swap Sides, Notes, Document Variables, Snap
   Options, Options.
 - Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Component with
@@ -169,7 +172,6 @@ say "not implemented yet".
   window tiling and cascade.
 - Gadgets; Help Contents.
 - Drawing tab:
-  - Import Component.
   - Node Edit, Transform, Trim, Close / Extend, Validator, Measure.
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture.

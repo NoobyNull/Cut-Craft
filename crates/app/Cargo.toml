@@ -22,6 +22,7 @@ fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
+fmt-import-stl = { path = "../formats/import-stl" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
 cmd-cross-section = { path = "../commands/cross-section" }

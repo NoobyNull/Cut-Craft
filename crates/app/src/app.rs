@@ -21,7 +21,7 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 41] = [
+const BUILT_INS: [&str; 42] = [
     "create_component_from_toolpath_preview",
     "refresh_2d_view",
     "cut",
@@ -40,6 +40,7 @@ const BUILT_INS: [&str; 41] = [
     "save",
     "save_as",
     "import_vectors_bitmap",
+    "import_component_3d_model",
     "recalculate_toolpath",
     "recalculate_visible_toolpaths",
     "recalculate_all_toolpaths",
@@ -94,6 +95,9 @@ const THIRD_PARTY: [(&str, &str); 14] = [
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
+/// Importers that make components; Import Component / 3D Model offers these, Import
+/// Vectors / Bitmap the rest.
+const MODEL_IMPORTERS: [&str; 1] = ["import_stl"];
 /// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
 const LAYOUT_KEYS: [(&str, &str); 2] = [("design_layout", "F11"), ("machining_layout", "F12")];
 /// The view buttons over the top right of the 2D view: action, label and icon.
@@ -342,6 +346,7 @@ impl CutCraftApp {
             | "save"
             | "save_as"
             | "import_vectors_bitmap"
+            | "import_component_3d_model"
             | "install_post_processor" => self.file_action(id),
             "tool_database" => self.tool_window = true,
             id if self.display.toggle(id) => ctx.request_repaint(),
@@ -442,10 +447,14 @@ impl CutCraftApp {
                     self.save_to(&path.with_extension(JOB_EXTENSION));
                 }
             }
-            "import_vectors_bitmap" => {
+            "import_vectors_bitmap" | "import_component_3d_model" => {
                 let mut dialog = file_dialog();
+                let models = id == "import_component_3d_model";
                 for importer in self.registry.importers() {
-                    dialog = dialog.add_filter(importer.format.label, importer.format.extensions);
+                    if MODEL_IMPORTERS.contains(&importer.id) == models {
+                        dialog =
+                            dialog.add_filter(importer.format.label, importer.format.extensions);
+                    }
                 }
                 if let Some(path) = dialog.pick_file() {
                     let change = files::import(&self.registry, &self.doc, &path)
@@ -3502,7 +3511,7 @@ mod tests {
     /// save-changes question (the smoke test's job has unsaved work), the file manager and
     /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 12] = [
+        const ASKS: [&str; 13] = [
             "new",
             "open",
             "close",
@@ -3511,6 +3520,7 @@ mod tests {
             "increment_and_save",
             "open_application_data_folder",
             "import_vectors_bitmap",
+            "import_component_3d_model",
             "install_post_processor",
             "save_toolpaths",
             "exit",

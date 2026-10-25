@@ -1465,6 +1465,7 @@ dependencies = [
  "fmt-export-svg",
  "fmt-import-bitmap",
  "fmt-import-dxf",
+ "fmt-import-stl",
  "fmt-import-svg",
  "log",
  "rfd",
@@ -1903,6 +1904,13 @@ version = "0.1.0"
 dependencies = [
  "cut-craft-core",
  "dxf",
+]
+
+[[package]]
+name = "fmt-import-stl"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
 ]
 
 [[package]]
