@@ -1,0 +1,17 @@
+[package]
+name = "cmd-circular-copy"
+description = "Circular Copy"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+glam.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

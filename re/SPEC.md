@@ -168,6 +168,11 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Corners:** All, Outer (pointing out of a closed shape: what a cutter inside a pocket cannot reach) or Inner (pointing in: what a cutter outside the shape cannot reach). Open vectors have no inside and get every corner.
 - A fillet may use at most half of each side it touches, so neighbouring fillets never overlap; corners that need more are left sharp. Aspire's tool is clicked corner by corner; ours does every corner of the selection at once.
 
+### Array Copy and Circular Copy of vectors [inf] (modelled on Array Copy toolpath above)
+- **Array Copy:** Rows (Y) × Columns (X), the original's row and column included, placed above and to the right of the selection. Spacing by **Gap** (between neighbouring copies' extents) or **Offset** (start to start).
+- **Circular Copy:** a number of items in all, the original included, round the **job centre** or a typed point, spread counter-clockwise over an angle (360° spaces them evenly; less puts the last one at the end of the angle). Copies turn with the circle unless **Rotate copies** is off, when they only move.
+- Copies stay on their originals' layers and the originals and copies end up selected.
+
 ### 3D components [obs]
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
 - **Create Shape** (from closed vectors): Round, Angled, Flat, Custom and Smooth profiles. The other creation tools are in the Model menu: Two Rail Sweep, Extrude & Weave, Turn & Spin, Texture Area, Zero Plane and From Bitmap.

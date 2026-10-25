@@ -134,6 +134,9 @@ say "not implemented yet".
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Create Fillets (round,
     dog-bone, T-bone; all, outer or inner corners of the selection at once).
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
+  - Array Copy (rows × columns by gap or offset) and Circular Copy (round the job centre or a
+    point, over a full or part circle, turning the copies or not). Copies stay on their
+    originals' layers; copies of grouped vectors are not grouped.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
@@ -157,7 +160,7 @@ say "not implemented yet".
   - Node Edit, Transform, Group, Trim, Close / Extend, Fit Curves, Validator, Measure.
   - Curve, Freehand, Text, Text on a Curve, Auto Layout Text, Dimensions,
     Vector Texture, Trace Bitmap.
-  - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
+  - Nest, Copy Along Vectors, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
   Emboss, Distort, Offset Model, Slice, Draft, Replace Below, Split.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,

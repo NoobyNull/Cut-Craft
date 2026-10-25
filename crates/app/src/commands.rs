@@ -88,6 +88,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_group::Group>();
     r.add::<cmd_ungroup::Ungroup>();
     r.add::<cmd_create_fillets::CreateFillets>();
+    r.add::<cmd_array_copy::ArrayCopy>();
+    r.add::<cmd_circular_copy::CircularCopy>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

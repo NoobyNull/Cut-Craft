@@ -342,6 +342,23 @@ impl Change {
         Ok(c.finish())
     }
 
+    /// Adds a copy of every selected vector under each of `transforms`, on the same layer as
+    /// its original, and selects the originals and all the copies.
+    pub fn copy_selected(doc: &Document, transforms: &[DAffine2]) -> Self {
+        let mut c = Self::builder(doc);
+        let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
+        let mut selected = originals.clone();
+        for t in transforms {
+            for &id in &originals {
+                let copy = c.add(doc.vectors[&id].transformed(t));
+                c.move_to_layer(copy, doc.layer_of(id));
+                selected.push(copy);
+            }
+        }
+        c.select(selected);
+        c.finish()
+    }
+
     /// Paths this change creates, e.g. to preview a command before applying it.
     pub fn added(&self) -> impl Iterator<Item = &Path> {
         self.edits.iter().filter_map(|e| match e {
