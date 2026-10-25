@@ -119,6 +119,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_cut_vector::CutVector>();
     r.add::<cmd_make_start_point::MakeStartPoint>();
     r.add::<cmd_span_to_line::SpanToLine>();
+    r.add::<cmd_span_to_bezier::SpanToBezier>();
+    r.add::<cmd_span_to_arc::SpanToArc>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

@@ -1221,6 +1221,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-span-to-arc"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-span-to-bezier"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-span-to-line"
 version = "0.1.0"
 dependencies = [
@@ -1639,6 +1657,8 @@ dependencies = [
  "cmd-smooth-selected-components",
  "cmd-space-horizontally",
  "cmd-space-vertically",
+ "cmd-span-to-arc",
+ "cmd-span-to-bezier",
  "cmd-span-to-line",
  "cmd-split",
  "cmd-subtract-vectors",

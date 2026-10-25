@@ -239,6 +239,8 @@ pub fn node_menu(at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
         MenuItem::run::<cmd_delete_point::DeletePoint>("Delete Point", at),
         MenuItem::separator(),
         MenuItem::run::<cmd_span_to_line::SpanToLine>("Convert Span to Line", at),
+        MenuItem::run::<cmd_span_to_bezier::SpanToBezier>("Convert Span to Bezier", at),
+        MenuItem::run::<cmd_span_to_arc::SpanToArc>("Convert Span to Arc", at),
         MenuItem::separator(),
         MenuItem::run::<cmd_cut_vector::CutVector>("Cut Vector", at),
         MenuItem::run::<cmd_make_start_point::MakeStartPoint>("Make Start Point", at),

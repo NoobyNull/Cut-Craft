@@ -138,8 +138,9 @@ say "not implemented yet".
     Ungroup turns it into curves.
   - Node Edit (N): handles on the selected vectors' nodes; drag a node to move it (arcs
     keep their bulge, Bézier handles follow); right-click a node or span for Insert Point,
-    Delete Point, Convert Span to Line, Cut Vector, Make Start Point, Exit Node Editing.
-    Dragging control points or spans, several nodes at once, spans to Bézier / arc, smooth
+    Delete Point, Convert Span to Line / Bezier / Arc, Cut Vector, Make Start Point, Exit
+    Node Editing.
+    Dragging control points or spans, several nodes at once, smooth
     points and Keep Bezier Tangency are not done.
   - Text in a Box (Draw Text's other mode): the text scaled to fit a box at the anchor,
     inside a None / Normal / Wide margin, centred (dialog 279; its stretch options are not

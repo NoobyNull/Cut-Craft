@@ -294,6 +294,63 @@ pub fn span_to_line(path: &Path, k: usize) -> Path {
     out
 }
 
+/// `path` with span `k` a Bézier: a line gets handles at its thirds, an arc becomes the
+/// Béziers that trace it.
+#[must_use]
+pub fn span_to_bezier(path: &Path, k: usize) -> Path {
+    let from = span_start(path, k);
+    let mut out = path.clone();
+    let pieces = match path.segments[k] {
+        Segment::Line { to } => vec![Segment::Cubic {
+            c1: from.lerp(to, 1.0 / 3.0),
+            c2: from.lerp(to, 2.0 / 3.0),
+            to,
+        }],
+        Segment::Arc { to, center, ccw } => crate::geometry::arc_to_cubics(from, to, center, ccw),
+        cubic @ Segment::Cubic { .. } => vec![cubic],
+    };
+    out.segments.splice(k..=k, pieces);
+    out
+}
+
+/// `path` with span `k` an arc: through a Bézier's middle, or bowed out an eighth of a
+/// line's length to its left.
+// ponytail: the line's bow is our own choice [inf]; Aspire's is not documented
+#[must_use]
+pub fn span_to_arc(path: &Path, k: usize) -> Path {
+    let from = span_start(path, k);
+    let to = path.segments[k].end();
+    let middle = match path.segments[k] {
+        Segment::Line { .. } => from.lerp(to, 0.5) + (to - from).perp() / 8.0,
+        Segment::Cubic { c1, c2, .. } => (from + 3.0 * c1 + 3.0 * c2 + to) / 8.0,
+        arc @ Segment::Arc { .. } => return replace_span(path, k, arc),
+    };
+    let Some((center, ccw)) = circle_through(from, middle, to) else {
+        return span_to_line(path, k);
+    };
+    replace_span(path, k, Segment::Arc { to, center, ccw })
+}
+
+fn replace_span(path: &Path, k: usize, s: Segment) -> Path {
+    let mut out = path.clone();
+    out.segments[k] = s;
+    out
+}
+
+/// The circle through three points, and whether a to c via b runs counter-clockwise.
+fn circle_through(a: Point, b: Point, c: Point) -> Option<(Point, bool)> {
+    let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let sq = |p: Point| p.length_squared();
+    let centre = Point::new(
+        (sq(a) * (b.y - c.y) + sq(b) * (c.y - a.y) + sq(c) * (a.y - b.y)) / d,
+        (sq(a) * (c.x - b.x) + sq(b) * (a.x - c.x) + sq(c) * (b.x - a.x)) / d,
+    );
+    Some((centre, (b - a).perp_dot(c - b) > 0.0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,6 +408,28 @@ mod tests {
             panic!("still a curve")
         };
         assert_eq!((c1, c2), (Point::new(1.0, 1.0), Point::new(9.0, 6.0)));
+    }
+
+    #[test]
+    fn spans_turn_into_beziers_and_arcs_and_back() {
+        let s = square();
+        let curved = span_to_bezier(&s, 0);
+        assert!(matches!(curved.segments[0], Segment::Cubic { .. }));
+        let arc = span_to_arc(&s, 0);
+        let Segment::Arc { center, .. } = arc.segments[0] else {
+            panic!("an arc")
+        };
+        // a 10 mm chord bowed 1.25 mm: radius (25 + 1.5625) / 2.5
+        let r = center.distance(Point::ZERO);
+        assert!((r - 10.625).abs() < 1e-9, "{r}");
+        assert_eq!(arc.segments[0].end(), Point::new(10.0, 0.0));
+        let back = span_to_bezier(&Path::circle(Point::ZERO, 5.0), 0);
+        assert!(
+            back.segments.len() > 2,
+            "a half circle is two quarter Béziers"
+        );
+        let round = span_to_arc(&back, 0);
+        assert!(matches!(round.segments[0], Segment::Arc { .. }));
     }
 
     #[test]
