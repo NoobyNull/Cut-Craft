@@ -683,7 +683,7 @@ impl MenuSystem {
                         i("Job Size and Position"),
                         i("Swap Sides"),
                         sep(),
-                        i("Notes"),
+                        a("Notes", "notes"),
                         i("Document Variables"),
                         k("Snap Options", "F4"),
                         i("Options"),

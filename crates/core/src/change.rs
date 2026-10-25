@@ -103,6 +103,10 @@ pub enum Edit {
         before: LayerId,
         after: LayerId,
     },
+    SetNotes {
+        before: String,
+        after: String,
+    },
 }
 
 impl Edit {
@@ -164,6 +168,10 @@ impl Edit {
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
                 before: after,
                 after: before,
+            },
+            Self::SetNotes { before, after } => Self::SetNotes {
+                before: after.clone(),
+                after: before.clone(),
             },
         }
     }
@@ -530,6 +538,7 @@ impl Document {
                 }
                 self.current_layer = *after;
             }
+            Edit::SetNotes { after, .. } => self.notes.clone_from(after),
         }
         Ok(())
     }
@@ -842,6 +851,15 @@ impl ChangeBuilder<'_> {
         let before = std::mem::replace(&mut self.current_layer, after);
         if before != after {
             self.edits.push(Edit::SetCurrentLayer { before, after });
+        }
+    }
+
+    pub fn set_notes(&mut self, after: &str) {
+        if self.doc.notes != after {
+            self.edits.push(Edit::SetNotes {
+                before: self.doc.notes.clone(),
+                after: after.into(),
+            });
         }
     }
 

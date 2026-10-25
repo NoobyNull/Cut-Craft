@@ -861,6 +861,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-notes"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-offset-model"
 version = "0.1.0"
 dependencies = [
@@ -1417,6 +1426,7 @@ dependencies = [
  "cmd-moulding-toolpath",
  "cmd-move",
  "cmd-move-to-layer",
+ "cmd-notes",
  "cmd-offset-model",
  "cmd-offset-vectors",
  "cmd-overlap-intersect",

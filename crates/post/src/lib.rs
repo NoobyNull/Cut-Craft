@@ -551,8 +551,7 @@ impl Post {
                 Some(concat!("Cut Craft ", env!("CARGO_PKG_VERSION")).into()),
             ),
             ("POST_NAME", Some(self.name.clone())),
-            // Cut Craft has no notes yet
-            ("FILE_NOTES", None),
+            ("FILE_NOTES", Some(doc.notes.clone())),
             ("TOOLPATH_NOTES", None),
             ("TOOL_NOTES", None),
         ] {

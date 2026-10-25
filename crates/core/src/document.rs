@@ -287,6 +287,10 @@ pub struct Document {
     /// Which group each grouped vector is in; picking one picks the group (added with groups).
     #[serde(default)]
     pub vector_groups: BTreeMap<EntityId, u64>,
+    /// Edit ▸ Notes: free text kept with the job, printed by posts as `[FILE_NOTES]`; notes
+    /// starting with "." open by themselves when the job is opened.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
 }
 
 impl Default for Document {
@@ -304,6 +308,7 @@ impl Default for Document {
             selected_components: Selection::new(),
             selected_bitmaps: Selection::new(),
             vector_groups: BTreeMap::new(),
+            notes: String::new(),
         }
     }
 }

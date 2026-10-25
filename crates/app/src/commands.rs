@@ -99,6 +99,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_emboss::Emboss>();
     r.add::<cmd_add_draft::AddDraft>();
     r.add_interactive::<cmd_cross_section::CrossSection>();
+    r.add::<cmd_notes::Notes>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

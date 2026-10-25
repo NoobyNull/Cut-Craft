@@ -596,6 +596,9 @@ impl CutCraftApp {
                 (self.doc, self.history, self.session) = (doc, history, session);
                 self.screen = Screen::Job;
                 self.remember(path);
+                if self.doc.notes.starts_with('.') {
+                    self.start_command("notes");
+                }
                 true
             }
             Err(e) => {
@@ -2399,6 +2402,26 @@ mod tests {
         );
         h.app.invoke(&h.ctx, "undo");
         assert_eq!(h.app.doc.vectors.len(), before + h.app.clipboard.len());
+    }
+
+    #[test]
+    fn notes_starting_with_a_dot_open_with_the_job() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-notes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut h = Harness::new();
+        for (notes, opens) in [(".Read me", true), ("quiet", false)] {
+            h.app.doc.notes = notes.into();
+            let path = dir.join("notes.ccjob");
+            h.app.save_to(&path);
+            h.app.form = None;
+            assert!(h.app.open_path(&path));
+            assert_eq!(
+                h.app.form.as_ref().map(|f| f.id) == Some("notes"),
+                opens,
+                "{notes}"
+            );
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
