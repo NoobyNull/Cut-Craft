@@ -670,6 +670,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-draw-text"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-drilling-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -1297,6 +1306,7 @@ dependencies = [
  "cmd-draw-polyline",
  "cmd-draw-rectangle",
  "cmd-draw-star",
+ "cmd-draw-text",
  "cmd-drilling-toolpath",
  "cmd-fluting-toolpath",
  "cmd-group",
@@ -1367,11 +1377,13 @@ name = "cut-craft-core"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
+ "fontdb",
  "glam",
  "i_overlay",
  "schemars",
  "serde",
  "serde_json",
+ "ttf-parser 0.20.0",
 ]
 
 [[package]]

@@ -22,6 +22,10 @@ python3 -I re/mo.py "$HOME/Desktop/Aspire 12.0/Language/Lang/de_DE/LC_MESSAGES" 
 python3 -I re/help2txt.py "$HOME/Desktop/Aspire 12.0/Language/ENU/Help" /tmp/help
 # peres.py needs the JSON from REA inspect_pe_resources on Resources_ENU.dll:
 python3 -I re/peres.py rea.json "$HOME/Desktop/Aspire 12.0/Language/ENU/x64/Resources_ENU.dll" /tmp/res
+# every DIALOG(EX) as one control per line, and the RT_XAML forms (stdlib PE walker):
+python3 -I re/dialogs.py "$HOME/Desktop/Aspire 12.0/Language/ENU/x64/Resources_ENU.dll" re/extracted/dialogs
+# a .vfont's streams and glyph sheet (re/cfb.py reads any OLE compound file):
+python3 -I re/vfont.py "$HOME/Desktop/Aspire 12.0/Fonts/Helvetica 1L.vfont" re/extracted/vfont/helv.svg
 ```
 
 ## How the original is built (reference only)
@@ -396,8 +400,45 @@ A plain-text, line-based format. Supporting it lets users reuse the `.pp` file f
 
 ---
 
+## Fonts: `.vfont` [obs] (the 23 files in `Fonts/`, read with `re/vfont.py`)
+
+- An OLE compound file (`D0 CF 11 E0`, version 4, 4096-byte sectors; the last sector may be
+  cut short). Two streams: `VectricFontInfo/Info` and `VectricFontData/GLYPHS_0_255`.
+- Both streams are MFC `CArchive` serialization: an object is `FFFF`, schema (u16), name
+  length (u16), class name, then its fields; a later object of a known class starts with
+  `8000 | n`, where n numbers classes and objects together from 1; `0000` is a null object.
+- `Info`: u32 version (3; 1 in the older `Century`), u32, name (u8 length + bytes), and in
+  version 3 six f64 (`[1, 1/h, 1, 0, h, 1]`, h = capital height in font units: 1500 or
+  15000), then a `txtKerningPairs` object or null: u32 version, u32 count, f64, then count ×
+  (u16 first, u16 second, i32 extra advance in font units). The older version stores no
+  height; the top of `H` stands in.
+- `GLYPHS_0_255`: u32, then one object per code 0–255 (null for missing glyphs).
+  - `txtVectricChar`: u32 version, u32 code, f64 advance, a `vdContourGroup` or null.
+  - `vdContourGroup`: u32 version, u32 count, the contours; version 2 adds a u8.
+  - `vdContour`: u32 version, i32, f64 tolerance, f64, u16, u32 span count, the spans;
+    version 2 adds 16 bytes after them. Closed when the last span ends at the first's start.
+    Single-line ("1L") fonts are open strokes; the others are closed outlines.
+  - Spans: u32 version, u32 kind, start x y z, end x y z (z always 0), u32; then
+    `vdLineSpan` nothing, `vdArcSpan` f64 bulge (tan(sweep/4), positive counter-clockwise),
+    `vdBezierSpan` two control points (x y each).
+- Codes are Windows-1252, except three fonts (AvCO, Avntgrd 1L, Times New Roman 3L) in code
+  page 437; those are the ones with a glyph at 129. **[inf]**
+- Text Height is the capital height (the Info height matches the top of `H` in every v3 font).
+  The files hold no line spacing; Cut Craft uses 1.6 capital heights. **[inf]**
+- Cut Craft reads `.vfont` files from `~/.config/cut-craft/fonts` (a link to a Vectric
+  install's `Fonts/` will do); none ship with it.
+
+### Create Text form [obs] (dialog 344; Text in a Box is dialog 279; Text on a Curve 426)
+
+Text / Text in a Box radios; Text box (with Larger Edit …); Font: TrueType / Single Line radios
+over one font list, Bold, Italic; Text Alignment: Left, Center, Right; Text Height; Anchor
+Point X, Y "(Click on drawing to set position)"; Apply, Close. Text in a Box swaps height and
+anchor for Bounding Box Width / Height, Margin Size (None, Normal, Wide), Vertical Stretch and
+Horizontal Stretch drop-downs.
+
 ## Open questions (need decompilation or sample files)
-1. `.crv3d` / `.3dclip` / `.v3m` / `.vfont` byte layouts. There are no samples here; `Aspire.exe` would need Ghidra.
+1. `.crv3d` / `.3dclip` / `.v3m` byte layouts. There are no samples here (probably the same
+   compound-file container as `.vfont`; saving a few from VCarve Pro under Wine would show it).
 2. Meanings of the `Default.prf` fields.
 3. Which mouse button orbits the 3D view (the help pages contradict each other).
 4. The commands behind keys 1, 2 and Ctrl+F1…F9.

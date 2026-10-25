@@ -6,6 +6,7 @@ mod command;
 pub mod component;
 pub mod document;
 pub mod file;
+pub mod font;
 mod formats;
 pub mod geometry;
 pub mod params;
@@ -16,6 +17,7 @@ pub mod simulation;
 pub mod testing;
 pub mod toolpath;
 pub mod trace;
+pub mod vfont;
 
 pub use glam;
 

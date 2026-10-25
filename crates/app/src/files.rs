@@ -95,14 +95,7 @@ pub fn save_through(
     std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// Where Cut Craft keeps its settings: `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
-// ponytail: XDG only; add the Windows/macOS config folders when those builds exist
-pub fn config_dir() -> Option<PathBuf> {
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .map(|dir| dir.join("cut-craft"))
-}
+pub use cut_craft_core::file::config_dir;
 
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
 /// other gets `_1`, and it keeps counting past names that `exists` says are taken.

@@ -132,6 +132,9 @@ say "not implemented yet".
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
+  - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
+    `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
+    The text is a group; Ungroup turns it into curves.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
@@ -154,7 +157,7 @@ say "not implemented yet".
 - Drawing tab:
   - Import Component.
   - Node Edit, Transform, Group, Trim, Close / Extend, Fit Curves, Validator, Measure.
-  - Curve, Freehand, Text, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
+  - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture, Trace Bitmap.
   - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
@@ -168,6 +171,8 @@ say "not implemented yet".
   rest-machining toolpath is made on its own, naming the tools that ran before it).
 
 **Known problems and stand-ins.**
+- Text is not editable once made (Aspire reopens the form on a text object); TrueType text has
+  no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
 - Components are selected in the Components tab, not by clicking them in the 3D view.
 - Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
   spacing commands do not yet use it).

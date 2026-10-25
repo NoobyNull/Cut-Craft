@@ -40,7 +40,10 @@ pub enum Kind {
         integer: bool,
     },
     Bool,
-    Text,
+    /// A string; `multiline` (`x-widget: multiline`) is a box of several lines.
+    Text {
+        multiline: bool,
+    },
     Choice(Vec<Choice>, Widget),
     /// A nested object, e.g. a point.
     Group(Vec<Field>),
@@ -209,9 +212,14 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
             }
             changed
         }
-        Kind::Text => {
+        Kind::Text { multiline } => {
             let mut s = value.as_str().unwrap_or_default().to_owned();
-            let changed = ui.text_edit_singleline(&mut s).changed();
+            let changed = if *multiline {
+                ui.text_edit_multiline(&mut s)
+            } else {
+                ui.text_edit_singleline(&mut s)
+            }
+            .changed();
             if changed {
                 *value = Value::String(s);
             }
@@ -464,7 +472,9 @@ fn kind(root: &Value, property: &Value) -> Kind {
             integer: t == "integer",
         },
         Some("boolean") => Kind::Bool,
-        Some("string") => Kind::Text,
+        Some("string") => Kind::Text {
+            multiline: marked("x-widget").and_then(Value::as_str) == Some("multiline"),
+        },
         Some("object") => Kind::Group(object_fields(root, s)),
         Some("array") => Kind::List(Box::new(kind(root, &s["items"]))),
         _ => Kind::Other,
@@ -588,6 +598,18 @@ mod tests {
         assert_eq!(widget("resolution"), Widget::DropDown);
         assert_eq!(widget("datum"), Widget::Corners);
         assert_eq!(widget("side"), Widget::Auto);
+    }
+
+    #[test]
+    fn text_marked_multiline_is_a_box_of_lines() {
+        let f = fields(&schema("draw_text"));
+        assert_eq!(field(&f, "text").kind, Kind::Text { multiline: true });
+        let job = fields(&schema("layer_properties"));
+        assert_eq!(field(&job, "name").kind, Kind::Text { multiline: false });
+        assert!(
+            matches!(&field(&f, "font").kind, Kind::Choice(fonts, Widget::DropDown) if fonts.iter().any(|c| c.value == "Test Boxes")),
+            "the font list is the installed fonts"
+        );
     }
 
     #[test]

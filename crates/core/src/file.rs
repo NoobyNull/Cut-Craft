@@ -3,6 +3,7 @@
 use crate::document::Document;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::path::PathBuf;
 
 pub const JOB_EXTENSION: &str = "ccjob";
 /// Jobs saved before the app was renamed Cut Craft; they still open.
@@ -11,6 +12,15 @@ const FORMAT: &str = "cut-craft-job";
 const OLD_FORMAT: &str = "aspire-clone-job";
 /// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.
 const VERSION: u32 = 1;
+
+/// Where Cut Craft keeps its settings: `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
+// ponytail: XDG only; add the Windows/macOS config folders when those builds exist
+pub fn config_dir() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+        .map(|dir| dir.join("cut-craft"))
+}
 
 #[derive(Serialize)]
 struct Saved<'a> {
