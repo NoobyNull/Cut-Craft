@@ -1,7 +1,7 @@
 //! 3D components: height-map shapes that combine, in the order they were made, into the model.
 
 use crate::CommandError;
-use crate::document::Document;
+use crate::document::{Document, EntityId};
 use crate::geometry::{Point, Rect};
 use crate::simulation::Material;
 use crate::toolpath::Tool;
@@ -157,6 +157,68 @@ impl Component {
     pub fn centre_of(&self, index: usize) -> Point {
         let (column, row) = (index % self.columns, index / self.columns);
         self.origin + Point::new(column as f64 + 0.5, row as f64 + 0.5) * self.cell
+    }
+}
+
+/// Closed paths round where `parts` have shape, traced over their finest cells and fitted
+/// with arcs within half a cell.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "cell counts are small and non-negative"
+)]
+pub fn silhouette(parts: &[&Component]) -> Vec<crate::geometry::Path> {
+    use crate::trace::{self, Fit, Grid};
+    let Some(area) = parts.iter().map(|c| c.extent()).reduce(Rect::union) else {
+        return vec![];
+    };
+    let cell = parts.iter().map(|c| c.cell).fold(f64::INFINITY, f64::min);
+    let grid = Grid {
+        columns: (area.size().x / cell).ceil() as usize,
+        rows: (area.size().y / cell).ceil() as usize,
+        origin: area.min,
+        cell,
+    };
+    let centre = |c: usize, r: usize| area.min + Point::new(c as f64 + 0.5, r as f64 + 0.5) * cell;
+    let rings = trace::outlines(grid, |c, r| {
+        parts
+            .iter()
+            .any(|part| part.height_at(centre(c, r)).is_some())
+    });
+    // ponytail: arcs within half a cell, corners over 60° kept [inf]; Aspire's own smoothing
+    // is not described
+    rings
+        .iter()
+        .map(|ring| trace::fit(ring, true, Fit::Arcs, cell / 2.0, 60_f64.to_radians()))
+        .collect()
+}
+
+/// What a "selected components" tool works on: the selected components (else the newest
+/// one), and the single component they make: the one itself, or several baked together over
+/// the job. Removing the returned ids and adding the component replaces them.
+pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
+    let mut ids: Vec<EntityId> = doc
+        .selected_components
+        .iter()
+        .copied()
+        .filter(|id| doc.components.contains_key(id))
+        .collect();
+    if ids.is_empty() {
+        ids.extend(doc.chosen_component());
+    }
+    match ids.as_slice() {
+        [] => None,
+        [one] => Some((ids.clone(), doc.components[one].clone())),
+        _ => {
+            let mut only = doc.clone();
+            for (id, c) in &mut only.components {
+                c.visible = ids.contains(id);
+            }
+            let baked =
+                Component::from_material("Baked", Combine::Add, &model_at_resolution(&only));
+            Some((ids, baked))
+        }
     }
 }
 

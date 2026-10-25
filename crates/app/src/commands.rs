@@ -91,6 +91,9 @@ pub fn registry() -> Registry {
     r.add::<cmd_fit_curves_to_vectors::FitCurvesToVectors>();
     r.add::<cmd_component_boundary::ComponentBoundary>();
     r.add::<cmd_trace_bitmap::TraceBitmap>();
+    r.add::<cmd_replace_below::ReplaceBelow>();
+    r.add::<cmd_offset_model::OffsetModel>();
+    r.add::<cmd_slice::Slice>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

@@ -2,9 +2,8 @@
 //! the selected components (all visible ones when none is selected), grouped when there are
 //! several, for use as toolpath boundaries.
 
+use cut_craft_core::component::silhouette;
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::geometry::Rect;
-use cut_craft_core::trace::{self, Fit, Grid};
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
 
 pub struct ComponentBoundary;
@@ -17,17 +16,11 @@ impl Command for ComponentBoundary {
         Meta {
             label: "Create Vector Boundary Around Selected Components",
             group: "Modeling",
-            icon: "",
+            icon: "modeling/create_vector_boundary_around_selected_components.svg",
             shortcut: "",
         }
     }
 
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss,
-        reason = "cell counts are small and non-negative"
-    )]
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
         let mut ids: Vec<EntityId> = doc
             .selected_components
@@ -44,32 +37,12 @@ impl Command for ComponentBoundary {
                 .collect();
         }
         let parts: Vec<_> = ids.iter().map(|id| &doc.components[id]).collect();
-        let Some(area) = parts.iter().map(|c| c.extent()).reduce(Rect::union) else {
+        if parts.is_empty() {
             return Err(CommandError::Failed(
                 "select components to draw a boundary round".into(),
             ));
-        };
-        let cell = parts.iter().map(|c| c.cell).fold(f64::INFINITY, f64::min);
-        let grid = Grid {
-            columns: (area.size().x / cell).ceil() as usize,
-            rows: (area.size().y / cell).ceil() as usize,
-            origin: area.min,
-            cell,
-        };
-        let centre = |c: usize, r: usize| {
-            area.min + cut_craft_core::geometry::Point::new(c as f64 + 0.5, r as f64 + 0.5) * cell
-        };
-        let rings = trace::outlines(grid, |c, r| {
-            parts
-                .iter()
-                .any(|part| part.height_at(centre(c, r)).is_some())
-        });
-        // ponytail: arcs within half a cell, corners over 60° kept [inf]; Aspire's own smoothing
-        // is not described
-        let paths: Vec<_> = rings
-            .iter()
-            .map(|ring| trace::fit(ring, true, Fit::Arcs, cell / 2.0, 60_f64.to_radians()))
-            .collect();
+        }
+        let paths = silhouette(&parts);
         if paths.is_empty() {
             return Err(CommandError::Failed("the components have no shape".into()));
         }

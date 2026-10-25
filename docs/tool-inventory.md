@@ -143,6 +143,11 @@ say "not implemented yet".
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
+  - Replace Below (transparent or plane, optional lowering; several selected are baked
+    first), Offset Model (a ball offset of the visible model into a new component, the
+    originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
+    top or bottom, or by count; optional boundary vectors). Slice heights cannot be edited
+    one by one yet.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 
@@ -152,8 +157,7 @@ say "not implemented yet".
 - Edit: Vector Selector, Nest, Swap Sides, Notes, Document Variables, Snap
   Options, Options.
 - Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Component with
-  Draft, Offset Model, Slice, Import, Export as 3D Clipart, Sculpt, Split,
-  Cross Section, Emboss, Distort, Replace Below.
+  Draft, Import, Export as 3D Clipart, Sculpt, Split, Cross Section, Emboss, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Draw Join Moves, Templates, Job Sheet, Materials, Toolpath Summary.
@@ -167,7 +171,7 @@ say "not implemented yet".
     Vector Texture.
   - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
-  Emboss, Distort, Offset Model, Slice, Draft, Replace Below, Split.
+  Emboss, Distort, Draft, Split.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
   not hidden behind it.
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool

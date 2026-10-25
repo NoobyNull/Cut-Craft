@@ -834,6 +834,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-offset-model"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-offset-vectors"
 version = "0.1.0"
 dependencies = [
@@ -887,6 +896,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-quick-engrave-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-replace-below"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1005,6 +1023,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-sketch-carving-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-slice"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1351,6 +1378,7 @@ dependencies = [
  "cmd-moulding-toolpath",
  "cmd-move",
  "cmd-move-to-layer",
+ "cmd-offset-model",
  "cmd-offset-vectors",
  "cmd-overlap-intersect",
  "cmd-photo-vcarve-toolpath",
@@ -1358,6 +1386,7 @@ dependencies = [
  "cmd-prism-toolpath",
  "cmd-profile-toolpath",
  "cmd-quick-engrave-toolpath",
+ "cmd-replace-below",
  "cmd-reset-inside-selected-vectors",
  "cmd-reset-outside-selected-vectors",
  "cmd-rotate",
@@ -1371,6 +1400,7 @@ dependencies = [
  "cmd-set-size",
  "cmd-show-hide",
  "cmd-sketch-carving-toolpath",
+ "cmd-slice",
  "cmd-smooth-selected-components",
  "cmd-space-horizontally",
  "cmd-space-vertically",
