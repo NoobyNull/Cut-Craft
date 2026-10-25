@@ -448,6 +448,8 @@ Horizontal Stretch drop-downs.
   the toolpath settings: 0.001 and plain values in a mm job, 0.001/25.4 (3.94e-5) and values
   divided by 25.4 in an inch job (New-inch / New-mm, the same job saved in each; the
   geometry numbers stayed the same, so the job's units are a label on the numbers).
+  A rotary job is stored unwrapped: a 50 mm diameter × 20 mm long job is x ±10, y ±(π × 25)
+  = ±78.54, z from −25 (the radius) to 0, the same unwrapping Cut Craft uses.
 - `2dDataV2` is MFC `CArchive` serialization (as in `.vfont`): u32 version 2, u32, u32 layer
   count, then each `vcCadLayer` (v4): 16-byte GUID, UTF-16 name (`FF FE FF` + u8 length,
   or `FF` + u16), flags, then its records. Every record sits behind a `Vectric__Version`
