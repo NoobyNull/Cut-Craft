@@ -742,6 +742,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-draw-freehand"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-draw-polygon"
 version = "0.1.0"
 dependencies = [
@@ -1640,6 +1649,7 @@ dependencies = [
  "cmd-draw-arc",
  "cmd-draw-circle",
  "cmd-draw-ellipse",
+ "cmd-draw-freehand",
  "cmd-draw-polygon",
  "cmd-draw-polyline",
  "cmd-draw-rectangle",

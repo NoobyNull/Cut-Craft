@@ -111,6 +111,8 @@ const THIRD_PARTY: [(&str, &str); 14] = [
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
+/// Drawing tools that take the whole path the pointer was dragged along, as `points`.
+const STROKE_TOOLS: [&str; 1] = ["draw_freehand"];
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 1] = ["import_stl"];
@@ -247,6 +249,8 @@ struct CutCraftApp {
     info: Option<Info>,
     /// Toolpath Summary's rapid rate (mm/min) and scale factor.
     summary: (f64, f64),
+    /// Where the pointer has been during this drag, for stroke tools such as Freehand.
+    stroke: Vec<Point>,
     /// What the views draw.
     display: crate::display::Display,
     /// The tool shown in the Tool Database window.
@@ -296,6 +300,7 @@ impl CutCraftApp {
             clipboard: vec![],
             info: None,
             summary: SUMMARY_DEFAULTS,
+            stroke: Vec::new(),
             display: crate::display::Display::default(),
             tool_selected: 0,
             simulation: None,
@@ -2438,26 +2443,10 @@ impl CutCraftApp {
         let job = self.shown_job();
         let mut canvas = Canvas::new(ui, &job, self.camera);
         let area = canvas.area;
-        // the wheel zooms about the cursor: a quarter of the view's height doubles the zoom
-        if let Some(at) = canvas.hover() {
-            let scroll = ui.input(|i| i.raw_scroll_delta.y);
-            if scroll != 0.0 {
-                let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
-                canvas.transform = canvas.transform.zoomed_about(at, factor);
-                self.camera = Some(canvas.transform);
-            }
-        }
-        let pan = match self.view_tool {
-            Some(ViewTool::Pan) => canvas.dragged_by(egui::PointerButton::Primary),
-            _ => None,
-        }
-        .or_else(|| canvas.dragged_by(egui::PointerButton::Middle));
-        if let Some(by) = pan {
-            canvas.transform = canvas.transform.panned(by);
-            self.camera = Some(canvas.transform);
-        }
+        self.zoom_and_pan(ui, &mut canvas);
         let gesture = canvas.gesture(ui);
         let reach = canvas.pick_tolerance(ui);
+        self.track_stroke(gesture);
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
             (_, Some(ViewTool::NodeEdit), _) => self.node_overlay(gesture, reach),
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Measure), _) => {
@@ -2691,10 +2680,60 @@ impl CutCraftApp {
         let (Some(cmd), Some(form)) = (self.registry.get(id), &self.form) else {
             return vec![];
         };
-        cmd.drag_params(drag, &form.params)
+        cmd.drag_params(drag, &self.with_stroke(id, &form.params))
             .and_then(|params| cmd.run_json(&self.doc, &params))
             .map(|change| change.added().cloned().collect())
             .unwrap_or_default()
+    }
+
+    /// The wheel zooms about the cursor; the middle button (or the Pan tool) pans.
+    fn zoom_and_pan(&mut self, ui: &egui::Ui, canvas: &mut Canvas) {
+        let area = canvas.area;
+        // the wheel zooms about the cursor: a quarter of the view's height doubles the zoom
+        if let Some(at) = canvas.hover() {
+            let scroll = ui.input(|i| i.raw_scroll_delta.y);
+            if scroll != 0.0 {
+                let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
+                canvas.transform = canvas.transform.zoomed_about(at, factor);
+                self.camera = Some(canvas.transform);
+            }
+        }
+        let pan = match self.view_tool {
+            Some(ViewTool::Pan) => canvas.dragged_by(egui::PointerButton::Primary),
+            _ => None,
+        }
+        .or_else(|| canvas.dragged_by(egui::PointerButton::Middle));
+        if let Some(by) = pan {
+            canvas.transform = canvas.transform.panned(by);
+            self.camera = Some(canvas.transform);
+        }
+    }
+
+    /// Remembers where the pointer goes while dragging, for stroke tools.
+    fn track_stroke(&mut self, gesture: Option<Gesture>) {
+        if let Some(Gesture::Dragging(drag)) = gesture {
+            // a new drag starts a new stroke
+            if self.stroke.first() != Some(&drag.start) {
+                self.stroke = vec![drag.start];
+            }
+            if self.stroke.last() != Some(&drag.end) {
+                self.stroke.push(drag.end);
+            }
+        }
+    }
+
+    /// A stroke tool's params with the points dragged through so far.
+    fn with_stroke(&self, id: &str, params: &Value) -> Value {
+        let mut params = params.clone();
+        if STROKE_TOOLS.contains(&id) {
+            let points: Vec<_> = self
+                .stroke
+                .iter()
+                .map(|q| serde_json::json!({ "x": q.x, "y": q.y }))
+                .collect();
+            params["points"] = Value::from(points);
+        }
+        params
     }
 
     /// Finishes a drag with a drawing tool: the form shows the dragged values, then they apply.
@@ -2702,9 +2741,10 @@ impl CutCraftApp {
         let Some(cmd) = self.registry.get(id) else {
             return;
         };
-        let Some(current) = self.form.as_ref().map(|f| f.params.clone()) else {
+        let Some(current) = self.form.as_ref().map(|f| self.with_stroke(id, &f.params)) else {
             return;
         };
+        self.stroke.clear();
         let result = cmd
             .drag_params(drag, &current)
             .map_err(|e| e.to_string())
@@ -2852,6 +2892,26 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn freehand_follows_the_whole_drag() {
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "draw_freehand");
+        let points = [(10.0, 10.0), (20.0, 30.0), (30.0, 10.0), (40.0, 30.0)];
+        h.frame(vec![Event::PointerMoved(h.at(10.0, 10.0))]);
+        h.press(h.at(10.0, 10.0), true, Modifiers::NONE);
+        for (x, y) in points {
+            h.frame(vec![Event::PointerMoved(h.at(x, y))]);
+        }
+        h.press(h.at(40.0, 30.0), false, Modifiers::NONE);
+        h.frame(vec![]);
+        let drawn = h.app.doc.vectors.values().next().expect("a stroke");
+        let b = drawn.bounds();
+        assert!(
+            b.size().y > 15.0,
+            "it went up and down, not straight: {b:?}"
+        );
     }
 
     #[test]
