@@ -212,6 +212,9 @@ say "not implemented yet".
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
   the material, arcs as Béziers.
+- File ▸ Import ▸ Import Vectors: Vectric `.crv3d` / `.crv` jobs, vectors only (lines, arcs,
+  Béziers onto layers of the job's names; text objects, the model and toolpaths are not
+  read). Layout from samples saved by Aspire 12 under Wine (`re/SPEC.md`, Job files).
 - File ▸ Import ▸ Import Component / 3D Model (and the Design tab button): binary and ASCII
   STL, seen from above at the job's modeling resolution, centred, lowest point on the zero
   plane, shrunk to fit the job. No Orientate 3D Model step yet (size, position, depth

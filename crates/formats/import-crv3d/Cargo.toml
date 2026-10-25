@@ -1,0 +1,14 @@
+[package]
+name = "fmt-import-crv3d"
+description = "Import the vectors of a Vectric .crv3d job"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

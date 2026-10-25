@@ -74,7 +74,7 @@ fn decode(code: u32, oem: bool) -> Option<char> {
     clippy::many_single_char_names,
     reason = "the format's own short names"
 )]
-fn compound_streams(b: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
+pub fn compound_streams(b: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
     const MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
     let bad = || "not a Vectric font (damaged compound file)".to_string();
     if b.get(..8) != Some(&MAGIC) {
@@ -364,7 +364,7 @@ impl<'a> Archive<'a> {
 }
 
 /// An arc span: `bulge` is tan(sweep / 4), positive counter-clockwise.
-fn arc(from: Point, to: Point, bulge: f64) -> Segment {
+pub fn arc(from: Point, to: Point, bulge: f64) -> Segment {
     if bulge.abs() < 1e-12 {
         return Segment::Line { to };
     }

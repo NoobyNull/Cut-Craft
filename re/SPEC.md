@@ -436,9 +436,31 @@ Point X, Y "(Click on drawing to set position)"; Apply, Close. Text in a Box swa
 anchor for Bounding Box Width / Height, Margin Size (None, Normal, Wide), Vertical Stretch and
 Horizontal Stretch drop-downs.
 
+## Job files: `.crv3d` [obs] (samples saved from Aspire 12.010 under Wine, read with `re/crv3d.py`)
+
+- The same OLE compound container as `.vfont`. Streams: `VersionData/Version`,
+  `PreviewData/Preview2D_GIF` and `Preview3D_PNG`, `SideData/Sides`, `VectorData/MaterialSize`,
+  `VectorData/DocumentData`, `VectorData/2dDataV2`, `ModelObjects/ObjectData`,
+  `ModelSettings/Settings`, `Toolpaths/ToolpathData`, `ToolpathDataEx`, `Simulation`.
+- `2dDataV2` is MFC `CArchive` serialization (as in `.vfont`): u32 version 2, u32, u32 layer
+  count, then each `vcCadLayer` (v4): 16-byte GUID, UTF-16 name (`FF FE FF` + u8 length,
+  or `FF` + u16), flags, then its `vcCadContour` records (v10: own GUID, layer GUID, …,
+  bounding box as 4 f64, a 3×3 f64 transform, a `Vectric__Version` wrapper naming the
+  record GUID, then the `vdContour`).
+- `vdContour` here is **version 7**: i32, f64 tolerance (4e-5), f64, u16, u32 span count,
+  then the spans **inline** (not as objects, unlike `.vfont`): u8 kind (0 line, 1 arc,
+  2 Bézier), u32 span version (2), u32 type, start x y z, end x y z, u32 flags, then an
+  arc's f64 bulge (tan(sweep/4), positive counter-clockwise; a circle is four quarter arcs)
+  or a Bézier's two control points. Coordinates are in the job's units (inches here).
+- Text is a `txtBlock` record (font name, the string, every glyph as `vdContourGroup`s
+  of `txtChar`s) with `_txtAL_*` and `_txtblk*` parameters, not plain contours.
+- Layers seen: "Toolpath Previews" (always first), then the user's. "Sheet 1" is a `vcCadSheet`.
+- `re/crv3d.py` extracts the contours per layer; `fmt-import-crv3d` imports them.
+  **[unk]** the remaining fields of layers and contours (colours, visibility, groups), the
+  model, toolpath and sheet streams, and `.3dclip` / `.v3m`.
+
 ## Open questions (need decompilation or sample files)
-1. `.crv3d` / `.3dclip` / `.v3m` byte layouts. There are no samples here (probably the same
-   compound-file container as `.vfont`; saving a few from VCarve Pro under Wine would show it).
+1. `.3dclip` / `.v3m` byte layouts, and the rest of `.crv3d` (see Job files).
 2. Meanings of the `Default.prf` fields.
 3. Which mouse button orbits the 3D view (the help pages contradict each other).
 4. The commands behind keys 1, 2 and Ctrl+F1…F9.

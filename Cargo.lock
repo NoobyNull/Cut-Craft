@@ -1758,6 +1758,7 @@ dependencies = [
  "fmt-export-pdf",
  "fmt-export-svg",
  "fmt-import-bitmap",
+ "fmt-import-crv3d",
  "fmt-import-dxf",
  "fmt-import-stl",
  "fmt-import-svg",
@@ -2205,6 +2206,13 @@ version = "0.1.0"
 dependencies = [
  "cut-craft-core",
  "image 0.25.10",
+]
+
+[[package]]
+name = "fmt-import-crv3d"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
 ]
 
 [[package]]
