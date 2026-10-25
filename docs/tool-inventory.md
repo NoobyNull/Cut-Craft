@@ -136,6 +136,9 @@ say "not implemented yet".
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;
     Ungroup turns it into curves.
+  - Interactive Vector Trim: click a piece of a vector and the stretch between the nearest
+    crossings either side goes; what is left comes back as polylines (curves are not kept
+    exactly), and drag-trimming and rejoining are not done.
   - Measure / Inspect: drag between two points for distance, angle and X / Y distances;
     click a vector for the span's type and length and the vector's perimeter and area, on
     the status bar (Aspire shows them in a form).
@@ -234,7 +237,7 @@ say "not implemented yet".
   window tiling and cascade.
 - Gadgets; Help Contents.
 - Drawing tab:
-  - Transform, Trim.
+  - Transform, Trim Objects.
   - Curve, Freehand, Auto Layout Text,
     Vector Texture.
   - Distort.
