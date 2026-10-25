@@ -1119,6 +1119,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-texture-area"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-texture-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -1455,6 +1464,7 @@ dependencies = [
  "cmd-space-vertically",
  "cmd-split",
  "cmd-subtract-vectors",
+ "cmd-texture-area",
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",
  "cmd-toolpath-properties",

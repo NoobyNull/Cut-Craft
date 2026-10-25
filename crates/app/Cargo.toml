@@ -26,6 +26,7 @@ fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-import-stl = { path = "../formats/import-stl" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-texture-area = { path = "../commands/texture-area" }
 cmd-notes = { path = "../commands/notes" }
 cmd-cross-section = { path = "../commands/cross-section" }
 cmd-add-draft = { path = "../commands/add-draft" }

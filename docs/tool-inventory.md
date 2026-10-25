@@ -163,6 +163,9 @@ say "not implemented yet".
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
     component with no wall steeper than the draft angle), Create Cross Section Vector (drag
     a line; the profile is drawn from it, height 1:1).
+  - Create Texture Area: the chosen component tiled over the selected closed vectors or
+    the job, with spacing, alternate shifts and a reflection per tile of each four; the
+    tile is hidden. The result is an ordinary component (Aspire's stays re-editable).
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 
@@ -170,8 +173,7 @@ say "not implemented yet".
 - File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths.
 - Edit: Vector Selector, Nest, Swap Sides, Document Variables, Snap
   Options, Options.
-- Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Component with
-  Draft, Import, Export as 3D Clipart, Sculpt, Distort.
+- Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Component with Draft, Import, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Draw Join Moves, Templates, Job Sheet, Materials.
@@ -183,7 +185,7 @@ say "not implemented yet".
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture.
   - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
-- Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
+- Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin; Sculpt,
   Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
   not hidden behind it.
