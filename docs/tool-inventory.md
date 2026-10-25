@@ -99,88 +99,88 @@ What works and what does not, by menu and tab; items not built yet are greyed an
 say "not implemented yet".
 
 **Working.**
-- File: New, Open, Close, Save, Save As, Recent Files, Import Vectors / Bitmap (bitmaps:
-  PNG, JPEG, GIF, BMP, TIFF in grey, shown in the 2D view), Export DXF / SVG, Exit.
-- Edit: Undo, Redo, Delete, Select All Vectors, Select All Vectors On Current Layer, Unselect
-  All, the ten Align commands, Join Vectors, Job Size and Position.
-- Model: Export as STL.
+- File: New, Open, Close, Save, Save As, Increment and Save, Recent Files, Import Vectors /
+  Bitmap (bitmaps: PNG, JPEG, GIF, BMP, TIFF in grey, shown in the 2D view), Export DXF /
+  SVG, Open Application Data Folder, Exit.
+- Edit: Undo, Redo, Cut, Copy, Paste, Delete; Select All Vectors / Open Vectors / Duplicate
+  Vectors / On Current Layer, Unselect All; the ten Align commands and the four spacing ones
+  (Left To Right ... Bottom To Top); Join Vectors, Job Size and Position.
+- Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
+  Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
+  Component Properties, Export as STL, Export as Grayscale Bitmap.
 - Machine: Install Post-Processor (real grbl / FluidNC posts load, rotary G93 ones included).
 - Job Setup: single-sided and rotary jobs.
 - Save Toolpaths: through the installed post, else Cut Craft's own FluidNC posts (tool
   changer; rotary jobs wrapped onto A in inverse time).
+- Toolpaths menu: Show Toolpaths Tab, Recalculate All, Toolpath Drawing (2D previews, solid
+  previews, auto-open 3D view, rapid / plunge / retract moves), Preview Simulation Quality,
+  Merge Visible Toolpaths, Tool Database.
+- View: Zoom to Drawing (F6), Refresh 2D View, Draw Origin / Modeling Plane / Material Block /
+  Vectors in 3D View, Light Follows Viewer, Color Shaded View, Use Shaded Background.
+- 3D view: left- or right-drag rotates, middle-drag / Ctrl+right-drag / left+right pans, the
+  wheel zooms about the cursor, double-click or F fits; Top, Front, Right, Iso, Fit buttons.
+- Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
-- 3D Finishing: rest machining after earlier tools (Minimum Detail, Boundary Offset).
-- Fluting: ramps at start, both ends or the whole length, by length or %, linear or smooth.
-- V-Carve: Start Depth. V-Carve Inlay: pocket plus mirrored plug (glue gap, surface clearance,
-  vector-offset or sheet-limit boundary) as two V-carvings.
-- Prism Carving: start and prism depth, depth for a full prism, climb / conventional.
-- Texture: random scallops (depth, length, overlap, stepover, angle, boundary offset, seed) or
-  selected vectors as the pattern, ramped or flat.
-- Quick Engrave (Ctrl+Q): outline or fill (offset, hatch, cross hatch), number of passes.
-- Keyhole (slot direction, depth, length, preview outlines) and Drag Knife (blade offset,
-  tolerance angle, swivel depth, passes) toolpaths.
-- Chamfer: inside / outside, down / up, width, overcut, climb / conventional; V-bit or ball nose.
-- Thread Milling: internal / external, pitch, diameter, fit tolerance, hand, up / down
-  (single-point tool; tooth offset on the form).
-- Moulding: an open profile swept along drive rails (outside closed rails, right of open ones),
-  sharp corners, boundary offset.
-- Rounding (rotary jobs): square or round blank, radial / raster / optimized raster, allowance.
-- Photo V-Carve: raster, hatch or along selected vectors; line spacing and angle, stepover retract.
-- Sketch Carving: from the bitmap or 3D model, line thickness, bitmap or vector boundary.
-- Lasers: Laser Cut / Fill (outside, inside, on, hatch fill with cross hatch and outline;
-  kerf, allowance, power, passes) and Laser Picture (raster, hatch, selected; dither; line
-  spacing in kerfs). Output needs a post with LASER_SUPPORT and the JET_TOOL blocks.
-- Array Copy: rows and columns of copies of the visible toolpaths, by offset or gap; follows
-  them when recalculated.
-- Merged: the visible toolpaths with one tool as one, in the list's order or nearest-first,
-  whichever travels less.
-- Inlay: male straight or stepped, female pocket or hole, corners rounded to the tool, allowance.
-- Toolpaths: Show Toolpaths Tab, Recalculate All, Tool Database.
-- View: Zoom to Drawing (F6).
+- Every toolpath strategy in `re/SPEC.md` (backlog item 19): Profile, Pocket, Drilling,
+  V-Carve (with Start Depth), V-Carve Inlay, Inlay (pocket / plug), Quick Engrave (Ctrl+Q),
+  Chamfer, Fluting, Prism, Thread Milling, Keyhole, Drag Knife, Moulding, Texture, Photo V-Carve,
+  Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
+  Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
+  each leaves out is in its `re/SPEC.md` section.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
-- Modeling tab: Create Shape.
-- Toolpaths tab: Profile, Pocket, Drilling, V-Carve, 3D Roughing, 3D Finishing, Save Toolpaths,
-  Tool Database; the list's Recalculate, Recalculate All, Delete, Preview, Preview All, Reset Preview.
+- Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
+- Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
+  Preview, Preview All, Reset Preview.
 
 **Not built yet.**
-- File: New from Template, Save As Template, Increment and Save, Print, Print Preview,
-  Import Component / 3D Model, Import Toolpaths, Export EPS / AI / PDF, Open Application Data
-  Folder.
-- Edit:
-  - Cut, Copy, Paste.
-  - Select All Open Vectors, Select All Duplicate Vectors, Vector Selector.
-  - Align Left / Right To Left / Right and Top / Bottom To Bottom / Top.
-  - Curve Fit, Nest, Swap Sides, Notes, Document Variables, Snap Options, Options.
-- Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Zero Plane, the
-  "Create Component from" set, from Bitmap, Import, Export as Grayscale Bitmap / 3D Clipart,
-  Sculpt, Smooth, Reset Inside / Outside, Split, Vector Boundary, Cross Section, Emboss, Scale Z,
-  Distort, Replace Below, Component Properties.
+- File: New from Template, Save As Template, Print, Print Preview, Import Component / 3D
+  Model, Import Toolpaths, Export EPS / AI / PDF.
+- Edit: Vector Selector, Curve Fit, Nest, Swap Sides, Notes, Document Variables, Snap
+  Options, Options.
+- Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Component with
+  Draft, Offset Model, Slice, Import, Export as 3D Clipart, Sculpt, Split, Vector Boundary,
+  Cross Section, Emboss, Distort, Replace Below.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
-- Toolpaths: Toolpath Drawing toggles, Preview Simulation Quality, Templates, Merge Visible,
-  Job Sheet, Materials.
-- View: Refresh, Guide Lines, Draw Origin / Modeling Plane / Material Block / Vectors / Keep-Out
-  Zones, shading options, Save Shaded Image, window tiling.
-- Help: Help Contents, Keyboard Shortcuts, Third Party Licenses, About.
+- Toolpaths: Draw Join Moves, Templates, Job Sheet, Materials, Toolpath Summary.
+- View: Guide Lines, Keep-Out Zones, Auto-Wrapping, Shadow Shading, Save Shaded Image,
+  window tiling and cascade.
+- Gadgets; Help Contents.
 - Drawing tab:
   - Import Component.
   - Node Edit, Transform, Group, Trim, Close / Extend, Fit Curves, Validator, Measure.
   - Curve, Freehand, Text, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture, Trace Bitmap.
-  - Nest, Copy Along Vectors, Array Copy, Circular Copy, Distort.
-- Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area, Zero Plane,
-  from Bitmap; Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Draft, Scale Z, Replace
-  Below, Split, Bake.
-- Toolpaths tab:  Toolpath Summary.
-
+  - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
+- Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
+  Emboss, Distort, Offset Model, Slice, Draft, Replace Below, Split.
+- 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
+  not hidden behind it.
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
   (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).
 - Job Setup: double-sided jobs.
 - 3D Finishing's several-tools form: one toolpath per tool made in one go (today each
   rest-machining toolpath is made on its own, naming the tools that ran before it).
+
+**Known problems and stand-ins.**
+- Components and bitmaps cannot be selected. Commands on "the selected component" (Smooth,
+  Component Properties) name it in their form, starting on the newest; picture strategies
+  and Create Component from Bitmap use the newest bitmap; bitmaps cannot be moved or deleted.
+- The selection keeps no order (Aspire's Ctrl-click order). Left To Right spaces the same as
+  Right To Left, and Moulding takes the newest open vector as its profile.
+- Display settings (Toolpath Drawing, quality, View toggles) last only for the session.
+- Thread mills and lasers are not tool types in the database: their tooth offset and power
+  are on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
+- Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code
+  reference to the fluting strings was found in Aspire.exe), prism and photo V-carve
+  geometry, texture scallop shape, sketch-line contrast rule.
+- Not done inside strategies: Project onto 3D Model, Fill Regionally, Merge By Part, the
+  extra clearance tools, laser passes lowering the focus.
+- The strategies and menu items added on 2026-10-24 have tests but have not been tried by
+  hand in the running app.
 
 ## Differences from Aspire 12 seen on screen
 

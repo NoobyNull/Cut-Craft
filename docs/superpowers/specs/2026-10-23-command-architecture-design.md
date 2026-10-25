@@ -100,3 +100,18 @@ Next:
     moulding; rounding; bitmaps; photo V-carve; sketch carving; lasers (cut / fill, picture,
     post blocks); array copy; merged; inlay (pocket / plug). Every strategy in `re/SPEC.md`
     now exists; what each leaves out is in its spec section and `docs/tool-inventory.md`.
+20. Menus, part 1 ✅: Edit (cut / copy / paste, spacing, open and duplicate selections),
+    File (increment and save, application data folder), Help (about, shortcuts, licences),
+    Toolpath Drawing and Preview Quality, the View toggles, 3D view pan / zoom / rotate and
+    standard views, and the Model items the height-grid components already support (zero
+    plane, scale Z, from bitmap / visible model / toolpath preview, bake, smooth, reset
+    inside / outside, grayscale export).
+
+Next (see `docs/tool-inventory.md` for the full list and its known problems):
+21. Component selection (click in the 3D view or Components tab), then the "selected
+    component" commands: split, vector boundary, cross section, emboss, distort, offset, slice.
+22. Import Component / 3D Model (STL as a height map); PDF / EPS export; Notes; guide lines;
+    Save Shaded Image; window tiling.
+23. Bigger tools: extrude and weave, two rail sweep, turn and spin, sculpting, nesting, curve
+    fit, toolpath templates and job sheet, snap and program options, machine configuration.
+
