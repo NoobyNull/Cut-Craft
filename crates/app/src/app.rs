@@ -21,8 +21,9 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 42] = [
+const BUILT_INS: [&str; 43] = [
     "create_component_from_toolpath_preview",
+    "toolpath_summary",
     "refresh_2d_view",
     "cut",
     "copy",
@@ -71,7 +72,13 @@ enum Info {
     About,
     Shortcuts,
     Licenses,
+    /// Toolpath Summary: estimated machining times.
+    Summary,
 }
+
+/// Toolpath Summary's rapid rate (mm/min) and scale factor until the user changes them.
+// ponytail: session-only like the other display settings [inf]; Aspire keeps them per machine
+const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
@@ -221,6 +228,8 @@ struct CutCraftApp {
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// An open Help window.
     info: Option<Info>,
+    /// Toolpath Summary's rapid rate (mm/min) and scale factor.
+    summary: (f64, f64),
     /// What the views draw.
     display: crate::display::Display,
     /// The tool shown in the Tool Database window.
@@ -269,6 +278,7 @@ impl CutCraftApp {
             tool_window: false,
             clipboard: vec![],
             info: None,
+            summary: SUMMARY_DEFAULTS,
             display: crate::display::Display::default(),
             tool_selected: 0,
             simulation: None,
@@ -357,6 +367,7 @@ impl CutCraftApp {
             }
             "keyboard_shortcuts" => self.info = Some(Info::Shortcuts),
             "third_party_licenses" => self.info = Some(Info::Licenses),
+            "toolpath_summary" => self.info = Some(Info::Summary),
             "about_cut_craft" => self.info = Some(Info::About),
             // the Select tool: put away whatever tool is in hand
             "select" => {
@@ -1374,6 +1385,7 @@ impl CutCraftApp {
             Info::About => "About Cut Craft",
             Info::Shortcuts => "Keyboard Shortcuts",
             Info::Licenses => "Third Party Licenses",
+            Info::Summary => "Toolpath Summary",
         };
         let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
             let mut rows: Vec<(String, String)> = self
@@ -1392,10 +1404,25 @@ impl CutCraftApp {
         } else {
             vec![]
         };
+        let times: Vec<(String, f64, bool)> = self
+            .doc
+            .toolpaths
+            .values()
+            .map(|t| {
+                (
+                    t.name.clone(),
+                    t.machining_minutes(self.summary.0) * self.summary.1,
+                    t.visible,
+                )
+            })
+            .collect();
+        let summary = &mut self.summary;
+        let units = self.doc.job.units;
         egui::Window::new(title)
             .open(&mut open)
             .collapsible(false)
             .show(ctx, |ui| match info {
+                Info::Summary => summary_table(ui, &times, summary, units),
                 Info::About => {
                     ui.heading("Cut Craft");
                     ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
@@ -1428,7 +1455,81 @@ impl CutCraftApp {
             self.info = None;
         }
     }
+}
 
+/// Hours, minutes and seconds.
+fn hms(minutes: f64) -> String {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a positive time"
+    )]
+    let s = (minutes * 60.0).round() as u64;
+    format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+}
+
+/// Each toolpath's estimated time, the visible ones' total, and the rate and scale they use.
+fn summary_table(
+    ui: &mut egui::Ui,
+    times: &[(String, f64, bool)],
+    (rapid, scale): &mut (f64, f64),
+    units: cut_craft_core::document::Units,
+) {
+    let total: f64 = times.iter().filter(|t| t.2).map(|t| t.1).sum();
+    ui.strong(format!("Total machining time: {}", hms(total)));
+    ui.separator();
+    egui::Grid::new("summary").striped(true).show(ui, |ui| {
+        for (name, minutes, visible) in times {
+            ui.add_enabled(*visible, egui::Label::new(name));
+            ui.label(hms(*minutes));
+            ui.end_row();
+        }
+    });
+    ui.separator();
+    ui.weak("Time estimates based on the tools' feed rates");
+    let fields = [
+        crate::form::Field {
+            key: "rapid_rate".into(),
+            label: "Rapid rate".into(),
+            help: Some("The machine's G0 speed".into()),
+            kind: crate::form::Kind::Number {
+                unit: Some("mm/min".into()),
+                min: Some(1.0),
+                max: None,
+                integer: false,
+            },
+            section: false,
+            icon: None,
+        },
+        crate::form::Field {
+            key: "scale_factor".into(),
+            label: "Scale factor".into(),
+            help: Some(
+                "Multiplies every time, for a machine slower than its programmed feeds".into(),
+            ),
+            kind: crate::form::Kind::Number {
+                unit: None,
+                min: Some(0.1),
+                max: None,
+                integer: false,
+            },
+            section: false,
+            icon: None,
+        },
+    ];
+    let mut values = serde_json::json!({ "rapid_rate": *rapid, "scale_factor": *scale });
+    let picture = |_: &str| None;
+    let look = crate::form::Look {
+        units,
+        picture: &picture,
+    };
+    if crate::form::show(ui, &fields, &mut values, &look) {
+        *rapid = values["rapid_rate"].as_f64().unwrap_or(*rapid);
+        *scale = values["scale_factor"].as_f64().unwrap_or(*scale);
+    }
+}
+
+impl CutCraftApp {
     /// Pick a tool to edit or delete; edits are saved as they are made.
     fn tool_database_window(&mut self, ctx: &egui::Context) {
         let (mut open, mut delete, mut edited) = (self.tool_window, None, false);
@@ -2425,12 +2526,19 @@ mod tests {
     }
 
     #[test]
+    fn times_read_as_hours_minutes_and_seconds() {
+        assert_eq!(hms(0.0), "0:00:00");
+        assert_eq!(hms(61.5), "1:01:30");
+    }
+
+    #[test]
     fn help_items_open_their_windows() {
         let mut h = Harness::new();
         for (id, info) in [
             ("about_cut_craft", Info::About),
             ("keyboard_shortcuts", Info::Shortcuts),
             ("third_party_licenses", Info::Licenses),
+            ("toolpath_summary", Info::Summary),
         ] {
             h.app.invoke(&h.ctx, id);
             assert_eq!(h.app.info, Some(info));

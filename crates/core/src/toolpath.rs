@@ -224,6 +224,56 @@ fn shown() -> bool {
     true
 }
 
+impl Toolpath {
+    /// Estimated machining time in minutes: each move's length at its rate (rapids at
+    /// `rapid_rate`, mm/min), from the first move on.
+    // ponytail: no acceleration; Toolpath Summary's scale factor stands in for it, as Aspire's does
+    pub fn machining_minutes(&self, rapid_rate: f64) -> f64 {
+        self.moves
+            .windows(2)
+            .map(|pair| {
+                let rate = match pair[1].kind {
+                    MoveKind::Rapid => rapid_rate,
+                    MoveKind::Plunge => self.tool.plunge_rate,
+                    MoveKind::Cut => self.tool.feed_rate,
+                };
+                let length = pair[0].to.distance(pair[1].to);
+                if rate > 0.0 { length / rate } else { 0.0 }
+            })
+            .sum()
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn machining_time_is_each_move_at_its_rate() {
+    let at = |kind, x, z| Move {
+        kind,
+        to: DVec3::new(x, 0.0, z),
+    };
+    let tp = Toolpath {
+        name: "t".into(),
+        strategy: String::new(),
+        params: serde_json::Value::Null,
+        tool: Tool {
+            feed_rate: 1000.0,
+            plunge_rate: 100.0,
+            ..Tool::default()
+        },
+        vectors: vec![],
+        moves: vec![
+            at(MoveKind::Rapid, 0.0, 5.0),
+            at(MoveKind::Plunge, 0.0, -5.0),
+            at(MoveKind::Cut, 500.0, -5.0),
+            at(MoveKind::Rapid, 500.0, 5.0),
+        ],
+        visible: true,
+        power: vec![],
+    };
+    // 10 mm plunge at 100, 500 mm cut at 1000, 10 mm rapid at 5000
+    assert!((tp.machining_minutes(5000.0) - (0.1 + 0.5 + 0.002)).abs() < 1e-12);
+}
+
 /// Depth of each pass (negative z) down to `depth`, in equal steps no deeper than `pass_depth`.
 pub fn pass_depths(depth: f64, pass_depth: f64) -> Vec<f64> {
     // ponytail: equal steps; a lighter final "finish" pass is a later option
