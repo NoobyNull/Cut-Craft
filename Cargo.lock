@@ -1074,6 +1074,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-trace-bitmap"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-ungroup"
 version = "0.1.0"
 dependencies = [
@@ -1369,6 +1378,7 @@ dependencies = [
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",
  "cmd-toolpath-properties",
+ "cmd-trace-bitmap",
  "cmd-ungroup",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",

@@ -137,6 +137,8 @@ say "not implemented yet".
     The text is a group; Ungroup turns it into curves.
   - Fit Curves to Vectors (Edit ▸ Curve Fit Vectors): arcs, Béziers or lines within a
     tolerance, sharp corners kept past a max angle, replacing or beside the originals.
+  - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
+    corner fit, noise filter and grouping (dialog 347).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
@@ -162,7 +164,7 @@ say "not implemented yet".
   - Import Component.
   - Node Edit, Transform, Trim, Close / Extend, Validator, Measure.
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
-    Vector Texture, Trace Bitmap.
+    Vector Texture.
   - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
   Emboss, Distort, Offset Model, Slice, Draft, Replace Below, Split.
@@ -175,6 +177,8 @@ say "not implemented yet".
   rest-machining toolpath is made on its own, naming the tools that ran before it).
 
 **Known problems and stand-ins.**
+- Trace Bitmap has no colour mode (bitmaps are kept in grey) and no traced-area selection;
+  Corner Fit's scale is our own.
 - Text is not editable once made (Aspire reopens the form on a text object); TrueType text has
   no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
 - Components are selected in the Components tab, not by clicking them in the 3D view.

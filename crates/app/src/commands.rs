@@ -90,6 +90,7 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_draw_text::DrawText>();
     r.add::<cmd_fit_curves_to_vectors::FitCurvesToVectors>();
     r.add::<cmd_component_boundary::ComponentBoundary>();
+    r.add::<cmd_trace_bitmap::TraceBitmap>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
