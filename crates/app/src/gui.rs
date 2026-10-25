@@ -156,16 +156,20 @@ fn toolpath_groups() -> Vec<ToolGroup> {
                 "profile_toolpath",
                 "pocket_toolpath",
                 "drilling_toolpath",
-                "quick_engrave",
+                "quick_engrave_toolpath",
                 "vcarve_engrave_toolpath",
-                "vcarve_inlay",
+                "vcarve_inlay_toolpath",
+                "inlay_toolpath",
                 "chamfer_toolpath",
                 "fluting_toolpath",
-                "prism_carving",
+                "prism_toolpath",
+                "thread_milling_toolpath",
                 "keyhole_toolpath",
+                "drag_knife_toolpath",
                 "moulding_toolpath",
                 "texture_toolpath",
-                "sketch_carving",
+                "photo_vcarve_toolpath",
+                "sketch_carving_toolpath",
             ],
         ),
         group(
@@ -176,7 +180,14 @@ fn toolpath_groups() -> Vec<ToolGroup> {
                 "rounding_toolpath",
             ],
         ),
-        group("Laser", &["laser_cut_fill", "laser_picture"]),
+        group(
+            "Laser",
+            &["laser_cut_fill_toolpath", "laser_picture_toolpath"],
+        ),
+        group(
+            "Toolpath Templates",
+            &["array_copy_toolpath", "merged_toolpath"],
+        ),
         group(
             "Output",
             &["save_toolpaths", "toolpath_summary", "tool_database"],
@@ -887,6 +898,23 @@ mod tests {
 #[cfg(test)]
 mod menu_tests {
     use super::MenuSystem;
+
+    #[test]
+    fn every_strategy_in_the_toolpaths_tab_is_a_command() {
+        let registry = crate::commands::registry();
+        for group in super::toolpath_groups() {
+            if group.name == "Output" {
+                continue; // app actions, not commands
+            }
+            for id in group.tools {
+                assert!(
+                    registry.get(id).is_some(),
+                    "{} lists `{id}`, which is not a command",
+                    group.name
+                );
+            }
+        }
+    }
 
     #[test]
     fn align_submenu_items_run_the_align_commands() {
