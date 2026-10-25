@@ -13,8 +13,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import cfb  # noqa: E402
 
-# the versioned-record wrapper that precedes every vdContour in VectorData/2dDataV2
-CONTOUR_KEY = b"6e106aab-8dff-46e7-9367-abcaf75fb3d1"
+# every record sits behind a "Vectric__Version" wrapper: u32 16, the name, u32 1, u32 36, a GUID
+# string (which record it belongs to; not fixed), u32 wrapper version; a vdContour follows some
+CONTOUR_KEY = b"Vectric__Version"
 KINDS = {0: "L", 1: "A", 2: "C"}
 
 
@@ -44,8 +45,16 @@ def contours(data):
     out = []
     for m in re.finditer(re.escape(CONTOUR_KEY), data):
         o = m.end()
-        if o + 4 > len(data):
+        if o + 8 + 36 + 4 > len(data):
             break
+        _ver, n = struct.unpack_from("<II", data, o)
+        o += 8
+        if n != 36:
+            continue
+        guid = data[o:o + 36]
+        o += 36
+        if guid == b"00000000-0000-0000-0000-000000000000":
+            continue  # a component's 2D preview outline, not a drawn vector
         wrap, = struct.unpack_from("<I", data, o)
         o += 4
         if wrap != 2:

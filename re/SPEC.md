@@ -442,22 +442,34 @@ Horizontal Stretch drop-downs.
   `PreviewData/Preview2D_GIF` and `Preview3D_PNG`, `SideData/Sides`, `VectorData/MaterialSize`,
   `VectorData/DocumentData`, `VectorData/2dDataV2`, `ModelObjects/ObjectData`,
   `ModelSettings/Settings`, `Toolpaths/ToolpathData`, `ToolpathDataEx`, `Simulation`.
+- `MaterialSize`: u32 8, u8, u8, then six f64: the material's x min, y min, z min (minus the
+  thickness), x max, y max, z max (0), in the job's units. The units flag is not here;
+  **[inf]** byte 0x11 of `DocumentData` was 0 in an inch job and 1 in a mm job.
 - `2dDataV2` is MFC `CArchive` serialization (as in `.vfont`): u32 version 2, u32, u32 layer
   count, then each `vcCadLayer` (v4): 16-byte GUID, UTF-16 name (`FF FE FF` + u8 length,
-  or `FF` + u16), flags, then its `vcCadContour` records (v10: own GUID, layer GUID, …,
-  bounding box as 4 f64, a 3×3 f64 transform, a `Vectric__Version` wrapper naming the
-  record GUID, then the `vdContour`).
-- `vdContour` here is **version 7**: i32, f64 tolerance (4e-5), f64, u16, u32 span count,
-  then the spans **inline** (not as objects, unlike `.vfont`): u8 kind (0 line, 1 arc,
-  2 Bézier), u32 span version (2), u32 type, start x y z, end x y z, u32 flags, then an
-  arc's f64 bulge (tan(sweep/4), positive counter-clockwise; a circle is four quarter arcs)
-  or a Bézier's two control points. Coordinates are in the job's units (inches here).
+  or `FF` + u16), flags, then its records. Every record sits behind a `Vectric__Version`
+  wrapper: u32 16, that name, u32 1, u32 36, a 36-char GUID string, u32 wrapper version. The
+  GUID names the record (it is not fixed per kind); a nil GUID marks a component's 2D preview
+  (`vcCadModelPreview`), whose contour is the component's outline, not a drawn vector.
+- A drawn vector is a `vcCadContour` (v10: own GUID, layer GUID, …, bounding box as 4 f64,
+  a 3×3 f64 transform) wrapping a `vdContour` **version 7**: i32, f64 tolerance (4e-5),
+  f64, u16, u32 span count, then the spans **inline** (not as objects, unlike `.vfont`):
+  u8 kind (0 line, 1 arc, 2 Bézier), u32 span version (2), u32 type, start x y z, end x y z,
+  u32 flags, then an arc's f64 bulge (tan(sweep/4), positive counter-clockwise; a circle is
+  four quarter arcs) or a Bézier's two control points. Coordinates are in the job's units.
 - Text is a `txtBlock` record (font name, the string, every glyph as `vdContourGroup`s
   of `txtChar`s) with `_txtAL_*` and `_txtblk*` parameters, not plain contours.
-- Layers seen: "Toolpath Previews" (always first), then the user's. "Sheet 1" is a `vcCadSheet`.
+- Layers seen: "Toolpath Previews" (always first), the user's, and after an STL import
+  "Zero Plane", "2Rail Sweep Rails", "Bounding Box" and one named for the model. "Sheet 1"
+  is a `vcCadSheet`.
+- `ModelObjects/ObjectData`: `sdModelManager`, `vmmObjectNode` / `cmModelNode` per component,
+  a `RawRotaryModelImportData` holding the imported model's source path and name (UTF-16),
+  a GUID wrapper, then a readable header (three f64::MAX, f64s that look like a transform)
+  and a large block at 8.00 bits/byte (336 KB for a 217 MB STL): compressed or encrypted,
+  not zlib. **[unk]** Its layout. Cut Craft could re-import the model from the stored path.
 - `re/crv3d.py` extracts the contours per layer; `fmt-import-crv3d` imports them.
   **[unk]** the remaining fields of layers and contours (colours, visibility, groups), the
-  model, toolpath and sheet streams, and `.3dclip` / `.v3m`.
+  toolpath and sheet streams, and `.v3m`.
 
 ## Open questions (need decompilation or sample files)
 1. `.v3m` byte layout, and the rest of `.crv3d` (see Job files). `.3dClip` (the 22 sculpting

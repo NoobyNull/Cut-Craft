@@ -8,8 +8,9 @@ use cut_craft_core::{Change, CommandError, FileFormat, Importer};
 
 pub struct ImportCrv3d;
 
-/// The versioned-record wrapper that precedes every contour in `VectorData/2dDataV2`.
-const CONTOUR_KEY: &[u8] = b"6e106aab-8dff-46e7-9367-abcaf75fb3d1";
+/// Every record in `VectorData/2dDataV2` sits behind this wrapper: u32 16, the name, u32 1,
+/// u32 36, a GUID string, u32 wrapper version; the ones followed by a `vdContour` are vectors.
+const CONTOUR_KEY: &[u8] = b"Vectric__Version";
 
 impl Importer for ImportCrv3d {
     const ID: &'static str = "import_crv3d";
@@ -25,11 +26,11 @@ impl Importer for ImportCrv3d {
             .find(|(n, _)| n == "2dDataV2")
             .map(|(_, d)| d.as_slice())
             .ok_or_else(|| CommandError::Failed("not a Vectric job: no 2D data".into()))?;
-        // ponytail: byte 5 of MaterialSize was 1 for an inch job [inf]; mm jobs untested
+        // ponytail: byte 0x11 of DocumentData was 0 in an inch job and 1 in a mm job [inf]
         let inches = streams
             .iter()
-            .find(|(n, _)| n == "MaterialSize")
-            .is_some_and(|(_, d)| d.get(5) == Some(&1));
+            .find(|(n, _)| n == "DocumentData")
+            .is_some_and(|(_, d)| d.get(0x11) == Some(&0));
         let scale = if inches { 25.4 } else { 1.0 };
         let layers = layer_names(data);
         let mut c = Change::builder(doc);
@@ -126,6 +127,14 @@ fn contours(b: &[u8], scale: f64) -> Vec<(usize, Path)> {
 }
 
 fn contour_at(b: &[u8], mut o: usize, scale: f64) -> Option<Path> {
+    if u32_at(b, o + 4)? != 36 {
+        return None;
+    }
+    // a nil record GUID marks a component's 2D preview outline, not a drawn vector
+    if b.get(o + 8..o + 8 + 36)? == b"00000000-0000-0000-0000-000000000000" {
+        return None;
+    }
+    o += 8 + 36;
     if u32_at(b, o)? != 2 {
         return None;
     }
@@ -207,6 +216,37 @@ mod tests {
         let b = circle.bounds();
         assert!((b.size().x - 8.0 * 25.4).abs() < 1e-6, "radius 4 in: {b:?}");
         assert!(circle.closed);
+    }
+
+    #[test]
+    fn the_snowman_sample_imports_its_layers_in_millimetres() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../re/extracted/crv3d/shapes2.crv3d"
+        );
+        let Ok(bytes) = std::fs::read(path) else {
+            return;
+        };
+        let mut doc = Document::default();
+        let change = ImportCrv3d::import(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        assert_eq!(
+            doc.vectors.len(),
+            3,
+            "component preview outlines are not vectors"
+        );
+        let names: Vec<&str> = doc.layers.iter().map(|l| l.name.as_str()).collect();
+        assert!(
+            names.contains(&"Bounding Box") && names.contains(&"2Rail Sweep Rails"),
+            "{names:?}"
+        );
+        let b = doc
+            .vectors
+            .values()
+            .find(|p| p.closed && p.bounds().size().x > 290.0)
+            .unwrap()
+            .bounds();
+        assert!((b.size().x - 300.0).abs() < 1e-6, "a 300 mm job box: {b:?}");
     }
 
     #[test]
