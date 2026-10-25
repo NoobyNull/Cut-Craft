@@ -7,6 +7,7 @@ edition.workspace = true
 [dependencies]
 chrono.workspace = true
 cut-craft-core.workspace = true
+cut-craft-vtdb = { path = "../vtdb" }
 cut-craft-post = { path = "../post" }
 eframe.workspace = true
 egui_extras.workspace = true

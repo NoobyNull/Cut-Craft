@@ -476,6 +476,30 @@ Horizontal Stretch drop-downs.
   **[unk]** the remaining fields of layers and contours (colours, visibility, groups), the
   toolpath and sheet streams, and `.v3m`.
 
+## Tool databases: `.vtdb` [obs] (vendor files from Amana, IDC Woodcraft and CIC; Aspire 12.5)
+
+- A SQLite file: `tool_geometry` (name_format with `{Tool Type}`, `{Diameter|F}`,
+  `{Included Angle|.0}`, `{Units Short}` fields; tool_type; units; diameter; included_angle;
+  flat_diameter; num_flutes; tip_radius; thread_pitch; tooth_*; an `outline` blob for form
+  tools), `tool_cutting_data` (rate_units, feed_rate, plunge_rate, spindle_speed, stepdown,
+  stepover, clear_stepover, thread_*, laser_*, line_width, length_units, tool_number),
+  `tool_entity` (geometry × material × machine → cutting data), `machine`, `material`,
+  `tool_tree_entry` (groups), `drill_bank_*`, `tool_name_format`, `migration`, `version`.
+- **[inf]** tool_type: 0 ball nose, 1 end mill, 2 radiused end mill, 3 V-bit, 4 engraving,
+  5 tapered ball nose, 6 drill, 8 form tool, 9 diamond drag (7 unseen). units / length_units:
+  0 mm, 1 inches. rate_units: 1 mm/min, 4 in/min (the rate list is mm/sec, mm/min, m/min,
+  in/sec, in/min, ft/min). Entries whose cutting data has no feed rate are placeholders.
+- `crates/vtdb` reads them into Cut Craft tools (Tool Database ▸ Import).
+
+## Aspire 12.5 trial (12.5.1.1) against 12.010 [obs]
+
+- Same fonts (23) and posts; code encrypted the same way (`.text` 8.00 bits/byte). Help 242 →
+  248 pages, dialogs 273 → 285. New: the **Advanced Machining Module** (paid add-on: cabinet
+  cut-list import from CSV + DXF parts with a template job, cutter compensation on profile
+  toolpaths, Drill Bank toolpath, Print Part Labels with barcodes via ZXing; dialogs 101,
+  102, 4204, 5176, 5180), a laser sketch-carving form (35159, 5172), getting-started guides.
+  Trial dumps: `re/extracted/dialogs-12.5/`, `re/extracted/help-12.5/`.
+
 ## Open questions (need decompilation or sample files)
 1. `.v3m` byte layout, and the rest of `.crv3d` (see Job files). `.3dClip` (the 22 sculpting
    brushes the installer puts in `Public/Documents/Vectric Files`) is **not** a compound file:

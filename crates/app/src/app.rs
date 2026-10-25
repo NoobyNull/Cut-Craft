@@ -1734,9 +1734,20 @@ impl CutCraftApp {
     /// Pick a tool to edit or delete; edits are saved as they are made.
     fn tool_database_window(&mut self, ctx: &egui::Context) {
         let (mut open, mut delete, mut edited) = (self.tool_window, None, false);
+        let mut imported = None;
         egui::Window::new("Tool Database")
             .open(&mut open)
             .show(ctx, |ui| {
+                if ui
+                    .button("Import Vectric tool database…")
+                    .on_hover_text("Adds the tools of a .vtdb file (Aspire / VCarve 12.5)")
+                    .clicked()
+                    && let Some(path) = file_dialog()
+                        .add_filter("Vectric tool database", &["vtdb"])
+                        .pick_file()
+                {
+                    imported = Some(path);
+                }
                 let Some(last) = self.tools.tools.len().checked_sub(1) else {
                     ui.weak("No tools: save one from a toolpath form");
                     return;
@@ -1777,10 +1788,24 @@ impl CutCraftApp {
                 }
             });
         self.tool_window = open;
-        if let Some(index) = delete {
+        if let Some(path) = imported {
+            self.import_tools(&path);
+        } else if let Some(index) = delete {
             self.delete_tool(index);
         } else if edited {
             self.tools_changed("Tool database saved");
+        }
+    }
+
+    /// Adds the tools of a Vectric `.vtdb` file to the database and saves it.
+    fn import_tools(&mut self, path: &std::path::Path) {
+        match cut_craft_vtdb::read(path) {
+            Ok(tools) => {
+                let n = tools.len();
+                self.tools.tools.extend(tools);
+                self.tools_changed(&format!("Imported {n} tools from {}", file_name(path)));
+            }
+            Err(e) => self.status.set_message(&e),
         }
     }
 
@@ -3055,6 +3080,30 @@ mod tests {
             b.size().y > 15.0,
             "it went up and down, not straight: {b:?}"
         );
+    }
+
+    #[test]
+    fn a_vendor_tool_database_imports_when_one_is_in_downloads() {
+        let mut h = Harness::new();
+        let before = h.app.tools.tools.len();
+        h.app
+            .import_tools(std::path::Path::new("/nonexistent.vtdb"));
+        assert_eq!(h.app.tools.tools.len(), before, "nothing added on failure");
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let Some(file) = std::fs::read_dir(std::path::Path::new(&home).join("Downloads"))
+            .ok()
+            .and_then(|d| {
+                d.flatten()
+                    .map(|e| e.path())
+                    .find(|p| p.extension().is_some_and(|x| x == "vtdb"))
+            })
+        else {
+            return;
+        };
+        h.app.import_tools(&file);
+        assert!(h.app.tools.tools.len() > before + 10, "{}", file.display());
     }
 
     #[test]
