@@ -30,6 +30,10 @@ impl Command for Ungroup {
         }
         let mut c = Change::builder(doc);
         for &id in &doc.selection {
+            // ungrouping text is Convert Text to Curves: it stops being editable text
+            if let Some(&group) = doc.vector_groups.get(&id) {
+                c.set_text(group, None);
+            }
             c.set_group(id, None);
         }
         Ok(c.finish())

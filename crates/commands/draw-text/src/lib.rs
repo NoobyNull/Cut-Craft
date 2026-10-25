@@ -32,6 +32,11 @@ pub struct Params {
     /// drawing to set it
     #[schemars(title = "Anchor point")]
     pub anchor: Xy,
+    /// The text group being edited: its vectors are replaced. Set when the form opens on
+    /// selected text.
+    #[schemars(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaces: Option<u64>,
 }
 
 fn font_choices(_: &mut SchemaGenerator) -> Schema {
@@ -49,6 +54,7 @@ impl Default for Params {
             // ponytail: 10 mm [inf]; Aspire remembers the last height used
             height: 10.0,
             anchor: Xy::new(10.0, 10.0),
+            replaces: None,
         }
     }
 }
@@ -66,6 +72,22 @@ impl Command for DrawText {
         }
     }
 
+    /// On selected text, its own settings, so the form edits it.
+    fn initial_params(doc: &Document) -> Params {
+        doc.selection
+            .iter()
+            .find_map(|id| doc.vector_groups.get(id))
+            .and_then(|group| {
+                let spec = doc.texts.get(group)?;
+                let p: Params = serde_json::from_value(spec.clone()).ok()?;
+                Some(Params {
+                    replaces: Some(*group),
+                    ..p
+                })
+            })
+            .unwrap_or_default()
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("text height", p.height)?;
         let font = font::load(&p.font, p.bold, p.italic, &p.text).map_err(CommandError::Failed)?;
@@ -75,12 +97,33 @@ impl Command for DrawText {
                 "enter some text the font can draw".into(),
             ));
         }
-        let group = doc.next_group();
+        let group = p
+            .replaces
+            .filter(|g| doc.texts.contains_key(g))
+            .unwrap_or_else(|| doc.next_group());
         let mut c = Change::builder(doc);
+        let old: Vec<_> = doc
+            .vector_groups
+            .iter()
+            .filter(|(id, g)| **g == group && doc.vectors.contains_key(id))
+            .map(|(&id, _)| id)
+            .collect();
+        for id in old {
+            c.set_group(id, None);
+            c.remove(id);
+        }
         let ids: Vec<_> = paths.into_iter().map(|path| c.add(path)).collect();
         for &id in &ids {
             c.set_group(id, Some(group));
         }
+        let spec = Params {
+            replaces: None,
+            ..p.clone()
+        };
+        c.set_text(
+            group,
+            Some(serde_json::to_value(spec).expect("params serialise")),
+        );
         c.select(ids);
         Ok(c.finish())
     }
@@ -126,6 +169,34 @@ mod tests {
             .unwrap();
         assert!((b.min.x - 10.0).abs() < 1e-9 && (b.min.y - 10.0).abs() < 1e-9);
         assert!((b.size().y - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn selected_text_opens_its_settings_and_is_replaced_when_edited() {
+        let mut doc = after::<DrawText>(&boxes("HI"));
+        let p = DrawText::initial_params(&doc);
+        assert_eq!(p.text, "HI");
+        let group = p.replaces.expect("editing that text");
+        let edited = Params {
+            text: "HIH".into(),
+            ..p
+        };
+        cut_craft_core::testing::run_on::<DrawText>(&mut doc, &edited);
+        let members: Vec<_> = doc
+            .vector_groups
+            .values()
+            .filter(|g| **g == group)
+            .collect();
+        assert_eq!(
+            members.len(),
+            3,
+            "the old letters went, the new ones joined the group"
+        );
+        assert_eq!(
+            doc.vectors.len(),
+            cut_craft_core::testing::sample_document().vectors.len() + 3
+        );
+        assert_eq!(doc.texts[&group]["text"], "HIH");
     }
 
     #[test]

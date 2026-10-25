@@ -134,7 +134,8 @@ say "not implemented yet".
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
   - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
-    The text is a group; Ungroup turns it into curves.
+    The text is a group that remembers its settings: Draw Text on selected text edits it;
+    Ungroup turns it into curves.
   - Fit Curves to Vectors (Edit ▸ Curve Fit Vectors): arcs, Béziers or lines within a
     tolerance, sharp corners kept past a max angle, replacing or beside the originals.
   - Array Copy (rows and columns by gap or offset, alternate row / column displacement,
@@ -237,8 +238,7 @@ say "not implemented yet".
   Emboss's split into shape and detail is our own [inf].
 - Trace Bitmap has no colour mode (bitmaps are kept in grey) and no traced-area selection;
   Corner Fit's scale is our own.
-- Text is not editable once made (Aspire reopens the form on a text object); TrueType text has
-  no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
+- TrueType text has no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
 - Components are selected in the Components tab, not by clicking them in the 3D view.
 - Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
   spacing commands do not yet use it).

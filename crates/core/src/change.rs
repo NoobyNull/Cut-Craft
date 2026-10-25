@@ -107,6 +107,12 @@ pub enum Edit {
         before: String,
         after: String,
     },
+    /// A group's text settings (what Draw Text made it from); `None` when it is not text.
+    SetText {
+        group: u64,
+        before: Option<serde_json::Value>,
+        after: Option<serde_json::Value>,
+    },
 }
 
 impl Edit {
@@ -170,6 +176,15 @@ impl Edit {
                 after: before,
             },
             Self::SetNotes { before, after } => Self::SetNotes {
+                before: after.clone(),
+                after: before.clone(),
+            },
+            Self::SetText {
+                group,
+                before,
+                after,
+            } => Self::SetText {
+                group,
                 before: after.clone(),
                 after: before.clone(),
             },
@@ -469,6 +484,13 @@ impl Document {
         Ok(())
     }
 
+    fn set_text(&mut self, group: u64, text: Option<serde_json::Value>) {
+        match text {
+            Some(text) => self.texts.insert(group, text),
+            None => self.texts.remove(&group),
+        };
+    }
+
     fn apply_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
             Edit::Add { id, path } => insert_new(&mut self.vectors, *id, path.clone())?,
@@ -564,6 +586,7 @@ impl Document {
                 self.current_layer = *after;
             }
             Edit::SetNotes { after, .. } => self.notes.clone_from(after),
+            Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
         }
         Ok(())
     }
@@ -876,6 +899,18 @@ impl ChangeBuilder<'_> {
         let before = std::mem::replace(&mut self.current_layer, after);
         if before != after {
             self.edits.push(Edit::SetCurrentLayer { before, after });
+        }
+    }
+
+    /// Marks `group` as text made from `after` (Draw Text's settings), or not text.
+    pub fn set_text(&mut self, group: u64, after: Option<serde_json::Value>) {
+        let before = self.doc.texts.get(&group).cloned();
+        if before != after {
+            self.edits.push(Edit::SetText {
+                group,
+                before,
+                after,
+            });
         }
     }
 

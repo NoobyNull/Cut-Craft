@@ -291,6 +291,10 @@ pub struct Document {
     /// starting with "." open by themselves when the job is opened.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub notes: String,
+    /// Groups that are text, with the Draw Text settings they were made from, so the text
+    /// can be edited again; ungrouping turns it into plain curves.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub texts: BTreeMap<u64, serde_json::Value>,
 }
 
 impl Default for Document {
@@ -309,6 +313,7 @@ impl Default for Document {
             selected_bitmaps: Selection::new(),
             vector_groups: BTreeMap::new(),
             notes: String::new(),
+            texts: BTreeMap::new(),
         }
     }
 }
