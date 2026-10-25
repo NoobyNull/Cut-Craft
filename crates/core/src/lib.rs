@@ -12,6 +12,7 @@ pub mod geometry;
 pub mod nodes;
 pub mod params;
 pub mod polygon;
+pub mod random;
 pub mod selection;
 pub mod simulation;
 #[cfg(feature = "testing")]

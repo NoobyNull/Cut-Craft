@@ -5,6 +5,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::random::Random;
 use cut_craft_core::toolpath::{
     Move, Tool, contour_moves, cut_points, follow, hatch_lines, made_by,
 };
@@ -74,28 +75,6 @@ impl Default for Params {
     }
 }
 
-/// A small seeded generator (splitmix64), so a toolpath recalculates to the same pattern.
-struct Random(u64);
-
-impl Random {
-    /// Uniform in [0, 1).
-    fn next(&mut self) -> f64 {
-        self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        #[expect(clippy::cast_precision_loss, reason = "53 random bits")]
-        let unit = (z >> 11) as f64 / (1u64 << 53) as f64;
-        unit
-    }
-
-    /// Uniform between `percent` % of `max` and `max`.
-    fn between(&mut self, percent: f64, max: f64) -> f64 {
-        let min = max * percent / 100.0;
-        min + (max - min) * self.next()
-    }
-}
-
 /// Samples along each dip, enough for a smooth curve.
 const DIP_STEPS: u32 = 16;
 
@@ -138,7 +117,7 @@ impl Params {
                 let overlap = self.max_cut_length * self.max_overlap_percent / 100.0
                     * self.overlap_variation_percent
                     / 100.0
-                    * random.next();
+                    * random.unit();
                 // always move on, by at least a tenth of this scallop
                 x = (to - overlap).max(x + (to - x) / 10.0).max(x + 1e-3);
                 if x < to {

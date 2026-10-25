@@ -124,6 +124,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_reverse_direction::ReverseDirection>();
     r.add::<cmd_close_with_line::CloseWithLine>();
     r.add_interactive::<cmd_interactive_vector_trim::InteractiveVectorTrim>();
+    r.add::<cmd_vector_texture::VectorTexture>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

@@ -136,6 +136,9 @@ say "not implemented yet".
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;
     Ungroup turns it into curves.
+  - Create Vector Texture: wavy lines at an angle over the selected closed vectors or the
+    job, max spacing with variation, wavelength, amplitude, noise and a seed (vectors go on
+    the current layer; no new-layer option yet).
   - Interactive Vector Trim: click a piece of a vector and the stretch between the nearest
     crossings either side goes; what is left comes back as polylines (curves are not kept
     exactly), and drag-trimming and rejoining are not done.
@@ -238,8 +241,7 @@ say "not implemented yet".
 - Gadgets; Help Contents.
 - Drawing tab:
   - Transform, Trim Objects.
-  - Curve, Freehand, Auto Layout Text,
-    Vector Texture.
+  - Curve, Freehand, Auto Layout Text.
   - Distort.
 - Modeling tab: Sculpt,
   Distort.
