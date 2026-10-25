@@ -30,6 +30,10 @@ python3 -I re/vfont.py "$HOME/Desktop/Aspire 12.0/Fonts/Helvetica 1L.vfont" re/e
 
 ## How the original is built (reference only)
 
+- **[obs]** Toolchain (from `Aspire.exe`'s PE header, Rich header and debug record): Microsoft
+  Visual C++ 2019, toolset 14.29 (16.11), C++ with MFC 14 (`mfc140u.dll`, `MSVCP140`,
+  `VCRUNTIME140`), x64, linked 2024-07-09 on a TeamCity agent from an "AspireUnified" tree
+  (`Vectric.pdb`); one static library inside dates from the VS 2008 SP1 toolset.
 - **[obs]** UI: MFC + Codejock Xtreme Toolkit Pro (`XTP_*` resource names) and embedded XAML for newer forms. The same resource DLL is shared with VCarve Pro / ShopBot builds, and product edition decides which menu items appear.
 - **[obs]** 3D: OpenSceneGraph (`osg*.dll`), with a Mesa llvmpipe software-OpenGL fallback (`x64/swrndr/opengl32.dll`). `VectricGLDetector.exe` probes the GPU.
 - **[obs]** I/O libraries: ODA (DXF/DWG; `IoOda`, `Oda` catalogs), pstill (EPS/AI/PDF; `IoPScript`), GraphicsMagick (bitmaps; `IoMagick`), OpenNURBS (`.3dm`), SketchUp SDK (`.skp`).
