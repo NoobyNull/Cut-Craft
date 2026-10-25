@@ -778,6 +778,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-extrude-and-weave"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-fit-curves-to-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1498,6 +1507,7 @@ dependencies = [
  "cmd-draw-text",
  "cmd-drilling-toolpath",
  "cmd-emboss",
+ "cmd-extrude-and-weave",
  "cmd-fit-curves-to-vectors",
  "cmd-fluting-toolpath",
  "cmd-group",

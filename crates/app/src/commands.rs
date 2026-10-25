@@ -109,6 +109,7 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_create_fillets::CreateFillets>();
     r.add_interactive::<cmd_dimensions::Dimensions>();
     r.add::<cmd_turn_and_spin::TurnAndSpin>();
+    r.add::<cmd_extrude_and_weave::ExtrudeAndWeave>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

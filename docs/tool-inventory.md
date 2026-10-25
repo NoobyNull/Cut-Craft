@@ -179,6 +179,9 @@ say "not implemented yet".
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
     component with no wall steeper than the draft angle), Create Cross Section Vector (drag
     a line; the profile is drawn from it, height 1:1).
+  - Extrude and Weave: one open cross-section swept along a drive rail (picked first),
+    scaled to height if asked. Several cross-sections placed along the rail, rail reversing
+    and start points, and weaving components are not done.
   - Turn and Spin: an open profile turned round the line between its ends, or spun round
     its left end, optionally scaled to an exact height, with name and combine mode.
   - Create Texture Area: the chosen component tiled over the selected closed vectors or
@@ -191,7 +194,7 @@ say "not implemented yet".
 - File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths.
 - Edit: Vector Selector, Nest, Swap Sides, Document Variables, Snap
   Options, Options.
-- Model: Two Rail Sweep, Extrude and Weave, Component with Draft, Export as 3D Clipart, Sculpt, Distort.
+- Model: Two Rail Sweep, Component with Draft, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Draw Join Moves, Templates, Job Sheet, Materials.
@@ -203,7 +206,7 @@ say "not implemented yet".
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text,
     Vector Texture.
   - Nest, Distort.
-- Modeling tab: Extrude and Weave, Two Rail Sweep; Sculpt,
+- Modeling tab: Two Rail Sweep; Sculpt,
   Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
   not hidden behind it.
