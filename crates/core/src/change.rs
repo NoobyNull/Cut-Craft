@@ -5,10 +5,11 @@ use crate::bitmap::Bitmap;
 use crate::component::Component;
 use crate::document::{Document, EntityId, Job, Layer, LayerId};
 use crate::geometry::{Path, Point, Rect};
+use crate::selection::Selection;
 use crate::toolpath::Toolpath;
 use glam::DAffine2;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 
 /// One primitive edit. Each stores what it replaces, so its inverse is exact.
@@ -28,8 +29,8 @@ pub enum Edit {
         after: Path,
     },
     Select {
-        before: BTreeSet<EntityId>,
-        after: BTreeSet<EntityId>,
+        before: Selection,
+        after: Selection,
     },
     SetJob {
         before: Job,
@@ -547,7 +548,7 @@ fn replace_matching<T: PartialEq + Clone>(
 pub struct ChangeBuilder<'a> {
     doc: &'a Document,
     next_id: u64,
-    selection: BTreeSet<EntityId>,
+    selection: Selection,
     /// Paths as this change has left them (`None` = removed), shadowing `doc`.
     pending: BTreeMap<EntityId, Option<Path>>,
     pending_toolpaths: BTreeMap<EntityId, Option<Toolpath>>,
@@ -601,7 +602,7 @@ impl ChangeBuilder<'_> {
 
     /// Makes exactly `ids` selected.
     pub fn select(&mut self, ids: impl IntoIterator<Item = EntityId>) {
-        let after: BTreeSet<EntityId> = ids.into_iter().collect();
+        let after: Selection = ids.into_iter().collect();
         if after != self.selection {
             let before = std::mem::replace(&mut self.selection, after.clone());
             self.edits.push(Edit::Select { before, after });

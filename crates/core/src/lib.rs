@@ -10,6 +10,7 @@ mod formats;
 pub mod geometry;
 pub mod params;
 pub mod polygon;
+pub mod selection;
 pub mod simulation;
 #[cfg(feature = "testing")]
 pub mod testing;

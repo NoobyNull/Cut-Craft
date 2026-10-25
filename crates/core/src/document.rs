@@ -3,10 +3,11 @@
 use crate::bitmap::Bitmap;
 use crate::component::Component;
 use crate::geometry::{Path, Point, Rect, polyline_distance, polyline_touches};
+use crate::selection::Selection;
 use crate::toolpath::Toolpath;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
@@ -257,7 +258,7 @@ impl Default for Job {
 pub struct Document {
     pub job: Job,
     pub vectors: BTreeMap<EntityId, Path>,
-    pub selection: BTreeSet<EntityId>,
+    pub selection: Selection,
     /// Added after the first job format; older files have none.
     #[serde(default)]
     pub toolpaths: BTreeMap<EntityId, Toolpath>,
@@ -283,7 +284,7 @@ impl Default for Document {
         Self {
             job: Job::default(),
             vectors: BTreeMap::new(),
-            selection: BTreeSet::new(),
+            selection: Selection::new(),
             toolpaths: BTreeMap::new(),
             layers: default_layers(),
             current_layer: first_layer(),

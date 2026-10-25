@@ -126,8 +126,7 @@ impl Command for MouldingToolpath {
                 "stepover must be more than 0 and at most 1".into(),
             ));
         }
-        // ponytail: the selection has no order, so the profile is the newest selected open
-        // vector rather than the last one picked
+        // the profile is the open vector picked last, as in Aspire
         let mut ids: Vec<_> = doc.selection.iter().copied().collect();
         let Some(at) = ids.iter().rposition(|id| !doc.vectors[id].closed) else {
             return Err(CommandError::Failed(
@@ -299,6 +298,19 @@ mod tests {
         let t = moulding(rail, &Params::default());
         let deepest = t.moves.iter().map(|m| m.to.z).fold(0.0, f64::min);
         assert!(deepest < -4.0, "{deepest}");
+    }
+
+    #[test]
+    fn the_profile_is_the_open_vector_picked_last() {
+        use cut_craft_core::document::EntityId;
+        // the profile drawn first, the rail second, then picked rail first
+        let rail = Path::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
+        let mut doc = cut_craft_core::testing::document_with(vec![chamfered_profile(), rail]);
+        doc.selection = [EntityId(2), EntityId(1)].into();
+        let change = MouldingToolpath::run(&doc, &end_mill()).unwrap();
+        doc.apply(&change).unwrap();
+        let t = doc.toolpaths.values().next().unwrap();
+        assert_eq!(t.vectors[0], EntityId(1), "the profile comes first");
     }
 
     #[test]
