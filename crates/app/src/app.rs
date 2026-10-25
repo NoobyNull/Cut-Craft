@@ -17,7 +17,6 @@ use cut_craft_core::{Change, Drag, History, Registry};
 use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 use std::borrow::Cow;
-use std::f64::consts::{FRAC_PI_2, PI};
 
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
@@ -187,6 +186,7 @@ struct CutCraftApp {
     /// `simulation` at the 3D view's mesh resolution.
     simulation_coarse: Option<Material>,
     orbit: view3d::Orbit,
+    framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
@@ -227,6 +227,7 @@ impl CutCraftApp {
             simulation: None,
             simulation_coarse: None,
             orbit: view3d::Orbit::default(),
+            framing: view3d::Framing::default(),
             recent: vec![],
             recent_path: None,
             title: String::new(),
@@ -1478,7 +1479,9 @@ impl CutCraftApp {
             .then(|| Cow::Owned(cut_craft_core::component::model(&self.doc, MESH_CELLS)))
     }
 
-    /// The preview or model as a block, turned by dragging sideways and tilted up/down.
+    /// The preview or model as a block, with Aspire's 3D mouse controls: left- or right-drag
+    /// rotates, middle-drag (or Ctrl+right, or left and right together) pans, the wheel zooms
+    /// about the cursor, and a double-click or F fits it again.
     fn view_3d(&mut self, ui: &mut egui::Ui) {
         if self.simulation.is_none() && self.doc.components.is_empty() {
             ui.centered_and_justified(|ui| {
@@ -1486,18 +1489,59 @@ impl CutCraftApp {
             });
             return;
         }
-        let (area, response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::drag());
-        // dragging across the whole view turns half a turn
+        ui.horizontal(|ui| {
+            for (label, orbit) in [
+                ("Top", view3d::Orbit::TOP),
+                ("Front", view3d::Orbit::FRONT),
+                ("Right", view3d::Orbit::RIGHT),
+                ("Iso", view3d::Orbit::default()),
+            ] {
+                if ui.small_button(label).clicked() {
+                    self.orbit = orbit;
+                    self.framing = view3d::Framing::default();
+                }
+            }
+            if ui.small_button("Fit").clicked() {
+                self.framing = view3d::Framing::default();
+            }
+        });
+        let (area, response) =
+            ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+        let (left, right, middle, ctrl, scroll, fit_key) = ui.input(|i| {
+            (
+                i.pointer.primary_down(),
+                i.pointer.secondary_down(),
+                i.pointer.middle_down(),
+                i.modifiers.ctrl,
+                i.raw_scroll_delta.y,
+                i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::F6),
+            )
+        });
         let delta = response.drag_delta();
-        self.orbit.yaw += f64::from(delta.x / area.width().max(1.0)) * PI;
-        self.orbit.pitch = (self.orbit.pitch + f64::from(delta.y / area.height().max(1.0)) * PI)
-            .clamp(0.0, FRAC_PI_2);
+        if response.dragged() && delta != egui::Vec2::ZERO {
+            match view3d::drag_mode([left, right, middle], ctrl) {
+                Some(view3d::DragMode::Rotate) => {
+                    self.orbit = self.orbit.dragged(delta, area.size());
+                }
+                Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
+                None => {}
+            }
+        }
+        if let Some(at) = response.hover_pos().filter(|_| scroll != 0.0) {
+            // as in the 2D view: a quarter of the view's height doubles the zoom
+            let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
+            self.framing = self.framing.zoomed_about(at - area.center(), factor);
+        }
+        if response.double_clicked() || (response.hovered() && fit_key) {
+            self.framing = view3d::Framing::default();
+        }
         let [r, g, b] = self.shown_job().colour;
-        let (orbit, colour) = (self.orbit, egui::Color32::from_rgb(r, g, b));
+        let colour = egui::Color32::from_rgb(r, g, b);
+        let (orbit, framing) = (self.orbit, self.framing);
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         if let Some(surface) = self.surface_3d() {
             ui.painter_at(area)
-                .add(view3d::mesh(&surface, orbit, colour, fit));
+                .add(view3d::mesh(&surface, orbit, framing, colour, fit));
         }
     }
 

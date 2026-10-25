@@ -1,8 +1,8 @@
-//! The 3D view: the simulated material as a lit block, turned and tilted by dragging.
+//! The 3D view: the simulated material as a lit block, turned, tilted, panned and zoomed.
 
 use cut_craft_core::glam::{DVec2, DVec3};
 use cut_craft_core::simulation::Material;
-use eframe::egui::{Color32, Mesh, Pos2, Rect, Rgba};
+use eframe::egui::{Color32, Mesh, Pos2, Rect, Rgba, Vec2};
 
 // ponytail: fixed lighting until the 3D view has light settings
 /// Where the light comes from: upper left (-x, +y) and above.
@@ -31,6 +31,33 @@ impl Default for Orbit {
 }
 
 impl Orbit {
+    /// Looking straight down on the job.
+    pub const TOP: Self = Self {
+        yaw: 0.0,
+        pitch: 0.0,
+    };
+    /// Side on, from the front (-y) edge.
+    pub const FRONT: Self = Self {
+        yaw: 0.0,
+        pitch: std::f64::consts::FRAC_PI_2,
+    };
+    /// Side on, from the right (+x) edge.
+    pub const RIGHT: Self = Self {
+        yaw: -std::f64::consts::FRAC_PI_2,
+        pitch: std::f64::consts::FRAC_PI_2,
+    };
+
+    /// Turned by a drag of `by` across a view `size`: across the whole view is half a turn,
+    /// sideways turning and up/down tilting (between straight down and side on).
+    #[must_use]
+    pub fn dragged(self, by: Vec2, size: Vec2) -> Self {
+        let turn = |d: f32, across: f32| f64::from(d / across.max(1.0)) * std::f64::consts::PI;
+        Self {
+            yaw: self.yaw + turn(by.x, size.x),
+            pitch: (self.pitch + turn(by.y, size.y)).clamp(0.0, std::f64::consts::FRAC_PI_2),
+        }
+    }
+
     /// `p` on the screen plane (x right, y up) and its distance towards the viewer.
     pub fn project(self, p: DVec3) -> (DVec2, f64) {
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
@@ -40,6 +67,63 @@ impl Orbit {
             DVec2::new(x, y * cos_pitch + p.z * sin_pitch),
             p.z * cos_pitch - y * sin_pitch,
         )
+    }
+}
+
+/// Zoom and pan on top of fitting the block to the view: `zoom` 1 and no `pan` fit it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Framing {
+    pub zoom: f32,
+    /// Of the block's centre from the view's, in points.
+    pub pan: Vec2,
+}
+
+impl Default for Framing {
+    fn default() -> Self {
+        Self {
+            zoom: 1.0,
+            pan: Vec2::ZERO,
+        }
+    }
+}
+
+impl Framing {
+    /// Zoomed by `factor` keeping the point `at` (from the view's centre) still.
+    #[must_use]
+    pub fn zoomed_about(self, at: Vec2, factor: f32) -> Self {
+        // ponytail: limits keep the block findable; a "zoom to selection" can widen them
+        let zoom = (self.zoom * factor).clamp(0.05, 200.0);
+        Self {
+            zoom,
+            pan: at - (at - self.pan) * (zoom / self.zoom),
+        }
+    }
+
+    #[must_use]
+    pub fn panned(self, by: Vec2) -> Self {
+        Self {
+            pan: self.pan + by,
+            ..self
+        }
+    }
+}
+
+/// What a drag in the 3D view does, from the buttons held (Aspire's mouse controls).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragMode {
+    Rotate,
+    Pan,
+}
+
+/// Middle-drag, Ctrl+right-drag or left and right together pan; left or right alone rotate.
+/// `held` is the left, right and middle buttons.
+pub fn drag_mode(held: [bool; 3], ctrl: bool) -> Option<DragMode> {
+    let [left, right, middle] = held;
+    match (left, right, middle) {
+        (_, _, true) | (true, true, _) => Some(DragMode::Pan),
+        (false, true, _) if ctrl => Some(DragMode::Pan),
+        (true, _, _) | (_, true, _) => Some(DragMode::Rotate),
+        _ => None,
     }
 }
 
@@ -97,13 +181,20 @@ pub fn coarse(material: &Material, most: usize) -> Material {
     }
 }
 
-/// The material seen from `orbit`, fitted into `area` and drawn far to near.
+/// The material seen from `orbit`, fitted into `area` (then zoomed and panned by `framing`)
+/// and drawn far to near.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
     reason = "screen coordinates and brightness fit f32; cell indices fit f64"
 )]
-pub fn mesh(material: &Material, orbit: Orbit, colour: Color32, area: Rect) -> Mesh {
+pub fn mesh(
+    material: &Material,
+    orbit: Orbit,
+    framing: Framing,
+    colour: Color32,
+    area: Rect,
+) -> Mesh {
     let m = material;
     let base = Rgba::from(colour);
     let shade = |brightness: f64| {
@@ -165,22 +256,25 @@ pub fn mesh(material: &Material, orbit: Orbit, colour: Color32, area: Rect) -> M
         })
         .collect();
     projected.sort_by(|a, b| a.1.total_cmp(&b.1));
-    // fit into the area
-    let (lo, hi) = projected
-        .iter()
-        .flat_map(|(corners, ..)| corners)
-        .fold((DVec2::INFINITY, DVec2::NEG_INFINITY), |(lo, hi), &p| {
-            (lo.min(p), hi.max(p))
-        });
-    let size = (hi - lo).max(DVec2::splat(f64::EPSILON));
-    let scale = (f64::from(area.width()) / size.x).min(f64::from(area.height()) / size.y);
-    let middle = (lo + hi) / 2.0;
+    // fit the block's bounding sphere into the area, so turning it never changes the size
+    let top_z = m.heights.iter().copied().fold(m.bottom, f64::max);
+    let extent = DVec3::new(
+        m.columns as f64 * m.cell,
+        m.rows as f64 * m.cell,
+        top_z - m.bottom,
+    );
+    let radius = (extent.length() / 2.0).max(f64::EPSILON);
+    let (middle, _) = orbit.project(DVec3::new(
+        extent.x / 2.0,
+        extent.y / 2.0,
+        f64::midpoint(top_z, m.bottom),
+    ));
+    let scale =
+        f64::from(area.width().min(area.height())) / (2.0 * radius) * f64::from(framing.zoom);
+    let centre = area.center() + framing.pan;
     let screen = |p: DVec2| {
         let offset = (p - middle) * scale;
-        Pos2::new(
-            area.center().x + offset.x as f32,
-            area.center().y - offset.y as f32,
-        )
+        Pos2::new(centre.x + offset.x as f32, centre.y - offset.y as f32)
     };
     let mut mesh = Mesh::default();
     for (corners, _, colours) in projected {
@@ -284,7 +378,7 @@ mod tests {
             yaw: 0.0,
             pitch: 60f64.to_radians(),
         };
-        let mesh = mesh(&slotted(), orbit, Color32::WHITE, area);
+        let mesh = mesh(&slotted(), orbit, Framing::default(), Color32::WHITE, area);
         assert_ne!(mesh.indices.len(), 0);
         assert!(
             mesh.vertices
@@ -304,5 +398,75 @@ mod tests {
             centre_y(&mesh.indices[mesh.indices.len() - 3..]),
         );
         assert!(first < last, "far (higher on screen) first, near last");
+    }
+
+    #[test]
+    fn turning_never_changes_where_the_block_is_or_its_size() {
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let width = |orbit| {
+            let mesh = mesh(&slotted(), orbit, Framing::default(), Color32::WHITE, area);
+            let xs = mesh.vertices.iter().map(|v| v.pos.x);
+            xs.clone().fold(f32::INFINITY, f32::min)..xs.fold(f32::NEG_INFINITY, f32::max)
+        };
+        for orbit in [Orbit::TOP, Orbit::default(), Orbit::FRONT, Orbit::RIGHT] {
+            let r = width(orbit);
+            assert!(
+                r.start >= -1e-3 && r.end <= 400.0 + 1e-3,
+                "{orbit:?}: {r:?}"
+            );
+        }
+        let top = width(Orbit::TOP);
+        assert!(
+            (f32::midpoint(top.start, top.end) - 200.0).abs() < 1.0,
+            "centred: {top:?}"
+        );
+    }
+
+    #[test]
+    fn zooming_keeps_the_point_under_the_cursor_still() {
+        let at = Vec2::new(50.0, -20.0);
+        let f = Framing::default().panned(Vec2::new(10.0, 5.0));
+        let z = f.zoomed_about(at, 2.0);
+        // a block point at offset o from its centre shows at pan + zoom * o
+        let o = (at - f.pan) / f.zoom;
+        assert!((z.pan + o * z.zoom - at).length() < 1e-4);
+        assert!((z.zoom - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mouse_buttons_pick_rotate_or_pan_as_in_aspire() {
+        assert_eq!(
+            drag_mode([true, false, false], false),
+            Some(DragMode::Rotate)
+        );
+        assert_eq!(
+            drag_mode([false, true, false], false),
+            Some(DragMode::Rotate)
+        );
+        assert_eq!(drag_mode([false, false, true], false), Some(DragMode::Pan));
+        assert_eq!(drag_mode([false, true, false], true), Some(DragMode::Pan));
+        assert_eq!(drag_mode([true, true, false], false), Some(DragMode::Pan));
+        assert_eq!(drag_mode([false, false, false], false), None);
+    }
+
+    #[test]
+    fn the_standard_views_look_from_where_they_say() {
+        // the side nearest the viewer has the greatest depth
+        let nearest = |orbit: Orbit, a: DVec3, b: DVec3| orbit.project(a).1 > orbit.project(b).1;
+        assert!(nearest(Orbit::TOP, DVec3::Z, DVec3::NEG_Z));
+        assert!(nearest(Orbit::FRONT, DVec3::NEG_Y, DVec3::Y));
+        assert!(nearest(Orbit::RIGHT, DVec3::X, DVec3::NEG_X));
+    }
+
+    #[test]
+    fn dragging_turns_and_tilts_within_straight_down_and_side_on() {
+        let size = Vec2::new(400.0, 300.0);
+        let o = Orbit::TOP.dragged(Vec2::new(200.0, -300.0), size);
+        assert!((o.yaw - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        assert_eq!(o.pitch, 0.0, "cannot tilt past straight down");
+        assert_eq!(
+            Orbit::TOP.dragged(Vec2::new(0.0, 900.0), size).pitch,
+            std::f64::consts::FRAC_PI_2
+        );
     }
 }
