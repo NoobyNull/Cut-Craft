@@ -783,7 +783,7 @@ impl MenuSystem {
                                 i("Load Template..."),
                             ],
                         ),
-                        i("Merge Visible Toolpaths"),
+                        MenuItem::with_action("Merge Visible Toolpaths", "merged_toolpath"),
                         i("Create Job Sheet"),
                         sep(),
                         i("Materials..."),
