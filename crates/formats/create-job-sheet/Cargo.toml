@@ -1,0 +1,15 @@
+[package]
+name = "fmt-create-job-sheet"
+description = "Create Job Sheet: the job's setup and toolpaths as an HTML page"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+fmt-export-svg = { path = "../export-svg" }
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

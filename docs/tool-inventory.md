@@ -205,6 +205,9 @@ say "not implemented yet".
   object centres, the job's centre and corners, and a grid, within a snapping radius in
   pixels; Shift holds snapping off. Guides, intersections, smart snapping, nudging and
   cursor text are not done; the options last for the session.
+- Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
+  toolpaths summary and each toolpath's tool, feeds and estimated time (the sections of
+  Aspire's job setup sheet; no logo or colour settings).
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
@@ -244,7 +247,7 @@ say "not implemented yet".
 - Model: Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
-- Toolpaths: Draw Join Moves, Job Sheet, Materials.
+- Toolpaths: Draw Join Moves, Materials.
 - View: Guide Lines, Keep-Out Zones, Auto-Wrapping, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
 - Gadgets; Help Contents.

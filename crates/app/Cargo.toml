@@ -20,6 +20,7 @@ fmt-export-dxf = { path = "../formats/export-dxf" }
 fmt-export-as-stl = { path = "../formats/export-as-stl" }
 fmt-export-svg = { path = "../formats/export-svg" }
 fmt-export-pdf = { path = "../formats/export-pdf" }
+fmt-create-job-sheet = { path = "../formats/create-job-sheet" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }

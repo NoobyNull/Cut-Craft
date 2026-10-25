@@ -133,6 +133,7 @@ pub fn registry() -> Registry {
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
     r.add_exporter::<fmt_export_pdf::ExportEps>();
     r.add_exporter::<fmt_export_pdf::ExportAi>();
+    r.add_exporter::<fmt_create_job_sheet::JobSheet>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
     r.add_importer::<fmt_import_bitmap::ImportBitmap>();
     r.add_importer::<fmt_import_stl::ImportStl>();
