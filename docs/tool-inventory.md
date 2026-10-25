@@ -173,7 +173,7 @@ say "not implemented yet".
 - File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths.
 - Edit: Vector Selector, Nest, Swap Sides, Document Variables, Snap
   Options, Options.
-- Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Component with Draft, Import, Export as 3D Clipart, Sculpt, Distort.
+- Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Component with Draft, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Draw Join Moves, Templates, Job Sheet, Materials.
