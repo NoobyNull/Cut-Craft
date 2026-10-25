@@ -15,6 +15,7 @@ pub mod polygon;
 pub mod random;
 pub mod selection;
 pub mod simulation;
+pub mod snap;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod toolpath;

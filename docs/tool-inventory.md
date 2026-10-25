@@ -201,6 +201,10 @@ say "not implemented yet".
 - Edit ▸ Select ▸ Vector Selector: selects shown vectors by open / closed, circles, circles
   of a diameter within a tolerance, on all visible layers or the current one (dialog 949;
   Associate with toolpath and Z values are not done).
+- Edit ▸ Snap Options (F4): drawing and node drags snap to span ends and middles, arc and
+  object centres, the job's centre and corners, and a grid, within a snapping radius in
+  pixels; Shift holds snapping off. Guides, intersections, smart snapping, nudging and
+  cursor text are not done; the options last for the session.
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
@@ -236,7 +240,7 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: Import Toolpaths.
-- Edit: Swap Sides, Document Variables, Snap
+- Edit: Swap Sides, Document Variables,
   Options, Options.
 - Model: Component with Draft, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,

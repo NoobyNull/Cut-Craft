@@ -21,7 +21,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 52] = [
+const BUILT_INS: [&str; 53] = [
+    "snap_options",
     "node_edit",
     "measure_inspect",
     "print",
@@ -251,6 +252,9 @@ struct CutCraftApp {
     summary: (f64, f64),
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
+    /// Snapping Options (F4) and whether their window is open.
+    snap: cut_craft_core::snap::SnapOptions,
+    snap_window: bool,
     /// What the views draw.
     display: crate::display::Display,
     /// The tool shown in the Tool Database window.
@@ -301,6 +305,8 @@ impl CutCraftApp {
             info: None,
             summary: SUMMARY_DEFAULTS,
             stroke: Vec::new(),
+            snap: cut_craft_core::snap::SnapOptions::default(),
+            snap_window: false,
             display: crate::display::Display::default(),
             tool_selected: 0,
             simulation: None,
@@ -402,10 +408,11 @@ impl CutCraftApp {
             | "print_preview" => {
                 self.clipboard_or_file_action(id);
             }
-            "keyboard_shortcuts" => self.info = Some(Info::Shortcuts),
-            "third_party_licenses" => self.info = Some(Info::Licenses),
-            "toolpath_summary" => self.info = Some(Info::Summary),
-            "about_cut_craft" => self.info = Some(Info::About),
+            "keyboard_shortcuts"
+            | "third_party_licenses"
+            | "toolpath_summary"
+            | "about_cut_craft"
+            | "snap_options" => self.open_window(id),
             // the Select tool: put away whatever tool is in hand
             "select" => {
                 (self.form, self.view_tool) = (None, None);
@@ -439,14 +446,7 @@ impl CutCraftApp {
                     self.preview_toolpath(id);
                 }
             }
-            // the cascade: start again from uncut material, then preview each toolpath
-            "preview_all_toolpaths" => {
-                self.simulation = None;
-                let visible = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
-                for id in visible.map(|(&id, _)| id).collect::<Vec<_>>() {
-                    self.preview_toolpath(id);
-                }
-            }
+            "preview_all_toolpaths" => self.preview_all(),
             "reset_preview" => (self.simulation, self.simulation_coarse) = (None, None),
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -1927,6 +1927,15 @@ impl CutCraftApp {
     }
 
     /// Cuts the toolpath from the previewed material (uncut material if there is none yet).
+    /// The cascade: start again from uncut material, then preview each visible toolpath.
+    fn preview_all(&mut self) {
+        self.simulation = None;
+        let visible = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
+        for id in visible.map(|(&id, _)| id).collect::<Vec<_>>() {
+            self.preview_toolpath(id);
+        }
+    }
+
     fn preview_toolpath(&mut self, id: EntityId) {
         let Some(toolpath) = self.doc.toolpaths.get(&id) else {
             return;
@@ -2352,6 +2361,7 @@ impl CutCraftApp {
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));
         self.tool_database_window(ctx);
         self.info_window(ctx);
+        self.snap_options_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::SidePanel::left("start_page").show(ctx, |ui| self.start_page(ui));
@@ -2444,7 +2454,7 @@ impl CutCraftApp {
         let mut canvas = Canvas::new(ui, &job, self.camera);
         let area = canvas.area;
         self.zoom_and_pan(ui, &mut canvas);
-        let gesture = canvas.gesture(ui);
+        let gesture = self.snapped(ui, canvas.gesture(ui), canvas.transform.scale);
         let reach = canvas.pick_tolerance(ui);
         self.track_stroke(gesture);
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
@@ -2686,6 +2696,68 @@ impl CutCraftApp {
             .unwrap_or_default()
     }
 
+    /// The Help windows, Toolpath Summary and Snapping Options.
+    fn open_window(&mut self, id: &str) {
+        self.info = match id {
+            "keyboard_shortcuts" => Some(Info::Shortcuts),
+            "third_party_licenses" => Some(Info::Licenses),
+            "toolpath_summary" => Some(Info::Summary),
+            "about_cut_craft" => Some(Info::About),
+            _ => {
+                self.snap_window = true;
+                return;
+            }
+        };
+    }
+
+    /// Drawing and node drags snap to the snap points (Shift holds snapping off).
+    fn snapped(&self, ui: &egui::Ui, gesture: Option<Gesture>, scale: f32) -> Option<Gesture> {
+        let snapping = self.drawing_tool().is_some() || self.view_tool == Some(ViewTool::NodeEdit);
+        if !snapping || ui.input(|i| i.modifiers.shift) {
+            return gesture;
+        }
+        let reach = self.snap.snapping_radius / f64::from(scale);
+        let snap = |mut drag: Drag| {
+            drag.start = self.snap.snap(&self.doc, drag.start, reach);
+            drag.end = self.snap.snap(&self.doc, drag.end, reach);
+            drag
+        };
+        gesture.map(|g| match g {
+            Gesture::Dragging(drag) => Gesture::Dragging(snap(drag)),
+            Gesture::Dropped { drag, shift } => Gesture::Dropped {
+                drag: snap(drag),
+                shift,
+            },
+            click @ Gesture::Click { .. } => click,
+        })
+    }
+
+    /// Snapping Options: what drawing and node drags snap to.
+    fn snap_options_window(&mut self, ctx: &egui::Context) {
+        let mut open = self.snap_window;
+        let schema = serde_json::to_value(schemars::schema_for!(cut_craft_core::snap::SnapOptions))
+            .expect("a schema serialises");
+        let fields = crate::form::fields(&schema);
+        let mut values = serde_json::to_value(&self.snap).expect("options serialise");
+        let units = self.doc.job.units;
+        egui::Window::new("Snapping Options")
+            .open(&mut open)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                let picture = |_: &str| None;
+                let look = crate::form::Look {
+                    units,
+                    picture: &picture,
+                };
+                if crate::form::show(ui, &fields, &mut values, &look)
+                    && let Ok(options) = serde_json::from_value(values)
+                {
+                    self.snap = options;
+                }
+            });
+        self.snap_window = open;
+    }
+
     /// The wheel zooms about the cursor; the middle button (or the Pan tool) pans.
     fn zoom_and_pan(&mut self, ui: &egui::Ui, canvas: &mut Canvas) {
         let area = canvas.area;
@@ -2892,6 +2964,36 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn drawing_snaps_to_nearby_corners() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 10.0);
+        h.app.invoke(&h.ctx, "draw_circle");
+        h.app.invoke(&h.ctx, "snap_options");
+        assert!(h.app.snap_window);
+        h.frame(vec![]);
+        let scale = h.app.view_transform.unwrap().scale;
+        let near = 2.0 / f64::from(scale); // two pixels off the corner
+        let drag = Drag {
+            start: Point::new(30.0 + near, 20.0 - near),
+            end: Point::new(50.0, 50.0),
+            from_center: false,
+            constrain: false,
+        };
+        let mut snapped = None;
+        let ctx = h.ctx.clone();
+        let _ = ctx.run(RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                snapped = h.app.snapped(ui, Some(Gesture::Dragging(drag)), scale);
+            });
+        });
+        let Some(Gesture::Dragging(d)) = snapped else {
+            panic!("still a drag")
+        };
+        assert_eq!(d.start, Point::new(30.0, 20.0), "onto the corner");
+        assert_eq!(d.end, Point::new(50.0, 50.0), "nothing near");
     }
 
     #[test]
