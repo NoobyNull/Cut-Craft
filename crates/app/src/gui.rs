@@ -767,11 +767,14 @@ impl MenuSystem {
                         sub(
                             "Preview Simulation Quality",
                             vec![
-                                i("Standard"),
-                                i("High (2x Slower)"),
-                                i("Very High (4x Slower)"),
-                                i("Extremely High (8x Slower)"),
-                                i("Maximum (25x Slower)"),
+                                MenuItem::with_action("Standard", "preview_quality_1"),
+                                MenuItem::with_action("High (2x Slower)", "preview_quality_2"),
+                                MenuItem::with_action("Very High (4x Slower)", "preview_quality_4"),
+                                MenuItem::with_action(
+                                    "Extremely High (8x Slower)",
+                                    "preview_quality_8",
+                                ),
+                                MenuItem::with_action("Maximum (25x Slower)", "preview_quality_25"),
                             ],
                         ),
                         sep(),

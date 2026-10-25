@@ -21,7 +21,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 39] = [
+const BUILT_INS: [&str; 40] = [
+    "refresh_2d_view",
     "cut",
     "copy",
     "paste",
@@ -89,9 +90,6 @@ const THIRD_PARTY: [(&str, &str); 14] = [
     ("Rust standard library", "MIT or Apache-2.0"),
 ];
 
-/// Simulation cells along the longer side of the job.
-// ponytail: one quality until the Preview Simulation Quality menu is wired
-const PREVIEW_CELLS: usize = 1000;
 /// 3D view mesh cells along the longer side of the job.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
@@ -218,6 +216,8 @@ struct CutCraftApp {
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// An open Help window.
     info: Option<Info>,
+    /// What the views draw.
+    display: crate::display::Display,
     /// The tool shown in the Tool Database window.
     tool_selected: usize,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
@@ -264,6 +264,7 @@ impl CutCraftApp {
             tool_window: false,
             clipboard: vec![],
             info: None,
+            display: crate::display::Display::default(),
             tool_selected: 0,
             simulation: None,
             simulation_coarse: None,
@@ -293,6 +294,7 @@ impl CutCraftApp {
             }
             "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
             "reset_preview" => self.simulation.is_some(),
+            id if self.display.checked(id).is_some() => true,
             "cut" | "copy" => !self.doc.selection.is_empty(),
             "paste" => !self.clipboard.is_empty(),
             "increment_and_save" => self.screen == Screen::Job,
@@ -340,6 +342,8 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "install_post_processor" => self.file_action(id),
             "tool_database" => self.tool_window = true,
+            id if self.display.toggle(id) => ctx.request_repaint(),
+            "refresh_2d_view" => ctx.request_repaint(),
             "copy" | "cut" | "paste" | "increment_and_save" | "open_application_data_folder" => {
                 self.clipboard_or_file_action(id);
             }
@@ -808,6 +812,7 @@ impl CutCraftApp {
                         &menu.items,
                         &Menus {
                             available: &|id| self.available(id),
+                            checked: &|id| self.display.checked(id),
                             shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
                             recent: &recent,
                         },
@@ -1548,6 +1553,7 @@ impl CutCraftApp {
         response.context_menu(|ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
+                checked: &|_| None,
                 shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
                 recent: &[],
             };
@@ -1596,10 +1602,12 @@ impl CutCraftApp {
             return;
         };
         self.simulation
-            .get_or_insert_with(|| Material::new(&self.doc.job, PREVIEW_CELLS))
+            .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()))
             .cut(toolpath);
         self.simulation_coarse = None;
-        self.view = View::ThreeD;
+        if self.display.auto_open_3d {
+            self.view = View::ThreeD;
+        }
         self.status
             .set_message(&format!("Previewed {}", toolpath.name));
     }
@@ -1693,13 +1701,83 @@ impl CutCraftApp {
         if response.double_clicked() || (response.hovered() && fit_key) {
             self.framing = view3d::Framing::default();
         }
-        let [r, g, b] = self.shown_job().colour;
-        let colour = egui::Color32::from_rgb(r, g, b);
-        let (orbit, framing) = (self.orbit, self.framing);
+        self.paint_3d(ui, area);
+    }
+
+    /// The 3D view's picture: background, block and the overlays the View menu turns on.
+    fn paint_3d(&mut self, ui: &egui::Ui, area: egui::Rect) {
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
-        if let Some(surface) = self.surface_3d() {
-            ui.painter_at(area)
-                .add(view3d::mesh(&surface, orbit, framing, colour, fit));
+        let shown = self.display;
+        let [r, g, b] = self.shown_job().colour;
+        let look = view3d::Look {
+            colour: if shown.colour_shaded {
+                egui::Color32::from_rgb(r, g, b)
+            } else {
+                ui.visuals().widgets.inactive.fg_stroke.color
+            },
+            sides: shown.material_block,
+            light: view3d::Look::light_from(self.orbit, shown.light_follows),
+        };
+        let (orbit, framing) = (self.orbit, self.framing);
+        let painter = ui.painter_at(area);
+        if shown.shaded_background {
+            painter.add(view3d::background(area, ui.visuals()));
+        }
+        let vectors: Vec<Vec<cut_craft_core::geometry::Point>> = if shown.vectors_3d {
+            self.doc
+                .vectors
+                .iter()
+                .filter(|(id, _)| self.doc.shown(**id))
+                .map(|(_, path)| path.flatten(cut_craft_core::polygon::TOLERANCE))
+                .collect()
+        } else {
+            vec![]
+        };
+        let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
+        let Some(surface) = self.surface_3d() else {
+            return;
+        };
+        painter.add(view3d::mesh(&surface, orbit, framing, &look, fit));
+        let screen = view3d::screen_of(&surface, orbit, framing, fit);
+        let local = |p: cut_craft_core::geometry::Point, z: f64| {
+            cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
+        };
+        // vectors lie on the surface where it is, at the top elsewhere
+        for points in &vectors {
+            let line = points
+                .iter()
+                .map(|&p| screen(local(p, surface.at(p).unwrap_or(0.0))))
+                .collect();
+            painter.add(egui::Shape::line(line, stroke));
+        }
+        let size = view3d::plan_size(&surface);
+        if shown.modeling_plane {
+            let corners = [
+                (0.0, 0.0),
+                (size.x, 0.0),
+                (size.x, size.y),
+                (0.0, size.y),
+                (0.0, 0.0),
+            ];
+            let line = corners
+                .iter()
+                .map(|&(x, y)| screen(cut_craft_core::glam::DVec3::new(x, y, 0.0)))
+                .collect::<Vec<_>>();
+            let dash = ui.spacing().item_spacing.x;
+            painter.add(egui::Shape::dashed_line(&line, stroke, dash, dash / 2.0));
+        }
+        if shown.origin {
+            // X, Y and Z from the job's origin, a tenth of the job long, in the usual axis colours
+            let o = local(cut_craft_core::geometry::Point::ZERO, 0.0);
+            let reach = size.x.max(size.y) / 10.0;
+            let width = stroke.width * 2.0;
+            for (axis, colour) in [
+                (cut_craft_core::glam::DVec3::X, egui::Color32::RED),
+                (cut_craft_core::glam::DVec3::Y, egui::Color32::GREEN),
+                (cut_craft_core::glam::DVec3::Z, egui::Color32::BLUE),
+            ] {
+                painter.line_segment([screen(o), screen(o + axis * reach)], (width, colour));
+            }
         }
     }
 
@@ -1777,6 +1855,8 @@ fn job_dialog() -> rfd::FileDialog {
 /// What drawing the menus needs from the app.
 struct Menus<'a> {
     available: &'a dyn Fn(&str) -> bool,
+    /// Ticked state of the items that are settings; `None` keeps the item's own.
+    checked: &'a dyn Fn(&str) -> Option<bool>,
     shortcut_of: &'a dyn Fn(&str) -> Option<&'static str>,
     /// Filled in where the menus have a Recent Files entry.
     recent: &'a [gui::MenuItem],
@@ -1805,7 +1885,7 @@ fn menu_items(
         } else {
             let button = egui::Button::new(&item.name)
                 .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
-                .selected(item.is_checked);
+                .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
             let response = ui
                 .add_enabled(item.is_enabled && (menus.available)(&item.action), button)
                 .on_disabled_hover_text("Not implemented yet");
@@ -2004,7 +2084,13 @@ impl CutCraftApp {
             },
             _ => Overlay::None,
         };
-        canvas.paint(ui, &self.doc, &overlay, self.selected_toolpath);
+        canvas.paint(
+            ui,
+            &self.doc,
+            &overlay,
+            self.selected_toolpath,
+            &self.display,
+        );
         // while Job Setup is open a red square marks the datum, as in Aspire
         if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {
             let edge = ui.spacing().interact_size.y / 2.0;

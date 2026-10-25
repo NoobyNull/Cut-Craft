@@ -297,12 +297,77 @@ impl Canvas {
         );
     }
 
+    /// Toolpaths seen from above, as the Toolpath Drawing menu asks.
+    fn paint_toolpaths(
+        &self,
+        painter: &egui::Painter,
+        ui: &egui::Ui,
+        doc: &Document,
+        highlighted: Option<EntityId>,
+        display: &crate::display::Display,
+    ) {
+        let visuals = ui.visuals();
+        let t = self.transform;
+        let (dash, gap) = (
+            ui.spacing().item_spacing.x,
+            ui.spacing().item_spacing.x / 2.0,
+        );
+        let datum = visuals.widgets.noninteractive.fg_stroke;
+        let selected = visuals.selection.stroke;
+        // toolpaths seen from above: cutting moves (as wide as the tool when solid), and if
+        // asked for, rapids dashed, plunges as dots and retracts as rings
+        let marker = gap;
+        for (id, toolpath) in doc
+            .toolpaths
+            .iter()
+            .filter(|(_, t)| t.visible && display.previews_2d)
+        {
+            let colour = if highlighted == Some(*id) {
+                selected.color
+            } else {
+                visuals.warn_fg_color
+            };
+            let cut_width = if display.solid_previews {
+                to_f32(toolpath.tool.diameter) * t.scale
+            } else {
+                datum.width
+            };
+            let cut = Stroke::new(cut_width.max(datum.width), colour);
+            let travel = Stroke::new(datum.width, visuals.error_fg_color);
+            let mut from: Option<cut_craft_core::glam::DVec3> = None;
+            for m in &toolpath.moves {
+                let to = t.to_screen(m.to.truncate());
+                if let Some(was) = from {
+                    let start = t.to_screen(was.truncate());
+                    let vertical = (was.truncate() - m.to.truncate()).length() < 1e-9;
+                    match m.kind {
+                        MoveKind::Cut => {
+                            painter.line_segment([start, to], cut);
+                        }
+                        MoveKind::Plunge if display.plunges => {
+                            painter.circle_filled(to, marker, travel.color);
+                        }
+                        MoveKind::Rapid if vertical && m.to.z > was.z && display.retracts => {
+                            painter.circle_stroke(to, marker, travel);
+                        }
+                        MoveKind::Rapid if !vertical && display.rapids => {
+                            painter.extend(Shape::dashed_line(&[start, to], travel, dash, gap));
+                        }
+                        _ => {}
+                    }
+                }
+                from = Some(m.to);
+            }
+        }
+    }
+
     pub fn paint(
         &self,
         ui: &egui::Ui,
         doc: &Document,
         overlay: &Overlay,
         highlighted: Option<EntityId>,
+        display: &crate::display::Display,
     ) {
         let painter = ui.painter_at(self.area);
         let visuals = ui.visuals();
@@ -360,23 +425,7 @@ impl Canvas {
             }
         }
 
-        // toolpaths: their cutting moves seen from above
-        for (id, toolpath) in doc.toolpaths.iter().filter(|(_, t)| t.visible) {
-            let colour = if highlighted == Some(*id) {
-                selected.color
-            } else {
-                visuals.warn_fg_color
-            };
-            let stroke = Stroke::new(datum.width, colour);
-            let mut from = None;
-            for m in &toolpath.moves {
-                let to = t.to_screen(m.to.truncate());
-                if let (Some(from), MoveKind::Cut) = (from, m.kind) {
-                    painter.line_segment([from, to], stroke);
-                }
-                from = Some(to);
-            }
-        }
+        self.paint_toolpaths(&painter, ui, doc, highlighted, display);
 
         match overlay {
             Overlay::None => {}

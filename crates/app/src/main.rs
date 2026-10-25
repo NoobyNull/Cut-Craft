@@ -2,6 +2,7 @@
 
 mod app;
 mod commands;
+mod display;
 mod files;
 mod form;
 mod gui;
