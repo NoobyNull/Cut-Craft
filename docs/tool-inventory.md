@@ -198,6 +198,9 @@ say "not implemented yet".
   Layers dialog is not done.
 - File ▸ Print and Print Preview: the drawing as a PDF opened in the system viewer, which
   prints it (Aspire's own print window with scale and tiling is not done).
+- Edit ▸ Select ▸ Vector Selector: selects shown vectors by open / closed, circles, circles
+  of a diameter within a tolerance, on all visible layers or the current one (dialog 949;
+  Associate with toolpath and Z values are not done).
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
@@ -233,7 +236,7 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: Import Toolpaths.
-- Edit: Vector Selector, Swap Sides, Document Variables, Snap
+- Edit: Swap Sides, Document Variables, Snap
   Options, Options.
 - Model: Component with Draft, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
