@@ -12,9 +12,9 @@ pub struct CreateFillets;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
-    /// An arc tangent to both sides of the corner
+    /// A rounded corner: an arc tangent to both sides
     #[default]
-    Round,
+    Normal,
     /// A cutter-sized circle into the corner, along the line that halves it
     DogBone,
     /// A cutter-sized notch into the longer side of the corner
@@ -46,7 +46,7 @@ pub struct Params {
 impl Default for Params {
     fn default() -> Self {
         Self {
-            kind: Kind::Round,
+            kind: Kind::Normal,
             radius: 3.0,
             corners: Corners::All,
         }
@@ -177,17 +177,39 @@ fn sharp_corners(path: &Path, which: Corners) -> Vec<(usize, Corner)> {
     found
 }
 
-/// Where the fillet goes in `corner`, or `None` when it needs more than half a side (so
-/// neighbouring corners never overlap).
+/// Where the fillet goes in `corner`. A fillet may use at most half of each side, so
+/// neighbouring corners never overlap; a radius needing more is cut to the largest that
+/// fits, as Aspire does. `None` when not even a tiny one fits.
 fn plan(mut corner: Corner, p: &Params) -> Option<Corner> {
-    let r = p.radius;
     let (back, on) = (corner.back, corner.on);
     let cos = back.dot(on).clamp(-1.0, 1.0);
     // halves the angle between the sides, pointing into it
     let bisector = (back + on).normalize();
     let half = cos.acos() / 2.0;
+    let (len_in, len_out) = (corner.len_in / 2.0, corner.len_out / 2.0);
+    let largest = match p.kind {
+        Kind::Normal => len_in.min(len_out) * half.tan(),
+        Kind::DogBone => len_in.min(len_out) / (2.0 * half.cos()),
+        Kind::TBone => {
+            let (notched, other) = if corner.len_in >= corner.len_out {
+                (len_in, len_out)
+            } else {
+                (len_out, len_in)
+            };
+            let across = if cos > 0.0 {
+                other / (2.0 * cos)
+            } else {
+                f64::INFINITY
+            };
+            (notched / 2.0).min(across)
+        }
+    };
+    let r = p.radius.min(largest);
+    if r <= STRAIGHT {
+        return None;
+    }
     let (trim_in, trim_out, center) = match p.kind {
-        Kind::Round => {
+        Kind::Normal => {
             let t = r / half.tan();
             (t, t, corner.at + bisector * (r / half.sin()))
         }
@@ -204,10 +226,6 @@ fn plan(mut corner: Corner, p: &Params) -> Option<Corner> {
             }
         }
     };
-    let fits = |trim: f64, len: f64| trim <= len / 2.0 + 1e-9;
-    if !fits(trim_in, corner.len_in) || !fits(trim_out, corner.len_out) {
-        return None;
-    }
     corner.trim_in = trim_in;
     corner.trim_out = trim_out;
     corner.center = center;
@@ -383,7 +401,7 @@ mod tests {
             true,
         );
         let count = |corners| {
-            let [path] = filleted(vec![ell.clone()], &params(Kind::Round, 2.0, corners))
+            let [path] = filleted(vec![ell.clone()], &params(Kind::Normal, 2.0, corners))
                 .unwrap()
                 .try_into()
                 .unwrap();
@@ -395,7 +413,7 @@ mod tests {
         // the same holds when the L is drawn the other way round
         let [path] = filleted(
             vec![ell.reversed()],
-            &params(Kind::Round, 2.0, Corners::Inner),
+            &params(Kind::Normal, 2.0, Corners::Inner),
         )
         .unwrap()
         .try_into()
@@ -407,7 +425,7 @@ mod tests {
     fn open_vectors_keep_their_ends_and_round_the_corners_between() {
         let p = Point::new;
         let vee = Path::polyline(&[p(0.0, 10.0), p(10.0, 0.0), p(20.0, 10.0)], false);
-        let [path] = filleted(vec![vee], &params(Kind::Round, 2.0, Corners::Outer))
+        let [path] = filleted(vec![vee], &params(Kind::Normal, 2.0, Corners::Outer))
             .unwrap()
             .try_into()
             .unwrap();
@@ -418,14 +436,31 @@ mod tests {
     }
 
     #[test]
-    fn a_radius_too_large_for_every_corner_is_an_error_and_curves_are_left_alone() {
-        let err = filleted(
+    fn a_radius_too_large_is_cut_to_the_largest_that_fits() {
+        // half of each 10 mm side is the most a corner may use: radius 5 rounds it fully
+        let [path] = filleted(
             vec![square(0.0, 0.0, 10.0)],
-            &params(Kind::Round, 50.0, Corners::All),
+            &params(Kind::Normal, 50.0, Corners::All),
         )
-        .unwrap_err();
-        assert!(err.contains("too large"), "{err}");
-        // a circle has no sharp corners
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let centres = arcs(&path);
+        assert_eq!(centres.len(), 4);
+        assert!(
+            centres
+                .iter()
+                .all(|c| (*c - Point::new(5.0, 5.0)).length() < EPS)
+        );
+        assert!(
+            path.segments
+                .iter()
+                .all(|s| matches!(s, Segment::Arc { .. }))
+        );
+    }
+
+    #[test]
+    fn curves_have_no_sharp_corners() {
         let err = filleted(
             vec![Path::circle(Point::new(0.0, 0.0), 5.0)],
             &Params::default(),
@@ -439,7 +474,7 @@ mod tests {
         assert!(
             filleted(
                 vec![square(0.0, 0.0, 10.0)],
-                &params(Kind::Round, 0.0, Corners::All)
+                &params(Kind::Normal, 0.0, Corners::All)
             )
             .is_err()
         );
