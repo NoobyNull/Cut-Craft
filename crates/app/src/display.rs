@@ -12,6 +12,8 @@ pub struct Display {
     pub rapids: bool,
     pub plunges: bool,
     pub retracts: bool,
+    /// Feed moves above the material that link one cut to the next.
+    pub joins: bool,
     /// How many times slower than Standard the preview simulation may be: 1, 2, 4, 8 or 25.
     pub quality: u32,
     pub origin: bool,
@@ -32,6 +34,7 @@ impl Default for Display {
             rapids: false,
             plunges: false,
             retracts: false,
+            joins: false,
             quality: 1,
             origin: true,
             modeling_plane: false,
@@ -65,6 +68,7 @@ impl Display {
             "draw_rapid_moves" => &mut self.rapids,
             "draw_plunge_moves" => &mut self.plunges,
             "draw_retract_moves" => &mut self.retracts,
+            "draw_join_moves" => &mut self.joins,
             "draw_origin" => &mut self.origin,
             "draw_modeling_plane" => &mut self.modeling_plane,
             "draw_material_block" => &mut self.material_block,

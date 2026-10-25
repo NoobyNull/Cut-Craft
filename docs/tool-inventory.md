@@ -115,7 +115,7 @@ say "not implemented yet".
 - Save Toolpaths: through the installed post, else Cut Craft's own FluidNC posts (tool
   changer; rotary jobs wrapped onto A in inverse time).
 - Toolpaths menu: Show Toolpaths Tab, Recalculate All, Toolpath Drawing (2D previews, solid
-  previews, auto-open 3D view, rapid / plunge / retract moves), Preview Simulation Quality,
+  previews, auto-open 3D view, rapid / plunge / retract / join moves; a join is a feed move above the material [inf]), Preview Simulation Quality,
   Merge Visible Toolpaths, Tool Database.
 - View: Zoom to Drawing (F6), Refresh 2D View, Draw Origin / Modeling Plane / Material Block /
   Vectors in 3D View, Light Follows Viewer, Color Shaded View, Use Shaded Background.
@@ -247,7 +247,7 @@ say "not implemented yet".
 - Model: Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
-- Toolpaths: Draw Join Moves, Materials.
+- Toolpaths: Materials.
 - View: Guide Lines, Keep-Out Zones, Auto-Wrapping, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
 - Gadgets; Help Contents.

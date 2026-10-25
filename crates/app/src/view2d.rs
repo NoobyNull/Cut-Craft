@@ -355,7 +355,7 @@ impl Canvas {
         let datum = visuals.widgets.noninteractive.fg_stroke;
         let selected = visuals.selection.stroke;
         // toolpaths seen from above: cutting moves (as wide as the tool when solid), and if
-        // asked for, rapids dashed, plunges as dots and retracts as rings
+        // asked for, rapids dashed, plunges as dots, retracts as rings and joins dotted
         let marker = gap;
         for (id, toolpath) in doc
             .toolpaths
@@ -380,7 +380,19 @@ impl Canvas {
                 if let Some(was) = from {
                     let start = t.to_screen(was.truncate());
                     let vertical = (was.truncate() - m.to.truncate()).length() < 1e-9;
+                    // ponytail: a join is a feed move wholly above the material [inf]
+                    let join = m.kind == MoveKind::Cut && was.z >= 0.0 && m.to.z >= 0.0;
                     match m.kind {
+                        MoveKind::Cut if join => {
+                            if display.joins {
+                                painter.extend(Shape::dotted_line(
+                                    &[start, to],
+                                    colour,
+                                    gap,
+                                    datum.width,
+                                ));
+                            }
+                        }
                         MoveKind::Cut => {
                             painter.line_segment([start, to], cut);
                         }
