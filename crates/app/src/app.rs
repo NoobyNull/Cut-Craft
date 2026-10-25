@@ -21,7 +21,9 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 48] = [
+const BUILT_INS: [&str; 50] = [
+    "print",
+    "print_preview",
     "save_all_visible_toolpaths_as_template",
     "load_template",
     "save_selected_toolpath_as_template",
@@ -376,7 +378,13 @@ impl CutCraftApp {
             id if self.display.toggle(id) => ctx.request_repaint(),
             "refresh_2d_view" => ctx.request_repaint(),
             "create_component_from_toolpath_preview" => self.component_from_preview(),
-            "copy" | "cut" | "paste" | "increment_and_save" | "open_application_data_folder" => {
+            "copy"
+            | "cut"
+            | "paste"
+            | "increment_and_save"
+            | "open_application_data_folder"
+            | "print"
+            | "print_preview" => {
                 self.clipboard_or_file_action(id);
             }
             "keyboard_shortcuts" => self.info = Some(Info::Shortcuts),
@@ -1441,6 +1449,22 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
                 None => self.file_action("save_as"),
             },
+            // ponytail: the drawing as a PDF opened in the system viewer, which prints it;
+            // Aspire's own print window (scale, tiling) is not done
+            "print" | "print_preview" => {
+                let path = std::env::temp_dir().join("cut-craft-print.pdf");
+                let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
+                    .and_then(|()| {
+                        on_the_desktop();
+                        std::process::Command::new("xdg-open")
+                            .arg(&path)
+                            .spawn()
+                            .map_err(|e| e.to_string())
+                    });
+                if let Err(e) = opened {
+                    self.status.set_message(&format!("could not print: {e}"));
+                }
+            }
             "open_application_data_folder" => {
                 let opened = files::config_dir()
                     .ok_or_else(|| "no home folder".to_owned())
@@ -3763,7 +3787,7 @@ mod tests {
     /// save-changes question (the smoke test's job has unsaved work), the file manager and
     /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 18] = [
+        const ASKS: [&str; 20] = [
             "new",
             "open",
             "close",
@@ -3778,6 +3802,8 @@ mod tests {
             "save_selected_toolpath_as_template",
             "save_all_visible_toolpaths_as_template",
             "load_template",
+            "print",
+            "print_preview",
             "install_post_processor",
             "save_toolpaths",
             "exit",

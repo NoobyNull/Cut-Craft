@@ -171,6 +171,8 @@ say "not implemented yet".
 - Toolpaths ▸ Templates: save the selected or all visible toolpaths' settings as a
   `.cctpt` template, and load one as empty toolpaths to edit and calculate. The Missing
   Layers dialog is not done.
+- File ▸ Print and Print Preview: the drawing as a PDF opened in the system viewer, which
+  prints it (Aspire's own print window with scale and tiling is not done).
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
@@ -205,7 +207,7 @@ say "not implemented yet".
   Preview, Preview All, Reset Preview.
 
 **Not built yet.**
-- File: Print, Print Preview, Import Toolpaths.
+- File: Import Toolpaths.
 - Edit: Vector Selector, Swap Sides, Document Variables, Snap
   Options, Options.
 - Model: Component with Draft, Export as 3D Clipart, Sculpt, Distort.
