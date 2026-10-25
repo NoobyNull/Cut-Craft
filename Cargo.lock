@@ -561,6 +561,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-copy-along-vectors"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-create-component-from-bitmap"
 version = "0.1.0"
 dependencies = [
@@ -1420,6 +1429,7 @@ dependencies = [
  "cmd-circular-copy",
  "cmd-component-boundary",
  "cmd-component-properties",
+ "cmd-copy-along-vectors",
  "cmd-create-component-from-bitmap",
  "cmd-create-component-from-visible-model",
  "cmd-create-shape",

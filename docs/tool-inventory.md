@@ -140,6 +140,9 @@ say "not implemented yet".
   - Array Copy (rows and columns by gap or offset, alternate row / column displacement,
     group copies; dialog 2516) and Circular Copy (round a centre by total or step angle,
     rotated or upright, group copies). Array Copy's symmetry buttons are not done.
+  - Copy Along Vectors: the first selected object (or circles) along the other selected
+    vectors, by distance (optionally evened to land on the ends) or count, upright or
+    turned with the curve, reversed, optionally on a new layer (dialog 458).
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
     corner fit, noise filter and grouping (dialog 347).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
@@ -187,7 +190,7 @@ say "not implemented yet".
   - Node Edit, Transform, Trim, Close / Extend, Validator, Measure.
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture.
-  - Nest, Copy Along Vectors, Distort.
+  - Nest, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin; Sculpt,
   Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,

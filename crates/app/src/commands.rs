@@ -103,6 +103,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_texture_area::TextureArea>();
     r.add::<cmd_array_copy::ArrayCopy>();
     r.add::<cmd_circular_copy::CircularCopy>();
+    r.add::<cmd_copy_along_vectors::CopyAlongVectors>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
