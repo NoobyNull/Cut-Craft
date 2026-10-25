@@ -387,6 +387,15 @@ impl Document {
             .map(|(&id, _)| id)
     }
 
+    /// The newest visible component with shape under `at`, for picking in the 2D view.
+    pub fn pick_component(&self, at: Point) -> Option<EntityId> {
+        self.components
+            .iter()
+            .rev()
+            .find(|(_, c)| c.visible && c.height_at(at).is_some())
+            .map(|(&id, _)| id)
+    }
+
     pub fn layer(&self, id: LayerId) -> Option<&Layer> {
         self.layers.iter().find(|l| l.id == id)
     }

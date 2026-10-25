@@ -275,7 +275,8 @@ say "not implemented yet".
 - Trace Bitmap has no colour mode (bitmaps are kept in grey) and no traced-area selection;
   Corner Fit's scale is our own.
 - TrueType text has no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
-- Components are selected in the Components tab, not by clicking them in the 3D view.
+- Components show in the 2D view as greyscale depth maps (black lowest, white highest, per
+  component) and a click on one selects it, as in Aspire; they are not picked in the 3D view.
 - Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
   spacing commands do not yet use it).
 - Groups hold vectors only and do not nest.

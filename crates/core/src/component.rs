@@ -152,6 +152,23 @@ impl Component {
         })
     }
 
+    /// The component as a picture, top row first: each shaped cell's height as a grey level
+    /// (0 at its lowest, 255 at its highest), `None` where it has no shape.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to 0..=255"
+    )]
+    pub fn shade(&self) -> Vec<Option<u8>> {
+        let (lo, hi) = self.height_range().unwrap_or((0.0, 0.0));
+        let span = (hi - lo).max(f64::EPSILON);
+        (0..self.rows)
+            .rev()
+            .flat_map(|row| &self.heights[row * self.columns..(row + 1) * self.columns])
+            .map(|h| h.map(|z| ((z - lo) / span * 255.0).round().clamp(0.0, 255.0) as u8))
+            .collect()
+    }
+
     /// Where cell `index` is: its centre in job mm.
     #[expect(clippy::cast_precision_loss, reason = "cell indices are small")]
     pub fn centre_of(&self, index: usize) -> Point {
@@ -280,4 +297,22 @@ pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandErro
         *height -= top;
     }
     Ok(surface)
+}
+
+#[cfg(test)]
+mod shade_tests {
+    use super::*;
+
+    #[test]
+    fn shade_runs_from_black_at_the_lowest_to_white_at_the_top_row_first() {
+        let k = Component::from_fn(
+            "ramp",
+            Combine::Add,
+            Rect::new(Point::ZERO, Point::new(2.0, 2.0)),
+            1.0,
+            |p| (p.x < 1.5).then_some(p.y),
+        );
+        // rows from the bottom: [0.5, 0.5] under [1.5, 1.5]; the right column has no shape
+        assert_eq!(k.shade(), vec![Some(255), None, Some(0), None]);
+    }
 }

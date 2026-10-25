@@ -306,6 +306,47 @@ impl Canvas {
         );
     }
 
+    /// Every visible component as a greyscale depth map.
+    fn paint_components(&self, ui: &egui::Ui, painter: &egui::Painter, doc: &Document) {
+        let t = self.transform;
+        // components as greyscale depth maps, as Aspire's 2D view shows them; the texture is
+        // remade when the heights change (their bit pattern is hashed each frame)
+        for (id, component) in doc.components.iter().filter(|(_, c)| c.visible) {
+            let hash = component
+                .heights
+                .iter()
+                .fold(0xcbf2_9ce4_8422_2325_u64, |h, z| {
+                    (h ^ z.map_or(0, f64::to_bits)).wrapping_mul(0x0100_0000_01b3)
+                });
+            let key = egui::Id::new(("component", id.0, hash));
+            let ctx = ui.ctx();
+            let texture = ctx
+                .data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
+                .unwrap_or_else(|| {
+                    let pixels: Vec<egui::Color32> = component
+                        .shade()
+                        .into_iter()
+                        .map(|g| g.map_or(egui::Color32::TRANSPARENT, egui::Color32::from_gray))
+                        .collect();
+                    let image = egui::ColorImage {
+                        size: [component.columns, component.rows],
+                        pixels,
+                    };
+                    let texture = ctx.load_texture(
+                        format!("component {}", id.0),
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    );
+                    ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
+                    texture
+                });
+            let e = component.extent();
+            let at = Rect::from_two_pos(t.to_screen(e.min), t.to_screen(e.max));
+            let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+            painter.image(texture.id(), at, whole, egui::Color32::WHITE);
+        }
+    }
+
     /// Selected bitmaps and components: their extent, dashed like selected vectors.
     fn paint_outlines(
         &self,
@@ -450,6 +491,7 @@ impl Canvas {
             let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
             painter.image(texture.id(), at, whole, egui::Color32::WHITE);
         }
+        self.paint_components(ui, &painter, doc);
         let datum = visuals.widgets.noninteractive.fg_stroke;
         let (o, area) = (t.origin, self.area);
         for line in [

@@ -2860,6 +2860,19 @@ impl CutCraftApp {
             (picture, false) => self.doc.selected_bitmaps = picture.into_iter().collect(),
             (None, true) => {}
         }
+        // a component's depth map is picked where no vector or picture is
+        let component = (hit.is_none() && picture.is_none())
+            .then(|| self.doc.pick_component(at))
+            .flatten();
+        match (component, shift) {
+            (Some(k), true) => {
+                if !self.doc.selected_components.remove(&k) {
+                    self.doc.selected_components.insert(k);
+                }
+            }
+            (component, false) => self.doc.selected_components = component.into_iter().collect(),
+            (None, true) => {}
+        }
         if shift {
             // a grouped vector brings or takes its whole group
             let mut ids = self.doc.selection.clone();
@@ -3007,6 +3020,21 @@ mod tests {
         };
         assert_eq!(d.start, Point::new(30.0, 20.0), "onto the corner");
         assert_eq!(d.end, Point::new(50.0, 50.0), "nothing near");
+    }
+
+    #[test]
+    fn clicking_a_component_in_the_2d_view_selects_it() {
+        let mut h = Harness::new();
+        h.app.doc = cut_craft_core::testing::domed();
+        h.frame(vec![]);
+        h.click(h.at(20.0, 20.0), Modifiers::NONE);
+        assert_eq!(
+            h.app.doc.selected_components.len(),
+            1,
+            "the dome under the click"
+        );
+        h.click(h.at(2.0, 2.0), Modifiers::NONE);
+        assert!(h.app.doc.selected_components.is_empty(), "off the dome");
     }
 
     #[test]
