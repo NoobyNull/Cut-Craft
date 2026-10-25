@@ -147,6 +147,9 @@ say "not implemented yet".
     all shown vectors; the faulty vectors are selected, zero-length spans fixed) and Extend
     Vectors (two selected open vectors' nearest ends run straight to where they meet;
     Aspire picks the ends by hovering and clicking).
+  - Create Fillets: click a corner where two straight spans meet for a normal or dog-bone
+    fillet of the radius (dialog with T-Bone and Plasma / Drag Knife types, and removing
+    fillets, not done yet).
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
     corner fit, noise filter and grouping (dialog 347).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
@@ -192,7 +195,7 @@ say "not implemented yet".
 - Gadgets; Help Contents.
 - Drawing tab:
   - Node Edit, Transform, Trim, Measure.
-  - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
+  - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions,
     Vector Texture.
   - Nest, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin; Sculpt,

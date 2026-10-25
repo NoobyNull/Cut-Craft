@@ -106,6 +106,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_copy_along_vectors::CopyAlongVectors>();
     r.add::<cmd_vector_validator::VectorValidator>();
     r.add::<cmd_close_extend_vector::CloseExtendVector>();
+    r.add_interactive::<cmd_create_fillets::CreateFillets>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

@@ -597,6 +597,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-create-fillets"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-create-shape"
 version = "0.1.0"
 dependencies = [
@@ -1451,6 +1460,7 @@ dependencies = [
  "cmd-copy-along-vectors",
  "cmd-create-component-from-bitmap",
  "cmd-create-component-from-visible-model",
+ "cmd-create-fillets",
  "cmd-create-shape",
  "cmd-cross-section",
  "cmd-delete",
