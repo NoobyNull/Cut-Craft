@@ -345,11 +345,17 @@ impl Change {
     /// Adds a copy of every selected vector under each of `transforms`, on the same layer as
     /// its original, and selects the originals and all the copies.
     pub fn copy_selected(doc: &Document, transforms: &[DAffine2]) -> Self {
-        let mut c = Self::builder(doc);
         let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
-        let mut selected = originals.clone();
+        Self::copy_vectors(doc, &originals, transforms)
+    }
+
+    /// Adds a copy of each of `originals` under each of `transforms`, on the same layer as
+    /// its original, and selects the originals and all the copies.
+    pub fn copy_vectors(doc: &Document, originals: &[EntityId], transforms: &[DAffine2]) -> Self {
+        let mut c = Self::builder(doc);
+        let mut selected = originals.to_vec();
         for t in transforms {
-            for &id in &originals {
+            for &id in originals {
                 let copy = c.add(doc.vectors[&id].transformed(t));
                 c.move_to_layer(copy, doc.layer_of(id));
                 selected.push(copy);

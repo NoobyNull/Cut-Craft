@@ -137,6 +137,11 @@ say "not implemented yet".
   - Array Copy (rows × columns by gap or offset) and Circular Copy (round the job centre or a
     point, over a full or part circle, turning the copies or not). Copies stay on their
     originals' layers; copies of grouped vectors are not grouped.
+  - Copy Along Vectors (the last vector picked is the path; by count or distance, turned to
+    follow it or not).
+  - Close / Extend Vector (a closing line, or the end lines run on until they meet; max gap).
+  - Vector Validator (selects open, self-crossing, duplicate and tiny vectors in the
+    selection, or in the whole job when nothing is selected).
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
@@ -157,10 +162,10 @@ say "not implemented yet".
 - Gadgets; Help Contents.
 - Drawing tab:
   - Import Component.
-  - Node Edit, Transform, Group, Trim, Close / Extend, Fit Curves, Validator, Measure.
+  - Node Edit, Transform, Group, Trim, Fit Curves, Measure.
   - Curve, Freehand, Text, Text on a Curve, Auto Layout Text, Dimensions,
     Vector Texture, Trace Bitmap.
-  - Nest, Copy Along Vectors, Distort.
+  - Nest, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
   Emboss, Distort, Offset Model, Slice, Draft, Replace Below, Split.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,

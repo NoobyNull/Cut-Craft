@@ -173,6 +173,11 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Circular Copy:** a number of items in all, the original included, round the **job centre** or a typed point, spread counter-clockwise over an angle (360° spaces them evenly; less puts the last one at the end of the angle). Copies turn with the circle unless **Rotate copies** is off, when they only move.
 - Copies stay on their originals' layers and the originals and copies end up selected.
 
+### Close / Extend, Vector Validator, Copy Along Vectors [inf]
+- **Close / Extend Vector:** closes the selected open vectors with a straight line from end to start, or **Extend** runs the first and last lines on until they meet (a closing line when they never do). **Max gap** leaves vectors whose ends are further apart.
+- **Vector Validator:** checks the selection, or every editable vector when nothing is selected, for open vectors, closed ones crossing themselves, vectors on top of another (either direction) and vectors or spans shorter than a tolerance, and selects the ones that fail. Aspire's validator also marks the trouble spots; ours selects whole vectors.
+- **Copy Along Vectors:** the last vector picked is the path; the objects picked before it are copied along it, a number of copies spread end to end (all round when it is closed) or one every so far from its start, turned to follow the path as if facing +X, or not.
+
 ### 3D components [obs]
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
 - **Create Shape** (from closed vectors): Round, Angled, Flat, Custom and Smooth profiles. The other creation tools are in the Model menu: Two Rail Sweep, Extrude & Weave, Turn & Spin, Texture Area, Zero Plane and From Bitmap.
