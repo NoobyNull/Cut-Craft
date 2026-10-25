@@ -270,6 +270,8 @@ impl MenuSystem {
             MenuItem::with_action("Subtract", "subtract_vectors"),
             MenuItem::with_action("Overlap", "overlap_intersect"),
             edit("Join Vectors"),
+            MenuItem::with_action("Group", "group"),
+            MenuItem::with_action("Ungroup", "ungroup"),
             MenuItem {
                 name: "Align".into(),
                 ..edit("Align Selected Objects")

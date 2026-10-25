@@ -284,6 +284,9 @@ pub struct Document {
     /// Bitmaps picked in the 2D view, in pick order; view state like `selection`.
     #[serde(default)]
     pub selected_bitmaps: Selection,
+    /// Which group each grouped vector is in; picking one picks the group (added with groups).
+    #[serde(default)]
+    pub vector_groups: BTreeMap<EntityId, u64>,
 }
 
 impl Default for Document {
@@ -300,6 +303,7 @@ impl Default for Document {
             bitmaps: BTreeMap::new(),
             selected_components: Selection::new(),
             selected_bitmaps: Selection::new(),
+            vector_groups: BTreeMap::new(),
         }
     }
 }
@@ -326,6 +330,24 @@ impl Document {
             .find(|id| self.components.contains_key(id))
             .or_else(|| self.components.keys().next_back())
             .copied()
+    }
+
+    /// The vectors picked together with `id`: its group's, or `id` alone.
+    pub fn group_members(&self, id: EntityId) -> Vec<EntityId> {
+        match self.vector_groups.get(&id) {
+            Some(group) => self
+                .vector_groups
+                .iter()
+                .filter(|(v, g)| *g == group && self.vectors.contains_key(v))
+                .map(|(&v, _)| v)
+                .collect(),
+            None => vec![id],
+        }
+    }
+
+    /// A group number no vector uses yet.
+    pub fn next_group(&self) -> u64 {
+        self.vector_groups.values().max().map_or(1, |g| g + 1)
     }
 
     /// The picture a picture tool works on: the last one picked, else the newest.

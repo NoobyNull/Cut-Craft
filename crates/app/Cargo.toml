@@ -24,6 +24,8 @@ fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-ungroup = { path = "../commands/ungroup" }
+cmd-group = { path = "../commands/group" }
 cmd-bitmap-properties = { path = "../commands/bitmap-properties" }
 cmd-reset-outside-selected-vectors = { path = "../commands/reset-outside-selected-vectors" }
 cmd-reset-inside-selected-vectors = { path = "../commands/reset-inside-selected-vectors" }

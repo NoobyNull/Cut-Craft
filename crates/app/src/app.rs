@@ -2294,11 +2294,17 @@ impl CutCraftApp {
             (None, true) => {}
         }
         if shift {
+            // a grouped vector brings or takes its whole group
             let mut ids = self.doc.selection.clone();
-            if let Some(id) = hit
-                && !ids.remove(&id)
-            {
-                ids.insert(id);
+            if let Some(id) = hit {
+                let members = self.doc.group_members(id);
+                if ids.contains(&id) {
+                    for m in &members {
+                        ids.remove(m);
+                    }
+                } else {
+                    ids.extend(members);
+                }
             }
             self.select(ids, false);
         } else {
@@ -2307,12 +2313,15 @@ impl CutCraftApp {
     }
 
     /// Selection is view state: applied directly, never recorded for undo.
+    /// Picking a grouped vector picks its whole group.
     fn select(&mut self, ids: impl IntoIterator<Item = EntityId>, add: bool) {
-        let mut c = Change::builder(&self.doc);
+        let doc = &self.doc;
+        let whole = ids.into_iter().flat_map(|id| doc.group_members(id));
+        let mut c = Change::builder(doc);
         if add {
-            c.select(self.doc.selection.iter().copied().chain(ids));
+            c.select(doc.selection.iter().copied().chain(whole));
         } else {
-            c.select(ids);
+            c.select(whole);
         }
         self.doc
             .apply(&c.finish())
@@ -2444,6 +2453,28 @@ mod tests {
         h.click(at, Modifiers::NONE);
         h.app.invoke(&h.ctx, "delete");
         assert!(h.app.doc.bitmaps.is_empty());
+    }
+
+    #[test]
+    fn clicking_one_of_a_group_picks_the_group() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 20.0);
+        h.rectangle(60.0, 10.0, 20.0, 20.0);
+        h.app.invoke(&h.ctx, "select_all_vectors");
+        h.app.invoke(&h.ctx, "group");
+        h.click(h.at(5.0, 5.0), Modifiers::NONE);
+        assert!(h.app.doc.selection.is_empty());
+        h.click(h.at(10.0, 20.0), Modifiers::NONE);
+        assert_eq!(h.app.doc.selection.len(), 2, "the edge of one picks both");
+        h.click(h.at(10.0, 20.0), Modifiers::SHIFT);
+        assert!(
+            h.app.doc.selection.is_empty(),
+            "Shift-click takes the group away"
+        );
+        h.click(h.at(10.0, 20.0), Modifiers::NONE);
+        h.app.invoke(&h.ctx, "ungroup");
+        h.click(h.at(10.0, 20.0), Modifiers::NONE);
+        assert_eq!(h.app.doc.selection.len(), 1, "ungrouped, one at a time");
     }
 
     struct Harness {

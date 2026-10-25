@@ -75,6 +75,12 @@ pub enum Edit {
         before: Box<Bitmap>,
         after: Box<Bitmap>,
     },
+    /// Puts a vector into a group or takes it out (`None`).
+    SetGroup {
+        id: EntityId,
+        before: Option<u64>,
+        after: Option<u64>,
+    },
     /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
     SetLayer {
         id: EntityId,
@@ -135,6 +141,11 @@ impl Edit {
                 after: before,
             },
             Self::ReplaceComponent { id, before, after } => Self::ReplaceComponent {
+                id,
+                before: after,
+                after: before,
+            },
+            Self::SetGroup { id, before, after } => Self::SetGroup {
                 id,
                 before: after,
                 after: before,
@@ -398,6 +409,33 @@ impl Document {
         Ok(())
     }
 
+    /// The component and bitmap edits.
+    fn apply_model_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
+        match edit {
+            Edit::AddComponent { id, component } => {
+                insert_new(&mut self.components, *id, (**component).clone())?;
+            }
+            Edit::RemoveComponent { id, component } => {
+                remove_matching(&mut self.components, *id, component)?;
+            }
+            Edit::AddBitmap { id, bitmap } => {
+                insert_new(&mut self.bitmaps, *id, (**bitmap).clone())?;
+            }
+            Edit::RemoveBitmap { id, bitmap } => {
+                remove_matching(&mut self.bitmaps, *id, bitmap)?;
+                self.selected_bitmaps.remove(id);
+            }
+            Edit::ReplaceBitmap { id, before, after } => {
+                replace_matching(&mut self.bitmaps, *id, before, after)?;
+            }
+            Edit::ReplaceComponent { id, before, after } => {
+                replace_matching(&mut self.components, *id, before, after)?;
+            }
+            _ => unreachable!("only component and bitmap edits come here"),
+        }
+        Ok(())
+    }
+
     fn apply_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
             Edit::Add { id, path } => insert_new(&mut self.vectors, *id, path.clone())?,
@@ -428,24 +466,20 @@ impl Document {
                 }
                 self.job = *after;
             }
-            Edit::AddComponent { id, component } => {
-                insert_new(&mut self.components, *id, (**component).clone())?;
-            }
-            Edit::RemoveComponent { id, component } => {
-                remove_matching(&mut self.components, *id, component)?;
-            }
-            Edit::AddBitmap { id, bitmap } => {
-                insert_new(&mut self.bitmaps, *id, (**bitmap).clone())?;
-            }
-            Edit::RemoveBitmap { id, bitmap } => {
-                remove_matching(&mut self.bitmaps, *id, bitmap)?;
-                self.selected_bitmaps.remove(id);
-            }
-            Edit::ReplaceBitmap { id, before, after } => {
-                replace_matching(&mut self.bitmaps, *id, before, after)?;
-            }
-            Edit::ReplaceComponent { id, before, after } => {
-                replace_matching(&mut self.components, *id, before, after)?;
+            Edit::AddComponent { .. }
+            | Edit::RemoveComponent { .. }
+            | Edit::ReplaceComponent { .. }
+            | Edit::AddBitmap { .. }
+            | Edit::RemoveBitmap { .. }
+            | Edit::ReplaceBitmap { .. } => self.apply_model_edit(edit)?,
+            Edit::SetGroup { id, before, after } => {
+                if self.vector_groups.get(id) != before.as_ref() {
+                    return Err(ApplyError::Conflict(*id));
+                }
+                match after {
+                    Some(group) => self.vector_groups.insert(*id, *group),
+                    None => self.vector_groups.remove(id),
+                };
             }
             Edit::SetLayer { id, before, after } => {
                 if self.vector_layers.get(id) != before.as_ref() {
@@ -746,6 +780,18 @@ impl ChangeBuilder<'_> {
         if before != after {
             self.vector_layers.insert(id, after);
             self.edits.push(Edit::SetLayer { id, before, after });
+        }
+    }
+
+    /// Puts vector `id` in `group`, or takes it out of any (`None`).
+    pub fn set_group(&mut self, id: EntityId, group: Option<u64>) {
+        let before = self.doc.vector_groups.get(&id).copied();
+        if before != group {
+            self.edits.push(Edit::SetGroup {
+                id,
+                before,
+                after: group,
+            });
         }
     }
 

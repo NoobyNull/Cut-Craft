@@ -297,6 +297,37 @@ impl Canvas {
         );
     }
 
+    /// Selected bitmaps and components: their extent, dashed like selected vectors.
+    fn paint_outlines(
+        &self,
+        painter: &egui::Painter,
+        doc: &Document,
+        selected: Stroke,
+        (dash, gap): (f32, f32),
+    ) {
+        let t = self.transform;
+        for bitmap in doc
+            .selected_bitmaps
+            .iter()
+            .filter_map(|id| doc.bitmaps.get(id))
+        {
+            let JobRect { min: lo, max: hi } = bitmap.rect;
+            let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y), lo]
+                .map(|p| t.to_screen(p));
+            painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
+        }
+        for component in doc
+            .selected_components
+            .iter()
+            .filter_map(|id| doc.components.get(id))
+        {
+            let JobRect { min: lo, max: hi } = component.extent();
+            let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y), lo]
+                .map(|p| t.to_screen(p));
+            painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
+        }
+    }
+
     /// Toolpaths seen from above, as the Toolpath Drawing menu asks.
     fn paint_toolpaths(
         &self,
@@ -418,34 +449,17 @@ impl Canvas {
         let normal = Stroke::new(datum.width, visuals.text_color());
         let selected = visuals.selection.stroke;
         for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
-            if doc.selection.contains(id) {
+            // as in Aspire: selected vectors dashed, selected groups solid
+            if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
+                painter.add(Shape::line(screen(path), selected));
+            } else if doc.selection.contains(id) {
                 painter.extend(Shape::dashed_line(&screen(path), selected, dash, gap));
             } else {
                 painter.add(Shape::line(screen(path), normal));
             }
         }
 
-        // selected bitmaps and components: their extent, dashed like selected vectors
-        for bitmap in doc
-            .selected_bitmaps
-            .iter()
-            .filter_map(|id| doc.bitmaps.get(id))
-        {
-            let JobRect { min: lo, max: hi } = bitmap.rect;
-            let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y), lo]
-                .map(|p| t.to_screen(p));
-            painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
-        }
-        for component in doc
-            .selected_components
-            .iter()
-            .filter_map(|id| doc.components.get(id))
-        {
-            let JobRect { min: lo, max: hi } = component.extent();
-            let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y), lo]
-                .map(|p| t.to_screen(p));
-            painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
-        }
+        self.paint_outlines(&painter, doc, selected, (dash, gap));
         self.paint_toolpaths(&painter, ui, doc, highlighted, display);
 
         match overlay {

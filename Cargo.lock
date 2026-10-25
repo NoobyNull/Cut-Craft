@@ -688,6 +688,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-group"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-inlay-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -1038,6 +1047,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-ungroup"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-unselect-all"
 version = "0.1.0"
 dependencies = [
@@ -1281,6 +1299,7 @@ dependencies = [
  "cmd-draw-star",
  "cmd-drilling-toolpath",
  "cmd-fluting-toolpath",
+ "cmd-group",
  "cmd-inlay-toolpath",
  "cmd-job-setup",
  "cmd-join-vectors",
@@ -1320,6 +1339,7 @@ dependencies = [
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",
  "cmd-toolpath-properties",
+ "cmd-ungroup",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
  "cmd-vcarve-inlay-toolpath",
