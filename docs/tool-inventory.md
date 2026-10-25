@@ -123,6 +123,10 @@ say "not implemented yet".
   wheel zooms about the cursor, double-click or F fits; Top, Front, Right, Iso, Fit buttons.
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
+  Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
+  ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
+  (as a ball nose), drill (as an end mill); one tool per material it has cutting data for.
+  Form tools and diamond drags are skipped.
 - Every toolpath strategy in `re/SPEC.md` (backlog item 19): Profile, Pocket, Drilling,
   V-Carve (with Start Depth), V-Carve Inlay, Inlay (pocket / plug), Quick Engrave (Ctrl+Q),
   Chamfer, Fluting, Prism, Thread Milling, Keyhole, Drag Knife, Moulding, Texture, Photo V-Carve,
