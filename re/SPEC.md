@@ -503,8 +503,10 @@ Horizontal Stretch drop-downs.
 ## Open questions (need decompilation or sample files)
 1. `.v3m` byte layout, and the rest of `.crv3d` (see Job files). `.3dClip` (the 22 sculpting
    brushes the installer puts in `Public/Documents/Vectric Files`) is **not** a compound file:
-   a short plain header (u16s, a GUID, UTF-16 "Aspire", "DLL") then 7.99 bits/byte, so the
-   clipart payload is encrypted like the program code and is left alone.
+   a plain header (u16s 2, 1, 1; the GUID `7d82aea4-9169-f743-a375-09ddf91359e7` in every
+   file; UTF-16 "Aspire" (the creating application), "DLL", then the exported component's
+   name, e.g. "Clouds - Baked") and then 7.99 bits/byte, so the height data is encrypted
+   like the program code and is left alone.
 2. Meanings of the `Default.prf` fields.
 3. Which mouse button orbits the 3D view (the help pages contradict each other).
 4. The commands behind keys 1, 2 and Ctrl+F1…F9.
