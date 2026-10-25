@@ -190,3 +190,22 @@ fn the_placed_model_is_no_finer_than_the_job_resolution() {
     assert!((standard - 2f64.sqrt()).abs() < 0.01, "{standard}");
     assert!(cell(Resolution::Highest) < standard / 2.0);
 }
+
+#[test]
+fn the_chosen_component_is_the_last_picked_else_the_newest() {
+    use cut_craft_core::document::EntityId;
+    let mut doc = cut_craft_core::testing::two_components();
+    assert_eq!(
+        doc.chosen_component(),
+        Some(EntityId(2)),
+        "nothing picked: the newest"
+    );
+    doc.selected_components = [EntityId(2), EntityId(1)].into();
+    assert_eq!(doc.chosen_component(), Some(EntityId(1)));
+    doc.selected_components = [EntityId(9)].into();
+    assert_eq!(
+        doc.chosen_component(),
+        Some(EntityId(2)),
+        "a gone one is passed over"
+    );
+}

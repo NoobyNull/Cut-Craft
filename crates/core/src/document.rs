@@ -277,6 +277,10 @@ pub struct Document {
     /// Imported pictures (added with bitmap strategies; older files have none).
     #[serde(default)]
     pub bitmaps: BTreeMap<EntityId, Bitmap>,
+    /// Components picked in the Components tab, in pick order: view state like `selection`,
+    /// read by the commands that work on "the selected component".
+    #[serde(default)]
+    pub selected_components: Selection,
 }
 
 impl Default for Document {
@@ -291,6 +295,7 @@ impl Default for Document {
             vector_layers: BTreeMap::new(),
             components: BTreeMap::new(),
             bitmaps: BTreeMap::new(),
+            selected_components: Selection::new(),
         }
     }
 }
@@ -306,6 +311,17 @@ impl Document {
             .max(self.components.keys().next_back())
             .max(self.bitmaps.keys().next_back());
         EntityId(last.map_or(1, |id| id.0 + 1))
+    }
+
+    /// The component a "selected component" command works on: the last one picked, else the
+    /// newest.
+    pub fn chosen_component(&self) -> Option<EntityId> {
+        self.selected_components
+            .iter()
+            .rev()
+            .find(|id| self.components.contains_key(id))
+            .or_else(|| self.components.keys().next_back())
+            .copied()
     }
 
     pub fn layer(&self, id: LayerId) -> Option<&Layer> {

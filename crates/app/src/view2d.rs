@@ -425,6 +425,17 @@ impl Canvas {
             }
         }
 
+        // selected components: their extent, dashed like selected vectors
+        for component in doc
+            .selected_components
+            .iter()
+            .filter_map(|id| doc.components.get(id))
+        {
+            let JobRect { min: lo, max: hi } = component.extent();
+            let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y), lo]
+                .map(|p| t.to_screen(p));
+            painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
+        }
         self.paint_toolpaths(&painter, ui, doc, highlighted, display);
 
         match overlay {

@@ -44,10 +44,9 @@ impl Command for ComponentProperties {
     }
 
     fn initial_params(doc: &Document) -> Params {
-        doc.components
-            .iter()
-            .next()
-            .map_or_else(Params::default, |(&component, c)| Params {
+        doc.chosen_component()
+            .map(|id| (id, &doc.components[&id]))
+            .map_or_else(Params::default, |(component, c)| Params {
                 component,
                 name: c.name.clone(),
                 combine: c.combine,

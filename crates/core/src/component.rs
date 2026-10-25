@@ -138,6 +138,13 @@ impl Component {
         }
     }
 
+    /// The area its grid covers, in job mm.
+    #[expect(clippy::cast_precision_loss, reason = "cell counts are small")]
+    pub fn extent(&self) -> Rect {
+        let size = Point::new(self.columns as f64, self.rows as f64) * self.cell;
+        Rect::new(self.origin, self.origin + size)
+    }
+
     /// Lowest and highest of its heights, or `None` when it has no shape.
     pub fn height_range(&self) -> Option<(f64, f64)> {
         self.heights.iter().flatten().fold(None, |range, &h| {

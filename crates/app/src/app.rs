@@ -1645,13 +1645,31 @@ impl CutCraftApp {
         if self.doc.components.is_empty() {
             ui.weak("No components yet");
         }
-        let mut chosen = None;
+        let components = &self.doc.components;
+        self.doc
+            .selected_components
+            .retain(|id| components.contains_key(id));
+        let (mut chosen, mut picked) = (None, None);
         for (&id, component) in self.doc.components.iter().rev() {
             let text = format!("{} ({:?})", component.name, component.combine);
-            let row = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
+            let on = self.doc.selected_components.contains(&id);
+            let row = ui.selectable_label(on, text);
+            if row.clicked() {
+                picked = Some((id, ui.input(|i| i.modifiers.shift)));
+            }
             if let Some(action) = self.popup(&row, || gui::component_menu(id, component)) {
                 chosen = Some(action);
             }
+        }
+        // click picks one; Shift-click adds or takes away
+        match picked {
+            Some((id, true)) => {
+                if !self.doc.selected_components.remove(&id) {
+                    self.doc.selected_components.insert(id);
+                }
+            }
+            Some((id, false)) => self.doc.selected_components = [id].into(),
+            None => {}
         }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);

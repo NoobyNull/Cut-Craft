@@ -300,7 +300,10 @@ mod tests {
         );
         let mut discarded = Session::default();
         discarded.discard_changes(&history);
-        assert!(!discarded.is_dirty(&history), "changes thrown away are not asked about again");
+        assert!(
+            !discarded.is_dirty(&history),
+            "changes thrown away are not asked about again"
+        );
         session.save(&doc, &history, &path).unwrap();
         assert!(!session.is_dirty(&history));
         assert_eq!(
