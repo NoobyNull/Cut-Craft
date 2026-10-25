@@ -1,0 +1,135 @@
+# Release builds for Linux and Windows.
+#   push to main, the nightly schedule, or "Run workflow" -> the rolling "nightly" pre-release
+#   push a tag v*  (git tag v0.2.0 && git push origin v0.2.0) -> a versioned release
+# The nightly schedule skips the build when nightly already points at the latest commit.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  schedule:
+    - cron: '17 10 * * *' # 03:17 Pacific (daylight time) / 02:17 (standard time)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "tag=nightly" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            built=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" --jq .object.sha 2>/dev/null || true)
+            if [[ "$built" == "$GITHUB_SHA" ]]; then
+              echo "nightly is already $GITHUB_SHA - nothing new to build"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04 keeps the Linux binary runnable on older glibc distributions
+          - os: ubuntu-22.04
+            name: linux-x86_64
+          - os: windows-latest
+            name: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux GUI libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      - name: Build
+        run: cargo build --release --package cut-craft --locked
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          dir="cut-craft-${{ needs.plan.outputs.tag }}-${{ matrix.name }}"
+          mkdir -p "$dir"
+          cp target/release/cut-craft "$dir/"
+          cp -r assets README.md "$dir/"
+          tar -czf "$dir.tar.gz" "$dir"
+          echo "ASSET=$dir.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = "cut-craft-${{ needs.plan.outputs.tag }}-${{ matrix.name }}"
+          New-Item -ItemType Directory $dir | Out-Null
+          Copy-Item target/release/cut-craft.exe $dir
+          Copy-Item -Recurse assets, README.md $dir
+          Compress-Archive -Path $dir -DestinationPath "$dir.zip"
+          "ASSET=$dir.zip" | Out-File -Append $env:GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  publish:
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          ls -l dist
+          if [[ "$TAG" == nightly ]]; then
+            # move the rolling nightly release to this commit
+            gh release delete nightly --cleanup-tag --yes || true
+            gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" \
+              --title "Nightly ($(date -u +%Y-%m-%d) ${GITHUB_SHA::7})" \
+              --notes "Automatic build of ${GITHUB_SHA} from main. Unsigned and untested beyond CI; for testing only."
+          else
+            gh release create "$TAG" dist/* --verify-tag --generate-notes --title "Cut Craft $TAG"
+          fi
