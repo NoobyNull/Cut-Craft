@@ -113,6 +113,12 @@ pub fn registry() -> Registry {
     r.add::<cmd_two_rail_sweep::TwoRailSweep>();
     r.add::<cmd_nest_parts::NestParts>();
     r.add::<cmd_text_on_a_curve::TextOnACurve>();
+    r.add::<cmd_move_node::MoveNode>();
+    r.add::<cmd_insert_point::InsertPoint>();
+    r.add::<cmd_delete_point::DeletePoint>();
+    r.add::<cmd_cut_vector::CutVector>();
+    r.add::<cmd_make_start_point::MakeStartPoint>();
+    r.add::<cmd_span_to_line::SpanToLine>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

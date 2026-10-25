@@ -624,6 +624,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-cut-vector"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-delete"
 version = "0.1.0"
 dependencies = [
@@ -653,6 +662,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-layer"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-delete-point"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -824,6 +842,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-insert-point"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-job-setup"
 version = "0.1.0"
 dependencies = [
@@ -880,6 +907,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-make-start-point"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-merged-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -908,6 +944,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-move"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-move-node"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1168,6 +1213,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-space-vertically"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-span-to-line"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1519,10 +1573,12 @@ dependencies = [
  "cmd-create-fillets",
  "cmd-create-shape",
  "cmd-cross-section",
+ "cmd-cut-vector",
  "cmd-delete",
  "cmd-delete-component",
  "cmd-delete-items",
  "cmd-delete-layer",
+ "cmd-delete-point",
  "cmd-delete-toolpath",
  "cmd-dimensions",
  "cmd-drag-knife-toolpath",
@@ -1541,16 +1597,19 @@ dependencies = [
  "cmd-fluting-toolpath",
  "cmd-group",
  "cmd-inlay-toolpath",
+ "cmd-insert-point",
  "cmd-job-setup",
  "cmd-join-vectors",
  "cmd-keyhole-toolpath",
  "cmd-laser-cut-fill-toolpath",
  "cmd-laser-picture-toolpath",
  "cmd-layer-properties",
+ "cmd-make-start-point",
  "cmd-merged-toolpath",
  "cmd-mirror",
  "cmd-moulding-toolpath",
  "cmd-move",
+ "cmd-move-node",
  "cmd-move-to-layer",
  "cmd-nest-parts",
  "cmd-notes",
@@ -1580,6 +1639,7 @@ dependencies = [
  "cmd-smooth-selected-components",
  "cmd-space-horizontally",
  "cmd-space-vertically",
+ "cmd-span-to-line",
  "cmd-split",
  "cmd-subtract-vectors",
  "cmd-text-on-a-curve",

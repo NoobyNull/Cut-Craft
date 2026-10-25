@@ -9,6 +9,7 @@ pub mod file;
 pub mod font;
 mod formats;
 pub mod geometry;
+pub mod nodes;
 pub mod params;
 pub mod polygon;
 pub mod selection;

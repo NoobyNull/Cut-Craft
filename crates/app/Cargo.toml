@@ -26,6 +26,12 @@ fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-import-stl = { path = "../formats/import-stl" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-span-to-line = { path = "../commands/span-to-line" }
+cmd-make-start-point = { path = "../commands/make-start-point" }
+cmd-cut-vector = { path = "../commands/cut-vector" }
+cmd-delete-point = { path = "../commands/delete-point" }
+cmd-insert-point = { path = "../commands/insert-point" }
+cmd-move-node = { path = "../commands/move-node" }
 cmd-text-on-a-curve = { path = "../commands/text-on-a-curve" }
 cmd-nest-parts = { path = "../commands/nest-parts" }
 cmd-two-rail-sweep = { path = "../commands/two-rail-sweep" }
