@@ -244,6 +244,8 @@ pub fn node_menu(at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
         MenuItem::separator(),
         MenuItem::run::<cmd_cut_vector::CutVector>("Cut Vector", at),
         MenuItem::run::<cmd_make_start_point::MakeStartPoint>("Make Start Point", at),
+        MenuItem::run::<cmd_reverse_direction::ReverseDirection>("Reverse Direction", at),
+        MenuItem::run::<cmd_close_with_line::CloseWithLine>("Close With a Line", at),
         MenuItem::separator(),
         MenuItem::with_action("Exit Node Editing", "node_edit"),
     ]

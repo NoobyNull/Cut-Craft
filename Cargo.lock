@@ -552,6 +552,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-close-with-line"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-component-boundary"
 version = "0.1.0"
 dependencies = [
@@ -1085,6 +1094,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-reverse-direction"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-rotate"
 version = "0.1.0"
 dependencies = [
@@ -1583,6 +1601,7 @@ dependencies = [
  "cmd-chamfer-toolpath",
  "cmd-circular-copy",
  "cmd-close-extend-vector",
+ "cmd-close-with-line",
  "cmd-component-boundary",
  "cmd-component-properties",
  "cmd-copy-along-vectors",
@@ -1642,6 +1661,7 @@ dependencies = [
  "cmd-replace-below",
  "cmd-reset-inside-selected-vectors",
  "cmd-reset-outside-selected-vectors",
+ "cmd-reverse-direction",
  "cmd-rotate",
  "cmd-rounding-toolpath",
  "cmd-scale-model-z-height",
