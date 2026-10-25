@@ -75,6 +75,30 @@ impl Font {
         out
     }
 
+    /// Each glyph of one line, `height` tall per capital: where it starts along the
+    /// baseline, its advance, and its paths placed at x = 0 on the baseline.
+    pub fn glyphs(&self, line: &str, height: f64) -> Vec<(f64, f64, Vec<Path>)> {
+        let k = height / self.cap_height;
+        let scale = DAffine2::from_scale(glam::DVec2::splat(k));
+        let mut x = 0.0;
+        let mut prev = None;
+        let mut out = Vec::new();
+        for ch in line.chars() {
+            let Some(glyph) = self.glyph(ch) else {
+                continue;
+            };
+            x += prev.map_or(0.0, |before| self.kern(before, ch));
+            out.push((
+                x * k,
+                glyph.advance * k,
+                glyph.paths.iter().map(|p| p.transformed(&scale)).collect(),
+            ));
+            x += glyph.advance;
+            prev = Some(ch);
+        }
+        out
+    }
+
     /// A line's width in font units: advances and kerning.
     pub fn width(&self, line: &str) -> f64 {
         let mut w = 0.0;
@@ -361,6 +385,16 @@ pub(crate) mod tests {
         assert!((b.size().y - 20.0).abs() < 1e-9);
         // two advances of 10 at scale 2, the last glyph 8 wide
         assert!((b.size().x - 36.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn glyphs_report_their_place_along_the_line() {
+        let g = boxes().glyphs("AV", 20.0);
+        assert_eq!(g.len(), 2);
+        // scale 2: A at 0, advance 20; V kerned in by 2 × 2
+        assert!((g[0].0).abs() < 1e-9 && (g[0].1 - 20.0).abs() < 1e-9);
+        assert!((g[1].0 - 16.0).abs() < 1e-9);
+        assert!((g[1].2[0].bounds().size().y - 20.0).abs() < 1e-9);
     }
 
     #[test]

@@ -102,13 +102,7 @@ impl Command for DrawText {
             .filter(|g| doc.texts.contains_key(g))
             .unwrap_or_else(|| doc.next_group());
         let mut c = Change::builder(doc);
-        let old: Vec<_> = doc
-            .vector_groups
-            .iter()
-            .filter(|(id, g)| **g == group && doc.vectors.contains_key(id))
-            .map(|(&id, _)| id)
-            .collect();
-        for id in old {
+        for id in doc.group_members_of(group) {
             c.set_group(id, None);
             c.remove(id);
         }

@@ -1192,6 +1192,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-text-on-a-curve"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-texture-area"
 version = "0.1.0"
 dependencies = [
@@ -1572,6 +1582,7 @@ dependencies = [
  "cmd-space-vertically",
  "cmd-split",
  "cmd-subtract-vectors",
+ "cmd-text-on-a-curve",
  "cmd-texture-area",
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",

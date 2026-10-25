@@ -26,6 +26,7 @@ fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-import-stl = { path = "../formats/import-stl" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-text-on-a-curve = { path = "../commands/text-on-a-curve" }
 cmd-nest-parts = { path = "../commands/nest-parts" }
 cmd-two-rail-sweep = { path = "../commands/two-rail-sweep" }
 cmd-extrude-and-weave = { path = "../commands/extrude-and-weave" }

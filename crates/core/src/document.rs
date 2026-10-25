@@ -355,6 +355,15 @@ impl Document {
         }
     }
 
+    /// The vectors in group `group`.
+    pub fn group_members_of(&self, group: u64) -> Vec<EntityId> {
+        self.vector_groups
+            .iter()
+            .filter(|(v, g)| **g == group && self.vectors.contains_key(v))
+            .map(|(&v, _)| v)
+            .collect()
+    }
+
     /// A group number no vector uses yet.
     pub fn next_group(&self) -> u64 {
         self.vector_groups.values().max().map_or(1, |g| g + 1)
