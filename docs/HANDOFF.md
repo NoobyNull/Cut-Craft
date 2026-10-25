@@ -1,8 +1,30 @@
 ---
 status: read
 created: 2026-10-24
-focus: Keep building Cut Craft — right-click menus done; next match Aspire 12's layout, then down the tool inventory
+updated: 2026-10-25
+focus: Keep building Cut Craft down docs/tool-inventory.md's "Not built yet"
 ---
+
+## Update 2026-10-25 (40 local commits, `fc648d6`…`2b9c97a`, not pushed)
+
+- **Fonts:** `.vfont` decoded from the 23 samples (layout in `re/SPEC.md`, Fonts);
+  `crates/core/src/vfont.rs` reads them, `font.rs` adds system TrueType (fontdb) and layout.
+  Fonts are read from `~/.config/cut-craft/fonts` (locally a link to Aspire's `Fonts/`).
+  Tests use the built-in "Test Boxes" font (testing feature).
+- **Built:** Draw Text (editable: `Document.texts`), Text in a Box, Text on a Curve; Fit
+  Curves, Trace Bitmap, component boundary; Replace Below, Offset Model, Slice, Split,
+  Emboss, Add Draft, Cross Section, Texture Area, Turn and Spin, Extrude and Weave, Two Rail
+  Sweep; STL import; PDF / EPS / AI export, Print; Notes (`Document.notes`), Toolpath
+  Summary, Job Sheet, job and toolpath templates; Array / Circular / Copy Along Vectors,
+  Nest (box packing); Validator, Extend, Fillets, Dimensions, Trim, Measure, Vector Texture,
+  Freehand, Curve, Vector Selector; node editing (`core::nodes`, N, node right-click menu);
+  snapping (`core::snap`, F4); Draw Join Moves.
+- **New stdlib RE helpers:** `re/cfb.py` (OLE files), `re/vfont.py`, `re/dialogs.py` (every
+  DIALOG and XAML resource; dumps in `re/extracted/dialogs/`, one per tool's form).
+- **Left:** see "Not built yet". Mostly big or UI-heavy: Sculpt, Distort, Transform handles,
+  guides, keep-out zones, Options, document variables, machine configuration, double-sided
+  jobs, sheets, true-shape nesting. Calibration against VCarve Pro under Wine still needs
+  Matthew's OK.
 
 # Handoff: Cut Craft (Rust, Vectric Aspire-style CNC CAD/CAM)
 
