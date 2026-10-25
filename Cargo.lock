@@ -543,6 +543,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-close-extend-vector"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-component-boundary"
 version = "0.1.0"
 dependencies = [
@@ -1226,6 +1235,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-vector-validator"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-weld-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1427,6 +1445,7 @@ dependencies = [
  "cmd-center-vertically-in-material",
  "cmd-chamfer-toolpath",
  "cmd-circular-copy",
+ "cmd-close-extend-vector",
  "cmd-component-boundary",
  "cmd-component-properties",
  "cmd-copy-along-vectors",
@@ -1503,6 +1522,7 @@ dependencies = [
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
  "cmd-vcarve-inlay-toolpath",
+ "cmd-vector-validator",
  "cmd-weld-vectors",
  "cut-craft-core",
  "cut-craft-post",

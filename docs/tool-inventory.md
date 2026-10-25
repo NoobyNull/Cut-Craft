@@ -143,6 +143,10 @@ say "not implemented yet".
   - Copy Along Vectors: the first selected object (or circles) along the other selected
     vectors, by distance (optionally evened to land on the ends) or count, upright or
     turned with the curve, reversed, optionally on a new layer (dialog 458).
+  - Vector Validator (crossings, self-crossings and zero-length spans in the selection or
+    all shown vectors; the faulty vectors are selected, zero-length spans fixed) and Extend
+    Vectors (two selected open vectors' nearest ends run straight to where they meet;
+    Aspire picks the ends by hovering and clicking).
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
     corner fit, noise filter and grouping (dialog 347).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
@@ -187,7 +191,7 @@ say "not implemented yet".
   window tiling and cascade.
 - Gadgets; Help Contents.
 - Drawing tab:
-  - Node Edit, Transform, Trim, Close / Extend, Validator, Measure.
+  - Node Edit, Transform, Trim, Measure.
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture.
   - Nest, Distort.
