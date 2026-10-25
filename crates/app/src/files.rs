@@ -21,6 +21,11 @@ impl Session {
         history.revision() != self.saved
     }
 
+    /// The changes since the last save were thrown away on purpose: stop asking about them.
+    pub fn discard_changes(&mut self, history: &History) {
+        self.saved = history.revision();
+    }
+
     /// Window title: file name (or "Untitled"), with `*` for unsaved changes.
     pub fn title(&self, app: &str, history: &History) -> String {
         let name = self.path.as_deref().and_then(Path::file_name).map_or_else(

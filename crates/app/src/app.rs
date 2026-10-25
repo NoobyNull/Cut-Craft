@@ -712,7 +712,11 @@ impl CutCraftApp {
                 }
                 !self.session.is_dirty(&self.history)
             }
-            rfd::MessageDialogResult::No => true,
+            rfd::MessageDialogResult::No => {
+                // asked once: a repeated close request must not ask again
+                self.session.discard_changes(&self.history);
+                true
+            }
             _ => false,
         }
     }
