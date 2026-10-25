@@ -1236,6 +1236,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-two-rail-sweep"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-ungroup"
 version = "0.1.0"
 dependencies = [
@@ -1558,6 +1567,7 @@ dependencies = [
  "cmd-toolpath-properties",
  "cmd-trace-bitmap",
  "cmd-turn-and-spin",
+ "cmd-two-rail-sweep",
  "cmd-ungroup",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
