@@ -388,6 +388,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-add-draft"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-add-layer"
 version = "0.1.0"
 dependencies = [
@@ -561,6 +570,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-cross-section"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-delete"
 version = "0.1.0"
 dependencies = [
@@ -689,6 +707,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-drilling-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-emboss"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1067,6 +1094,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-split"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-subtract-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1327,6 +1363,7 @@ dependencies = [
  "chrono",
  "cmd-3d-finishing-toolpath",
  "cmd-3d-roughing-toolpath",
+ "cmd-add-draft",
  "cmd-add-layer",
  "cmd-add-zero-plane",
  "cmd-align-bottom",
@@ -1348,6 +1385,7 @@ dependencies = [
  "cmd-create-component-from-bitmap",
  "cmd-create-component-from-visible-model",
  "cmd-create-shape",
+ "cmd-cross-section",
  "cmd-delete",
  "cmd-delete-component",
  "cmd-delete-items",
@@ -1363,6 +1401,7 @@ dependencies = [
  "cmd-draw-star",
  "cmd-draw-text",
  "cmd-drilling-toolpath",
+ "cmd-emboss",
  "cmd-fit-curves-to-vectors",
  "cmd-fluting-toolpath",
  "cmd-group",
@@ -1404,6 +1443,7 @@ dependencies = [
  "cmd-smooth-selected-components",
  "cmd-space-horizontally",
  "cmd-space-vertically",
+ "cmd-split",
  "cmd-subtract-vectors",
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",

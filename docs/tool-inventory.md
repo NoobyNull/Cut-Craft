@@ -148,6 +148,10 @@ say "not implemented yet".
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
     top or bottom, or by count; optional boundary vectors). Slice heights cannot be edited
     one by one yet.
+  - Split Component (by a closed vector: "- A" inside, "- B" outside), Emboss Component
+    (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
+    component with no wall steeper than the draft angle), Create Cross Section Vector (drag
+    a line; the profile is drawn from it, height 1:1).
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 
@@ -157,7 +161,7 @@ say "not implemented yet".
 - Edit: Vector Selector, Nest, Swap Sides, Notes, Document Variables, Snap
   Options, Options.
 - Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Component with
-  Draft, Import, Export as 3D Clipart, Sculpt, Split, Cross Section, Emboss, Distort.
+  Draft, Import, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Draw Join Moves, Templates, Job Sheet, Materials, Toolpath Summary.
@@ -171,7 +175,7 @@ say "not implemented yet".
     Vector Texture.
   - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
-  Emboss, Distort, Draft, Split.
+  Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
   not hidden behind it.
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
@@ -181,6 +185,8 @@ say "not implemented yet".
   rest-machining toolpath is made on its own, naming the tools that ran before it).
 
 **Known problems and stand-ins.**
+- Split Component takes closed vectors only (Aspire also extends open ones to the edges).
+  Emboss's split into shape and detail is our own [inf].
 - Trace Bitmap has no colour mode (bitmaps are kept in grey) and no traced-area selection;
   Corner Fit's scale is our own.
 - Text is not editable once made (Aspire reopens the form on a text object); TrueType text has

@@ -3,6 +3,7 @@
 
 use cut_craft_core::Registry;
 
+#[expect(clippy::too_many_lines, reason = "one line per command")]
 pub fn registry() -> Registry {
     let mut r = Registry::default();
     r.add::<cmd_align_bottom::AlignBottom>();
@@ -94,6 +95,10 @@ pub fn registry() -> Registry {
     r.add::<cmd_replace_below::ReplaceBelow>();
     r.add::<cmd_offset_model::OffsetModel>();
     r.add::<cmd_slice::Slice>();
+    r.add::<cmd_split::Split>();
+    r.add::<cmd_emboss::Emboss>();
+    r.add::<cmd_add_draft::AddDraft>();
+    r.add_interactive::<cmd_cross_section::CrossSection>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

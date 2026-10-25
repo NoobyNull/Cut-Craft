@@ -24,6 +24,10 @@ fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-cross-section = { path = "../commands/cross-section" }
+cmd-add-draft = { path = "../commands/add-draft" }
+cmd-emboss = { path = "../commands/emboss" }
+cmd-split = { path = "../commands/split" }
 cmd-slice = { path = "../commands/slice" }
 cmd-offset-model = { path = "../commands/offset-model" }
 cmd-replace-below = { path = "../commands/replace-below" }

@@ -729,7 +729,7 @@ impl MenuSystem {
                             "Create Vector Boundary Around Selected Components",
                             "component_boundary",
                         ),
-                        i("Create Cross Section Vector"),
+                        a("Create Cross Section Vector", "cross_section"),
                         sep(),
                         i("Emboss Component"),
                         i("Scale Model Z Height"),
