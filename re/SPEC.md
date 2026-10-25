@@ -14,7 +14,7 @@ Confidence tags: **[obs]** read directly from a shipped file · **[dec]** read f
 | `Language/Lang/*/LC_MESSAGES/*.mo` | English UI strings split into 35 subsystem catalogs | `re/mo.py` (stdlib gettext) |
 | `Language/ENU/Help/{form,page}/*/index.html` | 241 help topics = full feature list and behaviour | `re/help2txt.py` |
 | `x64/`, `Language/ENU/Help/third-party/` | dependency and architecture map | file inventory |
-| `x64/Aspire.exe` | the post-processor vocabulary table, unit labels, date formats | Ghidra 12.1.2 project `re/extracted/ghidra/` (gitignored, about 2 h to analyse); `re/ghidra_scripts/` decompiles one function, finds a string's users, or dumps everything (`dump-decompiled`, about 50 min on 12 processes) |
+| `x64/Aspire.exe` | the post-processor vocabulary table, unit labels, date formats, form names (MFC runtime-class records). **Its code section is encrypted on disk** (7.99 bits/byte; most of the decompile is Ghidra decoding encrypted bytes), so only data is read statically. | Ghidra 12.1.2 project `re/extracted/ghidra/` (gitignored, about 2 h to analyse); `re/ghidra_scripts/` decompiles one function, finds a string's users, or dumps everything (`dump-decompiled`, about 50 min on 12 processes) |
 
 Regenerate the raw dumps:
 ```bash
