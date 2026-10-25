@@ -1,0 +1,17 @@
+[package]
+name = "cmd-orientate-3d-model"
+description = "Orientate 3D Model"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+fmt-import-stl = { path = "../../formats/import-stl" }
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

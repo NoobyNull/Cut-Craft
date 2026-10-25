@@ -70,7 +70,7 @@ impl Importer for ImportStl {
     clippy::many_single_char_names,
     reason = "the triangle's corners and barycentric u, v"
 )]
-fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
+pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
     let cell = k.cell;
     let index = |v: f64, n: usize| (v.max(0.0) as usize).min(n.saturating_sub(1));
     for [a, b, c] in triangles {
@@ -105,7 +105,7 @@ fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
 }
 
 /// The triangles of a binary or ASCII STL file.
-fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
+pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
     let binary_count = bytes
         .get(80..84)
         .map(|c| u32::from_le_bytes(c.try_into().expect("4 bytes")) as usize);

@@ -1042,6 +1042,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-orientate-3d-model"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "fmt-import-stl",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-overlap-intersect"
 version = "0.1.0"
 dependencies = [
@@ -1700,6 +1710,7 @@ dependencies = [
  "cmd-notes",
  "cmd-offset-model",
  "cmd-offset-vectors",
+ "cmd-orientate-3d-model",
  "cmd-overlap-intersect",
  "cmd-photo-vcarve-toolpath",
  "cmd-pocket-toolpath",

@@ -28,6 +28,7 @@ fmt-import-stl = { path = "../formats/import-stl" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-orientate-3d-model = { path = "../commands/orientate-3d-model" }
 cmd-vector-selector = { path = "../commands/vector-selector" }
 cmd-draw-curve = { path = "../commands/draw-curve" }
 cmd-draw-freehand = { path = "../commands/draw-freehand" }

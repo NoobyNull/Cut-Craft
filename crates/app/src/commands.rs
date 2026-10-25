@@ -128,6 +128,7 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_draw_freehand::DrawFreehand>();
     r.add::<cmd_draw_curve::DrawCurve>();
     r.add::<cmd_vector_selector::VectorSelector>();
+    r.add::<cmd_orientate_3d_model::Orientate3dModel>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

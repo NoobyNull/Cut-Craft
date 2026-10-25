@@ -216,9 +216,10 @@ say "not implemented yet".
   Béziers onto layers of the job's names; text objects, the model and toolpaths are not
   read). Layout from samples saved by Aspire 12 under Wine (`re/SPEC.md`, Job files).
 - File ▸ Import ▸ Import Component / 3D Model (and the Design tab button): binary and ASCII
-  STL, seen from above at the job's modeling resolution, centred, lowest point on the zero
-  plane, shrunk to fit the job. No Orientate 3D Model step yet (size, position, depth
-  below top); no OBJ.
+  STL through Aspire's Orientate 3D Model form (dialogs 524 and 4104): initial
+  orientation (which face is up), rotation about Z, file units, model size with locked
+  ratio, centre or position, depth below top, discard below the zero plane. No OBJ; no
+  undercut highlighting, perspective or segmenting.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the

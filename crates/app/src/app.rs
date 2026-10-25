@@ -506,6 +506,19 @@ impl CutCraftApp {
                     }
                 }
                 if let Some(path) = dialog.pick_file() {
+                    // meshes go through Orientate 3D Model, as Aspire's import does
+                    let stl = path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+                    if models && stl {
+                        self.start_command("orientate_3d_model");
+                        if let Some(form) =
+                            self.form.as_mut().filter(|f| f.id == "orientate_3d_model")
+                        {
+                            form.params["file"] = Value::from(path.display().to_string());
+                        }
+                        return;
+                    }
                     let change = files::import(&self.registry, &self.doc, &path)
                         .map_err(cut_craft_core::CommandError::Failed);
                     self.record(change, &format!("Imported {}", path.display()));
