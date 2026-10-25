@@ -8,6 +8,8 @@ use std::path::PathBuf;
 pub const JOB_EXTENSION: &str = "ccjob";
 /// Jobs saved before the app was renamed Cut Craft; they still open.
 pub const OLD_JOB_EXTENSION: &str = "ajob";
+/// Job templates: jobs that open as new, unsaved files.
+pub const TEMPLATE_EXTENSION: &str = "ccjobt";
 const FORMAT: &str = "cut-craft-job";
 const OLD_FORMAT: &str = "aspire-clone-job";
 /// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.

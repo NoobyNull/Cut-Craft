@@ -21,7 +21,9 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 43] = [
+const BUILT_INS: [&str; 45] = [
+    "save_as_template",
+    "new_from_template",
     "create_component_from_toolpath_preview",
     "toolpath_summary",
     "refresh_2d_view",
@@ -357,6 +359,8 @@ impl CutCraftApp {
             | "save_as"
             | "import_vectors_bitmap"
             | "import_component_3d_model"
+            | "save_as_template"
+            | "new_from_template"
             | "install_post_processor" => self.file_action(id),
             "tool_database" => self.tool_window = true,
             id if self.display.toggle(id) => ctx.request_repaint(),
@@ -450,6 +454,27 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&path),
                 None => self.file_action("save_as"),
             },
+            "save_as_template" => {
+                if let Some(path) = template_dialog()
+                    .set_file_name(format!("template.{TEMPLATE}"))
+                    .save_file()
+                {
+                    let path = path.with_extension(TEMPLATE);
+                    match std::fs::write(&path, cut_craft_core::file::save_job(&self.doc)) {
+                        Ok(()) => self
+                            .status
+                            .set_message(&format!("Saved template {}", path.display())),
+                        Err(e) => self
+                            .status
+                            .set_message(&format!("could not save {}: {e}", path.display())),
+                    }
+                }
+            }
+            "new_from_template" => {
+                if let Some(path) = template_dialog().pick_file() {
+                    self.open_path(&path);
+                }
+            }
             "save_as" => {
                 if let Some(path) = job_dialog()
                     .set_file_name(format!("untitled.{JOB_EXTENSION}"))
@@ -604,9 +629,18 @@ impl CutCraftApp {
         match session.open(path) {
             Ok((doc, history)) => {
                 self.reset_job();
+                let template = path
+                    .extension()
+                    .is_some_and(|e| e == cut_craft_core::file::TEMPLATE_EXTENSION);
+                if template {
+                    // a template opens as a new file: saving asks where, the template stays
+                    session.path = None;
+                }
                 (self.doc, self.history, self.session) = (doc, history, session);
                 self.screen = Screen::Job;
-                self.remember(path);
+                if !template {
+                    self.remember(path);
+                }
                 if self.doc.notes.starts_with('.') {
                     self.start_command("notes");
                 }
@@ -2008,6 +2042,17 @@ impl CutCraftApp {
     }
 }
 
+use cut_craft_core::file::TEMPLATE_EXTENSION as TEMPLATE;
+
+/// Job templates, starting in Cut Craft's `templates` folder.
+fn template_dialog() -> rfd::FileDialog {
+    let dialog = file_dialog().add_filter("Cut Craft job template", &[TEMPLATE]);
+    match files::config_dir().map(|d| d.join("templates")) {
+        Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
+        _ => dialog,
+    }
+}
+
 fn job_dialog() -> rfd::FileDialog {
     file_dialog().add_filter("Cut Craft job", &[JOB_EXTENSION, OLD_JOB_EXTENSION])
 }
@@ -2522,6 +2567,22 @@ mod tests {
                 "{notes}"
             );
         }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_template_opens_as_a_new_unsaved_job() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-template-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("plate.ccjobt");
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 10.0);
+        std::fs::write(&path, cut_craft_core::file::save_job(&h.app.doc)).unwrap();
+        let mut fresh = Harness::new();
+        assert!(fresh.app.open_path(&path));
+        assert_eq!(fresh.app.doc.vectors.len(), h.app.doc.vectors.len());
+        assert_eq!(fresh.app.session.path, None, "saving asks for a new name");
+        assert!(!fresh.app.recent.contains(&path));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -3642,7 +3703,7 @@ mod tests {
     /// save-changes question (the smoke test's job has unsaved work), the file manager and
     /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 13] = [
+        const ASKS: [&str; 15] = [
             "new",
             "open",
             "close",
@@ -3652,6 +3713,8 @@ mod tests {
             "open_application_data_folder",
             "import_vectors_bitmap",
             "import_component_3d_model",
+            "save_as_template",
+            "new_from_template",
             "install_post_processor",
             "save_toolpaths",
             "exit",

@@ -166,6 +166,8 @@ say "not implemented yet".
 - Toolpaths ▸ Toolpath Summary: each toolpath's estimated time and the visible ones' total
   (moves at their feed, plunge or rapid rate, times a scale factor; dialog 231). Rapid rate
   and scale last for the session; no summary notes.
+- File ▸ New from Template and Save As Template: `.ccjobt` job templates, kept in
+  `~/.config/cut-craft/templates`; a template opens as a new, unsaved job.
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
@@ -200,7 +202,7 @@ say "not implemented yet".
   Preview, Preview All, Reset Preview.
 
 **Not built yet.**
-- File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths.
+- File: Print, Print Preview, Import Toolpaths.
 - Edit: Vector Selector, Swap Sides, Document Variables, Snap
   Options, Options.
 - Model: Component with Draft, Export as 3D Clipart, Sculpt, Distort.
