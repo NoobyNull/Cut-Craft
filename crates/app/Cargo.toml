@@ -26,6 +26,7 @@ fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-import-stl = { path = "../formats/import-stl" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-draw-curve = { path = "../commands/draw-curve" }
 cmd-draw-freehand = { path = "../commands/draw-freehand" }
 cmd-vector-texture = { path = "../commands/vector-texture" }
 cmd-interactive-vector-trim = { path = "../commands/interactive-vector-trim" }

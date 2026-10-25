@@ -136,6 +136,8 @@ say "not implemented yet".
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;
     Ungroup turns it into curves.
+  - Draw Curve: a smooth Bézier curve (Catmull-Rom) through a list of points, open or
+    closed; points are entered in the form (Aspire places them with clicks).
   - Draw Freehand: the whole drag path, smoothed into Béziers within a tolerance.
   - Create Vector Texture: wavy lines at an angle over the selected closed vectors or the
     job, max spacing with variation, wavelength, amplitude, noise and a seed (vectors go on
@@ -242,7 +244,7 @@ say "not implemented yet".
 - Gadgets; Help Contents.
 - Drawing tab:
   - Transform, Trim Objects.
-  - Curve, Auto Layout Text.
+  - Auto Layout Text.
   - Distort.
 - Modeling tab: Sculpt,
   Distort.

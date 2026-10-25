@@ -733,6 +733,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-draw-curve"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-draw-ellipse"
 version = "0.1.0"
 dependencies = [
@@ -1648,6 +1657,7 @@ dependencies = [
  "cmd-drag-knife-toolpath",
  "cmd-draw-arc",
  "cmd-draw-circle",
+ "cmd-draw-curve",
  "cmd-draw-ellipse",
  "cmd-draw-freehand",
  "cmd-draw-polygon",
