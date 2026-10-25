@@ -21,7 +21,10 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 45] = [
+const BUILT_INS: [&str; 48] = [
+    "save_all_visible_toolpaths_as_template",
+    "load_template",
+    "save_selected_toolpath_as_template",
     "save_as_template",
     "new_from_template",
     "create_component_from_toolpath_preview",
@@ -303,8 +306,12 @@ impl CutCraftApp {
             "zoom_selected" => !self.doc.selection.is_empty(),
             id if id.starts_with("open_recent:") => true,
             "redo" => self.history.can_redo(),
-            "recalculate_toolpath" | "delete_toolpath" | "preview_toolpath" => {
-                self.selected_toolpath.is_some()
+            "recalculate_toolpath"
+            | "delete_toolpath"
+            | "preview_toolpath"
+            | "save_selected_toolpath_as_template" => self.selected_toolpath.is_some(),
+            "save_all_visible_toolpaths_as_template" => {
+                self.doc.toolpaths.values().any(|t| t.visible)
             }
             "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
                 !self.doc.toolpaths.is_empty()
@@ -359,9 +366,12 @@ impl CutCraftApp {
             | "save_as"
             | "import_vectors_bitmap"
             | "import_component_3d_model"
-            | "save_as_template"
-            | "new_from_template"
             | "install_post_processor" => self.file_action(id),
+            "save_as_template"
+            | "new_from_template"
+            | "save_selected_toolpath_as_template"
+            | "save_all_visible_toolpaths_as_template"
+            | "load_template" => self.template_action(id),
             "tool_database" => self.tool_window = true,
             id if self.display.toggle(id) => ctx.request_repaint(),
             "refresh_2d_view" => ctx.request_repaint(),
@@ -454,27 +464,6 @@ impl CutCraftApp {
                 Some(path) => self.save_to(&path),
                 None => self.file_action("save_as"),
             },
-            "save_as_template" => {
-                if let Some(path) = template_dialog()
-                    .set_file_name(format!("template.{TEMPLATE}"))
-                    .save_file()
-                {
-                    let path = path.with_extension(TEMPLATE);
-                    match std::fs::write(&path, cut_craft_core::file::save_job(&self.doc)) {
-                        Ok(()) => self
-                            .status
-                            .set_message(&format!("Saved template {}", path.display())),
-                        Err(e) => self
-                            .status
-                            .set_message(&format!("could not save {}: {e}", path.display())),
-                    }
-                }
-            }
-            "new_from_template" => {
-                if let Some(path) = template_dialog().pick_file() {
-                    self.open_path(&path);
-                }
-            }
             "save_as" => {
                 if let Some(path) = job_dialog()
                     .set_file_name(format!("untitled.{JOB_EXTENSION}"))
@@ -514,6 +503,67 @@ impl CutCraftApp {
                 }
             }
             _ => unreachable!("not a file action: {id}"),
+        }
+    }
+
+    /// Job and toolpath templates, saved and loaded through the templates folder.
+    fn template_action(&mut self, id: &str) {
+        match id {
+            "save_as_template" => {
+                if let Some(path) = template_dialog()
+                    .set_file_name(format!("template.{TEMPLATE}"))
+                    .save_file()
+                {
+                    let path = path.with_extension(TEMPLATE);
+                    match std::fs::write(&path, cut_craft_core::file::save_job(&self.doc)) {
+                        Ok(()) => self
+                            .status
+                            .set_message(&format!("Saved template {}", path.display())),
+                        Err(e) => self
+                            .status
+                            .set_message(&format!("could not save {}: {e}", path.display())),
+                    }
+                }
+            }
+            "save_selected_toolpath_as_template" | "save_all_visible_toolpaths_as_template" => {
+                let ids: Vec<_> = if id == "save_selected_toolpath_as_template" {
+                    self.selected_toolpath.into_iter().collect()
+                } else {
+                    self.doc
+                        .toolpaths
+                        .iter()
+                        .filter(|(_, t)| t.visible)
+                        .map(|(&i, _)| i)
+                        .collect()
+                };
+                if let Some(path) = toolpath_template_dialog()
+                    .set_file_name(format!("toolpaths.{}", files::TOOLPATH_TEMPLATE_EXTENSION))
+                    .save_file()
+                {
+                    let path = path.with_extension(files::TOOLPATH_TEMPLATE_EXTENSION);
+                    let message =
+                        match std::fs::write(&path, files::toolpath_template(&self.doc, &ids)) {
+                            Ok(()) => format!("Saved toolpath template {}", path.display()),
+                            Err(e) => format!("could not save {}: {e}", path.display()),
+                        };
+                    self.status.set_message(&message);
+                }
+            }
+            "load_template" => {
+                if let Some(path) = toolpath_template_dialog().pick_file() {
+                    let change = std::fs::read(&path)
+                        .map_err(|e| e.to_string())
+                        .and_then(|bytes| files::load_toolpath_template(&self.doc, &bytes))
+                        .map_err(cut_craft_core::CommandError::Failed);
+                    self.record(change, &format!("Loaded {}", path.display()));
+                }
+            }
+            "new_from_template" => {
+                if let Some(path) = template_dialog().pick_file() {
+                    self.open_path(&path);
+                }
+            }
+            _ => unreachable!("not a template action: {id}"),
         }
     }
 
@@ -2047,6 +2097,16 @@ use cut_craft_core::file::TEMPLATE_EXTENSION as TEMPLATE;
 /// Job templates, starting in Cut Craft's `templates` folder.
 fn template_dialog() -> rfd::FileDialog {
     let dialog = file_dialog().add_filter("Cut Craft job template", &[TEMPLATE]);
+    match files::config_dir().map(|d| d.join("templates")) {
+        Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
+        _ => dialog,
+    }
+}
+
+/// Toolpath templates, in the same `templates` folder.
+fn toolpath_template_dialog() -> rfd::FileDialog {
+    let dialog =
+        file_dialog().add_filter("Toolpath template", &[files::TOOLPATH_TEMPLATE_EXTENSION]);
     match files::config_dir().map(|d| d.join("templates")) {
         Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
         _ => dialog,
@@ -3703,7 +3763,7 @@ mod tests {
     /// save-changes question (the smoke test's job has unsaved work), the file manager and
     /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 15] = [
+        const ASKS: [&str; 18] = [
             "new",
             "open",
             "close",
@@ -3715,6 +3775,9 @@ mod tests {
             "import_component_3d_model",
             "save_as_template",
             "new_from_template",
+            "save_selected_toolpath_as_template",
+            "save_all_visible_toolpaths_as_template",
+            "load_template",
             "install_post_processor",
             "save_toolpaths",
             "exit",

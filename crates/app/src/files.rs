@@ -151,6 +151,38 @@ pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
 pub const RECENT_COUNT: usize = 4;
 
 /// Puts `path` first in `recent`, once, keeping the latest [`RECENT_COUNT`].
+/// Toolpath templates: the toolpaths' settings, without their moves or vectors.
+pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
+
+/// The toolpaths `ids` as a template file.
+pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::EntityId]) -> Vec<u8> {
+    let toolpaths: Vec<_> = ids
+        .iter()
+        .filter_map(|id| doc.toolpaths.get(id))
+        .map(|t| cut_craft_core::toolpath::Toolpath {
+            moves: vec![],
+            vectors: vec![],
+            power: vec![],
+            ..t.clone()
+        })
+        .collect();
+    serde_json::to_vec_pretty(&toolpaths).expect("toolpaths serialise")
+}
+
+/// A template's toolpaths added, empty, ready to be edited and calculated on vectors.
+pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, String> {
+    let toolpaths: Vec<cut_craft_core::toolpath::Toolpath> =
+        serde_json::from_slice(bytes).map_err(|e| format!("not a toolpath template: {e}"))?;
+    if toolpaths.is_empty() {
+        return Err("the template holds no toolpaths".into());
+    }
+    let mut c = Change::builder(doc);
+    for t in toolpaths {
+        c.add_toolpath(t);
+    }
+    Ok(c.finish())
+}
+
 pub fn remember(recent: &mut Vec<PathBuf>, path: &Path) {
     recent.retain(|p| p != path);
     recent.insert(0, path.to_path_buf());
@@ -215,6 +247,28 @@ mod increment_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn toolpath_templates_keep_settings_and_drop_moves() {
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let id = *doc.toolpaths.keys().next().unwrap();
+        doc.toolpaths
+            .get_mut(&id)
+            .unwrap()
+            .moves
+            .push(cut_craft_core::toolpath::Move {
+                kind: cut_craft_core::toolpath::MoveKind::Cut,
+                to: cut_craft_core::glam::DVec3::ZERO,
+            });
+        let bytes = super::toolpath_template(&doc, &[id]);
+        let change = super::load_toolpath_template(&doc, &bytes).unwrap();
+        doc.apply(&change).unwrap();
+        assert_eq!(doc.toolpaths.len(), 2);
+        let loaded = doc.toolpaths.values().last().unwrap();
+        assert_eq!(loaded.name, "Profile");
+        assert_eq!(loaded.moves, vec![]);
+        assert!(super::load_toolpath_template(&doc, b"[]").is_err());
+    }
+
     use super::*;
     use cut_craft_core::testing::sample_document;
     use cut_craft_core::toolpath::ToolDatabase;

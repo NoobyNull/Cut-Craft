@@ -168,6 +168,9 @@ say "not implemented yet".
   and scale last for the session; no summary notes.
 - File ▸ New from Template and Save As Template: `.ccjobt` job templates, kept in
   `~/.config/cut-craft/templates`; a template opens as a new, unsaved job.
+- Toolpaths ▸ Templates: save the selected or all visible toolpaths' settings as a
+  `.cctpt` template, and load one as empty toolpaths to edit and calculate. The Missing
+  Layers dialog is not done.
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
@@ -208,7 +211,7 @@ say "not implemented yet".
 - Model: Component with Draft, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
-- Toolpaths: Draw Join Moves, Templates, Job Sheet, Materials.
+- Toolpaths: Draw Join Moves, Job Sheet, Materials.
 - View: Guide Lines, Keep-Out Zones, Auto-Wrapping, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
 - Gadgets; Help Contents.
