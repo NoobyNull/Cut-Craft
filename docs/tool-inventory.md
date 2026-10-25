@@ -240,9 +240,8 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: Import Toolpaths.
-- Edit: Swap Sides, Document Variables,
-  Options, Options.
-- Model: Component with Draft, Export as 3D Clipart, Sculpt, Distort.
+- Edit: Swap Sides, Document Variables, Options.
+- Model: Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Draw Join Moves, Job Sheet, Materials.
