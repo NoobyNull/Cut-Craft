@@ -443,7 +443,7 @@ impl CutCraftApp {
                 }
             }
             "import_vectors_bitmap" => {
-                let mut dialog = rfd::FileDialog::new();
+                let mut dialog = file_dialog();
                 for importer in self.registry.importers() {
                     dialog = dialog.add_filter(importer.format.label, importer.format.extensions);
                 }
@@ -454,7 +454,7 @@ impl CutCraftApp {
                 }
             }
             "install_post_processor" => {
-                if let Some(path) = rfd::FileDialog::new()
+                if let Some(path) = file_dialog()
                     .add_filter("Post-processor", &["pp"])
                     .pick_file()
                 {
@@ -504,7 +504,7 @@ impl CutCraftApp {
             "save_toolpaths" => {
                 let post = self.output_post();
                 let extension = post.extension.clone();
-                let dialog = rfd::FileDialog::new().add_filter(&post.name, &[extension.as_str()]);
+                let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
                 if let Some(path) = dialog.save_file() {
                     let path = path.with_extension(&extension);
                     let job = self.session.path.as_deref();
@@ -675,7 +675,7 @@ impl CutCraftApp {
         let Some(format) = self.registry.exporter(id).map(|e| e.format) else {
             return;
         };
-        let dialog = rfd::FileDialog::new().add_filter(format.label, format.extensions);
+        let dialog = file_dialog().add_filter(format.label, format.extensions);
         if let Some(path) = dialog.save_file() {
             let path = path.with_extension(format.extensions[0]);
             let result = files::export(&self.registry, id, &self.doc, &path);
@@ -691,6 +691,7 @@ impl CutCraftApp {
         if !self.session.is_dirty(&self.history) {
             return true;
         }
+        on_the_desktop();
         let answer = rfd::MessageDialog::new()
             .set_title(APP_NAME)
             .set_description(format!(
@@ -1338,6 +1339,7 @@ impl CutCraftApp {
                     .ok_or_else(|| "no home folder".to_owned())
                     .and_then(|dir| {
                         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                        on_the_desktop();
                         std::process::Command::new("xdg-open")
                             .arg(&dir)
                             .spawn()
@@ -1894,7 +1896,20 @@ impl CutCraftApp {
 }
 
 fn job_dialog() -> rfd::FileDialog {
-    rfd::FileDialog::new().add_filter("Cut Craft job", &[JOB_EXTENSION, OLD_JOB_EXTENSION])
+    file_dialog().add_filter("Cut Craft job", &[JOB_EXTENSION, OLD_JOB_EXTENSION])
+}
+
+/// The system's file dialog. Tests must never open one: it lands on the desktop of whoever
+/// runs them and waits for an answer.
+fn file_dialog() -> rfd::FileDialog {
+    on_the_desktop();
+    rfd::FileDialog::new()
+}
+
+/// Every window or program the app puts on the desktop passes here; in tests it fails.
+fn on_the_desktop() {
+    #[cfg(test)]
+    panic!("a test opened a real dialog or program: list the control in needs_a_person");
 }
 
 /// What drawing the menus needs from the app.
@@ -3404,15 +3419,18 @@ mod tests {
         );
     }
 
-    /// Controls that wait on a person: the system's file dialogs, the save-changes question
-    /// (the smoke test's job has unsaved work) and quitting.
+    /// Controls that wait on a person or open other programs: the system's file dialogs, the
+    /// save-changes question (the smoke test's job has unsaved work), the file manager and
+    /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 10] = [
+        const ASKS: [&str; 12] = [
             "new",
             "open",
             "close",
             "save",
             "save_as",
+            "increment_and_save",
+            "open_application_data_folder",
             "import_vectors_bitmap",
             "install_post_processor",
             "save_toolpaths",
