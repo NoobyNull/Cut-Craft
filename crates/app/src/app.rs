@@ -3123,6 +3123,7 @@ mod tests {
         h.app.invoke(&h.ctx, "open_recent:0");
         assert_eq!(h.app.screen, Screen::Job);
         assert_eq!(h.app.session.path.as_deref(), Some(job.as_path()));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
