@@ -18,6 +18,8 @@ pub enum Method {
     /// Lengthen the first and last lines until they meet; when they never do, close with a
     /// straight line
     Extend,
+    /// A smooth curve leaving the end and reaching the start along their own directions
+    Smooth,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
@@ -63,6 +65,7 @@ impl Command for CloseExtendVector {
             }
             let joined = match p.method {
                 Method::Extend if gap > TOUCHING => extended(&path),
+                Method::Smooth if gap > TOUCHING => smoothed(&path),
                 _ => None,
             };
             c.replace(id, joined.unwrap_or_else(|| with_line(path)));
@@ -100,6 +103,45 @@ fn with_line(mut path: Path) -> Path {
     }
     path.closed = true;
     path
+}
+
+/// `path` closed by a curve leaving its end, and reaching its start, along their own
+/// directions; `None` when either direction is unknown (a span of no length).
+fn smoothed(path: &Path) -> Option<Path> {
+    let (start, finish) = (path.start, end(path));
+    let first = *path.segments.first()?;
+    let last = *path.segments.last()?;
+    let before_last = path
+        .segments
+        .len()
+        .checked_sub(2)
+        .map_or(path.start, |i| path.segments[i].end());
+    // the direction travelled on leaving the start, and on arriving at the end
+    let leaving = match first {
+        Segment::Line { to } => to - start,
+        Segment::Cubic { c1, .. } => c1 - start,
+        Segment::Arc { center, ccw, .. } => turn(start - center, ccw),
+    };
+    let arriving = match last {
+        Segment::Line { to } => to - before_last,
+        Segment::Cubic { c2, to, .. } => to - c2,
+        Segment::Arc { to, center, ccw } => turn(to - center, ccw),
+    };
+    let (leaving, arriving) = (leaving.try_normalize()?, arriving.try_normalize()?);
+    let reach = (start - finish).length() / 3.0;
+    let mut closed = path.clone();
+    closed.segments.push(Segment::Cubic {
+        c1: finish + arriving * reach,
+        c2: start - leaving * reach,
+        to: start,
+    });
+    closed.closed = true;
+    Some(closed)
+}
+
+/// The direction of travel round an arc at the point `radius` from its centre.
+fn turn(radius: Point, ccw: bool) -> Point {
+    if ccw { radius.perp() } else { -radius.perp() }
 }
 
 /// `path` with its first and last lines lengthened to where they meet, closed there; `None`
@@ -205,6 +247,32 @@ mod tests {
             .unwrap();
         assert!(u.closed);
         assert_eq!(u.segments.len(), 4);
+    }
+
+    #[test]
+    fn smooth_closes_with_a_curve_carrying_on_from_each_end() {
+        let smooth = Params {
+            method: Method::Smooth,
+            ..Params::default()
+        };
+        let [path] = closed(vec![u_shape()], &smooth)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert!(path.closed);
+        let Some(&Segment::Cubic { c1, c2, to }) = path.segments.last() else {
+            panic!("closed with a curve: {:?}", path.segments.last());
+        };
+        // down out of the right side, up into the left side, a third of the gap away
+        assert_eq!(
+            (c1, c2, to),
+            (p(10.0, -10.0 / 3.0), p(0.0, -10.0 / 3.0), p(0.0, 0.0))
+        );
+        assert!(
+            (path.bounds().min.y + 2.5).abs() < 1e-9,
+            "{:?}",
+            path.bounds()
+        );
     }
 
     #[test]

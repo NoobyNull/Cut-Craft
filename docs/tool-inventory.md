@@ -131,17 +131,21 @@ say "not implemented yet".
   each leaves out is in its `re/SPEC.md` section.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
-  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Create Fillets (round,
-    dog-bone, T-bone; all, outer or inner corners of the selection at once).
+  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Create Fillets (Normal,
+    Dog-Bone, T-Bone; all, outer or inner corners of the selection at once; an oversize
+    radius gets the largest that fits).
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
-  - Array Copy (rows × columns by gap or offset) and Circular Copy (round the job centre or a
-    point, over a full or part circle, turning the copies or not). Copies stay on their
-    originals' layers; copies of grouped vectors are not grouped.
-  - Copy Along Vectors (the last vector picked is the path; by count or distance, turned to
-    follow it or not).
-  - Close / Extend Vector (a closing line, or the end lines run on until they meet; max gap).
-  - Vector Validator (selects open, self-crossing, duplicate and tiny vectors in the
-    selection, or in the whole job when nothing is selected).
+  - Array Copy (rows × columns by gap or offset) and Circular Copy (round the selection's
+    middle, the job centre or a point; total or step angle, clockwise positive; turning the
+    copies or not). Copies stay on their originals' layers; copies of grouped vectors are
+    not grouped.
+  - Copy Along Vectors (the first object picked is copied along the other vectors; by count
+    or distance with force even spacing; align, reverse, copies on a new layer).
+  - Close / Extend Vector (a closing line, a smooth curve, or the end lines run on until
+    they meet; max gap).
+  - Vector Validator (overlaps, intersections within and between vectors, zero-length spans,
+    and optionally open vectors; selects them or fixes the spans).
+  - Not built from these tools' Aspire forms: see each one's section in `re/SPEC.md`.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.

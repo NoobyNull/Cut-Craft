@@ -162,21 +162,27 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
 
-### Create Fillets [inf] (no help text read yet; general CNC practice)
-- Works on the sharp corners where two straight sides meet; corners touching curves are left as they are.
-- **Round:** an arc of the given radius tangent to both sides. **Dog-Bone:** a circle the cutter's radius, centred on the line halving the corner and passing through it, so a round cutter clears the corner fully. **T-Bone:** the same circle, notched into the longer side instead.
-- **Corners:** All, Outer (pointing out of a closed shape: what a cutter inside a pocket cannot reach) or Inner (pointing in: what a cutter outside the shape cannot reach). Open vectors have no inside and get every corner.
-- A fillet may use at most half of each side it touches, so neighbouring fillets never overlap; corners that need more are left sharp. Aspire's tool is clicked corner by corner; ours does every corner of the selection at once.
+### Create Fillets [obs] (help: Create Fillets, V12.5)
+- Fillets corners where two **straight** spans meet; corners touching arcs or curves cannot be filleted. Types: **Normal** (a rounded corner of the radius), **Dog-Bone** (a relief circle the radius whose edge touches the sharp corner: for slots clearly wider than the cutter) and **T-Bone** (the relief circle pushed sideways into one side: for slots about as wide as the cutter; on the longer side when the corner itself is clicked, else on the side clicked nearer).
+- A radius the corner cannot take gets the **largest fillet of that type that fits**, with a warning icon.
+- Aspire's tool is interactive: hover a corner (a tick shows it can be filleted; a cross over an existing fillet removes it, rebuilding a sharp corner from straight lines) and click. Ours fillets every corner of the selection at once, optionally only the **Outer** or **Inner** corners of closed shapes [inf], and a fillet uses at most half of each side so neighbours never overlap [inf]. Not built: removing fillets, choosing the T-bone side by where the corner is clicked.
 
-### Array Copy and Circular Copy of vectors [inf] (modelled on Array Copy toolpath above)
-- **Array Copy:** Rows (Y) × Columns (X), the original's row and column included, placed above and to the right of the selection. Spacing by **Gap** (between neighbouring copies' extents) or **Offset** (start to start).
-- **Circular Copy:** a number of items in all, the original included, round the **job centre** or a typed point, spread counter-clockwise over an angle (360° spaces them evenly; less puts the last one at the end of the angle). Copies turn with the circle unless **Rotate copies** is off, when they only move.
-- Copies stay on their originals' layers and the originals and copies end up selected.
+### Array Copy and Circular Copy of vectors [obs] (help: Array Copy, Circular Copy, V12.5)
+- **Array Copy:** Rows × Columns copies. **Gap**: X and Y are the space between neighbouring copies' edges; **Offset**: how far each copy is from the last. Copies go above and to the right of the selection [inf: the help does not say]. Not built: Symmetry (mirrored / rotated copies), Row / Column Displacement (staggered rows), Group Copies.
+- **Circular Copy:** a number of items [unk: whether the original counts; ours counts it] round a **Rotation Centre** that starts in the middle of the selection (moved by typing X, Y or dragging its handle; ours also offers the job centre). **Total angle** is divided by the number of items; **Step angle** is the angle per item. A positive step goes **clockwise**, negative counter-clockwise [inf: the same for total]. **Rotate Copies** turns each copy with the circle; off, they keep the original's orientation.
 
-### Close / Extend, Vector Validator, Copy Along Vectors [inf]
-- **Close / Extend Vector:** closes the selected open vectors with a straight line from end to start, or **Extend** runs the first and last lines on until they meet (a closing line when they never do). **Max gap** leaves vectors whose ends are further apart.
-- **Vector Validator:** checks the selection, or every editable vector when nothing is selected, for open vectors, closed ones crossing themselves, vectors on top of another (either direction) and vectors or spans shorter than a tolerance, and selects the ones that fail. Aspire's validator also marks the trouble spots; ours selects whole vectors.
-- **Copy Along Vectors:** the last vector picked is the path; the objects picked before it are copied along it, a number of copies spread end to end (all round when it is closed) or one every so far from its start, turned to follow the path as if facing +X, or not.
+### Copy Along Vectors [obs] (help: Copy Along Vectors, V12.5)
+- The **first** object selected (with its group) is copied; the other selected vectors are the curves it is copied along.
+- Spacing by **Distance between copies** (from the start; **Force even spacing** adjusts it so copies land on the ends) or by **Number of copies** spread along the whole curve. **Align Objects to curve** turns each copy with the curve (ours: as if the object faced +X); **Reverse Direction** runs from the other end; **Create Copies on new layer**.
+- Not built: **Copy Circles** (circles of a typed diameter instead of an object). On a closed curve no copy lands on top of the first [inf].
+
+### Close / Extend Vector [obs] (help: Join / Close Vector with a Smooth Curve; Extend Vectors)
+- Aspire's slot holds a **smooth-curve join/close** (nearest ends of two open vectors joined, or one closed, by a smooth curve; two smoothing methods) and an interactive **Extend** (pick an open end, see its dashed extension, click where it meets another span).
+- Ours closes each selected open vector by a **Line**, a **Smooth** curve leaving the end and arriving at the start along their own directions, or by **Extend**ing the first and last lines to where they meet (a line when they never do), within a **max gap** [inf]. Not built: interactive extend to another vector; joining two different vectors with a curve (Join Vectors joins them with a line).
+
+### Vector Validator [obs] (help: Vector Validator, V12.5)
+- Finds **overlapping** contours, **intersections** and **zero-length spans**; a **Fix zero length Spans** button removes the spans. With a selection only those vectors are checked, else every visible vector on the current sheet and side.
+- Aspire marks each problem on the vectors; ours selects the vectors with problems (or fixes the spans). Extra: an **Open vectors** check, off by default. Not built: V-Carving Mode (ignores intersections in text).
 
 ### 3D components [obs]
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
