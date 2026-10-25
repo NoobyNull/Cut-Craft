@@ -107,11 +107,5 @@ Next:
     plane, scale Z, from bitmap / visible model / toolpath preview, bake, smooth, reset
     inside / outside, grayscale export).
 
-Next (see `docs/tool-inventory.md` for the full list and its known problems):
-21. Component selection (click in the 3D view or Components tab), then the "selected
-    component" commands: split, vector boundary, cross section, emboss, distort, offset, slice.
-22. Import Component / 3D Model (STL as a height map); PDF / EPS export; Notes; guide lines;
-    Save Shaded Image; window tiling.
-23. Bigger tools: extrude and weave, two rail sweep, turn and spin, sculpting, nesting, curve
-    fit, toolpath templates and job sheet, snap and program options, machine configuration.
-
+Next: the plan for everything left, in phases with sizes and open decisions, is
+`docs/ROADMAP.md`; `docs/tool-inventory.md` lists what works and what does not.
