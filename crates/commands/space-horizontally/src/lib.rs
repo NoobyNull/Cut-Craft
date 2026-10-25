@@ -1,13 +1,34 @@
 //! Space Horizontally: evenly spaces the selected objects along x, the outermost staying put.
 
+use cut_craft_core::Sequence;
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Meta};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 pub struct SpaceHorizontally;
 
+/// Which object goes where along the span.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Order {
+    /// Keep the order they are in
+    #[default]
+    AsPlaced,
+    /// The first picked on the left
+    LeftToRight,
+    /// The first picked on the right
+    RightToLeft,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct Params {
+    pub order: Order,
+}
+
 impl Command for SpaceHorizontally {
     const ID: &'static str = "space_horizontally";
-    type Params = NoParams;
+    type Params = Params;
 
     fn meta() -> Meta {
         Meta {
@@ -18,8 +39,13 @@ impl Command for SpaceHorizontally {
         }
     }
 
-    fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
-        Change::space_selected(doc, false)
+    fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        let sequence = match p.order {
+            Order::AsPlaced => Sequence::ByPosition,
+            Order::LeftToRight => Sequence::PickedFromLow,
+            Order::RightToLeft => Sequence::PickedFromHigh,
+        };
+        Change::space_selected(doc, false, sequence)
     }
 }
 
@@ -44,7 +70,7 @@ mod tests {
     fn the_middle_ones_move_to_equal_gaps_and_the_ends_stay() {
         // squares 10 wide at 0, 15 and 100: 40 either side of the middle one
         let mut doc = document_with(vec![at(0.0), at(15.0), at(100.0)]);
-        let change = SpaceHorizontally::run(&doc, &NoParams {}).unwrap();
+        let change = SpaceHorizontally::run(&doc, &Params::default()).unwrap();
         doc.apply(&change).unwrap();
         let mut starts: Vec<f64> = doc
             .vectors
@@ -64,6 +90,29 @@ mod tests {
     #[test]
     fn needs_three_objects() {
         let doc = document_with(vec![at(0.0), at(50.0)]);
-        assert!(SpaceHorizontally::run(&doc, &NoParams {}).is_err());
+        assert!(SpaceHorizontally::run(&doc, &Params::default()).is_err());
+    }
+
+    fn picked_starts(order: Order, picked: [f64; 3]) -> Vec<f64> {
+        let mut doc = document_with(picked.map(at).to_vec());
+        let change = SpaceHorizontally::run(&doc, &Params { order }).unwrap();
+        doc.apply(&change).unwrap();
+        doc.selection
+            .iter()
+            .map(|id| doc.vectors[id].bounds().min.x)
+            .collect()
+    }
+
+    #[test]
+    fn the_first_picked_goes_at_the_start_of_the_direction() {
+        // picked at 100, 0, 15: the same span, laid out in pick order
+        assert_eq!(
+            picked_starts(Order::LeftToRight, [100.0, 0.0, 15.0]),
+            [0.0, 50.0, 100.0]
+        );
+        assert_eq!(
+            picked_starts(Order::RightToLeft, [100.0, 0.0, 15.0]),
+            [100.0, 50.0, 0.0]
+        );
     }
 }

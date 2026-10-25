@@ -12,6 +12,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 
+/// The order spaced objects are laid out in, from the low end (left, bottom) of the span.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sequence {
+    /// Where they already are
+    ByPosition,
+    /// The first picked at the low end
+    PickedFromLow,
+    /// The first picked at the high end
+    PickedFromHigh,
+}
+
 /// One primitive edit. Each stores what it replaces, so its inverse is exact.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Edit {
@@ -275,7 +286,11 @@ impl Change {
     /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
     /// stay put and the others move so the gaps between their extents are equal, keeping
     /// their order and their other coordinate.
-    pub fn space_selected(doc: &Document, vertical: bool) -> Result<Self, CommandError> {
+    pub fn space_selected(
+        doc: &Document,
+        vertical: bool,
+        sequence: Sequence,
+    ) -> Result<Self, CommandError> {
         let along = |r: Rect| {
             if vertical {
                 (r.min.y, r.max.y)
@@ -296,13 +311,19 @@ impl Change {
                 "select at least three objects to space".into(),
             ));
         }
-        items.sort_by(|a, b| (a.1 + a.2).total_cmp(&(b.1 + b.2)));
-        let span = items[items.len() - 1].2 - items[0].1;
+        let start = items.iter().map(|i| i.1).fold(f64::INFINITY, f64::min);
+        let end = items.iter().map(|i| i.2).fold(f64::NEG_INFINITY, f64::max);
+        match sequence {
+            Sequence::ByPosition => items.sort_by(|a, b| (a.1 + a.2).total_cmp(&(b.1 + b.2))),
+            Sequence::PickedFromLow => {}
+            Sequence::PickedFromHigh => items.reverse(),
+        }
+        let span = end - start;
         let sizes: f64 = items.iter().map(|(_, lo, hi)| hi - lo).sum();
         #[expect(clippy::cast_precision_loss, reason = "a few objects")]
         let gap = (span - sizes) / (items.len() - 1) as f64;
         let mut c = Self::builder(doc);
-        let mut at = items[0].1;
+        let mut at = start;
         for &(id, lo, hi) in &items {
             let by = at - lo;
             if by.abs() > 1e-12 {

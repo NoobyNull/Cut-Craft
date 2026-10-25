@@ -104,7 +104,7 @@ say "not implemented yet".
   SVG, Open Application Data Folder, Exit.
 - Edit: Undo, Redo, Cut, Copy, Paste, Delete; Select All Vectors / Open Vectors / Duplicate
   Vectors / On Current Layer, Unselect All; the ten Align commands and the four spacing ones
-  (Left To Right ... Bottom To Top); Join Vectors, Group, Ungroup, Job Size and Position.
+  (Left To Right ... Bottom To Top; laid out in pick order, the first picked at the named start [inf]); Join Vectors, Group, Ungroup, Job Size and Position.
 - Selection: pick order kept; components picked in the Components tab; bitmaps picked in the
   2D view (Bitmap Properties: position and size; Delete removes them).
 - Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
@@ -169,8 +169,6 @@ say "not implemented yet".
 
 **Known problems and stand-ins.**
 - Components are selected in the Components tab, not by clicking them in the 3D view.
-- Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
-  spacing commands do not yet use it).
 - Groups hold vectors only and do not nest.
 - Display settings (Toolpath Drawing, quality, View toggles) last only for the session.
 - Thread mills and lasers are not tool types in the database: their tooth offset and power
