@@ -15,6 +15,7 @@ pub mod simulation;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod toolpath;
+pub mod trace;
 
 pub use glam;
 
