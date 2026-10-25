@@ -1,5 +1,6 @@
-//! Vector Validator: finds vectors that would trouble toolpaths or modelling (open,
-//! crossing themselves, lying on top of another, or too small) and selects them.
+//! Vector Validator: finds vectors that would stop toolpaths being made (overlapping,
+//! crossing themselves or each other, or with zero-length spans) and selects them, or fixes
+//! the zero-length spans.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Segment};
@@ -12,14 +13,16 @@ pub struct VectorValidator;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[expect(clippy::struct_excessive_bools, reason = "one tick box per check")]
 pub struct Params {
-    /// Open vectors: they cannot be pocketed, modelled or profiled inside or outside
-    pub open: bool,
-    /// Closed vectors that cross themselves
-    pub self_intersecting: bool,
     /// Vectors lying on top of another one
-    pub duplicates: bool,
-    /// Vectors, or spans within them, shorter than the tolerance
-    pub tiny: bool,
+    pub overlapping: bool,
+    /// Vectors crossing themselves or each other
+    pub intersections: bool,
+    /// Spans, or whole vectors, shorter than the tolerance
+    pub zero_length_spans: bool,
+    /// Open vectors: they cannot be pocketed or modelled (not one of Aspire's checks)
+    pub open: bool,
+    /// Instead of selecting problems, remove the zero-length spans from the vectors checked
+    pub fix_zero_length_spans: bool,
     /// How close counts as the same point
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance: f64,
@@ -28,10 +31,11 @@ pub struct Params {
 impl Default for Params {
     fn default() -> Self {
         Self {
-            open: true,
-            self_intersecting: true,
-            duplicates: true,
-            tiny: true,
+            overlapping: true,
+            intersections: true,
+            zero_length_spans: true,
+            open: false,
+            fix_zero_length_spans: false,
             tolerance: 0.01,
         }
     }
@@ -52,7 +56,7 @@ impl Command for VectorValidator {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("tolerance", p.tolerance)?;
-        // the selection when there is one, else every vector that can be edited
+        // the selection when there is one, else every vector on a visible, unlocked layer
         let checked: Vec<EntityId> = if doc.selection.is_empty() {
             doc.vectors
                 .keys()
@@ -62,24 +66,35 @@ impl Command for VectorValidator {
         } else {
             doc.selection.iter().copied().collect()
         };
-        let flat: Vec<(EntityId, Vec<Point>)> = checked
+        if p.fix_zero_length_spans {
+            return fix_spans(doc, &checked, p.tolerance);
+        }
+        let flat: Vec<Vec<Point>> = checked
             .iter()
-            .map(|&id| (id, doc.vectors[&id].flatten(p.tolerance)))
+            .map(|id| doc.vectors[id].flatten(p.tolerance))
             .collect();
-        let mut problems = vec![];
-        for (i, (id, points)) in flat.iter().enumerate() {
-            let path = &doc.vectors[id];
-            let bad = (p.open && !path.closed)
-                || (p.tiny && is_tiny(path, points, p.tolerance))
-                || (p.self_intersecting && path.closed && crosses_itself(points))
-                || (p.duplicates
-                    && flat[..i]
-                        .iter()
-                        .any(|(_, other)| same_points(points, other, p.tolerance)));
-            if bad {
-                problems.push(*id);
+        let mut bad = vec![false; checked.len()];
+        if p.intersections {
+            let closed: Vec<bool> = checked.iter().map(|id| doc.vectors[id].closed).collect();
+            for owner in crossing(&flat, &closed) {
+                bad[owner] = true;
             }
         }
+        for (i, id) in checked.iter().enumerate() {
+            let path = &doc.vectors[id];
+            bad[i] |= (p.open && !path.closed)
+                || (p.zero_length_spans && has_zero_length_span(path, p.tolerance))
+                || (p.overlapping
+                    && flat[..i]
+                        .iter()
+                        .any(|other| same_points(&flat[i], other, p.tolerance)));
+        }
+        let problems: Vec<EntityId> = checked
+            .iter()
+            .zip(&bad)
+            .filter(|(_, bad)| **bad)
+            .map(|(id, _)| *id)
+            .collect();
         if problems.is_empty() {
             return Err(CommandError::Failed(format!(
                 "no problems found in {} vector{}",
@@ -93,15 +108,62 @@ impl Command for VectorValidator {
     }
 }
 
-fn is_tiny(path: &Path, points: &[Point], tolerance: f64) -> bool {
+fn ends(path: &Path) -> Vec<Point> {
+    std::iter::once(path.start)
+        .chain(path.segments.iter().map(Segment::end))
+        .collect()
+}
+
+fn has_zero_length_span(path: &Path, tolerance: f64) -> bool {
     let size = path.bounds().size();
     size.x.max(size.y) < tolerance
-        || std::iter::once(path.start)
-            .chain(path.segments.iter().map(Segment::end))
-            .collect::<Vec<_>>()
+        || ends(path)
             .windows(2)
             .any(|w| (w[1] - w[0]).length() < tolerance)
-        || points.len() < 2
+}
+
+/// Removes every span shorter than `tolerance` from the `checked` vectors.
+fn fix_spans(doc: &Document, checked: &[EntityId], tolerance: f64) -> Result<Change, CommandError> {
+    let mut c = Change::builder(doc);
+    let mut fixed = 0;
+    for id in checked {
+        let path = &doc.vectors[id];
+        let mut segments: Vec<Segment> = vec![];
+        let mut from = path.start;
+        for segment in &path.segments {
+            if (segment.end() - from).length() >= tolerance {
+                segments.push(*segment);
+                from = segment.end();
+            }
+        }
+        // too little left to be a vector: leave it for the person to delete
+        if segments.len() == path.segments.len() || segments.is_empty() {
+            continue;
+        }
+        if path.closed {
+            // the last span kept now ends where the dropped ones led: back on the start
+            match segments.last_mut().expect("not empty") {
+                Segment::Line { to } | Segment::Arc { to, .. } | Segment::Cubic { to, .. } => {
+                    *to = path.start;
+                }
+            }
+        }
+        c.replace(
+            *id,
+            Path {
+                start: path.start,
+                segments,
+                closed: path.closed,
+            },
+        );
+        fixed += 1;
+    }
+    if fixed == 0 {
+        return Err(CommandError::Failed(
+            "no zero-length spans to fix in the vectors checked".into(),
+        ));
+    }
+    Ok(c.finish())
 }
 
 /// Whether `a` and `b` trace the same points, in the same or the opposite direction.
@@ -112,34 +174,60 @@ fn same_points(a: &[Point], b: &[Point], tolerance: f64) -> bool {
             || a.iter().zip(b.iter().rev()).all(|(x, y)| close(x, y)))
 }
 
-/// Whether the closed ring through `points` crosses itself: two of its edges that are not
-/// neighbours meet. Edges are swept left to right so only overlapping ones are compared.
-fn crosses_itself(points: &[Point]) -> bool {
-    let mut ring: Vec<Point> = points.to_vec();
-    if ring.len() > 1 && ring.first() == ring.last() {
-        ring.pop();
+/// One straight edge of a flattened vector.
+struct Edge {
+    owner: usize,
+    index: usize,
+    a: Point,
+    b: Point,
+}
+
+/// Which of the polylines `flat` cross themselves or another: two of their edges meet that
+/// are not neighbours along one polyline. Edges are swept left to right so only ones that
+/// overlap in x are compared.
+fn crossing(flat: &[Vec<Point>], closed: &[bool]) -> Vec<usize> {
+    let mut edges = vec![];
+    let mut count = vec![0; flat.len()];
+    for (owner, points) in flat.iter().enumerate() {
+        let mut ring = points.clone();
+        if closed[owner] && ring.len() > 1 && ring.first() == ring.last() {
+            ring.pop();
+        }
+        let n = ring.len();
+        let spans = if closed[owner] {
+            n
+        } else {
+            n.saturating_sub(1)
+        };
+        count[owner] = n;
+        for index in 0..spans {
+            let (a, b) = (ring[index], ring[(index + 1) % n]);
+            edges.push(Edge { owner, index, a, b });
+        }
     }
-    let n = ring.len();
-    if n < 4 {
-        return false;
-    }
-    let edge = |i: usize| (ring[i], ring[(i + 1) % n]);
-    let mut order: Vec<usize> = (0..n).collect();
-    let left = |i: usize| ring[i].x.min(ring[(i + 1) % n].x);
-    let right = |i: usize| ring[i].x.max(ring[(i + 1) % n].x);
-    order.sort_by(|&a, &b| left(a).total_cmp(&left(b)));
-    for (k, &i) in order.iter().enumerate() {
-        for &j in &order[k + 1..] {
-            if left(j) > right(i) {
+    let left = |e: &Edge| e.a.x.min(e.b.x);
+    let right = |e: &Edge| e.a.x.max(e.b.x);
+    edges.sort_by(|e, f| left(e).total_cmp(&left(f)));
+    let mut found = vec![false; flat.len()];
+    for (k, e) in edges.iter().enumerate() {
+        for f in &edges[k + 1..] {
+            if left(f) > right(e) {
                 break;
             }
-            let neighbours = (i + 1) % n == j || (j + 1) % n == i;
-            if !neighbours && edges_cross(edge(i), edge(j)) {
-                return true;
+            if e.owner == f.owner {
+                let n = count[e.owner];
+                let next = |i: usize| (i + 1) % n;
+                if next(e.index) == f.index || next(f.index) == e.index {
+                    continue;
+                }
+            }
+            if edges_cross((e.a, e.b), (f.a, f.b)) {
+                found[e.owner] = true;
+                found[f.owner] = true;
             }
         }
     }
-    false
+    (0..flat.len()).filter(|&i| found[i]).collect()
 }
 
 fn edges_cross((a, b): (Point, Point), (c, d): (Point, Point)) -> bool {
@@ -155,19 +243,30 @@ mod tests {
     use super::*;
     use cut_craft_core::testing::{document_with, square};
 
-    cut_craft_core::contract_tests!(VectorValidator);
+    cut_craft_core::contract_tests!(VectorValidator, crossed);
+
+    /// A job with a problem to find: a bow tie.
+    fn crossed() -> Document {
+        document_with(vec![bow_tie()])
+    }
 
     fn p(x: f64, y: f64) -> Point {
         Point::new(x, y)
     }
 
-    /// Which of `paths` (by position) the validator picks, with nothing selected first.
-    fn found(paths: Vec<Path>, params: &Params) -> Result<Vec<usize>, String> {
+    /// `paths` with nothing selected, so the validator checks them all.
+    fn unselected(paths: Vec<Path>) -> Document {
         let mut doc = document_with(paths);
-        let ids: Vec<EntityId> = doc.vectors.keys().copied().collect();
         let mut c = Change::builder(&doc);
         c.select([]);
         doc.apply(&c.finish()).unwrap();
+        doc
+    }
+
+    /// Which of `paths` (by position) the validator picks.
+    fn found(paths: Vec<Path>, params: &Params) -> Result<Vec<usize>, String> {
+        let mut doc = unselected(paths);
+        let ids: Vec<EntityId> = doc.vectors.keys().copied().collect();
         let change = VectorValidator::run(&doc, params).map_err(|e| e.to_string())?;
         doc.apply(&change).unwrap();
         Ok(doc
@@ -184,28 +283,55 @@ mod tests {
         )
     }
 
-    #[test]
-    fn finds_each_kind_of_problem() {
-        let open = Path::polyline(&[p(50.0, 0.0), p(60.0, 0.0)], false);
-        let speck = square(70.0, 70.0, 0.001);
-        let paths = vec![
-            square(0.0, 0.0, 10.0),
-            open,
-            bow_tie(),
-            square(30.0, 30.0, 5.0),
-            square(30.0, 30.0, 5.0).reversed(),
-            speck,
-        ];
-        assert_eq!(found(paths, &Params::default()).unwrap(), [1, 2, 4, 5]);
+    fn with_zero_span() -> Path {
+        Path::polyline(
+            &[
+                p(50.0, 50.0),
+                p(60.0, 50.0),
+                p(60.0, 50.0),
+                p(60.0, 60.0),
+                p(50.0, 60.0),
+            ],
+            true,
+        )
     }
 
     #[test]
-    fn each_check_can_be_turned_off() {
-        let only = |open, self_intersecting, duplicates, tiny| Params {
+    fn finds_each_kind_of_problem() {
+        let paths = vec![
+            square(0.0, 0.0, 10.0),
+            bow_tie(),
+            square(30.0, 30.0, 5.0),
+            square(30.0, 30.0, 5.0).reversed(),
+            with_zero_span(),
+            Path::polyline(&[p(80.0, 0.0), p(90.0, 0.0)], false),
+        ];
+        // the bow tie is drawn over the first square, whose corners it touches but does not
+        // cross; the second copy of the small square overlaps the first
+        assert_eq!(found(paths, &Params::default()).unwrap(), [1, 3, 4]);
+    }
+
+    #[test]
+    fn vectors_crossing_each_other_are_both_found() {
+        let a = square(0.0, 0.0, 10.0);
+        let b = square(5.0, 5.0, 10.0);
+        let apart = square(40.0, 40.0, 5.0);
+        assert_eq!(
+            found(vec![a, b, apart], &Params::default()).unwrap(),
+            [0, 1]
+        );
+        // touching at a corner is not crossing
+        let touching = vec![square(0.0, 0.0, 10.0), square(10.0, 10.0, 10.0)];
+        assert!(found(touching, &Params::default()).is_err());
+    }
+
+    #[test]
+    fn each_check_can_be_turned_off_and_open_is_an_extra() {
+        let only = |overlapping, intersections, zero_length_spans, open| Params {
+            overlapping,
+            intersections,
+            zero_length_spans,
             open,
-            self_intersecting,
-            duplicates,
-            tiny,
             ..Params::default()
         };
         let paths = || {
@@ -214,10 +340,11 @@ mod tests {
                 bow_tie(),
                 square(30.0, 30.0, 5.0),
                 square(30.0, 30.0, 5.0),
+                with_zero_span(),
             ]
         };
         assert_eq!(
-            found(paths(), &only(true, false, false, false)).unwrap(),
+            found(paths(), &only(false, false, false, true)).unwrap(),
             [0]
         );
         assert_eq!(
@@ -225,17 +352,31 @@ mod tests {
             [1]
         );
         assert_eq!(
-            found(paths(), &only(false, false, true, false)).unwrap(),
+            found(paths(), &only(true, false, false, false)).unwrap(),
             [3]
+        );
+        assert_eq!(
+            found(paths(), &only(false, false, true, false)).unwrap(),
+            [4]
         );
     }
 
     #[test]
-    fn crossing_is_told_from_touching_and_curves_are_checked_too() {
-        assert!(crosses_itself(&bow_tie().flatten(0.01)));
-        assert!(!crosses_itself(&square(0.0, 0.0, 10.0).flatten(0.01)));
-        let circle = Path::circle(p(0.0, 0.0), 5.0);
-        assert!(!crosses_itself(&circle.flatten(0.01)));
+    fn fixing_removes_zero_length_spans_and_keeps_the_shape() {
+        let mut doc = unselected(vec![with_zero_span(), square(0.0, 0.0, 10.0)]);
+        let fix = Params {
+            fix_zero_length_spans: true,
+            ..Params::default()
+        };
+        doc.apply(&VectorValidator::run(&doc, &fix).unwrap())
+            .unwrap();
+        let fixed = doc.vectors.values().next().unwrap();
+        assert!(fixed.closed);
+        assert_eq!(fixed.segments.len(), 4);
+        assert_eq!(fixed.bounds(), with_zero_span().bounds());
+        // nothing left to fix, and nothing left to find
+        assert!(VectorValidator::run(&doc, &fix).is_err());
+        assert!(VectorValidator::run(&doc, &Params::default()).is_err());
     }
 
     #[test]
@@ -247,10 +388,19 @@ mod tests {
     #[test]
     fn checks_only_the_selection_when_there_is_one() {
         // document_with selects what it adds; add a bow tie after, unselected
-        let mut doc = document_with(vec![square(0.0, 0.0, 10.0)]);
+        let mut doc = document_with(vec![square(20.0, 20.0, 10.0)]);
         let mut c = Change::builder(&doc);
         c.add(bow_tie());
         doc.apply(&c.finish()).unwrap();
         assert!(VectorValidator::run(&doc, &Params::default()).is_err());
+    }
+
+    #[test]
+    fn curves_are_checked_too() {
+        let circle = Path::circle(p(0.0, 0.0), 5.0);
+        assert_eq!(
+            crossing(&[circle.flatten(0.01)], &[true]),
+            Vec::<usize>::new()
+        );
     }
 }
