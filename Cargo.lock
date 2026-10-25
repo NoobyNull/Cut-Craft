@@ -1218,6 +1218,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-turn-and-spin"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-ungroup"
 version = "0.1.0"
 dependencies = [
@@ -1538,6 +1547,7 @@ dependencies = [
  "cmd-thread-milling-toolpath",
  "cmd-toolpath-properties",
  "cmd-trace-bitmap",
+ "cmd-turn-and-spin",
  "cmd-ungroup",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",

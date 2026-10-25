@@ -26,6 +26,7 @@ fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-import-stl = { path = "../formats/import-stl" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-turn-and-spin = { path = "../commands/turn-and-spin" }
 cmd-dimensions = { path = "../commands/dimensions" }
 cmd-create-fillets = { path = "../commands/create-fillets" }
 cmd-close-extend-vector = { path = "../commands/close-extend-vector" }
