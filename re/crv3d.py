@@ -17,6 +17,8 @@ import cfb  # noqa: E402
 # string (which record it belongs to; not fixed), u32 wrapper version; a vdContour follows some
 CONTOUR_KEY = b"Vectric__Version"
 KINDS = {0: "L", 1: "A", 2: "C"}
+# the job's units, told by the contours' fitting tolerance (0.001 mm, or that over 25.4 inches)
+UNITS = {}
 
 
 def layers(data):
@@ -69,7 +71,8 @@ def contours(data):
         o += 4
         if ver != 7:
             continue
-        _, _tol, _z, _flag, n = struct.unpack_from("<iddHI", data, o)
+        _, tol, _z, _flag, n = struct.unpack_from("<iddHI", data, o)
+        UNITS.setdefault("inches" if tol < 1e-4 else "mm", m.start())
         o += 4 + 8 + 8 + 2 + 4
         spans = []
         for _ in range(n):
@@ -111,6 +114,7 @@ def load(path):
 
 if __name__ == "__main__":
     items = load(sys.argv[1])
+    print("units:", ", ".join(UNITS) or "unknown (no contours)")
     for layer, spans in items:
         kinds = "".join(s[0] for s in spans)
         print(f"{layer:20s} {len(spans):3d} spans {kinds[:40]} from {spans[0][1]}")

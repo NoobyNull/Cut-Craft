@@ -443,8 +443,11 @@ Horizontal Stretch drop-downs.
   `VectorData/DocumentData`, `VectorData/2dDataV2`, `ModelObjects/ObjectData`,
   `ModelSettings/Settings`, `Toolpaths/ToolpathData`, `ToolpathDataEx`, `Simulation`.
 - `MaterialSize`: u32 8, u8, u8, then six f64: the material's x min, y min, z min (minus the
-  thickness), x max, y max, z max (0), in the job's units. The units flag is not here;
-  **[inf]** byte 0x11 of `DocumentData` was 0 in an inch job and 1 in a mm job.
+  thickness), x max, y max, z max (0), in the job's units. There is no units flag in it or
+  in `DocumentData`; **[inf]** the units show in every `vdContour`'s fitting tolerance and in
+  the toolpath settings: 0.001 and plain values in a mm job, 0.001/25.4 (3.94e-5) and values
+  divided by 25.4 in an inch job (New-inch / New-mm, the same job saved in each; the
+  geometry numbers stayed the same, so the job's units are a label on the numbers).
 - `2dDataV2` is MFC `CArchive` serialization (as in `.vfont`): u32 version 2, u32, u32 layer
   count, then each `vcCadLayer` (v4): 16-byte GUID, UTF-16 name (`FF FE FF` + u8 length,
   or `FF` + u16), flags, then its records. Every record sits behind a `Vectric__Version`

@@ -26,11 +26,9 @@ impl Importer for ImportCrv3d {
             .find(|(n, _)| n == "2dDataV2")
             .map(|(_, d)| d.as_slice())
             .ok_or_else(|| CommandError::Failed("not a Vectric job: no 2D data".into()))?;
-        // ponytail: byte 0x11 of DocumentData was 0 in an inch job and 1 in a mm job [inf]
-        let inches = streams
-            .iter()
-            .find(|(n, _)| n == "DocumentData")
-            .is_some_and(|(_, d)| d.get(0x11) == Some(&0));
+        // the job's units show in the contours' fitting tolerance: 0.001 in a mm job, that
+        // over 25.4 in an inch job (four samples, re/SPEC.md) [inf]
+        let inches = first_tolerance(data).is_some_and(|t| t < 1e-4);
         let scale = if inches { 25.4 } else { 1.0 };
         let layers = layer_names(data);
         let mut c = Change::builder(doc);
@@ -107,6 +105,40 @@ fn layer_names(b: &[u8]) -> Vec<(usize, String)> {
         i = at + 3;
     }
     out
+}
+
+/// The fitting tolerance of the first drawn contour.
+fn first_tolerance(b: &[u8]) -> Option<f64> {
+    let mut i = 0;
+    while let Some(k) = b[i..]
+        .windows(CONTOUR_KEY.len())
+        .position(|w| w == CONTOUR_KEY)
+    {
+        i += k + CONTOUR_KEY.len();
+        if let Some(t) = contour_tolerance(b, i) {
+            return Some(t);
+        }
+    }
+    None
+}
+
+/// The tolerance field of the `vdContour` behind a record wrapper at `o`, if one is there.
+fn contour_tolerance(b: &[u8], mut o: usize) -> Option<f64> {
+    if u32_at(b, o + 4)? != 36 || b.get(o + 8..o + 44)? == b"00000000-0000-0000-0000-000000000000" {
+        return None;
+    }
+    o += 44;
+    if u32_at(b, o)? != 2 {
+        return None;
+    }
+    o += 4;
+    if u16_at(b, o)? == 0xFFFF {
+        o += 4;
+        o += 2 + usize::from(u16_at(b, o)?);
+    } else {
+        o += 2;
+    }
+    (u32_at(b, o)? == 7).then(|| f64_at(b, o + 8)).flatten()
 }
 
 /// (offset, path) of each contour, scaled into millimetres.
@@ -219,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn the_snowman_sample_imports_its_layers_in_millimetres() {
+    fn the_snowman_sample_imports_its_layers() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../../re/extracted/crv3d/shapes2.crv3d"
@@ -246,7 +278,26 @@ mod tests {
             .find(|p| p.closed && p.bounds().size().x > 290.0)
             .unwrap()
             .bounds();
-        assert!((b.size().x - 300.0).abs() < 1e-6, "a 300 mm job box: {b:?}");
+        // an inch job (its tolerance says so): the 300-unit box is 300 in
+        assert!(
+            (b.size().x - 300.0 * 25.4).abs() < 1e-6,
+            "a 300 in job box: {b:?}"
+        );
+    }
+
+    #[test]
+    fn units_come_from_the_contour_tolerance() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../re/extracted/crv3d/");
+        for (name, width) in [("inch", 300.0 * 25.4), ("mm", 300.0)] {
+            let Ok(bytes) = std::fs::read(format!("{dir}{name}.crv3d")) else {
+                continue;
+            };
+            let mut doc = Document::default();
+            doc.apply(&ImportCrv3d::import(&doc, &bytes).unwrap())
+                .unwrap();
+            let b = doc.vectors.values().find(|p| p.closed).unwrap().bounds();
+            assert!((b.size().x - width).abs() < 1e-6, "{name}: {b:?}");
+        }
     }
 
     #[test]
