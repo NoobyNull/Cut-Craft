@@ -1,5 +1,6 @@
-//! Create Fillets: rounds the sharp corners of the selected vectors, or cuts dog-bone or
-//! T-bone relief into them so a round cutter can clear the corner fully.
+//! Create Fillets: rounds the sharp corners of the selected vectors, cuts dog-bone or T-bone
+//! relief into them so a round cutter can clear the corner fully, or loops a plasma or drag
+//! knife round the outside of them.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, Segment, winding};
@@ -19,6 +20,9 @@ pub enum Kind {
     DogBone,
     /// A cutter-sized notch into the longer side of the corner
     TBone,
+    /// The sides run on past the corner into a loop outside it, so a plasma torch or drag
+    /// knife turns there instead of on the corner
+    PlasmaDragKnife,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -79,10 +83,20 @@ impl Command for CreateFillets {
         for (id, path) in ids.into_iter().zip(&paths) {
             let found = sharp_corners(path, p.corners);
             corners += found.len();
-            let plans: Vec<(usize, Corner)> = found
-                .into_iter()
-                .filter_map(|(at, corner)| plan(corner, p).map(|c| (at, c)))
-                .collect();
+            // corners are filleted in turn, as if clicked one after another: each may use
+            // what is left of its sides after the corners before it
+            let n = path.segments.len();
+            let mut used = vec![0.0; n];
+            let mut plans: Vec<(usize, Corner)> = vec![];
+            for (k, corner) in found {
+                let next = (k + 1) % n;
+                let left = (corner.len_in - used[k], corner.len_out - used[next]);
+                if let Some(planned) = plan(corner, p, left) {
+                    used[k] += planned.trim_in.max(0.0);
+                    used[next] += planned.trim_out.max(0.0);
+                    plans.push((k, planned));
+                }
+            }
             if !plans.is_empty() {
                 done += plans.len();
                 c.replace(id, rebuilt(path, &plans));
@@ -177,17 +191,19 @@ fn sharp_corners(path: &Path, which: Corners) -> Vec<(usize, Corner)> {
     found
 }
 
-/// Where the fillet goes in `corner`. A fillet may use at most half of each side, so
-/// neighbouring corners never overlap; a radius needing more is cut to the largest that
-/// fits, as Aspire does. `None` when not even a tiny one fits.
-fn plan(mut corner: Corner, p: &Params) -> Option<Corner> {
+/// Where the fillet goes in `corner`, with `left` of the side in and the side out still
+/// straight. A radius needing more is cut to the largest that fits, as Aspire's help says.
+/// `None` when not even a tiny one fits.
+fn plan(mut corner: Corner, p: &Params, left: (f64, f64)) -> Option<Corner> {
     let (back, on) = (corner.back, corner.on);
     let cos = back.dot(on).clamp(-1.0, 1.0);
     // halves the angle between the sides, pointing into it
     let bisector = (back + on).normalize();
     let half = cos.acos() / 2.0;
-    let (len_in, len_out) = (corner.len_in / 2.0, corner.len_out / 2.0);
+    let (len_in, len_out) = (left.0.max(0.0), left.1.max(0.0));
     let largest = match p.kind {
+        // past the corner, on the sides' extensions: nothing of the sides is used
+        Kind::PlasmaDragKnife => f64::INFINITY,
         Kind::Normal => len_in.min(len_out) * half.tan(),
         Kind::DogBone => len_in.min(len_out) / (2.0 * half.cos()),
         Kind::TBone => {
@@ -209,6 +225,11 @@ fn plan(mut corner: Corner, p: &Params) -> Option<Corner> {
         return None;
     }
     let (trim_in, trim_out, center) = match p.kind {
+        Kind::PlasmaDragKnife => {
+            // the normal fillet mirrored through the corner, round the long way
+            let t = r / half.tan();
+            (-t, -t, corner.at - bisector * (r / half.sin()))
+        }
         Kind::Normal => {
             let t = r / half.tan();
             (t, t, corner.at + bisector * (r / half.sin()))
@@ -246,7 +267,12 @@ fn rebuilt(path: &Path, plans: &[(usize, Corner)]) -> Path {
     let mut from = start;
     for (k, segment) in path.segments.iter().enumerate() {
         let Some(c) = at(k) else {
-            segments.push(*segment);
+            // a side used up by the fillets at both its ends is left out
+            let used_up = matches!(segment, Segment::Line { .. })
+                && (segment.end() - from).length() <= STRAIGHT;
+            if !used_up {
+                segments.push(*segment);
+            }
             from = segment.end();
             continue;
         };
@@ -436,8 +462,29 @@ mod tests {
     }
 
     #[test]
+    fn a_fillet_may_use_a_whole_side_and_later_corners_get_what_is_left() {
+        // in turn: the first corner takes radius 6 (6 of each side), the next only 4 of its
+        // side is left, the third 6 again, the last 4
+        let [path] = filleted(
+            vec![square(0.0, 0.0, 10.0)],
+            &params(Kind::Normal, 6.0, Corners::All),
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let p = Point::new;
+        let expected = [p(4.0, 6.0), p(6.0, 6.0), p(6.0, 4.0), p(4.0, 4.0)];
+        let centres = arcs(&path);
+        assert_eq!(centres.len(), 4);
+        for (got, want) in centres.iter().zip(expected) {
+            assert!((*got - want).length() < EPS, "{got} vs {want}");
+        }
+    }
+
+    #[test]
     fn a_radius_too_large_is_cut_to_the_largest_that_fits() {
-        // half of each 10 mm side is the most a corner may use: radius 5 rounds it fully
+        // radius 50 on a 10 mm square: the first corner takes both its whole sides, which
+        // leaves the next corner nothing; the third takes the other two sides
         let [path] = filleted(
             vec![square(0.0, 0.0, 10.0)],
             &params(Kind::Normal, 50.0, Corners::All),
@@ -445,17 +492,41 @@ mod tests {
         .unwrap()
         .try_into()
         .unwrap();
-        let centres = arcs(&path);
-        assert_eq!(centres.len(), 4);
-        assert!(
-            centres
-                .iter()
-                .all(|c| (*c - Point::new(5.0, 5.0)).length() < EPS)
-        );
+        assert!(path.closed);
+        assert_eq!(path.segments.len(), 2, "two quarter circles: a lens");
         assert!(
             path.segments
                 .iter()
                 .all(|s| matches!(s, Segment::Arc { .. }))
+        );
+    }
+
+    #[test]
+    fn plasma_fillets_loop_outside_each_corner() {
+        let r = 1.0;
+        let [path] = filleted(
+            vec![square(0.0, 0.0, 10.0)],
+            &params(Kind::PlasmaDragKnife, r, Corners::All),
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        // every corner is still on the path, and each loop sits diagonally outside its
+        // corner: centre (11, -1) for the corner at (10, 0)
+        let points = path.flatten(1e-4);
+        for corner in [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)] {
+            let corner = Point::new(corner.0, corner.1);
+            assert!(polyline_distance(&points, corner) < 1e-3, "{corner}");
+        }
+        assert!(
+            arcs(&path)
+                .iter()
+                .any(|c| (*c - Point::new(11.0, -1.0)).length() < EPS)
+        );
+        let b = path.bounds();
+        assert!(
+            (b.max.x - 12.0).abs() < 1e-6 && (b.min.y + 2.0).abs() < 1e-6,
+            "{b:?}"
         );
     }
 

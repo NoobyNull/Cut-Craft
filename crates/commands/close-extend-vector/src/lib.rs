@@ -2,7 +2,7 @@
 //! start or by extending their end lines until they meet.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::{Path, Point, Segment};
+use cut_craft_core::geometry::{Path, Point, Segment, arc_to_cubics};
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,8 @@ pub enum Method {
     Extend,
     /// A smooth curve leaving the end and reaching the start along their own directions
     Smooth,
+    /// Move the start and the end to the point halfway between them
+    CommonPoint,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
@@ -66,6 +68,7 @@ impl Command for CloseExtendVector {
             let joined = match p.method {
                 Method::Extend if gap > TOUCHING => extended(&path),
                 Method::Smooth if gap > TOUCHING => smoothed(&path),
+                Method::CommonPoint if gap > TOUCHING => Some(met(path.clone())),
                 _ => None,
             };
             c.replace(id, joined.unwrap_or_else(|| with_line(path)));
@@ -101,6 +104,47 @@ fn with_line(mut path: Path) -> Path {
     } else {
         path.segments.push(Segment::Line { to: start });
     }
+    path.closed = true;
+    path
+}
+
+/// `path` with its start and end both moved to the point halfway between them, closed there.
+/// Curves at either end keep their shape near the other end; arcs there become curves.
+fn met(mut path: Path) -> Path {
+    let middle = (path.start + end(&path)) / 2.0;
+    // arcs cannot move an end and stay arcs: make the end spans curves first
+    let as_curves = |segments: &mut Vec<Segment>, at: usize, from: Point| {
+        if let Segment::Arc { to, center, ccw } = segments[at] {
+            let curves = arc_to_cubics(from, to, center, ccw);
+            segments.splice(at..=at, curves);
+        }
+    };
+    let start = path.start;
+    as_curves(&mut path.segments, 0, start);
+    let last = path.segments.len() - 1;
+    let from = if last == 0 {
+        path.start
+    } else {
+        path.segments[last - 1].end()
+    };
+    as_curves(&mut path.segments, last, from);
+    let shift_start = middle - path.start;
+    if let Some(Segment::Cubic { c1, .. }) = path.segments.first_mut() {
+        *c1 += shift_start;
+    }
+    let shift_end = middle - end(&path);
+    match path
+        .segments
+        .last_mut()
+        .expect("open vectors have segments")
+    {
+        Segment::Cubic { c2, to, .. } => {
+            *c2 += shift_end;
+            *to = middle;
+        }
+        Segment::Line { to } | Segment::Arc { to, .. } => *to = middle,
+    }
+    path.start = middle;
     path.closed = true;
     path
 }
@@ -272,6 +316,22 @@ mod tests {
             (path.bounds().min.y + 2.5).abs() < 1e-9,
             "{:?}",
             path.bounds()
+        );
+    }
+
+    #[test]
+    fn common_point_moves_both_ends_halfway() {
+        let meet = Params {
+            method: Method::CommonPoint,
+            ..Params::default()
+        };
+        let [path] = closed(vec![u_shape()], &meet).unwrap().try_into().unwrap();
+        assert!(path.closed);
+        assert_eq!(path.start, p(5.0, 0.0));
+        assert_eq!(
+            line_ends(&path),
+            [p(0.0, 10.0), p(10.0, 10.0), p(5.0, 0.0)],
+            "the sides now lean in to meet"
         );
     }
 

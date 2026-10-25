@@ -132,8 +132,8 @@ say "not implemented yet".
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Create Fillets (Normal,
-    Dog-Bone, T-Bone; all, outer or inner corners of the selection at once; an oversize
-    radius gets the largest that fits).
+    Dog-Bone, T-Bone, Plasma / Drag Knife; all, outer or inner corners of the selection at
+    once, in turn as if clicked; an oversize radius gets the largest that fits).
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
   - Array Copy (rows × columns by gap or offset) and Circular Copy (round the selection's
     middle, the job centre or a point; total or step angle, clockwise positive; turning the
@@ -141,8 +141,8 @@ say "not implemented yet".
     not grouped.
   - Copy Along Vectors (the first object picked is copied along the other vectors; by count
     or distance with force even spacing; align, reverse, copies on a new layer).
-  - Close / Extend Vector (a closing line, a smooth curve, or the end lines run on until
-    they meet; max gap).
+  - Close / Extend Vector (a closing line, a smooth curve, both ends moved to a common
+    point, or the end lines run on until they meet; max gap).
   - Vector Validator (overlaps, intersections within and between vectors, zero-length spans,
     and optionally open vectors; selects them or fixes the spans).
   - Not built from these tools' Aspire forms: see each one's section in `re/SPEC.md`.
