@@ -95,13 +95,37 @@ pub fn save_through(
     std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// Where Cut Craft keeps its settings: `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
-// ponytail: XDG only; add the Windows/macOS config folders when those builds exist
+/// Where Cut Craft keeps its settings: `%APPDATA%\cut-craft` on Windows, elsewhere
+/// `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
 pub fn config_dir() -> Option<PathBuf> {
+    config_base().map(|dir| dir.join("cut-craft"))
+}
+
+#[cfg(windows)]
+fn config_base() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(PathBuf::from)
+}
+
+#[cfg(not(windows))]
+fn config_base() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .map(|dir| dir.join("cut-craft"))
+}
+
+/// Opens `dir` in the platform's file manager.
+pub fn show_folder(dir: &Path) -> std::io::Result<()> {
+    let opener = if cfg!(windows) {
+        "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener)
+        .arg(dir)
+        .spawn()
+        .map(drop)
 }
 
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
@@ -376,7 +400,7 @@ mod tests {
         fs::write(&path, "{").unwrap();
         assert_eq!(load_recent(&path), Vec::<PathBuf>::new());
         assert_eq!(load_recent(&temp("no-recent.json")), Vec::<PathBuf>::new());
-        let config = recent_files_path().expect("HOME is set");
+        let config = recent_files_path().expect("a config folder");
         assert!(
             config.ends_with("cut-craft/recent.json"),
             "{}",
@@ -386,7 +410,7 @@ mod tests {
 
     #[test]
     fn the_tool_database_lives_in_the_cut_craft_config_folder() {
-        let path = tool_database_path().expect("HOME is set");
+        let path = tool_database_path().expect("a config folder");
         assert!(path.ends_with("cut-craft/tools.json"), "{}", path.display());
     }
 
