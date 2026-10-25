@@ -516,6 +516,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-component-boundary"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-component-properties"
 version = "0.1.0"
 dependencies = [
@@ -680,6 +689,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-drilling-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-fit-curves-to-vectors"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1289,6 +1307,7 @@ dependencies = [
  "cmd-center-vertically",
  "cmd-center-vertically-in-material",
  "cmd-chamfer-toolpath",
+ "cmd-component-boundary",
  "cmd-component-properties",
  "cmd-create-component-from-bitmap",
  "cmd-create-component-from-visible-model",
@@ -1308,6 +1327,7 @@ dependencies = [
  "cmd-draw-star",
  "cmd-draw-text",
  "cmd-drilling-toolpath",
+ "cmd-fit-curves-to-vectors",
  "cmd-fluting-toolpath",
  "cmd-group",
  "cmd-inlay-toolpath",

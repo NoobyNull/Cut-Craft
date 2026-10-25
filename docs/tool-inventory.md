@@ -135,6 +135,10 @@ say "not implemented yet".
   - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group; Ungroup turns it into curves.
+  - Fit Curves to Vectors (Edit ▸ Curve Fit Vectors): arcs, Béziers or lines within a
+    tolerance, sharp corners kept past a max angle, replacing or beside the originals.
+- Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
+  vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
@@ -143,10 +147,10 @@ say "not implemented yet".
 **Not built yet.**
 - File: New from Template, Save As Template, Print, Print Preview, Import Component / 3D
   Model, Import Toolpaths, Export EPS / AI / PDF.
-- Edit: Vector Selector, Curve Fit, Nest, Swap Sides, Notes, Document Variables, Snap
+- Edit: Vector Selector, Nest, Swap Sides, Notes, Document Variables, Snap
   Options, Options.
 - Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Component with
-  Draft, Offset Model, Slice, Import, Export as 3D Clipart, Sculpt, Split, Vector Boundary,
+  Draft, Offset Model, Slice, Import, Export as 3D Clipart, Sculpt, Split,
   Cross Section, Emboss, Distort, Replace Below.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
@@ -156,7 +160,7 @@ say "not implemented yet".
 - Gadgets; Help Contents.
 - Drawing tab:
   - Import Component.
-  - Node Edit, Transform, Group, Trim, Close / Extend, Fit Curves, Validator, Measure.
+  - Node Edit, Transform, Trim, Close / Extend, Validator, Measure.
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
     Vector Texture, Trace Bitmap.
   - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
