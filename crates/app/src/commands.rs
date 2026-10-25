@@ -101,6 +101,9 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_cross_section::CrossSection>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
+    r.add_exporter::<fmt_export_pdf::ExportPdf>();
+    r.add_exporter::<fmt_export_pdf::ExportEps>();
+    r.add_exporter::<fmt_export_pdf::ExportAi>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
     r.add_importer::<fmt_import_bitmap::ImportBitmap>();
     r.add_importer::<fmt_import_stl::ImportStl>();

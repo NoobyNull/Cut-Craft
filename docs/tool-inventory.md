@@ -142,6 +142,8 @@ say "not implemented yet".
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
+- File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of
+  the material, arcs as Béziers.
 - File ▸ Import ▸ Import Component / 3D Model (and the Design tab button): binary and ASCII
   STL, seen from above at the job's modeling resolution, centred, lowest point on the zero
   plane, shrunk to fit the job. No Orientate 3D Model step yet (size, position, depth
@@ -160,7 +162,7 @@ say "not implemented yet".
   Preview, Preview All, Reset Preview.
 
 **Not built yet.**
-- File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths, Export EPS / AI / PDF.
+- File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths.
 - Edit: Vector Selector, Nest, Swap Sides, Notes, Document Variables, Snap
   Options, Options.
 - Model: Two Rail Sweep, Extrude and Weave, Turn and Spin, Textured Area, Component with

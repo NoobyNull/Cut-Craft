@@ -1462,6 +1462,7 @@ dependencies = [
  "fmt-export-as-grayscale-bitmap",
  "fmt-export-as-stl",
  "fmt-export-dxf",
+ "fmt-export-pdf",
  "fmt-export-svg",
  "fmt-import-bitmap",
  "fmt-import-dxf",
@@ -1881,6 +1882,13 @@ dependencies = [
  "cut-craft-core",
  "dxf",
  "fmt-import-dxf",
+]
+
+[[package]]
+name = "fmt-export-pdf"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
 ]
 
 [[package]]
