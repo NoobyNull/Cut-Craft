@@ -924,6 +924,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-nest-parts"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-notes"
 version = "0.1.0"
 dependencies = [
@@ -1532,6 +1541,7 @@ dependencies = [
  "cmd-moulding-toolpath",
  "cmd-move",
  "cmd-move-to-layer",
+ "cmd-nest-parts",
  "cmd-notes",
  "cmd-offset-model",
  "cmd-offset-vectors",

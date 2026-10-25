@@ -140,6 +140,11 @@ say "not implemented yet".
   - Array Copy (rows and columns by gap or offset, alternate row / column displacement,
     group copies; dialog 2516) and Circular Copy (round a centre by total or step angle,
     rotated or upright, group copies). Array Copy's symmetry buttons are not done.
+  - Nest Parts (Edit ▸ Nest Selected Objects too): parts (grouped or overlapping vectors)
+    packed by their boxes in rows from a chosen corner, along X or Y, a tool diameter plus
+    clearance apart and a border in, quarter-turned where that fits better, moved or
+    copied. True-shape nesting, step angles, mirroring, parts inside parts, copies per
+    part, fillers and bounds layers are not done.
   - Copy Along Vectors: the first selected object (or circles) along the other selected
     vectors, by distance (optionally evened to land on the ends) or count, upright or
     turned with the curve, reversed, optionally on a new layer (dialog 458).
@@ -196,7 +201,7 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: New from Template, Save As Template, Print, Print Preview, Import Toolpaths.
-- Edit: Vector Selector, Nest, Swap Sides, Document Variables, Snap
+- Edit: Vector Selector, Swap Sides, Document Variables, Snap
   Options, Options.
 - Model: Component with Draft, Export as 3D Clipart, Sculpt, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
@@ -209,7 +214,7 @@ say "not implemented yet".
   - Node Edit, Transform, Trim, Measure.
   - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text,
     Vector Texture.
-  - Nest, Distort.
+  - Distort.
 - Modeling tab: Sculpt,
   Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,

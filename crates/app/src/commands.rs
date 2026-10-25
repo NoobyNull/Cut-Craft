@@ -111,6 +111,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_turn_and_spin::TurnAndSpin>();
     r.add::<cmd_extrude_and_weave::ExtrudeAndWeave>();
     r.add::<cmd_two_rail_sweep::TwoRailSweep>();
+    r.add::<cmd_nest_parts::NestParts>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

@@ -678,7 +678,7 @@ impl MenuSystem {
                         ),
                         k("Join Vectors", "J"),
                         a("Curve Fit Vectors", "fit_curves_to_vectors"),
-                        i("Nest Selected Objects"),
+                        a("Nest Selected Objects", "nest_parts"),
                         sep(),
                         i("Job Size and Position"),
                         i("Swap Sides"),
