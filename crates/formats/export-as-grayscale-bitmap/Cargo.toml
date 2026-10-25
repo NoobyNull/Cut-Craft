@@ -1,0 +1,15 @@
+[package]
+name = "fmt-export-as-grayscale-bitmap"
+description = "Export the model as a grayscale bitmap"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+image.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

@@ -21,7 +21,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 40] = [
+const BUILT_INS: [&str; 41] = [
+    "create_component_from_toolpath_preview",
     "refresh_2d_view",
     "cut",
     "copy",
@@ -296,6 +297,7 @@ impl CutCraftApp {
             "reset_preview" => self.simulation.is_some(),
             id if self.display.checked(id).is_some() => true,
             "cut" | "copy" => !self.doc.selection.is_empty(),
+            "create_component_from_toolpath_preview" => self.simulation.is_some(),
             "paste" => !self.clipboard.is_empty(),
             "increment_and_save" => self.screen == Screen::Job,
             _ => {
@@ -344,6 +346,7 @@ impl CutCraftApp {
             "tool_database" => self.tool_window = true,
             id if self.display.toggle(id) => ctx.request_repaint(),
             "refresh_2d_view" => ctx.request_repaint(),
+            "create_component_from_toolpath_preview" => self.component_from_preview(),
             "copy" | "cut" | "paste" | "increment_and_save" | "open_application_data_folder" => {
                 self.clipboard_or_file_action(id);
             }
@@ -1278,6 +1281,26 @@ impl CutCraftApp {
             .map_or(Ok(()), |path| files::save_tools(&self.tools, path));
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
+    }
+
+    /// Model > Create Component from Toolpath Preview: the block as previewed, standing on
+    /// the material's bottom.
+    fn component_from_preview(&mut self) {
+        if let Some(preview) = &self.simulation {
+            // the block as cut, standing on the material's bottom
+            let mut block = preview.clone();
+            for h in &mut block.heights {
+                *h -= preview.bottom;
+            }
+            let component = cut_craft_core::component::Component::from_material(
+                "Toolpath Preview",
+                cut_craft_core::component::Combine::Add,
+                &block,
+            );
+            let mut c = Change::builder(&self.doc);
+            c.add_component(component);
+            self.record(Ok(c.finish()), "Made a component from the toolpath preview");
+        }
     }
 
     /// Cut, Copy, Paste, Increment and Save, Open Application Data Folder.
@@ -2316,6 +2339,27 @@ mod tests {
             h.app.invoke(&h.ctx, id);
             assert_eq!(h.app.info, Some(info));
         }
+    }
+
+    #[test]
+    fn a_toolpath_preview_becomes_a_component() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        let params = h
+            .app
+            .registry
+            .get("pocket_toolpath")
+            .unwrap()
+            .initial_params(&h.app.doc);
+        h.app.apply("pocket_toolpath", &params).unwrap();
+        assert!(!h.app.available("create_component_from_toolpath_preview"));
+        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        h.app
+            .invoke(&h.ctx, "create_component_from_toolpath_preview");
+        let made = h.app.doc.components.values().next().expect("a component");
+        let thickness = h.app.doc.job.thickness;
+        let (lo, hi) = made.height_range().unwrap();
+        assert!((hi - thickness).abs() < 1e-9 && lo < hi, "{lo} {hi}");
     }
 
     struct Harness {

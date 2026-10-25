@@ -109,6 +109,50 @@ impl Component {
     }
 }
 
+/// The model at the job's modeling resolution.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a cell count"
+)]
+pub fn model_at_resolution(doc: &Document) -> Material {
+    let longest = doc.job.width.max(doc.job.height);
+    model(
+        doc,
+        ((longest / doc.job.model_cell()).ceil() as usize).max(1),
+    )
+}
+
+impl Component {
+    /// A component holding `material`'s heights (each cell a shape), over the same cells.
+    pub fn from_material(name: &str, combine: Combine, material: &Material) -> Self {
+        Self {
+            name: name.into(),
+            combine,
+            origin: material.origin,
+            cell: material.cell,
+            columns: material.columns,
+            rows: material.rows,
+            heights: material.heights.iter().map(|&h| Some(h)).collect(),
+            visible: true,
+        }
+    }
+
+    /// Lowest and highest of its heights, or `None` when it has no shape.
+    pub fn height_range(&self) -> Option<(f64, f64)> {
+        self.heights.iter().flatten().fold(None, |range, &h| {
+            Some(range.map_or((h, h), |(lo, hi): (f64, f64)| (lo.min(h), hi.max(h))))
+        })
+    }
+
+    /// Where cell `index` is: its centre in job mm.
+    #[expect(clippy::cast_precision_loss, reason = "cell indices are small")]
+    pub fn centre_of(&self, index: usize) -> Point {
+        let (column, row) = (index % self.columns, index / self.columns);
+        self.origin + Point::new(column as f64 + 0.5, row as f64 + 0.5) * self.cell
+    }
+}
+
 /// The model's surface over the job: every component combined onto a flat base at 0.
 pub fn model(doc: &Document, cells_across: usize) -> Material {
     let mut surface = Material::new(&doc.job, cells_across);

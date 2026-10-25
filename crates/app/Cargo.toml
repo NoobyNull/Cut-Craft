@@ -22,7 +22,16 @@ fmt-export-svg = { path = "../formats/export-svg" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
+fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-reset-outside-selected-vectors = { path = "../commands/reset-outside-selected-vectors" }
+cmd-reset-inside-selected-vectors = { path = "../commands/reset-inside-selected-vectors" }
+cmd-smooth-selected-components = { path = "../commands/smooth-selected-components" }
+cmd-create-component-from-visible-model = { path = "../commands/create-component-from-visible-model" }
+cmd-bake-components = { path = "../commands/bake-components" }
+cmd-create-component-from-bitmap = { path = "../commands/create-component-from-bitmap" }
+cmd-scale-model-z-height = { path = "../commands/scale-model-z-height" }
+cmd-add-zero-plane = { path = "../commands/add-zero-plane" }
 cmd-select-all-duplicate-vectors = { path = "../commands/select-all-duplicate-vectors" }
 cmd-select-all-open-vectors = { path = "../commands/select-all-open-vectors" }
 cmd-space-vertically = { path = "../commands/space-vertically" }

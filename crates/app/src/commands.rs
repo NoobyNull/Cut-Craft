@@ -76,10 +76,19 @@ pub fn registry() -> Registry {
     r.add::<cmd_space_vertically::SpaceVertically>();
     r.add::<cmd_select_all_open_vectors::SelectAllOpenVectors>();
     r.add::<cmd_select_all_duplicate_vectors::SelectAllDuplicateVectors>();
+    r.add::<cmd_add_zero_plane::AddZeroPlane>();
+    r.add::<cmd_scale_model_z_height::ScaleModelZHeight>();
+    r.add::<cmd_create_component_from_bitmap::CreateComponentFromBitmap>();
+    r.add::<cmd_bake_components::BakeComponents>();
+    r.add::<cmd_create_component_from_visible_model::CreateComponentFromVisibleModel>();
+    r.add::<cmd_smooth_selected_components::SmoothSelectedComponents>();
+    r.add::<cmd_reset_inside_selected_vectors::ResetInsideSelectedVectors>();
+    r.add::<cmd_reset_outside_selected_vectors::ResetOutsideSelectedVectors>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
     r.add_importer::<fmt_import_bitmap::ImportBitmap>();
+    r.add_exporter::<fmt_export_as_grayscale_bitmap::ExportGrayscaleBitmap>();
     r.add_exporter::<fmt_export_dxf::ExportDxf>();
     r.add_exporter::<fmt_export_as_stl::ExportStl>();
     r.add_importer::<fmt_import_dxf::ImportDxf>();

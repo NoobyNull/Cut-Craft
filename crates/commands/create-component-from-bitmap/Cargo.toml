@@ -1,0 +1,16 @@
+[package]
+name = "cmd-create-component-from-bitmap"
+description = "Create Component from Bitmap"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

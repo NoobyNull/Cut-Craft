@@ -397,6 +397,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-add-zero-plane"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-align-bottom"
 version = "0.1.0"
 dependencies = [
@@ -426,6 +435,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-array-copy-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-bake-components"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -490,6 +508,24 @@ dependencies = [
 
 [[package]]
 name = "cmd-component-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-create-component-from-bitmap"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-create-component-from-visible-model"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -814,6 +850,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-reset-inside-selected-vectors"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-reset-outside-selected-vectors"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-rotate"
 version = "0.1.0"
 dependencies = [
@@ -824,6 +878,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-rounding-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-scale-model-z-height"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -897,6 +960,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-sketch-carving-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-smooth-selected-components"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1166,11 +1238,13 @@ dependencies = [
  "cmd-3d-finishing-toolpath",
  "cmd-3d-roughing-toolpath",
  "cmd-add-layer",
+ "cmd-add-zero-plane",
  "cmd-align-bottom",
  "cmd-align-left",
  "cmd-align-right",
  "cmd-align-top",
  "cmd-array-copy-toolpath",
+ "cmd-bake-components",
  "cmd-center",
  "cmd-center-horizontally",
  "cmd-center-horizontally-in-material",
@@ -1179,6 +1253,8 @@ dependencies = [
  "cmd-center-vertically-in-material",
  "cmd-chamfer-toolpath",
  "cmd-component-properties",
+ "cmd-create-component-from-bitmap",
+ "cmd-create-component-from-visible-model",
  "cmd-create-shape",
  "cmd-delete",
  "cmd-delete-component",
@@ -1214,8 +1290,11 @@ dependencies = [
  "cmd-prism-toolpath",
  "cmd-profile-toolpath",
  "cmd-quick-engrave-toolpath",
+ "cmd-reset-inside-selected-vectors",
+ "cmd-reset-outside-selected-vectors",
  "cmd-rotate",
  "cmd-rounding-toolpath",
+ "cmd-scale-model-z-height",
  "cmd-select-all-duplicate-vectors",
  "cmd-select-all-open-vectors",
  "cmd-select-all-vectors",
@@ -1224,6 +1303,7 @@ dependencies = [
  "cmd-set-size",
  "cmd-show-hide",
  "cmd-sketch-carving-toolpath",
+ "cmd-smooth-selected-components",
  "cmd-space-horizontally",
  "cmd-space-vertically",
  "cmd-subtract-vectors",
@@ -1239,6 +1319,7 @@ dependencies = [
  "eframe",
  "egui_extras",
  "env_logger",
+ "fmt-export-as-grayscale-bitmap",
  "fmt-export-as-stl",
  "fmt-export-dxf",
  "fmt-export-svg",
@@ -1634,6 +1715,14 @@ name = "float-cmp"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
+
+[[package]]
+name = "fmt-export-as-grayscale-bitmap"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "image 0.25.10",
+]
 
 [[package]]
 name = "fmt-export-as-stl"
