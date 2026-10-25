@@ -5,7 +5,7 @@ clean-room spec (`re/SPEC.md`, from Aspire's help, resources and strings); the d
 working / not-built list is `docs/tool-inventory.md`; how commands are built is
 `docs/superpowers/specs/2026-10-23-command-architecture-design.md`.
 
-Sizes: **S** a day or less, **M** a few days, **L** a week or more. Updated 2026-10-24.
+Sizes: **S** a day or less, **M** a few days, **L** a week or more. Updated 2026-10-24 (Phase A done).
 
 ## 1. Done
 
@@ -23,11 +23,12 @@ Sizes: **S** a day or less, **M** a few days, **L** a week or more. Updated 2026
 
 These shape the plan: Phase A exists to fix the first three.
 
-1. **No component or bitmap selection.** "Selected component" commands name the component
-   in their form; picture tools use the newest bitmap; bitmaps cannot be moved or deleted.
-2. **The selection has no order.** Aspire uses Ctrl-click order (align to last, space between
-   first and last, moulding's profile, two-rail sweep's rails). Ours is a set.
-3. **No groups.** Many Aspire tools act on groups and levels.
+1. ~~No component or bitmap selection~~ (Phase A). Components are picked in the Components
+   tab only, not yet by clicking them in the 3D view.
+2. ~~The selection has no order~~ (Phase A). Align still aligns to the selection's extent,
+   not to the last-picked object: Aspire's help does not say what a window selection does.
+3. ~~No groups~~ (Phase A). Vector groups only; they do not nest, and components and
+   bitmaps cannot be grouped yet.
 4. **Not tried by hand.** The 2026-10-24 work has tests but has not been used in the
    running app.
 5. **Settings are not saved.** Display options last for the session (needs Options, F2).
@@ -44,7 +45,13 @@ These shape the plan: Phase A exists to fix the first three.
 
 Phases are in dependency order. Within a phase, items are independent.
 
-### Phase A — Selection foundations (unblocks B, D, E)
+### Phase A — Selection foundations ✅ (2026-10-24)
+
+Done: selection keeps pick order (`Selection`, `last()`), moulding takes the last-picked
+profile; components picked in the Components tab (`chosen_component`), outlined in 2D;
+bitmaps picked in the 2D view, outlined, deleted, moved and resized (Bitmap Properties),
+used by the picture tools (`chosen_bitmap`); Group / Ungroup with whole-group picking.
+Left for later: picking components in the 3D view, nested groups, grouping components.
 
 | Item | Approach | Size |
 |---|---|---|

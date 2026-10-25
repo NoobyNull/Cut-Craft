@@ -104,7 +104,9 @@ say "not implemented yet".
   SVG, Open Application Data Folder, Exit.
 - Edit: Undo, Redo, Cut, Copy, Paste, Delete; Select All Vectors / Open Vectors / Duplicate
   Vectors / On Current Layer, Unselect All; the ten Align commands and the four spacing ones
-  (Left To Right ... Bottom To Top); Join Vectors, Job Size and Position.
+  (Left To Right ... Bottom To Top); Join Vectors, Group, Ungroup, Job Size and Position.
+- Selection: pick order kept; components picked in the Components tab; bitmaps picked in the
+  2D view (Bitmap Properties: position and size; Delete removes them).
 - Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL, Export as Grayscale Bitmap.
@@ -166,11 +168,10 @@ say "not implemented yet".
   rest-machining toolpath is made on its own, naming the tools that ran before it).
 
 **Known problems and stand-ins.**
-- Components and bitmaps cannot be selected. Commands on "the selected component" (Smooth,
-  Component Properties) name it in their form, starting on the newest; picture strategies
-  and Create Component from Bitmap use the newest bitmap; bitmaps cannot be moved or deleted.
-- The selection keeps no order (Aspire's Ctrl-click order). Left To Right spaces the same as
-  Right To Left, and Moulding takes the newest open vector as its profile.
+- Components are selected in the Components tab, not by clicking them in the 3D view.
+- Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
+  spacing commands do not yet use it).
+- Groups hold vectors only and do not nest.
 - Display settings (Toolpath Drawing, quality, View toggles) last only for the session.
 - Thread mills and lasers are not tool types in the database: their tooth offset and power
   are on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
