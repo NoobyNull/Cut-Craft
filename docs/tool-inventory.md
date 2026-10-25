@@ -136,6 +136,9 @@ say "not implemented yet".
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;
     Ungroup turns it into curves.
+  - Measure / Inspect: drag between two points for distance, angle and X / Y distances;
+    click a vector for the span's type and length and the vector's perimeter and area, on
+    the status bar (Aspire shows them in a form).
   - Node Edit (N): handles on the selected vectors' nodes; drag a node to move it (arcs
     keep their bulge, Bézier handles follow); right-click a node or span for Insert Point,
     Delete Point, Convert Span to Line / Bezier / Arc, Cut Vector, Make Start Point, Reverse Direction,
@@ -231,7 +234,7 @@ say "not implemented yet".
   window tiling and cascade.
 - Gadgets; Help Contents.
 - Drawing tab:
-  - Transform, Trim, Measure.
+  - Transform, Trim.
   - Curve, Freehand, Auto Layout Text,
     Vector Texture.
   - Distort.

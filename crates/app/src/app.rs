@@ -21,8 +21,9 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 51] = [
+const BUILT_INS: [&str; 52] = [
     "node_edit",
+    "measure_inspect",
     "print",
     "print_preview",
     "save_all_visible_toolpaths_as_template",
@@ -183,6 +184,8 @@ enum ViewTool {
     ZoomBox,
     /// Drag the selected vectors' nodes; right-click a node or span for its menu (N).
     NodeEdit,
+    /// Drag between two points for their distance and angle; click a vector for its span.
+    Measure,
 }
 
 #[derive(PartialEq)]
@@ -416,7 +419,7 @@ impl CutCraftApp {
             "machining_layout" => self.pages = Pages::machining_layout(),
             "interface_layout" => self.pages.switch_layout(),
             "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected"
-            | "node_edit" => {
+            | "node_edit" | "measure_inspect" => {
                 self.view_action(ctx, id);
             }
             "recalculate_toolpath"
@@ -1573,6 +1576,70 @@ impl CutCraftApp {
     }
 }
 
+/// A length in the job's units.
+fn length(mm: f64, units: cut_craft_core::document::Units) -> String {
+    match units {
+        cut_craft_core::document::Units::Mm => format!("{mm:.3} mm"),
+        cut_craft_core::document::Units::Inch => format!("{:.4} in", mm / 25.4),
+    }
+}
+
+/// Measure between two points: distance, angle from horizontal, and the X and Y distances.
+fn measured(from: Point, to: Point, units: cut_craft_core::document::Units) -> String {
+    let d = to - from;
+    format!(
+        "Distance {}, angle {:.2}°, X {}, Y {}",
+        length(d.length(), units),
+        d.y.atan2(d.x).to_degrees(),
+        length(d.x.abs(), units),
+        length(d.y.abs(), units)
+    )
+}
+
+/// The clicked span's type and length, and its vector's perimeter and area.
+fn inspected(path: &Path, at: Point, reach: f64, units: cut_craft_core::document::Units) -> String {
+    use cut_craft_core::geometry::Segment;
+    use std::fmt::Write as _;
+    let span = |k: usize| {
+        let from = if k == 0 {
+            path.start
+        } else {
+            path.segments[k - 1].end()
+        };
+        Path {
+            start: from,
+            segments: vec![path.segments[k]],
+            closed: false,
+        }
+    };
+    let measure = |p: &Path| {
+        p.flatten(cut_craft_core::polygon::TOLERANCE)
+            .windows(2)
+            .map(|w| w[0].distance(w[1]))
+            .sum::<f64>()
+    };
+    let mut text =
+        cut_craft_core::nodes::span_near(path, at, reach).map_or_else(String::new, |k| {
+            let kind = match path.segments[k] {
+                Segment::Line { .. } => "Line",
+                Segment::Arc { .. } => "Arc",
+                Segment::Cubic { .. } => "Bezier Curve",
+            };
+            format!("{kind}, length {}; ", length(measure(&span(k)), units))
+        });
+    let _ = write!(text, "vector perimeter {}", length(measure(path), units));
+    if path.closed {
+        let area = cut_craft_core::polygon::area(path);
+        let _ = match units {
+            cut_craft_core::document::Units::Mm => write!(text, ", area {area:.3} mm²"),
+            cut_craft_core::document::Units::Inch => {
+                write!(text, ", area {:.4} in²", area / 645.16)
+            }
+        };
+    }
+    text
+}
+
 /// Hours, minutes and seconds.
 fn hms(minutes: f64) -> String {
     #[expect(
@@ -2331,6 +2398,10 @@ impl CutCraftApp {
                 self.view_tool = Some(ViewTool::Pan);
                 "Pan"
             }
+            "measure_inspect" => {
+                self.view_tool = Some(ViewTool::Measure);
+                "Measure"
+            }
             "node_edit" => {
                 if self.view_tool == Some(ViewTool::NodeEdit) {
                     self.view_tool = None;
@@ -2389,6 +2460,11 @@ impl CutCraftApp {
         let reach = canvas.pick_tolerance(ui);
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
             (_, Some(ViewTool::NodeEdit), _) => self.node_overlay(gesture, reach),
+            (Some(Gesture::Dragging(drag)), Some(ViewTool::Measure), _) => {
+                self.status
+                    .set_message(&measured(drag.start, drag.end, self.doc.job.units));
+                Overlay::Preview(vec![Path::polyline(&[drag.start, drag.end], false)])
+            }
             (Some(Gesture::Dragging(drag)), Some(ViewTool::ZoomBox), _) => Overlay::Window {
                 start: drag.start,
                 end: drag.end,
@@ -2445,6 +2521,7 @@ impl CutCraftApp {
             (Some(Gesture::Dropped { drag, shift }), Some(ViewTool::NodeEdit), _) => {
                 self.node_drop(drag, shift, reach);
             }
+            (_, Some(ViewTool::Measure), _) => self.measure(gesture, reach),
             (Some(Gesture::Click { at, shift }), Some(ViewTool::NodeEdit), _) => {
                 self.click_select(at, shift, reach);
             }
@@ -2475,6 +2552,7 @@ impl CutCraftApp {
             Some(ViewTool::Pan) => id == "pan",
             Some(ViewTool::ZoomBox) => id == "zoom_box",
             Some(ViewTool::NodeEdit) => id == "node_edit",
+            Some(ViewTool::Measure) => id == "measure_inspect",
             None => false,
         };
         let mut clicked = None;
@@ -2507,6 +2585,24 @@ impl CutCraftApp {
             .get(form.id)
             .filter(|c| c.interactive())
             .map(cut_craft_core::DynCommand::id)
+    }
+
+    /// Measure / Inspect: a finished drag measures between its ends, a click inspects a vector.
+    fn measure(&mut self, gesture: Option<Gesture>, reach: f64) {
+        match gesture {
+            Some(Gesture::Dropped { drag, .. }) => {
+                self.status
+                    .set_message(&measured(drag.start, drag.end, self.doc.job.units));
+            }
+            Some(Gesture::Click { at, .. }) => {
+                let message = self.doc.pick(at, reach).map_or_else(
+                    || "click a vector, or drag between two points".to_owned(),
+                    |id| inspected(&self.doc.vectors[&id], at, reach, self.doc.job.units),
+                );
+                self.status.set_message(&message);
+            }
+            _ => {}
+        }
     }
 
     /// The 2D view's right-click menu: a node's while node editing, else the selection's.
@@ -2808,6 +2904,19 @@ mod tests {
         assert_eq!(fresh.app.session.path, None, "saving asks for a new name");
         assert!(!fresh.app.recent.contains(&path));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn measuring_reports_distances_and_spans() {
+        use cut_craft_core::document::Units;
+        let m = measured(Point::ZERO, Point::new(3.0, 4.0), Units::Mm);
+        assert_eq!(m, "Distance 5.000 mm, angle 53.13°, X 3.000 mm, Y 4.000 mm");
+        let square = cut_craft_core::testing::square(0.0, 0.0, 10.0);
+        let i = inspected(&square, Point::new(5.0, 0.0), 0.5, Units::Mm);
+        assert_eq!(
+            i,
+            "Line, length 10.000 mm; vector perimeter 40.000 mm, area 100.000 mm²"
+        );
     }
 
     #[test]
