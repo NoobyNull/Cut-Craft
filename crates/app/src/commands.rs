@@ -87,6 +87,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_bitmap_properties::BitmapProperties>();
     r.add::<cmd_group::Group>();
     r.add::<cmd_ungroup::Ungroup>();
+    r.add::<cmd_create_fillets::CreateFillets>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

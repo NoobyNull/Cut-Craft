@@ -162,6 +162,12 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
 
+### Create Fillets [inf] (no help text read yet; general CNC practice)
+- Works on the sharp corners where two straight sides meet; corners touching curves are left as they are.
+- **Round:** an arc of the given radius tangent to both sides. **Dog-Bone:** a circle the cutter's radius, centred on the line halving the corner and passing through it, so a round cutter clears the corner fully. **T-Bone:** the same circle, notched into the longer side instead.
+- **Corners:** All, Outer (pointing out of a closed shape: what a cutter inside a pocket cannot reach) or Inner (pointing in: what a cutter outside the shape cannot reach). Open vectors have no inside and get every corner.
+- A fillet may use at most half of each side it touches, so neighbouring fillets never overlap; corners that need more are left sharp. Aspire's tool is clicked corner by corner; ours does every corner of the selection at once.
+
 ### 3D components [obs]
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
 - **Create Shape** (from closed vectors): Round, Angled, Flat, Custom and Smooth profiles. The other creation tools are in the Model menu: Two Rail Sweep, Extrude & Weave, Turn & Spin, Texture Area, Zero Plane and From Bitmap.

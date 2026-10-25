@@ -131,7 +131,8 @@ say "not implemented yet".
   each leaves out is in its `re/SPEC.md` section.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
-  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
+  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Create Fillets (round,
+    dog-bone, T-bone; all, outer or inner corners of the selection at once).
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
@@ -154,7 +155,7 @@ say "not implemented yet".
 - Drawing tab:
   - Import Component.
   - Node Edit, Transform, Group, Trim, Close / Extend, Fit Curves, Validator, Measure.
-  - Curve, Freehand, Text, Text on a Curve, Auto Layout Text, Dimensions, Fillets,
+  - Curve, Freehand, Text, Text on a Curve, Auto Layout Text, Dimensions,
     Vector Texture, Trace Bitmap.
   - Nest, Copy Along Vectors, Array Copy (vectors), Circular Copy, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin, Texture Area; Sculpt,
