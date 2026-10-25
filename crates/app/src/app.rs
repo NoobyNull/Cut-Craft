@@ -2192,18 +2192,7 @@ impl CutCraftApp {
                 self.select(ids, shift);
             }
             (Some(Gesture::Click { at, shift }), None, None) => {
-                let hit = self.doc.pick(at, canvas.pick_tolerance(ui));
-                if shift {
-                    let mut ids = self.doc.selection.clone();
-                    if let Some(id) = hit
-                        && !ids.remove(&id)
-                    {
-                        ids.insert(id);
-                    }
-                    self.select(ids, false);
-                } else {
-                    self.select(hit, false);
-                }
+                self.click_select(at, shift, canvas.pick_tolerance(ui));
             }
             _ => {}
         }
@@ -2285,6 +2274,35 @@ impl CutCraftApp {
             });
         if let Some(form) = &mut self.form {
             form.error = result.err();
+        }
+    }
+
+    /// A click in the 2D view: picks the vector under it, else the picture; Shift adds or
+    /// takes away.
+    fn click_select(&mut self, at: cut_craft_core::geometry::Point, shift: bool, tolerance: f64) {
+        let hit = self.doc.pick(at, tolerance);
+        // a picture is picked where no vector is: click picks it, Shift-click adds or
+        // takes it away
+        let picture = hit.is_none().then(|| self.doc.pick_bitmap(at)).flatten();
+        match (picture, shift) {
+            (Some(b), true) => {
+                if !self.doc.selected_bitmaps.remove(&b) {
+                    self.doc.selected_bitmaps.insert(b);
+                }
+            }
+            (picture, false) => self.doc.selected_bitmaps = picture.into_iter().collect(),
+            (None, true) => {}
+        }
+        if shift {
+            let mut ids = self.doc.selection.clone();
+            if let Some(id) = hit
+                && !ids.remove(&id)
+            {
+                ids.insert(id);
+            }
+            self.select(ids, false);
+        } else {
+            self.select(hit, false);
         }
     }
 
@@ -2397,6 +2415,35 @@ mod tests {
         let thickness = h.app.doc.job.thickness;
         let (lo, hi) = made.height_range().unwrap();
         assert!((hi - thickness).abs() < 1e-9 && lo < hi, "{lo} {hi}");
+    }
+
+    #[test]
+    fn clicking_a_picture_selects_it_and_delete_removes_it() {
+        use cut_craft_core::bitmap::Bitmap;
+        use cut_craft_core::geometry::{Point, Rect};
+        let mut h = Harness::new();
+        let mut c = Change::builder(&h.app.doc);
+        let rect = Rect::new(Point::new(20.0, 20.0), Point::new(120.0, 120.0));
+        let id = c.add_bitmap(Bitmap {
+            name: "b".into(),
+            columns: 1,
+            rows: 1,
+            grey: vec![0],
+            rect,
+        });
+        h.app.record(Ok(c.finish()), "added");
+        h.frame(vec![]);
+        let at = h.at(70.0, 70.0);
+        h.click(at, Modifiers::NONE);
+        assert_eq!(h.app.doc.selected_bitmaps, [id].into());
+        h.click(h.at(5.0, 5.0), Modifiers::NONE);
+        assert!(
+            h.app.doc.selected_bitmaps.is_empty(),
+            "clicking elsewhere lets it go"
+        );
+        h.click(at, Modifiers::NONE);
+        h.app.invoke(&h.ctx, "delete");
+        assert!(h.app.doc.bitmaps.is_empty());
     }
 
     struct Harness {

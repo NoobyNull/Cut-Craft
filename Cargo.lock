@@ -452,6 +452,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-bitmap-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-center"
 version = "0.1.0"
 dependencies = [
@@ -1245,6 +1254,7 @@ dependencies = [
  "cmd-align-top",
  "cmd-array-copy-toolpath",
  "cmd-bake-components",
+ "cmd-bitmap-properties",
  "cmd-center",
  "cmd-center-horizontally",
  "cmd-center-horizontally-in-material",

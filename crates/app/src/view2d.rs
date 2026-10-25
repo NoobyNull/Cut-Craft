@@ -425,7 +425,17 @@ impl Canvas {
             }
         }
 
-        // selected components: their extent, dashed like selected vectors
+        // selected bitmaps and components: their extent, dashed like selected vectors
+        for bitmap in doc
+            .selected_bitmaps
+            .iter()
+            .filter_map(|id| doc.bitmaps.get(id))
+        {
+            let JobRect { min: lo, max: hi } = bitmap.rect;
+            let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y), lo]
+                .map(|p| t.to_screen(p));
+            painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
+        }
         for component in doc
             .selected_components
             .iter()

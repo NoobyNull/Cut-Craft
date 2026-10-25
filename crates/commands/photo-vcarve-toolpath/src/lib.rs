@@ -162,8 +162,8 @@ impl Command for PhotoVcarveToolpath {
         }
         ensure_positive("max carving depth", p.max_carving_depth)?;
         ensure_positive("line spacing", p.line_spacing_percent)?;
-        // ponytail: bitmaps cannot be selected yet, so the newest one is carved
-        let Some(bitmap) = doc.bitmaps.values().next_back() else {
+        // the bitmap picked last, else the newest
+        let Some(bitmap) = doc.chosen_bitmap() else {
             return Err(CommandError::Failed(
                 "import the picture to carve first".into(),
             ));

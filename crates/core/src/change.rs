@@ -70,6 +70,11 @@ pub enum Edit {
         id: EntityId,
         bitmap: Box<Bitmap>,
     },
+    ReplaceBitmap {
+        id: EntityId,
+        before: Box<Bitmap>,
+        after: Box<Bitmap>,
+    },
     /// Moves a vector between layers; `None` is "not on any layer" (added or removed).
     SetLayer {
         id: EntityId,
@@ -124,6 +129,11 @@ impl Edit {
             Self::RemoveComponent { id, component } => Self::AddComponent { id, component },
             Self::AddBitmap { id, bitmap } => Self::RemoveBitmap { id, bitmap },
             Self::RemoveBitmap { id, bitmap } => Self::AddBitmap { id, bitmap },
+            Self::ReplaceBitmap { id, before, after } => Self::ReplaceBitmap {
+                id,
+                before: after,
+                after: before,
+            },
             Self::ReplaceComponent { id, before, after } => Self::ReplaceComponent {
                 id,
                 before: after,
@@ -429,6 +439,10 @@ impl Document {
             }
             Edit::RemoveBitmap { id, bitmap } => {
                 remove_matching(&mut self.bitmaps, *id, bitmap)?;
+                self.selected_bitmaps.remove(id);
+            }
+            Edit::ReplaceBitmap { id, before, after } => {
+                replace_matching(&mut self.bitmaps, *id, before, after)?;
             }
             Edit::ReplaceComponent { id, before, after } => {
                 replace_matching(&mut self.components, *id, before, after)?;
@@ -669,6 +683,25 @@ impl ChangeBuilder<'_> {
             bitmap: Box::new(bitmap),
         });
         id
+    }
+
+    /// Removes bitmap `id` (as it is in the document).
+    pub fn remove_bitmap(&mut self, id: EntityId) {
+        let bitmap = self.doc.bitmaps[&id].clone();
+        self.edits.push(Edit::RemoveBitmap {
+            id,
+            bitmap: Box::new(bitmap),
+        });
+    }
+
+    /// Replaces bitmap `id` (as it is in the document) with `after`.
+    pub fn replace_bitmap(&mut self, id: EntityId, after: Bitmap) {
+        let before = self.doc.bitmaps[&id].clone();
+        self.edits.push(Edit::ReplaceBitmap {
+            id,
+            before: Box::new(before),
+            after: Box::new(after),
+        });
     }
 
     /// Current component `id` as seen by this change so far.

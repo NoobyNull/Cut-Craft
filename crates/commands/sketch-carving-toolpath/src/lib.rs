@@ -146,8 +146,8 @@ impl Params {
     fn darkness(&self, doc: &Document, cell: f64) -> Result<Grid, CommandError> {
         Ok(match self.source {
             Source::Bitmap => {
-                // ponytail: bitmaps cannot be selected yet, so the newest one is used
-                let Some(bitmap) = doc.bitmaps.values().next_back() else {
+                // the bitmap picked last, else the newest
+                let Some(bitmap) = doc.chosen_bitmap() else {
                     return Err(CommandError::Failed(
                         "import the picture to sketch first".into(),
                     ));

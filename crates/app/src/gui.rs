@@ -276,6 +276,8 @@ impl MenuSystem {
             },
             MenuItem::separator(),
             MenuItem::with_action("Object Properties", "object_properties"),
+            MenuItem::with_action("Bitmap Properties", "bitmap_properties")
+                .enabled(!doc.selected_bitmaps.is_empty()),
         ]
     }
 

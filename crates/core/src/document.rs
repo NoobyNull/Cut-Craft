@@ -281,6 +281,9 @@ pub struct Document {
     /// read by the commands that work on "the selected component".
     #[serde(default)]
     pub selected_components: Selection,
+    /// Bitmaps picked in the 2D view, in pick order; view state like `selection`.
+    #[serde(default)]
+    pub selected_bitmaps: Selection,
 }
 
 impl Default for Document {
@@ -296,6 +299,7 @@ impl Default for Document {
             components: BTreeMap::new(),
             bitmaps: BTreeMap::new(),
             selected_components: Selection::new(),
+            selected_bitmaps: Selection::new(),
         }
     }
 }
@@ -322,6 +326,24 @@ impl Document {
             .find(|id| self.components.contains_key(id))
             .or_else(|| self.components.keys().next_back())
             .copied()
+    }
+
+    /// The picture a picture tool works on: the last one picked, else the newest.
+    pub fn chosen_bitmap(&self) -> Option<&Bitmap> {
+        self.selected_bitmaps
+            .iter()
+            .rev()
+            .find_map(|id| self.bitmaps.get(id))
+            .or_else(|| self.bitmaps.values().next_back())
+    }
+
+    /// The newest bitmap under `at`, for picking in the 2D view.
+    pub fn pick_bitmap(&self, at: Point) -> Option<EntityId> {
+        self.bitmaps
+            .iter()
+            .rev()
+            .find(|(_, b)| b.rect.contains(at))
+            .map(|(&id, _)| id)
     }
 
     pub fn layer(&self, id: LayerId) -> Option<&Layer> {

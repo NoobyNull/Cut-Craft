@@ -49,8 +49,8 @@ impl Command for CreateComponentFromBitmap {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("max height", p.max_height)?;
-        // ponytail: bitmaps cannot be selected yet, so the newest one is used
-        let Some(bitmap) = doc.bitmaps.values().next_back() else {
+        // the bitmap picked last, else the newest
+        let Some(bitmap) = doc.chosen_bitmap() else {
             return Err(CommandError::Failed("import the picture first".into()));
         };
         let relief = Component::from_fn(

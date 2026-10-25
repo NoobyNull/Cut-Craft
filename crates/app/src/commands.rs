@@ -84,6 +84,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_smooth_selected_components::SmoothSelectedComponents>();
     r.add::<cmd_reset_inside_selected_vectors::ResetInsideSelectedVectors>();
     r.add::<cmd_reset_outside_selected_vectors::ResetOutsideSelectedVectors>();
+    r.add::<cmd_bitmap_properties::BitmapProperties>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
