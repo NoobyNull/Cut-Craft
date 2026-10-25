@@ -91,6 +91,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_array_copy::ArrayCopy>();
     r.add::<cmd_circular_copy::CircularCopy>();
     r.add::<cmd_close_extend_vector::CloseExtendVector>();
+    r.add::<cmd_vector_validator::VectorValidator>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

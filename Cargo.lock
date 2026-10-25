@@ -1120,6 +1120,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-vector-validator"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-weld-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1385,6 +1394,7 @@ dependencies = [
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
  "cmd-vcarve-inlay-toolpath",
+ "cmd-vector-validator",
  "cmd-weld-vectors",
  "cut-craft-core",
  "cut-craft-post",
