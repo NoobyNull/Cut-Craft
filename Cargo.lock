@@ -670,6 +670,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-dimensions"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-drag-knife-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -1468,6 +1477,7 @@ dependencies = [
  "cmd-delete-items",
  "cmd-delete-layer",
  "cmd-delete-toolpath",
+ "cmd-dimensions",
  "cmd-drag-knife-toolpath",
  "cmd-draw-arc",
  "cmd-draw-circle",

@@ -147,6 +147,9 @@ say "not implemented yet".
     all shown vectors; the faulty vectors are selected, zero-length spans fixed) and Extend
     Vectors (two selected open vectors' nearest ends run straight to where they meet;
     Aspire picks the ends by hovering and clicking).
+  - Dimensions: length, vertical and horizontal, dragged between two points, with offset,
+    text height, font, decimal places and custom text, as one group (dialog 963). Angle and
+    arc dimensions, separate text placement and editing are not done.
   - Create Fillets: click a corner where two straight spans meet for a normal or dog-bone
     fillet of the radius (dialog with T-Bone and Plasma / Drag Knife types, and removing
     fillets, not done yet).
@@ -195,7 +198,7 @@ say "not implemented yet".
 - Gadgets; Help Contents.
 - Drawing tab:
   - Node Edit, Transform, Trim, Measure.
-  - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text, Dimensions,
+  - Curve, Freehand, Text in a Box, Text on a Curve, Auto Layout Text,
     Vector Texture.
   - Nest, Distort.
 - Modeling tab: Extrude and Weave, Two Rail Sweep, Turn and Spin; Sculpt,
