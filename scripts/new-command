@@ -3,7 +3,7 @@
 #   scripts/new-command draw-rectangle "Draw Rectangle" "Create Vectors" drawing/create_vectors/draw_rectangle.svg
 # Then: write behaviour tests in its src/lib.rs and implement run(). The app registration is done here.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "$(readlink -f "$0")")/.."
 name="$1" label="$2" group="$3" icon="${4:-}"
 dir="crates/commands/$name"
 [[ -e $dir ]] && { echo "$dir already exists" >&2; exit 1; }

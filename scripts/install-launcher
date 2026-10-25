@@ -5,7 +5,7 @@
 # The launcher runs this checkout's target/release/cut-craft from the repository folder,
 # where the app finds assets/icons. Re-run after pulling changes to rebuild.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(dirname "$(readlink -f "$0")")/.."
 repo=$(pwd)
 data="${XDG_DATA_HOME:-$HOME/.local/share}"
 entry="$data/applications/cut-craft.desktop"
