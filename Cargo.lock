@@ -1781,6 +1781,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cut-craft-calib"
+version = "0.1.0"
+dependencies = [
+ "cmd-create-fillets",
+ "cmd-fit-curves-to-vectors",
+ "cmd-offset-vectors",
+ "cmd-weld-vectors",
+ "cut-craft-core",
+ "fmt-import-crv3d",
+ "fmt-import-dxf",
+]
+
+[[package]]
 name = "cut-craft-core"
 version = "0.1.0"
 dependencies = [

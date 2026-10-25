@@ -1,0 +1,17 @@
+[package]
+name = "cut-craft-calib"
+description = "Blind-test harness: the same input through Aspire (a saved .crv3d) and Cut Craft, compared"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+fmt-import-dxf = { path = "../formats/import-dxf" }
+fmt-import-crv3d = { path = "../formats/import-crv3d" }
+cmd-offset-vectors = { path = "../commands/offset-vectors" }
+cmd-create-fillets = { path = "../commands/create-fillets" }
+cmd-weld-vectors = { path = "../commands/weld-vectors" }
+cmd-fit-curves-to-vectors = { path = "../commands/fit-curves-to-vectors" }
+
+[lints]
+workspace = true
