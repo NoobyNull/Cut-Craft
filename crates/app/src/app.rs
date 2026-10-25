@@ -21,7 +21,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 50] = [
+const BUILT_INS: [&str; 51] = [
+    "node_edit",
     "print",
     "print_preview",
     "save_all_visible_toolpaths_as_template",
@@ -113,7 +114,11 @@ const MESH_CELLS: usize = 250;
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 1] = ["import_stl"];
 /// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
-const LAYOUT_KEYS: [(&str, &str); 2] = [("design_layout", "F11"), ("machining_layout", "F12")];
+const LAYOUT_KEYS: [(&str, &str); 3] = [
+    ("design_layout", "F11"),
+    ("machining_layout", "F12"),
+    ("node_edit", "N"),
+];
 /// The view buttons over the top right of the 2D view: action, label and icon.
 const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
     ("pan", "Pan", "view/pan.svg"),
@@ -176,6 +181,8 @@ enum ViewTool {
     Pan,
     /// One box, then back to selecting.
     ZoomBox,
+    /// Drag the selected vectors' nodes; right-click a node or span for its menu (N).
+    NodeEdit,
 }
 
 #[derive(PartialEq)]
@@ -408,7 +415,8 @@ impl CutCraftApp {
             "design_layout" => self.pages = Pages::design_layout(),
             "machining_layout" => self.pages = Pages::machining_layout(),
             "interface_layout" => self.pages.switch_layout(),
-            "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected" => {
+            "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected"
+            | "node_edit" => {
                 self.view_action(ctx, id);
             }
             "recalculate_toolpath"
@@ -2323,6 +2331,15 @@ impl CutCraftApp {
                 self.view_tool = Some(ViewTool::Pan);
                 "Pan"
             }
+            "node_edit" => {
+                if self.view_tool == Some(ViewTool::NodeEdit) {
+                    self.view_tool = None;
+                    "Select"
+                } else {
+                    self.view_tool = Some(ViewTool::NodeEdit);
+                    "Node Edit"
+                }
+            }
             "zoom_box" => {
                 self.view_tool = Some(ViewTool::ZoomBox);
                 "Zoom Box"
@@ -2369,7 +2386,9 @@ impl CutCraftApp {
             self.camera = Some(canvas.transform);
         }
         let gesture = canvas.gesture(ui);
+        let reach = canvas.pick_tolerance(ui);
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
+            (_, Some(ViewTool::NodeEdit), _) => self.node_overlay(gesture, reach),
             (Some(Gesture::Dragging(drag)), Some(ViewTool::ZoomBox), _) => Overlay::Window {
                 start: drag.start,
                 end: drag.end,
@@ -2404,10 +2423,7 @@ impl CutCraftApp {
             );
         }
         canvas.rulers(ui, job.units);
-        let selection_menu = || self.menus.selection_menu(&self.doc);
-        if let Some(action) = self.popup(canvas.response(), selection_menu) {
-            self.invoke(ui.ctx(), &action);
-        }
+        self.view_menu(ui, &canvas, reach);
         self.view_buttons(ui, area);
         self.view_transform = Some(canvas.transform);
         self.view_area = Some(area);
@@ -2425,6 +2441,12 @@ impl CutCraftApp {
                 }
                 self.view_tool = None;
                 "Select".clone_into(&mut self.status.current_tool);
+            }
+            (Some(Gesture::Dropped { drag, shift }), Some(ViewTool::NodeEdit), _) => {
+                self.node_drop(drag, shift, reach);
+            }
+            (Some(Gesture::Click { at, shift }), Some(ViewTool::NodeEdit), _) => {
+                self.click_select(at, shift, reach);
             }
             (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
@@ -2452,6 +2474,7 @@ impl CutCraftApp {
         let in_hand = |id: &str| match self.view_tool {
             Some(ViewTool::Pan) => id == "pan",
             Some(ViewTool::ZoomBox) => id == "zoom_box",
+            Some(ViewTool::NodeEdit) => id == "node_edit",
             None => false,
         };
         let mut clicked = None;
@@ -2484,6 +2507,87 @@ impl CutCraftApp {
             .get(form.id)
             .filter(|c| c.interactive())
             .map(cut_craft_core::DynCommand::id)
+    }
+
+    /// The 2D view's right-click menu: a node's while node editing, else the selection's.
+    fn view_menu(&mut self, ui: &egui::Ui, canvas: &Canvas, reach: f64) {
+        let pressed = ui
+            .input(|i| i.pointer.press_origin())
+            .map(|q| canvas.transform.to_job(q));
+        let node_target = pressed
+            .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
+            .and_then(|at| self.node_target(at, reach));
+        let selection_menu = || match node_target {
+            Some(target) => gui::node_menu(&target),
+            None => self.menus.selection_menu(&self.doc),
+        };
+        if let Some(action) = self.popup(canvas.response(), selection_menu) {
+            self.invoke(ui.ctx(), &action);
+        }
+    }
+
+    /// Node handles on the selected vectors, and the dragged node's vector as it would be.
+    fn node_overlay(&self, gesture: Option<Gesture>, reach: f64) -> Overlay {
+        // the dragged node's vector as it would be, drawn over the old one
+        let moving = match gesture {
+            Some(Gesture::Dragging(drag)) => self
+                .node_target(drag.start, reach)
+                .and_then(|t| {
+                    let path = &self.doc.vectors[&t.vector];
+                    let k = cut_craft_core::nodes::node_near(path, drag.start, reach)?;
+                    Some(cut_craft_core::nodes::move_node(path, k, drag.end))
+                })
+                .into_iter()
+                .collect(),
+            _ => vec![],
+        };
+        let at = self
+            .doc
+            .selection
+            .iter()
+            .flat_map(|id| cut_craft_core::nodes::nodes(&self.doc.vectors[id]))
+            .collect();
+        Overlay::Nodes { at, moving }
+    }
+
+    /// A drag from a node moves it; any other drag selects, as with the Select tool.
+    fn node_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
+        if let Some(params) = self.node_move(drag, reach) {
+            if let Err(e) = self.apply("move_node", &params) {
+                self.status.set_message(&e);
+            }
+        } else {
+            let ids = self
+                .doc
+                .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);
+            self.select(ids, shift);
+        }
+    }
+
+    /// A selected, editable vector with a node or span within `reach` of `at`.
+    fn node_target(&self, at: Point, reach: f64) -> Option<cut_craft_core::nodes::NodeAt> {
+        self.doc
+            .selection
+            .iter()
+            .find(|id| {
+                let path = &self.doc.vectors[id];
+                self.doc.editable(**id)
+                    && (cut_craft_core::nodes::node_near(path, at, reach).is_some()
+                        || cut_craft_core::nodes::span_near(path, at, reach).is_some())
+            })
+            .map(|&vector| cut_craft_core::nodes::NodeAt {
+                vector,
+                at: cut_craft_core::params::Xy::new(at.x, at.y),
+                reach,
+            })
+    }
+
+    /// Move Node's params when `drag` starts on a selected vector's node.
+    fn node_move(&self, drag: Drag, reach: f64) -> Option<Value> {
+        let target = self.node_target(drag.start, reach)?;
+        cut_craft_core::nodes::node_near(&self.doc.vectors[&target.vector], drag.start, reach)?;
+        let to = cut_craft_core::params::Xy::new(drag.end.x, drag.end.y);
+        Some(serde_json::json!({ "from": target, "to": to }))
     }
 
     /// Paths `id` would create for `drag`, by running the command itself.
@@ -2652,6 +2756,42 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn node_editing_drags_a_corner_and_offers_its_menu() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 10.0);
+        let id = *h.app.doc.selection.iter().next().unwrap();
+        h.app.invoke(&h.ctx, "node_edit");
+        assert_eq!(h.app.view_tool, Some(ViewTool::NodeEdit));
+        let (from, to) = (h.at(30.0, 20.0), h.at(40.0, 25.0));
+        h.drag(from, to);
+        let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+        assert!(
+            corners
+                .iter()
+                .any(|q| q.distance(Point::new(40.0, 25.0)) < 0.5),
+            "the corner followed the drag: {corners:?}"
+        );
+        assert_eq!(
+            h.app.doc.vectors.len(),
+            1,
+            "a node drag selects nothing new"
+        );
+        let target = h
+            .app
+            .node_target(Point::new(10.0, 10.0), 1.0)
+            .expect("a node there");
+        let menu = gui::node_menu(&target);
+        let delete = leaf(&menu, &["Delete Point"]);
+        h.app.invoke(&h.ctx, &delete.action);
+        assert_eq!(
+            cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]).len(),
+            3
+        );
+        h.app.invoke(&h.ctx, "node_edit");
+        assert_eq!(h.app.view_tool, None, "N toggles it off");
     }
 
     #[test]

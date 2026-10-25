@@ -136,6 +136,11 @@ say "not implemented yet".
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;
     Ungroup turns it into curves.
+  - Node Edit (N): handles on the selected vectors' nodes; drag a node to move it (arcs
+    keep their bulge, Bézier handles follow); right-click a node or span for Insert Point,
+    Delete Point, Convert Span to Line, Cut Vector, Make Start Point, Exit Node Editing.
+    Dragging control points or spans, several nodes at once, spans to Bézier / arc, smooth
+    points and Keep Bezier Tangency are not done.
   - Text in a Box (Draw Text's other mode): the text scaled to fit a box at the anchor,
     inside a None / Normal / Wide margin, centred (dialog 279; its stretch options are not
     done).
@@ -225,7 +230,7 @@ say "not implemented yet".
   window tiling and cascade.
 - Gadgets; Help Contents.
 - Drawing tab:
-  - Node Edit, Transform, Trim, Measure.
+  - Transform, Trim, Measure.
   - Curve, Freehand, Auto Layout Text,
     Vector Texture.
   - Distort.

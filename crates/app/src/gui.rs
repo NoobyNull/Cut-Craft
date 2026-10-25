@@ -232,6 +232,21 @@ pub struct MenuSystem {
     pub menus: Vec<Menu>,
 }
 
+/// The node-editing popup for the node or span at `at` (Aspire's popup menus 142, 317, 635).
+pub fn node_menu(at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
+    vec![
+        MenuItem::run::<cmd_insert_point::InsertPoint>("Insert Point", at),
+        MenuItem::run::<cmd_delete_point::DeletePoint>("Delete Point", at),
+        MenuItem::separator(),
+        MenuItem::run::<cmd_span_to_line::SpanToLine>("Convert Span to Line", at),
+        MenuItem::separator(),
+        MenuItem::run::<cmd_cut_vector::CutVector>("Cut Vector", at),
+        MenuItem::run::<cmd_make_start_point::MakeStartPoint>("Make Start Point", at),
+        MenuItem::separator(),
+        MenuItem::with_action("Exit Node Editing", "node_edit"),
+    ]
+}
+
 impl MenuSystem {
     fn menu(&self, name: &str) -> &Menu {
         self.menus

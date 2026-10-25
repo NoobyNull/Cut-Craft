@@ -96,6 +96,10 @@ pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
         .collect()
 }
 
+/// A node handle's edge, as a share of the theme's interactive row height.
+// ponytail: fixed share until a preferences dialog sizes handles
+const NODE_HANDLE_SHARE: f32 = 0.35;
+
 /// What the pointer did on the canvas this frame.
 #[derive(Clone, Copy, Debug)]
 pub enum Gesture {
@@ -109,6 +113,11 @@ pub enum Overlay {
     None,
     /// What the active drawing tool would create.
     Preview(Vec<Path>),
+    /// Node editing: handles on the selected vectors' nodes, and a node's drag in progress.
+    Nodes {
+        at: Vec<Point>,
+        moving: Vec<Path>,
+    },
     /// A selection box in job coordinates; crossing boxes are drawn dashed.
     Window {
         start: Point,
@@ -466,6 +475,17 @@ impl Canvas {
             Overlay::None => {}
             Overlay::Preview(paths) => {
                 for path in paths {
+                    painter.add(Shape::line(screen(path), selected));
+                }
+            }
+            Overlay::Nodes { at, moving } => {
+                let half = ui.spacing().interact_size.y * NODE_HANDLE_SHARE / 2.0;
+                for q in at {
+                    let r = Rect::from_center_size(t.to_screen(*q), egui::vec2(half, half) * 2.0);
+                    painter.rect_filled(r, 0.0, ui.visuals().extreme_bg_color);
+                    painter.rect_stroke(r, 0.0, selected);
+                }
+                for path in moving {
                     painter.add(Shape::line(screen(path), selected));
                 }
             }
