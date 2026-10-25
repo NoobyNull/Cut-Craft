@@ -832,6 +832,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-select-all-duplicate-vectors"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-select-all-open-vectors"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-select-all-vectors"
 version = "0.1.0"
 dependencies = [
@@ -879,6 +897,24 @@ dependencies = [
 
 [[package]]
 name = "cmd-sketch-carving-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-space-horizontally"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-space-vertically"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1180,12 +1216,16 @@ dependencies = [
  "cmd-quick-engrave-toolpath",
  "cmd-rotate",
  "cmd-rounding-toolpath",
+ "cmd-select-all-duplicate-vectors",
+ "cmd-select-all-open-vectors",
  "cmd-select-all-vectors",
  "cmd-select-layer-vectors",
  "cmd-set-current-layer",
  "cmd-set-size",
  "cmd-show-hide",
  "cmd-sketch-carving-toolpath",
+ "cmd-space-horizontally",
+ "cmd-space-vertically",
  "cmd-subtract-vectors",
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",

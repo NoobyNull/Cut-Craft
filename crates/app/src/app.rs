@@ -21,7 +21,15 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 31] = [
+const BUILT_INS: [&str; 39] = [
+    "cut",
+    "copy",
+    "paste",
+    "increment_and_save",
+    "open_application_data_folder",
+    "keyboard_shortcuts",
+    "third_party_licenses",
+    "about_cut_craft",
     "undo",
     "redo",
     "exit",
@@ -54,6 +62,33 @@ const BUILT_INS: [&str; 31] = [
     "preview_all_toolpaths",
     "reset_preview",
 ];
+/// The Help windows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Info {
+    About,
+    Shortcuts,
+    Licenses,
+}
+
+/// The libraries Cut Craft is built on and the licences their makers declare.
+// ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
+const THIRD_PARTY: [(&str, &str); 14] = [
+    ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
+    ("glam", "MIT or Apache-2.0"),
+    ("i_overlay", "MIT or Apache-2.0"),
+    ("image", "MIT or Apache-2.0"),
+    ("usvg", "MPL-2.0"),
+    ("dxf", "MIT"),
+    ("serde / serde_json", "MIT or Apache-2.0"),
+    ("schemars", "MIT"),
+    ("rfd", "MIT"),
+    ("chrono", "MIT or Apache-2.0"),
+    ("env_logger", "MIT or Apache-2.0"),
+    ("log", "MIT or Apache-2.0"),
+    ("wgpu (through eframe)", "MIT or Apache-2.0"),
+    ("Rust standard library", "MIT or Apache-2.0"),
+];
+
 /// Simulation cells along the longer side of the job.
 // ponytail: one quality until the Preview Simulation Quality menu is wired
 const PREVIEW_CELLS: usize = 1000;
@@ -179,6 +214,10 @@ struct CutCraftApp {
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
     tool_window: bool,
+    /// What Cut and Copy last took, pasted back in place.
+    clipboard: Vec<cut_craft_core::geometry::Path>,
+    /// An open Help window.
+    info: Option<Info>,
     /// The tool shown in the Tool Database window.
     tool_selected: usize,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
@@ -223,6 +262,8 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_window: false,
+            clipboard: vec![],
+            info: None,
             tool_selected: 0,
             simulation: None,
             simulation_coarse: None,
@@ -252,6 +293,9 @@ impl CutCraftApp {
             }
             "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
             "reset_preview" => self.simulation.is_some(),
+            "cut" | "copy" => !self.doc.selection.is_empty(),
+            "paste" => !self.clipboard.is_empty(),
+            "increment_and_save" => self.screen == Screen::Job,
             _ => {
                 BUILT_INS.contains(&id)
                     || self.registry.get(id).is_some()
@@ -296,6 +340,12 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "install_post_processor" => self.file_action(id),
             "tool_database" => self.tool_window = true,
+            "copy" | "cut" | "paste" | "increment_and_save" | "open_application_data_folder" => {
+                self.clipboard_or_file_action(id);
+            }
+            "keyboard_shortcuts" => self.info = Some(Info::Shortcuts),
+            "third_party_licenses" => self.info = Some(Info::Licenses),
+            "about_cut_craft" => self.info = Some(Info::About),
             // the Select tool: put away whatever tool is in hand
             "select" => {
                 (self.form, self.view_tool) = (None, None);
@@ -1225,6 +1275,114 @@ impl CutCraftApp {
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
     }
 
+    /// Cut, Copy, Paste, Increment and Save, Open Application Data Folder.
+    fn clipboard_or_file_action(&mut self, id: &str) {
+        match id {
+            "copy" | "cut" => {
+                self.clipboard = self
+                    .doc
+                    .selection
+                    .iter()
+                    .map(|id| self.doc.vectors[id].clone())
+                    .collect();
+                if id == "cut"
+                    && let Err(e) = self.apply("delete", &serde_json::json!({}))
+                {
+                    self.status.set_message(&e);
+                }
+            }
+            "paste" => {
+                let mut c = Change::builder(&self.doc);
+                let ids: Vec<_> = self.clipboard.iter().map(|p| c.add(p.clone())).collect();
+                c.select(ids);
+                self.record(Ok(c.finish()), "Pasted");
+            }
+            "increment_and_save" => match self.session.path.clone() {
+                Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
+                None => self.file_action("save_as"),
+            },
+            "open_application_data_folder" => {
+                let opened = files::config_dir()
+                    .ok_or_else(|| "no home folder".to_owned())
+                    .and_then(|dir| {
+                        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                        std::process::Command::new("xdg-open")
+                            .arg(&dir)
+                            .spawn()
+                            .map_err(|e| e.to_string())
+                    });
+                if let Err(e) = opened {
+                    self.status
+                        .set_message(&format!("could not open the folder: {e}"));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The Help windows: About, Keyboard Shortcuts, Third Party Licenses.
+    fn info_window(&mut self, ctx: &egui::Context) {
+        let Some(info) = self.info else { return };
+        let mut open = true;
+        let title = match info {
+            Info::About => "About Cut Craft",
+            Info::Shortcuts => "Keyboard Shortcuts",
+            Info::Licenses => "Third Party Licenses",
+        };
+        let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
+            let mut rows: Vec<(String, String)> = self
+                .bindings()
+                .into_iter()
+                .map(|(id, keys)| {
+                    let label = self
+                        .registry
+                        .get(&id)
+                        .map_or_else(|| gui::title_case(&id), |c| c.meta().label.to_owned());
+                    (ctx.format_shortcut(&keys), label)
+                })
+                .collect();
+            rows.sort_by(|a, b| a.1.cmp(&b.1));
+            rows
+        } else {
+            vec![]
+        };
+        egui::Window::new(title)
+            .open(&mut open)
+            .collapsible(false)
+            .show(ctx, |ui| match info {
+                Info::About => {
+                    ui.heading("Cut Craft");
+                    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                    ui.label("2D and 3D design and CNC toolpaths.");
+                }
+                Info::Shortcuts => {
+                    egui::ScrollArea::vertical()
+                        .max_height(400.0)
+                        .show(ui, |ui| {
+                            egui::Grid::new("shortcuts").striped(true).show(ui, |ui| {
+                                for (keys, label) in &shortcuts {
+                                    ui.monospace(keys);
+                                    ui.label(label);
+                                    ui.end_row();
+                                }
+                            });
+                        });
+                }
+                Info::Licenses => {
+                    egui::Grid::new("licenses").striped(true).show(ui, |ui| {
+                        for (name, licence) in THIRD_PARTY {
+                            ui.label(name);
+                            ui.label(licence);
+                            ui.end_row();
+                        }
+                    });
+                }
+            });
+        if !open {
+            self.info = None;
+        }
+    }
+
     /// Pick a tool to edit or delete; edits are saved as they are made.
     fn tool_database_window(&mut self, ctx: &egui::Context) {
         let (mut open, mut delete, mut edited) = (self.tool_window, None, false);
@@ -1731,6 +1889,7 @@ impl CutCraftApp {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| self.menu_bar(ui));
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));
         self.tool_database_window(ctx);
+        self.info_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::SidePanel::left("start_page").show(ctx, |ui| self.start_page(ui));
@@ -2035,6 +2194,44 @@ mod tests {
     use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
     /// Drives the real UI headlessly, one frame per call, with synthetic pointer input.
+    #[test]
+    fn cut_copy_and_paste_vectors() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 10.0);
+        let before = h.app.doc.vectors.len();
+        assert!(before > 0);
+        assert!(!h.app.available("paste"));
+        h.app.invoke(&h.ctx, "copy");
+        h.app.invoke(&h.ctx, "paste");
+        assert_eq!(h.app.doc.vectors.len(), before + h.app.clipboard.len());
+        assert_eq!(
+            h.app.doc.selection.len(),
+            h.app.clipboard.len(),
+            "the pasted copies are selected"
+        );
+        h.app.invoke(&h.ctx, "cut");
+        assert_eq!(
+            h.app.doc.vectors.len(),
+            before,
+            "cut takes the selection away"
+        );
+        h.app.invoke(&h.ctx, "undo");
+        assert_eq!(h.app.doc.vectors.len(), before + h.app.clipboard.len());
+    }
+
+    #[test]
+    fn help_items_open_their_windows() {
+        let mut h = Harness::new();
+        for (id, info) in [
+            ("about_cut_craft", Info::About),
+            ("keyboard_shortcuts", Info::Shortcuts),
+            ("third_party_licenses", Info::Licenses),
+        ] {
+            h.app.invoke(&h.ctx, id);
+            assert_eq!(h.app.info, Some(info));
+        }
+    }
+
     struct Harness {
         ctx: egui::Context,
         app: CutCraftApp,
@@ -2476,8 +2673,8 @@ mod tests {
             .map(|v| v.bounds().min.x)
             .collect();
         assert!((left[0] - left[1]).abs() < 1e-9, "{left:?}");
-        let cut = leaf(&menu(&h.app), &["Cut"]).action.clone();
-        assert!(!h.app.available(&cut), "Cut is greyed until it is built");
+        h.choose(menu, &["Cut"]);
+        assert!(h.app.doc.vectors.is_empty(), "Cut takes the selection away");
     }
 
     #[test]

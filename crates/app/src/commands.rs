@@ -72,6 +72,10 @@ pub fn registry() -> Registry {
     r.add::<cmd_array_copy_toolpath::ArrayCopyToolpath>();
     r.add::<cmd_merged_toolpath::MergedToolpath>();
     r.add::<cmd_inlay_toolpath::InlayToolpath>();
+    r.add::<cmd_space_horizontally::SpaceHorizontally>();
+    r.add::<cmd_space_vertically::SpaceVertically>();
+    r.add::<cmd_select_all_open_vectors::SelectAllOpenVectors>();
+    r.add::<cmd_select_all_duplicate_vectors::SelectAllDuplicateVectors>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_importer::<fmt_import_svg::ImportSvg>();

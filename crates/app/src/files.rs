@@ -92,11 +92,41 @@ pub fn save_through(
 
 /// Where Cut Craft keeps its settings: `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
 // ponytail: XDG only; add the Windows/macOS config folders when those builds exist
-fn config_dir() -> Option<PathBuf> {
+pub fn config_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
         .map(|dir| dir.join("cut-craft"))
+}
+
+/// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
+/// other gets `_1`, and it keeps counting past names that `exists` says are taken.
+pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("untitled");
+    let (base, mut n) = match stem.rfind(['_', '-']) {
+        Some(at) if stem[at + 1..].parse::<u64>().is_ok() => {
+            (&stem[..=at], stem[at + 1..].parse::<u64>().unwrap_or(0))
+        }
+        _ => (stem, 0),
+    };
+    let base = if n == 0 && !base.ends_with(['_', '-']) {
+        format!("{base}_")
+    } else {
+        base.to_owned()
+    };
+    loop {
+        n += 1;
+        let mut next = path.with_file_name(format!("{base}{n}"));
+        if let Some(ext) = path.extension() {
+            next.set_extension(ext);
+        }
+        if !exists(&next) {
+            return next;
+        }
+    }
 }
 
 pub fn tool_database_path() -> Option<PathBuf> {
@@ -155,6 +185,34 @@ fn write_creating(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod increment_tests {
+    use super::incremented;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn increment_counts_up_a_trailing_number_and_skips_taken_names() {
+        let none = |_: &Path| false;
+        assert_eq!(
+            incremented(Path::new("/j/sign_1.ccjob"), none),
+            PathBuf::from("/j/sign_2.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/sign-9.ccjob"), none),
+            PathBuf::from("/j/sign-10.ccjob")
+        );
+        assert_eq!(
+            incremented(Path::new("/j/sign.ccjob"), none),
+            PathBuf::from("/j/sign_1.ccjob")
+        );
+        let taken = |p: &Path| p.ends_with("sign_2.ccjob");
+        assert_eq!(
+            incremented(Path::new("/j/sign_1.ccjob"), taken),
+            PathBuf::from("/j/sign_3.ccjob")
+        );
+    }
 }
 
 #[cfg(test)]

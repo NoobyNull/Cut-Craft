@@ -250,6 +250,55 @@ impl Change {
         })
     }
 
+    /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
+    /// stay put and the others move so the gaps between their extents are equal, keeping
+    /// their order and their other coordinate.
+    pub fn space_selected(doc: &Document, vertical: bool) -> Result<Self, CommandError> {
+        let along = |r: Rect| {
+            if vertical {
+                (r.min.y, r.max.y)
+            } else {
+                (r.min.x, r.max.x)
+            }
+        };
+        let mut items: Vec<(EntityId, f64, f64)> = doc
+            .selection
+            .iter()
+            .map(|&id| {
+                let (lo, hi) = along(doc.vectors[&id].bounds());
+                (id, lo, hi)
+            })
+            .collect();
+        if items.len() < 3 {
+            return Err(CommandError::Failed(
+                "select at least three objects to space".into(),
+            ));
+        }
+        items.sort_by(|a, b| (a.1 + a.2).total_cmp(&(b.1 + b.2)));
+        let span = items[items.len() - 1].2 - items[0].1;
+        let sizes: f64 = items.iter().map(|(_, lo, hi)| hi - lo).sum();
+        #[expect(clippy::cast_precision_loss, reason = "a few objects")]
+        let gap = (span - sizes) / (items.len() - 1) as f64;
+        let mut c = Self::builder(doc);
+        let mut at = items[0].1;
+        for &(id, lo, hi) in &items {
+            let by = at - lo;
+            if by.abs() > 1e-12 {
+                let shift = if vertical {
+                    Point::new(0.0, by)
+                } else {
+                    Point::new(by, 0.0)
+                };
+                c.replace(
+                    id,
+                    doc.vectors[&id].transformed(&DAffine2::from_translation(shift)),
+                );
+            }
+            at += hi - lo + gap;
+        }
+        Ok(c.finish())
+    }
+
     /// Paths this change creates, e.g. to preview a command before applying it.
     pub fn added(&self) -> impl Iterator<Item = &Path> {
         self.edits.iter().filter_map(|e| match e {
