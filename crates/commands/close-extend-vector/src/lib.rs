@@ -1,0 +1,245 @@
+//! Close / Extend Vector: closes the selected open vectors, with a straight line from end to
+//! start or by extending their end lines until they meet.
+
+use cut_craft_core::document::Document;
+use cut_craft_core::geometry::{Path, Point, Segment};
+use cut_craft_core::{Change, Command, CommandError, Meta};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+pub struct CloseExtendVector;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Method {
+    /// A straight line from the end back to the start
+    #[default]
+    Line,
+    /// Lengthen the first and last lines until they meet; when they never do, close with a
+    /// straight line
+    Extend,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct Params {
+    pub method: Method,
+    /// Only close vectors whose ends are at most this far apart; 0 closes any
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub max_gap: f64,
+}
+
+/// Ends closer than this already meet.
+const TOUCHING: f64 = 1e-9;
+
+impl Command for CloseExtendVector {
+    const ID: &'static str = "close_extend_vector";
+    type Params = Params;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Close / Extend Vector",
+            group: "Edit Objects",
+            icon: "drawing/create_vectors/close_extend_vector.svg",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        if p.max_gap < 0.0 {
+            return Err(CommandError::InvalidParams(
+                "max gap must not be negative".into(),
+            ));
+        }
+        let (ids, paths) = doc.selected_paths(|path| !path.closed && !path.segments.is_empty());
+        if ids.is_empty() {
+            return Err(CommandError::Failed("select open vectors to close".into()));
+        }
+        let mut c = Change::builder(doc);
+        let mut closed = 0;
+        for (id, path) in ids.into_iter().zip(paths) {
+            let gap = (end(&path) - path.start).length();
+            if p.max_gap > 0.0 && gap > p.max_gap {
+                continue;
+            }
+            let joined = match p.method {
+                Method::Extend if gap > TOUCHING => extended(&path),
+                _ => None,
+            };
+            c.replace(id, joined.unwrap_or_else(|| with_line(path)));
+            closed += 1;
+        }
+        if closed == 0 {
+            return Err(CommandError::Failed(
+                "no selected vector's ends are within the max gap".into(),
+            ));
+        }
+        Ok(c.finish())
+    }
+}
+
+fn end(path: &Path) -> Point {
+    path.segments.last().map_or(path.start, Segment::end)
+}
+
+/// `path` closed by a line from its end to its start, or just marked closed when they meet.
+fn with_line(mut path: Path) -> Path {
+    let start = path.start;
+    let last = path
+        .segments
+        .last_mut()
+        .expect("open vectors have segments");
+    if (last.end() - start).length() <= TOUCHING {
+        // snap the end exactly onto the start
+        match last {
+            Segment::Line { to } | Segment::Arc { to, .. } | Segment::Cubic { to, .. } => {
+                *to = start;
+            }
+        }
+    } else {
+        path.segments.push(Segment::Line { to: start });
+    }
+    path.closed = true;
+    path
+}
+
+/// `path` with its first and last lines lengthened to where they meet, closed there; `None`
+/// when either end is not a line or the lines never meet ahead of both ends.
+fn extended(path: &Path) -> Option<Path> {
+    let count = path.segments.len();
+    if count < 2 {
+        return None;
+    }
+    let (Segment::Line { to: second }, Segment::Line { to: last_end }) =
+        (path.segments[0], path.segments[count - 1])
+    else {
+        return None;
+    };
+    let before_last = path.segments[count - 2].end();
+    // the start runs on backwards, away from the second point; the end runs on forwards
+    let (from_start, back) = (path.start, path.start - second);
+    let (from_end, on) = (last_end, last_end - before_last);
+    let cross = back.perp_dot(on);
+    if cross.abs() <= TOUCHING * back.length() * on.length() {
+        return None;
+    }
+    let along_start = (from_end - from_start).perp_dot(on) / cross;
+    let along_end = (from_end - from_start).perp_dot(back) / cross;
+    if along_start < 0.0 || along_end < 0.0 {
+        return None;
+    }
+    let meet = from_start + back * along_start;
+    let mut segments = path.segments.clone();
+    segments[count - 1] = Segment::Line { to: meet };
+    Some(Path {
+        start: meet,
+        segments,
+        closed: true,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cut_craft_core::testing::{document_with, square};
+
+    cut_craft_core::contract_tests!(CloseExtendVector);
+
+    fn p(x: f64, y: f64) -> Point {
+        Point::new(x, y)
+    }
+
+    /// An open U: up the left, across the top, down the right; its ends 10 apart.
+    fn u_shape() -> Path {
+        Path::polyline(
+            &[p(0.0, 0.0), p(0.0, 10.0), p(10.0, 10.0), p(10.0, 0.0)],
+            false,
+        )
+    }
+
+    /// Two sides of a triangle whose tip, at (5, 10), is missing.
+    fn no_tip() -> Path {
+        Path::polyline(
+            &[p(2.0, 4.0), p(0.0, 0.0), p(10.0, 0.0), p(8.0, 4.0)],
+            false,
+        )
+    }
+
+    fn closed(paths: Vec<Path>, params: &Params) -> Result<Vec<Path>, String> {
+        let mut doc = document_with(paths);
+        let change = CloseExtendVector::run(&doc, params).map_err(|e| e.to_string())?;
+        doc.apply(&change).unwrap();
+        Ok(doc.vectors.values().cloned().collect())
+    }
+
+    fn line_ends(path: &Path) -> Vec<Point> {
+        path.segments.iter().map(Segment::end).collect()
+    }
+
+    #[test]
+    fn a_line_closes_the_gap_from_end_to_start() {
+        let [path] = closed(vec![u_shape()], &Params::default())
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert!(path.closed);
+        assert_eq!(
+            line_ends(&path),
+            [p(0.0, 10.0), p(10.0, 10.0), p(10.0, 0.0), p(0.0, 0.0)]
+        );
+    }
+
+    #[test]
+    fn extending_runs_the_end_lines_on_until_they_meet() {
+        let extend = Params {
+            method: Method::Extend,
+            ..Params::default()
+        };
+        let [path] = closed(vec![no_tip()], &extend).unwrap().try_into().unwrap();
+        assert!(path.closed);
+        assert_eq!(path.start, p(5.0, 10.0));
+        assert_eq!(line_ends(&path), [p(0.0, 0.0), p(10.0, 0.0), p(5.0, 10.0)]);
+        // the sides of the U are parallel and never meet: closed with a line instead
+        let [u] = closed(vec![u_shape()], &extend)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert!(u.closed);
+        assert_eq!(u.segments.len(), 4);
+    }
+
+    #[test]
+    fn ends_that_already_touch_are_only_marked_closed() {
+        let p0 = p(0.0, 0.0);
+        let almost = Path::polyline(&[p0, p(10.0, 0.0), p(10.0, 10.0), p0], false);
+        let [path] = closed(vec![almost], &Params::default())
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert!(path.closed);
+        assert_eq!(path.segments.len(), 3);
+    }
+
+    #[test]
+    fn max_gap_leaves_vectors_whose_ends_are_further_apart() {
+        let tight = Params {
+            max_gap: 5.0,
+            ..Params::default()
+        };
+        let err = closed(vec![u_shape()], &tight).unwrap_err();
+        assert!(err.contains("max gap"), "{err}");
+        let enough = Params {
+            max_gap: 10.0,
+            ..Params::default()
+        };
+        assert!(closed(vec![u_shape()], &enough).unwrap()[0].closed);
+    }
+
+    #[test]
+    fn closed_vectors_are_left_alone_and_are_not_enough() {
+        let paths = closed(vec![square(20.0, 20.0, 5.0), u_shape()], &Params::default()).unwrap();
+        assert_eq!(paths[0], square(20.0, 20.0, 5.0));
+        assert!(paths[1].closed);
+        let err = closed(vec![square(0.0, 0.0, 5.0)], &Params::default()).unwrap_err();
+        assert!(err.contains("open vectors"), "{err}");
+    }
+}

@@ -536,6 +536,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-close-extend-vector"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-component-properties"
 version = "0.1.0"
 dependencies = [
@@ -1311,6 +1320,7 @@ dependencies = [
  "cmd-center-vertically-in-material",
  "cmd-chamfer-toolpath",
  "cmd-circular-copy",
+ "cmd-close-extend-vector",
  "cmd-component-properties",
  "cmd-create-component-from-bitmap",
  "cmd-create-component-from-visible-model",

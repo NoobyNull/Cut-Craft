@@ -24,6 +24,7 @@ fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-close-extend-vector = { path = "../commands/close-extend-vector" }
 cmd-circular-copy = { path = "../commands/circular-copy" }
 cmd-array-copy = { path = "../commands/array-copy" }
 cmd-create-fillets = { path = "../commands/create-fillets" }
