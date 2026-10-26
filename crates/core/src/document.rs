@@ -46,6 +46,35 @@ impl Layer {
     }
 }
 
+/// One of the job's material sheets (the Sheets tab), with its own size and setup. The
+/// active sheet's setup is [`Document::job`]; its copy here is brought up to date when
+/// another sheet is activated, so read sheets through [`Document::sheet_job`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Sheet {
+    pub name: String,
+    pub job: Job,
+    #[serde(default = "visible")]
+    pub visible: bool,
+}
+
+impl Sheet {
+    pub fn new(name: &str, job: Job) -> Self {
+        Self {
+            name: name.to_owned(),
+            job,
+            visible: true,
+        }
+    }
+}
+
+fn visible() -> bool {
+    true
+}
+
+fn one_sheet() -> Vec<Sheet> {
+    vec![Sheet::new("Sheet 1", Job::default())]
+}
+
 fn default_layers() -> Vec<Layer> {
     vec![Layer::new(LayerId(1), "Layer 1")]
 }
@@ -336,6 +365,12 @@ pub struct Document {
     /// the one level every job has).
     #[serde(default = "crate::component::default_levels")]
     pub levels: BTreeMap<u64, Level>,
+    /// The Sheets tab's sheets, first first (added with sheets; older files get one).
+    #[serde(default = "one_sheet")]
+    pub sheets: Vec<Sheet>,
+    /// Which of `sheets` is being worked on; its setup is `job`.
+    #[serde(default)]
+    pub active_sheet: usize,
 }
 
 impl Default for Document {
@@ -356,11 +391,35 @@ impl Default for Document {
             notes: String::new(),
             texts: BTreeMap::new(),
             levels: crate::component::default_levels(),
+            sheets: one_sheet(),
+            active_sheet: 0,
         }
     }
 }
 
 impl Document {
+    /// Replaces the sheet list and active sheet, `before` being what they are now.
+    pub(crate) fn set_sheets(
+        &mut self,
+        before: &(Vec<Sheet>, usize),
+        after: &(Vec<Sheet>, usize),
+    ) -> Result<(), crate::change::ApplyError> {
+        if (&self.sheets, self.active_sheet) != (&before.0, before.1) {
+            return Err(crate::change::ApplyError::JobConflict);
+        }
+        (self.sheets, self.active_sheet) = after.clone();
+        Ok(())
+    }
+
+    /// Sheet `index`'s setup: the job itself for the active sheet.
+    pub fn sheet_job(&self, index: usize) -> Option<Job> {
+        if index == self.active_sheet {
+            Some(self.job)
+        } else {
+            self.sheets.get(index).map(|s| s.job)
+        }
+    }
+
     /// First id not used by any entity.
     pub fn next_id(&self) -> EntityId {
         let last = self

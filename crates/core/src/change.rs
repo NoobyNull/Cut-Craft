@@ -3,7 +3,7 @@
 use crate::CommandError;
 use crate::bitmap::Bitmap;
 use crate::component::{Component, Level};
-use crate::document::{Document, EntityId, Job, Layer, LayerId};
+use crate::document::{Document, EntityId, Job, Layer, LayerId, Sheet};
 use crate::geometry::{Path, Point, Rect};
 use crate::selection::Selection;
 use crate::toolpath::Toolpath;
@@ -130,6 +130,11 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
+    /// Replaces the sheet list and which sheet is active.
+    SetSheets {
+        before: (Vec<Sheet>, usize),
+        after: (Vec<Sheet>, usize),
+    },
 }
 
 impl Edit {
@@ -189,6 +194,10 @@ impl Edit {
                 after: before,
             },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
+                before: after,
+                after: before,
+            },
+            Self::SetSheets { before, after } => Self::SetSheets {
                 before: after,
                 after: before,
             },
@@ -654,6 +663,7 @@ impl Document {
             Edit::SetLevel { id, before, after } => {
                 self.set_level(*id, before.as_ref(), after.as_ref())?;
             }
+            Edit::SetSheets { before, after } => self.set_sheets(before, after)?,
         }
         Ok(())
     }
@@ -1039,6 +1049,33 @@ impl ChangeBuilder<'_> {
                 after: after.into(),
             });
         }
+    }
+
+    /// Replaces the sheet list and which sheet is active (as it stands, not its setup: see
+    /// [`Self::activate_sheet`]).
+    pub fn set_sheets(&mut self, after: Vec<Sheet>, active: usize) {
+        let before = (self.doc.sheets.clone(), self.doc.active_sheet);
+        let after = (after, active);
+        if before != after {
+            self.edits.push(Edit::SetSheets { before, after });
+        }
+    }
+
+    /// Makes sheet `index` the one worked on: the job takes its setup, and the sheet left
+    /// keeps the job's.
+    pub fn activate_sheet(&mut self, index: usize) {
+        let Some(job) = self.doc.sheets.get(index).map(|s| s.job) else {
+            return;
+        };
+        if index == self.doc.active_sheet {
+            return;
+        }
+        let mut sheets = self.doc.sheets.clone();
+        if let Some(left) = sheets.get_mut(self.doc.active_sheet) {
+            left.job = self.doc.job;
+        }
+        self.set_sheets(sheets, index);
+        self.set_job(job);
     }
 
     pub fn set_job(&mut self, after: Job) {
