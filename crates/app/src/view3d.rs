@@ -11,6 +11,9 @@ const LIGHT: DVec3 = DVec3::new(-1.0, 1.0, 1.0);
 const AMBIENT: f64 = 0.35;
 /// How much darker the full material thickness down is than the top.
 const DEPTH_SHADE: f64 = 0.5;
+/// How near the cursor, in pixels, a surface point picks at least.
+// ponytail: fixed until the 3D view has settings
+const PICK_REACH: f32 = 4.0;
 
 /// Where the view looks from: `yaw` turns the job about the vertical, `pitch` tilts it from
 /// straight down (0) towards side on (a right angle), radians.
@@ -401,6 +404,51 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
     mesh
 }
 
+/// The cell of the drawn surface under `at` nearest the viewer, as (column, row); `None`
+/// when the click is off it. Cells count as under the cursor within the larger of one
+/// cell's size on screen and [`PICK_REACH`] pixels.
+#[expect(clippy::cast_precision_loss, reason = "cell indices fit f64")]
+pub fn pick(
+    material: &Material,
+    orbit: Orbit,
+    framing: Framing,
+    area: Rect,
+    wrap: Option<Wrap>,
+    at: Pos2,
+) -> Option<(usize, usize)> {
+    let m = material;
+    let round = if wrap.is_some_and(|w| w.along_x) {
+        plan_size(m).y
+    } else {
+        plan_size(m).x
+    };
+    let place = |column: usize, row: usize| {
+        let p = DVec3::new(
+            (column as f64 + 0.5) * m.cell,
+            (row as f64 + 0.5) * m.cell,
+            m.heights[row * m.columns + column],
+        );
+        wrap.map_or(p, |w| w.place(p, round))
+    };
+    let screen = screen_of(m, orbit, framing, area, wrap);
+    let step = screen(place(0, 0)).distance(screen(place(1.min(m.columns - 1), 0)));
+    let reach = step.max(PICK_REACH);
+    let near: Vec<((usize, usize), f64, f32)> = (0..m.rows)
+        .flat_map(|row| (0..m.columns).map(move |column| (column, row)))
+        .filter_map(|(column, row)| {
+            let p = place(column, row);
+            let off = screen(p).distance(at);
+            (off <= reach).then(|| ((column, row), orbit.project(p).1, off))
+        })
+        .collect();
+    // the frontmost surface there (within a cell), and on it the cell nearest the cursor
+    let front = near.iter().map(|n| n.1).fold(f64::NEG_INFINITY, f64::max);
+    near.into_iter()
+        .filter(|n| n.1 >= front - m.cell)
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|n| n.0)
+}
+
 /// The material's surface round the axis as quads, each with its brightness: lit by its own
 /// facing, darker deeper, and closed across the seam where the circumference meets itself.
 #[expect(clippy::cast_precision_loss, reason = "cell indices fit f64")]
@@ -739,6 +787,35 @@ mod wrap_tests {
                 .vertices
                 .iter()
                 .all(|v| area.expand(1.0).contains(v.pos))
+        );
+    }
+}
+
+#[cfg(test)]
+mod pick_tests {
+    use super::*;
+    use cut_craft_core::document::Job;
+    use eframe::egui::pos2;
+
+    #[test]
+    fn from_above_the_cell_under_the_cursor_is_picked_and_off_the_block_nothing() {
+        let job = Job {
+            width: 100.0,
+            height: 50.0,
+            ..Job::default()
+        };
+        let m = Material::new(&job, 100);
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let screen = screen_of(&m, Orbit::TOP, Framing::default(), area, None);
+        let at = screen(DVec3::new(30.5, 10.5, 0.0));
+        assert_eq!(
+            pick(&m, Orbit::TOP, Framing::default(), area, None, at),
+            Some((30, 10))
+        );
+        let far = pos2(-50.0, -50.0);
+        assert_eq!(
+            pick(&m, Orbit::TOP, Framing::default(), area, None, far),
+            None
         );
     }
 }

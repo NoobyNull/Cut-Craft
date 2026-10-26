@@ -130,7 +130,7 @@ say "not implemented yet".
   axis, closed at the seam, each face lit by its own facing; the vector, plane and origin
   overlays are left off it, and it has not been tried by hand yet).
 - 3D view: left- or right-drag rotates, middle-drag / Ctrl+right-drag / left+right pans, the
-  wheel zooms about the cursor, double-click or F fits; Top, Front, Right, Iso, Fit buttons.
+  wheel zooms about the cursor, F (or a double-click off the model) fits; Top, Front, Right, Iso, Fit buttons.
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
@@ -367,7 +367,8 @@ say "not implemented yet".
   Corner Fit's scale is our own.
 - TrueType text has no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
 - Components show in the 2D view as greyscale depth maps (black lowest, white highest, per
-  component) and a click on one selects it, as in Aspire; they are not picked in the 3D view.
+  component) and a click on one selects it, as in Aspire; in the 3D view a double-click picks
+  the topmost shown component under it (Shift adds or takes away; off the model it fits).
 - Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
   spacing commands do not yet use it).
 - Groups hold vectors only and do not nest.

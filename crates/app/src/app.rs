@@ -2212,10 +2212,42 @@ impl CutCraftApp {
             let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
             self.framing = self.framing.zoomed_about(at - area.center(), factor);
         }
-        if response.double_clicked() || (response.hovered() && fit_key) {
+        // a double-click picks the component under it, as in Aspire; off the model it fits
+        let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
+        let double = response
+            .double_clicked()
+            .then(|| response.interact_pointer_pos())
+            .flatten();
+        let picked = double.and_then(|at| self.component_at_3d(fit, at));
+        if let Some(id) = picked {
+            if ui.input(|i| i.modifiers.shift) {
+                if !self.doc.selected_components.remove(&id) {
+                    self.doc.selected_components.insert(id);
+                }
+            } else {
+                self.doc.selected_components = [id].into();
+            }
+        } else if double.is_some() || (response.hovered() && fit_key) {
             self.framing = view3d::Framing::default();
         }
         self.paint_3d(ui, area);
+    }
+
+    /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
+    fn component_at_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> Option<EntityId> {
+        let (job, previewing) = (self.shown_job(), self.simulation.is_some());
+        let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
+        let surface = self.surface_3d()?.into_owned();
+        let wrap = wrap_for(&job, on, previewing, &surface);
+        let (column, row) = view3d::pick(&surface, orbit, framing, fit, wrap, at)?;
+        let p = surface.centre(column, row);
+        self.doc
+            .components
+            .iter()
+            .rev()
+            .filter(|(_, k)| k.visible)
+            .find(|(_, k)| k.height_at(p).is_some())
+            .map(|(&id, _)| id)
     }
 
     /// The 3D view's picture: background, block and the overlays the View menu turns on.
@@ -2250,25 +2282,11 @@ impl CutCraftApp {
         };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
         let job = self.shown_job();
-        let (rotary, previewing) = (job.rotary, self.simulation.is_some());
+        let previewing = self.simulation.is_some();
         let Some(surface) = self.surface_3d() else {
             return;
         };
-        // a rotary job round its axis: a preview's surface is at 0, the model placed as
-        // Material Setup says
-        let wrap = rotary
-            .filter(|_| shown.auto_wrapping)
-            .map(|r| view3d::Wrap {
-                along_x: r.along == cut_craft_core::document::Along::X,
-                radius: r.diameter / 2.0,
-                surface: if previewing {
-                    0.0
-                } else {
-                    let heights = surface.heights.iter().copied();
-                    let lowest = heights.clone().fold(f64::INFINITY, f64::min);
-                    -job.model_shift(lowest, heights.fold(f64::NEG_INFINITY, f64::max))
-                },
-            });
+        let wrap = wrap_for(&job, shown.auto_wrapping, previewing, &surface);
         let look = view3d::Look { wrap, ..look };
         painter.add(view3d::mesh(&surface, orbit, framing, &look, fit));
         if wrap.is_some() {
@@ -3106,6 +3124,27 @@ pub fn run(title: &str) {
         }),
     )
     .expect("event loop error");
+}
+
+/// How the 3D view wraps `surface` round a rotary job's axis, when Auto-Wrapping is `on`: a
+/// preview's surface is at 0, the model placed as Material Setup says.
+fn wrap_for(
+    job: &cut_craft_core::document::Job,
+    on: bool,
+    previewing: bool,
+    surface: &Material,
+) -> Option<view3d::Wrap> {
+    job.rotary.filter(|_| on).map(|r| view3d::Wrap {
+        along_x: r.along == cut_craft_core::document::Along::X,
+        radius: r.diameter / 2.0,
+        surface: if previewing {
+            0.0
+        } else {
+            let heights = surface.heights.iter().copied();
+            let lowest = heights.clone().fold(f64::INFINITY, f64::min);
+            -job.model_shift(lowest, heights.fold(f64::NEG_INFINITY, f64::max))
+        },
+    })
 }
 
 #[cfg(test)]
@@ -4041,6 +4080,31 @@ mod tests {
         h.app.invoke(&h.ctx, "preview_all_toolpaths");
         h.frame(vec![]);
         assert!(!raised(&mut h.app), "the preview, cut down from the top");
+    }
+
+    #[test]
+    fn a_double_click_in_the_3d_view_picks_the_component_under_it() {
+        let mut h = Harness::new();
+        h.app.doc = cut_craft_core::testing::domed();
+        h.app.orbit = view3d::Orbit::TOP;
+        let fit = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0));
+        let surface = h.app.surface_3d().unwrap().into_owned();
+        let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
+        let local = |x: f64, y: f64| {
+            let z = surface
+                .at(cut_craft_core::geometry::Point::new(x, y))
+                .unwrap();
+            cut_craft_core::glam::DVec3::new(x - surface.origin.x, y - surface.origin.y, z)
+        };
+        assert_eq!(
+            h.app.component_at_3d(fit, screen(local(20.0, 20.0))),
+            Some(EntityId(1))
+        );
+        assert_eq!(
+            h.app.component_at_3d(fit, screen(local(2.0, 2.0))),
+            None,
+            "off the dome"
+        );
     }
 
     #[test]
