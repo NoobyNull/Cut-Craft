@@ -25,6 +25,8 @@ pub struct Display {
     pub shaded_background: bool,
     /// Rotary jobs: the 3D view shows the model and preview wrapped round the axis.
     pub auto_wrapping: bool,
+    /// Guide lines drawn in the 2D view.
+    pub guides: bool,
 }
 
 impl Default for Display {
@@ -46,6 +48,7 @@ impl Default for Display {
             colour_shaded: true,
             shaded_background: true,
             auto_wrapping: true,
+            guides: true,
         }
     }
 }
@@ -73,6 +76,7 @@ impl Display {
             "draw_retract_moves" => &mut self.retracts,
             "draw_join_moves" => &mut self.joins,
             "draw_origin" => &mut self.origin,
+            "guides_visible" => &mut self.guides,
             "draw_modeling_plane" => &mut self.modeling_plane,
             "draw_material_block" => &mut self.material_block,
             "draw_vectors_in_3d_view" => &mut self.vectors_3d,

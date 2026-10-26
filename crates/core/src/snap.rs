@@ -65,17 +65,30 @@ impl SnapOptions {
             .map(|q| (q, q.distance(at)))
             .filter(|(_, d)| *d <= reach)
             .min_by(|a, b| a.1.total_cmp(&b.1));
-        if near.is_none() && self.smart_snapping {
-            // ponytail: lines through every point; Aspire's only through the nodes hovered
-            let points = self.points(doc);
-            let nearest = |of: fn(Point) -> f64| {
-                points
+        if near.is_none() {
+            // lines the pointer is pulled onto: guides (with geometry snapping) and, with
+            // smart snapping, lines through every snap point across and up and down
+            // ponytail: Aspire's smart lines go only through the nodes hovered
+            let (mut xs, mut ys) = (vec![], vec![]);
+            if self.geometry_snapping {
+                for g in &doc.guides {
+                    if g.vertical { &mut xs } else { &mut ys }.push(g.at);
+                }
+            }
+            if self.smart_snapping {
+                for q in self.points(doc) {
+                    xs.push(q.x);
+                    ys.push(q.y);
+                }
+            }
+            let nearest = |lines: &[f64], v: f64| {
+                lines
                     .iter()
-                    .map(|&q| of(q))
-                    .filter(|v| (v - of(at)).abs() <= reach)
-                    .min_by(|a, b| (a - of(at)).abs().total_cmp(&(b - of(at)).abs()))
+                    .copied()
+                    .filter(|l| (l - v).abs() <= reach)
+                    .min_by(|a, b| (a - v).abs().total_cmp(&(b - v).abs()))
             };
-            let (x, y) = (nearest(|p| p.x), nearest(|p| p.y));
+            let (x, y) = (nearest(&xs, at.x), nearest(&ys, at.y));
             if x.is_some() || y.is_some() {
                 return Point::new(x.unwrap_or(at.x), y.unwrap_or(at.y));
             }
@@ -211,6 +224,34 @@ mod tests {
         assert_eq!(
             off.snap(&doc, Point::new(29.7, 45.0), 1.0),
             Point::new(29.7, 45.0)
+        );
+    }
+
+    #[test]
+    fn guides_pull_the_pointer_onto_them() {
+        use crate::document::Guide;
+        let mut doc = document_with(vec![]);
+        doc.guides = vec![Guide::vertical(42.0), Guide::horizontal(17.0)];
+        let s = SnapOptions {
+            job_center_and_corners: false,
+            ..SnapOptions::default()
+        };
+        assert_eq!(
+            s.snap(&doc, Point::new(42.6, 70.0), 1.0),
+            Point::new(42.0, 70.0)
+        );
+        assert_eq!(
+            s.snap(&doc, Point::new(41.5, 16.5), 1.0),
+            Point::new(42.0, 17.0),
+            "where they cross"
+        );
+        let off = SnapOptions {
+            geometry_snapping: false,
+            ..s
+        };
+        assert_eq!(
+            off.snap(&doc, Point::new(42.6, 70.0), 1.0),
+            Point::new(42.6, 70.0)
         );
     }
 

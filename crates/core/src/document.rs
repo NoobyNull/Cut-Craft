@@ -428,6 +428,37 @@ pub struct Document {
     /// Areas a tool must not pass over (clamps), closed paths of their own.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keep_out: Vec<Path>,
+    /// Guide lines dragged out of the 2D view's rulers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guides: Vec<Guide>,
+}
+
+/// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
+/// y = `at`. A locked guide cannot be dragged.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Guide {
+    pub vertical: bool,
+    pub at: f64,
+    #[serde(default)]
+    pub locked: bool,
+}
+
+impl Guide {
+    pub fn vertical(x: f64) -> Self {
+        Self {
+            vertical: true,
+            at: x,
+            locked: false,
+        }
+    }
+
+    pub fn horizontal(y: f64) -> Self {
+        Self {
+            vertical: false,
+            at: y,
+            locked: false,
+        }
+    }
 }
 
 impl Default for Document {
@@ -452,6 +483,7 @@ impl Default for Document {
             active_sheet: 0,
             variables: BTreeMap::new(),
             keep_out: vec![],
+            guides: vec![],
         }
     }
 }

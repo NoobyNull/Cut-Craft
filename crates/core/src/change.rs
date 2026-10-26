@@ -3,7 +3,9 @@
 use crate::CommandError;
 use crate::bitmap::Bitmap;
 use crate::component::{Component, Level};
-use crate::document::{Document, EntityId, Job, Layer, LayerId, Sheet, SheetObjects, StoredVector};
+use crate::document::{
+    Document, EntityId, Guide, Job, Layer, LayerId, Sheet, SheetObjects, StoredVector,
+};
 use crate::geometry::{Path, Point, Rect};
 use crate::selection::Selection;
 use crate::toolpath::Toolpath;
@@ -130,6 +132,11 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
+    /// Replaces the guide lines.
+    SetGuides {
+        before: Vec<Guide>,
+        after: Vec<Guide>,
+    },
     /// Replaces the keep-out zones.
     SetKeepOut {
         before: Vec<Path>,
@@ -204,6 +211,10 @@ impl Edit {
                 after: before,
             },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
+                before: after,
+                after: before,
+            },
+            Self::SetGuides { before, after } => Self::SetGuides {
                 before: after,
                 after: before,
             },
@@ -546,6 +557,18 @@ impl Document {
     }
 
     /// The component and bitmap edits.
+    /// The edits of a whole-document setting: notes, variables, keep-out zones, guides.
+    /// Like the selection they are not checked against `before`.
+    fn apply_setting(&mut self, edit: &Edit) {
+        match edit {
+            Edit::SetNotes { after, .. } => self.notes.clone_from(after),
+            Edit::SetVariables { after, .. } => self.variables.clone_from(after),
+            Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
+            Edit::SetGuides { after, .. } => self.guides.clone_from(after),
+            _ => unreachable!("only settings come here"),
+        }
+    }
+
     fn apply_model_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
             Edit::AddComponent { id, component } => {
@@ -595,6 +618,7 @@ impl Document {
         Ok(())
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per kind of edit")]
     fn apply_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
             Edit::Add { id, path } => insert_new(&mut self.vectors, *id, path.clone())?,
@@ -689,14 +713,15 @@ impl Document {
                 }
                 self.current_layer = *after;
             }
-            Edit::SetNotes { after, .. } => self.notes.clone_from(after),
+            Edit::SetNotes { .. }
+            | Edit::SetVariables { .. }
+            | Edit::SetKeepOut { .. }
+            | Edit::SetGuides { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
             Edit::SetLevel { id, before, after } => {
                 self.set_level(*id, before.as_ref(), after.as_ref())?;
             }
             Edit::SetSheets { before, after } => self.set_sheets(before, after)?,
-            Edit::SetVariables { after, .. } => self.variables.clone_from(after),
-            Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
         }
         Ok(())
     }
@@ -1095,6 +1120,13 @@ impl ChangeBuilder<'_> {
         if self.sheets != after {
             let before = std::mem::replace(&mut self.sheets, after.clone());
             self.edits.push(Edit::SetSheets { before, after });
+        }
+    }
+
+    pub fn set_guides(&mut self, after: Vec<Guide>) {
+        if self.doc.guides != after {
+            let before = self.doc.guides.clone();
+            self.edits.push(Edit::SetGuides { before, after });
         }
     }
 

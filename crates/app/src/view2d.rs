@@ -214,6 +214,26 @@ impl Canvas {
 
     /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the
     /// selection colour) and `overlay`.
+    /// Whether `at` is on a ruler: `Some(true)` the left one (it gives vertical guides),
+    /// `Some(false)` the top one; the corner where they meet is neither.
+    pub fn ruler_at(&self, ui: &egui::Ui, at: Pos2) -> Option<bool> {
+        let thick = ui.spacing().interact_size.y;
+        let (x, y) = (at.x - self.area.min.x, at.y - self.area.min.y);
+        if !self.area.contains(at) || (x < thick && y < thick) {
+            return None;
+        }
+        (x < thick || y < thick).then_some(x < thick)
+    }
+
+    /// Whether a drag with the main button started or stopped this frame.
+    pub fn drag_started(&self) -> bool {
+        self.response.drag_started_by(PointerButton::Primary)
+    }
+
+    pub fn drag_stopped(&self) -> bool {
+        self.response.drag_stopped_by(PointerButton::Primary)
+    }
+
     /// Rulers along the top and left, in the job's units, as Aspire's 2D view has.
     #[expect(
         clippy::cast_possible_truncation,
@@ -454,6 +474,44 @@ impl Canvas {
         }
     }
 
+    /// Guide lines (dashed, while shown) and keep-out zones (in the warning colour, heavier
+    /// than vectors).
+    fn paint_guides_and_zones(
+        &self,
+        painter: &egui::Painter,
+        ui: &egui::Ui,
+        doc: &Document,
+        display: &crate::display::Display,
+        (dash, gap): (f32, f32),
+    ) {
+        let (t, visuals) = (self.transform, ui.visuals());
+        let datum = visuals.widgets.noninteractive.fg_stroke;
+        let tolerance = f64::from(0.5 / (ui.ctx().pixels_per_point() * t.scale));
+        let screen = |path: &Path| -> Vec<Pos2> {
+            path.flatten(tolerance)
+                .into_iter()
+                .map(|p| t.to_screen(p))
+                .collect()
+        };
+        if display.guides {
+            let guide = Stroke::new(datum.width, visuals.selection.bg_fill);
+            for g in &doc.guides {
+                let at = t.to_screen(Point::new(g.at, g.at));
+                let line = if g.vertical {
+                    [pos2(at.x, self.area.top()), pos2(at.x, self.area.bottom())]
+                } else {
+                    [pos2(self.area.left(), at.y), pos2(self.area.right(), at.y)]
+                };
+                painter.extend(Shape::dashed_line(&line, guide, dash, gap));
+            }
+        }
+        // keep-out zones in the warning colour, heavier than vectors
+        let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
+        for path in &doc.keep_out {
+            painter.add(Shape::line(screen(path), zone));
+        }
+    }
+
     pub fn paint(
         &self,
         ui: &egui::Ui,
@@ -522,11 +580,7 @@ impl Canvas {
             }
         }
 
-        // keep-out zones in the warning colour, heavier than vectors
-        let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
-        for path in &doc.keep_out {
-            painter.add(Shape::line(screen(path), zone));
-        }
+        self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
         self.paint_toolpaths(&painter, ui, doc, highlighted, display);
 

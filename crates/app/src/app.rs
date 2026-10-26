@@ -23,7 +23,10 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 56] = [
+const BUILT_INS: [&str; 59] = [
+    "delete_all_guides",
+    "lock_all_existing_guides",
+    "unlock_all_existing_guides",
     "options",
     "segment_3d_model_file",
     "snap_options",
@@ -302,6 +305,8 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
+    /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).
+    guide_drag: Option<(bool, Option<usize>)>,
     /// Transform mode's corners rotate rather than scale.
     rotating: bool,
     /// Edit ▸ Options, kept between runs, and whether its window is open.
@@ -358,6 +363,7 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
+            guide_drag: None,
             rotating: false,
             options: crate::options::Options::default(),
             options_window: false,
@@ -454,6 +460,17 @@ impl CutCraftApp {
             | "save_all_visible_toolpaths_as_template"
             | "load_template" => self.template_action(id),
             id if TOP_BAR_TOGGLES.contains(&id) => self.top_bar_toggle(id),
+            "delete_all_guides" => self.set_guides(vec![]),
+            "lock_all_existing_guides" | "unlock_all_existing_guides" => {
+                let locked = id.starts_with("lock");
+                let guides = self
+                    .doc
+                    .guides
+                    .iter()
+                    .map(|g| cut_craft_core::document::Guide { locked, ..*g })
+                    .collect();
+                self.set_guides(guides);
+            }
             "tool_database" => self.tool_window = true,
             id if self.display.toggle(id) => ctx.request_repaint(),
             "refresh_2d_view" => ctx.request_repaint(),
@@ -3050,8 +3067,14 @@ impl CutCraftApp {
         let mut canvas = Canvas::new(ui, &job, self.camera);
         let area = canvas.area;
         self.zoom_and_pan(ui, &mut canvas);
-        let gesture = self.snapped(ui, canvas.gesture(ui), canvas.transform.scale);
         let reach = canvas.pick_tolerance(ui);
+        let gesture = canvas.gesture(ui);
+        // a guide being dragged takes the drag over
+        let gesture = if self.guide_gesture(ui, &canvas, reach) {
+            None
+        } else {
+            self.snapped(ui, gesture, canvas.transform.scale)
+        };
         self.track_stroke(gesture);
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
             (_, Some(ViewTool::NodeEdit), _) => self.node_overlay(gesture, reach),
@@ -3139,6 +3162,80 @@ impl CutCraftApp {
             }
             _ => {}
         }
+    }
+
+    /// Guides: dragged out of a ruler (top: across, left: up and down), dragged along when
+    /// unlocked, and dragged back onto a ruler to delete them. True while one is dragged.
+    fn guide_gesture(&mut self, ui: &egui::Ui, canvas: &Canvas, reach: f64) -> bool {
+        if canvas.drag_started()
+            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        {
+            let at = canvas.transform.to_job(origin);
+            let selecting = self.view_tool.is_none() && self.drawing_tool().is_none();
+            self.guide_drag = match canvas.ruler_at(ui, origin) {
+                Some(vertical) => Some((vertical, None)),
+                None if selecting => self
+                    .doc
+                    .guides
+                    .iter()
+                    .position(|g| {
+                        let along = if g.vertical { at.x } else { at.y };
+                        !g.locked && (along - g.at).abs() <= reach
+                    })
+                    .map(|i| (self.doc.guides[i].vertical, Some(i))),
+                None => None,
+            };
+        }
+        let Some((vertical, index)) = self.guide_drag else {
+            return false;
+        };
+        let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) else {
+            return true;
+        };
+        let at = canvas.transform.to_job(pointer);
+        let along = if vertical { at.x } else { at.y };
+        if !canvas.drag_stopped() {
+            let screen = canvas.transform.to_screen(Point::new(along, along));
+            let area = canvas.area;
+            let line = if vertical {
+                [
+                    egui::pos2(screen.x, area.top()),
+                    egui::pos2(screen.x, area.bottom()),
+                ]
+            } else {
+                [
+                    egui::pos2(area.left(), screen.y),
+                    egui::pos2(area.right(), screen.y),
+                ]
+            };
+            ui.painter_at(area)
+                .line_segment(line, ui.visuals().selection.stroke);
+            return true;
+        }
+        self.guide_drag = None;
+        let onto_ruler = canvas.ruler_at(ui, pointer).is_some();
+        let mut guides = self.doc.guides.clone();
+        match (index, onto_ruler) {
+            (Some(i), true) => {
+                guides.remove(i);
+            }
+            (Some(i), false) => guides[i].at = along,
+            (None, false) => guides.push(if vertical {
+                cut_craft_core::document::Guide::vertical(along)
+            } else {
+                cut_craft_core::document::Guide::horizontal(along)
+            }),
+            (None, true) => {}
+        }
+        self.set_guides(guides);
+        true
+    }
+
+    /// Replaces the guides, undoably.
+    fn set_guides(&mut self, guides: Vec<cut_craft_core::document::Guide>) {
+        let mut c = Change::builder(&self.doc);
+        c.set_guides(guides);
+        self.record(Ok(c.finish()), "Guides changed");
     }
 
     /// Transform mode while dragging: the selection as the handle would leave it, else the
@@ -4274,6 +4371,36 @@ mod tests {
         cut_craft_core::testing::cut_bounds(app.doc.toolpaths.values().next().unwrap())
             .min
             .x
+    }
+
+    #[test]
+    fn guides_come_out_of_the_rulers_move_and_go_back_in() {
+        let mut h = Harness::new();
+        h.frame(vec![]);
+        let area = h.app.view_area.unwrap();
+        let ruler = h.ctx.style().spacing.interact_size.y / 2.0;
+        let top_ruler = egui::pos2(area.center().x, area.min.y + ruler);
+        h.drag(top_ruler, h.at(100.0, 80.0));
+        assert_eq!(h.app.doc.guides.len(), 1, "a guide across the job");
+        let g = h.app.doc.guides[0];
+        assert!(!g.vertical && (g.at - 80.0).abs() < 0.5, "{g:?}");
+        h.drag(h.at(150.0, 80.0), h.at(150.0, 60.0));
+        assert!((h.app.doc.guides[0].at - 60.0).abs() < 0.5, "dragged along");
+        h.app.invoke(&h.ctx, "lock_all_existing_guides");
+        h.drag(h.at(150.0, 60.0), h.at(150.0, 40.0));
+        assert!(
+            (h.app.doc.guides[0].at - 60.0).abs() < 0.5,
+            "a locked guide stays"
+        );
+        h.app.invoke(&h.ctx, "unlock_all_existing_guides");
+        h.drag(h.at(150.0, 60.0), top_ruler);
+        assert!(
+            h.app.doc.guides.is_empty(),
+            "back onto the ruler deletes it"
+        );
+        h.app.doc.guides = vec![cut_craft_core::document::Guide::vertical(5.0)];
+        h.app.invoke(&h.ctx, "delete_all_guides");
+        assert_eq!(h.app.doc.guides, [] as [cut_craft_core::document::Guide; 0]);
     }
 
     #[test]
