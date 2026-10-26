@@ -1384,5 +1384,26 @@
   "guess": false,
   "slot": "ico/35038",
   "source": "ico/35038"
+ },
+ {
+  "path": "import/initial_orientation.svg",
+  "label": "Initial orientation",
+  "guess": false,
+  "slot": "bmp/4018",
+  "source": "bmp/4018"
+ },
+ {
+  "path": "import/model_size_xyz.svg",
+  "label": "Model size XYZ",
+  "guess": false,
+  "slot": "bmp/4023",
+  "source": "bmp/4023"
+ },
+ {
+  "path": "import/position_relative_to_modeling_plane.svg",
+  "label": "Position relative to modeling plane",
+  "guess": false,
+  "slot": "bmp/34746",
+  "source": "bmp/34746"
  }
 ]

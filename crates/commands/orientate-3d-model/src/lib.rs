@@ -34,38 +34,79 @@ pub enum FileUnits {
     Inches,
 }
 
+/// Aspire's Initial Orientation: which face is up, then a turn about Z.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[expect(clippy::struct_excessive_bools, reason = "the form's own check boxes")]
-pub struct Params {
-    /// The STL file (binary or ASCII)
-    pub file: String,
-    #[schemars(title = "Initial orientation")]
-    pub orientation: Face,
-    #[schemars(title = "Rotation about Z axis", extend("x-unit" = "deg"))]
+pub struct Orientation {
+    /// The face of the model as drawn that becomes its top
+    #[schemars(
+        title = "Face up",
+        extend("x-widget" = "faces"),
+        extend("x-icon" = "import/initial_orientation.svg")
+    )]
+    pub face: Face,
+    #[schemars(
+        title = "Rotation about Z Axis",
+        extend("x-unit" = "deg"),
+        extend("x-steps" = [-180, -90, 0, 90, 180])
+    )]
     pub rotation: f64,
-    /// The numbers in the file are in these units
-    pub units: FileUnits,
-    /// The model's footprint once placed; 0 keeps the file's size
-    #[schemars(title = "Model size")]
-    pub size: Xy,
+}
+
+/// Aspire's Model Size: the footprint, the ratio lock and the file's units.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ModelSize {
     /// Scale Z with X and Y; otherwise only the footprint changes
     #[schemars(title = "Lock XYZ ratio")]
     pub lock_ratio: bool,
+    /// The model's length once placed; 0 keeps the file's size
+    #[schemars(title = "X", extend("x-unit" = "mm"))]
+    pub x: f64,
+    /// The model's width once placed; 0 keeps the file's size
+    #[schemars(title = "Y", extend("x-unit" = "mm"))]
+    pub y: f64,
+    /// The numbers in the file are in these units
+    #[schemars(extend("x-widget" = "row"))]
+    pub units: FileUnits,
+}
+
+/// Aspire's second page, Position relative to Modeling Plane.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Placing {
     #[schemars(title = "Center model")]
     pub center: bool,
     /// Where the model's lower-left corner goes when not centred
     pub position: Xy,
     /// How far the model's highest point sits below the material surface
-    #[schemars(title = "Depth below top", extend("x-unit" = "mm"))]
+    #[schemars(title = "Depth Below Top", extend("x-unit" = "mm"))]
     pub depth_below_top: f64,
     #[schemars(title = "Discard data below zero plane")]
     pub discard_below_zero: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Params {
+    /// The STL file (binary or ASCII)
+    pub file: String,
+    #[schemars(title = "Initial Orientation", extend("x-section" = true))]
+    pub orientation: Orientation,
+    #[schemars(
+        title = "Model Size",
+        extend("x-section" = true),
+        extend("x-icon" = "import/model_size_xyz.svg")
+    )]
+    pub size: ModelSize,
+    #[schemars(
+        title = "Position relative to Modeling Plane",
+        extend("x-section" = true),
+        extend("x-icon" = "import/position_relative_to_modeling_plane.svg")
+    )]
+    pub placing: Placing,
     /// Rotary jobs: a full 3D model is wrapped round the axis, its distance out at each angle
     /// becoming the height; a flat model is placed on the unrolled surface like clipart
     #[schemars(title = "Imported model type")]
     #[serde(default)]
     pub model_type: ModelType,
-    /// Full 3D models: scaled to the material's length and diameter (else Model size's X is
+    /// Full 3D models: scaled to the material's length and diameter (else Model Size's X is
     /// its length; 0 keeps the file's size)
     #[schemars(title = "Scale model to fit material")]
     #[serde(default = "yes")]
@@ -93,15 +134,22 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             file: String::new(),
-            orientation: Face::Top,
-            rotation: 0.0,
-            units: FileUnits::Mm,
-            size: Xy::new(0.0, 0.0),
-            lock_ratio: true,
-            center: true,
-            position: Xy::new(0.0, 0.0),
-            depth_below_top: 0.0,
-            discard_below_zero: true,
+            orientation: Orientation {
+                face: Face::Top,
+                rotation: 0.0,
+            },
+            size: ModelSize {
+                lock_ratio: true,
+                x: 0.0,
+                y: 0.0,
+                units: FileUnits::Mm,
+            },
+            placing: Placing {
+                center: true,
+                position: Xy::new(0.0, 0.0),
+                depth_below_top: 0.0,
+                discard_below_zero: true,
+            },
             model_type: ModelType::Flat,
             fit_material: true,
         }
@@ -140,8 +188,9 @@ impl Command for Orientate3dModel {
         let bytes =
             std::fs::read(&p.file).map_err(|e| CommandError::Failed(format!("{}: {e}", p.file)))?;
         let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
-        let turn = DMat3::from_rotation_z(p.rotation.to_radians()) * face_up(p.orientation);
-        let unit = match p.units {
+        let turn = DMat3::from_rotation_z(p.orientation.rotation.to_radians())
+            * face_up(p.orientation.face);
+        let unit = match p.size.units {
             FileUnits::Mm => 1.0,
             FileUnits::Inches => 25.4,
         };
@@ -178,19 +227,19 @@ impl Command for Orientate3dModel {
                 1.0
             },
         );
-        let scale = if p.lock_ratio {
+        let scale = if p.size.lock_ratio {
             DVec3::splat(sx)
         } else {
             DVec3::new(sx, sy, 1.0)
         };
         let area = doc.job.area();
         let footprint = Point::new(size.x * scale.x, size.y * scale.y);
-        let corner = if p.center {
+        let corner = if p.placing.center {
             area.center() - footprint / 2.0
         } else {
-            p.position.into()
+            p.placing.position.into()
         };
-        let top = doc.job.thickness - p.depth_below_top;
+        let top = doc.job.thickness - p.placing.depth_below_top;
         let place = |v: DVec3| {
             DVec3::new(
                 corner.x + (v.x - lo.x) * scale.x,
@@ -210,7 +259,7 @@ impl Command for Orientate3dModel {
             |_| None,
         );
         fmt_import_stl::top_down(&mut k, &tris);
-        if p.discard_below_zero {
+        if p.placing.discard_below_zero {
             for h in &mut k.heights {
                 *h = h.filter(|z| *z >= 0.0);
             }
@@ -297,12 +346,12 @@ fn wrapped(
     } else {
         1.0
     };
-    let first = if params.center {
+    let first = if params.placing.center {
         unrolled.along_from + (job_length - length * scale) / 2.0
     } else if x_axis {
-        params.position.x
+        params.placing.position.x
     } else {
-        params.position.y
+        params.placing.position.y
     };
     let mut made = Component::from_fn(
         "Imported model",
@@ -514,10 +563,19 @@ mod tests {
         let (_, k) = imported(
             "front",
             &Params {
-                orientation: Face::Front,
-                size: Xy::new(40.0, 0.0),
-                depth_below_top: 2.0,
-                discard_below_zero: false,
+                orientation: Orientation {
+                    face: Face::Front,
+                    rotation: 0.0,
+                },
+                size: ModelSize {
+                    x: 40.0,
+                    ..Params::default().size
+                },
+                placing: Placing {
+                    depth_below_top: 2.0,
+                    discard_below_zero: false,
+                    ..Params::default().placing
+                },
                 ..Params::default()
             },
         );
@@ -534,7 +592,10 @@ mod tests {
         let (_, k) = imported(
             "inches",
             &Params {
-                units: FileUnits::Inches,
+                size: ModelSize {
+                    units: FileUnits::Inches,
+                    ..Params::default().size
+                },
                 ..Params::default()
             },
         );
@@ -544,7 +605,10 @@ mod tests {
         let p = with_file(
             "deep",
             &Params {
-                depth_below_top: 100.0,
+                placing: Placing {
+                    depth_below_top: 100.0,
+                    ..Params::default().placing
+                },
                 ..Params::default()
             },
         );

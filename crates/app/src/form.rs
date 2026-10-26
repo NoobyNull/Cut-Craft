@@ -9,6 +9,9 @@ const MOST_RADIOS: usize = 5;
 /// The corner picker's size, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const CORNER_PICKER_ROWS: f32 = 3.0;
+/// The picture the face radio buttons sit round, in rows of the theme's interactive height.
+// ponytail: fixed ratio until a preferences dialog exists
+const FACES_PICTURE_ROWS: f32 = 4.0;
 
 #[derive(Debug, PartialEq)]
 pub struct Field {
@@ -81,6 +84,8 @@ pub enum Kind {
         min: Option<f64>,
         max: Option<f64>,
         integer: bool,
+        /// `x-steps`: only these values, as radio buttons side by side.
+        steps: Vec<f64>,
     },
     Bool,
     /// A string; `multiline` (`x-widget: multiline`) is a box of several lines.
@@ -99,7 +104,7 @@ pub enum Kind {
 }
 
 /// How a choice is drawn (`x-widget`); Aspire's forms use each of these.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Widget {
     /// Radio buttons, one under another, for a few options; a drop-down for more.
     #[default]
@@ -110,6 +115,9 @@ pub enum Widget {
     DropDown,
     /// A square with a spot at each corner and the centre, as the XY datum picker (`corners`).
     Corners,
+    /// A radio button for each face of a model round its picture (`faces`, with `x-icon`),
+    /// as Aspire's Initial Orientation.
+    Faces { picture: Option<String> },
 }
 
 #[derive(Debug, PartialEq)]
@@ -236,7 +244,11 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
             min,
             max,
             integer,
+            steps,
         } => {
+            if !steps.is_empty() {
+                return pick_step(ui, steps, value);
+            }
             let (factor, unit) = match unit.as_deref().map(|u| (u, shown_in(u, look.units))) {
                 Some((_, Some((factor, shown)))) => (factor, Some(shown.to_owned())),
                 Some((stored, None)) => (1.0, Some(stored.to_owned())),
@@ -284,7 +296,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
             }
             changed
         }
-        Kind::Choice(options, widget) => choose(ui, options, *widget, value),
+        Kind::Choice(options, widget) => choose(ui, options, widget, value, look),
         Kind::Group(inner) => ui.vertical(|ui| show(ui, inner, value, look)).inner,
         Kind::List(item) => ui.vertical(|ui| edit_list(ui, item, value, look)).inner,
         Kind::Colour => {
@@ -307,7 +319,13 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
     }
 }
 
-fn choose(ui: &mut egui::Ui, options: &[Choice], widget: Widget, value: &mut Value) -> bool {
+fn choose(
+    ui: &mut egui::Ui,
+    options: &[Choice],
+    widget: &Widget,
+    value: &mut Value,
+    look: &Look,
+) -> bool {
     let current = value.as_str().unwrap_or_default().to_owned();
     let picked = match widget {
         Widget::Auto if options.len() <= MOST_RADIOS => {
@@ -332,6 +350,10 @@ fn choose(ui: &mut egui::Ui, options: &[Choice], widget: Widget, value: &mut Val
             .inner
         }
         Widget::Corners => corners(ui, options, &current),
+        Widget::Faces { picture } => {
+            let picture = picture.as_deref().and_then(look.picture);
+            faces(ui, options, &current, picture)
+        }
     };
     match picked {
         Some(v) if v != current => {
@@ -409,6 +431,113 @@ fn corners(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<Strin
         .filter(|_| response.clicked())?;
     let across = (at - square.min) / square.size();
     nearest_corner(options, across).map(|o| o.value.clone())
+}
+
+/// One of a few numbers, as radio buttons side by side; true when another was picked.
+fn pick_step(ui: &mut egui::Ui, steps: &[f64], value: &mut Value) -> bool {
+    let n = value.as_f64().unwrap_or_default();
+    let is = |step: f64| (step - n).abs() < f64::EPSILON;
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        for &step in steps {
+            if ui.radio(is(step), step_label(step)).clicked() {
+                picked = Some(step);
+            }
+        }
+    });
+    match picked {
+        Some(step) if !is(step) => {
+            *value = Value::from(step);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// A step as Aspire labels it: positive ones carry a plus.
+pub fn step_label(step: f64) -> String {
+    if step > 0.0 {
+        format!("+{step}")
+    } else {
+        format!("{step}")
+    }
+}
+
+/// Aspire's Initial Orientation: the model's picture with a radio button for each face round it.
+fn faces(
+    ui: &mut egui::Ui,
+    options: &[Choice],
+    current: &str,
+    picture: Option<egui::Image<'static>>,
+) -> Option<String> {
+    let row = ui.spacing().interact_size.y;
+    let edge = row * FACES_PICTURE_ROWS;
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let widths: Vec<f32> = options
+        .iter()
+        .map(|o| {
+            let text = ui.painter().layout_no_wrap(
+                o.label.clone(),
+                font.clone(),
+                egui::Color32::PLACEHOLDER,
+            );
+            text.size().x + ui.spacing().icon_width + ui.spacing().icon_spacing
+        })
+        .collect();
+    let side = options
+        .iter()
+        .zip(&widths)
+        .filter(|(o, _)| face_spot(&o.value).is_some_and(|(column, _)| column != 1))
+        .map(|(_, w)| *w)
+        .fold(0.0, f32::max);
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(2.0 * side + edge, 2.0 * row + edge),
+        egui::Sense::hover(),
+    );
+    let middle =
+        egui::Rect::from_min_size(rect.min + egui::vec2(side, row), egui::vec2(edge, edge));
+    if let Some(picture) = picture {
+        ui.put(middle, picture.fit_to_exact_size(middle.size()));
+    }
+    let mut picked = None;
+    for (o, &width) in options.iter().zip(&widths) {
+        let Some((column, line)) = face_spot(&o.value) else {
+            continue;
+        };
+        let x = match column {
+            0 => rect.min.x,
+            1 => middle.center().x - width / 2.0,
+            _ => middle.max.x,
+        };
+        let y = match line {
+            0 => rect.min.y + row / 2.0,
+            1 => middle.min.y + edge / 4.0,
+            2 => middle.max.y - edge / 4.0,
+            _ => middle.max.y + row / 2.0,
+        };
+        let at =
+            egui::Rect::from_center_size(egui::pos2(x + width / 2.0, y), egui::vec2(width, row));
+        let radio = ui.put(at, egui::RadioButton::new(o.value == current, &o.label));
+        if radio.clicked() {
+            picked = Some(o.value.clone());
+        }
+        hover(radio, o.help.as_ref());
+    }
+    picked
+}
+
+/// Where a face's radio button sits round the picture: column (left, middle, right) and line
+/// (above, upper, lower, below), as in Aspire's dialog.
+pub fn face_spot(value: &str) -> Option<(u8, u8)> {
+    Some(match value {
+        "top" => (1, 0),
+        "back" => (0, 1),
+        "left" => (0, 2),
+        "right" => (2, 1),
+        "front" => (2, 2),
+        "bottom" => (1, 3),
+        _ => return None,
+    })
 }
 
 /// Where a corner choice sits in the picker, as fractions across and down the square.
@@ -520,6 +649,9 @@ fn kind(root: &Value, property: &Value) -> Kind {
             Some("row") => Widget::Row,
             Some("drop-down") => Widget::DropDown,
             Some("corners") => Widget::Corners,
+            Some("faces") => Widget::Faces {
+                picture: marked("x-icon").and_then(Value::as_str).map(String::from),
+            },
             _ => Widget::Auto,
         };
         return Kind::Choice(options, widget);
@@ -530,6 +662,10 @@ fn kind(root: &Value, property: &Value) -> Kind {
             min: s["minimum"].as_f64(),
             max: s["maximum"].as_f64(),
             integer: t == "integer",
+            steps: marked("x-steps")
+                .and_then(Value::as_array)
+                .map(|steps| steps.iter().filter_map(Value::as_f64).collect())
+                .unwrap_or_default(),
         },
         Some("boolean") => Kind::Bool,
         Some("string") => Kind::Text {
@@ -651,7 +787,7 @@ mod tests {
         });
         let f = fields(&schema);
         let widget = |key| match &field(&f, key).kind {
-            Kind::Choice(_, widget) => *widget,
+            Kind::Choice(_, widget) => widget.clone(),
             other => panic!("{key} is {other:?}"),
         };
         assert_eq!(widget("units"), Widget::Row);
@@ -714,6 +850,56 @@ mod tests {
     }
 
     #[test]
+    fn orientate_3d_model_is_in_aspires_sections() {
+        let f = fields(&schema("orientate_3d_model"));
+        let sections: Vec<&str> = f
+            .iter()
+            .filter(|f| f.section)
+            .map(|f| f.label.as_str())
+            .collect();
+        assert_eq!(
+            sections,
+            [
+                "Initial Orientation",
+                "Model Size",
+                "Position relative to Modeling Plane"
+            ]
+        );
+        let Kind::Group(orientation) = &field(&f, "orientation").kind else {
+            panic!("a group")
+        };
+        assert!(matches!(
+            &field(orientation, "face").kind,
+            Kind::Choice(faces, Widget::Faces { picture: Some(p) })
+                if faces.len() == 6 && p == "import/initial_orientation.svg"
+        ));
+        assert!(matches!(
+            &field(orientation, "rotation").kind,
+            Kind::Number { steps, .. } if *steps == [-180.0, -90.0, 0.0, 90.0, 180.0]
+        ));
+    }
+
+    #[test]
+    fn faces_sit_round_the_picture_as_in_aspire() {
+        // columns left, middle, right; rows above, upper, lower, below the picture
+        assert_eq!(face_spot("top"), Some((1, 0)));
+        assert_eq!(face_spot("back"), Some((0, 1)));
+        assert_eq!(face_spot("left"), Some((0, 2)));
+        assert_eq!(face_spot("right"), Some((2, 1)));
+        assert_eq!(face_spot("front"), Some((2, 2)));
+        assert_eq!(face_spot("bottom"), Some((1, 3)));
+        assert_eq!(face_spot("centre"), None);
+    }
+
+    #[test]
+    fn steps_are_labelled_with_their_sign() {
+        assert_eq!(step_label(-90.0), "-90");
+        assert_eq!(step_label(0.0), "0");
+        assert_eq!(step_label(180.0), "+180");
+        assert_eq!(step_label(22.5), "+22.5");
+    }
+
+    #[test]
     fn section_pictures_follow_the_choice_made() {
         let schema = serde_json::json!({
             "type": "object",
@@ -772,7 +958,8 @@ mod tests {
                 unit: Some("mm".into()),
                 min: Some(0.0),
                 max: None,
-                integer: false
+                integer: false,
+                steps: vec![]
             }
         );
         assert_eq!(field(&f, "x").help.as_deref(), Some("Left edge"));
@@ -807,7 +994,8 @@ mod tests {
                 unit: None,
                 min: Some(3.0),
                 max: Some(100.0),
-                integer: true
+                integer: true,
+                steps: vec![]
             }
         );
     }

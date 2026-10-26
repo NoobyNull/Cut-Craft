@@ -235,8 +235,9 @@ say "not implemented yet".
   Béziers onto layers of the job's names; text objects, the model and toolpaths are not
   read). Layout from samples saved by Aspire 12 under Wine (`re/SPEC.md`, Job files).
 - File ▸ Import ▸ Import Component / 3D Model (and the Design tab button): binary and ASCII
-  STL through Aspire's Orientate 3D Model form (dialogs 524 and 4104): initial
-  orientation (which face is up), rotation about Z, file units, model size with locked
+  STL through Aspire's Orientate 3D Model form (dialogs 524 and 4104), in its sections and
+  pictures on one page (Aspire's has two): initial orientation (a radio per face round the
+  model's picture), rotation about Z (-180 … +180 in quarter turns), file units, model size with locked
   ratio, centre or position, depth below top, discard below the zero plane. No OBJ; no
   undercut highlighting, perspective or segmenting.
   In a rotary job (help: Orientate 3D Model Rotary) the Imported model type picks Full 3D
