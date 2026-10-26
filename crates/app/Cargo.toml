@@ -11,6 +11,8 @@ cut-craft-vtdb = { path = "../vtdb" }
 cut-craft-post = { path = "../post" }
 eframe.workspace = true
 egui_extras.workspace = true
+# egui_extras decodes pictures with image 0.24; this turns on its BMP reader (dialog pictures)
+image-egui = { package = "image", version = "0.24", default-features = false, features = ["bmp"] }
 env_logger.workspace = true
 log.workspace = true
 rfd.workspace = true
