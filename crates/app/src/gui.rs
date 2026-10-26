@@ -87,6 +87,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "auto_layout_text",
                 "dimensions",
                 "create_fillets",
+                "vector_boundary",
                 "vector_texture",
                 "trace_bitmap",
             ],
