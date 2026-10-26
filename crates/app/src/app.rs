@@ -1325,13 +1325,19 @@ impl CutCraftApp {
         Ok(())
     }
 
-    /// The arrow keys move the selection by the Fixed Nudge Distance (Snapping Options): Aspire
-    /// nudges with Ctrl + Shift and the arrows; plain arrows do it too [inf].
+    /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
+    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl + Shift).
     fn nudge(&mut self, ctx: &egui::Context) {
         if self.screen != Screen::Job || ctx.wants_keyboard_input() {
             return;
         }
-        let step = self.snap.nudge_distance;
+        let (shift, ctrl) = ctx.input(|i| (i.modifiers.shift, i.modifiers.command));
+        let share = match (shift, ctrl) {
+            (true, true) => 0.1,
+            (true, false) => 0.5,
+            _ => 1.0,
+        };
+        let step = self.snap.grid_spacing * share;
         let by = ctx.input(|i| {
             [
                 (Key::ArrowLeft, -1.0, 0.0),
@@ -5906,18 +5912,37 @@ mod tests {
     fn the_arrow_keys_nudge_the_selection() {
         let mut h = Harness::new();
         h.rectangle(10.0, 10.0, 20.0, 20.0);
-        let step = h.app.snap.nudge_distance;
+        let square = h.app.snap.grid_spacing;
         let at = |h: &Harness| h.app.doc.selection_bounds().unwrap().min;
         let before = at(&h);
         h.frame(vec![key(Key::ArrowRight)]);
         h.frame(vec![key(Key::ArrowUp)]);
         let moved = at(&h) - before;
         assert!(
-            (moved.x - step).abs() < 1e-9 && (moved.y - step).abs() < 1e-9,
+            (moved.x - square).abs() < 1e-9 && (moved.y - square).abs() < 1e-9,
             "{moved:?}"
         );
         h.frame(vec![key(Key::ArrowLeft), key(Key::ArrowDown)]);
         assert!((at(&h) - before).length() < 1e-9, "back where it was");
+        for (modifiers, share) in [
+            (Modifiers::SHIFT, 0.5),
+            (Modifiers::SHIFT | Modifiers::COMMAND, 0.1),
+        ] {
+            let from = at(&h);
+            let press = Event::Key {
+                key: Key::ArrowRight,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            };
+            h.frame_holding(modifiers, vec![press]);
+            let moved = (at(&h) - from).x;
+            assert!(
+                (moved - square * share).abs() < 1e-9,
+                "{modifiers:?}: {moved}"
+            );
+        }
     }
 
     #[test]

@@ -28,18 +28,9 @@ pub struct SnapOptions {
     /// Line the pointer up with the snap points, across or up and down, when none is near
     #[serde(default = "on")]
     pub smart_snapping: bool,
-    /// How far each arrow key press moves the selection
-    #[schemars(title = "Fixed Nudge Distance", extend("x-unit" = "mm"), range(min = 0))]
-    #[serde(default = "nudge")]
-    pub nudge_distance: f64,
     /// How near, in screen pixels, the pointer must come to a point to snap to it
     #[schemars(range(min = 1, max = 50))]
     pub snapping_radius: f64,
-}
-
-/// [inf] Aspire's default is not in its help; a millimetre
-fn nudge() -> f64 {
-    1.0
 }
 
 fn on() -> bool {
@@ -58,7 +49,6 @@ impl Default for SnapOptions {
             span_mid_points: true,
             arc_centers: true,
             smart_snapping: true,
-            nudge_distance: nudge(),
             // ponytail: Aspire's slider runs Small to Large; 8 px is our middle [inf]
             snapping_radius: 8.0,
         }
