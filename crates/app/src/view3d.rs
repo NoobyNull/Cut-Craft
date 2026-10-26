@@ -294,6 +294,22 @@ pub fn screen_of(
     }
 }
 
+/// The height a vector is drawn at: flat, in one plane, at the highest the surface reaches
+/// under it (within half a cell, so an outline on a shape's edge counts the wall's top); 0 off
+/// the material.
+pub fn vector_plane(material: &Material, points: &[DVec2]) -> f64 {
+    let r = material.cell / 2.0;
+    points
+        .iter()
+        .flat_map(|&p| {
+            [(0.0, 0.0), (r, 0.0), (-r, 0.0), (0.0, r), (0.0, -r)]
+                .map(|(dx, dy)| material.at(p + DVec2::new(dx, dy)))
+        })
+        .flatten()
+        .reduce(f64::max)
+        .unwrap_or(0.0)
+}
+
 /// The material's width and height.
 #[expect(clippy::cast_precision_loss, reason = "cell counts")]
 pub fn plan_size(material: &Material) -> DVec2 {
@@ -515,6 +531,7 @@ fn wrapped_quads(m: &Material, wrap: Wrap, light: DVec3) -> Vec<([DVec3; 4], f64
 mod tests {
     use super::*;
     use cut_craft_core::document::Job;
+    use cut_craft_core::geometry::Point;
     use eframe::egui::pos2;
 
     fn plain() -> Look {
@@ -524,6 +541,44 @@ mod tests {
             light: LIGHT,
             wrap: None,
         }
+    }
+
+    #[test]
+    fn a_vector_is_flat_at_the_top_of_what_it_outlines() {
+        // the left half of the job raised 5: an outline along its edge, and a line from the
+        // floor onto it, lie in one plane on top
+        let job = Job::default();
+        let mut m = Material::new(&job, 40);
+        let edge = m.origin.x + 20.0 * m.cell;
+        for row in 0..m.rows {
+            for column in 0..20 {
+                m.heights[row * m.columns + column] += 5.0;
+            }
+        }
+        let (top, y) = (m.heights[0], m.origin.y + 3.3 * m.cell);
+        for nudge in [-0.4, -1e-9, 0.0, 1e-9, 0.4] {
+            let along = [
+                Point::new(edge + nudge * m.cell, y),
+                Point::new(edge, y + 5.0),
+            ];
+            assert_eq!(
+                vector_plane(&m, &along),
+                top,
+                "{nudge} of a cell off the edge"
+            );
+        }
+        let across = [
+            Point::new(edge + 10.0 * m.cell, y),
+            Point::new(edge - 2.0, y),
+        ];
+        assert_eq!(vector_plane(&m, &across), top);
+        let floor = [Point::new(edge + 3.0 * m.cell, y)];
+        assert_eq!(vector_plane(&m, &floor), m.at(floor[0]).unwrap());
+        assert_eq!(
+            vector_plane(&m, &[Point::new(-1e6, 0.0)]),
+            0.0,
+            "off the material"
+        );
     }
 
     #[test]

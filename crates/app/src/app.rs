@@ -2300,12 +2300,10 @@ impl CutCraftApp {
         let local = |p: cut_craft_core::geometry::Point, z: f64| {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
         };
-        // vectors lie on the surface where it is, at the top elsewhere
+        // each vector flat, in one plane, on top of what it outlines
         for points in &vectors {
-            let line = points
-                .iter()
-                .map(|&p| screen(local(p, surface.at(p).unwrap_or(0.0))))
-                .collect();
+            let z = view3d::vector_plane(&surface, points);
+            let line = points.iter().map(|&p| screen(local(p, z))).collect();
             painter.add(egui::Shape::line(line, stroke));
         }
         let size = view3d::plan_size(&surface);
