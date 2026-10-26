@@ -633,8 +633,8 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
     surface
 }
 /// The model as a 3D toolpath machines it: cells a twentieth of `tool` across, but no finer
-/// than the job's modeling resolution, its top at z = 0 (the material surface). It must
-/// exist and fit in the material.
+/// than the job's modeling resolution, placed in the material as Material Setup says (z = 0
+/// is the material surface; by default the model's top is there). It must exist and fit.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -667,8 +667,15 @@ pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandErro
             doc.job.thickness
         )));
     }
+    let shift = doc.job.model_shift(lowest, top);
+    // ponytail: 1 µm slack for rounding
+    if top + shift > 1e-6 || lowest + shift < -doc.job.thickness - 1e-6 {
+        return Err(CommandError::Failed(
+            "the model does not fit in the material where Material Setup puts it".into(),
+        ));
+    }
     for height in &mut surface.heights {
-        *height -= top;
+        *height += shift;
     }
     Ok(surface)
 }

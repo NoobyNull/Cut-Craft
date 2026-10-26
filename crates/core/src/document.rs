@@ -159,6 +159,30 @@ impl Resolution {
     }
 }
 
+/// Which side of the material Material Setup's gap is measured from.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum GapFrom {
+    /// Between the model's top and the material surface (Gap Outside Model on rotary jobs)
+    #[default]
+    #[schemars(title = "Gap Above Model")]
+    Above,
+    /// Between the model's bottom and the material's bottom (Gap Inside Model, from the
+    /// axis, on rotary jobs)
+    #[schemars(title = "Gap Below Model")]
+    Below,
+}
+
+/// Material Setup's Model Position in Material.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ModelPosition {
+    pub from: GapFrom,
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub gap: f64,
+}
+
 /// The material block, in millimetres. Job coordinates are the machine's: the datum is at
 /// `offset` (0, 0 unless an offset is used), so the material lies where [`Job::area`] says.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -185,6 +209,9 @@ pub struct Job {
     /// Set for a rotary job (added with rotary jobs; flat jobs leave it out).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotary: Option<Rotary>,
+    /// Where the 3D model sits in the material (Material Setup; added with it).
+    #[serde(default)]
+    pub model_position: ModelPosition,
 }
 
 fn default_clearance() -> f64 {
@@ -228,6 +255,15 @@ impl Job {
         }
     }
 
+    /// What to add to a model height for its depth from the material surface, for a model
+    /// whose heights run from `lowest` to `top`, placed as Material Setup says.
+    pub fn model_shift(&self, lowest: f64, top: f64) -> f64 {
+        match self.model_position.from {
+            GapFrom::Above => -(top + self.model_position.gap),
+            GapFrom::Below => self.model_position.gap - self.thickness - lowest,
+        }
+    }
+
     /// Edge of one 3D model cell: the resolution's points spread over the job.
     pub fn model_cell(&self) -> f64 {
         (self.width * self.height / self.resolution.points()).sqrt()
@@ -250,6 +286,7 @@ impl Default for Job {
             // ponytail: one wood colour until a Materials dialog offers textures
             colour: [214, 160, 102],
             rotary: None,
+            model_position: ModelPosition::default(),
         }
     }
 }

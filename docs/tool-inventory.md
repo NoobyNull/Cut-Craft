@@ -239,10 +239,10 @@ say "not implemented yet".
   along the job's through the middle of its box; each cell of the unrolled job holds how
   far out from the axis the model reaches there, so heights are measured from the axis.
   Scale model to fit material (on by default) fits it to the material's diameter and
-  length, else Model size X is its length. Angle 0 is straight up [inf]. Not done: the
-  rotation handles, moving the rotation axis, Resize material block, and Material Setup's
-  gap (the model's top is machined at the material surface, so a full model narrower than
-  the material should be fitted to it).
+  length, else Model size X is its length. Angle 0 is straight up [inf]. For a full model
+  narrower than the material, set Material Setup's Gap Inside Model to 0 so it is machined
+  from the axis out. Not done: the rotation handles, moving the rotation axis, Resize
+  material block.
 - Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by one
   plane square to X, Y or Z at a percentage of its size; the segment beyond the plane and
   the one before it (turned over, if asked, so its far side is machined) are laid out side
@@ -319,6 +319,11 @@ say "not implemented yet".
     0.01 mm; components are resampled, heights kept. The curves run left to right [inf].
     Not done: editing the envelope with node editing (the distortion is applied at once,
     not kept live, so there is no Bake Distortion), Use Rotated Bounds, the 3D view.
+- Toolpaths tab ▸ Material Setup (help: Material Setup - Flat / Rotary): Model Position in
+  Material, as the gap above the model's top (Gap Outside Model on rotary jobs) or below its
+  bottom (Gap Inside Model, from the axis); 3D roughing and finishing and the wrapped 3D
+  view place the model by it, refusing a model it pushes out of the material. The rest of
+  the form (thickness, Z zero, Z1 / Z2, home) is in Job Setup; Z2 and home are not done.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 

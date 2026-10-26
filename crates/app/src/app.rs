@@ -2205,11 +2205,13 @@ impl CutCraftApp {
             vec![]
         };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
-        let (rotary, previewing) = (self.shown_job().rotary, self.simulation.is_some());
+        let job = self.shown_job();
+        let (rotary, previewing) = (job.rotary, self.simulation.is_some());
         let Some(surface) = self.surface_3d() else {
             return;
         };
-        // a rotary job round its axis: a preview's surface is at 0, the model's at its top
+        // a rotary job round its axis: a preview's surface is at 0, the model placed as
+        // Material Setup says
         let wrap = rotary
             .filter(|_| shown.auto_wrapping)
             .map(|r| view3d::Wrap {
@@ -2218,11 +2220,9 @@ impl CutCraftApp {
                 surface: if previewing {
                     0.0
                 } else {
-                    surface
-                        .heights
-                        .iter()
-                        .copied()
-                        .fold(f64::NEG_INFINITY, f64::max)
+                    let heights = surface.heights.iter().copied();
+                    let lowest = heights.clone().fold(f64::INFINITY, f64::min);
+                    -job.model_shift(lowest, heights.fold(f64::NEG_INFINITY, f64::max))
                 },
             });
         let look = view3d::Look { wrap, ..look };

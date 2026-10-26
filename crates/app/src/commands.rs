@@ -141,6 +141,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_reorder_level::ReorderLevel>();
     r.add::<cmd_duplicate_component::DuplicateComponent>();
     r.add::<cmd_segment_3d_model::Segment3dModel>();
+    r.add::<cmd_material_setup::MaterialSetup>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

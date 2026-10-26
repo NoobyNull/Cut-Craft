@@ -151,6 +151,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
 /// The Toolpaths panel, laid out the same way.
 fn toolpath_groups() -> Vec<ToolGroup> {
     vec![
+        group("Material", &["material_setup"]),
         group(
             "Toolpath Operations",
             &[
