@@ -343,6 +343,8 @@ impl Registry {
             .ok_or_else(|| {
                 CommandError::Failed(format!("`{}` did not make a toolpath", toolpath.strategy))
             })?;
+        let mut fresh = fresh;
+        crate::rest::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
         let mut c = Change::builder(doc);
         if &fresh != toolpath {
             c.replace_toolpath(id, fresh);

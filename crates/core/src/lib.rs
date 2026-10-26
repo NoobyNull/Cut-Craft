@@ -17,6 +17,7 @@ pub mod params;
 pub mod playback;
 pub mod polygon;
 pub mod random;
+pub mod rest;
 pub mod selection;
 pub mod simulation;
 pub mod snap;

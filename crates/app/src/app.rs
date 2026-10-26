@@ -1324,6 +1324,9 @@ impl CutCraftApp {
             .get(id)
             .expect("only registered commands are applied");
         let change = cmd.run_json(&self.doc, params).map_err(|e| e.to_string())?;
+        // rest machining, for any toolpath whose settings ask for it
+        let change = cut_craft_core::rest::with_rest(&self.doc.job, params, change)
+            .map_err(|e| e.to_string())?;
         let made = change.toolpaths_made();
         self.history
             .apply(&mut self.doc, change)
@@ -1856,6 +1859,10 @@ impl CutCraftApp {
             material: form::material(&self.doc, units),
         };
         form::show(ui, &open.fields, &mut open.params, &look);
+        // every toolpath can rest machine (3D Finishing has its own, as `after`)
+        if open.page == Page::Toolpaths && open.params.get("after").is_none() {
+            rest_section(ui, &mut open.params, &self.tools.tools);
+        }
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
@@ -3316,6 +3323,69 @@ fn paint_focus_ring(ctx: &egui::Context) {
         ctx.style().visuals.widgets.inactive.rounding,
         egui::Stroke::new(width, stroke.color),
     );
+}
+
+/// The Rest Machining section of a toolpath form: the tools that cut before this one
+/// (picked from the database, each removable), and, once there are any, the minimum
+/// detail and overlap. Kept as `rest` in the form's settings.
+fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
+    use cut_craft_core::rest::Rest;
+    let mut rest: Rest = params
+        .get("rest")
+        .and_then(|r| serde_json::from_value(r.clone()).ok())
+        .unwrap_or_default();
+    let before = rest.clone();
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("Rest Machining")
+            .on_hover_text("Cut only what the tools that ran before this one could not reach");
+        let mut remove = None;
+        for (i, tool) in rest.after.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(&tool.name);
+                if ui.small_button("✕").on_hover_text("Remove").clicked() {
+                    remove = Some(i);
+                }
+            });
+        }
+        if let Some(i) = remove {
+            rest.after.remove(i);
+        }
+        egui::ComboBox::from_label("Add an earlier tool")
+            .selected_text("")
+            .show_ui(ui, |ui| {
+                for tool in database {
+                    if ui.selectable_label(false, &tool.name).clicked() {
+                        rest.after.push(tool.clone());
+                    }
+                }
+            });
+        if !rest.after.is_empty() {
+            egui::Grid::new("rest_settings")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    ui.label("Minimum detail")
+                        .on_hover_text("Leave alone unmachined areas narrower than this");
+                    ui.add(
+                        egui::DragValue::new(&mut rest.minimum_detail)
+                            .suffix(" mm")
+                            .clamp_range(0.0..=f64::INFINITY),
+                    );
+                    ui.end_row();
+                    ui.label("Overlap")
+                        .on_hover_text("Grow each unmachined area by this");
+                    ui.add(
+                        egui::DragValue::new(&mut rest.overlap)
+                            .suffix(" mm")
+                            .clamp_range(0.0..=f64::INFINITY),
+                    );
+                    ui.end_row();
+                });
+        }
+    });
+    if rest != before {
+        params["rest"] = serde_json::to_value(&rest).expect("rest settings serialise");
+    }
 }
 
 /// A category of a drop-down in a border filling its width, as menus draw theirs.
@@ -6121,6 +6191,44 @@ mod tests {
         assert!(
             h.app.playback.is_none() && h.app.simulation.is_some(),
             "kept as far as it went"
+        );
+    }
+
+    #[test]
+    fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.app.invoke(&h.ctx, "pocket_toolpath");
+        // the section, drawn on its own (it is below the fold of the pocket form)
+        let ctx = egui::Context::default();
+        let mut section = serde_json::json!({});
+        let out = ctx.run(RawInput::default(), |ctx| {
+            egui::CentralPanel::default()
+                .show(ctx, |ui| rest_section(ui, &mut section, &h.app.tools.tools));
+        });
+        let drawn = |text: &str| {
+            out.shapes
+                .iter()
+                .any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == text))
+        };
+        assert!(drawn("Rest Machining") && drawn("Add an earlier tool"));
+        let mut params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("pocket_toolpath", &params).unwrap();
+        let whole = h.app.doc.toolpaths.values().last().unwrap().moves.len();
+        let mut big = h.app.form.as_ref().unwrap().params["tool"].clone();
+        big["diameter"] = Value::from(params["tool"]["diameter"].as_f64().unwrap() * 4.0);
+        params["rest"] =
+            serde_json::json!({ "after": [big], "minimum_detail": 0.0, "overlap": 0.0 });
+        h.app.apply("pocket_toolpath", &params).unwrap();
+        let rest = h.app.doc.toolpaths.values().last().unwrap();
+        assert!(
+            rest.moves.len() < whole,
+            "{} of {whole} moves",
+            rest.moves.len()
+        );
+        assert!(
+            cut_craft_core::rest::Rest::of(&rest.params).is_some(),
+            "kept to recalculate"
         );
     }
 

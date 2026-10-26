@@ -169,6 +169,11 @@ say "not implemented yet".
   Run / Pause, Single Step, Run to Retract, Stop (keeps what is cut), a slider to scrub
   along the path and a speed slider over the 3D view; the tool drawn as an upright
   cylinder. Not done: the tool's real shape, Preview All Sides.
+- Rest machining for every toolpath (a Rest Machining section in each toolpath form; 3D
+  Finishing keeps its own): what the toolpath would leave is simulated, each earlier tool's
+  best try at it shows what that tool left, and only the cuts over areas every earlier tool
+  left are kept (minimum detail, overlap). Kept with the toolpath, so recalculating does it
+  again. The rest grid is a quarter of the tool across [inf].
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
