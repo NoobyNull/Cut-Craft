@@ -18,7 +18,7 @@ icons are skipped (Matthew: no laser features).
 - [ ] Texture (`modeling/texture.svg`): Create Texture Area.
 - [ ] Component Levels (`modeling/component_levels.svg`): the Components tab.
 - [ ] Import Vectors / Export Vectors (`file/*`).
-- [ ] Edit / Preview / Hide toolpaths, Save Toolpath Template, Save All as Template
+- [x] Edit / Preview / Hide toolpaths, Save Toolpath Template, Save All as Template
       (`toolpaths/*`): the toolpath list's buttons (help: edit-toolpath, Preview Toolpaths,
       save-toolpath-template, save-all-visible-toolpaths-as-a-template).
 - [ ] 2D toolpath drawing on / off / solid (`view/*`): Toolpath Drawing toggles.

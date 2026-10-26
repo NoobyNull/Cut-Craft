@@ -297,6 +297,17 @@ impl Registry {
     /// Re-runs the strategy that made toolpath `id`, with its saved params, on the vectors it was
     /// made from (whatever is selected now). Unchanged results make an empty change.
     pub fn recalculate(&self, doc: &Document, id: EntityId) -> Result<Change, CommandError> {
+        self.edit(doc, id, None)
+    }
+
+    /// Edit Toolpath: toolpath `id` made again from its vectors with `params` (its own when
+    /// `None`), in its place.
+    pub fn edit(
+        &self,
+        doc: &Document,
+        id: EntityId,
+        params: Option<&serde_json::Value>,
+    ) -> Result<Change, CommandError> {
         let toolpath = doc
             .toolpaths
             .get(&id)
@@ -322,7 +333,7 @@ impl Registry {
             )));
         }
         let fresh = strategy
-            .run_json(&sources, &toolpath.params)?
+            .run_json(&sources, params.unwrap_or(&toolpath.params))?
             .edits
             .into_iter()
             .find_map(|e| match e {

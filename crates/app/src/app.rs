@@ -23,7 +23,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 67] = [
+const BUILT_INS: [&str; 68] = [
+    "edit_toolpath",
     "create_shape_round",
     "create_shape_angled",
     "create_shape_smooth",
@@ -258,6 +259,8 @@ struct OpenForm {
     new_job: bool,
     /// The tool page it shows in: Toolpaths for toolpath strategies, else Design.
     page: Page,
+    /// Edit Toolpath: the toolpath Apply replaces rather than adding a new one.
+    editing: Option<EntityId>,
 }
 
 #[expect(
@@ -408,7 +411,8 @@ impl CutCraftApp {
             "recalculate_toolpath"
             | "delete_toolpath"
             | "preview_toolpath"
-            | "save_selected_toolpath_as_template" => self.selected_toolpath.is_some(),
+            | "save_selected_toolpath_as_template"
+            | "edit_toolpath" => self.selected_toolpath.is_some(),
             "save_all_visible_toolpaths_as_template" => {
                 self.doc.toolpaths.values().any(|t| t.visible)
             }
@@ -500,6 +504,7 @@ impl CutCraftApp {
                     self.status.set_message(&e);
                 }
             }
+            "edit_toolpath" => self.edit_toolpath(),
             "delete_all_guides" => self.set_guides(vec![]),
             "lock_all_existing_guides" | "unlock_all_existing_guides" => {
                 let locked = id.starts_with("lock");
@@ -834,6 +839,7 @@ impl CutCraftApp {
                 error: None,
                 new_job: false,
                 page,
+                editing: None,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -1035,6 +1041,92 @@ impl CutCraftApp {
         if !over.is_empty() {
             let message = format!("Warning: {} passes over a keep-out zone", over.join(", "));
             self.status.set_message(&message);
+        }
+    }
+
+    /// Aspire's icons over the toolpath list: edit and hide the selected toolpath, and save
+    /// it, or every visible one, as a template.
+    fn toolpath_list_buttons(&mut self, ui: &mut egui::Ui) {
+        let edge = ui.spacing().interact_size.y * TOOL_ICON_ROWS;
+        let mut clicked = None;
+        ui.horizontal(|ui| {
+            for (id, icon, tip) in [
+                (
+                    "edit_toolpath",
+                    "toolpaths/edit_toolpath.svg",
+                    "Edit Toolpath",
+                ),
+                (
+                    "hide_toolpath",
+                    "toolpaths/hide_toolpaths.svg",
+                    "Show or Hide Toolpath",
+                ),
+                (
+                    "save_selected_toolpath_as_template",
+                    "toolpaths/save_toolpath_template.svg",
+                    "Save Toolpath as Template",
+                ),
+                (
+                    "save_all_visible_toolpaths_as_template",
+                    "toolpaths/save_all_as_template.svg",
+                    "Save All Visible Toolpaths as Template",
+                ),
+            ] {
+                let available =
+                    id == "hide_toolpath" && self.selected_toolpath.is_some() || self.available(id);
+                let button = self.icon_button(icon, "", tip, edge);
+                if ui
+                    .add_enabled(available, button)
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    clicked = Some(id);
+                }
+            }
+        });
+        match clicked {
+            Some("hide_toolpath") => {
+                if let Some((id, t)) = self
+                    .selected_toolpath
+                    .and_then(|id| Some((id, self.doc.toolpaths.get(&id)?)))
+                {
+                    let params = serde_json::json!({ "toolpath": id, "name": t.name, "visible": !t.visible });
+                    if let Err(e) = self.apply("toolpath_properties", &params) {
+                        self.status.set_message(&e);
+                    }
+                }
+            }
+            Some(id) => self.invoke(ui.ctx(), id),
+            None => {}
+        }
+    }
+
+    /// Edit Toolpath: the selected toolpath's form, filled in with its settings.
+    fn edit_toolpath(&mut self) {
+        let Some((id, toolpath)) = self
+            .selected_toolpath
+            .and_then(|id| Some((id, self.doc.toolpaths.get(&id)?.clone())))
+        else {
+            return;
+        };
+        self.start_command(&toolpath.strategy);
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == toolpath.strategy) {
+            form.params = toolpath.params;
+            form.editing = Some(id);
+        }
+    }
+
+    /// A form's Apply: its command, or for an edited toolpath that toolpath made again with
+    /// the form's settings, in its place.
+    fn apply_form(&mut self, id: &str, params: &Value) -> Result<(), String> {
+        match self.form.as_ref().and_then(|f| f.editing) {
+            Some(toolpath) => {
+                let change = self.registry.edit(&self.doc, toolpath, Some(params));
+                let failed = change.as_ref().err().map(ToString::to_string);
+                self.record(change, "Toolpath edited");
+                failed.map_or(Ok(()), Err)
+            }
+            None => self.apply(id, params),
         }
     }
 
@@ -1465,7 +1557,7 @@ impl CutCraftApp {
             (true, _, true) => self.job_setup_cancel(),
             (false, true, _) => {
                 let (id, params) = (open.id, open.params.clone());
-                let result = self.apply(id, &params);
+                let result = self.apply_form(id, &params);
                 if let Some(open) = &mut self.form {
                     open.error = result.err();
                 }
@@ -2609,22 +2701,46 @@ impl CutCraftApp {
     fn toolpaths_page(&mut self, ui: &mut egui::Ui) {
         self.page_header(ui, Page::Toolpaths, "Toolpaths");
         let groups = self.toolbar.toolpath_groups.clone();
+        if self
+            .form
+            .as_ref()
+            .is_some_and(|f| f.page == Page::Toolpaths)
+        {
+            egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+            return;
+        }
+        // the toolpath list in its own bottom half, as Aspire's, so it never scrolls away
+        egui::TopBottomPanel::bottom("toolpath_list")
+            .resizable(true)
+            .default_height(ui.available_height() / 2.0)
+            .show_inside(ui, |ui| self.toolpath_list(ui));
         egui::ScrollArea::vertical().show(ui, |ui| {
-            if self
-                .form
-                .as_ref()
-                .is_some_and(|f| f.page == Page::Toolpaths)
-            {
-                self.command_form(ui);
-                return;
-            }
             self.tool_groups(ui, &groups, Page::Toolpaths);
-            ui.separator();
-            ui.strong("Toolpath List");
-            if self.doc.toolpaths.is_empty() {
-                ui.weak("No toolpaths yet");
-            }
-            let mut chosen = None;
+        });
+    }
+
+    /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
+    /// a right-click on one opening its menu.
+    fn toolpath_list(&mut self, ui: &mut egui::Ui) {
+        ui.strong("Toolpath List");
+        self.toolpath_list_buttons(ui);
+        let actions = [gui::ToolGroup {
+            name: "Toolpath List Actions",
+            tools: &[
+                "recalculate_toolpath",
+                "recalculate_all_toolpaths",
+                "delete_toolpath",
+                "preview_toolpath",
+                "preview_all_toolpaths",
+                "reset_preview",
+            ],
+        }];
+        self.tool_groups(ui, &actions, Page::Toolpaths);
+        if self.doc.toolpaths.is_empty() {
+            ui.weak("No toolpaths yet");
+        }
+        let mut chosen = None;
+        egui::ScrollArea::vertical().show(ui, |ui| {
             for (&id, toolpath) in &self.doc.toolpaths {
                 let selected = self.selected_toolpath == Some(id);
                 let label = ui
@@ -2641,22 +2757,10 @@ impl CutCraftApp {
                     chosen = Some(action);
                 }
             }
-            if let Some(action) = chosen {
-                self.invoke(ui.ctx(), &action);
-            }
-            let actions = [gui::ToolGroup {
-                name: "Toolpath List Actions",
-                tools: &[
-                    "recalculate_toolpath",
-                    "recalculate_all_toolpaths",
-                    "delete_toolpath",
-                    "preview_toolpath",
-                    "preview_all_toolpaths",
-                    "reset_preview",
-                ],
-            }];
-            self.tool_groups(ui, &actions, Page::Toolpaths);
         });
+        if let Some(action) = chosen {
+            self.invoke(ui.ctx(), &action);
+        }
     }
 
     fn status_bar(&self, ui: &mut egui::Ui) {
@@ -4873,6 +4977,8 @@ mod tests {
         let params = params.initial_params(&h.app.doc);
         h.app.apply("profile_toolpath", &params).unwrap();
         h.app.invoke(&h.ctx, "machining_layout");
+        // the toolpath list's section settles its height over a frame or two
+        h.frame(vec![]);
         h.frame(vec![]);
         let (&id, toolpath) = h.app.doc.toolpaths.iter().next().unwrap();
         let row = h
@@ -5070,6 +5176,27 @@ mod tests {
                 ("create_shape", Some(profile))
             );
         }
+    }
+
+    #[test]
+    fn edit_toolpath_reopens_its_form_and_replaces_it() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+        let id = *h.app.doc.toolpaths.keys().next().unwrap();
+        h.app.selected_toolpath = Some(id);
+        h.app.doc.selection = cut_craft_core::selection::Selection::new();
+        h.app.invoke(&h.ctx, "edit_toolpath");
+        let form = h.app.form.as_mut().expect("the toolpath's form");
+        assert_eq!((form.id, form.editing), ("profile_toolpath", Some(id)));
+        form.params["name"] = Value::from("Edited");
+        let params = form.params.clone();
+        h.app.apply_form("profile_toolpath", &params).unwrap();
+        assert_eq!(h.app.doc.toolpaths.len(), 1, "replaced, not added");
+        assert_eq!(h.app.doc.toolpaths[&id].name, "Edited");
     }
 
     #[test]
