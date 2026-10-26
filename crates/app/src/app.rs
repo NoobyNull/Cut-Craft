@@ -148,6 +148,14 @@ const STARTUP_TASKS: [(&str, &str, &str); 3] = [
     ),
     ("open", "Open an existing file", "file/open.svg"),
 ];
+/// The top bar's split and snapping toggles.
+const TOP_BAR_TOGGLES: [&str; 5] = [
+    "split_stacked",
+    "split_side_by_side",
+    "toggle_geometry_snapping",
+    "toggle_smart_snapping",
+    "toggle_grid_snapping",
+];
 /// The level menu's Select Components and Export as 3D Clipart: these, then the level's id.
 pub const SELECT_LEVEL: &str = "select_level_components:";
 pub const EXPORT_LEVEL: &str = "export_level_clipart:";
@@ -203,6 +211,15 @@ enum ViewTool {
 enum View {
     TwoD,
     ThreeD,
+}
+
+/// Both views at once, as Aspire's top bar splits them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Split {
+    /// 2D above 3D
+    Stacked,
+    /// 2D left of 3D
+    SideBySide,
 }
 
 /// A command whose settings form is open.
@@ -275,6 +292,8 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
+    /// Both views shown at once.
+    split: Option<Split>,
     /// The Clipart tab's library.
     clipart: crate::clipart::Clipart,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
@@ -324,6 +343,7 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
+            split: None,
             clipart: crate::clipart::Clipart::default(),
             recent_path: None,
             title: String::new(),
@@ -341,6 +361,7 @@ impl CutCraftApp {
             id if id.starts_with("open_recent:") => true,
             id if id.starts_with(SELECT_LEVEL) => true,
             "add_clipart_folder" => true,
+            id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(EXPORT_LEVEL) => {
                 self.registry.exporter("export_as_3d_clipart").is_some()
             }
@@ -372,6 +393,7 @@ impl CutCraftApp {
 
     /// Menu items, tool buttons and shortcuts all end up here: built-in actions first, then
     /// the command registry.
+    #[expect(clippy::too_many_lines, reason = "the one dispatch of every action")]
     fn invoke(&mut self, ctx: &egui::Context, id: &str) {
         // right-click menu items: a command with params chosen by the menu
         if let Some((form, command, params)) = gui::command_action(id) {
@@ -406,12 +428,14 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "import_component_3d_model"
             | "segment_3d_model_file"
-            | "install_post_processor" => self.file_action(id),
+            | "install_post_processor"
+            | "add_clipart_folder" => self.file_action(id),
             "save_as_template"
             | "new_from_template"
             | "save_selected_toolpath_as_template"
             | "save_all_visible_toolpaths_as_template"
             | "load_template" => self.template_action(id),
+            id if TOP_BAR_TOGGLES.contains(&id) => self.top_bar_toggle(id),
             "tool_database" => self.tool_window = true,
             id if self.display.toggle(id) => ctx.request_repaint(),
             "refresh_2d_view" => ctx.request_repaint(),
@@ -2700,11 +2724,24 @@ impl CutCraftApp {
             Screen::Job => self.job_pages(ctx),
         }
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
-                ui.selectable_value(&mut self.view, View::ThreeD, "3D View (F3)");
-            });
+            self.top_bar(ui);
             ui.separator();
+            if let Some(split) = self.split {
+                let whole = ui.available_rect_before_wrap();
+                let (first, second) = match split {
+                    Split::Stacked => whole.split_top_bottom_at_fraction(0.5),
+                    Split::SideBySide => whole.split_left_right_at_fraction(0.5),
+                };
+                ui.allocate_ui_at_rect(first, |ui| {
+                    ui.set_clip_rect(first);
+                    self.view_2d(ui);
+                });
+                ui.allocate_ui_at_rect(second, |ui| {
+                    ui.set_clip_rect(second);
+                    self.view_3d(ui);
+                });
+                return;
+            }
             match self.view {
                 View::TwoD => self.view_2d(ui),
                 View::ThreeD => {
@@ -2713,6 +2750,144 @@ impl CutCraftApp {
                 }
             }
         });
+    }
+
+    /// The top bar's sheet, layer and level drop-downs: a command to apply, if one was
+    /// picked; actions to invoke go in `clicked`.
+    fn drop_downs(
+        &self,
+        ui: &mut egui::Ui,
+        clicked: &mut Option<&'static str>,
+    ) -> Option<(&'static str, Value)> {
+        let doc = &self.doc;
+        let mut apply = None;
+        let sheet = doc
+            .sheets
+            .get(doc.active_sheet)
+            .map_or("", |s| s.name.as_str());
+        ui.menu_button(sheet, |ui| {
+            for (i, s) in doc.sheets.iter().enumerate() {
+                if ui.radio(i == doc.active_sheet, &s.name).clicked() {
+                    apply = Some(("activate_sheet", serde_json::json!({ "sheet": i })));
+                    ui.close_menu();
+                }
+            }
+            ui.separator();
+            if ui.button("Add New Sheet...").clicked() {
+                *clicked = Some("add_sheet");
+                ui.close_menu();
+            }
+        });
+        let layer = doc.layer(doc.current_layer).map_or("", |l| l.name.as_str());
+        ui.menu_button(layer, |ui| {
+            for l in doc.layers.iter().rev() {
+                if ui.radio(l.id == doc.current_layer, &l.name).clicked() {
+                    let params = serde_json::json!({ "layer": l.id });
+                    apply = Some(("set_current_layer", params));
+                    ui.close_menu();
+                }
+            }
+            ui.separator();
+            if ui.button("Add New Layer...").clicked() {
+                *clicked = Some("add_layer");
+                ui.close_menu();
+            }
+        });
+        // new components go on the first level
+        let level = doc.levels.values().next().map_or("", |l| l.name.as_str());
+        ui.menu_button(level, |ui| {
+            for (&id, l) in doc.levels.iter().rev() {
+                let mut shown = l.visible;
+                if ui.checkbox(&mut shown, &l.name).changed() {
+                    let params = cmd_level_properties::Params {
+                        visible: shown,
+                        ..cmd_level_properties::Params::of(id, l)
+                    };
+                    let params = serde_json::to_value(params).expect("params serialize");
+                    apply = Some(("level_properties", params));
+                }
+            }
+        });
+        apply
+    }
+
+    /// The top bar's split and snapping toggles.
+    fn top_bar_toggle(&mut self, id: &str) {
+        match id {
+            "split_stacked" | "split_side_by_side" => {
+                let split = if id == "split_stacked" {
+                    Split::Stacked
+                } else {
+                    Split::SideBySide
+                };
+                self.split = (self.split != Some(split)).then_some(split);
+            }
+            "toggle_geometry_snapping" => self.snap.geometry_snapping ^= true,
+            "toggle_smart_snapping" => self.snap.smart_snapping ^= true,
+            _ => self.snap.snap_to_grid ^= true,
+        }
+    }
+
+    /// Aspire's top bar over the views: 2D / 3D and the split, the sheet, layer and level
+    /// drop-downs, and the geometry, smart and grid snapping toggles.
+    fn top_bar(&mut self, ui: &mut egui::Ui) {
+        let edge = ui.spacing().interact_size.y;
+        let (mut clicked, mut apply) = (None::<&str>, None::<(&str, Value)>);
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
+            ui.selectable_value(&mut self.view, View::ThreeD, "3D View (F3)");
+            for (id, label, split) in [
+                ("split_stacked", "2D over 3D", Split::Stacked),
+                ("split_side_by_side", "2D beside 3D", Split::SideBySide),
+            ] {
+                if ui
+                    .selectable_label(self.split == Some(split), label)
+                    .clicked()
+                {
+                    clicked = Some(id);
+                }
+            }
+            ui.separator();
+            apply = self.drop_downs(ui, &mut clicked);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let s = &self.snap;
+                for (id, on, icon, tip) in [
+                    (
+                        "toggle_grid_snapping",
+                        s.snap_to_grid,
+                        "grid",
+                        "Grid Snapping",
+                    ),
+                    (
+                        "toggle_smart_snapping",
+                        s.smart_snapping,
+                        "smart",
+                        "Smart Snapping",
+                    ),
+                    (
+                        "toggle_geometry_snapping",
+                        s.geometry_snapping,
+                        "geometry",
+                        "Geometry Snapping",
+                    ),
+                ] {
+                    let state = if on { "on" } else { "off" };
+                    let path = format!("snapping/{icon}_snapping_{state}.svg");
+                    let button = self.icon_button(&path, "", tip, edge).selected(on);
+                    if ui.add(button).on_hover_text(tip).clicked() {
+                        clicked = Some(id);
+                    }
+                }
+            });
+        });
+        if let Some((id, params)) = apply
+            && let Err(e) = self.apply(id, &params)
+        {
+            self.status.set_message(&e);
+        }
+        if let Some(id) = clicked {
+            self.invoke(ui.ctx(), id);
+        }
     }
 
     /// The job the views show: while Job Setup is open, the one being set up.
@@ -4702,6 +4877,39 @@ mod tests {
         h.double_click(at);
         assert_eq!(h.app.doc.bitmaps.len(), 1, "double-clicking imports it");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_top_bar_splits_the_views_and_toggles_snapping() {
+        let mut h = Harness::new();
+        h.app.doc = cut_craft_core::testing::two_sheets();
+        h.frame(vec![]);
+        for name in ["Sheet 1", "Layer 1", "Level 1"] {
+            assert!(h.text_at(name).is_some(), "{name} in the top bar");
+        }
+        h.app.invoke(&h.ctx, "split_side_by_side");
+        assert_eq!(h.app.split, Some(Split::SideBySide));
+        h.frame(vec![]);
+        h.app.invoke(&h.ctx, "split_side_by_side");
+        assert_eq!(h.app.split, None, "a second click joins them again");
+        let before = h.app.snap.clone();
+        for id in [
+            "toggle_geometry_snapping",
+            "toggle_smart_snapping",
+            "toggle_grid_snapping",
+        ] {
+            assert!(h.app.available(id), "{id}");
+            h.app.invoke(&h.ctx, id);
+        }
+        let s = &h.app.snap;
+        assert_eq!(
+            (s.geometry_snapping, s.smart_snapping, s.snap_to_grid),
+            (
+                !before.geometry_snapping,
+                !before.smart_snapping,
+                !before.snap_to_grid
+            )
+        );
     }
 
     #[test]
