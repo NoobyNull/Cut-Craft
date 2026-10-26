@@ -230,6 +230,15 @@ say "not implemented yet".
   orientation (which face is up), rotation about Z, file units, model size with locked
   ratio, centre or position, depth below top, discard below the zero plane. No OBJ; no
   undercut highlighting, perspective or segmenting.
+  In a rotary job (help: Orientate 3D Model Rotary) the Imported model type picks Full 3D
+  model (the default there) or Flat model (placed like clipart). A full model's axis runs
+  along the job's through the middle of its box; each cell of the unrolled job holds how
+  far out from the axis the model reaches there, so heights are measured from the axis.
+  Scale model to fit material (on by default) fits it to the material's diameter and
+  length, else Model size X is its length. Angle 0 is straight up [inf]. Not done: the
+  rotation handles, moving the rotation axis, Resize material block, and Material Setup's
+  gap (the model's top is machined at the material surface, so a full model narrower than
+  the material should be fitted to it).
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
   - Component Properties' dynamic properties (help: Component Properties): Shape Height
     (%), Base Height, Fade (kept at one point, lowered by a percentage toward another) and

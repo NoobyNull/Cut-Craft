@@ -3,7 +3,7 @@
 //! below the material surface, and whether anything below the zero plane is kept.
 
 use cut_craft_core::component::{Combine, Component};
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Along, Document, Rotary};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DMat3, DVec3};
 use cut_craft_core::params::Xy;
@@ -35,6 +35,7 @@ pub enum FileUnits {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[expect(clippy::struct_excessive_bools, reason = "the form's own check boxes")]
 pub struct Params {
     /// The STL file (binary or ASCII)
     pub file: String,
@@ -59,6 +60,33 @@ pub struct Params {
     pub depth_below_top: f64,
     #[schemars(title = "Discard data below zero plane")]
     pub discard_below_zero: bool,
+    /// Rotary jobs: a full 3D model is wrapped round the axis, its distance out at each angle
+    /// becoming the height; a flat model is placed on the unrolled surface like clipart
+    #[schemars(title = "Imported model type")]
+    #[serde(default)]
+    pub model_type: ModelType,
+    /// Full 3D models: scaled to the material's length and diameter (else Model size's X is
+    /// its length; 0 keeps the file's size)
+    #[schemars(title = "Scale model to fit material")]
+    #[serde(default = "yes")]
+    pub fit_material: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// What a model imported into a rotary job is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelType {
+    /// A model to machine as it is, all the way round
+    #[schemars(title = "Full 3D model")]
+    Full,
+    /// Part of a design, like clipart
+    #[default]
+    #[schemars(title = "Flat model")]
+    Flat,
 }
 
 impl Default for Params {
@@ -74,6 +102,8 @@ impl Default for Params {
             position: Xy::new(0.0, 0.0),
             depth_below_top: 0.0,
             discard_below_zero: true,
+            model_type: ModelType::Flat,
+            fit_material: true,
         }
     }
 }
@@ -88,6 +118,18 @@ impl Command for Orientate3dModel {
             group: "Modeling",
             icon: "modeling/import_component_3d_model.svg",
             shortcut: "",
+        }
+    }
+
+    /// A rotary job starts on a full 3D model.
+    fn initial_params(doc: &Document) -> Params {
+        Params {
+            model_type: if doc.job.rotary.is_some() {
+                ModelType::Full
+            } else {
+                ModelType::Flat
+            },
+            ..Params::default()
         }
     }
 
@@ -107,6 +149,14 @@ impl Command for Orientate3dModel {
             .iter()
             .map(|t| t.map(|v| turn * v * unit))
             .collect();
+        if let Some(rotary) = doc.job.rotary
+            && p.model_type == ModelType::Full
+        {
+            let k = wrapped(doc, rotary, &tris, p)?;
+            let mut c = Change::builder(doc);
+            c.add_component(k);
+            return Ok(c.finish());
+        }
         let (lo, hi) =
             bounds(&tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
         let size = hi - lo;
@@ -187,6 +237,171 @@ fn face_up(face: Face) -> DMat3 {
         Face::Back => DMat3::from_rotation_x(FRAC_PI_2),
         Face::Left => DMat3::from_rotation_y(FRAC_PI_2),
         Face::Right => DMat3::from_rotation_y(-FRAC_PI_2),
+    }
+}
+
+/// A full 3D model wrapped round a rotary job's axis: its axis along the job's, through the
+/// middle of its box across, and each cell of the unrolled job holding how far out from the
+/// axis the model reaches at that point along and that angle round. Angle 0 is straight up,
+/// turning toward +Y for an X axis or +X for a Y axis [inf].
+fn wrapped(
+    doc: &Document,
+    rotary: Rotary,
+    tris: &[[DVec3; 3]],
+    params: &Params,
+) -> Result<Component, CommandError> {
+    use std::f64::consts::{PI, TAU};
+    let (lo, hi) = bounds(tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
+    let x_axis = rotary.along == Along::X;
+    let along = |v: DVec3| if x_axis { v.x } else { v.y };
+    let across = |v: DVec3| {
+        if x_axis {
+            Point::new(v.y, v.z)
+        } else {
+            Point::new(v.x, v.z)
+        }
+    };
+    let middle = across((lo + hi) / 2.0);
+    let length = along(hi) - along(lo);
+    let reach = tris
+        .iter()
+        .flatten()
+        .map(|&v| (across(v) - middle).length())
+        .fold(0.0, f64::max);
+    if length <= 0.0 || reach <= 0.0 {
+        return Err(CommandError::Failed(
+            "the model has no length or width".into(),
+        ));
+    }
+    let job = doc.job.area();
+    let unrolled = if x_axis {
+        Unrolled {
+            along_from: job.min.x,
+            round_from: job.min.y,
+            round: job.size().y,
+            x_axis,
+        }
+    } else {
+        Unrolled {
+            along_from: job.min.y,
+            round_from: job.min.x,
+            round: job.size().x,
+            x_axis,
+        }
+    };
+    let job_length = if x_axis { job.size().x } else { job.size().y };
+    let scale = if params.fit_material {
+        (rotary.diameter / 2.0 / reach).min(job_length / length)
+    } else if params.size.x > 0.0 {
+        params.size.x / length
+    } else {
+        1.0
+    };
+    let first = if params.center {
+        unrolled.along_from + (job_length - length * scale) / 2.0
+    } else if x_axis {
+        params.position.x
+    } else {
+        params.position.y
+    };
+    let mut made = Component::from_fn(
+        "Imported model",
+        Combine::Add,
+        job,
+        doc.job.model_cell(),
+        |_| None,
+    );
+    // a vertex as (along, round, out from the axis), in job mm
+    let cylindrical = |vertex: DVec3| {
+        let off = across(vertex) - middle;
+        (
+            first + (along(vertex) - along(lo)) * scale,
+            off.x.atan2(off.y),
+            off.length() * scale,
+        )
+    };
+    for tri in tris {
+        let mut corners = tri.map(cylindrical);
+        // one side of the seam: the angles taken within half a turn of the first
+        for i in 1..3 {
+            let turn = corners[i].1 - corners[0].1;
+            corners[i].1 -= TAU * ((turn + PI) / TAU).floor();
+        }
+        let corners = corners
+            .map(|(a, angle, out)| (a, unrolled.round_from + angle / TAU * unrolled.round, out));
+        unrolled.draw(&mut made, corners);
+    }
+    Ok(made)
+}
+
+/// The unrolled job's axes: where the axis and the circumference start, how far round it
+/// is, and which way the axis runs.
+struct Unrolled {
+    along_from: f64,
+    round_from: f64,
+    round: f64,
+    x_axis: bool,
+}
+
+impl Unrolled {
+    /// Draws one triangle given as (along, round, out) into `made`'s cells, keeping the
+    /// farthest out; cells past the circumference wrap round.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        reason = "cell indices are small"
+    )]
+    fn draw(&self, made: &mut Component, corners: [(f64, f64, f64); 3]) {
+        let cell = made.cell;
+        let [first, second, third] = corners;
+        let det =
+            (second.0 - first.0) * (third.1 - first.1) - (third.0 - first.0) * (second.1 - first.1);
+        if det.abs() < 1e-12 {
+            return;
+        }
+        let span = |pick: fn(&(f64, f64, f64)) -> f64| {
+            corners
+                .iter()
+                .map(pick)
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
+                    (lo.min(x), hi.max(x))
+                })
+        };
+        let (along_lo, along_hi) = span(|c| c.0);
+        let (round_lo, round_hi) = span(|c| c.1);
+        let index = |x: f64, from: f64| ((x - from) / cell - 0.5).ceil() as isize;
+        let rows_round = ((self.round / cell).ceil() as isize).max(1);
+        for i in index(along_lo, self.along_from)..=index(along_hi, self.along_from) {
+            let at_along = self.along_from + (i as f64 + 0.5) * cell;
+            for j in index(round_lo, self.round_from)..=index(round_hi, self.round_from) {
+                let at_round = self.round_from + (j as f64 + 0.5) * cell;
+                let w_second = ((at_along - first.0) * (third.1 - first.1)
+                    - (third.0 - first.0) * (at_round - first.1))
+                    / det;
+                let w_third = ((second.0 - first.0) * (at_round - first.1)
+                    - (at_along - first.0) * (second.1 - first.1))
+                    / det;
+                let w_first = 1.0 - w_second - w_third;
+                if w_first < -1e-9 || w_second < -1e-9 || w_third < -1e-9 {
+                    continue;
+                }
+                let out = w_first * first.2 + w_second * second.2 + w_third * third.2;
+                let wrapped_row = j.rem_euclid(rows_round);
+                let (column, row) = if self.x_axis {
+                    (i, wrapped_row)
+                } else {
+                    (wrapped_row, i)
+                };
+                let (Ok(column), Ok(row)) = (usize::try_from(column), usize::try_from(row)) else {
+                    continue;
+                };
+                if column >= made.columns || row >= made.rows {
+                    continue;
+                }
+                let h = &mut made.heights[row * made.columns + column];
+                *h = Some(h.map_or(out, |z| z.max(out)));
+            }
+        }
     }
 }
 
@@ -334,5 +549,136 @@ mod tests {
             },
         );
         assert!(Orientate3dModel::run(&Document::default(), &p).is_err());
+    }
+}
+
+#[cfg(test)]
+mod rotary {
+    use super::*;
+    use cut_craft_core::document::Job;
+
+    /// Binary STL of `faces` in a temporary file of its own.
+    fn stl(name: &str, faces: &[[[f32; 3]; 3]]) -> String {
+        let mut out = vec![0u8; 80];
+        out.extend(u32::try_from(faces.len()).unwrap().to_le_bytes());
+        for t in faces {
+            out.extend([0u8; 12]);
+            for x in t.iter().flatten() {
+                out.extend(x.to_le_bytes());
+            }
+            out.extend([0u8; 2]);
+        }
+        let path = std::env::temp_dir().join(format!(
+            "cut-craft-rotary-{}-{name}.stl",
+            std::process::id()
+        ));
+        std::fs::write(&path, out).unwrap();
+        path.display().to_string()
+    }
+
+    /// A closed cylinder of `radius` and `length` along X, from 48 flat sides.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        reason = "test geometry in f32"
+    )]
+    fn cylinder(radius: f64, length: f64) -> Vec<[[f32; 3]; 3]> {
+        let sides = 48;
+        let at = |i: usize, x: f64| {
+            let angle = std::f64::consts::TAU * (i % sides) as f64 / sides as f64;
+            [
+                x as f32,
+                (radius * angle.cos()) as f32,
+                (radius * angle.sin()) as f32,
+            ]
+        };
+        let mut faces = vec![];
+        for i in 0..sides {
+            let (near, next, next_far, far) =
+                (at(i, 0.0), at(i + 1, 0.0), at(i + 1, length), at(i, length));
+            faces.push([near, next, next_far]);
+            faces.push([near, next_far, far]);
+            faces.push([[0.0, 0.0, 0.0], next, near]);
+            faces.push([[length as f32, 0.0, 0.0], far, next_far]);
+        }
+        faces
+    }
+
+    fn rotary_job() -> Document {
+        Document {
+            job: Job::rotary(100.0, 30.0, Along::X),
+            ..Document::default()
+        }
+    }
+
+    fn import(name: &str, faces: &[[[f32; 3]; 3]], p: &Params) -> (Document, Component) {
+        let mut doc = rotary_job();
+        let p = Params {
+            file: stl(name, faces),
+            ..p.clone()
+        };
+        let change = Orientate3dModel::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let k = doc.components.values().next().unwrap().clone();
+        (doc, k)
+    }
+
+    #[test]
+    fn a_rotary_job_starts_on_a_full_model() {
+        assert_eq!(
+            Orientate3dModel::initial_params(&rotary_job()).model_type,
+            ModelType::Full
+        );
+        assert_eq!(
+            Orientate3dModel::initial_params(&Document::default()).model_type,
+            ModelType::Flat
+        );
+    }
+
+    #[test]
+    fn a_cylinder_wraps_to_its_radius_all_round_and_its_length_along() {
+        let p = Params {
+            model_type: ModelType::Full,
+            fit_material: false,
+            ..Params::default()
+        };
+        let (doc, k) = import("cylinder", &cylinder(10.0, 50.0), &p);
+        let job = doc.job.area();
+        for turn in [0.05, 0.3, 0.55, 0.8, 0.97] {
+            let at = Point::new(50.0, job.min.y + job.size().y * turn);
+            let z = k.height_at(at).unwrap();
+            assert!((z - 10.0).abs() < 0.15, "{turn}: {z}");
+        }
+        assert_eq!(
+            k.height_at(Point::new(20.0, 40.0)),
+            None,
+            "the cylinder spans x 25..75"
+        );
+        assert!(k.height_at(Point::new(27.0, 40.0)).is_some());
+    }
+
+    #[test]
+    fn fitting_the_material_scales_it_to_the_job_diameter() {
+        let p = Params {
+            model_type: ModelType::Full,
+            ..Params::default()
+        };
+        let (doc, k) = import("fit", &cylinder(10.0, 50.0), &p);
+        let (_, hi) = k.height_range().unwrap();
+        assert!((hi - 15.0).abs() < 0.05, "{hi}");
+        // 1.5 times as long: 75 of the 100
+        assert!(k.height_at(Point::new(14.0, 40.0)).is_some());
+        assert_eq!(k.height_at(Point::new(11.0, 40.0)), None);
+        assert!(doc.job.rotary.is_some());
+    }
+
+    #[test]
+    fn a_flat_model_in_a_rotary_job_is_placed_like_clipart() {
+        let p = Params {
+            model_type: ModelType::Flat,
+            ..Params::default()
+        };
+        let (doc, k) = import("flat", &cylinder(10.0, 50.0), &p);
+        assert!(k.extent().size().y < doc.job.area().size().y / 2.0);
     }
 }
