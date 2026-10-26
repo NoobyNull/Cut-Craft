@@ -447,6 +447,7 @@ name = "cmd-array-copy"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
+ "glam",
  "schemars",
  "serde",
 ]
@@ -538,6 +539,7 @@ name = "cmd-circular-copy"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
+ "glam",
  "schemars",
  "serde",
 ]
@@ -583,6 +585,7 @@ name = "cmd-copy-along-vectors"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
+ "glam",
  "schemars",
  "serde",
 ]

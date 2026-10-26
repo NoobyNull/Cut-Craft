@@ -1,10 +1,11 @@
-//! Copy Along Vectors: copies of the first selected object (or circles) spaced along the
-//! other selected vectors, by a distance or a count, upright or turned with the curve.
+//! Copy Along Vectors: copies of an object spaced along vectors. The first object picked
+//! (with its group) is the one copied; every other selected vector is a path to copy it
+//! along.
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::geometry::{Path, Point};
-use cut_craft_core::glam::DAffine2;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::geometry::{Point, Rect};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use glam::DAffine2;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -12,57 +13,51 @@ pub struct CopyAlongVectors;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum What {
-    /// The first object selected, copied along the rest
+pub enum Spacing {
+    /// A number of copies, spread evenly from end to end (all round, on a closed vector)
     #[default]
-    CopyObject,
-    /// Circles of the diameter, along every selected vector
-    CopyCircles,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Specify {
-    #[default]
-    DistanceBetweenCopies,
-    NumberOfCopies,
+    Count,
+    /// Distance along the vector from one copy to the next, starting at its start
+    Distance,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[expect(clippy::struct_excessive_bools, reason = "the form's own check boxes")]
+#[expect(clippy::struct_excessive_bools, reason = "one tick box per option")]
 pub struct Params {
-    pub what: What,
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    pub diameter: f64,
-    pub specify: Specify,
+    pub spacing: Spacing,
+    /// How many copies on each vector, when spacing by count
+    #[schemars(range(min = 1))]
+    pub copies: u32,
+    /// Between copies, when spacing by distance
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub distance: f64,
-    /// Stretch the distance a little so copies land on both ends
+    /// Stretch or shrink the distance a little so copies land on both ends
     pub force_even_spacing: bool,
-    #[schemars(title = "Number of copies", range(min = 1, max = 10000))]
-    pub copies: u32,
-    /// Turn each copy with the curve under it
-    pub align_objects_to_curve: bool,
-    pub create_copies_on_new_layer: bool,
-    /// Go along the curves the other way
+    /// Turn each copy to follow the vector, as if the object travelled along it facing +X
+    pub align_to_vector: bool,
+    /// Run along each vector from its end instead of its start
     pub reverse_direction: bool,
+    /// Put the copies on a new layer of their own
+    pub create_copies_on_new_layer: bool,
 }
 
 impl Default for Params {
     fn default() -> Self {
         Self {
-            what: What::CopyObject,
-            diameter: 5.0,
-            specify: Specify::DistanceBetweenCopies,
+            spacing: Spacing::Count,
+            copies: 5,
             distance: 20.0,
-            force_even_spacing: true,
-            copies: 10,
-            align_objects_to_curve: false,
-            create_copies_on_new_layer: false,
+            force_even_spacing: false,
+            align_to_vector: true,
             reverse_direction: false,
+            create_copies_on_new_layer: false,
         }
     }
 }
+
+/// How finely the vectors to copy along are followed.
+// ponytail: fixed; copies land within this of the true curve
+const FOLLOW: f64 = 0.01;
 
 impl Command for CopyAlongVectors {
     const ID: &'static str = "copy_along_vectors";
@@ -79,207 +74,344 @@ impl Command for CopyAlongVectors {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
-        let (object, curves): (Vec<Path>, Vec<EntityId>) = match p.what {
-            What::CopyCircles => {
-                if p.diameter <= 0.0 {
-                    return Err(CommandError::InvalidParams(
-                        "diameter must be above 0".into(),
-                    ));
-                }
-                (vec![Path::circle(Point::ZERO, p.diameter / 2.0)], picked)
-            }
-            What::CopyObject => {
-                let Some(&first) = picked.first() else {
-                    return Err(CommandError::NothingSelected);
-                };
-                let members = doc.group_members(first);
-                let object = members.iter().map(|id| doc.vectors[id].clone()).collect();
-                (
-                    object,
-                    picked
-                        .into_iter()
-                        .filter(|id| !members.contains(id))
-                        .collect(),
-                )
-            }
-        };
-        if curves.is_empty() {
+        let object = picked
+            .first()
+            .map(|&first| doc.group_members(first))
+            .unwrap_or_default();
+        let paths: Vec<EntityId> = picked
+            .iter()
+            .copied()
+            .filter(|id| !object.contains(id))
+            .collect();
+        if object.is_empty() || paths.is_empty() {
             return Err(CommandError::Failed(
-                "select the object, then the vectors to copy it along".into(),
+                "select the object to copy first, then the vectors to copy it along".into(),
             ));
         }
         let middle = object
             .iter()
-            .map(Path::bounds)
-            .reduce(cut_craft_core::geometry::Rect::union)
-            .expect("an object")
+            .map(|id| doc.vectors[id].bounds())
+            .reduce(Rect::union)
+            .expect("at least one object")
             .center();
-        let mut c = Change::builder(doc);
-        let layer = p.create_copies_on_new_layer.then(|| c.add_layer("Copies"));
-        for id in curves {
-            let mut curve = doc.vectors[&id].clone();
-            if p.reverse_direction {
-                curve = curve.reversed();
+        let mut transforms = vec![];
+        for id in &paths {
+            let guide = &doc.vectors[id];
+            let mut points = guide.flatten(FOLLOW);
+            if guide.closed && points.first() != points.last() {
+                points.push(points[0]);
             }
-            for (at, along) in stations(&curve, p)? {
-                let turn = if p.align_objects_to_curve {
-                    along.to_angle()
+            if p.reverse_direction {
+                points.reverse();
+            }
+            let walk = Walk::new(points);
+            if walk.length <= 0.0 {
+                return Err(CommandError::Failed(
+                    "a vector to copy along has no length".into(),
+                ));
+            }
+            for d in distances(p, walk.length, guide.closed)? {
+                let (point, heading) = walk.at(d);
+                let turn = if p.align_to_vector {
+                    DAffine2::from_angle(heading)
                 } else {
-                    0.0
+                    DAffine2::IDENTITY
                 };
-                let t = DAffine2::from_translation(at)
-                    * DAffine2::from_angle(turn)
-                    * DAffine2::from_translation(-middle);
-                for part in &object {
-                    let copy = c.add(part.transformed(&t));
-                    if let Some(layer) = layer {
-                        c.move_to_layer(copy, layer);
-                    }
-                }
+                transforms.push(
+                    DAffine2::from_translation(point) * turn * DAffine2::from_translation(-middle),
+                );
             }
         }
+        if !p.create_copies_on_new_layer {
+            return Ok(Change::copy_vectors(doc, &object, &transforms));
+        }
+        let mut c = Change::builder(doc);
+        let layer = c.add_layer("Copy Along Vectors");
+        let mut selected = object.clone();
+        for t in &transforms {
+            for id in &object {
+                let copy = c.add(doc.vectors[id].transformed(t));
+                c.move_to_layer(copy, layer);
+                selected.push(copy);
+            }
+        }
+        c.select(selected);
         Ok(c.finish())
     }
 }
 
-/// Where copies go along `curve`, with the curve's direction there.
-fn stations(curve: &Path, p: &Params) -> Result<Vec<(Point, Point)>, CommandError> {
-    let pts = curve.flatten(cut_craft_core::polygon::TOLERANCE);
-    let mut lengths = vec![0.0];
-    for pair in pts.windows(2) {
-        lengths.push(lengths.last().copied().unwrap_or_default() + pair[0].distance(pair[1]));
-    }
-    let total = lengths.last().copied().unwrap_or_default();
-    if total <= 0.0 {
-        return Ok(vec![]);
-    }
-    // a closed curve's end is its start, so it takes one copy fewer
-    let ends = u32::from(!curve.closed);
-    let (count, step) = match p.specify {
-        Specify::NumberOfCopies => {
-            let wanted = p.copies.max(1);
-            let gaps = (wanted - ends).max(1);
-            (wanted, total / f64::from(gaps))
-        }
-        Specify::DistanceBetweenCopies => {
-            if p.distance <= 0.0 {
+/// Distances along a vector `length` long at which copies go.
+fn distances(p: &Params, length: f64, closed: bool) -> Result<Vec<f64>, CommandError> {
+    // a closed vector's end is its start: one copy fewer than the gaps
+    let spread = |gaps: u32| -> Vec<f64> {
+        let copies = if closed { gaps } else { gaps + 1 };
+        (0..copies)
+            .map(|i| length * f64::from(i) / f64::from(gaps.max(1)))
+            .collect()
+    };
+    match p.spacing {
+        Spacing::Count => {
+            if p.copies == 0 {
                 return Err(CommandError::InvalidParams(
-                    "distance must be above 0".into(),
+                    "copies must be at least 1".into(),
                 ));
             }
-            let gaps = total / p.distance;
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "a positive count"
-            )]
-            let gaps = if p.force_even_spacing {
-                gaps.round().max(1.0)
-            } else {
-                gaps.floor()
-            } as u32;
-            let step = if p.force_even_spacing {
-                total / f64::from(gaps)
-            } else {
-                p.distance
-            };
-            (gaps + ends, step)
+            Ok(match (p.copies, closed) {
+                (1, _) => vec![0.0],
+                (n, true) => spread(n),
+                (n, false) => spread(n - 1),
+            })
         }
-    };
-    Ok((0..count)
-        .map(|copy| {
-            let along = (step * f64::from(copy)).min(total);
-            let i = lengths
-                .partition_point(|&l| l < along)
-                .clamp(1, pts.len() - 1);
-            let (from, to) = (pts[i - 1], pts[i]);
-            let span = lengths[i] - lengths[i - 1];
-            let part = if span > 0.0 {
-                (along - lengths[i - 1]) / span
-            } else {
-                0.0
-            };
-            (from.lerp(to, part), (to - from).normalize_or_zero())
-        })
-        .collect())
+        Spacing::Distance => {
+            ensure_positive("distance", p.distance)?;
+            if p.force_even_spacing {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "a positive count, capped"
+                )]
+                let gaps = ((length / p.distance).round().max(1.0) as u32).min(MAX_COPIES);
+                return Ok(spread(gaps));
+            }
+            let mut at = vec![];
+            let mut d = 0.0;
+            // on a closed vector the copy at its end would sit on the one at its start
+            while (d < length - 1e-9 || (!closed && d <= length + 1e-9))
+                && at.len() < MAX_COPIES as usize
+            {
+                at.push(d);
+                d += p.distance;
+            }
+            Ok(at)
+        }
+    }
+}
+
+/// A distance step so small next to the vector would make more copies than anyone means.
+const MAX_COPIES: u32 = 10_000;
+
+/// Positions along a polyline by distance from its start.
+struct Walk {
+    points: Vec<Point>,
+    /// Distance from the start to each point.
+    at: Vec<f64>,
+    length: f64,
+}
+
+impl Walk {
+    fn new(points: Vec<Point>) -> Self {
+        let mut at = vec![0.0];
+        for w in points.windows(2) {
+            at.push(at[at.len() - 1] + (w[1] - w[0]).length());
+        }
+        let length = at[at.len() - 1];
+        Self { points, at, length }
+    }
+
+    /// The point `d` along, and the heading (radians) of the edge it is on.
+    fn at(&self, d: f64) -> (Point, f64) {
+        let d = d.clamp(0.0, self.length);
+        // the first edge ending at or past `d` that has some length
+        let edge = (1..self.points.len())
+            .find(|&i| self.at[i] >= d && self.at[i] > self.at[i - 1])
+            .unwrap_or(self.points.len() - 1);
+        let (a, b) = (self.points[edge - 1], self.points[edge]);
+        let span = self.at[edge] - self.at[edge - 1];
+        let t = if span > 0.0 {
+            (d - self.at[edge - 1]) / span
+        } else {
+            0.0
+        };
+        (a.lerp(b, t), (b - a).to_angle())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cut_craft_core::testing::{document_with, run_on, square};
+    use cut_craft_core::geometry::Path;
+    use cut_craft_core::testing::{document_with, square};
 
-    /// A 2 mm square picked first, then a 100 mm line along x.
-    fn star_and_line() -> Document {
-        let line = Path::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
-        document_with(vec![square(-1.0, -1.0, 2.0), line])
+    cut_craft_core::contract_tests!(CopyAlongVectors);
+
+    fn p(x: f64, y: f64) -> Point {
+        Point::new(x, y)
     }
 
-    cut_craft_core::contract_tests!(CopyAlongVectors, star_and_line);
+    /// A 4 wide, 2 high bar at the origin.
+    fn bar() -> Path {
+        Path::polyline(&[p(0.0, 0.0), p(4.0, 0.0), p(4.0, 2.0), p(0.0, 2.0)], true)
+    }
 
-    fn centres(doc: &Document) -> Vec<Point> {
+    /// (centre, size) of each copy, rounded to µm; the object and the guide are left out.
+    fn copies(object: Path, along: Path, params: &Params) -> Vec<((f64, f64), (f64, f64))> {
+        let mut doc = document_with(vec![object, along]);
+        doc.apply(&CopyAlongVectors::run(&doc, params).unwrap())
+            .unwrap();
+        let round = |v: f64| (v * 1000.0).round() / 1000.0 + 0.0;
         doc.vectors
             .values()
             .skip(2)
-            .map(|v| v.bounds().center())
+            .map(|path| {
+                let b = path.bounds();
+                let (c, s) = (b.center(), b.size());
+                ((round(c.x), round(c.y)), (round(s.x), round(s.y)))
+            })
             .collect()
     }
 
     #[test]
-    fn distance_with_even_spacing_lands_on_both_ends() {
-        let mut doc = star_and_line();
-        let p = Params {
-            distance: 30.0,
-            ..Params::default()
-        };
-        run_on::<CopyAlongVectors>(&mut doc, &p);
-        let c = centres(&doc);
-        assert_eq!(c.len(), 4, "100 / 30 rounds to 3 gaps");
-        assert!((c[0] - Point::new(0.0, 50.0)).length() < 1e-9);
-        assert!((c[3] - Point::new(100.0, 50.0)).length() < 1e-9);
-    }
-
-    #[test]
-    fn counts_circles_layers_and_reversing() {
-        let mut doc = star_and_line();
-        let p = Params {
-            what: What::CopyCircles,
-            specify: Specify::NumberOfCopies,
-            copies: 5,
-            create_copies_on_new_layer: true,
-            reverse_direction: true,
-            ..Params::default()
-        };
-        run_on::<CopyAlongVectors>(&mut doc, &p);
-        // both selected vectors get circles: 5 along the line, 5 round the square
-        assert_eq!(doc.vectors.len(), 12);
-        assert_eq!(doc.layers.len(), 2, "a new layer for the copies");
-        let line_copies: Vec<Point> = centres(&doc).into_iter().filter(|q| q.y > 40.0).collect();
-        assert!(
-            (line_copies[0] - Point::new(100.0, 50.0)).length() < 1e-9,
-            "reversed"
+    fn a_count_spreads_copies_from_end_to_end() {
+        let line = Path::polyline(&[p(10.0, 0.0), p(50.0, 0.0)], false);
+        let placed = copies(bar(), line, &Params::default());
+        let centres: Vec<_> = placed.iter().map(|(c, _)| *c).collect();
+        assert_eq!(
+            centres,
+            [
+                (10.0, 0.0),
+                (20.0, 0.0),
+                (30.0, 0.0),
+                (40.0, 0.0),
+                (50.0, 0.0)
+            ]
         );
-        assert!((line_copies[1] - Point::new(75.0, 50.0)).length() < 1e-9);
+        assert!(placed.iter().all(|(_, size)| *size == (4.0, 2.0)));
     }
 
     #[test]
-    fn aligned_copies_turn_with_the_curve() {
-        let up = Path::polyline(&[Point::new(0.0, 0.0), Point::new(0.0, 100.0)], false);
-        let mut doc = document_with(vec![
-            Path::polyline(&[Point::new(-4.0, 0.0), Point::new(4.0, 0.0)], false),
-            up,
-        ]);
-        let p = Params {
-            specify: Specify::NumberOfCopies,
+    fn aligned_copies_turn_with_the_vector() {
+        let up = || Path::polyline(&[p(0.0, 10.0), p(0.0, 50.0)], false);
+        let aligned = copies(bar(), up(), &Params::default());
+        assert!(aligned.iter().all(|(_, size)| *size == (2.0, 4.0)));
+        let straight = copies(
+            bar(),
+            up(),
+            &Params {
+                align_to_vector: false,
+                ..Params::default()
+            },
+        );
+        assert!(straight.iter().all(|(_, size)| *size == (4.0, 2.0)));
+    }
+
+    #[test]
+    fn a_closed_vector_shares_the_copies_out_all_round() {
+        let ring = square(100.0, 100.0, 10.0);
+        let placed = copies(
+            bar(),
+            ring,
+            &Params {
+                copies: 4,
+                align_to_vector: false,
+                ..Params::default()
+            },
+        );
+        let centres: Vec<_> = placed.iter().map(|(c, _)| *c).collect();
+        assert_eq!(
+            centres,
+            [
+                (100.0, 100.0),
+                (110.0, 100.0),
+                (110.0, 110.0),
+                (100.0, 110.0)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_distance_steps_from_the_start_while_the_vector_lasts() {
+        let line = Path::polyline(&[p(0.0, 0.0), p(40.0, 0.0)], false);
+        let placed = copies(
+            bar(),
+            line,
+            &Params {
+                spacing: Spacing::Distance,
+                distance: 15.0,
+                ..Params::default()
+            },
+        );
+        let xs: Vec<f64> = placed.iter().map(|((x, _), _)| *x).collect();
+        assert_eq!(xs, [0.0, 15.0, 30.0]);
+    }
+
+    #[test]
+    fn force_even_spacing_lands_copies_on_both_ends() {
+        let line = Path::polyline(&[p(0.0, 0.0), p(40.0, 0.0)], false);
+        let placed = copies(
+            bar(),
+            line,
+            &Params {
+                spacing: Spacing::Distance,
+                distance: 15.0,
+                force_even_spacing: true,
+                ..Params::default()
+            },
+        );
+        // 40 / 15 rounds to 3 gaps of 13.333
+        let xs: Vec<f64> = placed.iter().map(|((x, _), _)| *x).collect();
+        assert_eq!(xs, [0.0, 13.333, 26.667, 40.0]);
+    }
+
+    #[test]
+    fn reversing_runs_from_the_end() {
+        let line = Path::polyline(&[p(10.0, 0.0), p(50.0, 0.0)], false);
+        let placed = copies(
+            bar(),
+            line,
+            &Params {
+                copies: 3,
+                reverse_direction: true,
+                ..Params::default()
+            },
+        );
+        let xs: Vec<f64> = placed.iter().map(|((x, _), _)| *x).collect();
+        assert_eq!(xs, [50.0, 30.0, 10.0]);
+    }
+
+    #[test]
+    fn every_other_selected_vector_is_a_path_and_new_layer_is_offered() {
+        let lines = || {
+            vec![
+                bar(),
+                Path::polyline(&[p(0.0, 10.0), p(20.0, 10.0)], false),
+                Path::polyline(&[p(0.0, 20.0), p(20.0, 20.0)], false),
+            ]
+        };
+        let mut doc = document_with(lines());
+        let two = Params {
             copies: 2,
-            align_objects_to_curve: true,
             ..Params::default()
         };
-        run_on::<CopyAlongVectors>(&mut doc, &p);
-        let copy = doc.vectors.values().nth(2).unwrap().bounds();
-        assert!(
-            copy.size().x < 1e-9 && (copy.size().y - 8.0).abs() < 1e-9,
-            "turned upright"
-        );
+        doc.apply(&CopyAlongVectors::run(&doc, &two).unwrap())
+            .unwrap();
+        assert_eq!(doc.vectors.len(), 3 + 4, "two copies on each of two paths");
+        let mut doc = document_with(lines());
+        let layers = doc.layers.len();
+        let apart = Params {
+            create_copies_on_new_layer: true,
+            ..two
+        };
+        doc.apply(&CopyAlongVectors::run(&doc, &apart).unwrap())
+            .unwrap();
+        assert_eq!(doc.layers.len(), layers + 1);
+        let new_layer = doc.layers.last().unwrap().id;
+        let copies: Vec<_> = doc.vectors.keys().skip(3).copied().collect();
+        assert_eq!(copies.len(), 4);
+        assert!(copies.iter().all(|id| doc.layer_of(*id) == new_layer));
+    }
+
+    #[test]
+    fn needs_an_object_then_a_vector() {
+        let doc = document_with(vec![bar()]);
+        assert!(CopyAlongVectors::run(&doc, &Params::default()).is_err());
+        let doc = document_with(vec![
+            bar(),
+            Path::polyline(&[p(5.0, 5.0), p(5.0, 5.0)], false),
+        ]);
+        let err = CopyAlongVectors::run(&doc, &Params::default())
+            .map(|_| ())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("no length"), "{err}");
     }
 }

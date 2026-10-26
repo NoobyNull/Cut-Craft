@@ -170,6 +170,29 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
 
+### Create Fillets [obs] (help: Create Fillets, V12.5; Aspire 12.5 trial, 2026-10-25)
+- Fillets corners where two **straight** spans meet; corners touching arcs or curves cannot be filleted. The form: **Fillet / Tool Radius** and a type: **Normal** (a rounded corner of the radius), **Dog-Bone** (a relief circle the radius whose edge touches the sharp corner: for slots clearly wider than the cutter), **T-Bone** (the relief circle pushed sideways into one side: for slots about as wide as the cutter; the trial put it in the longer side when the corner itself was clicked) and **Plasma / Drag Knife** (the two sides run on past the corner and join in a loop outside it, so the cutter turns there).
+- Trial: a fillet may use a **whole side** (0.8 on a 2 × 1 rectangle's corner worked); a radius larger than the side (5) did nothing in the 2D view. The help says the 3D view gives the largest fillet that fits, with a warning icon.
+- Interactive: hover a corner and click; clicking an existing fillet arc removes it (seen in the trial), rebuilding a sharp corner from straight lines.
+- Ours fillets every corner of the selection at once, in path order as if clicked in turn (each corner gets what its earlier neighbours left of the sides); optionally only the **Outer** or **Inner** corners of closed shapes [inf]; an oversize radius gets the largest that fits (the help's 3D behaviour). Not built: removing fillets; choosing the T-bone side by where the corner is clicked.
+
+### Array Copy and Circular Copy of vectors [obs] (help: Array Copy, Circular Copy, V12.5; Aspire 12.5 trial)
+- **Array Copy:** form: Selected Objects Size, **Rows (Y)**, **Columns (X)** (default 2 × 2), Spacing **Gap** (between neighbouring copies' edges) or **Offset** (start to start), X and Y; Symmetry buttons; Row / Column Displacement X, Y; Group Copies. Trial: the original stays bottom-left and the grid grows **right and up**; rows × columns objects in all. Not built: Symmetry, Displacement, Group Copies.
+- **Circular Copy:** form: Selected Objects Size, **Rotation Center** X, Y (defaults to the middle of the selection), Rotate Copies (on), **Number of items** (default 12), **Total Angle** (default 360) or **Step Angle**, Group Copies. Trial (4 items, total 90°): 4 objects in all, so **the original counts as an item**; the total is **divided by the number of items** (the copies spanned 67.5°, not 90°); a positive total goes **clockwise**. The help: a positive step goes clockwise too. Ours also offers the job centre as the rotation centre. Not built: Group Copies.
+
+### Copy Along Vectors [obs] (help: Copy Along Vectors, V12.5)
+- The **first** object selected (with its group) is copied; the other selected vectors are the curves it is copied along.
+- Spacing by **Distance between copies** (from the start; **Force even spacing** adjusts it so copies land on the ends) or by **Number of copies** spread along the whole curve. **Align Objects to curve** turns each copy with the curve (ours: as if the object faced +X); **Reverse Direction** runs from the other end; **Create Copies on new layer**.
+- Not built: **Copy Circles** (circles of a typed diameter instead of an object). On a closed curve no copy lands on top of the first [inf].
+
+### Close / Extend Vector [obs] (Aspire 12.5 trial tooltips; help: Join / Close with a Smooth Curve, Extend Vectors)
+- Aspire's Edit Objects tools here: **Join open vectors** (J), **Join / Close with a straight line**, **Join / Close with a smooth curve**, **Join / Close by moving end points to a common point**, and **Extend vectors to a common point of intersection** (interactive: pick an open end, see its dashed extension, click where it meets another span). The straight-line one has no form; it acts on the selection when clicked.
+- Ours is one tool closing each selected open vector by **Line**, **Smooth** curve, **Common Point** (start and end both moved halfway) or **Extend** (the end lines run on until they meet; a line when they never do), within a **max gap** [inf]. Joining two different vectors is Join Vectors. Not built: the smooth join between two vectors, interactive extend to another vector.
+
+### Vector Validator [obs] (help: Vector Validator, V12.5)
+- Finds **overlapping** contours, **intersections** and **zero-length spans**; a **Fix zero length Spans** button removes the spans. With a selection only those vectors are checked, else every visible vector on the current sheet and side.
+- Aspire marks each problem on the vectors; ours selects the vectors with problems (or fixes the spans). Extra: an **Open vectors** check, off by default. Not built: V-Carving Mode (ignores intersections in text).
+
 ### 3D components [obs]
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
 - **Create Shape** (from closed vectors): Round, Angled, Flat, Custom and Smooth profiles. The other creation tools are in the Model menu: Two Rail Sweep, Extrude & Weave, Turn & Spin, Texture Area, Zero Plane and From Bitmap.

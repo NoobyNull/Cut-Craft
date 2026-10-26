@@ -15,13 +15,23 @@ const OLD_FORMAT: &str = "aspire-clone-job";
 /// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.
 const VERSION: u32 = 1;
 
-/// Where Cut Craft keeps its settings: `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
-// ponytail: XDG only; add the Windows/macOS config folders when those builds exist
+/// Where Cut Craft keeps its settings: `%APPDATA%\cut-craft` on Windows, elsewhere
+/// `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
+// ponytail: macOS uses the XDG path too; ~/Library/Application Support when a Mac build exists
 pub fn config_dir() -> Option<PathBuf> {
+    config_base().map(|dir| dir.join("cut-craft"))
+}
+
+#[cfg(windows)]
+fn config_base() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(PathBuf::from)
+}
+
+#[cfg(not(windows))]
+fn config_base() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .map(|dir| dir.join("cut-craft"))
 }
 
 #[derive(Serialize)]

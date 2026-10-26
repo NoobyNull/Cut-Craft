@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
+glam.workspace = true
 schemars.workspace = true
 serde.workspace = true
 

@@ -111,7 +111,7 @@ say "not implemented yet".
   SVG, Open Application Data Folder, Exit.
 - Edit: Undo, Redo, Cut, Copy, Paste, Delete; Select All Vectors / Open Vectors / Duplicate
   Vectors / On Current Layer, Unselect All; the ten Align commands and the four spacing ones
-  (Left To Right ... Bottom To Top); Join Vectors, Group, Ungroup, Job Size and Position.
+  (Left To Right ... Bottom To Top; laid out in pick order, the first picked at the named start [inf]); Join Vectors, Group, Ungroup, Job Size and Position.
 - Selection: pick order kept; components picked in the Components tab; bitmaps picked in the
   2D view (Bitmap Properties: position and size; Delete removes them).
 - Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
@@ -180,27 +180,28 @@ say "not implemented yet".
     (dialog 426). The result is plain curves (Aspire keeps it editable).
   - Fit Curves to Vectors (Edit ▸ Curve Fit Vectors): arcs, Béziers or lines within a
     tolerance, sharp corners kept past a max angle, replacing or beside the originals.
-  - Array Copy (rows and columns by gap or offset, alternate row / column displacement,
-    group copies; dialog 2516) and Circular Copy (round a centre by total or step angle,
-    rotated or upright, group copies). Array Copy's symmetry buttons are not done.
+  - Array Copy (rows × columns by gap or offset) and Circular Copy (round the selection's
+    middle, the job centre or a point; total or step angle, clockwise positive; turning the
+    copies or not). Copies stay on their originals' layers; copies of grouped vectors are
+    not grouped.
   - Nest Parts (Edit ▸ Nest Selected Objects too): parts (grouped or overlapping vectors)
     packed by their boxes in rows from a chosen corner, along X or Y, a tool diameter plus
     clearance apart and a border in, quarter-turned where that fits better, moved or
     copied. True-shape nesting, step angles, mirroring, parts inside parts, copies per
     part, fillers and bounds layers are not done.
-  - Copy Along Vectors: the first selected object (or circles) along the other selected
-    vectors, by distance (optionally evened to land on the ends) or count, upright or
-    turned with the curve, reversed, optionally on a new layer (dialog 458).
-  - Vector Validator (crossings, self-crossings and zero-length spans in the selection or
-    all shown vectors; the faulty vectors are selected, zero-length spans fixed) and Extend
-    Vectors (two selected open vectors' nearest ends run straight to where they meet;
-    Aspire picks the ends by hovering and clicking).
+  - Copy Along Vectors (the first object picked is copied along the other vectors; by count
+    or distance with force even spacing; align, reverse, copies on a new layer).
+  - Close / Extend Vector (a closing line, a smooth curve, both ends moved to a common
+    point, or the end lines run on until they meet; max gap).
+  - Vector Validator (overlaps, intersections within and between vectors, zero-length spans,
+    and optionally open vectors; selects them or fixes the spans).
   - Dimensions: length, vertical and horizontal, dragged between two points, with offset,
     text height, font, decimal places and custom text, as one group (dialog 963). Angle and
     arc dimensions, separate text placement and editing are not done.
-  - Create Fillets: click a corner where two straight spans meet for a normal or dog-bone
-    fillet of the radius (dialog with T-Bone and Plasma / Drag Knife types, and removing
-    fillets, not done yet).
+  - Create Fillets (Normal, Dog-Bone, T-Bone, Plasma / Drag Knife; all, outer or inner
+    corners of the selection at once, in turn as if clicked; an oversize radius gets the
+    largest that fits).
+  - Not built from these tools' Aspire forms: see each one's section in `re/SPEC.md`.
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
     corner fit, noise filter and grouping (dialog 347).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed

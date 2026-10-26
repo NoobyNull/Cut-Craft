@@ -12,6 +12,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 
+/// The order spaced objects are laid out in, from the low end (left, bottom) of the span.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sequence {
+    /// Where they already are
+    ByPosition,
+    /// The first picked at the low end
+    PickedFromLow,
+    /// The first picked at the high end
+    PickedFromHigh,
+}
+
 /// One primitive edit. Each stores what it replaces, so its inverse is exact.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Edit {
@@ -310,31 +321,6 @@ impl Change {
         Ok(c.finish())
     }
 
-    /// Adds a copy of the selection under each of `places`, selecting the copies; `group`
-    /// makes them one group.
-    pub fn copy_selected(
-        doc: &Document,
-        places: &[DAffine2],
-        group: bool,
-    ) -> Result<Self, CommandError> {
-        if doc.selection.is_empty() {
-            return Err(CommandError::NothingSelected);
-        }
-        let group = group.then(|| doc.next_group());
-        let mut c = Self::builder(doc);
-        let mut copies = Vec::new();
-        for t in places {
-            for id in &doc.selection {
-                copies.push(c.add(doc.vectors[id].transformed(t)));
-            }
-        }
-        for &id in &copies {
-            c.set_group(id, group);
-        }
-        c.select(copies);
-        Ok(c.finish())
-    }
-
     /// Moves each selected path by `offset(its bounds, the selection's bounds)`: every align
     /// command is one call to this.
     pub fn align_selected(
@@ -352,7 +338,11 @@ impl Change {
     /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
     /// stay put and the others move so the gaps between their extents are equal, keeping
     /// their order and their other coordinate.
-    pub fn space_selected(doc: &Document, vertical: bool) -> Result<Self, CommandError> {
+    pub fn space_selected(
+        doc: &Document,
+        vertical: bool,
+        sequence: Sequence,
+    ) -> Result<Self, CommandError> {
         let along = |r: Rect| {
             if vertical {
                 (r.min.y, r.max.y)
@@ -373,13 +363,19 @@ impl Change {
                 "select at least three objects to space".into(),
             ));
         }
-        items.sort_by(|a, b| (a.1 + a.2).total_cmp(&(b.1 + b.2)));
-        let span = items[items.len() - 1].2 - items[0].1;
+        let start = items.iter().map(|i| i.1).fold(f64::INFINITY, f64::min);
+        let end = items.iter().map(|i| i.2).fold(f64::NEG_INFINITY, f64::max);
+        match sequence {
+            Sequence::ByPosition => items.sort_by(|a, b| (a.1 + a.2).total_cmp(&(b.1 + b.2))),
+            Sequence::PickedFromLow => {}
+            Sequence::PickedFromHigh => items.reverse(),
+        }
+        let span = end - start;
         let sizes: f64 = items.iter().map(|(_, lo, hi)| hi - lo).sum();
         #[expect(clippy::cast_precision_loss, reason = "a few objects")]
         let gap = (span - sizes) / (items.len() - 1) as f64;
         let mut c = Self::builder(doc);
-        let mut at = items[0].1;
+        let mut at = start;
         for &(id, lo, hi) in &items {
             let by = at - lo;
             if by.abs() > 1e-12 {
@@ -396,6 +392,29 @@ impl Change {
             at += hi - lo + gap;
         }
         Ok(c.finish())
+    }
+
+    /// Adds a copy of every selected vector under each of `transforms`, on the same layer as
+    /// its original, and selects the originals and all the copies.
+    pub fn copy_selected(doc: &Document, transforms: &[DAffine2]) -> Self {
+        let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
+        Self::copy_vectors(doc, &originals, transforms)
+    }
+
+    /// Adds a copy of each of `originals` under each of `transforms`, on the same layer as
+    /// its original, and selects the originals and all the copies.
+    pub fn copy_vectors(doc: &Document, originals: &[EntityId], transforms: &[DAffine2]) -> Self {
+        let mut c = Self::builder(doc);
+        let mut selected = originals.to_vec();
+        for t in transforms {
+            for &id in originals {
+                let copy = c.add(doc.vectors[&id].transformed(t));
+                c.move_to_layer(copy, doc.layer_of(id));
+                selected.push(copy);
+            }
+        }
+        c.select(selected);
+        c.finish()
     }
 
     /// Paths this change creates, e.g. to preview a command before applying it.

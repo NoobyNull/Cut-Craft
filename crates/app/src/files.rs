@@ -97,6 +97,21 @@ pub fn save_through(
 
 pub use cut_craft_core::file::config_dir;
 
+/// Opens `dir` in the platform's file manager.
+pub fn show_folder(dir: &Path) -> std::io::Result<()> {
+    let opener = if cfg!(windows) {
+        "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener)
+        .arg(dir)
+        .spawn()
+        .map(drop)
+}
+
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
 /// other gets `_1`, and it keeps counting past names that `exists` says are taken.
 pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
@@ -423,7 +438,7 @@ mod tests {
         fs::write(&path, "{").unwrap();
         assert_eq!(load_recent(&path), Vec::<PathBuf>::new());
         assert_eq!(load_recent(&temp("no-recent.json")), Vec::<PathBuf>::new());
-        let config = recent_files_path().expect("HOME is set");
+        let config = recent_files_path().expect("a config folder");
         assert!(
             config.ends_with("cut-craft/recent.json"),
             "{}",
@@ -433,7 +448,7 @@ mod tests {
 
     #[test]
     fn the_tool_database_lives_in_the_cut_craft_config_folder() {
-        let path = tool_database_path().expect("HOME is set");
+        let path = tool_database_path().expect("a config folder");
         assert!(path.ends_with("cut-craft/tools.json"), "{}", path.display());
     }
 

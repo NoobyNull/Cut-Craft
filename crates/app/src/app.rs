@@ -1514,10 +1514,7 @@ impl CutCraftApp {
                     .and_then(|dir| {
                         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
                         on_the_desktop();
-                        std::process::Command::new("xdg-open")
-                            .arg(&dir)
-                            .spawn()
-                            .map_err(|e| e.to_string())
+                        files::show_folder(&dir).map_err(|e| e.to_string())
                     });
                 if let Err(e) = opened {
                     self.status

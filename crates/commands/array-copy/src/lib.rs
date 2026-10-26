@@ -1,9 +1,9 @@
-//! Array Copy: copies of the selection in rows and columns, spaced by a gap between them or
-//! an offset from one to the next, every other row or column displaced if asked.
+//! Array Copy: a grid of copies of the selected vectors, above and to the right of them.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::glam::{DAffine2, DVec2};
+use cut_craft_core::geometry::Point;
 use cut_craft_core::{Change, Command, CommandError, Meta};
+use glam::DAffine2;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -12,32 +12,26 @@ pub struct ArrayCopy;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Spacing {
-    /// X and Y are the gaps between the copies' edges
+    /// X and Y are the space between neighbouring copies
     #[default]
     Gap,
-    /// X and Y are how far each copy is from the one before
+    /// X and Y are from one copy's start to the next one's
     Offset,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    #[schemars(title = "Rows (Y)", range(min = 1, max = 1000))]
+    /// Copies up the job, the original's row included
+    #[schemars(range(min = 1))]
     pub rows: u32,
-    #[schemars(title = "Columns (X)", range(min = 1, max = 1000))]
+    /// Copies across the job, the original's column included
+    #[schemars(range(min = 1))]
     pub columns: u32,
-    #[schemars(extend("x-widget" = "row"))]
     pub spacing: Spacing,
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
-    /// Every other row moves across by this much
-    #[schemars(title = "Row displacement", extend("x-unit" = "mm"))]
-    pub row_displacement: f64,
-    /// Every other column moves up by this much
-    #[schemars(title = "Column displacement", extend("x-unit" = "mm"))]
-    pub column_displacement: f64,
-    pub group_copies: bool,
 }
 
 impl Default for Params {
@@ -48,9 +42,6 @@ impl Default for Params {
             spacing: Spacing::Gap,
             x: 5.0,
             y: 5.0,
-            row_displacement: 0.0,
-            column_displacement: 0.0,
-            group_copies: false,
         }
     }
 }
@@ -69,98 +60,119 @@ impl Command for ArrayCopy {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let Some(bounds) = doc.selection_bounds() else {
-            return Err(CommandError::NothingSelected);
-        };
-        if p.rows * p.columns < 2 {
+        if p.rows == 0 || p.columns == 0 {
             return Err(CommandError::InvalidParams(
-                "make at least two rows or columns".into(),
+                "rows and columns must be at least 1".into(),
             ));
         }
-        let step = match p.spacing {
-            Spacing::Gap => bounds.size() + DVec2::new(p.x, p.y),
-            Spacing::Offset => DVec2::new(p.x, p.y),
+        if p.rows * p.columns < 2 {
+            return Err(CommandError::InvalidParams(
+                "one row of one column makes no copies".into(),
+            ));
+        }
+        let Some(bounds) = doc.selection_bounds() else {
+            return Err(CommandError::Failed("select vectors to copy".into()));
         };
-        let places: Vec<DAffine2> = (0..p.rows)
-            .flat_map(|r| (0..p.columns).map(move |c| (r, c)))
-            .filter(|&rc| rc != (0, 0))
-            .map(|(r, c)| {
-                let odd = |k: u32| f64::from(k % 2);
-                DAffine2::from_translation(DVec2::new(
-                    f64::from(c) * step.x + odd(r) * p.row_displacement,
-                    f64::from(r) * step.y + odd(c) * p.column_displacement,
-                ))
-            })
-            .collect();
-        Change::copy_selected(doc, &places, p.group_copies)
+        let step = match p.spacing {
+            Spacing::Offset => Point::new(p.x, p.y),
+            Spacing::Gap => bounds.size() + Point::new(p.x, p.y),
+        };
+        let mut transforms = vec![];
+        for row in 0..p.rows {
+            for column in 0..p.columns {
+                if row > 0 || column > 0 {
+                    let at = Point::new(f64::from(column), f64::from(row)) * step;
+                    transforms.push(DAffine2::from_translation(at));
+                }
+            }
+        }
+        Ok(Change::copy_selected(doc, &transforms))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cut_craft_core::geometry::Point;
-    use cut_craft_core::testing::{document_with, run_on, square};
+    use cut_craft_core::testing::{document_with, square, two_layers};
 
     cut_craft_core::contract_tests!(ArrayCopy);
 
-    fn corners(doc: &Document) -> Vec<Point> {
-        let mut v: Vec<Point> = doc.vectors.values().map(|p| p.bounds().min).collect();
-        v.sort_by(|a, b| (a.y, a.x).partial_cmp(&(b.y, b.x)).unwrap());
-        v
+    fn corners(doc: &Document) -> Vec<(f64, f64)> {
+        let mut at: Vec<(f64, f64)> = doc
+            .vectors
+            .values()
+            .map(|p| (p.bounds().min.x, p.bounds().min.y))
+            .collect();
+        at.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        at
+    }
+
+    fn copied(p: &Params) -> Document {
+        let mut doc = document_with(vec![square(0.0, 0.0, 10.0)]);
+        doc.apply(&ArrayCopy::run(&doc, p).unwrap()).unwrap();
+        doc
     }
 
     #[test]
-    fn gaps_lay_a_grid_of_copies_and_group_them() {
-        let mut doc = document_with(vec![square(0.0, 0.0, 10.0)]);
-        run_on::<ArrayCopy>(
-            &mut doc,
-            &Params {
-                rows: 2,
-                columns: 3,
-                group_copies: true,
-                ..Params::default()
-            },
+    fn offsets_space_copies_start_to_start_up_and_to_the_right() {
+        let doc = copied(&Params {
+            rows: 2,
+            columns: 3,
+            spacing: Spacing::Offset,
+            x: 20.0,
+            y: 15.0,
+        });
+        assert_eq!(
+            corners(&doc),
+            [
+                (0.0, 0.0),
+                (0.0, 15.0),
+                (20.0, 0.0),
+                (20.0, 15.0),
+                (40.0, 0.0),
+                (40.0, 15.0)
+            ]
         );
-        assert_eq!(doc.vectors.len(), 6);
-        let want = [
-            (0.0, 0.0),
-            (15.0, 0.0),
-            (30.0, 0.0),
-            (0.0, 15.0),
-            (15.0, 15.0),
-            (30.0, 15.0),
-        ];
-        for (got, (x, y)) in corners(&doc).iter().zip(want) {
-            assert!((*got - Point::new(x, y)).length() < 1e-9, "{got}");
-        }
-        assert_eq!(doc.selection.len(), 5, "the copies are selected");
-        let copy = *doc.selection.iter().next().unwrap();
-        assert_eq!(doc.group_members(copy).len(), 5);
+        assert_eq!(doc.selection.len(), 6, "the original and every copy");
     }
 
     #[test]
-    fn offsets_and_displacement() {
-        let mut doc = document_with(vec![square(0.0, 0.0, 10.0)]);
-        run_on::<ArrayCopy>(
-            &mut doc,
+    fn gaps_space_copies_between_their_edges() {
+        let doc = copied(&Params::default());
+        assert_eq!(
+            corners(&doc),
+            [(0.0, 0.0), (0.0, 15.0), (15.0, 0.0), (15.0, 15.0)]
+        );
+    }
+
+    #[test]
+    fn copies_stay_on_their_originals_layers() {
+        let mut doc = two_layers();
+        let before: Vec<_> = doc.selection.iter().map(|id| doc.layer_of(*id)).collect();
+        let change = ArrayCopy::run(
+            &doc,
             &Params {
-                rows: 2,
-                columns: 1,
-                spacing: Spacing::Offset,
-                x: 0.0,
-                y: 20.0,
-                row_displacement: 4.0,
+                rows: 1,
                 ..Params::default()
             },
-        );
-        let c = corners(&doc);
-        assert!((c[1] - Point::new(4.0, 20.0)).length() < 1e-9, "{c:?}");
+        )
+        .unwrap();
+        doc.apply(&change).unwrap();
+        let after: Vec<_> = doc.selection.iter().map(|id| doc.layer_of(*id)).collect();
+        assert_eq!(after.len(), before.len() * 2);
+        assert_eq!(after[..before.len()], before[..]);
+        assert_eq!(after[before.len()..], before[..]);
+    }
+
+    #[test]
+    fn needs_a_selection_and_more_than_one_place() {
+        let doc = document_with(vec![square(0.0, 0.0, 10.0)]);
         let one = Params {
             rows: 1,
             columns: 1,
             ..Params::default()
         };
-        assert!(ArrayCopy::run(&document_with(vec![square(0.0, 0.0, 1.0)]), &one).is_err());
+        assert!(ArrayCopy::run(&doc, &one).is_err());
+        assert!(ArrayCopy::run(&Document::default(), &Params::default()).is_err());
     }
 }

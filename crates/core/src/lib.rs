@@ -24,7 +24,7 @@ pub mod vfont;
 
 pub use glam;
 
-pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Step};
+pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Sequence, Step};
 pub use command::{
     Command, CommandError, Drag, DynCommand, Interactive, Meta, NoParams, Registry, ensure_named,
     ensure_positive, existing, existing_layer,

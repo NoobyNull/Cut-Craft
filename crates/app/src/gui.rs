@@ -1,5 +1,7 @@
 //! Static UI data: Drawing tab tool groups, the main menu, right-click menus, status bar text.
 
+use cmd_space_horizontally::Order as SpaceH;
+use cmd_space_vertically::Order as SpaceV;
 use cut_craft_core::Command;
 use cut_craft_core::component::{Combine, Component, Group, Level, Mirror};
 use cut_craft_core::document::{Document, EntityId, Layer};
@@ -772,6 +774,18 @@ impl MenuSystem {
         let sub = MenuItem::submenu;
         let sep = MenuItem::separator;
         let a = MenuItem::with_action;
+        let space_h = |name: &str, order| {
+            MenuItem::run::<cmd_space_horizontally::SpaceHorizontally>(
+                name,
+                &cmd_space_horizontally::Params { order },
+            )
+        };
+        let space_v = |name: &str, order| {
+            MenuItem::run::<cmd_space_vertically::SpaceVertically>(
+                name,
+                &cmd_space_vertically::Params { order },
+            )
+        };
         let menu = |name: &str, items: Vec<MenuItem>| Menu {
             name: name.to_string(),
             items,
@@ -859,10 +873,10 @@ impl MenuSystem {
                                 i("Center Horizontally"),
                                 i("Center Vertically"),
                                 sep(),
-                                MenuItem::with_action("Left To Right", "space_horizontally"),
-                                MenuItem::with_action("Right To Left", "space_horizontally"),
-                                MenuItem::with_action("Top To Bottom", "space_vertically"),
-                                MenuItem::with_action("Bottom To Top", "space_vertically"),
+                                space_h("Left To Right", SpaceH::LeftToRight),
+                                space_h("Right To Left", SpaceH::RightToLeft),
+                                space_v("Top To Bottom", SpaceV::TopToBottom),
+                                space_v("Bottom To Top", SpaceV::BottomToTop),
                             ],
                         ),
                         k("Join Vectors", "J"),

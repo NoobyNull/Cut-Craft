@@ -1,6 +1,6 @@
 [package]
 name = "cmd-close-extend-vector"
-description = "Extend Vectors"
+description = "Close / Extend Vector"
 version.workspace = true
 edition.workspace = true
 

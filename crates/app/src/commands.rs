@@ -106,7 +106,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_copy_along_vectors::CopyAlongVectors>();
     r.add::<cmd_vector_validator::VectorValidator>();
     r.add::<cmd_close_extend_vector::CloseExtendVector>();
-    r.add_interactive::<cmd_create_fillets::CreateFillets>();
+    r.add::<cmd_create_fillets::CreateFillets>();
     r.add_interactive::<cmd_dimensions::Dimensions>();
     r.add::<cmd_turn_and_spin::TurnAndSpin>();
     r.add::<cmd_extrude_and_weave::ExtrudeAndWeave>();

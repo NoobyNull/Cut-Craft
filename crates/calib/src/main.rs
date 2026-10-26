@@ -6,7 +6,6 @@
 
 use cut_craft_core::document::{Document, EntityId, Job};
 use cut_craft_core::geometry::{Path, Point, Rect, polyline_distance};
-use cut_craft_core::params::Xy;
 use cut_craft_core::{Command, Importer};
 use std::path::Path as FsPath;
 
@@ -105,20 +104,14 @@ fn cut_craft(tool: &str) -> Vec<Path> {
             cmd_offset_vectors::OffsetVectors::run(&doc, &p)
         }
         "fillet" => {
-            // ponytail: the five outer points one after another, each on the path as it is then
-            let id = pick(&doc, &[star])[0];
-            let mut doc = doc.clone();
-            for k in 0..5 {
-                let a = (90.0 + 72.0 * f64::from(k)).to_radians();
-                let p = cmd_create_fillets::Params {
-                    radius: 5.0,
-                    fillet_type: cmd_create_fillets::FilletType::Normal,
-                    corner: Xy::new(100.0 + 25.0 * a.cos(), 40.0 + 25.0 * a.sin()),
-                };
-                let c = cmd_create_fillets::CreateFillets::run(&doc, &p).expect("a corner there");
-                doc.apply(&c).expect("applies");
-            }
-            return vec![doc.vectors[&id].clone()];
+            // the star's five outer points: its corners pointing out
+            doc.selection = pick(&doc, &[star]).into_iter().collect();
+            let p = cmd_create_fillets::Params {
+                kind: cmd_create_fillets::Kind::Normal,
+                radius: 5.0,
+                corners: cmd_create_fillets::Corners::Outer,
+            };
+            cmd_create_fillets::CreateFillets::run(&doc, &p)
         }
         "weld" => {
             doc.selection = pick(&doc, &pair).into_iter().collect();
