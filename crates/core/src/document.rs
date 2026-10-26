@@ -425,6 +425,9 @@ pub struct Document {
     /// Edit ▸ Document Variables: named values sums in number fields use as `{name}`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub variables: BTreeMap<String, f64>,
+    /// Areas a tool must not pass over (clamps), closed paths of their own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keep_out: Vec<Path>,
 }
 
 impl Default for Document {
@@ -448,6 +451,7 @@ impl Default for Document {
             sheets: one_sheet(),
             active_sheet: 0,
             variables: BTreeMap::new(),
+            keep_out: vec![],
         }
     }
 }

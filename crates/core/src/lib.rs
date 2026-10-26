@@ -10,6 +10,7 @@ pub mod file;
 pub mod font;
 mod formats;
 pub mod geometry;
+pub mod keep_out;
 pub mod nodes;
 pub mod params;
 pub mod polygon;

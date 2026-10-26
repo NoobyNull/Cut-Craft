@@ -1039,6 +1039,7 @@ impl MenuSystem {
                     vec![
                         i("Show Toolpaths Tab"),
                         i("Recalculate All Toolpaths"),
+                        MenuItem::with_action("Keep-Out Zones...", "keep_out_zones"),
                         sub(
                             "Toolpath Drawing",
                             vec![

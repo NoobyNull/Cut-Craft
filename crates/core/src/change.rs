@@ -130,6 +130,11 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
+    /// Replaces the keep-out zones.
+    SetKeepOut {
+        before: Vec<Path>,
+        after: Vec<Path>,
+    },
     /// Replaces the document variables.
     SetVariables {
         before: BTreeMap<String, f64>,
@@ -199,6 +204,10 @@ impl Edit {
                 after: before,
             },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
+                before: after,
+                after: before,
+            },
+            Self::SetKeepOut { before, after } => Self::SetKeepOut {
                 before: after,
                 after: before,
             },
@@ -465,6 +474,17 @@ impl Change {
         self.edits.is_empty()
     }
 
+    /// The toolpaths this change adds or replaces.
+    pub fn toolpaths_made(&self) -> Vec<EntityId> {
+        self.edits
+            .iter()
+            .filter_map(|e| match e {
+                Edit::AddToolpath { id, .. } | Edit::ReplaceToolpath { id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The job this change sets, if it sets one: lets a view show a job before it is applied.
     pub fn job(&self) -> Option<&Job> {
         self.edits.iter().rev().find_map(|e| match e {
@@ -676,6 +696,7 @@ impl Document {
             }
             Edit::SetSheets { before, after } => self.set_sheets(before, after)?,
             Edit::SetVariables { after, .. } => self.variables.clone_from(after),
+            Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
         }
         Ok(())
     }
@@ -1074,6 +1095,13 @@ impl ChangeBuilder<'_> {
         if self.sheets != after {
             let before = std::mem::replace(&mut self.sheets, after.clone());
             self.edits.push(Edit::SetSheets { before, after });
+        }
+    }
+
+    pub fn set_keep_out(&mut self, after: Vec<Path>) {
+        if self.doc.keep_out != after {
+            let before = self.doc.keep_out.clone();
+            self.edits.push(Edit::SetKeepOut { before, after });
         }
     }
 

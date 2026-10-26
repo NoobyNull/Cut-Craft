@@ -923,13 +923,31 @@ impl CutCraftApp {
 
     /// Applies a computed change for undo, reporting how it went in the status bar.
     fn record(&mut self, change: Result<Change, cut_craft_core::CommandError>, done: &str) {
+        let mut made = vec![];
         let result = change.map_err(|e| e.to_string()).and_then(|c| {
+            made = c.toolpaths_made();
             self.history
                 .apply(&mut self.doc, c)
                 .map_err(|e| e.to_string())
         });
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
+        self.warn_of_keep_out(&made);
+    }
+
+    /// A warning in the status bar for each toolpath in `made` that passes over a keep-out
+    /// zone.
+    fn warn_of_keep_out(&mut self, made: &[EntityId]) {
+        let over: Vec<&str> = made
+            .iter()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .filter(|t| cut_craft_core::keep_out::crossed(&self.doc.keep_out, &t.moves))
+            .map(|t| t.name.as_str())
+            .collect();
+        if !over.is_empty() {
+            let message = format!("Warning: {} passes over a keep-out zone", over.join(", "));
+            self.status.set_message(&message);
+        }
     }
 
     /// Runs a command and records it for undo.
@@ -939,11 +957,13 @@ impl CutCraftApp {
             .get(id)
             .expect("only registered commands are applied");
         let change = cmd.run_json(&self.doc, params).map_err(|e| e.to_string())?;
+        let made = change.toolpaths_made();
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
+        self.warn_of_keep_out(&made);
         Ok(())
     }
 
@@ -4130,6 +4150,25 @@ mod tests {
         cut_craft_core::testing::cut_bounds(app.doc.toolpaths.values().next().unwrap())
             .min
             .x
+    }
+
+    #[test]
+    fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
+        h.app.doc.keep_out = vec![zone];
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        assert!(
+            h.app.status.message.contains("keep-out"),
+            "{}",
+            h.app.status.message
+        );
+        h.app.doc.keep_out.clear();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        assert!(!h.app.status.message.contains("keep-out"));
     }
 
     #[test]
