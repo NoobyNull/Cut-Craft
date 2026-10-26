@@ -473,6 +473,10 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
         show,
         hide,
         MenuItem::form::<cmd_toolpath_properties::ToolpathProperties>("Rename", &properties),
+        MenuItem::run::<cmd_duplicate_toolpath::DuplicateToolpath>(
+            "Duplicate",
+            &cmd_duplicate_toolpath::Params { toolpath: id },
+        ),
         MenuItem::separator(),
         MenuItem::submenu(
             "Recalculate",
