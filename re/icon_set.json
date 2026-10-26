@@ -1092,8 +1092,8 @@
   "source": "png/35093"
  },
  {
-  "path": "view/tile_windows.svg",
-  "label": "Tile windows",
+  "path": "view/split_over_and_under.svg",
+  "label": "Split over and under",
   "guess": false,
   "slot": "ico/57651",
   "source": "ico/57651"
@@ -1118,6 +1118,27 @@
   "guess": false,
   "slot": "png/34563",
   "source": "png/34563"
+ },
+ {
+  "path": "view/split_side_by_side.svg",
+  "label": "Split side by side",
+  "guess": false,
+  "slot": "ico/57652",
+  "source": "ico/57652"
+ },
+ {
+  "path": "view/layers.svg",
+  "label": "Layers",
+  "guess": false,
+  "slot": "ico/33843",
+  "source": "ico/33843"
+ },
+ {
+  "path": "view/component_levels.svg",
+  "label": "Component levels",
+  "guess": false,
+  "slot": "ico/33847",
+  "source": "ico/33847"
  },
  {
   "path": "snapping/geometry_snapping_on.svg",

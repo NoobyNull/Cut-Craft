@@ -2887,11 +2887,22 @@ impl CutCraftApp {
     ) -> Option<(&'static str, Value)> {
         let doc = &self.doc;
         let mut apply = None;
+        let edge = ui.spacing().interact_size.y;
+        // each drop-down as Aspire's: its icon, then the name with a drop-down arrow
+        let drop_down =
+            |ui: &mut egui::Ui, icon: &str, name: &str, contents: &mut dyn FnMut(&mut egui::Ui)| {
+                if let Some(path) = self.icons.find(icon, "") {
+                    ui.add(Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)));
+                }
+                egui::ComboBox::from_id_source(icon)
+                    .selected_text(name)
+                    .show_ui(ui, |ui| contents(ui));
+            };
         let sheet = doc
             .sheets
             .get(doc.active_sheet)
             .map_or("", |s| s.name.as_str());
-        ui.menu_button(sheet, |ui| {
+        drop_down(ui, "view/interface_layout.svg", sheet, &mut |ui| {
             bordered(ui, |ui| {
                 for (i, s) in doc.sheets.iter().enumerate() {
                     if ui.radio(i == doc.active_sheet, &s.name).clicked() {
@@ -2908,7 +2919,7 @@ impl CutCraftApp {
             });
         });
         let layer = doc.layer(doc.current_layer).map_or("", |l| l.name.as_str());
-        ui.menu_button(layer, |ui| {
+        drop_down(ui, "view/layers.svg", layer, &mut |ui| {
             bordered(ui, |ui| {
                 for l in doc.layers.iter().rev() {
                     if ui.radio(l.id == doc.current_layer, &l.name).clicked() {
@@ -2927,7 +2938,7 @@ impl CutCraftApp {
         });
         // new components go on the first level
         let level = doc.levels.values().next().map_or("", |l| l.name.as_str());
-        ui.menu_button(level, |ui| {
+        drop_down(ui, "view/component_levels.svg", level, &mut |ui| {
             bordered(ui, |ui| {
                 for (&id, l) in doc.levels.iter().rev() {
                     let mut shown = l.visible;
@@ -2943,6 +2954,38 @@ impl CutCraftApp {
             });
         });
         apply
+    }
+
+    /// The top bar's geometry, smart and grid snapping toggles, right to left.
+    fn snap_toggles(&self, ui: &mut egui::Ui, edge: f32, clicked: &mut Option<&'static str>) {
+        let s = &self.snap;
+        for (id, on, icon, tip) in [
+            (
+                "toggle_grid_snapping",
+                s.snap_to_grid,
+                "grid",
+                "Grid Snapping",
+            ),
+            (
+                "toggle_smart_snapping",
+                s.smart_snapping,
+                "smart",
+                "Smart Snapping",
+            ),
+            (
+                "toggle_geometry_snapping",
+                s.geometry_snapping,
+                "geometry",
+                "Geometry Snapping",
+            ),
+        ] {
+            let state = if on { "on" } else { "off" };
+            let path = format!("snapping/{icon}_snapping_{state}.svg");
+            let button = self.icon_button(&path, "", tip, edge).selected(on);
+            if ui.add(button).on_hover_text(tip).clicked() {
+                *clicked = Some(id);
+            }
+        }
     }
 
     /// The top bar's split and snapping toggles.
@@ -2967,63 +3010,73 @@ impl CutCraftApp {
     fn top_bar(&mut self, ui: &mut egui::Ui) {
         let edge = ui.spacing().interact_size.y;
         let (mut clicked, mut apply) = (None::<&str>, None::<(&str, Value)>);
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
-            ui.selectable_value(&mut self.view, View::ThreeD, "3D View (F3)");
-            for (id, label, split) in [
-                ("split_stacked", "2D over 3D", Split::Stacked),
-                ("split_side_by_side", "2D beside 3D", Split::SideBySide),
-            ] {
-                if ui
-                    .selectable_label(self.split == Some(split), label)
-                    .clicked()
-                {
-                    clicked = Some(id);
-                }
-            }
-            ui.separator();
-            if self.doc.job.double_sided.is_some() {
-                let side = if self.doc.bottom_side {
-                    "Bottom Side"
-                } else {
-                    "Top Side"
-                };
-                if ui.button(side).on_hover_text("Swap Sides").clicked() {
-                    clicked = Some("swap_sides");
-                }
-            }
-            apply = self.drop_downs(ui, &mut clicked);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let s = &self.snap;
-                for (id, on, icon, tip) in [
+        let height = edge + 2.0 * ui.spacing().button_padding.y;
+        let (bar, _) = ui.allocate_exact_size(
+            egui::vec2(ui.available_width(), height),
+            egui::Sense::hover(),
+        );
+        // left: the views and their split
+        ui.allocate_ui_at_rect(bar, |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
+                ui.selectable_value(&mut self.view, View::ThreeD, "3D View (F3)");
+                for (id, icon, tip, split) in [
                     (
-                        "toggle_grid_snapping",
-                        s.snap_to_grid,
-                        "grid",
-                        "Grid Snapping",
+                        "split_stacked",
+                        "view/split_over_and_under.svg",
+                        "2D over 3D",
+                        Split::Stacked,
                     ),
                     (
-                        "toggle_smart_snapping",
-                        s.smart_snapping,
-                        "smart",
-                        "Smart Snapping",
-                    ),
-                    (
-                        "toggle_geometry_snapping",
-                        s.geometry_snapping,
-                        "geometry",
-                        "Geometry Snapping",
+                        "split_side_by_side",
+                        "view/split_side_by_side.svg",
+                        "2D beside 3D",
+                        Split::SideBySide,
                     ),
                 ] {
-                    let state = if on { "on" } else { "off" };
-                    let path = format!("snapping/{icon}_snapping_{state}.svg");
-                    let button = self.icon_button(&path, "", tip, edge).selected(on);
+                    let button = self
+                        .icon_button(icon, "", tip, edge)
+                        .selected(self.split == Some(split));
                     if ui.add(button).on_hover_text(tip).clicked() {
                         clicked = Some(id);
                     }
                 }
             });
         });
+        // right: snapping
+        ui.allocate_ui_at_rect(bar, |ui| {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                self.snap_toggles(ui, edge, &mut clicked);
+            });
+        });
+        // middle: the side, sheet, layer and level, centred on the bar by last frame's width
+        let width_id = ui.id().with("top_bar_middle_width");
+        let width: f32 = ui.data(|d| d.get_temp(width_id)).unwrap_or_default();
+        let middle = egui::Rect::from_center_size(bar.center(), egui::vec2(width, height));
+        let drawn = ui
+            .allocate_ui_at_rect(middle, |ui| {
+                ui.horizontal_centered(|ui| {
+                    if self.doc.job.double_sided.is_some() {
+                        let side = if self.doc.bottom_side {
+                            "Bottom Side"
+                        } else {
+                            "Top Side"
+                        };
+                        if ui.button(side).on_hover_text("Swap Sides").clicked() {
+                            clicked = Some("swap_sides");
+                        }
+                    }
+                    apply = self.drop_downs(ui, &mut clicked);
+                })
+                .response
+                .rect
+                .width()
+            })
+            .inner;
+        if (drawn - width).abs() > 0.5 {
+            ui.data_mut(|d| d.insert_temp(width_id, drawn));
+            ui.ctx().request_repaint();
+        }
         if let Some((id, params)) = apply
             && let Err(e) = self.apply(id, &params)
         {

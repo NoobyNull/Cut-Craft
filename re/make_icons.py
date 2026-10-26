@@ -23,7 +23,8 @@ STRIPS = {
 SKIP = re.compile(r"link$|logo$|^Account$|^Offline|\(alt\)")
 SINGLES = {
     "view": ["ico/35153", "ico/35154", "png/35096", "png/35097", "png/35098", "png/35099", "png/35091", "png/35092",
-             "png/35093", "ico/57651", "ico/33848", "png/34562", "png/34563"],
+             "png/35093", "ico/57651", "ico/33848", "png/34562", "png/34563",
+             "ico/57652", "ico/33843", "ico/33847"],
     "snapping": ["ico/33883", "ico/33884", "ico/33885", "ico/33886", "ico/33887", "ico/33888"],
     "layers": ["ico/414", "ico/415", "ico/418", "ico/419", "png/35146", "png/35147", "png/35148", "png/35149"],
     "job_setup": ["png/34896", "png/34897", "png/34898", "png/34899", "png/34900", "png/34556", "png/34557",
