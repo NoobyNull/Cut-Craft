@@ -6,11 +6,13 @@ use crate::form::{self, Field};
 use crate::gui;
 use crate::icons::Icons;
 use crate::pages::{Page, Pages, Shown};
-use crate::view2d::{Canvas, Gesture, Overlay, ViewTransform};
+use crate::view2d::{self, Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
 use cut_craft_core::document::{Document, EntityId, LayerId};
 use cut_craft_core::file::{JOB_EXTENSION, OLD_JOB_EXTENSION};
 use cut_craft_core::geometry::{Path, Point, Rect};
+use cut_craft_core::glam::DAffine2;
+use cut_craft_core::handles::{self, Handle};
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{Tool, ToolDatabase};
 use cut_craft_core::{Change, Drag, History, Registry};
@@ -21,11 +23,12 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 55] = [
+const BUILT_INS: [&str; 56] = [
     "options",
     "segment_3d_model_file",
     "snap_options",
     "node_edit",
+    "transform",
     "measure_inspect",
     "print",
     "print_preview",
@@ -206,6 +209,8 @@ enum ViewTool {
     NodeEdit,
     /// Drag between two points for their distance and angle; click a vector for its span.
     Measure,
+    /// Handles on the selection to move, scale and rotate it by dragging.
+    Transform,
 }
 
 #[derive(PartialEq)]
@@ -237,6 +242,10 @@ struct OpenForm {
     page: Page,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the windows and modes it shows"
+)]
 struct CutCraftApp {
     screen: Screen,
     doc: Document,
@@ -293,6 +302,8 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
+    /// Transform mode's corners rotate rather than scale.
+    rotating: bool,
     /// Edit ▸ Options, kept between runs, and whether its window is open.
     options: crate::options::Options,
     options_window: bool,
@@ -347,6 +358,7 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
+            rotating: false,
             options: crate::options::Options::default(),
             options_window: false,
             split: None,
@@ -479,7 +491,7 @@ impl CutCraftApp {
             "machining_layout" => self.pages = Pages::machining_layout(),
             "interface_layout" => self.pages.switch_layout(),
             "pan" | "zoom_box" | "zoom_to_job" | "zoom_to_drawing" | "zoom_selected"
-            | "node_edit" | "measure_inspect" => {
+            | "node_edit" | "measure_inspect" | "transform" => {
                 self.view_action(ctx, id);
             }
             "recalculate_toolpath"
@@ -2991,6 +3003,16 @@ impl CutCraftApp {
                 self.view_tool = Some(ViewTool::Measure);
                 "Measure"
             }
+            "transform" => {
+                self.rotating = false;
+                if self.view_tool == Some(ViewTool::Transform) {
+                    self.view_tool = None;
+                    "Select"
+                } else {
+                    self.view_tool = Some(ViewTool::Transform);
+                    "Transform"
+                }
+            }
             "node_edit" => {
                 if self.view_tool == Some(ViewTool::NodeEdit) {
                     self.view_tool = None;
@@ -3044,6 +3066,9 @@ impl CutCraftApp {
                 crossing: false,
             },
             (_, Some(ViewTool::Pan), _) => Overlay::None,
+            (Some(Gesture::Dragging(drag)), Some(ViewTool::Transform), _) => {
+                self.transform_overlay(ui, drag, reach)
+            }
             (Some(Gesture::Dragging(drag)), _, Some(id)) => {
                 Overlay::Preview(self.preview(id, drag))
             }
@@ -3070,6 +3095,9 @@ impl CutCraftApp {
                 0.0,
                 ui.visuals().error_fg_color,
             );
+        }
+        if self.view_tool == Some(ViewTool::Transform) {
+            self.paint_handles(ui, &canvas);
         }
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
@@ -3098,6 +3126,7 @@ impl CutCraftApp {
             (Some(Gesture::Click { at, shift }), Some(ViewTool::NodeEdit), _) => {
                 self.click_select(at, shift, reach);
             }
+            (gesture, Some(ViewTool::Transform), _) => self.transform_gesture(ui, gesture, reach),
             (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 let ids = self
@@ -3109,6 +3138,100 @@ impl CutCraftApp {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
             }
             _ => {}
+        }
+    }
+
+    /// Transform mode while dragging: the selection as the handle would leave it, else the
+    /// selection window.
+    fn transform_overlay(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Overlay {
+        if let Some(t) = self.handle_drag(ui, drag, reach) {
+            let doc = &self.doc;
+            let moved = doc
+                .selection
+                .iter()
+                .map(|id| doc.vectors[id].transformed(&t));
+            return Overlay::Preview(moved.collect());
+        }
+        Overlay::Window {
+            start: drag.start,
+            end: drag.end,
+            crossing: drag.end.x < drag.start.x,
+        }
+    }
+
+    /// Transform mode: a drag from a handle transforms the selection, any other drag
+    /// selects by window; a click on the middle turns rotation on or off, elsewhere selects.
+    fn transform_gesture(&mut self, ui: &egui::Ui, gesture: Option<Gesture>, reach: f64) {
+        match gesture {
+            Some(Gesture::Dropped { drag, shift }) => {
+                if let Some(t) = self.handle_drag(ui, drag, reach) {
+                    let change = Change::transform_selected(&self.doc, |_| t);
+                    self.record(change, "Transformed");
+                } else {
+                    let window = Rect::new(drag.start, drag.end);
+                    let ids = self.doc.window(window, drag.end.x < drag.start.x);
+                    self.select(ids, shift);
+                }
+            }
+            Some(Gesture::Click { at, shift }) => {
+                let on_middle = self
+                    .doc
+                    .selection_bounds()
+                    .and_then(|b| handles::pick(b, self.rotating, at, reach))
+                    == Some(Handle::Move);
+                if on_middle {
+                    self.rotating ^= true;
+                } else {
+                    self.click_select(at, shift, reach);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The transform a drag in Transform mode makes, if it started on one of the selection's
+    /// handles.
+    fn handle_drag(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Option<DAffine2> {
+        let bounds = self.doc.selection_bounds()?;
+        let handle = handles::pick(bounds, self.rotating, drag.start, reach)?;
+        let keys = ui.input(|i| handles::Keys {
+            alt: i.modifiers.alt,
+            shift: i.modifiers.shift,
+        });
+        Some(handles::transform(
+            bounds, handle, drag.start, drag.end, keys,
+        ))
+    }
+
+    /// Transform mode's handles on the selection: white squares scale, black ones rotate,
+    /// and a cross in the middle moves.
+    fn paint_handles(&self, ui: &egui::Ui, canvas: &Canvas) {
+        let Some(bounds) = self.doc.selection_bounds() else {
+            return;
+        };
+        let painter = ui.painter_at(canvas.area);
+        let visuals = ui.visuals();
+        let stroke = visuals.selection.stroke;
+        let half = ui.spacing().interact_size.y * view2d::NODE_HANDLE_SHARE / 2.0;
+        for handle in handles::handles(self.rotating) {
+            let at = canvas
+                .transform
+                .to_screen(handles::position(bounds, handle));
+            let square = egui::Rect::from_center_size(at, egui::vec2(half, half) * 2.0);
+            match handle {
+                Handle::Move => {
+                    for d in [egui::vec2(half, 0.0), egui::vec2(0.0, half)] {
+                        painter.line_segment([at - d, at + d], stroke);
+                    }
+                }
+                Handle::Scale { .. } => {
+                    painter.rect_filled(square, 0.0, visuals.extreme_bg_color);
+                    painter.rect_stroke(square, 0.0, stroke);
+                }
+                Handle::Rotate { .. } => {
+                    painter.rect_filled(square, 0.0, visuals.text_color());
+                }
+            }
         }
     }
 
@@ -3126,6 +3249,7 @@ impl CutCraftApp {
             Some(ViewTool::ZoomBox) => id == "zoom_box",
             Some(ViewTool::NodeEdit) => id == "node_edit",
             Some(ViewTool::Measure) => id == "measure_inspect",
+            Some(ViewTool::Transform) => id == "transform",
             None => false,
         };
         let mut clicked = None;
@@ -4150,6 +4274,29 @@ mod tests {
         cut_craft_core::testing::cut_bounds(app.doc.toolpaths.values().next().unwrap())
             .min
             .x
+    }
+
+    #[test]
+    fn transform_mode_scales_by_a_corner_and_rotates_after_a_second_click() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 10.0);
+        h.app.invoke(&h.ctx, "transform");
+        assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+        let (from, to) = (h.at(30.0, 20.0), h.at(50.0, 30.0));
+        h.drag(from, to);
+        let b = h.app.doc.selection_bounds().unwrap();
+        assert!(
+            (b.max.x - 50.0).abs() < 0.5 && (b.max.y - 30.0).abs() < 0.5,
+            "{b:?}"
+        );
+        assert!((b.min.x - 10.0).abs() < 1e-6, "the opposite corner stays");
+        assert!(!h.app.rotating);
+        let middle = h.at(b.center().x, b.center().y);
+        h.click(middle, Modifiers::NONE);
+        assert!(
+            h.app.rotating,
+            "a second click on the middle turns rotation on"
+        );
     }
 
     #[test]

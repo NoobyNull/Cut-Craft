@@ -98,7 +98,7 @@ pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
 
 /// A node handle's edge, as a share of the theme's interactive row height.
 // ponytail: fixed share until a preferences dialog sizes handles
-const NODE_HANDLE_SHARE: f32 = 0.35;
+pub const NODE_HANDLE_SHARE: f32 = 0.35;
 
 /// What the pointer did on the canvas this frame.
 #[derive(Clone, Copy, Debug)]
