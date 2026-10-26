@@ -2150,6 +2150,7 @@ impl CutCraftApp {
             },
             sides: shown.material_block,
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
+            wrap: None,
         };
         let (orbit, framing) = (self.orbit, self.framing);
         let painter = ui.painter_at(area);
@@ -2167,11 +2168,33 @@ impl CutCraftApp {
             vec![]
         };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
+        let (rotary, previewing) = (self.shown_job().rotary, self.simulation.is_some());
         let Some(surface) = self.surface_3d() else {
             return;
         };
+        // a rotary job round its axis: a preview's surface is at 0, the model's at its top
+        let wrap = rotary
+            .filter(|_| shown.auto_wrapping)
+            .map(|r| view3d::Wrap {
+                along_x: r.along == cut_craft_core::document::Along::X,
+                radius: r.diameter / 2.0,
+                surface: if previewing {
+                    0.0
+                } else {
+                    surface
+                        .heights
+                        .iter()
+                        .copied()
+                        .fold(f64::NEG_INFINITY, f64::max)
+                },
+            });
+        let look = view3d::Look { wrap, ..look };
         painter.add(view3d::mesh(&surface, orbit, framing, &look, fit));
-        let screen = view3d::screen_of(&surface, orbit, framing, fit);
+        if wrap.is_some() {
+            // ponytail: the overlays are drawn flat, so they are left off the wrapped view
+            return;
+        }
+        let screen = view3d::screen_of(&surface, orbit, framing, fit, None);
         let local = |p: cut_craft_core::geometry::Point, z: f64| {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
         };

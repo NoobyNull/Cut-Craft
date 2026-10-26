@@ -23,6 +23,8 @@ pub struct Display {
     pub light_follows: bool,
     pub colour_shaded: bool,
     pub shaded_background: bool,
+    /// Rotary jobs: the 3D view shows the model and preview wrapped round the axis.
+    pub auto_wrapping: bool,
 }
 
 impl Default for Display {
@@ -43,6 +45,7 @@ impl Default for Display {
             light_follows: false,
             colour_shaded: true,
             shaded_background: true,
+            auto_wrapping: true,
         }
     }
 }
@@ -76,6 +79,7 @@ impl Display {
             "light_follows_viewer" => &mut self.light_follows,
             "color_shaded_view" => &mut self.colour_shaded,
             "use_shaded_background" => &mut self.shaded_background,
+            "auto_wrapping_view" => &mut self.auto_wrapping,
             _ => return None,
         })
     }

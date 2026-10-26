@@ -124,7 +124,10 @@ say "not implemented yet".
   previews, auto-open 3D view, rapid / plunge / retract / join moves; a join is a feed move above the material [inf]), Preview Simulation Quality,
   Merge Visible Toolpaths, Tool Database.
 - View: Zoom to Drawing (F6), Refresh 2D View, Draw Origin / Modeling Plane / Material Block /
-  Vectors in 3D View, Light Follows Viewer, Color Shaded View, Use Shaded Background.
+  Vectors in 3D View, Light Follows Viewer, Color Shaded View, Use Shaded Background,
+  Auto-Wrapping View (rotary jobs, on by default: the model or preview drawn round the
+  axis, closed at the seam, each face lit by its own facing; the vector, plane and origin
+  overlays are left off it, and it has not been tried by hand yet).
 - 3D view: left- or right-drag rotates, middle-drag / Ctrl+right-drag / left+right pans, the
   wheel zooms about the cursor, double-click or F fits; Top, Front, Right, Iso, Fit buttons.
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
@@ -316,7 +319,7 @@ say "not implemented yet".
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Materials.
-- View: Guide Lines, Keep-Out Zones, Auto-Wrapping, Shadow Shading, Save Shaded Image,
+- View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
 - Gadgets; Help Contents.
 - Drawing tab:

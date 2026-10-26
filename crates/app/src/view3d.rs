@@ -201,6 +201,8 @@ pub struct Look {
     pub sides: bool,
     /// Where the light comes from, in job directions.
     pub light: DVec3,
+    /// Rotary jobs: drawn round the axis; the sides are then left out.
+    pub wrap: Option<Wrap>,
 }
 
 impl Look {
@@ -210,12 +212,64 @@ impl Look {
     }
 }
 
+/// A rotary job's material drawn round its axis instead of flat (View ▸ Auto-Wrapping View).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Wrap {
+    /// The axis runs along the material's x, else its y; the other way goes round.
+    pub along_x: bool,
+    /// The material's radius.
+    pub radius: f64,
+    /// The height in the material that is its outer surface.
+    pub surface: f64,
+}
+
+impl Wrap {
+    /// A point of the flat material (x, y from its corner, z a height) on the cylinder whose
+    /// circumference is `round`: the axis along x (or y) through the origin, angle 0 up.
+    pub fn place(self, p: DVec3, round: f64) -> DVec3 {
+        let out = (self.radius + p.z - self.surface).max(0.0);
+        let (along, across) = if self.along_x { (p.x, p.y) } else { (p.y, p.x) };
+        let angle = across / round * std::f64::consts::TAU;
+        let (side, up) = (out * angle.sin(), out * angle.cos());
+        if self.along_x {
+            DVec3::new(along, side, up)
+        } else {
+            DVec3::new(side, along, up)
+        }
+    }
+}
+
+/// The box the drawn material fills: the flat block, or the cylinder round its axis.
+fn extent(material: &Material, wrap: Option<Wrap>) -> (DVec3, DVec3) {
+    let size = plan_size(material);
+    match wrap {
+        None => {
+            let top_z = material
+                .heights
+                .iter()
+                .copied()
+                .fold(material.bottom, f64::max);
+            (
+                DVec3::new(0.0, 0.0, material.bottom),
+                DVec3::new(size.x, size.y, top_z),
+            )
+        }
+        Some(w) if w.along_x => (
+            DVec3::new(0.0, -w.radius, -w.radius),
+            DVec3::new(size.x, w.radius, w.radius),
+        ),
+        Some(w) => (
+            DVec3::new(-w.radius, 0.0, -w.radius),
+            DVec3::new(w.radius, size.y, w.radius),
+        ),
+    }
+}
+
 /// Screen positions of points in the material's own coordinates (x, y from its corner, z up
 /// from the surface) as [`mesh`] draws it: the block's bounding sphere fitted into `area`,
 /// so turning never changes its size, then zoomed and panned by `framing`.
 #[expect(
     clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
     reason = "screen coordinates fit f32"
 )]
 pub fn screen_of(
@@ -223,20 +277,11 @@ pub fn screen_of(
     orbit: Orbit,
     framing: Framing,
     area: Rect,
+    wrap: Option<Wrap>,
 ) -> impl Fn(DVec3) -> Pos2 {
-    let m = material;
-    let top_z = m.heights.iter().copied().fold(m.bottom, f64::max);
-    let extent = DVec3::new(
-        m.columns as f64 * m.cell,
-        m.rows as f64 * m.cell,
-        top_z - m.bottom,
-    );
-    let radius = (extent.length() / 2.0).max(f64::EPSILON);
-    let (middle, _) = orbit.project(DVec3::new(
-        extent.x / 2.0,
-        extent.y / 2.0,
-        f64::midpoint(top_z, m.bottom),
-    ));
+    let (lo, hi) = extent(material, wrap);
+    let radius = ((hi - lo).length() / 2.0).max(f64::EPSILON);
+    let (middle, _) = orbit.project((lo + hi) / 2.0);
     let scale =
         f64::from(area.width().min(area.height())) / (2.0 * radius) * f64::from(framing.zoom);
     let centre = area.center() + framing.pan;
@@ -291,8 +336,14 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         )
     };
     // quads in job space, a colour per corner
-    let mut quads: Vec<([DVec3; 4], [Color32; 4])> = vec![];
-    for row in 1..m.rows {
+    let mut quads: Vec<([DVec3; 4], [Color32; 4])> = match look.wrap {
+        Some(wrap) => wrapped_quads(m, wrap, look.light)
+            .into_iter()
+            .map(|(corners, brightness)| (corners, [shade(brightness); 4]))
+            .collect(),
+        None => vec![],
+    };
+    for row in (1..m.rows).filter(|_| look.wrap.is_none()) {
         for column in 1..m.columns {
             let corners = [
                 (column - 1, row - 1),
@@ -314,7 +365,10 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         (DVec3::NEG_X, (0..m.rows).map(|r| (0, r)).collect()),
         (DVec3::X, (0..m.rows).map(|r| (last_column, r)).collect()),
     ];
-    for (outward, edge) in sides.into_iter().filter(|_| look.sides) {
+    for (outward, edge) in sides
+        .into_iter()
+        .filter(|_| look.sides && look.wrap.is_none())
+    {
         if orbit.project(outward).1 <= 0.0 {
             continue;
         }
@@ -334,7 +388,7 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         })
         .collect();
     projected.sort_by(|a, b| a.1.total_cmp(&b.1));
-    let screen = screen_of(m, orbit, framing, area);
+    let screen = screen_of(m, orbit, framing, area, look.wrap);
     let mut mesh = Mesh::default();
     for (corners, _, colours) in projected {
         let first = u32::try_from(mesh.vertices.len()).expect("mesh fits u32 indices");
@@ -345,6 +399,68 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         mesh.add_triangle(first, first + 2, first + 3);
     }
     mesh
+}
+
+/// The material's surface round the axis as quads, each with its brightness: lit by its own
+/// facing, darker deeper, and closed across the seam where the circumference meets itself.
+#[expect(clippy::cast_precision_loss, reason = "cell indices fit f64")]
+fn wrapped_quads(m: &Material, wrap: Wrap, light: DVec3) -> Vec<([DVec3; 4], f64)> {
+    let round = if wrap.along_x {
+        plan_size(m).y
+    } else {
+        plan_size(m).x
+    };
+    let at = |column: usize, row: usize| {
+        wrap.place(
+            DVec3::new(
+                (column as f64 + 0.5) * m.cell,
+                (row as f64 + 0.5) * m.cell,
+                m.heights[row * m.columns + column],
+            ),
+            round,
+        )
+    };
+    // the way round wraps from its last cells back to its first
+    let (columns, rows) = if wrap.along_x {
+        (m.columns - 1, m.rows)
+    } else {
+        (m.columns, m.rows - 1)
+    };
+    let mut quads = vec![];
+    for row in 0..rows {
+        for column in 0..columns {
+            let (next_column, next_row) = ((column + 1) % m.columns, (row + 1) % m.rows);
+            let corners = [
+                at(column, row),
+                at(next_column, row),
+                at(next_column, next_row),
+                at(column, next_row),
+            ];
+            let mut normal = (corners[2] - corners[0]).cross(corners[3] - corners[1]);
+            // outward: away from the axis
+            let middle = corners.iter().copied().sum::<DVec3>() / 4.0;
+            let out = if wrap.along_x {
+                DVec3::new(0.0, middle.y, middle.z)
+            } else {
+                DVec3::new(middle.x, 0.0, middle.z)
+            };
+            if normal.dot(out) < 0.0 {
+                normal = -normal;
+            }
+            let depth = if m.bottom < 0.0 {
+                (m.heights[row * m.columns + column] - wrap.surface) / m.bottom
+            } else {
+                0.0
+            };
+            let brightness = if normal.length() > 0.0 {
+                lit(normal, light) * (1.0 - DEPTH_SHADE * depth.clamp(0.0, 1.0))
+            } else {
+                AMBIENT
+            };
+            quads.push((corners, brightness));
+        }
+    }
+    quads
 }
 
 #[cfg(test)]
@@ -358,6 +474,7 @@ mod tests {
             colour: Color32::WHITE,
             sides: true,
             light: LIGHT,
+            wrap: None,
         }
     }
 
@@ -568,6 +685,60 @@ mod tests {
         assert_eq!(
             Orbit::TOP.dragged(Vec2::new(0.0, 900.0), size).pitch,
             std::f64::consts::FRAC_PI_2
+        );
+    }
+}
+
+#[cfg(test)]
+mod wrap_tests {
+    use super::*;
+    use cut_craft_core::document::{Along, Job};
+    use eframe::egui::pos2;
+
+    fn wrap() -> Wrap {
+        Wrap {
+            along_x: true,
+            radius: 10.0,
+            surface: 0.0,
+        }
+    }
+
+    #[test]
+    fn the_surface_goes_round_the_axis_from_the_top() {
+        let round = 20.0 * std::f64::consts::PI;
+        let top = wrap().place(DVec3::new(5.0, 0.0, 0.0), round);
+        assert!(top.abs_diff_eq(DVec3::new(5.0, 0.0, 10.0), 1e-9));
+        let quarter = wrap().place(DVec3::new(5.0, round / 4.0, -2.0), round);
+        assert!(
+            quarter.abs_diff_eq(DVec3::new(5.0, 8.0, 0.0), 1e-9),
+            "{quarter}"
+        );
+    }
+
+    #[test]
+    fn a_rotary_material_is_drawn_closed_round_and_inside_the_view() {
+        let job = Job::rotary(60.0, 20.0, Along::X);
+        let m = Material::new(&job, 60);
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let look = Look {
+            colour: Color32::WHITE,
+            sides: true,
+            light: LIGHT,
+            wrap: Some(wrap()),
+        };
+        let quads = wrapped_quads(&m, wrap(), LIGHT);
+        assert_eq!(
+            quads.len(),
+            (m.columns - 1) * m.rows,
+            "every row, the seam too"
+        );
+        let drawn = mesh(&m, Orbit::default(), Framing::default(), &look, area);
+        assert_eq!(drawn.vertices.len(), 4 * quads.len());
+        assert!(
+            drawn
+                .vertices
+                .iter()
+                .all(|v| area.expand(1.0).contains(v.pos))
         );
     }
 }
