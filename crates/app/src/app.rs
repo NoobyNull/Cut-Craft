@@ -3478,6 +3478,7 @@ impl eframe::App for CutCraftApp {
 impl CutCraftApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
+        self.icons.preload(ctx);
         // picks are view state: undo or another sheet can take what they name away
         let doc = &mut self.doc;
         doc.selected_components

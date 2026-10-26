@@ -11,6 +11,8 @@ pub struct Icons {
     by_path: HashMap<String, PathBuf>,
     /// File stem (`draw_circle`) → absolute path.
     by_stem: HashMap<String, PathBuf>,
+    /// Whether every icon's bytes are already in egui (see [`Icons::preload`]).
+    preloaded: bool,
 }
 
 impl Icons {
@@ -21,6 +23,7 @@ impl Icons {
         let mut icons = Self {
             by_path: HashMap::new(),
             by_stem: HashMap::new(),
+            preloaded: false,
         };
         let mut pending = vec![dir.to_path_buf()];
         while let Some(folder) = pending.pop() {
@@ -63,8 +66,24 @@ impl Icons {
             .map_or_else(|| PathBuf::from("assets/icons"), PathBuf::from)
     }
 
+    /// Reads every icon into egui once, so none shows a loading spinner the first time it is
+    /// drawn (egui's own `file://` loader reads on a thread and draws a frame without it).
+    // ponytail: every icon at startup (~200 files, ~10 MB); load per folder if that grows slow
+    pub fn preload(&mut self, ctx: &egui::Context) {
+        if std::mem::replace(&mut self.preloaded, true) {
+            return;
+        }
+        for path in self.by_path.values() {
+            match fs::read(path) {
+                Ok(bytes) => ctx.include_bytes(uri(path), bytes),
+                Err(e) => log::warn!("icon {}: {e}", path.display()),
+            }
+        }
+    }
+
+    /// An indexed icon, drawn from the bytes [`Icons::preload`] read.
     pub fn image(path: &Path) -> egui::Image<'static> {
-        egui::Image::new(format!("file://{}", path.display()))
+        egui::Image::new(uri(path))
     }
 
     /// The icon a command names explicitly, else one whose file stem is the command id.
@@ -74,6 +93,11 @@ impl Icons {
             .or_else(|| self.by_stem.get(id))
             .map(PathBuf::as_path)
     }
+}
+
+/// Where an icon's bytes are kept in egui; the extension tells the loaders what it is.
+fn uri(path: &Path) -> String {
+    format!("bytes://{}", path.display())
 }
 
 /// A 1×1 24-bit BMP: file header, info header, one pixel padded to 4 bytes.
@@ -168,6 +192,25 @@ mod tests {
         assert!(
             matches!(loaded, Ok(egui::load::ImagePoll::Ready { .. })),
             "{error:?}"
+        );
+    }
+
+    #[test]
+    fn preloaded_icons_are_ready_the_first_time_they_are_drawn() {
+        let dir = icon_dir("preload");
+        fs::create_dir_all(dir.join("import")).unwrap();
+        let path = dir.join("import/picture.bmp");
+        fs::write(&path, tiny_bmp()).unwrap();
+        let mut icons = Icons::load(&dir);
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        icons.preload(&ctx);
+        let uri = Icons::image(&path).source().uri().unwrap().to_owned();
+        let loaded = ctx.try_load_image(&uri, egui::SizeHint::default());
+        assert!(
+            matches!(loaded, Ok(egui::load::ImagePoll::Ready { .. })),
+            "no loading spinner: {:?}",
+            loaded.err().map(|e| e.to_string())
         );
     }
 
