@@ -21,6 +21,7 @@ pub mod simulation;
 pub mod snap;
 #[cfg(feature = "testing")]
 pub mod testing;
+pub mod tiling;
 pub mod toolpath;
 pub mod trace;
 pub mod vfont;

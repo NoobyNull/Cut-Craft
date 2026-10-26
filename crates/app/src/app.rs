@@ -724,7 +724,24 @@ impl CutCraftApp {
                 if let Some(path) = dialog.save_file() {
                     let path = path.with_extension(&extension);
                     let job = self.session.path.as_deref();
-                    let result = files::save_through(&post, &self.doc, &path, job);
+                    let result = match self.doc.tiling {
+                        // one file per tile, each tile moved to the job's corner
+                        Some(tiling) => {
+                            let tiles = tiling.tiles(self.doc.job.area());
+                            tiles.iter().enumerate().try_for_each(|(n, &tile)| {
+                                let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+                                let named = path
+                                    .with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
+                                files::save_through(
+                                    &post,
+                                    &tiling.tiled(&self.doc, tile),
+                                    &named,
+                                    job,
+                                )
+                            })
+                        }
+                        None => files::save_through(&post, &self.doc, &path, job),
+                    };
                     self.status.set_message(
                         &result.map_or_else(
                             |e| e,

@@ -132,6 +132,11 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
+    /// Turns toolpath tiling on (with its settings) or off.
+    SetTiling {
+        before: Option<crate::tiling::Tiling>,
+        after: Option<crate::tiling::Tiling>,
+    },
     /// Replaces the guide lines.
     SetGuides {
         before: Vec<Guide>,
@@ -216,6 +221,10 @@ impl Edit {
                 after: before,
             },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
+                before: after,
+                after: before,
+            },
+            Self::SetTiling { before, after } => Self::SetTiling {
                 before: after,
                 after: before,
             },
@@ -575,6 +584,7 @@ impl Document {
             Edit::SetVariables { after, .. } => self.variables.clone_from(after),
             Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
+            Edit::SetTiling { after, .. } => self.tiling = *after,
             _ => unreachable!("only settings come here"),
         }
     }
@@ -726,7 +736,8 @@ impl Document {
             Edit::SetNotes { .. }
             | Edit::SetVariables { .. }
             | Edit::SetKeepOut { .. }
-            | Edit::SetGuides { .. } => self.apply_setting(edit),
+            | Edit::SetGuides { .. }
+            | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
             Edit::SetLevel { id, before, after } => {
                 self.set_level(*id, before.as_ref(), after.as_ref())?;
@@ -1135,6 +1146,13 @@ impl ChangeBuilder<'_> {
         if self.sheets != after {
             let before = std::mem::replace(&mut self.sheets, after.clone());
             self.edits.push(Edit::SetSheets { before, after });
+        }
+    }
+
+    pub fn set_tiling(&mut self, after: Option<crate::tiling::Tiling>) {
+        if self.doc.tiling != after {
+            let before = self.doc.tiling;
+            self.edits.push(Edit::SetTiling { before, after });
         }
     }
 

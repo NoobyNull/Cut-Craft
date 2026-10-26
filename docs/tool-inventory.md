@@ -156,6 +156,10 @@ say "not implemented yet".
 - Plate Production (Offset and Layout): a template's !!variables!! filled from a data file's
   columns or a counter, plates laid out inside margins, a layer per sheet of material when
   they need more. Not done: copying the template's toolpaths onto each plate.
+- Toolpath Tiling (Toolpaths menu): individual tiles or feed-through in X or Y, tile size,
+  overlap, smallest tile first; tiles drawn in the 2D view; Save Toolpaths writes one file
+  per tile (`name_tileN`), cuts clipped to the tile and its overlap and moved to the job's
+  corner. Not done: the 3D view's active tile and drawing tiles in their original place.
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.

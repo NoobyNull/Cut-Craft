@@ -505,6 +505,19 @@ impl Canvas {
                 painter.extend(Shape::dashed_line(&line, guide, dash, gap));
             }
         }
+        // toolpath tiles: their edges, and their overlap faintly
+        if let Some(tiling) = doc.tiling {
+            let edge = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
+            let overlap = Stroke::new(datum.width, visuals.error_fg_color);
+            for tile in tiling.tiles(doc.job.area()) {
+                let reach = tiling.reach(tile);
+                for (r, stroke) in [(reach, overlap), (tile, edge)] {
+                    let screen_rect =
+                        egui::Rect::from_two_pos(t.to_screen(r.min), t.to_screen(r.max));
+                    painter.rect_stroke(screen_rect, 0.0, stroke);
+                }
+            }
+        }
         // a double-sided job's other side, faint and turned over as the material is
         if let Some(sides) = doc.job.double_sided {
             let turn = sides.flip.mirror(doc.job.area());

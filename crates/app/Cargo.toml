@@ -33,6 +33,7 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-toolpath-tiling = { path = "../commands/toolpath-tiling" }
 cmd-plate-production = { path = "../commands/plate-production" }
 cmd-copy-to-other-side = { path = "../commands/copy-to-other-side" }
 cmd-swap-sides = { path = "../commands/swap-sides" }
