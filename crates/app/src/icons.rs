@@ -81,9 +81,13 @@ impl Icons {
         }
     }
 
-    /// An indexed icon, drawn from the bytes [`Icons::preload`] read.
-    pub fn image(path: &Path) -> egui::Image<'static> {
-        egui::Image::new(uri(path))
+    /// An indexed icon: from the bytes [`Icons::preload`] read, else read when first drawn.
+    pub fn image(&self, path: &Path) -> egui::Image<'static> {
+        if self.preloaded {
+            egui::Image::new(uri(path))
+        } else {
+            egui::Image::new(format!("file://{}", path.display()))
+        }
     }
 
     /// The icon a command names explicitly, else one whose file stem is the command id.
@@ -204,8 +208,10 @@ mod tests {
         let mut icons = Icons::load(&dir);
         let ctx = egui::Context::default();
         egui_extras::install_image_loaders(&ctx);
+        let lazy = icons.image(&path).source().uri().unwrap().to_owned();
+        assert!(lazy.starts_with("file://"), "read when first drawn: {lazy}");
         icons.preload(&ctx);
-        let uri = Icons::image(&path).source().uri().unwrap().to_owned();
+        let uri = icons.image(&path).source().uri().unwrap().to_owned();
         let loaded = ctx.try_load_image(&uri, egui::SizeHint::default());
         assert!(
             matches!(loaded, Ok(egui::load::ImagePoll::Ready { .. })),

@@ -42,6 +42,15 @@ pub struct General {
     /// How many files File ▸ Recent Files and the start page list
     #[schemars(range(min = 1, max = 20))]
     pub recent_file_list_size: u32,
+    /// Read every icon at startup, so none shows a loading spinner the first time it is
+    /// drawn; off reads each when first drawn, for low-end systems (from the next start)
+    #[serde(default = "on")]
+    pub preload_icons: bool,
+}
+
+/// What a setting added after options were first saved starts as.
+fn on() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -74,6 +83,7 @@ impl Default for Options {
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
                     .expect("a small count"),
+                preload_icons: on(),
             },
         }
     }
@@ -148,6 +158,12 @@ mod tests {
         let o: Options =
             serde_json::from_str(&serde_json::to_string(&Options::default()).unwrap()).unwrap();
         assert_eq!(o, Options::default());
+        let older = r#"{ "view_3d": { "draw_origin": false, "draw_material_block": true,
+            "color_shaded_view": true, "shaded_background": true, "light_follows_viewer": true },
+            "toolpaths": { "auto_open_3d_view": true, "create_2d_previews": true,
+            "solid_2d_previews": false }, "general": { "recent_file_list_size": 4 } }"#;
+        let older: Options = serde_json::from_str(older).expect("options saved before preloading");
+        assert!(!older.view_3d.draw_origin && older.general.preload_icons);
         let fields =
             crate::form::fields(&serde_json::to_value(schemars::schema_for!(Options)).unwrap());
         let sections: Vec<&str> = fields

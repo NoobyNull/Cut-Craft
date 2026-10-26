@@ -1495,7 +1495,9 @@ impl CutCraftApp {
         for (id, label, icon) in STARTUP_TASKS {
             let button = match self.icons.find(icon, id) {
                 Some(path) => egui::Button::image_and_text(
-                    Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)),
+                    self.icons
+                        .image(path)
+                        .fit_to_exact_size(egui::vec2(edge, edge)),
                     label,
                 ),
                 None => egui::Button::new(label),
@@ -1518,7 +1520,9 @@ impl CutCraftApp {
             let name = file_name(path);
             let button = match glyph {
                 Some(glyph) => egui::Button::image_and_text(
-                    Icons::image(glyph).fit_to_exact_size(egui::vec2(edge, edge)),
+                    self.icons
+                        .image(glyph)
+                        .fit_to_exact_size(egui::vec2(edge, edge)),
                     name,
                 ),
                 None => egui::Button::new(name),
@@ -1542,7 +1546,11 @@ impl CutCraftApp {
         for (label, url, icon) in LINKS {
             ui.horizontal(|ui| {
                 if let Some(path) = self.icons.find(icon, "") {
-                    ui.add(Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)));
+                    ui.add(
+                        self.icons
+                            .image(path)
+                            .fit_to_exact_size(egui::vec2(edge, edge)),
+                    );
                 }
                 ui.hyperlink_to(label, url);
             });
@@ -1560,7 +1568,10 @@ impl CutCraftApp {
         ui.vertical_centered(|ui| {
             ui.add_space((space.y - edge) / 2.0);
             if logo.exists() {
-                ui.add(Icons::image(logo).fit_to_exact_size(egui::vec2(edge, edge)));
+                ui.add(
+                    egui::Image::new(format!("file://{}", logo.display()))
+                        .fit_to_exact_size(egui::vec2(edge, edge)),
+                );
             }
             ui.heading(APP_NAME);
         });
@@ -1809,7 +1820,11 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
                 let edge = ui.spacing().interact_size.y;
-                ui.add(Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)));
+                ui.add(
+                    self.icons
+                        .image(path)
+                        .fit_to_exact_size(egui::vec2(edge, edge)),
+                );
             }
             ui.strong(open.label);
         });
@@ -1848,9 +1863,11 @@ impl CutCraftApp {
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
         let picture = |path: &str| {
-            self.icons
-                .find(path, "")
-                .map(|p| Icons::image(p).fit_to_exact_size(egui::vec2(edge, edge)))
+            self.icons.find(path, "").map(|p| {
+                self.icons
+                    .image(p)
+                    .fit_to_exact_size(egui::vec2(edge, edge))
+            })
         };
         let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
         let look = form::Look {
@@ -2372,9 +2389,11 @@ impl CutCraftApp {
     /// An icon button, or a text one when the icon is missing.
     fn icon_button(&self, icon: &str, id: &str, label: &str, edge: f32) -> egui::Button<'static> {
         match self.icons.find(icon, id) {
-            Some(path) => {
-                egui::Button::image(Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)))
-            }
+            Some(path) => egui::Button::image(
+                self.icons
+                    .image(path)
+                    .fit_to_exact_size(egui::vec2(edge, edge)),
+            ),
             None => egui::Button::new(label.to_owned()),
         }
     }
@@ -3478,7 +3497,9 @@ impl eframe::App for CutCraftApp {
 impl CutCraftApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
-        self.icons.preload(ctx);
+        if self.options.general.preload_icons {
+            self.icons.preload(ctx);
+        }
         // picks are view state: undo or another sheet can take what they name away
         let doc = &mut self.doc;
         doc.selected_components
@@ -3565,7 +3586,11 @@ impl CutCraftApp {
         let drop_down =
             |ui: &mut egui::Ui, icon: &str, name: &str, contents: &mut dyn FnMut(&mut egui::Ui)| {
                 if let Some(path) = self.icons.find(icon, "") {
-                    ui.add(Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)));
+                    ui.add(
+                        self.icons
+                            .image(path)
+                            .fit_to_exact_size(egui::vec2(edge, edge)),
+                    );
                 }
                 egui::ComboBox::from_id_source(icon)
                     .selected_text(name)
