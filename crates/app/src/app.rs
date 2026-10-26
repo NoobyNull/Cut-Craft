@@ -1078,8 +1078,10 @@ impl CutCraftApp {
     fn design_page(&mut self, ui: &mut egui::Ui) {
         self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
         egui::ScrollArea::vertical().show(ui, |ui| {
+            // a tool's form takes the page's place, as Aspire's does
             if self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
                 self.command_form(ui);
+                return;
             }
             match DESIGN_TABS[self.design_tab] {
                 "Design" => {
@@ -2348,6 +2350,7 @@ impl CutCraftApp {
                 .is_some_and(|f| f.page == Page::Toolpaths)
             {
                 self.command_form(ui);
+                return;
             }
             self.tool_groups(ui, &groups, Page::Toolpaths);
             ui.separator();
@@ -4454,6 +4457,27 @@ mod tests {
         h.app.form = None;
         h.app.pick(&h.ctx, Page::Design, "select_all_vectors");
         assert_eq!(h.app.pages.shown(Page::Design), Shown::Hidden);
+    }
+
+    #[test]
+    fn a_tools_form_takes_the_place_of_the_page_as_in_aspire() {
+        let mut h = Harness::new();
+        h.app.pages.set_pinned(Page::Design, true);
+        h.app.pages.set_pinned(Page::Toolpaths, true);
+        h.frame(vec![]);
+        assert!(h.text_at("Create Vectors").is_some());
+        assert!(h.text_at("Toolpath List").is_some());
+        h.app.invoke(&h.ctx, "draw_circle");
+        h.frame(vec![]);
+        assert!(h.text_at("Create Vectors").is_none(), "design tools hidden");
+        assert!(h.text_at("Toolpath List").is_some(), "the other page stays");
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        h.frame(vec![]);
+        assert!(
+            h.text_at("Create Vectors").is_some(),
+            "back once its form went"
+        );
+        assert!(h.text_at("Toolpath List").is_none(), "toolpath page hidden");
     }
 
     #[test]
