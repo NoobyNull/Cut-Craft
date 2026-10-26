@@ -2603,30 +2603,64 @@ fn menu_items(
 ) {
     // one line per item: the menu widens to its longest name instead
     ui.style_mut().wrap = Some(false);
-    for item in items {
-        if item.is_separator() {
-            ui.separator();
-        } else if item.action == "recent_files" {
-            ui.add_enabled_ui(!menus.recent.is_empty(), |ui| {
-                ui.menu_button(&item.name, |ui| {
-                    menu_items(ui, menus.recent, menus, clicked);
-                });
+    // each category in a border, all as wide as the widest item
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let text = |t: &str| {
+        ui.painter()
+            .layout_no_wrap(t.to_owned(), font.clone(), egui::Color32::PLACEHOLDER)
+            .size()
+            .x
+    };
+    let spacing = ui.spacing();
+    let room = 2.0 * (spacing.button_padding.x + spacing.item_spacing.x) + spacing.icon_width;
+    let widest = items
+        .iter()
+        .map(|i| {
+            let shortcut = (menus.shortcut_of)(&i.action).unwrap_or(&i.shortcut);
+            text(&i.name) + text(shortcut) + room
+        })
+        .fold(0.0, f32::max);
+    for category in gui::categories(items) {
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.set_min_width(widest);
+            ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
+                for item in category {
+                    menu_item(ui, item, menus, clicked);
+                }
             });
-        } else if !item.children.is_empty() {
+        });
+    }
+}
+
+/// A category of a drop-down in a border filling its width, as menus draw theirs.
+fn bordered(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    egui::Frame::group(ui.style()).show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        ui.with_layout(Layout::top_down_justified(Align::LEFT), add);
+    });
+}
+
+fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &mut Option<String>) {
+    if item.action == "recent_files" {
+        ui.add_enabled_ui(!menus.recent.is_empty(), |ui| {
             ui.menu_button(&item.name, |ui| {
-                menu_items(ui, &item.children, menus, clicked);
+                menu_items(ui, menus.recent, menus, clicked);
             });
-        } else {
-            let button = egui::Button::new(&item.name)
-                .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
-                .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
-            let response = ui
-                .add_enabled(item.is_enabled && (menus.available)(&item.action), button)
-                .on_disabled_hover_text("Not implemented yet");
-            if response.clicked() {
-                *clicked = Some(item.action.clone());
-                ui.close_menu();
-            }
+        });
+    } else if !item.children.is_empty() {
+        ui.menu_button(&item.name, |ui| {
+            menu_items(ui, &item.children, menus, clicked);
+        });
+    } else {
+        let button = egui::Button::new(&item.name)
+            .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
+            .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
+        let response = ui
+            .add_enabled(item.is_enabled && (menus.available)(&item.action), button)
+            .on_disabled_hover_text("Not implemented yet");
+        if response.clicked() {
+            *clicked = Some(item.action.clone());
+            ui.close_menu();
         }
     }
 }
@@ -2766,47 +2800,55 @@ impl CutCraftApp {
             .get(doc.active_sheet)
             .map_or("", |s| s.name.as_str());
         ui.menu_button(sheet, |ui| {
-            for (i, s) in doc.sheets.iter().enumerate() {
-                if ui.radio(i == doc.active_sheet, &s.name).clicked() {
-                    apply = Some(("activate_sheet", serde_json::json!({ "sheet": i })));
+            bordered(ui, |ui| {
+                for (i, s) in doc.sheets.iter().enumerate() {
+                    if ui.radio(i == doc.active_sheet, &s.name).clicked() {
+                        apply = Some(("activate_sheet", serde_json::json!({ "sheet": i })));
+                        ui.close_menu();
+                    }
+                }
+            });
+            bordered(ui, |ui| {
+                if ui.button("Add New Sheet...").clicked() {
+                    *clicked = Some("add_sheet");
                     ui.close_menu();
                 }
-            }
-            ui.separator();
-            if ui.button("Add New Sheet...").clicked() {
-                *clicked = Some("add_sheet");
-                ui.close_menu();
-            }
+            });
         });
         let layer = doc.layer(doc.current_layer).map_or("", |l| l.name.as_str());
         ui.menu_button(layer, |ui| {
-            for l in doc.layers.iter().rev() {
-                if ui.radio(l.id == doc.current_layer, &l.name).clicked() {
-                    let params = serde_json::json!({ "layer": l.id });
-                    apply = Some(("set_current_layer", params));
+            bordered(ui, |ui| {
+                for l in doc.layers.iter().rev() {
+                    if ui.radio(l.id == doc.current_layer, &l.name).clicked() {
+                        let params = serde_json::json!({ "layer": l.id });
+                        apply = Some(("set_current_layer", params));
+                        ui.close_menu();
+                    }
+                }
+            });
+            bordered(ui, |ui| {
+                if ui.button("Add New Layer...").clicked() {
+                    *clicked = Some("add_layer");
                     ui.close_menu();
                 }
-            }
-            ui.separator();
-            if ui.button("Add New Layer...").clicked() {
-                *clicked = Some("add_layer");
-                ui.close_menu();
-            }
+            });
         });
         // new components go on the first level
         let level = doc.levels.values().next().map_or("", |l| l.name.as_str());
         ui.menu_button(level, |ui| {
-            for (&id, l) in doc.levels.iter().rev() {
-                let mut shown = l.visible;
-                if ui.checkbox(&mut shown, &l.name).changed() {
-                    let params = cmd_level_properties::Params {
-                        visible: shown,
-                        ..cmd_level_properties::Params::of(id, l)
-                    };
-                    let params = serde_json::to_value(params).expect("params serialize");
-                    apply = Some(("level_properties", params));
+            bordered(ui, |ui| {
+                for (&id, l) in doc.levels.iter().rev() {
+                    let mut shown = l.visible;
+                    if ui.checkbox(&mut shown, &l.name).changed() {
+                        let params = cmd_level_properties::Params {
+                            visible: shown,
+                            ..cmd_level_properties::Params::of(id, l)
+                        };
+                        let params = serde_json::to_value(params).expect("params serialize");
+                        apply = Some(("level_properties", params));
+                    }
                 }
-            }
+            });
         });
         apply
     }

@@ -726,6 +726,14 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
 }
 
 /// Aspire's layer menu (MENU 967) for `layer`.
+/// A menu's categories: the runs of items between separators, each drawn in a border.
+pub fn categories(items: &[MenuItem]) -> Vec<&[MenuItem]> {
+    items
+        .split(MenuItem::is_separator)
+        .filter(|run| !run.is_empty())
+        .collect()
+}
+
 /// The right-click menu of sheet `sheet` in the Sheets tab (MENU 5030).
 pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
     use cmd_sheet_properties::SheetProperties;
@@ -1164,6 +1172,25 @@ impl MenuSystem {
 
 #[cfg(test)]
 mod tests {
+    use super::MenuItem;
+
+    #[test]
+    fn separators_split_a_menu_into_categories() {
+        let items = [
+            MenuItem::separator(),
+            MenuItem::with_action("Undo", "undo"),
+            MenuItem::with_action("Redo", "redo"),
+            MenuItem::separator(),
+            MenuItem::separator(),
+            MenuItem::with_action("Delete", "delete"),
+        ];
+        let names: Vec<Vec<&str>> = super::categories(&items)
+            .iter()
+            .map(|c| c.iter().map(|i| i.name.as_str()).collect())
+            .collect();
+        assert_eq!(names, [vec!["Undo", "Redo"], vec!["Delete"]]);
+    }
+
     #[test]
     fn title_case_capitalizes_each_word() {
         assert_eq!(super::title_case("join_vectors"), "Join Vectors");
