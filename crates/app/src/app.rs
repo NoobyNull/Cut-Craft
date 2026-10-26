@@ -21,7 +21,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 54] = [
+const BUILT_INS: [&str; 55] = [
+    "options",
     "segment_3d_model_file",
     "snap_options",
     "node_edit",
@@ -292,6 +293,9 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
+    /// Edit ▸ Options, kept between runs, and whether its window is open.
+    options: crate::options::Options,
+    options_window: bool,
     /// Both views shown at once.
     split: Option<Split>,
     /// The Clipart tab's library.
@@ -343,6 +347,8 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
+            options: crate::options::Options::default(),
+            options_window: false,
             split: None,
             clipart: crate::clipart::Clipart::default(),
             recent_path: None,
@@ -454,6 +460,7 @@ impl CutCraftApp {
             | "toolpath_summary"
             | "about_cut_craft"
             | "snap_options" => self.open_window(id),
+            "options" => self.options_window = true,
             // the Select tool: put away whatever tool is in hand
             "select" => {
                 (self.form, self.view_tool) = (None, None);
@@ -800,7 +807,7 @@ impl CutCraftApp {
     }
 
     fn remember(&mut self, path: &std::path::Path) {
-        files::remember(&mut self.recent, path);
+        files::remember(&mut self.recent, path, self.options.recent_count());
         self.save_recent();
     }
 
@@ -2749,6 +2756,7 @@ impl CutCraftApp {
         self.tool_database_window(ctx);
         self.info_window(ctx);
         self.snap_options_window(ctx);
+        self.options_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::SidePanel::left("start_page").show(ctx, |ui| self.start_page(ui));
@@ -3278,6 +3286,38 @@ impl CutCraftApp {
         })
     }
 
+    /// Edit ▸ Options: Aspire's sections; a change is saved and applied at once.
+    fn options_window(&mut self, ctx: &egui::Context) {
+        let mut open = self.options_window;
+        let schema = serde_json::to_value(schemars::schema_for!(crate::options::Options))
+            .expect("a schema serialises");
+        let fields = crate::form::fields(&schema);
+        let mut values = serde_json::to_value(&self.options).expect("options serialise");
+        let mut changed = None;
+        egui::Window::new("Options")
+            .open(&mut open)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                let look = crate::form::Look {
+                    units: self.doc.job.units,
+                    picture: &|_| None,
+                    material: crate::form::material(&self.doc.job, self.doc.job.units),
+                };
+                if crate::form::show(ui, &fields, &mut values, &look) {
+                    changed = serde_json::from_value::<crate::options::Options>(values).ok();
+                }
+            });
+        self.options_window = open;
+        if let Some(options) = changed {
+            options.apply_to(&mut self.display);
+            self.recent.truncate(options.recent_count());
+            if let Err(e) = options.save() {
+                self.status.set_message(&e);
+            }
+            self.options = options;
+        }
+    }
+
     /// Snapping Options: what drawing and node drags snap to.
     fn snap_options_window(&mut self, ctx: &egui::Context) {
         let mut open = self.snap_window;
@@ -3471,6 +3511,8 @@ pub fn run(title: &str) {
             }
             let mut app = CutCraftApp::new();
             app.load_tools();
+            app.options = crate::options::Options::load();
+            app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             Box::new(app)

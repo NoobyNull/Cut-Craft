@@ -11,6 +11,7 @@ mod files;
 mod form;
 mod gui;
 mod icons;
+mod options;
 mod pages;
 mod shortcut;
 mod view2d;

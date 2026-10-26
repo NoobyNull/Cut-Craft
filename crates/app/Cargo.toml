@@ -17,6 +17,7 @@ env_logger.workspace = true
 log.workspace = true
 rfd.workspace = true
 schemars.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 # File formats: one line per crate in crates/formats, registered in src/commands.rs
 fmt-export-dxf = { path = "../formats/export-dxf" }

@@ -170,7 +170,6 @@ pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
 /// How many jobs the start page lists.
 pub const RECENT_COUNT: usize = 4;
 
-/// Puts `path` first in `recent`, once, keeping the latest [`RECENT_COUNT`].
 /// Toolpath templates: the toolpaths' settings, without their moves or vectors.
 pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
 
@@ -203,10 +202,12 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
     Ok(c.finish())
 }
 
-pub fn remember(recent: &mut Vec<PathBuf>, path: &Path) {
+/// Puts `path` first in `recent`, once, keeping the latest `keep` (Options; [`RECENT_COUNT`]
+/// by default).
+pub fn remember(recent: &mut Vec<PathBuf>, path: &Path, keep: usize) {
     recent.retain(|p| p != path);
     recent.insert(0, path.to_path_buf());
-    recent.truncate(RECENT_COUNT);
+    recent.truncate(keep);
 }
 
 /// The recent files list; a missing or unreadable one is empty, as there is nothing to lose.
@@ -429,7 +430,7 @@ mod tests {
     fn recent_files_put_the_latest_first_once_and_keep_four() {
         let mut recent = vec![];
         for name in ["a", "b", "c", "a", "d", "e"] {
-            remember(&mut recent, Path::new(name));
+            remember(&mut recent, Path::new(name), RECENT_COUNT);
         }
         assert_eq!(recent, ["e", "d", "a", "c"].map(PathBuf::from));
     }
