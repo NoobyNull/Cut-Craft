@@ -1,7 +1,9 @@
+- Sheets, Components and Clipart side tabs
+- Top bar: split 2D and 3D, sheet, layer and level drop-downs, snapping toggles
+- Smart snapping
+- Menus in bordered categories
+- Number fields take sums, such as w/2
+- Duplicate Toolpath, Edit Picture, Crop Bitmap
 - Orientate 3D Model laid out in Aspire's sections, with its pictures
 - A tool's form takes the place of the tools while it is open
-- Light theme
-- Vector boundaries follow long straight edges
-- Vectors lie flat in the 3D view
-- The window keeps its size between runs
-- Menu items on one line
+- Light theme; the window keeps its size between runs

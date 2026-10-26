@@ -136,6 +136,17 @@ say "not implemented yet".
 - 3D view: left- or right-drag rotates, middle-drag / Ctrl+right-drag / left+right pans, the
   wheel zooms about the cursor, F (or a double-click off the model) fits; Top, Front, Right, Iso, Fit buttons.
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
+- Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
+  Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
+  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Clipart
+  (a library of folders; double-click a thumbnail to import it).
+- Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
+  geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
+  snap point across or up and down (Aspire's guide lines and woken nodes are not done).
+- Menus and drop-downs draw each category in a border.
+- Number fields take sums (Calculation Edit Boxes): + - * / ^, brackets, W H T, P, I, M, '.
+- Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
+  invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
