@@ -317,8 +317,11 @@ say "not implemented yet".
     above the open vector picked last (they keep their height above it), or the band
     between the two open vectors picked last. Vectors are refitted as Béziers within
     0.01 mm; components are resampled, heights kept. The curves run left to right [inf].
-    Not done: editing the envelope with node editing (the distortion is applied at once,
-    not kept live, so there is no Bake Distortion), Use Rotated Bounds, the 3D view.
+    Create Envelope adds a rectangle round the objects (picked last) to reshape with Node
+    Edit: move corners, insert nodes, turn sides into curves; Distort to Envelope then bends
+    the objects into it as a Coons patch of its four sides (corners: the nodes nearest its
+    bounding box's corners) and removes it. Not done: a live envelope (the distortion is
+    applied at once, so there is no Bake Distortion), Use Rotated Bounds, the 3D view.
 - Toolpaths tab ▸ Material Setup (help: Material Setup - Flat / Rotary): Model Position in
   Material, as the gap above the model's top (Gap Outside Model on rotary jobs) or below its
   bottom (Gap Inside Model, from the axis); 3D roughing and finishing and the wrapped 3D

@@ -27,6 +27,24 @@ pub enum Mode {
     /// Stretched between the two open vectors picked last
     #[schemars(title = "Between Two Curves")]
     BetweenCurves,
+    /// Adds a rectangle round the objects, picked last, to reshape with Node Edit (N)
+    #[schemars(title = "Create Envelope")]
+    CreateEnvelope,
+    /// Bent into the closed envelope picked last (its four corners and the sides between
+    /// them, as Node Edit left them); the envelope goes
+    #[schemars(title = "Distort to Envelope")]
+    ToEnvelope,
+}
+
+impl Mode {
+    /// How many of the last vectors picked are curves or the envelope, not objects.
+    fn guides(self) -> usize {
+        match self {
+            Self::BoundingBox | Self::CreateEnvelope => 0,
+            Self::AlongCurve | Self::ToEnvelope => 1,
+            Self::BetweenCurves => 2,
+        }
+    }
 }
 
 /// Where the bounding box's corners go.
@@ -77,25 +95,28 @@ const FIT_TOLERANCE: f64 = 0.01;
 
 /// The band between a bottom and a top edge, each sampled evenly along its length: unit
 /// square (u, v) goes to the point `v` of the way from the bottom edge to the top at `u`.
+/// With left and right edges too (bottom to top) it is the Coons patch of all four.
 struct Envelope {
     bottom: Vec<Point>,
     top: Vec<Point>,
+    sides: Option<(Vec<Point>, Vec<Point>)>,
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss,
-    reason = "sample indices are small"
-)]
+#[expect(clippy::cast_precision_loss, reason = "sample indices are small")]
 impl Envelope {
     fn at(&self, across: f64, up: f64) -> Point {
-        let along = across.clamp(0.0, 1.0) * (EDGE_SAMPLES - 1) as f64;
-        let index = (along.floor() as usize).min(EDGE_SAMPLES - 2);
-        let frac = along - index as f64;
-        let bottom = self.bottom[index].lerp(self.bottom[index + 1], frac);
-        let top = self.top[index].lerp(self.top[index + 1], frac);
-        bottom.lerp(top, up)
+        let (bottom, top) = (sample(&self.bottom, across), sample(&self.top, across));
+        let ruled = bottom.lerp(top, up);
+        let Some((left, right)) = &self.sides else {
+            return ruled;
+        };
+        // Coons: the ruled surface, corrected toward the side edges
+        let (u, v) = (across.clamp(0.0, 1.0), up.clamp(0.0, 1.0));
+        let side = sample(left, v).lerp(sample(right, v), u);
+        let corners = self.bottom[0]
+            .lerp(self.bottom[EDGE_SAMPLES - 1], u)
+            .lerp(self.top[0].lerp(self.top[EDGE_SAMPLES - 1], u), v);
+        ruled + side - corners
     }
 
     fn straight(from: Point, to: Point) -> Vec<Point> {
@@ -110,6 +131,11 @@ impl Envelope {
         if points.first().map(|p| p.x) > points.last().map(|p| p.x) {
             points.reverse();
         }
+        Self::resampled(&points)
+    }
+
+    /// `points` resampled evenly by length, in their own order.
+    fn resampled(points: &[Point]) -> Vec<Point> {
         let lengths: Vec<f64> = std::iter::once(0.0)
             .chain(points.windows(2).scan(0.0, |run, w| {
                 *run += w[0].distance(w[1]);
@@ -157,6 +183,97 @@ impl Envelope {
     }
 }
 
+/// Edge `points` (evenly spaced) at `t` of the way along.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "sample indices are small"
+)]
+fn sample(points: &[Point], t: f64) -> Point {
+    let along = t.clamp(0.0, 1.0) * (EDGE_SAMPLES - 1) as f64;
+    let index = (along.floor() as usize).min(EDGE_SAMPLES - 2);
+    points[index].lerp(points[index + 1], along - index as f64)
+}
+
+/// A closed envelope's four sides, each resampled: bottom and top left to right, left and
+/// right bottom to top. Its corners are the nodes nearest its bounding box's corners.
+fn sides_of(path: &Path) -> Result<Envelope, CommandError> {
+    let nodes: Vec<Point> = std::iter::once(path.start)
+        .chain(
+            path.segments
+                .iter()
+                .map(cut_craft_core::geometry::Segment::end),
+        )
+        .collect();
+    let count = path.segments.len();
+    let b = path.bounds();
+    let near = |corner: Point| {
+        (0..count)
+            .min_by(|&i, &j| {
+                nodes[i]
+                    .distance(corner)
+                    .total_cmp(&nodes[j].distance(corner))
+            })
+            .unwrap_or(0)
+    };
+    let [bl, br, tr, tl] = [
+        b.min,
+        Point::new(b.max.x, b.min.y),
+        b.max,
+        Point::new(b.min.x, b.max.y),
+    ]
+    .map(near);
+    let mut seen = [bl, br, tr, tl];
+    seen.sort_unstable();
+    if !path.closed || count < 4 || seen.windows(2).any(|w| w[0] == w[1]) {
+        return Err(CommandError::Failed(
+            "pick the envelope last: a closed vector with a node at each corner".into(),
+        ));
+    }
+    // the spans from node `from` forward to node `to`, as points
+    let forward = |from: usize, to: usize| {
+        let mut points = vec![nodes[from]];
+        let mut i = from;
+        while i != to {
+            let span = Path {
+                start: nodes[i],
+                segments: vec![path.segments[i]],
+                closed: false,
+            };
+            points.extend(span.flatten(FIT_TOLERANCE).into_iter().skip(1));
+            i = (i + 1) % count;
+        }
+        points
+    };
+    // a side between two corners, the way round that passes no other corner
+    let side = |from: usize, to: usize| {
+        let passes = |a: usize, b: usize| {
+            let mut i = a;
+            while i != b {
+                if i != a && seen.contains(&i) {
+                    return true;
+                }
+                i = (i + 1) % count;
+            }
+            false
+        };
+        let points = if passes(from, to) {
+            let mut back = forward(to, from);
+            back.reverse();
+            back
+        } else {
+            forward(from, to)
+        };
+        Envelope::resampled(&points)
+    };
+    Ok(Envelope {
+        bottom: side(bl, br),
+        top: side(tl, tr),
+        sides: Some((side(bl, tl), side(br, tr))),
+    })
+}
+
 /// The objects to distort and the curves to distort them along, from the selection.
 enum Objects {
     Vectors(Vec<EntityId>),
@@ -179,11 +296,7 @@ fn envelope(
     area: Rect,
 ) -> Result<(Envelope, Vec<EntityId>), CommandError> {
     let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
-    let curves = match p.mode {
-        Mode::BoundingBox => 0,
-        Mode::AlongCurve => 1,
-        Mode::BetweenCurves => 2,
-    };
+    let curves = p.mode.guides();
     if picked.len() < curves {
         return Err(CommandError::Failed(format!(
             "pick {curves} open vector(s) to distort along last"
@@ -195,6 +308,7 @@ fn envelope(
         Mode::BoundingBox => Envelope {
             bottom: Envelope::straight(c.bottom_left.into(), c.bottom_right.into()),
             top: Envelope::straight(c.top_left.into(), c.top_right.into()),
+            sides: None,
         },
         Mode::AlongCurve => {
             let bottom = Envelope::along(&open_curve(doc, used[0])?);
@@ -208,7 +322,11 @@ fn envelope(
                     bottom[i] + (b - a).normalize_or_zero().perp() * height
                 })
                 .collect();
-            Envelope { bottom, top }
+            Envelope {
+                bottom,
+                top,
+                sides: None,
+            }
         }
         Mode::BetweenCurves => {
             let (mut bottom, mut top) = (
@@ -219,8 +337,14 @@ fn envelope(
             if mean(&bottom) > mean(&top) {
                 std::mem::swap(&mut bottom, &mut top);
             }
-            Envelope { bottom, top }
+            Envelope {
+                bottom,
+                top,
+                sides: None,
+            }
         }
+        Mode::ToEnvelope => sides_of(&doc.vectors[&used[0]])?,
+        Mode::CreateEnvelope => unreachable!("Create Envelope distorts nothing"),
     };
     Ok((made, used))
 }
@@ -249,11 +373,7 @@ impl Command for DistortObject {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
-        let curves = match p.mode {
-            Mode::BoundingBox => 0,
-            Mode::AlongCurve => 1,
-            Mode::BetweenCurves => 2,
-        };
+        let curves = p.mode.guides();
         let vectors = picked[..picked.len().saturating_sub(curves)].to_vec();
         let components: Vec<EntityId> = doc
             .selected_components
@@ -287,7 +407,23 @@ impl Command for DistortObject {
                 "the objects have no width or height".into(),
             ));
         }
-        let (env, _) = envelope(doc, p, area)?;
+        if p.mode == Mode::CreateEnvelope {
+            let corners = [
+                area.min,
+                Point::new(area.max.x, area.min.y),
+                area.max,
+                Point::new(area.min.x, area.max.y),
+            ];
+            let mut c = Change::builder(doc);
+            let made = c.add(Path::polyline(&corners, true));
+            let objects = match &objects {
+                Objects::Vectors(ids) => ids.clone(),
+                Objects::Components(_) => vec![],
+            };
+            c.select(objects.into_iter().chain([made]));
+            return Ok(c.finish());
+        }
+        let (env, used) = envelope(doc, p, area)?;
         let unit = |q: Point| {
             (
                 (q.x - area.min.x) / area.size().x,
@@ -306,6 +442,9 @@ impl Command for DistortObject {
                     c.replace_component(id, distort_component(&doc.components[&id], &env, area));
                 }
             }
+        }
+        if p.mode == Mode::ToEnvelope {
+            c.remove(used[0]);
         }
         Ok(c.finish())
     }
@@ -526,5 +665,131 @@ mod tests {
     #[test]
     fn nothing_selected_is_an_error() {
         assert!(rejection::<DistortObject>(&Params::default()).contains("nothing"));
+    }
+}
+
+#[cfg(test)]
+mod envelope_tests {
+    use super::*;
+    use cut_craft_core::nodes::{insert_node, move_node, span_to_bezier};
+    use cut_craft_core::testing::{domed, run_on};
+
+    /// A 10 x 10 square at the origin, selected, and an envelope made round it.
+    fn enveloped() -> (Document, EntityId, EntityId) {
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        let square = c.add(Path::polyline(
+            &[
+                Point::ZERO,
+                Point::new(10.0, 0.0),
+                Point::new(10.0, 10.0),
+                Point::new(0.0, 10.0),
+            ],
+            true,
+        ));
+        c.select([square]);
+        doc.apply(&c.finish()).unwrap();
+        let create = Params {
+            mode: Mode::CreateEnvelope,
+            ..Params::default()
+        };
+        run_on::<DistortObject>(&mut doc, &create);
+        let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
+        (doc, square, picked[1])
+    }
+
+    fn edit(doc: &mut Document, id: EntityId, f: impl Fn(&Path) -> Path) {
+        let after = f(&doc.vectors[&id]);
+        let mut c = Change::builder(doc);
+        c.replace(id, after);
+        doc.apply(&c.finish()).unwrap();
+    }
+
+    fn to_envelope() -> Params {
+        Params {
+            mode: Mode::ToEnvelope,
+            ..Params::default()
+        }
+    }
+
+    #[test]
+    fn create_envelope_adds_the_objects_box_picked_last() {
+        let (doc, square, envelope) = enveloped();
+        assert_eq!(
+            doc.vectors[&envelope].bounds(),
+            doc.vectors[&square].bounds()
+        );
+        assert_eq!(doc.vectors[&envelope].segments.len(), 4);
+    }
+
+    #[test]
+    fn a_node_dragged_on_the_envelope_pulls_the_shape_and_the_envelope_goes() {
+        let (mut doc, square, envelope) = enveloped();
+        // the top right corner (node 2) out to (15, 15)
+        edit(&mut doc, envelope, |p| {
+            move_node(p, 2, Point::new(15.0, 15.0))
+        });
+        run_on::<DistortObject>(&mut doc, &to_envelope());
+        assert!(!doc.vectors.contains_key(&envelope));
+        let points = doc.vectors[&square].flatten(0.01);
+        assert!(
+            points
+                .iter()
+                .any(|q| q.distance(Point::new(15.0, 15.0)) < 0.05)
+        );
+        assert!(points.iter().any(|q| q.distance(Point::ZERO) < 0.05));
+    }
+
+    #[test]
+    fn a_side_bent_with_a_node_in_its_middle_bends_the_shape() {
+        let (mut doc, square, envelope) = enveloped();
+        // a node in the middle of the top side, raised by 4: the top bulges, corners stay
+        edit(&mut doc, envelope, |p| {
+            insert_node(p, Point::new(5.0, 10.0), 0.5).unwrap()
+        });
+        let middle =
+            cut_craft_core::nodes::node_near(&doc.vectors[&envelope], Point::new(5.0, 10.0), 0.5)
+                .unwrap();
+        edit(&mut doc, envelope, |p| {
+            move_node(p, middle, Point::new(5.0, 14.0))
+        });
+        run_on::<DistortObject>(&mut doc, &to_envelope());
+        let b = doc.vectors[&square].bounds();
+        assert!((b.max.y - 14.0).abs() < 0.05, "{b:?}");
+        assert!((b.min.y).abs() < 0.05 && (b.max.x - 10.0).abs() < 0.05);
+    }
+
+    #[test]
+    fn a_curved_side_works_and_components_follow_too() {
+        let mut doc = domed();
+        doc.selected_components = [EntityId(1)].into();
+        let create = Params {
+            mode: Mode::CreateEnvelope,
+            ..Params::default()
+        };
+        run_on::<DistortObject>(&mut doc, &create);
+        let envelope = doc.selection.last().unwrap();
+        edit(&mut doc, envelope, |p| span_to_bezier(p, 1));
+        edit(&mut doc, envelope, |p| {
+            move_node(p, 1, Point::new(34.0, 12.0))
+        });
+        edit(&mut doc, envelope, |p| {
+            move_node(p, 2, Point::new(34.0, 28.0))
+        });
+        let top = doc.components[&EntityId(1)].height_range().unwrap().1;
+        run_on::<DistortObject>(&mut doc, &to_envelope());
+        let k = &doc.components[&EntityId(1)];
+        assert!((k.extent().max.x - 34.0).abs() < 1.0, "{:?}", k.extent());
+        assert!((k.height_range().unwrap().1 - top).abs() < 0.3);
+    }
+
+    #[test]
+    fn an_open_or_too_simple_envelope_is_refused() {
+        let (mut doc, _, envelope) = enveloped();
+        edit(&mut doc, envelope, |p| Path {
+            closed: false,
+            ..p.clone()
+        });
+        assert!(DistortObject::run(&doc, &to_envelope()).is_err());
     }
 }
