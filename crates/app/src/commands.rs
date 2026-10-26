@@ -152,6 +152,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_duplicate_toolpath::DuplicateToolpath>();
     r.add::<cmd_crop_bitmap::CropBitmap>();
     r.add::<cmd_edit_picture::EditPicture>();
+    r.add::<cmd_document_variables::DocumentVariables>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

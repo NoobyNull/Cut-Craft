@@ -79,16 +79,21 @@ pub struct Look<'a> {
     pub material: cut_craft_core::calc::Values,
 }
 
-/// The job's material for [`Look::material`], in `units`.
-pub fn material(job: &cut_craft_core::document::Job, units: Units) -> cut_craft_core::calc::Values {
+/// The job's material, in `units`, and its document variables, for [`Look::material`].
+pub fn material(
+    doc: &cut_craft_core::document::Document,
+    units: Units,
+) -> cut_craft_core::calc::Values {
     let factor = match units {
         Units::Inch => 25.4,
         Units::Mm => 1.0,
     };
+    let job = &doc.job;
     cut_craft_core::calc::Values {
         width: job.width / factor,
         height: job.height / factor,
         thickness: job.thickness / factor,
+        variables: doc.variables.clone(),
     }
 }
 
@@ -271,7 +276,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
             };
             let mut n = value.as_f64().unwrap_or_default() / factor;
             // a sum typed in (Aspire's calculation edit boxes) is worked out
-            let material = look.material;
+            let material = look.material.clone();
             let mut drag = egui::DragValue::new(&mut n)
                 .custom_parser(move |text| cut_craft_core::calc::evaluate(text, &material))
                 .clamp_range(

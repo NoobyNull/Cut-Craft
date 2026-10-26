@@ -422,6 +422,9 @@ pub struct Document {
     /// Which of `sheets` is being worked on; its setup is `job`.
     #[serde(default)]
     pub active_sheet: usize,
+    /// Edit ▸ Document Variables: named values sums in number fields use as `{name}`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub variables: BTreeMap<String, f64>,
 }
 
 impl Default for Document {
@@ -444,6 +447,7 @@ impl Default for Document {
             levels: crate::component::default_levels(),
             sheets: one_sheet(),
             active_sheet: 0,
+            variables: BTreeMap::new(),
         }
     }
 }

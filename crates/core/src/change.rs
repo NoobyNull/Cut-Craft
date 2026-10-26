@@ -130,6 +130,11 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
+    /// Replaces the document variables.
+    SetVariables {
+        before: BTreeMap<String, f64>,
+        after: BTreeMap<String, f64>,
+    },
     /// Replaces the sheet list and which sheet is active.
     SetSheets {
         before: (Vec<Sheet>, usize),
@@ -194,6 +199,10 @@ impl Edit {
                 after: before,
             },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
+                before: after,
+                after: before,
+            },
+            Self::SetVariables { before, after } => Self::SetVariables {
                 before: after,
                 after: before,
             },
@@ -666,6 +675,7 @@ impl Document {
                 self.set_level(*id, before.as_ref(), after.as_ref())?;
             }
             Edit::SetSheets { before, after } => self.set_sheets(before, after)?,
+            Edit::SetVariables { after, .. } => self.variables.clone_from(after),
         }
         Ok(())
     }
@@ -1064,6 +1074,13 @@ impl ChangeBuilder<'_> {
         if self.sheets != after {
             let before = std::mem::replace(&mut self.sheets, after.clone());
             self.edits.push(Edit::SetSheets { before, after });
+        }
+    }
+
+    pub fn set_variables(&mut self, after: BTreeMap<String, f64>) {
+        if self.doc.variables != after {
+            let before = self.doc.variables.clone();
+            self.edits.push(Edit::SetVariables { before, after });
         }
     }
 

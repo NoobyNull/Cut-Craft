@@ -1415,7 +1415,7 @@ impl CutCraftApp {
         let look = form::Look {
             units,
             picture: &picture,
-            material: form::material(&self.doc.job, units),
+            material: form::material(&self.doc, units),
         };
         form::show(ui, &open.fields, &mut open.params, &look);
         if let Some(error) = &open.error {
@@ -1854,7 +1854,7 @@ impl CutCraftApp {
                 let look = form::Look {
                     units: self.doc.job.units,
                     picture: &|_| None,
-                    material: form::material(&self.doc.job, self.doc.job.units),
+                    material: form::material(&self.doc, self.doc.job.units),
                 };
                 if form::show(ui, &fields, &mut value, &look)
                     && let Ok(changed) = serde_json::from_value(value)
@@ -3301,7 +3301,7 @@ impl CutCraftApp {
                 let look = crate::form::Look {
                     units: self.doc.job.units,
                     picture: &|_| None,
-                    material: crate::form::material(&self.doc.job, self.doc.job.units),
+                    material: crate::form::material(&self.doc, self.doc.job.units),
                 };
                 if crate::form::show(ui, &fields, &mut values, &look) {
                     changed = serde_json::from_value::<crate::options::Options>(values).ok();
@@ -3334,7 +3334,7 @@ impl CutCraftApp {
                 let look = crate::form::Look {
                     units,
                     picture: &picture,
-                    material: crate::form::material(&self.doc.job, units),
+                    material: crate::form::material(&self.doc, units),
                 };
                 if crate::form::show(ui, &fields, &mut values, &look)
                     && let Ok(options) = serde_json::from_value(values)

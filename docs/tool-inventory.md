@@ -145,6 +145,9 @@ say "not implemented yet".
   snap point across or up and down (Aspire's guide lines and woken nodes are not done).
 - Menus and drop-downs draw each category in a border.
 - Number fields take sums (Calculation Edit Boxes): + - * / ^, brackets, W H T, P, I, M, '.
+- Sheets keep their own vectors, components, pictures and toolpaths; activating one swaps them.
+- Edit ▸ Options (3D view, toolpath and general settings, in options.json) and Edit ▸
+  Document Variables (used in sums as {name}).
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
@@ -359,7 +362,8 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: Import Toolpaths.
-- Edit: Swap Sides, Document Variables, Options.
+- Edit: Swap Sides; Options beyond the 3D view, toolpath and recent-file settings;
+  document variables linked to fields (a sum is worked out once, when entered).
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Materials.

@@ -1,14 +1,16 @@
 //! Calculation edit boxes: a number field may hold a sum, worked out when it is entered
 //! (Aspire's help: Calculation Edit Boxes). `+ - * / ^`, brackets, and letters for stored
 //! values: W or X the material width, H or Y its height, T or Z its thickness, P π, I to
-//! inches (÷ 25.4), M to millimetres (× 25.4), and `'` after a number for feet (× 12).
+//! inches (÷ 25.4), M to millimetres (× 25.4), `'` after a number for feet (× 12), and
+//! `{name}` for a document variable.
 
-/// What the letters stand for, in the units the field shows.
-#[derive(Clone, Copy, Debug, Default)]
+/// What the letters stand for, in the units the field shows, and the document variables.
+#[derive(Clone, Debug, Default)]
 pub struct Values {
     pub width: f64,
     pub height: f64,
     pub thickness: f64,
+    pub variables: std::collections::BTreeMap<String, f64>,
 }
 
 /// The value of `text`, a number or a sum; a trailing `=` is allowed. `None` when it is not one.
@@ -98,6 +100,17 @@ impl Parser<'_> {
     }
 
     fn atom(&mut self) -> Option<f64> {
+        if self.eat('{') {
+            let start = self.at;
+            while self.peek().is_some_and(|c| c != '}') {
+                self.at += 1;
+            }
+            let name: String = self.tokens[start..self.at].iter().collect();
+            return self
+                .eat('}')
+                .then(|| self.values.variables.get(&name).copied())
+                .flatten();
+        }
         if self.eat('(') {
             let v = self.sum()?;
             return self.eat(')').then_some(v);
@@ -133,6 +146,7 @@ mod tests {
         width: 600.0,
         height: 300.0,
         thickness: 18.0,
+        variables: std::collections::BTreeMap::new(),
     };
 
     fn calc(text: &str) -> Option<f64> {
@@ -159,6 +173,18 @@ mod tests {
         assert!((calc("25.4*i").unwrap() - 1.0).abs() < 1e-12);
         assert!((calc("2*M").unwrap() - 50.8).abs() < 1e-12);
         assert_eq!(calc("2'+10"), Some(34.0), "feet and inches");
+    }
+
+    #[test]
+    fn document_variables_go_in_braces() {
+        let values = Values {
+            variables: [("depth".to_owned(), 6.0), ("Pass_2".to_owned(), 1.5)].into(),
+            ..JOB
+        };
+        assert_eq!(evaluate("{depth}*2", &values), Some(12.0));
+        assert_eq!(evaluate("{depth}-{Pass_2}+t", &values), Some(22.5));
+        assert_eq!(evaluate("{missing}", &values), None);
+        assert_eq!(evaluate("{depth", &values), None);
     }
 
     #[test]
