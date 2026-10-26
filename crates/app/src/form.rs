@@ -22,6 +22,49 @@ pub struct Field {
     pub section: bool,
     /// `x-icon`: the section's picture, which may follow its value (see [`icon_path`]).
     pub icon: Option<String>,
+    /// Only shown while another choice says so.
+    pub when: Option<When>,
+}
+
+/// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
+/// judged on the form's top-level parameters: Aspire's forms change with what is chosen.
+#[derive(Debug, PartialEq)]
+pub struct When {
+    pub key: String,
+    pub values: Vec<String>,
+    /// Shown when the value is one of `values`; else hidden then.
+    pub show: bool,
+}
+
+impl When {
+    fn from_schema(s: &Value) -> Option<Self> {
+        let (rule, show) = match (s.get("x-show-when"), s.get("x-hide-when")) {
+            (Some(rule), _) => (rule, true),
+            (None, Some(rule)) => (rule, false),
+            (None, None) => return None,
+        };
+        let (key, values) = rule.as_object()?.iter().next()?;
+        let values = match values {
+            Value::Array(list) => list
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect(),
+            one => vec![one.as_str()?.to_owned()],
+        };
+        Some(Self {
+            key: key.clone(),
+            values,
+            show,
+        })
+    }
+
+    /// Whether the field shows, given the form's top-level `params`.
+    pub fn shown(&self, params: &Value) -> bool {
+        let is = params[&self.key]
+            .as_str()
+            .is_some_and(|v| self.values.iter().any(|w| w == v));
+        is == self.show
+    }
 }
 
 /// How a form looks: the units lengths are shown in, and the pictures sections show.
@@ -78,9 +121,25 @@ pub struct Choice {
 
 /// Edits `params` through its fields; true when anything changed.
 pub fn show(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look) -> bool {
+    let top = params.clone();
+    show_within(ui, fields, params, look, &top)
+}
+
+/// [`show`] for `params` somewhere inside the form, whose top-level parameters are `top`.
+fn show_within(
+    ui: &mut egui::Ui,
+    fields: &[Field],
+    params: &mut Value,
+    look: &Look,
+    top: &Value,
+) -> bool {
+    let shown: Vec<&Field> = fields
+        .iter()
+        .filter(|f| f.when.as_ref().is_none_or(|w| w.shown(top)))
+        .collect();
     let mut changed = false;
     // runs of ordinary fields share a grid; each section is a framed block of its own
-    let mut rest = fields;
+    let mut rest = shown.as_slice();
     while !rest.is_empty() {
         let run = rest.iter().position(|f| f.section).unwrap_or(rest.len());
         let (plain, after) = rest.split_at(run);
@@ -104,7 +163,7 @@ pub fn show(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look
                         ui.add(picture);
                     }
                     ui.vertical(|ui| match &section.kind {
-                        Kind::Group(inner) => show(ui, inner, value, look),
+                        Kind::Group(inner) => show_within(ui, inner, value, look, top),
                         kind => edit(ui, kind, value, look),
                     })
                     .inner
@@ -117,7 +176,7 @@ pub fn show(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look
     changed
 }
 
-fn grid(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look) -> bool {
+fn grid(ui: &mut egui::Ui, fields: &[&Field], params: &mut Value, look: &Look) -> bool {
     let mut changed = false;
     egui::Grid::new(ui.next_auto_id())
         .num_columns(2)
@@ -436,6 +495,7 @@ fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
                 .as_str()
                 .or_else(|| resolve(root, s)["x-icon"].as_str())
                 .map(String::from),
+            when: When::from_schema(s),
         })
         .collect()
 }
@@ -598,6 +658,27 @@ mod tests {
         assert_eq!(widget("resolution"), Widget::DropDown);
         assert_eq!(widget("datum"), Widget::Corners);
         assert_eq!(widget("side"), Widget::Auto);
+    }
+
+    #[test]
+    fn fields_show_or_hide_with_another_choice() {
+        let s = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "kind": { "enum": ["flat", "rotary"] },
+                "diameter": { "type": "number", "x-show-when": { "kind": "rotary" } },
+                "thickness": { "type": "number", "x-hide-when": { "kind": ["rotary"] } },
+            }
+        });
+        let fields = fields(&s);
+        let when = |key| field(&fields, key).when.as_ref().unwrap();
+        let (flat, rotary) = (
+            serde_json::json!({ "kind": "flat" }),
+            serde_json::json!({ "kind": "rotary" }),
+        );
+        assert!(!when("diameter").shown(&flat) && when("diameter").shown(&rotary));
+        assert!(when("thickness").shown(&flat) && !when("thickness").shown(&rotary));
+        assert!(field(&fields, "kind").when.is_none());
     }
 
     #[test]

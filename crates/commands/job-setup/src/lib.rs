@@ -23,23 +23,40 @@ pub enum JobType {
     Rotary,
 }
 
-/// For a rotary job: its length is the Width (along X) or the Height (along Y)
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct RotarySize {
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    pub diameter: f64,
-    /// The direction the cylinder's axis runs
-    pub orientation: Along,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Size {
-    #[schemars(title = "Width (X)", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Width (X)",
+        extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
+        range(min = 0)
+    )]
     pub width: f64,
-    #[schemars(title = "Height (Y)", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Height (Y)",
+        extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
+        range(min = 0)
+    )]
     pub height: f64,
-    #[schemars(title = "Thickness (Z)", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Thickness (Z)",
+        extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
+        range(min = 0)
+    )]
     pub thickness: f64,
+    /// Rotary jobs: the cylinder's length along its axis
+    #[schemars(
+        title = "Length (L)",
+        extend("x-unit" = "mm", "x-show-when" = {"job_type": "rotary"}),
+        range(min = 0)
+    )]
+    pub length: f64,
+    /// Rotary jobs: the cylinder's diameter
+    #[schemars(
+        title = "Diameter (D)",
+        extend("x-unit" = "mm", "x-show-when" = {"job_type": "rotary"}),
+        range(min = 0)
+    )]
+    pub diameter: f64,
     /// Lengths are shown in these; the job is always stored in millimetres
     #[schemars(extend("x-widget" = "row"))]
     pub units: Units,
@@ -84,8 +101,12 @@ pub struct Params {
         extend("x-icon" = "job_setup/xy_datum_{position}.svg")
     )]
     pub datum: DatumPosition,
-    #[schemars(title = "Rotary", extend("x-section" = true))]
-    pub rotary: RotarySize,
+    /// Rotary jobs: the direction the cylinder's axis runs
+    #[schemars(
+        title = "Orientation",
+        extend("x-section" = true, "x-show-when" = {"job_type": "rotary"})
+    )]
+    pub orientation: Along,
     /// How finely 3D shapes are worked out over the job; Standard suits most parts
     #[schemars(
         title = "Modeling Resolution",
@@ -128,6 +149,13 @@ impl From<&Job> for Params {
                 width: job.width,
                 height: job.height,
                 thickness: job.thickness,
+                length: match (job.rotary, rotary.along) {
+                    (Some(_), Along::X) => job.width,
+                    (Some(_), Along::Y) => job.height,
+                    // ponytail: a new rotary job starts 300 mm long
+                    (None, _) => 300.0,
+                },
+                diameter: rotary.diameter,
                 units: job.units,
             },
             z_zero: job.z_zero,
@@ -137,10 +165,7 @@ impl From<&Job> for Params {
                 x: job.offset.x,
                 y: job.offset.y,
             },
-            rotary: RotarySize {
-                diameter: rotary.diameter,
-                orientation: rotary.along,
-            },
+            orientation: rotary.along,
             resolution: job.resolution,
             colour: job.colour,
             clearance: job.clearance,
@@ -180,14 +205,9 @@ impl Command for JobSetup {
                 ));
             }
             JobType::Rotary => {
-                let along = p.rotary.orientation;
-                let length = match along {
-                    Along::X => p.size.width,
-                    Along::Y => p.size.height,
-                };
-                ensure_positive("length", length)?;
-                ensure_positive("diameter", p.rotary.diameter)?;
-                Job::rotary(length, p.rotary.diameter, along)
+                ensure_positive("length", p.size.length)?;
+                ensure_positive("diameter", p.size.diameter)?;
+                Job::rotary(p.size.length, p.size.diameter, p.orientation)
             }
             JobType::SingleSided => {
                 ensure_positive("width", p.size.width)?;
@@ -386,9 +406,9 @@ mod tests {
         use cut_craft_core::document::{Along, Rotary};
         let doc = after::<JobSetup>(&with(|p| {
             p.job_type = JobType::Rotary;
-            p.size.width = 300.0;
-            p.rotary.diameter = 50.0;
-            p.rotary.orientation = Along::X;
+            p.size.length = 300.0;
+            p.size.diameter = 50.0;
+            p.orientation = Along::X;
             p.z_zero = ZZero::MachineBed;
         }));
         let job = doc.job;
@@ -408,8 +428,12 @@ mod tests {
         assert_eq!(job.z_zero, ZZero::MachineBed);
         let reopened = Params::from(&job);
         assert_eq!(
-            (reopened.job_type, reopened.rotary.diameter),
-            (JobType::Rotary, 50.0)
+            (
+                reopened.job_type,
+                reopened.size.diameter,
+                reopened.size.length
+            ),
+            (JobType::Rotary, 50.0, 300.0)
         );
     }
 
@@ -418,6 +442,41 @@ mod tests {
         assert_eq!(
             after_err::<JobSetup>(&with(|p| p.size.thickness = 0.0)),
             "invalid parameters: thickness must be greater than 0"
+        );
+    }
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::*;
+
+    /// The schema's `x-show-when` / `x-hide-when` rule on `field`, as `(key, value)`.
+    fn rule(field: &serde_json::Value, which: &str) -> Option<String> {
+        field.get(which).map(|r| r["job_type"].to_string())
+    }
+
+    #[test]
+    fn rotary_fields_show_only_for_rotary_jobs_and_flat_sizes_only_for_flat_ones() {
+        let schema = serde_json::to_value(schemars::schema_for!(Params)).unwrap();
+        let size = &schema["$defs"]["Size"]["properties"];
+        for flat in ["width", "height", "thickness"] {
+            assert_eq!(
+                rule(&size[flat], "x-hide-when").as_deref(),
+                Some("\"rotary\""),
+                "{flat}"
+            );
+        }
+        for round in ["length", "diameter"] {
+            assert_eq!(
+                rule(&size[round], "x-show-when").as_deref(),
+                Some("\"rotary\""),
+                "{round}"
+            );
+        }
+        let orientation = &schema["properties"]["orientation"];
+        assert_eq!(
+            rule(orientation, "x-show-when").as_deref(),
+            Some("\"rotary\"")
         );
     }
 }

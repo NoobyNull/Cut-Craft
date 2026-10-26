@@ -118,7 +118,11 @@ say "not implemented yet".
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL, Export as Grayscale Bitmap.
 - Machine: Install Post-Processor (real grbl / FluidNC posts load, rotary G93 ones included).
-- Job Setup: single-sided and rotary jobs.
+- Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
+  does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
+  Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
+  `x-hide-when`). Rotary Z Zero is still labelled Material Surface / Machine Bed, and Flip
+  design is not done.
 - Save Toolpaths: through the installed post, else Cut Craft's own FluidNC posts (tool
   changer; rotary jobs wrapped onto A in inverse time).
 - Toolpaths menu: Show Toolpaths Tab, Recalculate All, Toolpath Drawing (2D previews, solid

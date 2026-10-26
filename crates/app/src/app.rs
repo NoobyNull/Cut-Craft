@@ -1715,6 +1715,7 @@ fn summary_table(
             },
             section: false,
             icon: None,
+            when: None,
         },
         crate::form::Field {
             key: "scale_factor".into(),
@@ -1730,6 +1731,7 @@ fn summary_table(
             },
             section: false,
             icon: None,
+            when: None,
         },
     ];
     let mut values = serde_json::json!({ "rapid_rate": *rapid, "scale_factor": *scale });
