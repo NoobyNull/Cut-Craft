@@ -166,6 +166,13 @@ const TOP_BAR_TOGGLES: [&str; 5] = [
 /// The level menu's Select Components and Export as 3D Clipart: these, then the level's id.
 pub const SELECT_LEVEL: &str = "select_level_components:";
 pub const EXPORT_LEVEL: &str = "export_level_clipart:";
+/// Text sizes and control heights are egui's times this, to read easily.
+// ponytail: fixed until Options has a text size
+const TEXT_SCALE: f32 = 1.15;
+/// Lines (widget outlines, the 2D view's vectors) are egui's widths times this.
+const LINE_SCALE: f32 = 1.5;
+/// Easy-to-read UI fonts, the first installed used; egui's own stay behind for symbols.
+const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
 /// Beside each recently opened file.
 const RECENT_FILE_ICON: &str = "file/new.svg";
 /// This version's changes, one `- ` line each, shown on the start page.
@@ -544,6 +551,8 @@ impl CutCraftApp {
             "new" => {
                 if self.confirm_discard() {
                     self.reset_job();
+                    // the material being set up shows in the 2D view
+                    self.view = View::TwoD;
                     self.start_command("job_setup");
                     if let Some(form) = &mut self.form {
                         form.new_job = true;
@@ -2717,6 +2726,41 @@ fn menu_items(
     }
 }
 
+/// An easier-to-read look: a heavier system font, larger text and thicker lines.
+fn readable(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    if let Some((name, data, index)) = cut_craft_core::font::system_face(&UI_FONTS) {
+        let mut data = egui::FontData::from_owned(data);
+        data.index = index;
+        fonts.font_data.insert(name.clone(), data);
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, name);
+    }
+    ctx.set_fonts(fonts);
+    ctx.style_mut(|style| {
+        for font in style.text_styles.values_mut() {
+            font.size *= TEXT_SCALE;
+        }
+        style.spacing.interact_size *= TEXT_SCALE;
+        let v = &mut style.visuals;
+        for w in [
+            &mut v.widgets.noninteractive,
+            &mut v.widgets.inactive,
+            &mut v.widgets.hovered,
+            &mut v.widgets.active,
+            &mut v.widgets.open,
+        ] {
+            w.fg_stroke.width *= LINE_SCALE;
+            w.bg_stroke.width *= LINE_SCALE;
+        }
+        v.window_stroke.width *= LINE_SCALE;
+        v.selection.stroke.width *= LINE_SCALE;
+    });
+}
+
 /// A category of a drop-down in a border filling its width, as menus draw theirs.
 fn bordered(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -3829,6 +3873,7 @@ pub fn run(title: &str) {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
+            readable(&cc.egui_ctx);
             if let Some(rs) = &cc.wgpu_render_state {
                 let info = rs.adapter.get_info();
                 log::info!(
@@ -4941,6 +4986,17 @@ mod tests {
     fn the_window_is_titled_cut_craft() {
         let h = Harness::new();
         assert_eq!(h.app.title, "Untitled - Cut Craft");
+    }
+
+    #[test]
+    fn a_new_job_is_set_up_over_the_2d_view() {
+        let mut h = Harness::at_start();
+        h.app.view = View::ThreeD;
+        h.app.invoke(&h.ctx, "new");
+        assert!(
+            h.app.view == View::TwoD,
+            "the material shows while it is set up"
+        );
     }
 
     #[test]
