@@ -1,0 +1,7 @@
+- Orientate 3D Model laid out in Aspire's sections, with its pictures
+- A tool's form takes the place of the tools while it is open
+- Light theme
+- Vector boundaries follow long straight edges
+- Vectors lie flat in the 3D view
+- The window keeps its size between runs
+- Menu items on one line

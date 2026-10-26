@@ -150,6 +150,10 @@ const STARTUP_TASKS: [(&str, &str, &str); 3] = [
 ];
 /// Beside each recently opened file.
 const RECENT_FILE_ICON: &str = "file/new.svg";
+/// This version's changes, one `- ` line each, shown on the start page.
+const WHATS_NEW: &str = include_str!("../whats-new.md");
+/// Where Cut Craft is found online, shown on the start page: label and address.
+const LINKS: [(&str, &str); 1] = [("GitHub", "https://github.com/NoobyNull/cut-craft")];
 /// The design panel's starting width, in the theme's interactive widths: room for Job Setup's
 /// pictures beside its choices.
 // ponytail: fixed until panel widths are saved with the window layout
@@ -1054,6 +1058,16 @@ impl CutCraftApp {
             {
                 clicked = Some(format!("open_recent:{i}"));
             }
+        }
+        ui.separator();
+        ui.strong(format!("What's new in v{}", env!("CARGO_PKG_VERSION")));
+        for change in WHATS_NEW.lines().filter(|l| !l.trim().is_empty()) {
+            ui.label(change.trim_start_matches("- "));
+        }
+        ui.separator();
+        ui.strong("Links");
+        for (label, url) in LINKS {
+            ui.hyperlink_to(label, url);
         }
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), &id);
@@ -4163,6 +4177,22 @@ mod tests {
         );
         assert!(h.app.menu_names().contains(&"Model"));
         assert!(h.app.view_transform.is_some());
+    }
+
+    #[test]
+    fn the_start_page_says_whats_new_and_links_out() {
+        let h = Harness::at_start();
+        let heading = format!("What's new in v{}", env!("CARGO_PKG_VERSION"));
+        assert!(h.text_at(&heading).is_some(), "{heading}");
+        let first = WHATS_NEW.lines().find(|l| !l.trim().is_empty()).unwrap();
+        assert!(
+            h.text_at(first.trim_start_matches("- ")).is_some(),
+            "{first}"
+        );
+        for (label, url) in LINKS {
+            assert!(h.text_at(label).is_some(), "{label}");
+            assert!(url.starts_with("https://"), "{url}");
+        }
     }
 
     #[test]
