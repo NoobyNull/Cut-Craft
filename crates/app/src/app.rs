@@ -1325,6 +1325,34 @@ impl CutCraftApp {
         Ok(())
     }
 
+    /// The arrow keys move the selection by the Fixed Nudge Distance (Snapping Options): Aspire
+    /// nudges with Ctrl + Shift and the arrows; plain arrows do it too [inf].
+    fn nudge(&mut self, ctx: &egui::Context) {
+        if self.screen != Screen::Job || ctx.wants_keyboard_input() {
+            return;
+        }
+        let step = self.snap.nudge_distance;
+        let by = ctx.input(|i| {
+            [
+                (Key::ArrowLeft, -1.0, 0.0),
+                (Key::ArrowRight, 1.0, 0.0),
+                (Key::ArrowDown, 0.0, -1.0),
+                (Key::ArrowUp, 0.0, 1.0),
+            ]
+            .iter()
+            .filter(|(key, ..)| i.key_pressed(*key))
+            .fold(Point::ZERO, |sum, &(_, x, y)| sum + Point::new(x, y) * step)
+        });
+        if by == Point::ZERO || self.doc.selection_bounds().is_none() {
+            return;
+        }
+        let params =
+            serde_json::json!({ "relative": true, "x": by.x, "y": by.y, "anchor": "bottom_left" });
+        if let Err(e) = self.apply("move", &params) {
+            self.status.set_message(&e);
+        }
+    }
+
     fn shortcuts(&mut self, ctx: &egui::Context) {
         // single-letter shortcuts must not fire while typing in a form field
         if !ctx.wants_keyboard_input() {
@@ -1351,6 +1379,7 @@ impl CutCraftApp {
             self.pages.done_with(Page::Design);
             self.pages.done_with(Page::Toolpaths);
         }
+        self.nudge(ctx);
         ctx.input(|i| {
             if i.key_pressed(Key::F2) {
                 self.view = View::TwoD;
@@ -5871,6 +5900,24 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::NONE,
         }
+    }
+
+    #[test]
+    fn the_arrow_keys_nudge_the_selection() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 20.0);
+        let step = h.app.snap.nudge_distance;
+        let at = |h: &Harness| h.app.doc.selection_bounds().unwrap().min;
+        let before = at(&h);
+        h.frame(vec![key(Key::ArrowRight)]);
+        h.frame(vec![key(Key::ArrowUp)]);
+        let moved = at(&h) - before;
+        assert!(
+            (moved.x - step).abs() < 1e-9 && (moved.y - step).abs() < 1e-9,
+            "{moved:?}"
+        );
+        h.frame(vec![key(Key::ArrowLeft), key(Key::ArrowDown)]);
+        assert!((at(&h) - before).length() < 1e-9, "back where it was");
     }
 
     #[test]
