@@ -1,6 +1,7 @@
 //! Snapping: points the pointer jumps to while drawing or moving nodes, as Aspire's Snapping
 //! Options (F4) choose them: geometry (span ends and middles, arc centres, object centres),
-//! the job's centre and corners, and a grid.
+//! the job's centre and corners, and a grid. Smart snapping lines the pointer up with those
+//! points across or up and down when none is near.
 
 use crate::document::Document;
 use crate::geometry::{Point, Segment};
@@ -24,9 +25,16 @@ pub struct SnapOptions {
     pub span_end_points: bool,
     pub span_mid_points: bool,
     pub arc_centers: bool,
+    /// Line the pointer up with the snap points, across or up and down, when none is near
+    #[serde(default = "on")]
+    pub smart_snapping: bool,
     /// How near, in screen pixels, the pointer must come to a point to snap to it
     #[schemars(range(min = 1, max = 50))]
     pub snapping_radius: f64,
+}
+
+fn on() -> bool {
+    true
 }
 
 impl Default for SnapOptions {
@@ -40,6 +48,7 @@ impl Default for SnapOptions {
             span_end_points: true,
             span_mid_points: true,
             arc_centers: true,
+            smart_snapping: true,
             // ponytail: Aspire's slider runs Small to Large; 8 px is our middle [inf]
             snapping_radius: 8.0,
         }
@@ -56,6 +65,21 @@ impl SnapOptions {
             .map(|q| (q, q.distance(at)))
             .filter(|(_, d)| *d <= reach)
             .min_by(|a, b| a.1.total_cmp(&b.1));
+        if near.is_none() && self.smart_snapping {
+            // ponytail: lines through every point; Aspire's only through the nodes hovered
+            let points = self.points(doc);
+            let nearest = |of: fn(Point) -> f64| {
+                points
+                    .iter()
+                    .map(|&q| of(q))
+                    .filter(|v| (v - of(at)).abs() <= reach)
+                    .min_by(|a, b| (a - of(at)).abs().total_cmp(&(b - of(at)).abs()))
+            };
+            let (x, y) = (nearest(|p| p.x), nearest(|p| p.y));
+            if x.is_some() || y.is_some() {
+                return Point::new(x.unwrap_or(at.x), y.unwrap_or(at.y));
+            }
+        }
         match near {
             Some((q, _)) => q,
             None if self.snap_to_grid && self.grid_spacing > 0.0 => {
@@ -163,6 +187,30 @@ mod tests {
         assert_eq!(
             none.snap(&doc, Point::new(29.6, 30.3), 1.0),
             Point::new(29.6, 30.3)
+        );
+    }
+
+    #[test]
+    fn smart_snapping_lines_the_pointer_up_with_a_point() {
+        let doc = document_with(vec![square(10.0, 10.0, 20.0)]);
+        let s = SnapOptions::default();
+        assert_eq!(
+            s.snap(&doc, Point::new(29.7, 45.0), 1.0),
+            Point::new(30.0, 45.0),
+            "straight above the right side"
+        );
+        assert_eq!(
+            s.snap(&doc, Point::new(45.0, 19.4), 1.0),
+            Point::new(45.0, 20.0),
+            "level with the centre"
+        );
+        let off = SnapOptions {
+            smart_snapping: false,
+            ..SnapOptions::default()
+        };
+        assert_eq!(
+            off.snap(&doc, Point::new(29.7, 45.0), 1.0),
+            Point::new(29.7, 45.0)
         );
     }
 

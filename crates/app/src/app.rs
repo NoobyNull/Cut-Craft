@@ -3447,6 +3447,8 @@ mod tests {
         let id = *h.app.doc.selection.iter().next().unwrap();
         h.app.invoke(&h.ctx, "node_edit");
         assert_eq!(h.app.view_tool, Some(ViewTool::NodeEdit));
+        // smart snapping would line the corner up with the other top corner
+        h.app.snap.smart_snapping = false;
         let (from, to) = (h.at(30.0, 20.0), h.at(40.0, 25.0));
         h.drag(from, to);
         let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
