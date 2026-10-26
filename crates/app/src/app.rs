@@ -275,6 +275,8 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
+    /// The Clipart tab's library.
+    clipart: crate::clipart::Clipart,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
     recent_path: Option<std::path::PathBuf>,
     /// Window title last sent to the viewport.
@@ -322,6 +324,7 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
+            clipart: crate::clipart::Clipart::default(),
             recent_path: None,
             title: String::new(),
         }
@@ -337,6 +340,7 @@ impl CutCraftApp {
             "zoom_selected" => self.doc.selection_bounds().is_some(),
             id if id.starts_with("open_recent:") => true,
             id if id.starts_with(SELECT_LEVEL) => true,
+            "add_clipart_folder" => true,
             id if id.starts_with(EXPORT_LEVEL) => {
                 self.registry.exporter("export_as_3d_clipart").is_some()
             }
@@ -522,22 +526,14 @@ impl CutCraftApp {
                     }
                 }
                 if let Some(path) = dialog.pick_file() {
-                    // meshes go through Orientate 3D Model, as Aspire's import does
-                    let stl = path
-                        .extension()
-                        .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
-                    if models && stl {
-                        self.start_command("orientate_3d_model");
-                        if let Some(form) =
-                            self.form.as_mut().filter(|f| f.id == "orientate_3d_model")
-                        {
-                            form.params["file"] = Value::from(path.display().to_string());
-                        }
-                        return;
-                    }
-                    let change = files::import(&self.registry, &self.doc, &path)
-                        .map_err(cut_craft_core::CommandError::Failed);
-                    self.record(change, &format!("Imported {}", path.display()));
+                    self.import_file(&path);
+                }
+            }
+            "add_clipart_folder" => {
+                if let Some(folder) = file_dialog().pick_folder()
+                    && let Err(e) = self.clipart.add(folder)
+                {
+                    self.status.set_message(&e);
                 }
             }
             "segment_3d_model_file" => {
@@ -1113,6 +1109,7 @@ impl CutCraftApp {
                     self.tool_groups(ui, &groups, Page::Design);
                 }
                 "Sheets" => self.sheets_panel(ui),
+                "Clipart" => self.clipart_panel(ui),
                 "Layers" => self.layers_panel(ui),
                 "Components" => self.component_list(ui),
                 tab => {
@@ -1971,6 +1968,35 @@ impl CutCraftApp {
                 self.export("export_as_3d_clipart");
             }
         }
+    }
+
+    /// The Clipart tab: its library, and the chosen folder's clipart to double-click in.
+    fn clipart_panel(&mut self, ui: &mut egui::Ui) {
+        let registry = &self.registry;
+        let importable = |ext: &str| registry.importer_for(ext).is_some();
+        match crate::clipart::panel(ui, &mut self.clipart, &importable) {
+            Some(crate::clipart::Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
+            Some(crate::clipart::Picked::Import(path)) => self.import_file(&path),
+            None => {}
+        }
+    }
+
+    /// Brings `path` into the job: meshes through Orientate 3D Model, as Aspire's import
+    /// does; anything else through its importer.
+    fn import_file(&mut self, path: &std::path::Path) {
+        let stl = path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+        if stl {
+            self.start_command("orientate_3d_model");
+            if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
+                form.params["file"] = Value::from(path.display().to_string());
+            }
+            return;
+        }
+        let change = files::import(&self.registry, &self.doc, path)
+            .map_err(cut_craft_core::CommandError::Failed);
+        self.record(change, &format!("Imported {}", path.display()));
     }
 
     /// The Sheets tab: Aspire's Sheets List (each sheet's name and size, the active one
@@ -3218,6 +3244,7 @@ pub fn run(title: &str) {
             let mut app = CutCraftApp::new();
             app.load_tools();
             app.load_recent();
+            app.clipart = crate::clipart::Clipart::load();
             Box::new(app)
         }),
     )
@@ -3690,6 +3717,14 @@ mod tests {
             self.press(at, true, modifiers);
             self.press(at, false, modifiers);
             self.frame_holding(modifiers, vec![]);
+        }
+
+        fn double_click(&mut self, at: Pos2) {
+            self.frame(vec![Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                self.press(at, pressed, Modifiers::NONE);
+            }
+            self.frame(vec![]);
         }
 
         /// Clicks the item at `path` (names, top down) of the right-click menu `menu` builds.
@@ -4640,6 +4675,34 @@ mod tests {
     }
 
     #[test]
+    fn the_clipart_tab_shows_a_library_folder_and_imports_what_is_double_clicked() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-clipart-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("flower.bmp"), crate::icons::tiny_bmp()).unwrap();
+        std::fs::write(dir.join("notes.txt"), "not clipart").unwrap();
+        let mut h = Harness::new();
+        h.app.pages.set_pinned(Page::Design, true);
+        h.app.design_tab = 4;
+        h.app.clipart.folders = vec![dir.clone()];
+        h.app.clipart.chosen = Some(0);
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let folder = dir.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(h.text_at(&folder).is_some(), "the library lists the folder");
+        assert!(
+            h.text_at("notes.txt").is_none(),
+            "only what can be imported"
+        );
+        let at = h
+            .text_at("flower.bmp")
+            .expect("the picture is in the browser");
+        h.double_click(at);
+        assert_eq!(h.app.doc.bitmaps.len(), 1, "double-clicking imports it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn toolpath_forms_open_in_the_toolpaths_page() {
         let mut h = Harness::new();
         h.app.invoke(&h.ctx, "profile_toolpath");
@@ -4736,7 +4799,8 @@ mod tests {
     /// save-changes question (the smoke test's job has unsaved work), the file manager and
     /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 21] = [
+        const ASKS: [&str; 22] = [
+            "add_clipart_folder",
             "segment_3d_model_file",
             "new",
             "open",

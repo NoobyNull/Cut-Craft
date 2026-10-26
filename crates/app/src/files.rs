@@ -150,6 +150,11 @@ pub fn recent_files_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join("recent.json"))
 }
 
+/// Where the Clipart tab's library folders are kept.
+pub fn clipart_folders_path() -> Option<PathBuf> {
+    config_dir().map(|dir| dir.join("clipart.json"))
+}
+
 /// The tool database at `path`; the starter tools when there is none yet.
 pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
     if !path.exists() {

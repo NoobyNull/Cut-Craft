@@ -75,6 +75,20 @@ impl Icons {
     }
 }
 
+/// A 1×1 24-bit BMP: file header, info header, one pixel padded to 4 bytes.
+#[cfg(test)]
+pub fn tiny_bmp() -> Vec<u8> {
+    let mut bmp = b"BM".to_vec();
+    for n in [58_u32, 0, 54, 40, 1, 1] {
+        bmp.extend(n.to_le_bytes());
+    }
+    bmp.extend(1_u16.to_le_bytes());
+    bmp.extend(24_u16.to_le_bytes());
+    bmp.extend([0_u8; 24]);
+    bmp.extend([255, 0, 0, 0]);
+    bmp
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,15 +156,7 @@ mod tests {
 
     #[test]
     fn egui_decodes_bitmaps() {
-        // a 1×1 24-bit BMP: file header, info header, one pixel padded to 4 bytes
-        let mut bmp = b"BM".to_vec();
-        for n in [58_u32, 0, 54, 40, 1, 1] {
-            bmp.extend(n.to_le_bytes());
-        }
-        bmp.extend(1_u16.to_le_bytes());
-        bmp.extend(24_u16.to_le_bytes());
-        bmp.extend([0_u8; 24]);
-        bmp.extend([255, 0, 0, 0]);
+        let bmp = tiny_bmp();
         let ctx = egui::Context::default();
         egui_extras::install_image_loaders(&ctx);
         ctx.include_bytes("bytes://picture.bmp", bmp);

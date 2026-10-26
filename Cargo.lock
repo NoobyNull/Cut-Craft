@@ -391,6 +391,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-activate-sheet"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-add-draft"
 version = "0.1.0"
 dependencies = [
@@ -401,6 +410,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-add-layer"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-add-sheet"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -696,6 +714,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-point"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-delete-sheet"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1353,6 +1380,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-sheet-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-show-hide"
 version = "0.1.0"
 dependencies = [
@@ -1790,8 +1826,10 @@ dependencies = [
  "chrono",
  "cmd-3d-finishing-toolpath",
  "cmd-3d-roughing-toolpath",
+ "cmd-activate-sheet",
  "cmd-add-draft",
  "cmd-add-layer",
+ "cmd-add-sheet",
  "cmd-add-zero-plane",
  "cmd-align-bottom",
  "cmd-align-left",
@@ -1826,6 +1864,7 @@ dependencies = [
  "cmd-delete-layer",
  "cmd-delete-level",
  "cmd-delete-point",
+ "cmd-delete-sheet",
  "cmd-delete-toolpath",
  "cmd-dimensions",
  "cmd-distort-object",
@@ -1898,6 +1937,7 @@ dependencies = [
  "cmd-select-layer-vectors",
  "cmd-set-current-layer",
  "cmd-set-size",
+ "cmd-sheet-properties",
  "cmd-show-hide",
  "cmd-sketch-carving-toolpath",
  "cmd-slice",
@@ -2627,6 +2667,16 @@ dependencies = [
 
 [[package]]
 name = "gif"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ae047235e33e2829703574b54fdec96bfbad892062d97fed2f76022287de61b"
+dependencies = [
+ "color_quant",
+ "weezl",
+]
+
+[[package]]
+name = "gif"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
@@ -2996,6 +3046,8 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "color_quant",
+ "gif 0.13.3",
+ "jpeg-decoder",
  "num-traits 0.2.19",
  "png 0.17.16",
 ]
@@ -3009,7 +3061,7 @@ dependencies = [
  "bytemuck",
  "byteorder-lite",
  "color_quant",
- "gif",
+ "gif 0.14.2",
  "moxcms",
  "num-traits 0.2.19",
  "png 0.18.1",
@@ -3113,6 +3165,12 @@ dependencies = [
  "getrandom 0.4.3",
  "libc",
 ]
+
+[[package]]
+name = "jpeg-decoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 
 [[package]]
 name = "js-sys"
