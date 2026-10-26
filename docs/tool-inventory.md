@@ -267,13 +267,21 @@ say "not implemented yet".
     view, custom brushes, dynamic rotation, merge, presets, the bitmap overlay, the
     keyboard shortcuts, Keep / Discard (undo does that), and growing the grid past the
     component's own.
+  - Distort Object (Drawing tab, and Model ▸ Distort Selected Component; help: Distort
+    Object): the selected vectors, or the selected components (not both), bent into an
+    envelope: their bounding box with its four corners moved (typed in the form), the band
+    above the open vector picked last (they keep their height above it), or the band
+    between the two open vectors picked last. Vectors are refitted as Béziers within
+    0.01 mm; components are resampled, heights kept. The curves run left to right [inf].
+    Not done: editing the envelope with node editing (the distortion is applied at once,
+    not kept live, so there is no Bake Distortion), Use Rotated Bounds, the 3D view.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 
 **Not built yet.**
 - File: Import Toolpaths.
 - Edit: Swap Sides, Document Variables, Options.
-- Model: Export as 3D Clipart, Distort.
+- Model: Export as 3D Clipart.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Materials.
@@ -283,8 +291,6 @@ say "not implemented yet".
 - Drawing tab:
   - Transform, Trim Objects.
   - Auto Layout Text.
-  - Distort.
-- Modeling tab: Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
   not hidden behind it.
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool

@@ -134,7 +134,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "sculpt",
                 "smooth_selected_components",
                 "emboss",
-                "distort",
+                "distort_object",
                 "offset_model",
                 "slice",
                 "add_draft",
@@ -747,7 +747,7 @@ impl MenuSystem {
                         sep(),
                         i("Emboss Component"),
                         i("Scale Model Z Height"),
-                        i("Distort Selected Component"),
+                        a("Distort Selected Component", "distort_object"),
                         i("Replace Below"),
                         sep(),
                         MenuItem::with_action(

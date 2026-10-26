@@ -130,6 +130,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_vector_selector::VectorSelector>();
     r.add::<cmd_orientate_3d_model::Orientate3dModel>();
     r.add_interactive::<cmd_sculpt::Sculpt>();
+    r.add::<cmd_distort_object::DistortObject>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

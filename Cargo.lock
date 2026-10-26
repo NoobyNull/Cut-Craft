@@ -706,6 +706,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-distort-object"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-drag-knife-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -1682,6 +1691,7 @@ dependencies = [
  "cmd-delete-point",
  "cmd-delete-toolpath",
  "cmd-dimensions",
+ "cmd-distort-object",
  "cmd-drag-knife-toolpath",
  "cmd-draw-arc",
  "cmd-draw-circle",
