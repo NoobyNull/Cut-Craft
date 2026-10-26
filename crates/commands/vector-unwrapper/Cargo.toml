@@ -1,0 +1,17 @@
+[package]
+name = "cmd-vector-unwrapper"
+description = "Vector Unwrapper"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+cmd-two-rail-sweep = { path = "../two-rail-sweep" }
+
+[lints]
+workspace = true

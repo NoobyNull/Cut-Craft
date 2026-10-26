@@ -122,6 +122,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "create_shape",
                 "extrude_and_weave",
                 "two_rail_sweep",
+                "vector_unwrapper",
                 "turn_and_spin",
                 "texture_area",
                 "add_zero_plane",

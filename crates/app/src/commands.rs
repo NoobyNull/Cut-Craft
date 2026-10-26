@@ -136,6 +136,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_delete_level::DeleteLevel>();
     r.add::<cmd_move_to_level::MoveToLevel>();
     r.add::<cmd_level_clipping::LevelClipping>();
+    r.add::<cmd_vector_unwrapper::VectorUnwrapper>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

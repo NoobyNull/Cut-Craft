@@ -273,6 +273,14 @@ say "not implemented yet".
     view, custom brushes, dynamic rotation, merge, presets, the bitmap overlay, the
     keyboard shortcuts, Keep / Discard (undo does that), and growing the grid past the
     component's own.
+  - Vector Unwrapper (rotary jobs; help: Vector Unwrapper, Modelling 3D Rotary Projects):
+    a closed cross-section becomes the open profile Two Rail Sweep takes: the distance
+    out to it round the centre of the contour, of the job or a typed point, laid along
+    the circumference with legs to the baseline at each end, refined to Béziers if asked.
+    Two drive rails along the job's sides go on the "Unwrapped Vectors Drive Rails" layer
+    and the rails and profile are left selected, so Two Rail Sweep makes the turned shape
+    at once. Angle 0 is up the cross-section, turning clockwise [inf]; the profile sits
+    across the middle of the job [inf]. The axis handle and the fit circle are not drawn.
   - Levels (help: Component Tree, Level Clipping, 3D Design and Management): every
     component is on a level; a level's components combine with each other first, then
     the shown levels combine from the bottom up with their combine mode and base height.

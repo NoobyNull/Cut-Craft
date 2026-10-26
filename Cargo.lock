@@ -1510,6 +1510,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-vector-unwrapper"
+version = "0.1.0"
+dependencies = [
+ "cmd-two-rail-sweep",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-vector-validator"
 version = "0.1.0"
 dependencies = [
@@ -1827,6 +1837,7 @@ dependencies = [
  "cmd-vcarve-inlay-toolpath",
  "cmd-vector-selector",
  "cmd-vector-texture",
+ "cmd-vector-unwrapper",
  "cmd-vector-validator",
  "cmd-weld-vectors",
  "cut-craft-core",
