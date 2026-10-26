@@ -154,3 +154,25 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod component_tests {
+    use super::*;
+    use cut_craft_core::document::EntityId;
+    use cut_craft_core::testing::{domed, run_on};
+
+    #[test]
+    fn sizes_a_selected_component_keeping_its_height() {
+        let mut doc = domed();
+        doc.selected_components = [EntityId(1)].into();
+        let top = doc.components[&EntityId(1)].height_range().unwrap().1;
+        let p = Params {
+            width: 32.0,
+            ..Params::default()
+        };
+        run_on::<SetSize>(&mut doc, &p);
+        let k = &doc.components[&EntityId(1)];
+        assert!((k.extent().size().x - 32.0).abs() < 0.3, "{:?}", k.extent());
+        assert!((k.height_range().unwrap().1 - top).abs() < 0.2);
+    }
+}

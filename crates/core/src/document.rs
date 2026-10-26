@@ -461,6 +461,12 @@ impl Document {
         self.selection
             .iter()
             .map(|id| self.vectors[id].bounds())
+            .chain(
+                self.selected_components
+                    .iter()
+                    .filter_map(|id| self.components.get(id))
+                    .map(Component::extent),
+            )
             .reduce(Rect::union)
     }
 

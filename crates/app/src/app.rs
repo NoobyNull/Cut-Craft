@@ -326,7 +326,7 @@ impl CutCraftApp {
         match id {
             "undo" => self.history.can_undo(),
             "close" => self.screen != Screen::Start,
-            "zoom_selected" => !self.doc.selection.is_empty(),
+            "zoom_selected" => self.doc.selection_bounds().is_some(),
             id if id.starts_with("open_recent:") => true,
             "redo" => self.history.can_redo(),
             "recalculate_toolpath"

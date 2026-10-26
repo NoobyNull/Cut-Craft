@@ -261,21 +261,35 @@ impl Change {
         c.finish()
     }
 
-    /// Transforms each selected path by `f(path)`; the shared core of move, scale, rotate,
-    /// mirror and align. Nothing selected is an error; identity transforms make no edit.
+    /// Transforms each selected path and component by `f(its bounds)`; the shared core of
+    /// move, scale, rotate, mirror and align. Nothing selected is an error; identity
+    /// transforms make no edit.
     pub fn transform_selected(
         doc: &Document,
-        f: impl Fn(&Path) -> DAffine2,
+        f: impl Fn(Rect) -> DAffine2,
     ) -> Result<Self, CommandError> {
-        if doc.selection.is_empty() {
+        let components: Vec<_> = doc
+            .selected_components
+            .iter()
+            .filter(|id| doc.components.contains_key(id))
+            .copied()
+            .collect();
+        if doc.selection.is_empty() && components.is_empty() {
             return Err(CommandError::NothingSelected);
         }
         let mut c = Self::builder(doc);
         for &id in &doc.selection {
             let path = &doc.vectors[&id];
-            let t = f(path);
+            let t = f(path.bounds());
             if t != DAffine2::IDENTITY {
                 c.replace(id, path.transformed(&t));
+            }
+        }
+        for id in components {
+            let component = &doc.components[&id];
+            let t = f(component.extent());
+            if t != DAffine2::IDENTITY {
+                c.replace_component(id, component.transformed(&t));
             }
         }
         Ok(c.finish())
@@ -315,8 +329,8 @@ impl Change {
         let sel = doc
             .selection_bounds()
             .ok_or(CommandError::NothingSelected)?;
-        Self::transform_selected(doc, |path| {
-            DAffine2::from_translation(offset(path.bounds(), sel))
+        Self::transform_selected(doc, |bounds| {
+            DAffine2::from_translation(offset(bounds, sel))
         })
     }
 

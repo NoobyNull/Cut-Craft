@@ -6,6 +6,7 @@ use crate::geometry::{Point, Rect};
 use crate::params::Xy;
 use crate::simulation::Material;
 use crate::toolpath::Tool;
+use glam::DAffine2;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -107,6 +108,28 @@ pub struct Tilt {
 }
 
 impl Shaping {
+    /// The same shaping with its anchors carried by `t`.
+    #[must_use]
+    pub fn transformed(&self, t: &DAffine2) -> Self {
+        let carry = |p: Xy| {
+            let q = t.transform_point2(p.into());
+            Xy::new(q.x, q.y)
+        };
+        Self {
+            fade: self.fade.map(|f| Fade {
+                from: carry(f.from),
+                to: carry(f.to),
+                ..f
+            }),
+            tilt: self.tilt.map(|k| Tilt {
+                pivot: carry(k.pivot),
+                toward: carry(k.toward),
+                ..k
+            }),
+            ..self.clone()
+        }
+    }
+
     /// Whether it leaves heights as they are.
     pub fn is_identity(&self) -> bool {
         *self == Self::default()
@@ -280,6 +303,83 @@ impl Component {
             .flat_map(|row| &heights[row * self.columns..(row + 1) * self.columns])
             .map(|h| h.map(|z| ((z - lo) / span * 255.0).round().clamp(0.0, 255.0) as u8))
             .collect()
+    }
+
+    /// The component carried by `t` in XY (moved, rotated, mirrored or scaled; heights kept),
+    /// resampled onto cells of the same size over where it lands; fade and tilt anchors go
+    /// with it.
+    #[must_use]
+    pub fn transformed(&self, t: &DAffine2) -> Self {
+        let e = self.extent();
+        let corners = [
+            e.min,
+            Point::new(e.max.x, e.min.y),
+            e.max,
+            Point::new(e.min.x, e.max.y),
+        ]
+        .map(|p| t.transform_point2(p));
+        let (lo, hi) = corners
+            .iter()
+            .fold((corners[0], corners[0]), |(lo, hi), &p| {
+                (lo.min(p), hi.max(p))
+            });
+        let back = t.inverse();
+        let mut out = Self::from_fn(
+            &self.name,
+            self.combine,
+            Rect::new(lo, hi),
+            self.cell,
+            |p| self.sample(back.transform_point2(p)),
+        );
+        out.visible = self.visible;
+        out.shaping = self.shaping.transformed(t);
+        out
+    }
+
+    /// The unshaped height at `p`: bilinear between the four cell centres round it where they
+    /// all have shape, else the height of the cell `p` is in.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "cell indices are small"
+    )]
+    fn sample(&self, p: Point) -> Option<f64> {
+        let raw = |column: isize, row: isize| {
+            let inside = column >= 0
+                && row >= 0
+                && (column as usize) < self.columns
+                && (row as usize) < self.rows;
+            inside
+                .then(|| self.heights[row as usize * self.columns + column as usize])
+                .flatten()
+        };
+        let local = (p - self.origin) / self.cell;
+        if local.x < 0.0 || local.y < 0.0 {
+            return None;
+        }
+        let own = raw(local.x as isize, local.y as isize)?;
+        let grid = local - 0.5;
+        let (column, row) = (grid.x.floor() as isize, grid.y.floor() as isize);
+        let frac = grid - grid.floor();
+        let around = [
+            raw(column, row),
+            raw(column + 1, row),
+            raw(column, row + 1),
+            raw(column + 1, row + 1),
+        ];
+        Some(match around {
+            [
+                Some(low_left),
+                Some(low_right),
+                Some(up_left),
+                Some(up_right),
+            ] => {
+                let bottom = low_left + (low_right - low_left) * frac.x;
+                let top = up_left + (up_right - up_left) * frac.x;
+                bottom + (top - bottom) * frac.y
+            }
+            _ => own,
+        })
     }
 
     /// Where cell `index` is: its centre in job mm.

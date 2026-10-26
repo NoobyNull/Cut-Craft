@@ -89,6 +89,22 @@ mod tests {
     }
 
     #[test]
+    fn moves_a_selected_component() {
+        use cut_craft_core::document::EntityId;
+        let mut doc = cut_craft_core::testing::domed();
+        doc.selected_components = [EntityId(1)].into();
+        let p = Params {
+            relative: false,
+            x: 0.0,
+            y: 0.0,
+            anchor: Anchor::BottomLeft,
+        };
+        cut_craft_core::testing::run_on::<Move>(&mut doc, &p);
+        let e = doc.components[&EntityId(1)].extent();
+        assert!(e.min.length() < 1e-9, "{e:?}");
+    }
+
+    #[test]
     fn nothing_selected_is_an_error() {
         assert_eq!(
             Move::run(&Document::default(), &Params::default()),

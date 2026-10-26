@@ -232,6 +232,11 @@ say "not implemented yet".
     bake them first. The anchors are typed in the form (Aspire sets them with two clicks);
     tilt is a plane through the pivot line, so it also lowers behind it [inf]. Several
     components at once and levels' base heights are not done.
+  - Move, Rotate, Mirror, Set Size and the Align / Center tools also act on the selected
+    components (picked in the 2D view or the Components tab): each is resampled onto cells
+    of its own size where it lands (bilinear inside the shape), heights unchanged, fade
+    and tilt anchors carried along. Aspire's Transform handles and Set Size's Z scaling
+    are not done.
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
