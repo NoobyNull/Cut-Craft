@@ -1,0 +1,17 @@
+[package]
+name = "cmd-join-close-vectors"
+description = "Join / Close Vectors"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cmd-close-extend-vector = { path = "../close-extend-vector" }
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

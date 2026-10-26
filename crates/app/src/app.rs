@@ -23,7 +23,10 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 73] = [
+const BUILT_INS: [&str; 76] = [
+    "join_straight_line",
+    "join_smooth_curve",
+    "join_move_end_points",
     "import_vectors",
     "export_vectors",
     "open_folder",
@@ -563,6 +566,14 @@ impl CutCraftApp {
                 }
             }
             "edit_toolpath" => self.edit_toolpath(),
+            // Aspire's three Join icons: Join / Close Vectors their way
+            "join_straight_line" | "join_smooth_curve" | "join_move_end_points" => {
+                let method = id.trim_start_matches("join_");
+                let params = serde_json::json!({ "method": method });
+                if let Err(e) = self.apply("join_close_vectors", &params) {
+                    self.status.set_message(&e);
+                }
+            }
             "import_vectors" | "export_vectors" | "open_folder" | "open_clipart_folder" => {
                 self.file_icon_action(id);
             }
@@ -5463,6 +5474,32 @@ mod tests {
             h.text_at(&name).is_none(),
             "hidden under its collapsed level"
         );
+    }
+
+    #[test]
+    fn the_join_icons_join_two_vectors_their_way() {
+        let mut h = Harness::new();
+        let line =
+            |x0: f64, x1: f64| Path::polyline(&[Point::new(x0, 10.0), Point::new(x1, 10.0)], false);
+        let change = Change::swap(&h.app.doc, [], vec![line(0.0, 10.0), line(20.0, 30.0)]);
+        h.app.doc.apply(&change).unwrap();
+        for id in [
+            "join_straight_line",
+            "join_smooth_curve",
+            "join_move_end_points",
+        ] {
+            assert!(h.app.available(id), "{id}");
+        }
+        h.app.invoke(&h.ctx, "join_smooth_curve");
+        assert_eq!(h.app.doc.vectors.len(), 1, "{}", h.app.status.message);
+        let edit = h
+            .app
+            .toolbar
+            .groups
+            .iter()
+            .find(|g| g.name == "Edit Objects")
+            .unwrap();
+        assert!(edit.tools.contains(&"join_move_end_points"));
     }
 
     #[test]

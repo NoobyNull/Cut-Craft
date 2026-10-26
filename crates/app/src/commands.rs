@@ -161,6 +161,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_wrapped_fluting_layout::WrappedFlutingLayout>();
     r.add::<cmd_wrapped_spiral_layout::WrappedSpiralLayout>();
     r.add::<cmd_celtic_weave::CelticWeave>();
+    r.add::<cmd_join_close_vectors::JoinCloseVectors>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

@@ -41,6 +41,7 @@ fn group(name: &'static str, tools: &'static [&'static str]) -> ToolGroup {
 /// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see
 /// `re/SPEC.md`); which tool sits in which group is inferred from the help topics. Ids match
 /// the icon file names, so unimplemented tools still show their icon.
+#[expect(clippy::too_many_lines, reason = "the drawing tab's tool list")]
 fn drawing_groups() -> Vec<ToolGroup> {
     vec![
         group(
@@ -96,6 +97,9 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "transform",
                 "group",
                 "join_vectors",
+                "join_straight_line",
+                "join_smooth_curve",
+                "join_move_end_points",
                 "weld_vectors",
                 "subtract_vectors",
                 "overlap_intersect",
