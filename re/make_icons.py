@@ -32,6 +32,7 @@ SINGLES = {
     "common": ["png/34241", "png/34243", "png/34245", "png/34246", "png/34247", "png/34248", "png/34278",
                "png/34242", "png/35075", "png/34829", "ico/35038"],
     "import": ["bmp/4018", "bmp/4023", "bmp/34746"],
+    "modeling": ["png/34199"],
 }
 
 def load(key):

@@ -1461,5 +1461,12 @@
   "guess": false,
   "slot": "slot/35069_25",
   "source": "slot/35069_25"
+ },
+ {
+  "path": "modeling/create_component_from_bitmap.svg",
+  "label": "Create Component from Bitmap",
+  "guess": true,
+  "slot": "png/34199",
+  "source": "png/34199"
  }
 ]

@@ -15,7 +15,8 @@ icons are skipped (Matthew: no laser features).
       (`drawing/align/*`): the four spacing commands, by pick order.
 - [x] Create Shape: Round / Angled / Smooth / Flat (`modeling/create_shape_*`): Create Shape
       with that profile chosen (help: Create Round / Angled / Smooth Shape, Create Flat Plane).
-- [ ] Texture (`modeling/texture.svg`): Create Texture Area.
+- [x] Texture (`modeling/texture.svg`): traced from Aspire's Smooth Selected Components art
+      (png/34764), so it is that tool's icon.
 - [x] Component Levels (`modeling/component_levels.svg`): the Components tab.
 - [x] Import Vectors / Export Vectors (`file/*`).
 - [x] Edit / Preview / Hide toolpaths, Save Toolpath Template, Save All as Template
@@ -35,7 +36,19 @@ icons are skipped (Matthew: no laser features).
 - [x] Vector Boundary (`drawing/create_vectors/vector_boundary.svg`; help: Vector Boundary).
 - [x] Paste in Place (`file/paste_in_place.svg`; help: paste-operation).
 - [x] Open Folder / Open Clipart Folder (`file/open_folder.svg`, `open_clipart_folder.svg`).
-- [ ] Weld (cross) (`drawing/edit_objects/weld_cross.svg`): the weld variant it shows.
-- [ ] Vector Texture fill (`drawing/weld_and_offset/vector_texture_fill.svg`).
+- [x] Weld (cross) (`drawing/edit_objects/weld_cross.svg`): sits where Aspire's Align Selected
+      Objects is (Edit Objects strip, between Set Size and Mirror) [inf]; the Align Objects group covers it.
+- [x] Vector Texture fill (`drawing/weld_and_offset/vector_texture_fill.svg`): the fifth of the
+      Weld / Subtract / Overlap / Offset strip, parts packed in a sheet: Nest Parts [inf].
 - [ ] Rounded shape / span (`drawing/create_vectors/rounded_shape_span.svg`).
-- [ ] Engraving, Circular pocket (`toolpaths/engraving.svg`, `circular_pocket.svg`).
+- [x] Engraving, Circular pocket (`toolpaths/engraving.svg`, `circular_pocket.svg`): a carved
+      portrait and a ridged hole, PhotoVCarve and Thread Milling [inf].
+
+## Tools with no icon that now have one
+
+- Interactive Vector Trim (its path pointed at the wrong folder), Smooth Selected
+  Components, Nest Parts, PhotoVCarve, Thread Milling; Keep-Out Zones and Toolpath Tiling
+  added to the Toolpaths page's Output group.
+- Create Component from Bitmap: Aspire's art (png/34199) traced.
+- Still text, Aspire having no icon found for them: Join Vectors, Plate Production, Vector
+  Unwrapper, Drag Knife, Inlay, Material Setup; Rounded shape / span is still unplaced.

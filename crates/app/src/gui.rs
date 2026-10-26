@@ -236,7 +236,13 @@ fn toolpath_groups() -> Vec<ToolGroup> {
         ),
         group(
             "Output",
-            &["save_toolpaths", "toolpath_summary", "tool_database"],
+            &[
+                "save_toolpaths",
+                "toolpath_summary",
+                "tool_database",
+                "keep_out_zones",
+                "toolpath_tiling",
+            ],
         ),
     ]
 }
