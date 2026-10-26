@@ -1102,6 +1102,7 @@ impl CutCraftApp {
                     let groups = self.design_groups("Design");
                     self.tool_groups(ui, &groups, Page::Design);
                 }
+                "Sheets" => self.sheets_panel(ui),
                 "Layers" => self.layers_panel(ui),
                 "Components" => self.component_list(ui),
                 tab => {
@@ -1621,6 +1622,14 @@ impl CutCraftApp {
     }
 }
 
+/// A sheet's size in the Sheets List: one decimal in mm, as Aspire's, three in inches.
+fn sheet_length(mm: f64, units: cut_craft_core::document::Units) -> String {
+    match units {
+        cut_craft_core::document::Units::Mm => format!("{mm:.1}"),
+        cut_craft_core::document::Units::Inch => format!("{:.3}", mm / 25.4),
+    }
+}
+
 /// A length in the job's units.
 fn length(mm: f64, units: cut_craft_core::document::Units) -> String {
     match units {
@@ -1936,6 +1945,48 @@ impl CutCraftApp {
         }
         if add {
             self.invoke(ui.ctx(), "add_layer");
+        }
+        if let Some(id) = chosen {
+            self.invoke(ui.ctx(), &id);
+        }
+    }
+
+    /// The Sheets tab: Aspire's Sheets List (each sheet's name and size, the active one
+    /// marked) and its Add New Sheet button. A click activates a sheet; a right-click has its
+    /// menu.
+    fn sheets_panel(&mut self, ui: &mut egui::Ui) {
+        ui.strong("Sheets List");
+        let units = self.doc.job.units;
+        let (mut activate, mut chosen) = (None, None);
+        egui::Grid::new("sheets_list").striped(true).show(ui, |ui| {
+            for heading in ["Name", "X", "Y", "Z"] {
+                ui.strong(heading);
+            }
+            ui.end_row();
+            for (i, sheet) in self.doc.sheets.iter().enumerate() {
+                let job = self.doc.sheet_job(i).unwrap_or(sheet.job);
+                let active = i == self.doc.active_sheet;
+                let row = ui.radio(active, &sheet.name);
+                if row.clicked() && !active {
+                    activate = Some(i);
+                }
+                if let Some(id) = self.popup(&row, || gui::sheet_menu(&self.doc, i)) {
+                    chosen = Some(id);
+                }
+                for mm in [job.width, job.height, job.thickness] {
+                    ui.label(sheet_length(mm, units));
+                }
+                ui.end_row();
+            }
+        });
+        let add = ui.button("Add New Sheet...").clicked();
+        if let Some(sheet) = activate
+            && let Err(e) = self.apply("activate_sheet", &serde_json::json!({ "sheet": sheet }))
+        {
+            self.status.set_message(&e);
+        }
+        if add {
+            self.invoke(ui.ctx(), "add_sheet");
         }
         if let Some(id) = chosen {
             self.invoke(ui.ctx(), &id);
@@ -4509,6 +4560,33 @@ mod tests {
             "back once its form went"
         );
         assert!(h.text_at("Toolpath List").is_none(), "toolpath page hidden");
+    }
+
+    #[test]
+    fn the_sheets_tab_lists_each_sheets_size_and_activates_one() {
+        use cut_craft_core::document::Units;
+        let mut h = Harness::new();
+        h.app.pages.set_pinned(Page::Design, true);
+        h.app.design_tab = 1;
+        h.app.doc = cut_craft_core::testing::two_sheets();
+        // the list's grid measures its columns on the first frame
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert!(h.text_at("Sheets List").is_some());
+        assert!(h.text_at("Sheet 2").is_some());
+        assert!(
+            h.text_at(&sheet_length(300.0, Units::Mm)).is_some(),
+            "Sheet 2's X"
+        );
+        assert!(
+            h.text_at(&sheet_length(12.0, Units::Mm)).is_some(),
+            "Sheet 2's Z"
+        );
+        assert!(h.text_at("Add New Sheet...").is_some());
+        let at = h.text_at("Sheet 2").unwrap();
+        h.click(at, Modifiers::NONE);
+        assert_eq!(h.app.doc.active_sheet, 1, "clicking a sheet activates it");
+        assert_eq!(h.app.doc.job.width, 300.0);
     }
 
     #[test]

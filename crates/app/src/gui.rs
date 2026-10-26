@@ -705,6 +705,45 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
 }
 
 /// Aspire's layer menu (MENU 967) for `layer`.
+/// The right-click menu of sheet `sheet` in the Sheets tab (MENU 5030).
+pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
+    use cmd_sheet_properties::SheetProperties;
+    let Some(s) = doc.sheets.get(sheet) else {
+        return vec![];
+    };
+    let props = cmd_sheet_properties::Params {
+        sheet,
+        name: s.name.clone(),
+        visible: s.visible,
+    };
+    let shown = |name: &str, visible: bool| {
+        let params = cmd_sheet_properties::Params {
+            visible,
+            ..props.clone()
+        };
+        MenuItem::run::<SheetProperties>(name, &params).enabled(s.visible != visible)
+    };
+    vec![
+        MenuItem::run::<cmd_activate_sheet::ActivateSheet>(
+            "Activate",
+            &cmd_activate_sheet::Params { sheet },
+        )
+        .enabled(sheet != doc.active_sheet),
+        shown("Show", true),
+        shown("Hide", false),
+        MenuItem::separator(),
+        MenuItem::with_action("Insert New Sheet", "add_sheet"),
+        // ponytail: a sheet is edited while active, in Job Setup; Aspire's Sheet Editor is that form
+        MenuItem::with_action("Edit Sheet...", "job_setup").enabled(sheet == doc.active_sheet),
+        MenuItem::form::<SheetProperties>("Rename", &props),
+        MenuItem::run::<cmd_delete_sheet::DeleteSheet>(
+            "Delete",
+            &cmd_delete_sheet::Params { sheet },
+        )
+        .enabled(doc.sheets.len() > 1),
+    ]
+}
+
 pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
     use cmd_delete_items::Which;
     use cmd_layer_properties::LayerProperties;

@@ -32,6 +32,10 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-sheet-properties = { path = "../commands/sheet-properties" }
+cmd-activate-sheet = { path = "../commands/activate-sheet" }
+cmd-delete-sheet = { path = "../commands/delete-sheet" }
+cmd-add-sheet = { path = "../commands/add-sheet" }
 cmd-group-properties = { path = "../commands/group-properties" }
 cmd-ungroup-components = { path = "../commands/ungroup-components" }
 cmd-group-components = { path = "../commands/group-components" }

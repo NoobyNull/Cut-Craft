@@ -191,6 +191,24 @@ pub fn two_layers() -> Document {
     doc
 }
 
+/// The sample document with a second, smaller sheet ("Sheet 2", 300 × 200 × 12); the first
+/// stays active.
+pub fn two_sheets() -> Document {
+    let mut doc = sample_document();
+    let mut sheets = doc.sheets.clone();
+    let job = crate::document::Job {
+        width: 300.0,
+        height: 200.0,
+        thickness: 12.0,
+        ..doc.job
+    };
+    sheets.push(crate::document::Sheet::new("Sheet 2", job));
+    let mut c = Change::builder(&doc);
+    c.set_sheets(sheets, 0);
+    doc.apply(&c.finish()).expect("adding a sheet applies");
+    doc
+}
+
 /// `doc` with layer `id` replaced by `edit` of it.
 pub fn edit_layer(
     doc: &mut Document,

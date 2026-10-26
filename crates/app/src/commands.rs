@@ -145,6 +145,10 @@ pub fn registry() -> Registry {
     r.add::<cmd_group_components::GroupComponents>();
     r.add::<cmd_ungroup_components::UngroupComponents>();
     r.add::<cmd_group_properties::GroupProperties>();
+    r.add::<cmd_add_sheet::AddSheet>();
+    r.add::<cmd_delete_sheet::DeleteSheet>();
+    r.add::<cmd_activate_sheet::ActivateSheet>();
+    r.add::<cmd_sheet_properties::SheetProperties>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
