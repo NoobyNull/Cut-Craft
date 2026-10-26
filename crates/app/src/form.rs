@@ -871,7 +871,7 @@ mod tests {
         assert!(matches!(
             &field(orientation, "face").kind,
             Kind::Choice(faces, Widget::Faces { picture: Some(p) })
-                if faces.len() == 6 && p == "import/initial_orientation.svg"
+                if faces.len() == 6 && p == "import/initial_orientation.bmp"
         ));
         assert!(matches!(
             &field(orientation, "rotation").kind,

@@ -1386,21 +1386,21 @@
   "source": "ico/35038"
  },
  {
-  "path": "import/initial_orientation.svg",
+  "path": "import/initial_orientation.bmp",
   "label": "Initial orientation",
   "guess": false,
   "slot": "bmp/4018",
   "source": "bmp/4018"
  },
  {
-  "path": "import/model_size_xyz.svg",
+  "path": "import/model_size_xyz.bmp",
   "label": "Model size XYZ",
   "guess": false,
   "slot": "bmp/4023",
   "source": "bmp/4023"
  },
  {
-  "path": "import/position_relative_to_modeling_plane.svg",
+  "path": "import/position_relative_to_modeling_plane.bmp",
   "label": "Position relative to modeling plane",
   "guess": false,
   "slot": "bmp/34746",

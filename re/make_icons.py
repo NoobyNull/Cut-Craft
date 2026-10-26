@@ -3,12 +3,13 @@
 Each icon is traced in colour layers with potrace and named after its label in re/icon_labels.json.
 usage: make_icons.py <extracted_dir> <icon_labels.json> <out_dir> <manifest.json>
 The SVGs are derived from Vectric's artwork: out_dir stays gitignored; the manifest (ids + names) is ours."""
-import glob, json, os, re, subprocess, sys, tempfile
+import glob, json, os, re, shutil, subprocess, sys, tempfile
 from PIL import Image
 
 SCALE_TO = 384      # trace at this many px on the longest side: smoother curves from small rasters
 COLORS = 8          # colour layers per icon; shaded art gets posterized to this many
 TURDSIZE = 40       # potrace: drop specks smaller than this many px (at SCALE_TO)
+RAW = {"import"}    # dialog pictures: Aspire's bitmaps copied as they are, not traced
 SAME_ART = 12       # feature distance below which a larger single PNG is the same art as a strip slot
 
 src_dir, labels_f, out_dir, manifest_f = sys.argv[1:5]
@@ -111,13 +112,18 @@ for folder, keys in SINGLES.items():
 manifest, used = [], set()
 for folder, key, label in jobs:
     name = slug(label.split(": ", 1)[-1] if folder == "drawing/align" else label)
-    path, n = f"{folder}/{name}.svg", 2
+    ext = os.path.splitext(glob.glob(f"{src_dir}/{key}.*")[0])[1] if folder in RAW else ".svg"
+    path, n = f"{folder}/{name}{ext}", 2
     while path in used:
-        path, n = f"{folder}/{name}_{n}.svg", n + 1
+        path, n = f"{folder}/{name}_{n}{ext}", n + 1
     used.add(path)
-    source, im = best_source(key) if key.startswith("slot/") else (key, load(key))
     os.makedirs(f"{out_dir}/{folder}", exist_ok=True)
-    open(f"{out_dir}/{path}", "w").write(trace(im))
+    if folder in RAW:
+        source = key
+        shutil.copyfile(glob.glob(f"{src_dir}/{key}.*")[0], f"{out_dir}/{path}")
+    else:
+        source, im = best_source(key) if key.startswith("slot/") else (key, load(key))
+        open(f"{out_dir}/{path}", "w").write(trace(im))
     manifest.append({"path": path, "label": label.rstrip(" ?"), "guess": label.endswith("?"), "slot": key, "source": source})
 json.dump(manifest, open(manifest_f, "w"), indent=1)
 print(len(manifest), "icons ->", out_dir)

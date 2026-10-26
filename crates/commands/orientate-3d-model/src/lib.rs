@@ -41,7 +41,7 @@ pub struct Orientation {
     #[schemars(
         title = "Face up",
         extend("x-widget" = "faces"),
-        extend("x-icon" = "import/initial_orientation.svg")
+        extend("x-icon" = "import/initial_orientation.bmp")
     )]
     pub face: Face,
     #[schemars(
@@ -92,13 +92,13 @@ pub struct Params {
     #[schemars(
         title = "Model Size",
         extend("x-section" = true),
-        extend("x-icon" = "import/model_size_xyz.svg")
+        extend("x-icon" = "import/model_size_xyz.bmp")
     )]
     pub size: ModelSize,
     #[schemars(
         title = "Position relative to Modeling Plane",
         extend("x-section" = true),
-        extend("x-icon" = "import/position_relative_to_modeling_plane.svg")
+        extend("x-icon" = "import/position_relative_to_modeling_plane.bmp")
     )]
     pub placing: Placing,
     /// Rotary jobs: a full 3D model is wrapped round the axis, its distance out at each angle
