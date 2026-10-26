@@ -343,7 +343,6 @@ say "not implemented yet".
 **Not built yet.**
 - File: Import Toolpaths.
 - Edit: Swap Sides, Document Variables, Options.
-- Model: (nothing left from the menu but Aspire-format clipart, see below).
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Materials.
