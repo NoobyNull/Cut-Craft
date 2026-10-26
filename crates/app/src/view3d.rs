@@ -146,7 +146,12 @@ pub fn drag_mode(held: [bool; 3], ctrl: bool) -> Option<DragMode> {
 #[expect(clippy::cast_precision_loss, reason = "cell steps are 1 or 2")]
 pub fn brightness(material: &Material, column: usize, row: usize, light: DVec3) -> f64 {
     let m = material;
-    let height = |column: usize, row: usize| m.heights[row * m.columns + column];
+    let own = m.heights[row * m.columns + column];
+    // an empty neighbour (NaN: no model there) counts as level with this cell
+    let height = |column: usize, row: usize| {
+        let h = m.heights[row * m.columns + column];
+        if h.is_nan() { own } else { h }
+    };
     // slope by central differences, one-sided at the edges
     let slope =
         |before: usize, after: usize, rise: f64| rise / (m.cell * (after - before).max(1) as f64);
@@ -306,6 +311,7 @@ pub fn vector_plane(material: &Material, points: &[DVec2]) -> f64 {
                 .map(|(dx, dy)| material.at(p + DVec2::new(dx, dy)))
         })
         .flatten()
+        .filter(|h| !h.is_nan())
         .reduce(f64::max)
         .unwrap_or(0.0)
 }
@@ -370,6 +376,13 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
                 (column, row),
                 (column - 1, row),
             ];
+            // nothing is drawn where there is no model (NaN)
+            if corners
+                .iter()
+                .any(|&(c, r)| m.heights[r * m.columns + c].is_nan())
+            {
+                continue;
+            }
             quads.push((
                 corners.map(|(c, r)| top(c, r)),
                 corners.map(|(c, r)| shade(brightness(m, c, r, look.light))),
@@ -394,6 +407,9 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         let colour = shade(lit(outward, look.light));
         for pair in edge.windows(2) {
             let (a, b) = (top(pair[0].0, pair[0].1), top(pair[1].0, pair[1].1));
+            if a.z.is_nan() || b.z.is_nan() {
+                continue;
+            }
             let down = |p: DVec3| DVec3::new(p.x, p.y, m.bottom);
             quads.push(([a, b, down(b), down(a)], [colour; 4]));
         }
@@ -613,6 +629,38 @@ mod tests {
             area,
         );
         assert!(without.indices.len() < with.indices.len());
+    }
+
+    #[test]
+    fn nothing_is_drawn_where_there_is_no_model() {
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let full = mesh(
+            &slotted(),
+            Orbit::default(),
+            Framing::default(),
+            &plain(),
+            area,
+        );
+        let mut half = slotted();
+        let columns = half.columns;
+        for (i, h) in half.heights.iter_mut().enumerate() {
+            if i % columns < columns / 2 {
+                *h = f64::NAN;
+            }
+        }
+        let shown = mesh(&half, Orbit::default(), Framing::default(), &plain(), area);
+        assert!(shown.indices.len() < full.indices.len() * 2 / 3);
+        assert!(
+            shown
+                .vertices
+                .iter()
+                .all(|v| v.pos.x.is_finite() && v.pos.y.is_finite()),
+            "no empty cell reaches the screen"
+        );
+        assert!(
+            brightness(&half, columns / 2, 3, LIGHT).is_finite(),
+            "an edge cell is lit"
+        );
     }
 
     /// 100 x 100 mm in 1 mm cells, with a 5 mm deep slot from x = 40 to 60 running along y.

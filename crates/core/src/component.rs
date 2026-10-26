@@ -616,6 +616,17 @@ fn combined(on: &[&Component], p: Point) -> Option<f64> {
 /// components combined (bottom of the tree first), clipped, mirrored and wrapped as the level
 /// says, then the levels combined from the first up.
 pub fn model(doc: &Document, cells_across: usize) -> Material {
+    model_over(doc, cells_across, 0.0)
+}
+
+/// The model alone, as the 3D view shows it before any preview: cells no shown component
+/// covers are NaN (nothing there), not the zero plane.
+pub fn model_shape(doc: &Document, cells_across: usize) -> Material {
+    model_over(doc, cells_across, f64::NAN)
+}
+
+/// [`model`], with `empty` in the cells nothing covers.
+fn model_over(doc: &Document, cells_across: usize, empty: f64) -> Material {
     use crate::document::Along;
     let mut surface = Material::new(&doc.job, cells_across);
     let job = doc.job.area();
@@ -662,7 +673,7 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
     for row in 0..surface.rows {
         for column in 0..surface.columns {
             let centre = surface.centre(column, row);
-            let mut total = 0.0;
+            let (mut total, mut covered) = (0.0, false);
             for (level, rings, on) in &levels {
                 if !rings.is_empty() && !crate::geometry::inside(rings, centre) {
                     continue;
@@ -679,9 +690,10 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
                     .reduce(f64::max);
                 if let Some(h) = height {
                     total = level.combine.apply(total, h + level.base_height);
+                    covered = true;
                 }
             }
-            surface.heights[row * surface.columns + column] = total;
+            surface.heights[row * surface.columns + column] = if covered { total } else { empty };
         }
     }
     surface

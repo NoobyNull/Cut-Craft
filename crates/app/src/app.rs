@@ -2732,8 +2732,12 @@ impl CutCraftApp {
                     .get_or_insert_with(|| view3d::coarse(material, MESH_CELLS)),
             ));
         }
-        (!self.doc.components.is_empty())
-            .then(|| Cow::Owned(cut_craft_core::component::model(&self.doc, MESH_CELLS)))
+        // before a preview, the model alone: nothing where no component is
+        (!self.doc.components.is_empty()).then(|| {
+            Cow::Owned(cut_craft_core::component::model_shape(
+                &self.doc, MESH_CELLS,
+            ))
+        })
     }
 
     /// The preview or model as a block, with Aspire's 3D mouse controls: left- or right-drag
@@ -2838,7 +2842,8 @@ impl CutCraftApp {
             } else {
                 ui.visuals().widgets.inactive.fg_stroke.color
             },
-            sides: shown.material_block,
+            // the block's sides belong to a preview; the model alone has no excess material
+            sides: shown.material_block && self.simulation.is_some(),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
             wrap: None,
         };
