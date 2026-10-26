@@ -58,6 +58,10 @@ pub struct Component {
     /// Shape and base height, fade and tilt: applied as heights are read, until baked.
     #[serde(default)]
     pub shaping: Shaping,
+    /// The heights before it was first sculpted, which the Undo Brush brings back; cleared
+    /// when the grid changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unsculpted: Option<Vec<Option<f64>>>,
 }
 
 /// A component's dynamic properties (Aspire's Component Properties): they change how its
@@ -197,6 +201,7 @@ impl Component {
             heights,
             visible: true,
             shaping: Shaping::default(),
+            unsculpted: None,
         }
     }
 
@@ -242,6 +247,7 @@ impl Component {
             heights: material.heights.iter().map(|&h| Some(h)).collect(),
             visible: true,
             shaping: Shaping::default(),
+            unsculpted: None,
         }
     }
 

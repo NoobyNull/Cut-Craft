@@ -734,7 +734,7 @@ impl MenuSystem {
                         i("Export as Grayscale Bitmap"),
                         i("Export as 3D Clipart"),
                         sep(),
-                        i("Sculpt Visible Model"),
+                        a("Sculpt Visible Model", "sculpt"),
                         i("Smooth Selected Components"),
                         i("Reset Inside Selected Vectors"),
                         i("Reset Outside Selected Vectors"),

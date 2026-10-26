@@ -113,7 +113,7 @@ const THIRD_PARTY: [(&str, &str); 14] = [
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
-const STROKE_TOOLS: [&str; 1] = ["draw_freehand"];
+const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 1] = ["import_stl"];
@@ -3083,6 +3083,34 @@ mod tests {
             b.size().y > 15.0,
             "it went up and down, not straight: {b:?}"
         );
+    }
+
+    #[test]
+    fn a_sculpting_drag_deposits_along_the_stroke() {
+        let mut h = Harness::new();
+        h.app.doc = cut_craft_core::testing::domed();
+        h.frame(vec![]);
+        let top = |h: &Harness| {
+            h.app
+                .doc
+                .components
+                .values()
+                .next()
+                .unwrap()
+                .height_at(Point::new(20.0, 20.0))
+        };
+        let before = top(&h).unwrap();
+        h.app.invoke(&h.ctx, "sculpt");
+        h.app.form.as_mut().unwrap().params["tool"] = Value::from("deposit");
+        h.frame(vec![Event::PointerMoved(h.at(16.0, 20.0))]);
+        h.press(h.at(16.0, 20.0), true, Modifiers::NONE);
+        for x in [18.0, 20.0, 22.0, 24.0] {
+            h.frame(vec![Event::PointerMoved(h.at(x, 20.0))]);
+        }
+        h.press(h.at(24.0, 20.0), false, Modifiers::NONE);
+        h.frame(vec![]);
+        assert!(top(&h).unwrap() > before, "the stroke raised the dome");
+        assert!(h.app.doc.vectors.is_empty(), "sculpting draws no vectors");
     }
 
     #[test]

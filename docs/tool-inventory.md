@@ -264,7 +264,7 @@ say "not implemented yet".
 **Not built yet.**
 - File: Import Toolpaths.
 - Edit: Swap Sides, Document Variables, Options.
-- Model: Export as 3D Clipart, Sculpt, Distort.
+- Model: Export as 3D Clipart, Distort.
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Materials.
@@ -275,8 +275,7 @@ say "not implemented yet".
   - Transform, Trim Objects.
   - Auto Layout Text.
   - Distort.
-- Modeling tab: Sculpt,
-  Distort.
+- Modeling tab: Distort.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
   not hidden behind it.
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool

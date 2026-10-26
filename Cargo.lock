@@ -1167,6 +1167,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-sculpt"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-select-all-duplicate-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1724,6 +1733,7 @@ dependencies = [
  "cmd-rotate",
  "cmd-rounding-toolpath",
  "cmd-scale-model-z-height",
+ "cmd-sculpt",
  "cmd-select-all-duplicate-vectors",
  "cmd-select-all-open-vectors",
  "cmd-select-all-vectors",
