@@ -16,8 +16,8 @@ icons are skipped (Matthew: no laser features).
 - [x] Create Shape: Round / Angled / Smooth / Flat (`modeling/create_shape_*`): Create Shape
       with that profile chosen (help: Create Round / Angled / Smooth Shape, Create Flat Plane).
 - [ ] Texture (`modeling/texture.svg`): Create Texture Area.
-- [ ] Component Levels (`modeling/component_levels.svg`): the Components tab.
-- [ ] Import Vectors / Export Vectors (`file/*`).
+- [x] Component Levels (`modeling/component_levels.svg`): the Components tab.
+- [x] Import Vectors / Export Vectors (`file/*`).
 - [x] Edit / Preview / Hide toolpaths, Save Toolpath Template, Save All as Template
       (`toolpaths/*`): the toolpath list's buttons (help: edit-toolpath, Preview Toolpaths,
       save-toolpath-template, save-all-visible-toolpaths-as-a-template).
@@ -34,7 +34,7 @@ icons are skipped (Matthew: no laser features).
       Convert Text To Curves) and Edit Text (`edit_text.svg`).
 - [ ] Vector Boundary (`drawing/create_vectors/vector_boundary.svg`; help: Vector Boundary).
 - [ ] Paste in Place (`file/paste_in_place.svg`; help: paste-operation).
-- [ ] Open Folder / Open Clipart Folder (`file/open_folder.svg`, `open_clipart_folder.svg`).
+- [x] Open Folder / Open Clipart Folder (`file/open_folder.svg`, `open_clipart_folder.svg`).
 - [ ] Weld (cross) (`drawing/edit_objects/weld_cross.svg`): the weld variant it shows.
 - [ ] Vector Texture fill (`drawing/weld_and_offset/vector_texture_fill.svg`).
 - [ ] Rounded shape / span (`drawing/create_vectors/rounded_shape_span.svg`).

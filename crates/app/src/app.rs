@@ -23,7 +23,12 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 68] = [
+const BUILT_INS: [&str; 73] = [
+    "import_vectors",
+    "export_vectors",
+    "open_folder",
+    "open_clipart_folder",
+    "component_levels",
     "edit_toolpath",
     "create_shape_round",
     "create_shape_angled",
@@ -142,6 +147,15 @@ const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 2] = ["import_stl", "import_3d_clipart"];
+/// Import Vectors and Export Vectors: the vector formats only.
+const VECTOR_IMPORTERS: [&str; 3] = ["import_dxf", "import_svg", "import_crv3d"];
+const VECTOR_EXPORTERS: [&str; 5] = [
+    "export_dxf",
+    "export_svg",
+    "export_pdf",
+    "export_eps",
+    "export_ai",
+];
 /// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
 const LAYOUT_KEYS: [(&str, &str); 3] = [
     ("design_layout", "F11"),
@@ -546,6 +560,17 @@ impl CutCraftApp {
                 }
             }
             "edit_toolpath" => self.edit_toolpath(),
+            "import_vectors" | "export_vectors" | "open_folder" | "open_clipart_folder" => {
+                self.file_icon_action(id);
+            }
+            // the Components tab, as Aspire's Component Levels icon shows
+            "component_levels" => {
+                self.design_tab = DESIGN_TABS
+                    .iter()
+                    .position(|&t| t == "Components")
+                    .unwrap_or_default();
+                self.pages.open(Page::Design);
+            }
             "delete_all_guides" => self.set_guides(vec![]),
             "lock_all_existing_guides" | "unlock_all_existing_guides" => {
                 let locked = id.starts_with("lock");
@@ -1139,6 +1164,85 @@ impl CutCraftApp {
             }
             Some(id) => self.invoke(ui.ctx(), id),
             None => {}
+        }
+    }
+
+    /// The file icons Aspire has beside its menus: Import Vectors and Export Vectors (vector
+    /// formats only), Open Folder (the job's folder) and Open Clipart Folder.
+    fn file_icon_action(&mut self, id: &str) {
+        let result = match id {
+            "import_vectors" => {
+                let mut dialog = file_dialog();
+                for importer in self.registry.importers() {
+                    if VECTOR_IMPORTERS.contains(&importer.id) {
+                        dialog =
+                            dialog.add_filter(importer.format.label, importer.format.extensions);
+                    }
+                }
+                if let Some(path) = dialog.pick_file() {
+                    self.import_file(&path);
+                }
+                Ok(())
+            }
+            "export_vectors" => {
+                let mut dialog = file_dialog();
+                let exporters: Vec<_> = self
+                    .registry
+                    .exporters()
+                    .filter(|e| VECTOR_EXPORTERS.contains(&e.id))
+                    .map(|e| (e.id, e.format))
+                    .collect();
+                for (_, format) in &exporters {
+                    dialog = dialog.add_filter(format.label, format.extensions);
+                }
+                match dialog.save_file() {
+                    // the extension picks the format; DXF when there is none
+                    Some(path) => {
+                        let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase());
+                        let (id, path) = exporters
+                            .iter()
+                            .find(|(_, f)| {
+                                ext.as_deref().is_some_and(|x| f.extensions.contains(&x))
+                            })
+                            .map_or(("export_dxf", path.with_extension("dxf")), |(id, _)| {
+                                (*id, path.clone())
+                            });
+                        files::export(&self.registry, id, &self.doc, &path).map(|()| {
+                            self.status
+                                .set_message(&format!("Exported {}", path.display()));
+                        })
+                    }
+                    None => Ok(()),
+                }
+            }
+            "open_folder" => {
+                let folder = self
+                    .session
+                    .path
+                    .as_deref()
+                    .and_then(std::path::Path::parent)
+                    .map(std::path::Path::to_path_buf)
+                    .or_else(files::config_dir);
+                folder.map_or(Err("no folder to open".to_owned()), |f| {
+                    on_the_desktop();
+                    files::show_folder(&f).map_err(|e| e.to_string())
+                })
+            }
+            _ => match self
+                .clipart
+                .chosen
+                .or((!self.clipart.folders.is_empty()).then_some(0))
+                .and_then(|i| self.clipart.folders.get(i))
+            {
+                Some(folder) => {
+                    on_the_desktop();
+                    files::show_folder(folder).map_err(|e| e.to_string())
+                }
+                None => Err("add a folder to the Clipart library first".to_owned()),
+            },
+        };
+        if let Err(e) = result {
+            self.status.set_message(&e);
         }
     }
 
@@ -2265,6 +2369,9 @@ impl CutCraftApp {
         let importable = |ext: &str| registry.importer_for(ext).is_some();
         match crate::clipart::panel(ui, &mut self.clipart, &importable) {
             Some(crate::clipart::Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
+            Some(crate::clipart::Picked::OpenFolder) => {
+                self.invoke(ui.ctx(), "open_clipart_folder");
+            }
             Some(crate::clipart::Picked::Import(path)) => self.import_file(&path),
             None => {}
         }
@@ -5246,6 +5353,32 @@ mod tests {
     }
 
     #[test]
+    fn the_file_and_component_level_icons_have_their_tools() {
+        let mut h = Harness::new();
+        for id in [
+            "import_vectors",
+            "export_vectors",
+            "open_folder",
+            "open_clipart_folder",
+            "component_levels",
+        ] {
+            assert!(h.app.available(id), "{id}");
+        }
+        let groups = &h.app.toolbar.groups;
+        let file = groups.iter().find(|g| g.name == "File Operations").unwrap();
+        assert!(file.tools.contains(&"export_vectors") && file.tools.contains(&"open_folder"));
+        h.app.invoke(&h.ctx, "component_levels");
+        assert_eq!(DESIGN_TABS[h.app.design_tab], "Components");
+        // with no library folder there is nothing to open, and it says so
+        h.app.invoke(&h.ctx, "open_clipart_folder");
+        assert!(
+            h.app.status.message.contains("Clipart library"),
+            "{}",
+            h.app.status.message
+        );
+    }
+
+    #[test]
     fn a_new_job_is_set_up_over_the_2d_view() {
         let mut h = Harness::at_start();
         h.app.view = View::ThreeD;
@@ -5818,7 +5951,7 @@ mod tests {
     /// save-changes question (the smoke test's job has unsaved work), the file manager and
     /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 22] = [
+        const ASKS: [&str; 26] = [
             "add_clipart_folder",
             "segment_3d_model_file",
             "new",
@@ -5841,6 +5974,10 @@ mod tests {
             "save_toolpaths",
             "exit",
             "recent_files",
+            "import_vectors",
+            "export_vectors",
+            "open_folder",
+            "open_clipart_folder",
         ];
         ASKS.contains(&id) || app.registry.exporter(id).is_some() || id.starts_with(EXPORT_LEVEL)
     }

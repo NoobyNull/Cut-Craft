@@ -50,7 +50,10 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "open",
                 "save",
                 "import_vectors_bitmap",
+                "import_vectors",
+                "export_vectors",
                 "import_component_3d_model",
+                "open_folder",
                 "job_setup",
             ],
         ),
@@ -175,6 +178,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "replace_below",
                 "split",
                 "bake_components",
+                "component_levels",
             ],
         ),
     ]

@@ -22,6 +22,8 @@ pub struct Clipart {
 /// What the tab asks the app to do.
 pub enum Picked {
     AddFolder,
+    /// Show the chosen folder in the desktop's file manager.
+    OpenFolder,
     Import(PathBuf),
 }
 
@@ -117,6 +119,12 @@ pub fn panel(
         remove = ui
             .add_enabled(clipart.chosen.is_some(), egui::Button::new("Remove Folder"))
             .clicked();
+        if ui
+            .add_enabled(clipart.chosen.is_some(), egui::Button::new("Open Folder"))
+            .clicked()
+        {
+            picked = Some(Picked::OpenFolder);
+        }
     });
     if remove && let Err(e) = clipart.remove_chosen() {
         ui.colored_label(ui.visuals().error_fg_color, e);
