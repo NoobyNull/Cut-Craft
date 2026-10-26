@@ -1129,6 +1129,7 @@ impl MenuSystem {
                     vec![
                         MenuItem::with_action("Wrapped Fluting Layout", "wrapped_fluting_layout"),
                         MenuItem::with_action("Wrapped Spiral Layout", "wrapped_spiral_layout"),
+                        MenuItem::with_action("Celtic Weave Creator", "celtic_weave"),
                     ],
                 ),
                 menu(

@@ -162,6 +162,9 @@ say "not implemented yet".
   corner. Not done: the 3D view's active tile and drawing tiles in their original place.
 - Gadgets ▸ Wrapped Fluting Layout and Wrapped Spiral Layout (rotary jobs): flutes or
   rope-twist strands, with coves, laid out as vectors for Profile / Fluting toolpaths.
+- Gadgets ▸ Celtic Weave Creator: a knot grid's loops as smooth closed vectors (crossings
+  cut vertically or horizontally from a list; Aspire picks them on a preview image) and a
+  half-round cross-section, for Extrude and Weave.
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
@@ -383,7 +386,7 @@ say "not implemented yet".
 - Toolpaths: Materials.
 - View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
-- Gadgets beyond the two rotary layouts; Help Contents.
+- Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.
 - Drawing tab:
   - Transform, Trim Objects.
   - Auto Layout Text.
