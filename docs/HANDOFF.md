@@ -1,9 +1,34 @@
 ---
 status: read
 created: 2026-10-24
-updated: 2026-10-25
+updated: 2026-10-26
 focus: Keep building Cut Craft down docs/tool-inventory.md's "Not built yet"
 ---
+
+## Update 2026-10-26 (Windows PC "cad", `0ed6bf2`…`2f15811`, pushed to PR #1's branch)
+
+- **Machine:** checkout at `C:\Users\CAD\Documents\cut-craft`, `core.autocrlf=false` (LF),
+  hook runs under Git for Windows' bash. No Python here; Aspire 12.5 Trial is installed
+  natively (`C:\Program Files\Aspire Trial Edition 12.5`), help text stripped into the
+  gitignored `re/extracted/help-win/`. Windows fixes: icon paths keyed with `/`, the font
+  test also accepts Arial.
+- **3D modeling (the focus Matthew asked for):**
+  - Component Properties' Shape / Base Height, Fade, Tilt, Bake (`Component::shaping`,
+    applied as heights are read; tools that change heights bake first).
+  - Move / Rotate / Mirror / Set Size / Align on selected components
+    (`Change::transform_selected` takes each object's bounds; `Component::transformed`).
+  - Sculpting (a stroke tool like Freehand; `Component::unsculpted` for the Undo Brush).
+  - Distort Object: bounding box, along a curve, between two curves, and Create Envelope +
+    Node Edit + Distort to Envelope (Coons patch), for vectors or components.
+  - Levels (`Document::levels`, `Component::level`, `Edit::SetLevel`): combine, base
+    height, clipping, eight mirror modes, rotary wrapping; level menu (MENU 1046), Move
+    Up / Down; groups (`Component::group`, members carry it); Duplicate.
+  - Rotary: Vector Unwrapper (feeds Two Rail Sweep), Orientate 3D Model's Full 3D model
+    (cylindrical z-buffer), Auto-Wrapping 3D view, Material Setup's model position
+    (`Job::model_position`, `Job::model_shift`, used by `placed_model`).
+  - Segment 3D Model (one plane), Export / import 3D clipart (`.ccclip`, our own JSON;
+    Aspire's `.3dclip` is encrypted), double-click picking in the 3D view.
+- **Not tried by hand yet:** all of the above. Ask Matthew before driving his desktop.
 
 ## Update 2026-10-25 (40 local commits, `fc648d6`…`2b9c97a`, not pushed)
 
