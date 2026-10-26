@@ -355,10 +355,12 @@ mod tests {
         let mut centers = arcs(&path);
         centers.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
         let p = Point::new;
-        assert_eq!(
-            centers,
-            [p(3.0, 3.0), p(3.0, 7.0), p(7.0, 3.0), p(7.0, 7.0)]
-        );
+        // within EPS: the centres come from trigonometry, whose last bits differ by platform
+        let expected = [p(3.0, 3.0), p(3.0, 7.0), p(7.0, 3.0), p(7.0, 7.0)];
+        assert_eq!(centers.len(), expected.len());
+        for (c, e) in centers.iter().zip(expected) {
+            assert!((*c - e).length() < EPS, "{centers:?}");
+        }
         let b = path.bounds();
         assert!((b.min - p(0.0, 0.0)).length() < EPS && (b.max - p(10.0, 10.0)).length() < EPS);
         // each corner loses a 3×3 square less a quarter circle
