@@ -186,8 +186,33 @@ const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI"
 const RECENT_FILE_ICON: &str = "file/new.svg";
 /// This version's changes, one `- ` line each, shown on the start page.
 const WHATS_NEW: &str = include_str!("../whats-new.md");
-/// Where Cut Craft is found online, shown on the start page: label and address.
-const LINKS: [(&str, &str); 1] = [("GitHub", "https://github.com/NoobyNull/cut-craft")];
+/// Where Cut Craft is found online, shown on the start page: label, address and icon (the
+/// social ones are placeholders: each site's home page).
+const LINKS: [(&str, &str, &str); 7] = [
+    ("GitHub", "https://github.com/NoobyNull/cut-craft", ""),
+    (
+        "Facebook",
+        "https://www.facebook.com",
+        "file/facebook_link.svg",
+    ),
+    ("X", "https://x.com", "file/twitter_link.svg"),
+    (
+        "YouTube",
+        "https://www.youtube.com",
+        "file/youtube_link.svg",
+    ),
+    (
+        "Instagram",
+        "https://www.instagram.com",
+        "file/instagram_link.svg",
+    ),
+    (
+        "Pinterest",
+        "https://www.pinterest.com",
+        "file/pinterest_link.svg",
+    ),
+    ("Thingiverse", "https://www.thingiverse.com", ""),
+];
 /// The design panel's starting width, in the theme's interactive widths: room for Job Setup's
 /// pictures beside its choices.
 // ponytail: fixed until panel widths are saved with the window layout
@@ -1311,8 +1336,13 @@ impl CutCraftApp {
         }
         ui.separator();
         ui.strong("Links");
-        for (label, url) in LINKS {
-            ui.hyperlink_to(label, url);
+        for (label, url, icon) in LINKS {
+            ui.horizontal(|ui| {
+                if let Some(path) = self.icons.find(icon, "") {
+                    ui.add(Icons::image(path).fit_to_exact_size(egui::vec2(edge, edge)));
+                }
+                ui.hyperlink_to(label, url);
+            });
         }
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), &id);
@@ -5265,7 +5295,7 @@ mod tests {
             h.text_at(first.trim_start_matches("- ")).is_some(),
             "{first}"
         );
-        for (label, url) in LINKS {
+        for (label, url, _) in LINKS {
             assert!(h.text_at(label).is_some(), "{label}");
             assert!(url.starts_with("https://"), "{url}");
         }

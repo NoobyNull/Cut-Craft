@@ -20,7 +20,7 @@ STRIPS = {
     "35063": "drawing/create_vectors", "35064": "drawing/edit_objects", "35065": "drawing/weld_and_offset",
     "35066": "drawing/join", "35067": "drawing/align", "35068": "modeling", "35069": "file", "35070": "toolpaths",
 }
-SKIP = re.compile(r"link$|logo$|^Account$|^Offline|\(alt\)")
+SKIP = re.compile(r"(Vectric|Design & Make|forum) link$|logo$|^Account$|^Offline|\(alt\)")
 SINGLES = {
     "view": ["ico/35153", "ico/35154", "png/35096", "png/35097", "png/35098", "png/35099", "png/35091", "png/35092",
              "png/35093", "ico/57651", "ico/33848", "png/34562", "png/34563",

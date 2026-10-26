@@ -23,7 +23,7 @@ icons are skipped (Matthew: no laser features).
       save-toolpath-template, save-all-visible-toolpaths-as-a-template).
 - [ ] 2D toolpath drawing on / off / solid (`view/*`): Toolpath Drawing toggles.
 - [ ] Expand / Collapse (`view/*`): the component tree's levels.
-- [ ] Start page social links (strip 35069 slots 14–25: YouTube, Facebook, Twitter,
+- [x] Start page social links (strip 35069 slots 14–25: YouTube, Facebook, Twitter,
       Instagram, Pinterest, forum): beside the Links (needs Matthew's addresses).
 
 ## Icons whose tool is missing

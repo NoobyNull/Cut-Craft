@@ -1426,5 +1426,40 @@
   "guess": false,
   "slot": "bmp/34746",
   "source": "bmp/34746"
+ },
+ {
+  "path": "file/youtube_link.svg",
+  "label": "YouTube link",
+  "guess": false,
+  "slot": "slot/35069_14",
+  "source": "slot/35069_14"
+ },
+ {
+  "path": "file/facebook_link.svg",
+  "label": "Facebook link",
+  "guess": false,
+  "slot": "slot/35069_15",
+  "source": "slot/35069_15"
+ },
+ {
+  "path": "file/twitter_link.svg",
+  "label": "Twitter link",
+  "guess": false,
+  "slot": "slot/35069_16",
+  "source": "slot/35069_16"
+ },
+ {
+  "path": "file/instagram_link.svg",
+  "label": "Instagram link",
+  "guess": false,
+  "slot": "slot/35069_23",
+  "source": "slot/35069_23"
+ },
+ {
+  "path": "file/pinterest_link.svg",
+  "label": "Pinterest link",
+  "guess": false,
+  "slot": "slot/35069_25",
+  "source": "slot/35069_25"
  }
 ]
