@@ -1159,6 +1159,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-reorder-component"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-reorder-level"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-replace-below"
 version = "0.1.0"
 dependencies = [
@@ -1798,6 +1816,8 @@ dependencies = [
  "cmd-prism-toolpath",
  "cmd-profile-toolpath",
  "cmd-quick-engrave-toolpath",
+ "cmd-reorder-component",
+ "cmd-reorder-level",
  "cmd-replace-below",
  "cmd-reset-inside-selected-vectors",
  "cmd-reset-outside-selected-vectors",

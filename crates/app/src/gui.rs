@@ -523,6 +523,15 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
     let clip = |name: &str, action| {
         MenuItem::run::<LevelClipping>(name, &cmd_level_clipping::Params { level: id, action })
     };
+    let reorder = |name: &str, direction| {
+        MenuItem::run::<cmd_reorder_level::ReorderLevel>(
+            name,
+            &cmd_reorder_level::Params {
+                level: id,
+                direction,
+            },
+        )
+    };
     let clipped = !level.clip.is_empty();
     let [show, hide] = show_hide(Items::Levels, id);
     vec![
@@ -570,6 +579,10 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
         .checked(level.wrapping)
         .enabled(doc.job.rotary.is_some()),
         MenuItem::separator(),
+        reorder("Move Level Up", cmd_reorder_level::Direction::Up)
+            .enabled(doc.levels.range(id + 1..).next().is_some()),
+        reorder("Move Level Down", cmd_reorder_level::Direction::Down)
+            .enabled(doc.levels.range(..id).next().is_some()),
         MenuItem::form::<cmd_insert_level::InsertLevel>(
             "Insert New Level",
             &cmd_insert_level::InsertLevel::initial_params(doc),

@@ -300,7 +300,10 @@ say "not implemented yet".
     modes reflect one half or quarter of the job about its middle; Wrapping (rotary jobs)
     brings what runs off one side of the unrolled job round the other, keeping the
     higher part where it meets itself. Older jobs get one level, so their models are
-    unchanged. New components go on the first level; levels cannot be reordered yet.
+    unchanged. New components go on the first level. Move Up / Move Down over the tree
+    (Aspire's blue arrows) move the picked component within its level, and the level
+    menu's Move Level Up / Down move a level with its components (Move Component, Move
+    Level); dragging in the tree is not done.
   - Distort Object (Drawing tab, and Model ▸ Distort Selected Component; help: Distort
     Object): the selected vectors, or the selected components (not both), bent into an
     envelope: their bounding box with its four corners moved (typed in the form), the band

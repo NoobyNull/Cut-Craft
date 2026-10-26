@@ -2013,6 +2013,21 @@ impl CutCraftApp {
             at == level
         };
         let (mut chosen, mut picked) = (None, None);
+        // Aspire's arrows over the tree: the picked component up or down its level
+        let mut moved = None;
+        let last = self.doc.selected_components.last();
+        ui.horizontal(|ui| {
+            use cmd_reorder_component::{Direction, neighbour};
+            for (label, direction) in [("Move Up", Direction::Up), ("Move Down", Direction::Down)] {
+                let to = last.and_then(|id| neighbour(&self.doc, id, direction));
+                if ui
+                    .add_enabled(to.is_some(), egui::Button::new(label))
+                    .clicked()
+                {
+                    moved = last.zip(to).map(|(id, to)| (id, direction, to));
+                }
+            }
+        });
         for (&level_id, level) in self.doc.levels.iter().rev() {
             let shown = if level.visible { "" } else { " (hidden)" };
             let header = ui.label(
@@ -2058,6 +2073,17 @@ impl CutCraftApp {
             }
             Some((id, false)) => self.doc.selected_components = [id].into(),
             None => {}
+        }
+        if let Some((component, direction, to)) = moved {
+            let params = cmd_reorder_component::Params {
+                component,
+                direction,
+            };
+            let params = serde_json::to_value(params).expect("params serialize");
+            if self.apply("reorder_component", &params).is_ok() {
+                // the moved component took its neighbour's id; keep it picked
+                self.doc.selected_components = [to].into();
+            }
         }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
