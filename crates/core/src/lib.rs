@@ -14,6 +14,7 @@ pub mod handles;
 pub mod keep_out;
 pub mod nodes;
 pub mod params;
+pub mod playback;
 pub mod polygon;
 pub mod random;
 pub mod selection;

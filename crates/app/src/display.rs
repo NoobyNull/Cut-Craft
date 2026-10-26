@@ -27,6 +27,8 @@ pub struct Display {
     pub auto_wrapping: bool,
     /// Guide lines drawn in the 2D view.
     pub guides: bool,
+    /// Previews play the tool cutting (Aspire's Animate preview) rather than appearing cut.
+    pub animate_preview: bool,
 }
 
 impl Default for Display {
@@ -49,6 +51,7 @@ impl Default for Display {
             shaded_background: true,
             auto_wrapping: true,
             guides: true,
+            animate_preview: true,
         }
     }
 }
@@ -77,6 +80,7 @@ impl Display {
             "draw_join_moves" => &mut self.joins,
             "draw_origin" => &mut self.origin,
             "guides_visible" => &mut self.guides,
+            "animate_preview" => &mut self.animate_preview,
             "draw_modeling_plane" => &mut self.modeling_plane,
             "draw_material_block" => &mut self.material_block,
             "draw_vectors_in_3d_view" => &mut self.vectors_3d,

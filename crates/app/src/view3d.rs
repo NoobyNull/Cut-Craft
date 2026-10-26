@@ -316,6 +316,43 @@ pub fn vector_plane(material: &Material, points: &[DVec2]) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// The outline on screen of an upright cylinder standing on `tip` (the moving tool in a
+/// playing preview): the convex hull of its top and bottom rims, `screen` placing points.
+#[expect(clippy::cast_precision_loss, reason = "a few rim points")]
+pub fn cylinder(screen: impl Fn(DVec3) -> Pos2, tip: DVec3, radius: f64, height: f64) -> Vec<Pos2> {
+    // ponytail: 24 points round each rim
+    const RIM: usize = 24;
+    let mut points: Vec<Pos2> = (0..RIM)
+        .flat_map(|i| {
+            let a = std::f64::consts::TAU * i as f64 / RIM as f64;
+            let round = DVec3::new(a.cos() * radius, a.sin() * radius, 0.0);
+            [screen(tip + round), screen(tip + round + DVec3::Z * height)]
+        })
+        .collect();
+    // convex hull (monotone chain) of the projected rims
+    points.sort_by(|p, q| p.x.total_cmp(&q.x).then(p.y.total_cmp(&q.y)));
+    let turn = |o: Pos2, a: Pos2, b: Pos2| (a - o).x * (b - o).y - (a - o).y * (b - o).x;
+    let mut hull: Vec<Pos2> = vec![];
+    for pass in [false, true] {
+        let start = hull.len();
+        let ordered: Vec<Pos2> = if pass {
+            points.iter().rev().copied().collect()
+        } else {
+            points.clone()
+        };
+        for p in ordered {
+            while hull.len() >= start + 2
+                && turn(hull[hull.len() - 2], hull[hull.len() - 1], p) <= 0.0
+            {
+                hull.pop();
+            }
+            hull.push(p);
+        }
+        hull.pop();
+    }
+    hull
+}
+
 /// The material's width and height.
 #[expect(clippy::cast_precision_loss, reason = "cell counts")]
 pub fn plan_size(material: &Material) -> DVec2 {
@@ -629,6 +666,26 @@ mod tests {
             area,
         );
         assert!(without.indices.len() < with.indices.len());
+    }
+
+    #[test]
+    #[expect(clippy::cast_possible_truncation, reason = "small test coordinates")]
+    fn the_tool_is_an_upright_cylinder_on_its_tip() {
+        // looking straight down: a circle; from the side: a rectangle as tall as the tool
+        let down = |p: DVec3| Pos2::new(p.x as f32, -p.y as f32);
+        let ring = cylinder(down, DVec3::ZERO, 3.0, 12.0);
+        assert!(
+            ring.len() >= 12
+                && ring
+                    .iter()
+                    .all(|p| (p.to_vec2().length() - 3.0).abs() < 1e-3)
+        );
+        let side = |p: DVec3| Pos2::new(p.x as f32, -p.z as f32);
+        let outline = cylinder(side, DVec3::ZERO, 3.0, 12.0);
+        let (lo, hi) = outline.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
+            (lo.min(p.y), hi.max(p.y))
+        });
+        assert!((hi - lo - 12.0).abs() < 1e-3, "{lo}..{hi}");
     }
 
     #[test]

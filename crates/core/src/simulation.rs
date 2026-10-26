@@ -137,7 +137,7 @@ impl Material {
 
     /// Lowers each cell the tool passes over from `a` to `b` to the lowest its cutting edge
     /// reaches there, at the cell centre.
-    fn sweep(&mut self, a: DVec3, b: DVec3, tool: &Tool) {
+    pub fn sweep(&mut self, a: DVec3, b: DVec3, tool: &Tool) {
         if a.z >= 0.0 && b.z >= 0.0 {
             return;
         }

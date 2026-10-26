@@ -165,6 +165,10 @@ say "not implemented yet".
 - Gadgets ▸ Celtic Weave Creator: a knot grid's loops as smooth closed vectors (crossings
   cut vertically or horizontally from a list; Aspire picks them on a preview image) and a
   half-round cross-section, for Extrude and Weave.
+- Animated toolpath preview (Toolpaths ▸ Toolpath Drawing ▸ Animate Preview, on by default):
+  Run / Pause, Single Step, Run to Retract, Stop (keeps what is cut), a slider to scrub
+  along the path and a speed slider over the 3D view; the tool drawn as an upright
+  cylinder. Not done: the tool's real shape, Preview All Sides.
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.

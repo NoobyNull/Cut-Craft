@@ -1096,6 +1096,7 @@ impl MenuSystem {
                                 i("Draw 2D Previews"),
                                 i("Make 2D Previews Solid"),
                                 i("Auto Open 3D View"),
+                                i("Animate Preview"),
                                 i("Draw Rapid Moves"),
                                 i("Draw Plunge Moves"),
                                 i("Draw Retract Moves"),

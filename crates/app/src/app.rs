@@ -209,6 +209,12 @@ const TEXT_SCALE: f32 = 1.15;
 const LINE_SCALE: f32 = 1.5;
 /// Easy-to-read UI fonts, the first installed used; egui's own stay behind for symbols.
 const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
+/// A playing preview's speed to start with, in mm of tool travel a second, and its range.
+// ponytail: fixed starting speed; the bar's slider changes it
+const PLAYBACK_SPEED: f64 = 200.0;
+const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 5.0..=20_000.0;
+/// The tool drawn in the 3D view while a preview plays: this many diameters tall.
+const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
 /// Beside each recently opened file.
 const RECENT_FILE_ICON: &str = "file/new.svg";
 /// This version's changes, one `- ` line each, shown on the start page.
@@ -383,6 +389,11 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
+    /// A preview playing (or paused): the tool cutting the material a distance at a time.
+    playback: Option<cut_craft_core::playback::Playback>,
+    playing: bool,
+    /// How fast the preview plays, in mm of tool travel a second.
+    playback_speed: f64,
     /// Component tree levels collapsed (Aspire's Expand / Collapse).
     collapsed_levels: std::collections::HashSet<u64>,
     /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).
@@ -443,6 +454,9 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
+            playback: None,
+            playing: false,
+            playback_speed: PLAYBACK_SPEED,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
             rotating: false,
@@ -489,7 +503,7 @@ impl CutCraftApp {
                 !self.doc.toolpaths.is_empty()
             }
             "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
-            "reset_preview" => self.simulation.is_some(),
+            "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             "cut" | "copy" => !self.doc.selection.is_empty(),
             "create_component_from_toolpath_preview" => self.simulation.is_some(),
@@ -660,7 +674,10 @@ impl CutCraftApp {
                 }
             }
             "preview_all_toolpaths" => self.preview_all(),
-            "reset_preview" => (self.simulation, self.simulation_coarse) = (None, None),
+            "reset_preview" => {
+                (self.simulation, self.simulation_coarse) = (None, None);
+                (self.playback, self.playing) = (None, false);
+            }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
                     self.open_recent(index);
@@ -2557,14 +2574,56 @@ impl CutCraftApp {
     /// Cuts the toolpath from the previewed material (uncut material if there is none yet).
     /// The cascade: start again from uncut material, then preview each visible toolpath.
     fn preview_all(&mut self) {
+        self.finish_playback();
         self.simulation = None;
-        let visible = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
-        for id in visible.map(|(&id, _)| id).collect::<Vec<_>>() {
+        let visible: Vec<EntityId> = self
+            .doc
+            .toolpaths
+            .iter()
+            .filter(|(_, t)| t.visible)
+            .map(|(&id, _)| id)
+            .collect();
+        if self.display.animate_preview {
+            self.play(&visible);
+            return;
+        }
+        for id in visible {
             self.preview_toolpath(id);
         }
     }
 
+    /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet).
+    fn play(&mut self, toolpaths: &[EntityId]) {
+        self.finish_playback();
+        let start = self
+            .simulation
+            .take()
+            .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
+        let list: Vec<&cut_craft_core::toolpath::Toolpath> = toolpaths
+            .iter()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .collect();
+        self.playback = Some(cut_craft_core::playback::Playback::new(start, &list));
+        (self.playing, self.simulation_coarse) = (true, None);
+        if self.display.auto_open_3d {
+            self.view = View::ThreeD;
+        }
+    }
+
+    /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path).
+    fn finish_playback(&mut self) {
+        if let Some(playback) = self.playback.take() {
+            self.simulation = Some(playback.material().clone());
+            (self.playing, self.simulation_coarse) = (false, None);
+        }
+    }
+
     fn preview_toolpath(&mut self, id: EntityId) {
+        if self.display.animate_preview {
+            self.play(&[id]);
+            return;
+        }
+        self.finish_playback();
         let Some(toolpath) = self.doc.toolpaths.get(&id) else {
             return;
         };
@@ -2577,6 +2636,62 @@ impl CutCraftApp {
         }
         self.status
             .set_message(&format!("Previewed {}", toolpath.name));
+    }
+
+    /// Aspire's Preview Control while a preview plays: Run / Pause, Single Step, Run to
+    /// Retract and Stop, the tool's place along the path (drag to scrub) and the speed. A
+    /// playing preview moves on here each frame.
+    fn playback_bar(&mut self, ui: &mut egui::Ui) {
+        let Some(playback) = self.playback.as_mut() else {
+            return;
+        };
+        if self.playing {
+            let dt = f64::from(ui.input(|i| i.stable_dt));
+            playback.seek(playback.at() + self.playback_speed * dt);
+            ui.ctx().request_repaint();
+        }
+        let mut stop = playback.finished();
+        ui.horizontal(|ui| {
+            let run = if self.playing { "Pause" } else { "Run" };
+            if ui.button(run).clicked() {
+                self.playing = !self.playing;
+            }
+            if ui.button("Single Step").clicked() {
+                self.playing = false;
+                playback.seek(playback.next_step());
+            }
+            if ui.button("Run to Retract").clicked() {
+                self.playing = false;
+                playback.seek(playback.next_retract());
+            }
+            stop |= ui
+                .button("Stop")
+                .on_hover_text("Keep what is cut so far")
+                .clicked();
+            let mut at = playback.at();
+            let length = playback.length();
+            if ui
+                .add(
+                    egui::Slider::new(&mut at, 0.0..=length)
+                        .suffix(" mm")
+                        .show_value(false),
+                )
+                .on_hover_text("Where the tool is along the toolpaths")
+                .changed()
+            {
+                self.playing = false;
+                playback.seek(at);
+            }
+            ui.add(
+                egui::Slider::new(&mut self.playback_speed, PLAYBACK_SPEEDS)
+                    .logarithmic(true)
+                    .suffix(" mm/s")
+                    .text("Speed"),
+            );
+        });
+        if stop {
+            self.finish_playback();
+        }
     }
 
     /// Aspire's arrows over the tree: the picked component up or down its level, as
@@ -2764,6 +2879,9 @@ impl CutCraftApp {
     // ponytail: rebuilt on every call, measured at about 0.1 ms of a 7.5 ms frame; cache it on
     // the history revision if that grows
     fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
+        if let Some(playback) = &self.playback {
+            return Some(Cow::Owned(view3d::coarse(playback.material(), MESH_CELLS)));
+        }
         if let Some(material) = &self.simulation {
             return Some(Cow::Borrowed(
                 self.simulation_coarse
@@ -2782,7 +2900,8 @@ impl CutCraftApp {
     /// rotates, middle-drag (or Ctrl+right, or left and right together) pans, the wheel zooms
     /// about the cursor, and a double-click or F fits it again.
     fn view_3d(&mut self, ui: &mut egui::Ui) {
-        if self.simulation.is_none() && self.doc.components.is_empty() {
+        self.playback_bar(ui);
+        if self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty() {
             ui.centered_and_justified(|ui| {
                 ui.weak("Nothing in 3D yet: create a shape or preview the toolpaths")
             });
@@ -2881,7 +3000,7 @@ impl CutCraftApp {
                 ui.visuals().widgets.inactive.fg_stroke.color
             },
             // the block's sides belong to a preview; the model alone has no excess material
-            sides: shown.material_block && self.simulation.is_some(),
+            sides: shown.material_block && (self.simulation.is_some() || self.playback.is_some()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
             wrap: None,
         };
@@ -2902,7 +3021,13 @@ impl CutCraftApp {
         };
         let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
         let job = self.shown_job();
-        let previewing = self.simulation.is_some();
+        let previewing = self.simulation.is_some() || self.playback.is_some();
+        // a playing preview's tool: where its tip is, and its diameter
+        let tool_at = self
+            .playback
+            .as_ref()
+            .and_then(cut_craft_core::playback::Playback::tool)
+            .map(|(tip, tool)| (tip, tool.diameter));
         let Some(surface) = self.surface_3d() else {
             return;
         };
@@ -2917,6 +3042,22 @@ impl CutCraftApp {
         let local = |p: cut_craft_core::geometry::Point, z: f64| {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
         };
+        // a playing preview's tool, an upright cylinder at the tip
+        if let Some((tip, diameter)) = tool_at {
+            let at = local(tip.truncate(), tip.z);
+            let outline = view3d::cylinder(
+                &screen,
+                at,
+                diameter / 2.0,
+                diameter * TOOL_HEIGHT_DIAMETERS,
+            );
+            let selection = ui.visuals().selection;
+            painter.add(egui::Shape::convex_polygon(
+                outline,
+                selection.bg_fill,
+                selection.stroke,
+            ));
+        }
         // each vector flat, in one plane, on top of what it outlines
         for points in &vectors {
             let z = view3d::vector_plane(&surface, points);
@@ -4707,6 +4848,8 @@ mod tests {
                 time: 0.0,
                 shapes: vec![],
             };
+            // previews appear cut at once unless a test plays one
+            h.app.display.animate_preview = false;
             h.frame(vec![]);
             h.frame(vec![]);
             h
@@ -5946,6 +6089,39 @@ mod tests {
         h.frame(vec![]);
         let second = focus_ring(&h.ctx).expect("the next control");
         assert_ne!(first, second, "Tab moves on");
+    }
+
+    #[test]
+    fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+        h.app.display.animate_preview = true;
+        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        assert!(h.app.playing && h.app.playback.is_some(), "it plays");
+        assert!(h.app.view == View::ThreeD);
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let along = h.app.playback.as_ref().unwrap().at();
+        assert!(along > 0.0, "the tool moves on each frame");
+        assert!(h.text_at("Pause").is_some() && h.text_at("Run to Retract").is_some());
+        h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+        assert!(!h.app.playing);
+        let paused = h.app.playback.as_ref().unwrap().at();
+        h.frame(vec![]);
+        assert_eq!(
+            h.app.playback.as_ref().unwrap().at(),
+            paused,
+            "paused stays put"
+        );
+        h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+        assert!(
+            h.app.playback.is_none() && h.app.simulation.is_some(),
+            "kept as far as it went"
+        );
     }
 
     #[test]
