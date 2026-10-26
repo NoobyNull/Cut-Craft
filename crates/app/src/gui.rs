@@ -101,6 +101,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "fit_curves_to_vectors",
                 "vector_validator",
                 "measure_inspect",
+                "crop_bitmap",
             ],
         ),
         group(
