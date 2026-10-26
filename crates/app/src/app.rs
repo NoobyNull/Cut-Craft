@@ -1374,8 +1374,11 @@ impl CutCraftApp {
                 self.invoke(ctx, &id);
             }
         }
-        if ctx
-            .input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Escape)))
+        // Escape in a field being typed in only leaves the field
+        if !ctx.wants_keyboard_input()
+            && ctx.input_mut(|i| {
+                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Escape))
+            })
         {
             if self.screen == Screen::NewJob {
                 self.job_setup_cancel();
@@ -3152,6 +3155,28 @@ fn readable(ctx: &egui::Context) {
     });
 }
 
+/// Where the keyboard focus ring goes: round the control Tab has focused, if any.
+fn focus_ring(ctx: &egui::Context) -> Option<egui::Rect> {
+    let id = ctx.memory(egui::Memory::focused)?;
+    ctx.read_response(id).map(|r| r.rect)
+}
+
+/// The focus ring for mouseless use: a clear outline round the focused control, over
+/// everything else.
+fn paint_focus_ring(ctx: &egui::Context) {
+    let Some(rect) = focus_ring(ctx) else {
+        return;
+    };
+    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("focus_ring"));
+    let stroke = ctx.style().visuals.selection.stroke;
+    let width = stroke.width * 2.0;
+    ctx.layer_painter(layer).rect_stroke(
+        rect.expand(width),
+        ctx.style().visuals.widgets.inactive.rounding,
+        egui::Stroke::new(width, stroke.color),
+    );
+}
+
 /// A category of a drop-down in a border filling its width, as menus draw theirs.
 fn bordered(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -3251,6 +3276,7 @@ impl CutCraftApp {
         if ctx.input(|i| i.viewport().close_requested()) && !self.confirm_discard() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
+        paint_focus_ring(ctx);
         let title = match self.screen {
             Screen::Start => APP_NAME.to_owned(),
             _ => self.session.title(APP_NAME, &self.history),
@@ -5906,6 +5932,20 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::NONE,
         }
+    }
+
+    #[test]
+    fn tab_moves_a_visible_focus_through_the_controls() {
+        let mut h = Harness::new();
+        h.frame(vec![]);
+        assert_eq!(focus_ring(&h.ctx), None, "nothing focused yet");
+        h.frame(vec![key(Key::Tab)]);
+        h.frame(vec![]);
+        let first = focus_ring(&h.ctx).expect("Tab focuses a control, ringed");
+        h.frame(vec![key(Key::Tab)]);
+        h.frame(vec![]);
+        let second = focus_ring(&h.ctx).expect("the next control");
+        assert_ne!(first, second, "Tab moves on");
     }
 
     #[test]
