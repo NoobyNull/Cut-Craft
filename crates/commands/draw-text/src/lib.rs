@@ -117,10 +117,11 @@ impl Command for DrawText {
 
     /// On selected text, its own settings, so the form edits it.
     fn initial_params(doc: &Document) -> Params {
+        // the first selected group that is text (plain groups may come before it)
         doc.selection
             .iter()
-            .find_map(|id| doc.vector_groups.get(id))
-            .and_then(|group| {
+            .filter_map(|id| doc.vector_groups.get(id))
+            .find_map(|group| {
                 let spec = doc.texts.get(group)?;
                 let p: Params = serde_json::from_value(spec.clone()).ok()?;
                 Some(Params {
@@ -149,7 +150,6 @@ impl Command for DrawText {
             .unwrap_or_else(|| doc.next_group());
         let mut c = Change::builder(doc);
         for id in doc.group_members_of(group) {
-            c.set_group(id, None);
             c.remove(id);
         }
         let ids: Vec<_> = paths.into_iter().map(|path| c.add(path)).collect();
@@ -268,6 +268,20 @@ mod tests {
             cut_craft_core::testing::sample_document().vectors.len() + 3
         );
         assert_eq!(doc.texts[&group]["text"], "HIH");
+        // deleting the letters takes the text's settings with them, undoably
+        let mut c = Change::builder(&doc);
+        for id in doc.group_members_of(group) {
+            c.remove(id);
+        }
+        let delete = c.finish();
+        let kept = doc.clone();
+        doc.apply(&delete).unwrap();
+        assert!(
+            !doc.texts.contains_key(&group),
+            "no settings for vanished text"
+        );
+        doc.apply(&delete.inverse()).unwrap();
+        assert_eq!(doc, kept);
     }
 
     #[test]

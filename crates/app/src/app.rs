@@ -596,7 +596,10 @@ impl CutCraftApp {
                 }
             }
             "new_from_template" => {
-                if let Some(path) = template_dialog().pick_file() {
+                // like New and Open: unsaved work is asked about first
+                if self.confirm_discard()
+                    && let Some(path) = template_dialog().pick_file()
+                {
                     self.open_path(&path);
                 }
             }

@@ -694,6 +694,19 @@ impl ChangeBuilder<'_> {
         self.pending.insert(id, None);
         self.edits.push(Edit::Remove { id, path });
         self.set_vector_layer(id, None);
+        // a removed vector leaves its group; the last one out takes the group's text with it
+        if let Some(&group) = self.doc.vector_groups.get(&id) {
+            self.set_group(id, None);
+            let others_left = self.doc.vector_groups.iter().any(|(v, g)| {
+                *g == group
+                    && *v != id
+                    && self.doc.vectors.contains_key(v)
+                    && !matches!(self.pending.get(v), Some(None))
+            });
+            if !others_left {
+                self.set_text(group, None);
+            }
+        }
     }
 
     pub fn replace(&mut self, id: EntityId, after: Path) {
@@ -842,7 +855,16 @@ impl ChangeBuilder<'_> {
 
     /// Puts vector `id` in `group`, or takes it out of any (`None`).
     pub fn set_group(&mut self, id: EntityId, group: Option<u64>) {
-        let before = self.doc.vector_groups.get(&id).copied();
+        // the group as this change has already left it, else as the document has it
+        let before = self
+            .edits
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                Edit::SetGroup { id: i, after, .. } if *i == id => Some(*after),
+                _ => None,
+            })
+            .unwrap_or_else(|| self.doc.vector_groups.get(&id).copied());
         if before != group {
             self.edits.push(Edit::SetGroup {
                 id,
@@ -904,7 +926,17 @@ impl ChangeBuilder<'_> {
 
     /// Marks `group` as text made from `after` (Draw Text's settings), or not text.
     pub fn set_text(&mut self, group: u64, after: Option<serde_json::Value>) {
-        let before = self.doc.texts.get(&group).cloned();
+        let before = self
+            .edits
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                Edit::SetText {
+                    group: g, after, ..
+                } if *g == group => Some(after.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| self.doc.texts.get(&group).cloned());
         if before != after {
             self.edits.push(Edit::SetText {
                 group,
