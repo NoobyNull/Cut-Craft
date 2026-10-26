@@ -73,6 +73,12 @@ pub struct SheetObjects {
     pub bitmaps: BTreeMap<EntityId, Bitmap>,
     #[serde(default)]
     pub toolpaths: BTreeMap<EntityId, Toolpath>,
+    /// Double-sided jobs: the bottom side was being worked on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bottom: bool,
+    /// Double-sided jobs: what is on the side not being worked on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_side: Option<Box<SheetObjects>>,
 }
 
 /// A vector kept on a sheet that is not active.
@@ -90,6 +96,8 @@ impl SheetObjects {
             && self.components.is_empty()
             && self.bitmaps.is_empty()
             && self.toolpaths.is_empty()
+            && !self.bottom
+            && self.other_side.is_none()
     }
 
     /// The highest id kept here.
@@ -102,8 +110,9 @@ impl SheetObjects {
         ]
         .into_iter()
         .flatten()
-        .max()
         .copied()
+        .chain(self.other_side.as_ref().and_then(|o| o.last_id()))
+        .max()
     }
 }
 
@@ -163,6 +172,46 @@ pub enum ZZero {
 }
 
 /// A rotary job: a cylinder turned by a rotary axis, worked on as its surface unrolled flat.
+/// A double-sided job's setup (Aspire's help: Job Setup - Double Sided).
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+pub struct DoubleSided {
+    /// How the material is turned over to reach the other side
+    #[schemars(title = "Flip Direction Between Sides", extend("x-widget" = "row"))]
+    pub flip: Flip,
+    /// Z zero is on the same physical face whichever side is up
+    #[schemars(title = "Zero off same side")]
+    #[serde(default)]
+    pub zero_same_side: bool,
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Flip {
+    /// Turned over left to right
+    #[default]
+    Horizontal,
+    /// Turned over top to bottom
+    Vertical,
+}
+
+impl Flip {
+    /// Where a point of one side lies seen from the other, on material covering `area`.
+    pub fn mirror(self, area: Rect) -> glam::DAffine2 {
+        let c = area.center();
+        let scale = match self {
+            Self::Horizontal => Point::new(-1.0, 1.0),
+            Self::Vertical => Point::new(1.0, -1.0),
+        };
+        glam::DAffine2::from_translation(c)
+            * glam::DAffine2::from_scale(scale)
+            * glam::DAffine2::from_translation(-c)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Rotary {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -287,6 +336,9 @@ pub struct Job {
     #[serde(default = "default_colour")]
     pub colour: [u8; 3],
     /// Set for a rotary job (added with rotary jobs; flat jobs leave it out).
+    /// Double-sided jobs: how the material is turned over between sides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub double_sided: Option<DoubleSided>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotary: Option<Rotary>,
     /// Where the 3D model sits in the material (Material Setup; added with it).
@@ -366,6 +418,7 @@ impl Default for Job {
             // ponytail: one wood colour until a Materials dialog offers textures
             colour: [214, 160, 102],
             rotary: None,
+            double_sided: None,
             model_position: ModelPosition::default(),
         }
     }
@@ -428,6 +481,12 @@ pub struct Document {
     /// Areas a tool must not pass over (clamps), closed paths of their own.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keep_out: Vec<Path>,
+    /// Double-sided jobs: the bottom side is being worked on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bottom_side: bool,
+    /// Double-sided jobs: what is on the side not being worked on.
+    #[serde(default, skip_serializing_if = "SheetObjects::is_empty")]
+    pub other_side: SheetObjects,
     /// Guide lines dragged out of the 2D view's rulers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
@@ -484,6 +543,8 @@ impl Default for Document {
             variables: BTreeMap::new(),
             keep_out: vec![],
             guides: vec![],
+            bottom_side: false,
+            other_side: SheetObjects::default(),
         }
     }
 }
@@ -532,7 +593,13 @@ impl Document {
     /// First id not used by any entity.
     pub fn next_id(&self) -> EntityId {
         // ids are unique over every sheet, so objects keep theirs when sheets are switched
-        let stored = self.sheets.iter().filter_map(|s| s.objects.last_id()).max();
+        let stored = self
+            .sheets
+            .iter()
+            .map(|s| &s.objects)
+            .chain([&self.other_side])
+            .filter_map(SheetObjects::last_id)
+            .max();
         let last = self
             .vectors
             .keys()
@@ -584,6 +651,7 @@ impl Document {
             .sheets
             .iter()
             .flat_map(|s| s.objects.vectors.values())
+            .chain(self.other_side.vectors.values())
             .filter_map(|v| v.group);
         self.vector_groups
             .values()

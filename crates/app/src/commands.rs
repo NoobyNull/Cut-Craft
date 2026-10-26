@@ -154,6 +154,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_edit_picture::EditPicture>();
     r.add::<cmd_document_variables::DocumentVariables>();
     r.add::<cmd_keep_out_zones::KeepOutZones>();
+    r.add::<cmd_swap_sides::SwapSides>();
+    r.add::<cmd_copy_to_other_side::CopyToOtherSide>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

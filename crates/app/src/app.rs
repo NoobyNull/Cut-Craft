@@ -2957,6 +2957,16 @@ impl CutCraftApp {
                 }
             }
             ui.separator();
+            if self.doc.job.double_sided.is_some() {
+                let side = if self.doc.bottom_side {
+                    "Bottom Side"
+                } else {
+                    "Top Side"
+                };
+                if ui.button(side).on_hover_text("Swap Sides").clicked() {
+                    clicked = Some("swap_sides");
+                }
+            }
             apply = self.drop_downs(ui, &mut clicked);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let s = &self.snap;

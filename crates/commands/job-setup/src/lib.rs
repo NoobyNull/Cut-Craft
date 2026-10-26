@@ -1,7 +1,9 @@
 //! Job Setup: the material block, where the machine's zero is on it, how finely the model is
 //! worked out and how the material looks, laid out in sections as Aspire's form is.
 
-use cut_craft_core::document::{Along, Datum, Document, Job, Resolution, Rotary, Units, ZZero};
+use cut_craft_core::document::{
+    Along, Datum, Document, DoubleSided, Job, Resolution, Rotary, Units, ZZero,
+};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -16,7 +18,7 @@ pub enum JobType {
     #[default]
     #[schemars(title = "Single Sided")]
     SingleSided,
-    /// Not supported yet
+    /// Both faces machined, the material turned over between them
     #[schemars(title = "Double Sided")]
     DoubleSided,
     /// A cylinder turned by a rotary axis
@@ -107,6 +109,13 @@ pub struct Params {
         extend("x-section" = true, "x-show-when" = {"job_type": "rotary"})
     )]
     pub orientation: Along,
+    /// Double-sided jobs: how the material is turned over between sides
+    #[schemars(
+        title = "Flip Direction Between Sides",
+        extend("x-section" = true, "x-show-when" = {"job_type": "double_sided"})
+    )]
+    #[serde(default)]
+    pub sides: DoubleSided,
     /// How finely 3D shapes are worked out over the job; Standard suits most parts
     #[schemars(
         title = "Modeling Resolution",
@@ -140,10 +149,10 @@ impl From<&Job> for Params {
             along: Along::X,
         });
         Self {
-            job_type: if job.rotary.is_some() {
-                JobType::Rotary
-            } else {
-                JobType::SingleSided
+            job_type: match (job.rotary, job.double_sided) {
+                (Some(_), _) => JobType::Rotary,
+                (None, Some(_)) => JobType::DoubleSided,
+                (None, None) => JobType::SingleSided,
             },
             size: Size {
                 width: job.width,
@@ -166,6 +175,7 @@ impl From<&Job> for Params {
                 y: job.offset.y,
             },
             orientation: rotary.along,
+            sides: job.double_sided.unwrap_or_default(),
             resolution: job.resolution,
             colour: job.colour,
             clearance: job.clearance,
@@ -199,17 +209,12 @@ impl Command for JobSetup {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("clearance", p.clearance)?;
         let shape = match p.job_type {
-            JobType::DoubleSided => {
-                return Err(CommandError::InvalidParams(
-                    "double-sided jobs are not supported yet".into(),
-                ));
-            }
             JobType::Rotary => {
                 ensure_positive("length", p.size.length)?;
                 ensure_positive("diameter", p.size.diameter)?;
                 Job::rotary(p.size.length, p.size.diameter, p.orientation)
             }
-            JobType::SingleSided => {
+            JobType::SingleSided | JobType::DoubleSided => {
                 ensure_positive("width", p.size.width)?;
                 ensure_positive("height", p.size.height)?;
                 ensure_positive("thickness", p.size.thickness)?;
@@ -217,6 +222,7 @@ impl Command for JobSetup {
                     width: p.size.width,
                     height: p.size.height,
                     thickness: p.size.thickness,
+                    double_sided: (p.job_type == JobType::DoubleSided).then_some(p.sides),
                     ..Job::default()
                 }
             }
@@ -396,9 +402,19 @@ mod tests {
     }
 
     #[test]
-    fn double_sided_jobs_are_not_supported_yet() {
-        let why = after_err::<JobSetup>(&with(|p| p.job_type = JobType::DoubleSided));
-        assert!(why.contains("not supported yet"), "{why}");
+    fn a_double_sided_job_keeps_its_flip_direction() {
+        use cut_craft_core::document::Flip;
+        let doc = after::<JobSetup>(&with(|p| {
+            p.job_type = JobType::DoubleSided;
+            p.sides.flip = Flip::Vertical;
+        }));
+        assert_eq!(doc.job.double_sided.unwrap().flip, Flip::Vertical);
+        assert_eq!(
+            JobSetup::initial_params(&doc).job_type,
+            JobType::DoubleSided
+        );
+        let single = after::<JobSetup>(&with(|p| p.job_type = JobType::SingleSided));
+        assert!(single.job.double_sided.is_none());
     }
 
     #[test]

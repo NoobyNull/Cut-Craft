@@ -147,6 +147,11 @@ pub enum Edit {
         before: BTreeMap<String, f64>,
         after: BTreeMap<String, f64>,
     },
+    /// Double-sided jobs: which side is worked on (bottom or not) and what is on the other.
+    SetSide {
+        before: (bool, SheetObjects),
+        after: (bool, SheetObjects),
+    },
     /// Replaces the sheet list and which sheet is active.
     SetSheets {
         before: (Vec<Sheet>, usize),
@@ -223,6 +228,10 @@ impl Edit {
                 after: before,
             },
             Self::SetVariables { before, after } => Self::SetVariables {
+                before: after,
+                after: before,
+            },
+            Self::SetSide { before, after } => Self::SetSide {
                 before: after,
                 after: before,
             },
@@ -314,6 +323,7 @@ impl Change {
             vector_layers: BTreeMap::new(),
             levels: BTreeMap::new(),
             sheets: (doc.sheets.clone(), doc.active_sheet),
+            side: (doc.bottom_side, doc.other_side.clone()),
             job: doc.job,
             edits: vec![],
         }
@@ -722,6 +732,9 @@ impl Document {
                 self.set_level(*id, before.as_ref(), after.as_ref())?;
             }
             Edit::SetSheets { before, after } => self.set_sheets(before, after)?,
+            Edit::SetSide { after, .. } => {
+                (self.bottom_side, self.other_side) = after.clone();
+            }
         }
         Ok(())
     }
@@ -801,6 +814,8 @@ pub struct ChangeBuilder<'a> {
     levels: BTreeMap<u64, Option<Level>>,
     /// The sheet list and active sheet as this change has left them.
     sheets: (Vec<Sheet>, usize),
+    /// The side worked on and the other side's objects as this change has left them.
+    side: (bool, SheetObjects),
     /// The job as this change has left it.
     job: Job,
     edits: Vec<Edit>,
@@ -1150,16 +1165,62 @@ impl ChangeBuilder<'_> {
     }
 
     /// Makes sheet `index` the one worked on: the job takes its setup and the document its
-    /// objects, and the sheet left keeps the job's setup and the document's objects. Call
-    /// it before anything else in the change.
+    /// objects (both sides of a double-sided job), and the sheet left keeps the job's setup
+    /// and the document's objects. Call it before anything else in the change.
     pub fn activate_sheet(&mut self, index: usize) {
         let (mut sheets, active) = self.sheets.clone();
         if index == active || index >= sheets.len() {
             return;
         }
+        let mut arriving = std::mem::take(&mut sheets[index].objects);
+        let mut left = self.swap_objects(&arriving);
+        let (bottom, other) = self.side.clone();
+        left.bottom = bottom;
+        left.other_side = (!other.is_empty()).then(|| Box::new(other));
+        let other = arriving.other_side.take().map(|o| *o).unwrap_or_default();
+        self.set_side(arriving.bottom, other);
+        sheets[active].objects = left;
+        sheets[active].job = self.job;
+        let job = sheets[index].job;
+        self.set_sheets(sheets, index);
+        self.set_job(job);
+    }
+
+    /// Double-sided jobs: work on the other side. The document's objects are kept as the
+    /// side left, and the other side's come in.
+    pub fn swap_sides(&mut self) {
+        let (bottom, arriving) = self.side.clone();
+        let left = self.swap_objects(&arriving);
+        self.set_side(!bottom, left);
+    }
+
+    /// Which side is worked on and what is on the other one.
+    pub fn set_side(&mut self, bottom: bool, other: SheetObjects) {
+        let after = (bottom, other);
+        if self.side != after {
+            let before = std::mem::replace(&mut self.side, after.clone());
+            self.edits.push(Edit::SetSide { before, after });
+        }
+    }
+
+    /// The side worked on (bottom or not) and what is on the other one, as this change has
+    /// left them.
+    pub fn side(&self) -> &(bool, SheetObjects) {
+        &self.side
+    }
+
+    /// A free id for something stored off the document (on the other side).
+    pub fn fresh_id(&mut self) -> EntityId {
+        let id = EntityId(self.next_id);
+        self.next_id += 1;
+        id
+    }
+
+    /// Takes the document's objects out (returned, to be stored) and puts `arriving`'s in,
+    /// with ordinary edits so undo is exact.
+    fn swap_objects(&mut self, arriving: &SheetObjects) -> SheetObjects {
         let doc = self.doc;
         self.select([]);
-        // the document's objects are stored on the sheet left
         let mut left = SheetObjects::default();
         for (&id, path) in &doc.vectors {
             let layer = doc.vector_layers.get(&id).copied();
@@ -1200,8 +1261,6 @@ impl ChangeBuilder<'_> {
             self.edits.push(Edit::RemoveToolpath { id, toolpath });
             left.toolpaths.insert(id, t.clone());
         }
-        // and the sheet's own come back
-        let arriving = std::mem::take(&mut sheets[index].objects);
         for (&id, v) in &arriving.vectors {
             self.edits.push(Edit::Add {
                 id,
@@ -1234,11 +1293,7 @@ impl ChangeBuilder<'_> {
             let toolpath = Box::new(t.clone());
             self.edits.push(Edit::AddToolpath { id, toolpath });
         }
-        sheets[active].objects = left;
-        sheets[active].job = self.job;
-        let job = sheets[index].job;
-        self.set_sheets(sheets, index);
-        self.set_job(job);
+        left
     }
 
     pub fn set_job(&mut self, after: Job) {

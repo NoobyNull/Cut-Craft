@@ -148,6 +148,11 @@ say "not implemented yet".
 - Sheets keep their own vectors, components, pictures and toolpaths; activating one swaps them.
 - Edit ▸ Options (3D view, toolpath and general settings, in options.json) and Edit ▸
   Document Variables (used in sums as {name}).
+- Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
+  (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
+- Double-sided jobs (Job Setup's Double Sided, Flip Direction Between Sides): each side keeps
+  its own objects; Edit ▸ Swap Sides or the top bar's side button turns over; the other side
+  is drawn faint and mirrored; the 2D right-click Copy to Other Side mirrors copies across.
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
@@ -362,7 +367,7 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: Import Toolpaths.
-- Edit: Swap Sides; Options beyond the 3D view, toolpath and recent-file settings;
+- Edit: Options beyond the 3D view, toolpath and recent-file settings;
   document variables linked to fields (a sum is worked out once, when entered).
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
@@ -377,7 +382,8 @@ say "not implemented yet".
   not hidden behind it.
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
   (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).
-- Job Setup: double-sided jobs.
+- Double-sided jobs: Zero off same side is kept but not yet used by the posts; the 3D
+  view shows one side.
 - 3D Finishing's several-tools form: one toolpath per tool made in one go (today each
   rest-machining toolpath is made on its own, naming the tools that ran before it).
 

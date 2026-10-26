@@ -505,6 +505,14 @@ impl Canvas {
                 painter.extend(Shape::dashed_line(&line, guide, dash, gap));
             }
         }
+        // a double-sided job's other side, faint and turned over as the material is
+        if let Some(sides) = doc.job.double_sided {
+            let turn = sides.flip.mirror(doc.job.area());
+            let faint = Stroke::new(datum.width, visuals.weak_text_color());
+            for v in doc.other_side.vectors.values() {
+                painter.add(Shape::line(screen(&v.path.transformed(&turn)), faint));
+            }
+        }
         // keep-out zones in the warning colour, heavier than vectors
         let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
         for path in &doc.keep_out {

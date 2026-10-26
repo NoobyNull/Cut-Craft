@@ -290,6 +290,8 @@ impl MenuSystem {
             edit("Delete"),
             MenuItem::separator(),
             MenuItem::submenu("Move to Layer", layers.collect()),
+            MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
+                .enabled(doc.job.double_sided.is_some()),
             MenuItem::separator(),
             MenuItem::with_action("Weld", "weld_vectors"),
             MenuItem::with_action("Subtract", "subtract_vectors"),
