@@ -202,9 +202,11 @@ mod tests {
             .values()
             .map(|p| p.bounds().size().x)
             .fold(0.0, f64::max);
+        // within the trace's tolerance, 0.3 px of 2 mm: its corners are under the corner
+        // angle, so they are rounded
         assert!(
-            (biggest - 80.0).abs() < 1e-6,
-            "the background spans the picture"
+            (biggest - 80.0).abs() < 0.6,
+            "the background spans the picture: {biggest}"
         );
     }
 
