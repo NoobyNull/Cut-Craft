@@ -1,5 +1,5 @@
-//! Tool icons: SVGs under the icon directory, and dialog pictures kept as Aspire's own
-//! bitmaps (both from `re/make_icons.py`, not in git).
+//! Tool icons: SVGs under the icon directory, dialog pictures kept as Aspire's own bitmaps
+//! (both from `re/make_icons.py`), and a few PNGs for links Aspire has no icon for; not in git.
 
 use eframe::egui;
 use std::collections::HashMap;
@@ -14,7 +14,8 @@ pub struct Icons {
 }
 
 impl Icons {
-    /// Indexes every `.svg` and `.bmp` under `dir`; a missing directory gives an empty index.
+    /// Indexes every `.svg`, `.bmp` and `.png` under `dir`; a missing directory gives an empty
+    /// index.
     /// Only SVGs stand in for a command by their name.
     pub fn load(dir: &Path) -> Self {
         let mut icons = Self {
@@ -31,7 +32,7 @@ impl Icons {
             for path in paths {
                 if path.is_dir() {
                     pending.push(path);
-                } else if let Some(ext @ ("svg" | "bmp")) =
+                } else if let Some(ext @ ("svg" | "bmp" | "png")) =
                     path.extension().and_then(|e| e.to_str())
                 {
                     let (Ok(rel), Some(stem)) = (path.strip_prefix(dir), path.file_stem()) else {
@@ -146,12 +147,14 @@ mod tests {
         fs::create_dir_all(dir.join("import")).unwrap();
         fs::write(dir.join("import/initial_orientation.bmp"), "BM").unwrap();
         fs::write(dir.join("import/notes.txt"), "").unwrap();
+        fs::write(dir.join("import/link.png"), "").unwrap();
         let icons = Icons::load(&dir);
         assert_eq!(
             icons.find("import/initial_orientation.bmp", ""),
             Some(dir.join("import/initial_orientation.bmp").as_path())
         );
         assert_eq!(icons.find("import/notes.txt", ""), None);
+        assert!(icons.find("import/link.png", "").is_some(), "PNG icons too");
     }
 
     #[test]

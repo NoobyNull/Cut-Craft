@@ -109,7 +109,7 @@ const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-const THIRD_PARTY: [(&str, &str); 14] = [
+const THIRD_PARTY: [(&str, &str); 15] = [
     ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
     ("glam", "MIT or Apache-2.0"),
     ("i_overlay", "MIT or Apache-2.0"),
@@ -124,6 +124,10 @@ const THIRD_PARTY: [(&str, &str); 14] = [
     ("log", "MIT or Apache-2.0"),
     ("wgpu (through eframe)", "MIT or Apache-2.0"),
     ("Rust standard library", "MIT or Apache-2.0"),
+    (
+        "GitHub and Thingiverse link icons",
+        "Icons8 (icons8.com), free with this credit",
+    ),
 ];
 
 /// 3D view mesh cells along the longer side of the job.
@@ -189,7 +193,11 @@ const WHATS_NEW: &str = include_str!("../whats-new.md");
 /// Where Cut Craft is found online, shown on the start page: label, address and icon (the
 /// social ones are placeholders: each site's home page).
 const LINKS: [(&str, &str, &str); 7] = [
-    ("GitHub", "https://github.com/NoobyNull/cut-craft", ""),
+    (
+        "GitHub",
+        "https://github.com/NoobyNull/cut-craft",
+        "file/github_link.png",
+    ),
     (
         "Facebook",
         "https://www.facebook.com",
@@ -211,7 +219,11 @@ const LINKS: [(&str, &str, &str); 7] = [
         "https://www.pinterest.com",
         "file/pinterest_link.svg",
     ),
-    ("Thingiverse", "https://www.thingiverse.com", ""),
+    (
+        "Thingiverse",
+        "https://www.thingiverse.com",
+        "file/thingiverse_link.png",
+    ),
 ];
 /// The design panel's starting width, in the theme's interactive widths: room for Job Setup's
 /// pictures beside its choices.
