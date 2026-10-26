@@ -258,6 +258,15 @@ say "not implemented yet".
   - Create Texture Area: the chosen component tiled over the selected closed vectors or
     the job, with spacing, alternate shifts and a reflection per tile of each four; the
     tile is hidden. The result is an ordinary component (Aspire's stays re-editable).
+  - Sculpting (Model ▸ Sculpt Visible Model; help: Sculpting): drag over the selected
+    component in the 2D view (several are baked into one first) with Smooth, Smudge,
+    Deposit, Remove or the Undo Brush (back toward the heights from before the first
+    stroke; Erase removes the shape, Aspire's Shift); diameter, strength, smoothness,
+    Normal / Raise / Lower mode, Preserve Transparency. Each drag is one undoable stroke.
+    Dab spacing and the deposit rate are our own [inf]. Not done: sculpting in the 3D
+    view, custom brushes, dynamic rotation, merge, presets, the bitmap overlay, the
+    keyboard shortcuts, Keep / Discard (undo does that), and growing the grid past the
+    component's own.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 
