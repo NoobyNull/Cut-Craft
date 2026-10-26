@@ -2726,6 +2726,12 @@ impl eframe::App for CutCraftApp {
 impl CutCraftApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
+        // picks are view state: undo or another sheet can take what they name away
+        let doc = &mut self.doc;
+        doc.selected_components
+            .retain(|id| doc.components.contains_key(id));
+        doc.selected_bitmaps
+            .retain(|id| doc.bitmaps.contains_key(id));
         if ctx.input(|i| i.viewport().close_requested()) && !self.confirm_discard() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }

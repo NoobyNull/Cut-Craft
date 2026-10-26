@@ -1,5 +1,5 @@
-//! Delete Sheet: removes a sheet; a job keeps at least one. Deleting the active sheet
-//! activates the one that takes its place.
+//! Delete Sheet: removes a sheet and what is on it; a job keeps at least one. Deleting the
+//! active sheet activates the one that takes its place.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta};
@@ -45,17 +45,22 @@ impl Command for DeleteSheet {
                 "a job needs at least one sheet".into(),
             ));
         }
-        let mut sheets = doc.sheets.clone();
-        // the active sheet's setup is the job's
-        sheets[doc.active_sheet].job = doc.job;
-        sheets.remove(p.sheet);
-        let active = match doc.active_sheet {
-            a if a > p.sheet => a - 1,
-            a if a == p.sheet => a.min(sheets.len() - 1),
-            a => a,
-        };
         let mut c = Change::builder(doc);
-        c.set_job(sheets[active].job);
+        let mut active = doc.active_sheet;
+        if p.sheet == active {
+            // the next sheet takes its place, else the one before
+            active = if p.sheet + 1 < doc.sheets.len() {
+                p.sheet + 1
+            } else {
+                p.sheet - 1
+            };
+            c.activate_sheet(active);
+        }
+        let mut sheets = c.sheets().to_vec();
+        sheets.remove(p.sheet);
+        if active > p.sheet {
+            active -= 1;
+        }
         c.set_sheets(sheets, active);
         Ok(c.finish())
     }
@@ -84,6 +89,16 @@ mod tests {
         run_on::<DeleteSheet>(&mut doc, &Params { sheet: 1 });
         assert_eq!((doc.sheets.len(), doc.active_sheet), (1, 0));
         assert_eq!(doc.job, job);
+    }
+
+    #[test]
+    fn the_sheets_objects_go_with_it() {
+        let mut doc = two_sheets();
+        let drawn = doc.vectors.len();
+        assert!(drawn > 0, "the sample document has vectors");
+        run_on::<DeleteSheet>(&mut doc, &Params { sheet: 0 });
+        assert!(doc.vectors.is_empty(), "sheet 2's (none) are in");
+        assert!(doc.sheets.iter().all(|s| s.objects.is_empty()));
     }
 
     #[test]

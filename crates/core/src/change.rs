@@ -3,7 +3,7 @@
 use crate::CommandError;
 use crate::bitmap::Bitmap;
 use crate::component::{Component, Level};
-use crate::document::{Document, EntityId, Job, Layer, LayerId, Sheet};
+use crate::document::{Document, EntityId, Job, Layer, LayerId, Sheet, SheetObjects, StoredVector};
 use crate::geometry::{Path, Point, Rect};
 use crate::selection::Selection;
 use crate::toolpath::Toolpath;
@@ -284,6 +284,8 @@ impl Change {
             current_layer: doc.current_layer,
             vector_layers: BTreeMap::new(),
             levels: BTreeMap::new(),
+            sheets: (doc.sheets.clone(), doc.active_sheet),
+            job: doc.job,
             edits: vec![],
         }
     }
@@ -741,6 +743,10 @@ pub struct ChangeBuilder<'a> {
     vector_layers: BTreeMap<EntityId, Option<LayerId>>,
     /// Levels as this change has left them (`None` = removed), shadowing `doc`.
     levels: BTreeMap<u64, Option<Level>>,
+    /// The sheet list and active sheet as this change has left them.
+    sheets: (Vec<Sheet>, usize),
+    /// The job as this change has left it.
+    job: Job,
     edits: Vec<Edit>,
 }
 
@@ -1054,33 +1060,113 @@ impl ChangeBuilder<'_> {
     /// Replaces the sheet list and which sheet is active (as it stands, not its setup: see
     /// [`Self::activate_sheet`]).
     pub fn set_sheets(&mut self, after: Vec<Sheet>, active: usize) {
-        let before = (self.doc.sheets.clone(), self.doc.active_sheet);
         let after = (after, active);
-        if before != after {
+        if self.sheets != after {
+            let before = std::mem::replace(&mut self.sheets, after.clone());
             self.edits.push(Edit::SetSheets { before, after });
         }
     }
 
-    /// Makes sheet `index` the one worked on: the job takes its setup, and the sheet left
-    /// keeps the job's.
+    /// The sheet list as this change has left it.
+    pub fn sheets(&self) -> &[Sheet] {
+        &self.sheets.0
+    }
+
+    /// Makes sheet `index` the one worked on: the job takes its setup and the document its
+    /// objects, and the sheet left keeps the job's setup and the document's objects. Call
+    /// it before anything else in the change.
     pub fn activate_sheet(&mut self, index: usize) {
-        let Some(job) = self.doc.sheets.get(index).map(|s| s.job) else {
-            return;
-        };
-        if index == self.doc.active_sheet {
+        let (mut sheets, active) = self.sheets.clone();
+        if index == active || index >= sheets.len() {
             return;
         }
-        let mut sheets = self.doc.sheets.clone();
-        if let Some(left) = sheets.get_mut(self.doc.active_sheet) {
-            left.job = self.doc.job;
+        let doc = self.doc;
+        self.select([]);
+        // the document's objects are stored on the sheet left
+        let mut left = SheetObjects::default();
+        for (&id, path) in &doc.vectors {
+            let layer = doc.vector_layers.get(&id).copied();
+            let group = doc.vector_groups.get(&id).copied();
+            if group.is_some() {
+                self.edits.push(Edit::SetGroup {
+                    id,
+                    before: group,
+                    after: None,
+                });
+            }
+            if layer.is_some() {
+                self.edits.push(Edit::SetLayer {
+                    id,
+                    before: layer,
+                    after: None,
+                });
+            }
+            self.edits.push(Edit::Remove {
+                id,
+                path: path.clone(),
+            });
+            let path = path.clone();
+            left.vectors.insert(id, StoredVector { path, layer, group });
         }
+        for (&id, k) in &doc.components {
+            let component = Box::new(k.clone());
+            self.edits.push(Edit::RemoveComponent { id, component });
+            left.components.insert(id, k.clone());
+        }
+        for (&id, b) in &doc.bitmaps {
+            let bitmap = Box::new(b.clone());
+            self.edits.push(Edit::RemoveBitmap { id, bitmap });
+            left.bitmaps.insert(id, b.clone());
+        }
+        for (&id, t) in &doc.toolpaths {
+            let toolpath = Box::new(t.clone());
+            self.edits.push(Edit::RemoveToolpath { id, toolpath });
+            left.toolpaths.insert(id, t.clone());
+        }
+        // and the sheet's own come back
+        let arriving = std::mem::take(&mut sheets[index].objects);
+        for (&id, v) in &arriving.vectors {
+            self.edits.push(Edit::Add {
+                id,
+                path: v.path.clone(),
+            });
+            if v.layer.is_some() {
+                self.edits.push(Edit::SetLayer {
+                    id,
+                    before: None,
+                    after: v.layer,
+                });
+            }
+            if v.group.is_some() {
+                self.edits.push(Edit::SetGroup {
+                    id,
+                    before: None,
+                    after: v.group,
+                });
+            }
+        }
+        for (&id, k) in &arriving.components {
+            let component = Box::new(k.clone());
+            self.edits.push(Edit::AddComponent { id, component });
+        }
+        for (&id, b) in &arriving.bitmaps {
+            let bitmap = Box::new(b.clone());
+            self.edits.push(Edit::AddBitmap { id, bitmap });
+        }
+        for (&id, t) in &arriving.toolpaths {
+            let toolpath = Box::new(t.clone());
+            self.edits.push(Edit::AddToolpath { id, toolpath });
+        }
+        sheets[active].objects = left;
+        sheets[active].job = self.job;
+        let job = sheets[index].job;
         self.set_sheets(sheets, index);
         self.set_job(job);
     }
 
     pub fn set_job(&mut self, after: Job) {
-        let before = self.doc.job;
-        if before != after {
+        if self.job != after {
+            let before = std::mem::replace(&mut self.job, after);
             self.edits.push(Edit::SetJob { before, after });
         }
     }

@@ -55,6 +55,56 @@ pub struct Sheet {
     pub job: Job,
     #[serde(default = "visible")]
     pub visible: bool,
+    /// What is on the sheet while another is active; the active sheet's objects are the
+    /// document's own.
+    #[serde(default, skip_serializing_if = "SheetObjects::is_empty")]
+    pub objects: SheetObjects,
+}
+
+/// A sheet's vectors (each with its layer and group), components, pictures and toolpaths,
+/// kept by their ids.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SheetObjects {
+    #[serde(default)]
+    pub vectors: BTreeMap<EntityId, StoredVector>,
+    #[serde(default)]
+    pub components: BTreeMap<EntityId, Component>,
+    #[serde(default)]
+    pub bitmaps: BTreeMap<EntityId, Bitmap>,
+    #[serde(default)]
+    pub toolpaths: BTreeMap<EntityId, Toolpath>,
+}
+
+/// A vector kept on a sheet that is not active.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StoredVector {
+    pub path: Path,
+    pub layer: Option<LayerId>,
+    #[serde(default)]
+    pub group: Option<u64>,
+}
+
+impl SheetObjects {
+    pub fn is_empty(&self) -> bool {
+        self.vectors.is_empty()
+            && self.components.is_empty()
+            && self.bitmaps.is_empty()
+            && self.toolpaths.is_empty()
+    }
+
+    /// The highest id kept here.
+    fn last_id(&self) -> Option<EntityId> {
+        [
+            self.vectors.keys().next_back(),
+            self.components.keys().next_back(),
+            self.bitmaps.keys().next_back(),
+            self.toolpaths.keys().next_back(),
+        ]
+        .into_iter()
+        .flatten()
+        .max()
+        .copied()
+    }
 }
 
 impl Sheet {
@@ -63,6 +113,7 @@ impl Sheet {
             name: name.to_owned(),
             job,
             visible: true,
+            objects: SheetObjects::default(),
         }
     }
 }
@@ -440,13 +491,17 @@ impl Document {
 
     /// First id not used by any entity.
     pub fn next_id(&self) -> EntityId {
+        // ids are unique over every sheet, so objects keep theirs when sheets are switched
+        let stored = self.sheets.iter().filter_map(|s| s.objects.last_id()).max();
         let last = self
             .vectors
             .keys()
             .next_back()
-            .max(self.toolpaths.keys().next_back())
-            .max(self.components.keys().next_back())
-            .max(self.bitmaps.keys().next_back());
+            .copied()
+            .max(self.toolpaths.keys().next_back().copied())
+            .max(self.components.keys().next_back().copied())
+            .max(self.bitmaps.keys().next_back().copied())
+            .max(stored);
         EntityId(last.map_or(1, |id| id.0 + 1))
     }
 
@@ -485,7 +540,17 @@ impl Document {
 
     /// A group number no vector uses yet.
     pub fn next_group(&self) -> u64 {
-        self.vector_groups.values().max().map_or(1, |g| g + 1)
+        let stored = self
+            .sheets
+            .iter()
+            .flat_map(|s| s.objects.vectors.values())
+            .filter_map(|v| v.group);
+        self.vector_groups
+            .values()
+            .copied()
+            .chain(stored)
+            .max()
+            .map_or(1, |g| g + 1)
     }
 
     /// The picture a picture tool works on: the last one picked, else the newest.
