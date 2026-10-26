@@ -160,6 +160,8 @@ say "not implemented yet".
   overlap, smallest tile first; tiles drawn in the 2D view; Save Toolpaths writes one file
   per tile (`name_tileN`), cuts clipped to the tile and its overlap and moved to the job's
   corner. Not done: the 3D view's active tile and drawing tiles in their original place.
+- Gadgets ▸ Wrapped Fluting Layout and Wrapped Spiral Layout (rotary jobs): flutes or
+  rope-twist strands, with coves, laid out as vectors for Profile / Fluting toolpaths.
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
@@ -381,7 +383,7 @@ say "not implemented yet".
 - Toolpaths: Materials.
 - View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
-- Gadgets; Help Contents.
+- Gadgets beyond the two rotary layouts; Help Contents.
 - Drawing tab:
   - Transform, Trim Objects.
   - Auto Layout Text.

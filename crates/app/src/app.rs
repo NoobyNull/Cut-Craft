@@ -1009,6 +1009,14 @@ impl CutCraftApp {
             .map_err(|e| e.to_string())?;
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
+        // the spiral gadget says how many times round each strand goes, as Aspire's does
+        if id == "wrapped_spiral_layout"
+            && let Ok(p) = serde_json::from_value(params.clone())
+            && let Some(turns) = cmd_wrapped_spiral_layout::revolutions(&self.doc, &p)
+        {
+            self.status
+                .set_message(&format!("Each strand makes {turns:.2} revolutions"));
+        }
         self.warn_of_keep_out(&made);
         Ok(())
     }

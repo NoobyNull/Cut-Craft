@@ -1126,10 +1126,10 @@ impl MenuSystem {
                 ),
                 menu(
                     "Gadgets",
-                    vec![MenuItem {
-                        is_enabled: false,
-                        ..i("No Gadgets Installed")
-                    }],
+                    vec![
+                        MenuItem::with_action("Wrapped Fluting Layout", "wrapped_fluting_layout"),
+                        MenuItem::with_action("Wrapped Spiral Layout", "wrapped_spiral_layout"),
+                    ],
                 ),
                 menu(
                     "Help",
