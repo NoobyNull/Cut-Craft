@@ -2457,6 +2457,8 @@ fn menu_items(
     menus: &Menus,
     clicked: &mut Option<String>,
 ) {
+    // one line per item: the menu widens to its longest name instead
+    ui.style_mut().wrap = Some(false);
     for item in items {
         if item.is_separator() {
             ui.separator();
