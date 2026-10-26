@@ -53,6 +53,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "import_vectors_bitmap",
                 "import_vectors",
                 "export_vectors",
+                "paste_in_place",
                 "import_component_3d_model",
                 "open_folder",
                 "job_setup",
@@ -960,6 +961,7 @@ impl MenuSystem {
                         k("Cut", "Ctrl+X"),
                         k("Copy", "Ctrl+C"),
                         k("Paste", "Ctrl+V"),
+                        i("Paste in Place"),
                         k("Delete", "Del"),
                         sep(),
                         sub(

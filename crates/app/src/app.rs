@@ -23,7 +23,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 77] = [
+const BUILT_INS: [&str; 78] = [
+    "paste_in_place",
     "edit_text",
     "join_straight_line",
     "join_smooth_curve",
@@ -492,7 +493,7 @@ impl CutCraftApp {
             id if self.display.checked(id).is_some() => true,
             "cut" | "copy" => !self.doc.selection.is_empty(),
             "create_component_from_toolpath_preview" => self.simulation.is_some(),
-            "paste" => !self.clipboard.is_empty(),
+            "paste" | "paste_in_place" => !self.clipboard.is_empty(),
             "increment_and_save" => self.screen == Screen::Job,
             _ => {
                 BUILT_INS.contains(&id)
@@ -612,6 +613,7 @@ impl CutCraftApp {
             "copy"
             | "cut"
             | "paste"
+            | "paste_in_place"
             | "increment_and_save"
             | "open_application_data_folder"
             | "print"
@@ -1920,7 +1922,8 @@ impl CutCraftApp {
                     self.status.set_message(&e);
                 }
             }
-            "paste" => {
+            // pasted where they were copied from, in this job or another (Paste in Place)
+            "paste" | "paste_in_place" => {
                 let mut c = Change::builder(&self.doc);
                 let ids: Vec<_> = self.clipboard.iter().map(|p| c.add(p.clone())).collect();
                 c.select(ids);

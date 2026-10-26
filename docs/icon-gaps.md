@@ -33,7 +33,7 @@ icons are skipped (Matthew: no laser features).
 - [x] Convert Text to Curves (`drawing/create_vectors/convert_text_to_curves.svg`; help:
       Convert Text To Curves) and Edit Text (`edit_text.svg`).
 - [x] Vector Boundary (`drawing/create_vectors/vector_boundary.svg`; help: Vector Boundary).
-- [ ] Paste in Place (`file/paste_in_place.svg`; help: paste-operation).
+- [x] Paste in Place (`file/paste_in_place.svg`; help: paste-operation).
 - [x] Open Folder / Open Clipart Folder (`file/open_folder.svg`, `open_clipart_folder.svg`).
 - [ ] Weld (cross) (`drawing/edit_objects/weld_cross.svg`): the weld variant it shows.
 - [ ] Vector Texture fill (`drawing/weld_and_offset/vector_texture_fill.svg`).
