@@ -663,6 +663,7 @@ version = "0.1.0"
 dependencies = [
  "cmd-delete-component",
  "cmd-delete-layer",
+ "cmd-delete-level",
  "cmd-delete-toolpath",
  "cut-craft-core",
  "schemars",
@@ -671,6 +672,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-delete-layer"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-delete-level"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -878,6 +888,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-insert-level"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-insert-point"
 version = "0.1.0"
 dependencies = [
@@ -952,6 +971,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-level-clipping"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-level-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-make-start-point"
 version = "0.1.0"
 dependencies = [
@@ -1007,6 +1044,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-move-to-layer"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-move-to-level"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1242,6 +1288,7 @@ version = "0.1.0"
 dependencies = [
  "cmd-component-properties",
  "cmd-layer-properties",
+ "cmd-level-properties",
  "cmd-toolpath-properties",
  "cut-craft-core",
  "schemars",
@@ -1688,6 +1735,7 @@ dependencies = [
  "cmd-delete-component",
  "cmd-delete-items",
  "cmd-delete-layer",
+ "cmd-delete-level",
  "cmd-delete-point",
  "cmd-delete-toolpath",
  "cmd-dimensions",
@@ -1710,6 +1758,7 @@ dependencies = [
  "cmd-fluting-toolpath",
  "cmd-group",
  "cmd-inlay-toolpath",
+ "cmd-insert-level",
  "cmd-insert-point",
  "cmd-interactive-vector-trim",
  "cmd-job-setup",
@@ -1718,6 +1767,8 @@ dependencies = [
  "cmd-laser-cut-fill-toolpath",
  "cmd-laser-picture-toolpath",
  "cmd-layer-properties",
+ "cmd-level-clipping",
+ "cmd-level-properties",
  "cmd-make-start-point",
  "cmd-merged-toolpath",
  "cmd-mirror",
@@ -1725,6 +1776,7 @@ dependencies = [
  "cmd-move",
  "cmd-move-node",
  "cmd-move-to-layer",
+ "cmd-move-to-level",
  "cmd-nest-parts",
  "cmd-notes",
  "cmd-offset-model",

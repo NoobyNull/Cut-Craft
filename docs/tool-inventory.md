@@ -66,9 +66,9 @@ single item's visibility, name or mode. ✅ built · ⬜ to build.
 
 | Family | Items | On (Aspire menu) | Subordinate per kind |
 |---|---|---|---|
-| Show / Hide | Show This, Show Only This, Show All But This, Show All, Hide This, Hide All | layers (967), toolpaths (968, 669), components (613), levels (1046) | Layer Properties ✅ · Toolpath Properties ✅ · Component Properties ✅ |
+| Show / Hide | Show This, Show Only This, Show All But This, Show All, Hide This, Hide All | layers (967), toolpaths (968, 669), components (613), levels (1046) | Layer Properties ✅ · Toolpath Properties ✅ · Component Properties ✅ · Level Properties ✅ |
 | Delete | This, Visible, Invisible, Empty, All | layers (967), toolpaths (968) | Delete Layer ✅ · Delete Toolpath ✅ · Delete Component ✅ |
-| Combine Mode | Add, Subtract, Merge, Low, Multiply | component, several components, active component, 3D view, levels (613, 615, 616, 619, 1046) | Component Properties ✅ |
+| Combine Mode | Add, Subtract, Merge, Low, Multiply | component, several components, active component, 3D view, levels (613, 615, 616, 619, 1046) | Component Properties ✅ · Level Properties ✅ |
 | Recalculate | This, Visible, All | toolpaths (968) | Recalculate ✅ (Visible: Recalculate over each shown toolpath) |
 | Rename, Properties | - | every kind | each kind's properties form |
 | Activate | - | layers (967), sheets (5030) | Set Current Layer ✅ |
@@ -84,8 +84,14 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
   Move Selection Here. Merge Visible is greyed.
 - **Toolpath list (968):** right-click selects the row. Show ▸, Hide ▸, Rename, Recalculate ▸
   This / Visible / All, Preview, Delete ▸ This / Invisible / Visible / All.
-- **Component list (613):** Combine Mode ▸ (current one ticked), Delete, Rename, Show ▸,
-  Hide ▸, Properties.
+- **Component list (613):** Combine Mode ▸ (current one ticked), Delete, Move to Level ▸
+  each level (ours: Aspire moves components between levels by dragging), Rename, Show ▸,
+  Hide ▸, Properties. Right-clicking an unpicked component picks it first.
+- **Levels (1046), the headers of the component tree:** Combine Mode ▸, Show ▸, Hide ▸,
+  Clipping ▸ Apply / Update / Remove, Mirror Mode ▸ (the eight modes and Off), Wrapping
+  (rotary jobs), Insert New Level, Delete Level (with its components; the last level
+  stays), Rename Level, Properties (Level Properties: name, combine mode, visible, base
+  height, mirror mode, wrapping). Select Components and Export as 3D Clipart are not done.
 - **2D view (318, plus ours):** Undo, Redo, Cut / Copy / Paste (greyed), Delete, Move to
   Layer ▸ each layer, Weld, Subtract, Overlap, Join, Align ▸. Object Properties is greyed.
 
@@ -267,6 +273,14 @@ say "not implemented yet".
     view, custom brushes, dynamic rotation, merge, presets, the bitmap overlay, the
     keyboard shortcuts, Keep / Discard (undo does that), and growing the grid past the
     component's own.
+  - Levels (help: Component Tree, Level Clipping, 3D Design and Management): every
+    component is on a level; a level's components combine with each other first, then
+    the shown levels combine from the bottom up with their combine mode and base height.
+    Clipping keeps a level only inside closed vectors (Update re-reads them); the mirror
+    modes reflect one half or quarter of the job about its middle; Wrapping (rotary jobs)
+    brings what runs off one side of the unrolled job round the other, keeping the
+    higher part where it meets itself. Older jobs get one level, so their models are
+    unchanged. New components go on the first level; levels cannot be reordered yet.
   - Distort Object (Drawing tab, and Model ▸ Distort Selected Component; help: Distort
     Object): the selected vectors, or the selected components (not both), bent into an
     envelope: their bounding box with its four corners moved (typed in the form), the band

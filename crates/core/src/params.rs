@@ -66,6 +66,7 @@ pub enum Items {
     Layers,
     Toolpaths,
     Components,
+    Levels,
 }
 
 impl Items {
@@ -75,6 +76,7 @@ impl Items {
             Self::Layers => "layer",
             Self::Toolpaths => "toolpath",
             Self::Components => "component",
+            Self::Levels => "level",
         }
     }
 }

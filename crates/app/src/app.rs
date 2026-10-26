@@ -1992,8 +1992,9 @@ impl CutCraftApp {
             .set_message(&format!("Previewed {}", toolpath.name));
     }
 
-    /// Components top first: the model is built from the bottom of the list up. Aspire's
-    /// component menu on a right-click.
+    /// The component tree, top first: each level (the last on top) with its components
+    /// under it, the model being built from the bottom up. Aspire's level and component
+    /// menus on a right-click; right-clicking an unpicked component picks it first.
     fn component_list(&mut self, ui: &mut egui::Ui) {
         if self.doc.components.is_empty() {
             ui.weak("No components yet");
@@ -2002,17 +2003,51 @@ impl CutCraftApp {
         self.doc
             .selected_components
             .retain(|id| components.contains_key(id));
+        let first = self.doc.levels.keys().next().copied().unwrap_or(0);
+        let on_level = |k: &cut_craft_core::component::Component, level: u64| {
+            let at = if self.doc.levels.contains_key(&k.level) {
+                k.level
+            } else {
+                first
+            };
+            at == level
+        };
         let (mut chosen, mut picked) = (None, None);
-        for (&id, component) in self.doc.components.iter().rev() {
-            let text = format!("{} ({:?})", component.name, component.combine);
-            let on = self.doc.selected_components.contains(&id);
-            let row = ui.selectable_label(on, text);
-            if row.clicked() {
-                picked = Some((id, ui.input(|i| i.modifiers.shift)));
-            }
-            if let Some(action) = self.popup(&row, || gui::component_menu(id, component)) {
+        for (&level_id, level) in self.doc.levels.iter().rev() {
+            let shown = if level.visible { "" } else { " (hidden)" };
+            let header = ui.label(
+                egui::RichText::new(format!("{}{shown} ({:?})", level.name, level.combine))
+                    .strong(),
+            );
+            if let Some(action) =
+                self.popup(&header, || gui::level_menu(&self.doc, level_id, level))
+            {
                 chosen = Some(action);
             }
+            ui.indent(("level", level_id), |ui| {
+                for (&id, component) in self
+                    .doc
+                    .components
+                    .iter()
+                    .rev()
+                    .filter(|(_, k)| on_level(k, level_id))
+                {
+                    let text = format!("{} ({:?})", component.name, component.combine);
+                    let on = self.doc.selected_components.contains(&id);
+                    let row = ui.selectable_label(on, text);
+                    if row.clicked() {
+                        picked = Some((id, ui.input(|i| i.modifiers.shift)));
+                    }
+                    if row.secondary_clicked() && !on {
+                        picked = Some((id, false));
+                    }
+                    if let Some(action) =
+                        self.popup(&row, || gui::component_menu(&self.doc, id, component))
+                    {
+                        chosen = Some(action);
+                    }
+                }
+            });
         }
         // click picks one; Shift-click adds or takes away
         match picked {
@@ -3681,6 +3716,34 @@ mod tests {
     }
 
     #[test]
+    fn the_level_menu_mirrors_and_components_move_between_levels() {
+        use cut_craft_core::component::Mirror;
+        let mut h = Harness::new();
+        h.app.doc = cut_craft_core::testing::domed();
+        let params = h.app.registry.get("insert_level").unwrap();
+        let params = params.initial_params(&h.app.doc);
+        h.app.apply("insert_level", &params).unwrap();
+        let level_menu = |app: &CutCraftApp| {
+            let (&id, level) = app.doc.levels.iter().next().unwrap();
+            gui::level_menu(&app.doc, id, level)
+        };
+        h.choose(level_menu, &["Mirror Mode", "Left to Right"]);
+        assert_eq!(h.app.doc.levels[&0].mirror, Mirror::LeftToRight);
+        assert!(
+            !leaf(&level_menu(&h.app), &["Wrapping"]).is_enabled,
+            "flat job"
+        );
+        h.app.doc.selected_components = [EntityId(1)].into();
+        let menu = |app: &CutCraftApp| {
+            let (&id, component) = app.doc.components.iter().next().unwrap();
+            gui::component_menu(&app.doc, id, component)
+        };
+        h.choose(menu, &["Move to Level", "Level 2"]);
+        assert_eq!(h.app.doc.components[&EntityId(1)].level, 1);
+        assert!(leaf(&menu(&h.app), &["Move to Level", "Level 2"]).is_checked);
+    }
+
+    #[test]
     fn the_component_menu_acts_on_the_component_clicked() {
         use cut_craft_core::component::Combine;
         let mut h = Harness::new();
@@ -3690,7 +3753,7 @@ mod tests {
         h.app.apply("create_shape", &params).unwrap();
         let menu = |app: &CutCraftApp| {
             let (&id, component) = app.doc.components.iter().next().unwrap();
-            gui::component_menu(id, component)
+            gui::component_menu(&app.doc, id, component)
         };
         let component = |app: &CutCraftApp| app.doc.components.values().next().unwrap().clone();
         assert!(leaf(&menu(&h.app), &["Combine Mode", "Add"]).is_checked);
@@ -4387,7 +4450,10 @@ mod tests {
             popups.extend(gui::toolpath_menu(id, toolpath));
         }
         for (&id, component) in &doc.components {
-            popups.extend(gui::component_menu(id, component));
+            popups.extend(gui::component_menu(doc, id, component));
+        }
+        for (&id, level) in &doc.levels {
+            popups.extend(gui::level_menu(doc, id, level));
         }
         let enabled = gui::leaves(&popups).into_iter().filter(|i| i.is_enabled);
         ids.extend(enabled.map(|i| i.action.clone()));

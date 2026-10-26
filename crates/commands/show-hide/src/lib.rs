@@ -124,6 +124,19 @@ fn set_visible(
                 },
             )
         }
+        Items::Levels => {
+            let l = doc
+                .levels
+                .get(&id)
+                .ok_or_else(|| CommandError::InvalidParams(format!("level {id} does not exist")))?;
+            cmd_level_properties::LevelProperties::run(
+                doc,
+                &cmd_level_properties::Params {
+                    visible,
+                    ..cmd_level_properties::Params::of(id, l)
+                },
+            )
+        }
     }
 }
 

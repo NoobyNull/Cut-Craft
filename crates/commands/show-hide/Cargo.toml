@@ -11,6 +11,7 @@ serde.workspace = true
 cmd-layer-properties = { path = "../layer-properties" }
 cmd-toolpath-properties = { path = "../toolpath-properties" }
 cmd-component-properties = { path = "../component-properties" }
+cmd-level-properties = { path = "../level-properties" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

@@ -431,6 +431,7 @@ impl Document {
                 .iter()
                 .map(|(id, c)| (id.0, c.visible))
                 .collect(),
+            Items::Levels => self.levels.iter().map(|(&id, l)| (id, l.visible)).collect(),
         }
     }
 

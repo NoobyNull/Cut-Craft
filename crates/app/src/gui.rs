@@ -1,7 +1,7 @@
 //! Static UI data: Drawing tab tool groups, the main menu, right-click menus, status bar text.
 
 use cut_craft_core::Command;
-use cut_craft_core::component::{Combine, Component};
+use cut_craft_core::component::{Combine, Component, Level, Mirror};
 use cut_craft_core::document::{Document, EntityId, Layer};
 use cut_craft_core::params::Items;
 use cut_craft_core::toolpath::Toolpath;
@@ -492,8 +492,117 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
     ]
 }
 
+/// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
+/// and (rotary jobs) wrapping.
+pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
+    use cmd_level_clipping::{Action, LevelClipping};
+    use cmd_level_properties::{LevelProperties, Params};
+    let properties = Params::of(id, level);
+    let set = |name: &str, params: Params| MenuItem::run::<LevelProperties>(name, &params);
+    let mode = |name: &str, combine| {
+        set(
+            name,
+            Params {
+                combine,
+                ..properties.clone()
+            },
+        )
+        .checked(level.combine == combine)
+    };
+    let mirror = |name: &str, mirror| {
+        set(
+            name,
+            Params {
+                mirror,
+                ..properties.clone()
+            },
+        )
+        .checked(level.mirror == mirror)
+    };
+    let clip = |name: &str, action| {
+        MenuItem::run::<LevelClipping>(name, &cmd_level_clipping::Params { level: id, action })
+    };
+    let clipped = !level.clip.is_empty();
+    let [show, hide] = show_hide(Items::Levels, id);
+    vec![
+        MenuItem::submenu(
+            "Combine Mode",
+            vec![
+                mode("Add", Combine::Add),
+                mode("Subtract", Combine::Subtract),
+                mode("Merge", Combine::Merge),
+                mode("Low", Combine::Low),
+                mode("Multiply", Combine::Multiply),
+            ],
+        ),
+        show,
+        hide,
+        MenuItem::submenu(
+            "Clipping",
+            vec![
+                clip("Apply", Action::Apply).checked(clipped),
+                clip("Update", Action::Update).enabled(clipped),
+                clip("Remove", Action::Remove).enabled(clipped),
+            ],
+        ),
+        MenuItem::submenu(
+            "Mirror Mode",
+            vec![
+                mirror("Off", Mirror::Off),
+                mirror("Left to Right", Mirror::LeftToRight),
+                mirror("Right to Left", Mirror::RightToLeft),
+                mirror("Top to Bottom", Mirror::TopToBottom),
+                mirror("Bottom to Top", Mirror::BottomToTop),
+                mirror("Top Left Quadrant", Mirror::TopLeft),
+                mirror("Top Right Quadrant", Mirror::TopRight),
+                mirror("Bottom Left Quadrant", Mirror::BottomLeft),
+                mirror("Bottom Right Quadrant", Mirror::BottomRight),
+            ],
+        ),
+        set(
+            "Wrapping",
+            Params {
+                wrapping: !level.wrapping,
+                ..properties.clone()
+            },
+        )
+        .checked(level.wrapping)
+        .enabled(doc.job.rotary.is_some()),
+        MenuItem::separator(),
+        MenuItem::form::<cmd_insert_level::InsertLevel>(
+            "Insert New Level",
+            &cmd_insert_level::InsertLevel::initial_params(doc),
+        ),
+        MenuItem::run::<cmd_delete_level::DeleteLevel>(
+            "Delete Level",
+            &cmd_delete_level::Params { level: id },
+        )
+        .enabled(doc.levels.len() > 1),
+        MenuItem::form::<LevelProperties>("Rename Level", &properties),
+        MenuItem::separator(),
+        MenuItem::form::<LevelProperties>("Properties", &properties),
+    ]
+}
+
+/// Move to Level ▸ each level, for the selected components; their level ticked.
+fn move_to_level(doc: &Document, component: &Component) -> MenuItem {
+    MenuItem::submenu(
+        "Move to Level",
+        doc.levels
+            .iter()
+            .map(|(&id, l)| {
+                MenuItem::run::<cmd_move_to_level::MoveToLevel>(
+                    &l.name,
+                    &cmd_move_to_level::Params { level: id },
+                )
+                .checked(component.level == id)
+            })
+            .collect(),
+    )
+}
+
 /// Aspire's component menu (MENU 613) for component `id`, its combine mode ticked.
-pub fn component_menu(id: EntityId, component: &Component) -> Vec<MenuItem> {
+pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Vec<MenuItem> {
     use cmd_component_properties::{ComponentProperties, Params};
     let properties = Params::of(id, component);
     let mode = |name: &str, combine| {
@@ -520,6 +629,7 @@ pub fn component_menu(id: EntityId, component: &Component) -> Vec<MenuItem> {
             "Delete",
             &cmd_delete_component::Params { component: id },
         ),
+        move_to_level(doc, component),
         MenuItem::form::<ComponentProperties>("Rename", &properties),
         show,
         hide,

@@ -11,6 +11,7 @@ serde.workspace = true
 cmd-delete-layer = { path = "../delete-layer" }
 cmd-delete-toolpath = { path = "../delete-toolpath" }
 cmd-delete-component = { path = "../delete-component" }
+cmd-delete-level = { path = "../delete-level" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

@@ -100,6 +100,9 @@ impl Command for DeleteItems {
                     component: EntityId(id),
                 },
             ),
+            Items::Levels => {
+                cmd_delete_level::DeleteLevel::run(d, &cmd_delete_level::Params { level: id })
+            }
         })
     }
 }
