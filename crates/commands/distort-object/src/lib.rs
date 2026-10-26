@@ -513,6 +513,8 @@ fn distort_component(k: &Component, env: &Envelope, area: Rect) -> Component {
         k.height_at(area.min + Point::new(u, v) * area.size())
     });
     out.visible = k.visible;
+    out.level = k.level;
+    out.group.clone_from(&k.group);
     out
 }
 

@@ -1,7 +1,7 @@
 //! Static UI data: Drawing tab tool groups, the main menu, right-click menus, status bar text.
 
 use cut_craft_core::Command;
-use cut_craft_core::component::{Combine, Component, Level, Mirror};
+use cut_craft_core::component::{Combine, Component, Group, Level, Mirror};
 use cut_craft_core::document::{Document, EntityId, Layer};
 use cut_craft_core::params::Items;
 use cut_craft_core::toolpath::Toolpath;
@@ -599,6 +599,39 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
     ]
 }
 
+/// A component group's menu in the tree: its combine mode ticked, Ungroup, Rename and
+/// Properties.
+pub fn group_menu(group: &Group) -> Vec<MenuItem> {
+    use cmd_group_properties::{GroupProperties, Params};
+    let properties = Params::of(group);
+    let mode = |name: &str, combine| {
+        let params = Params {
+            combine,
+            ..properties.clone()
+        };
+        MenuItem::run::<GroupProperties>(name, &params).checked(group.combine == combine)
+    };
+    vec![
+        MenuItem::submenu(
+            "Combine Mode",
+            vec![
+                mode("Add", Combine::Add),
+                mode("Subtract", Combine::Subtract),
+                mode("Merge", Combine::Merge),
+                mode("Low", Combine::Low),
+                mode("Multiply", Combine::Multiply),
+            ],
+        ),
+        MenuItem::run::<cmd_ungroup_components::UngroupComponents>(
+            "Ungroup",
+            &cmd_ungroup_components::Params { group: group.id },
+        ),
+        MenuItem::form::<GroupProperties>("Rename", &properties),
+        MenuItem::separator(),
+        MenuItem::form::<GroupProperties>("Properties", &properties),
+    ]
+}
+
 /// Move to Level ▸ each level, for the selected components; their level ticked.
 fn move_to_level(doc: &Document, component: &Component) -> MenuItem {
     MenuItem::submenu(
@@ -649,6 +682,18 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
             &cmd_delete_component::Params { component: id },
         ),
         move_to_level(doc, component),
+        MenuItem::form::<cmd_group_components::GroupComponents>(
+            "Group",
+            &cmd_group_components::Params::default(),
+        )
+        .enabled(doc.selected_components.len() > 1),
+        MenuItem::run::<cmd_ungroup_components::UngroupComponents>(
+            "Ungroup",
+            &cmd_ungroup_components::Params {
+                group: component.group.as_ref().map_or(0, |g| g.id),
+            },
+        )
+        .enabled(component.group.is_some()),
         MenuItem::form::<ComponentProperties>("Rename", &properties),
         show,
         hide,

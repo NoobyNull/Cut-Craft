@@ -2003,6 +2003,51 @@ impl CutCraftApp {
             .set_message(&format!("Previewed {}", toolpath.name));
     }
 
+    /// Aspire's arrows over the tree: the picked component up or down its level, as
+    /// (component, direction, the id it moves to) when one is clicked.
+    fn tree_arrows(
+        &self,
+        ui: &mut egui::Ui,
+    ) -> Option<(EntityId, cmd_reorder_component::Direction, EntityId)> {
+        use cmd_reorder_component::{Direction, neighbour};
+        let mut moved = None;
+        let last = self.doc.selected_components.last();
+        ui.horizontal(|ui| {
+            for (label, direction) in [("Move Up", Direction::Up), ("Move Down", Direction::Down)] {
+                let to = last.and_then(|id| neighbour(&self.doc, id, direction));
+                if ui
+                    .add_enabled(to.is_some(), egui::Button::new(label))
+                    .clicked()
+                {
+                    moved = last.zip(to).map(|(id, to)| (id, direction, to));
+                }
+            }
+        });
+        moved
+    }
+
+    /// One component's row in the tree: whether a click picked it (Shift: adds or takes
+    /// away; a right-click on an unpicked one picks it) and any action from its menu.
+    fn component_row(
+        &self,
+        ui: &mut egui::Ui,
+        id: EntityId,
+        component: &cut_craft_core::component::Component,
+    ) -> (Option<(EntityId, bool)>, Option<String>) {
+        let text = format!("{} ({:?})", component.name, component.combine);
+        let on = self.doc.selected_components.contains(&id);
+        let row = ui.selectable_label(on, text);
+        let mut picked = None;
+        if row.clicked() {
+            picked = Some((id, ui.input(|i| i.modifiers.shift)));
+        }
+        if row.secondary_clicked() && !on {
+            picked = Some((id, false));
+        }
+        let action = self.popup(&row, || gui::component_menu(&self.doc, id, component));
+        (picked, action)
+    }
+
     /// The component tree, top first: each level (the last on top) with its components
     /// under it, the model being built from the bottom up. Aspire's level and component
     /// menus on a right-click; right-clicking an unpicked component picks it first.
@@ -2024,21 +2069,7 @@ impl CutCraftApp {
             at == level
         };
         let (mut chosen, mut picked) = (None, None);
-        // Aspire's arrows over the tree: the picked component up or down its level
-        let mut moved = None;
-        let last = self.doc.selected_components.last();
-        ui.horizontal(|ui| {
-            use cmd_reorder_component::{Direction, neighbour};
-            for (label, direction) in [("Move Up", Direction::Up), ("Move Down", Direction::Down)] {
-                let to = last.and_then(|id| neighbour(&self.doc, id, direction));
-                if ui
-                    .add_enabled(to.is_some(), egui::Button::new(label))
-                    .clicked()
-                {
-                    moved = last.zip(to).map(|(id, to)| (id, direction, to));
-                }
-            }
-        });
+        let moved = self.tree_arrows(ui);
         for (&level_id, level) in self.doc.levels.iter().rev() {
             let shown = if level.visible { "" } else { " (hidden)" };
             let header = ui.label(
@@ -2051,27 +2082,40 @@ impl CutCraftApp {
                 chosen = Some(action);
             }
             ui.indent(("level", level_id), |ui| {
-                for (&id, component) in self
+                let on_this: Vec<(EntityId, &cut_craft_core::component::Component)> = self
                     .doc
                     .components
                     .iter()
                     .rev()
                     .filter(|(_, k)| on_level(k, level_id))
-                {
-                    let text = format!("{} ({:?})", component.name, component.combine);
-                    let on = self.doc.selected_components.contains(&id);
-                    let row = ui.selectable_label(on, text);
-                    if row.clicked() {
-                        picked = Some((id, ui.input(|i| i.modifiers.shift)));
+                    .map(|(&id, k)| (id, k))
+                    .collect();
+                let mut shown_groups = vec![];
+                for &(id, component) in &on_this {
+                    let Some(group) = &component.group else {
+                        let (pick, action) = self.component_row(ui, id, component);
+                        picked = pick.or(picked);
+                        chosen = action.or(chosen.take());
+                        continue;
+                    };
+                    // a group shows once, where its top member is, its members under it
+                    if shown_groups.contains(&group.id) {
+                        continue;
                     }
-                    if row.secondary_clicked() && !on {
-                        picked = Some((id, false));
-                    }
-                    if let Some(action) =
-                        self.popup(&row, || gui::component_menu(&self.doc, id, component))
-                    {
+                    shown_groups.push(group.id);
+                    let header = ui.label(format!("{} ({:?})", group.name, group.combine));
+                    if let Some(action) = self.popup(&header, || gui::group_menu(group)) {
                         chosen = Some(action);
                     }
+                    ui.indent(("group", group.id), |ui| {
+                        for &(member, k) in &on_this {
+                            if k.group.as_ref().is_some_and(|g| g.id == group.id) {
+                                let (pick, action) = self.component_row(ui, member, k);
+                                picked = pick.or(picked);
+                                chosen = action.or(chosen.take());
+                            }
+                        }
+                    });
                 }
             });
         }
@@ -4515,6 +4559,9 @@ mod tests {
         }
         for (&id, level) in &doc.levels {
             popups.extend(gui::level_menu(doc, id, level));
+        }
+        for group in doc.components.values().filter_map(|k| k.group.as_ref()) {
+            popups.extend(gui::group_menu(group));
         }
         let enabled = gui::leaves(&popups).into_iter().filter(|i| i.is_enabled);
         ids.extend(enabled.map(|i| i.action.clone()));

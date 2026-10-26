@@ -888,6 +888,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-group-components"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-group-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-inlay-toolpath"
 version = "0.1.0"
 dependencies = [
@@ -1512,6 +1530,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-ungroup-components"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-unselect-all"
 version = "0.1.0"
 dependencies = [
@@ -1814,6 +1841,8 @@ dependencies = [
  "cmd-fit-curves-to-vectors",
  "cmd-fluting-toolpath",
  "cmd-group",
+ "cmd-group-components",
+ "cmd-group-properties",
  "cmd-inlay-toolpath",
  "cmd-insert-level",
  "cmd-insert-point",
@@ -1883,6 +1912,7 @@ dependencies = [
  "cmd-turn-and-spin",
  "cmd-two-rail-sweep",
  "cmd-ungroup",
+ "cmd-ungroup-components",
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
  "cmd-vcarve-inlay-toolpath",

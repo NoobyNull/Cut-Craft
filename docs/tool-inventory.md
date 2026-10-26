@@ -98,7 +98,7 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
 
 Not built from Aspire's menus yet: toolpath Edit, Duplicate, groups, Activate Sheet, Show All
 With This Tool; component 2D preview order, Export as 3D Clipart, Re-Import, Copy,
-Ungroup; Move to Front / Back; the no-item menus (layers 982, components 614).
+Move to Front / Back; the no-item menus (layers 982, components 614).
 
 ## Status, top down
 
@@ -311,6 +311,12 @@ say "not implemented yet".
     (Aspire's blue arrows) move the picked component within its level, and the level
     menu's Move Level Up / Down move a level with its components (Move Component, Move
     Level); dragging in the tree is not done.
+  - Component groups (help: Component Tree): Group Components makes the selected ones (two
+    or more, one level) a group; its members combine with each other first and the group
+    then combines, with its own combine mode, where its top member is. The tree shows a
+    group under its level with its members; its menu has Combine Mode, Ungroup, Rename and
+    Properties (Group Properties); the component menu has Group and Ungroup. Groups do not
+    nest; Color from Children and a group's own base height are not done.
   - Distort Object (Drawing tab, and Model ▸ Distort Selected Component; help: Distort
     Object): the selected vectors, or the selected components (not both), bent into an
     envelope: their bounding box with its four corners moved (typed in the form), the band

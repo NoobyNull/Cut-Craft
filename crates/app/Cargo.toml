@@ -29,6 +29,9 @@ fmt-import-stl = { path = "../formats/import-stl" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-group-properties = { path = "../commands/group-properties" }
+cmd-ungroup-components = { path = "../commands/ungroup-components" }
+cmd-group-components = { path = "../commands/group-components" }
 cmd-material-setup = { path = "../commands/material-setup" }
 cmd-segment-3d-model = { path = "../commands/segment-3d-model" }
 cmd-duplicate-component = { path = "../commands/duplicate-component" }

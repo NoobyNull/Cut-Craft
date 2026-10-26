@@ -65,6 +65,18 @@ pub struct Component {
     /// The level it is on (added with levels; older files put everything on the first).
     #[serde(default)]
     pub level: u64,
+    /// The component group it is in, if any (added with groups).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<Group>,
+}
+
+/// A component group: its members combine with each other first, then the result combines
+/// with what is under it, where its top member is in the tree. Each member carries it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Group {
+    pub id: u64,
+    pub name: String,
+    pub combine: Combine,
 }
 
 /// A component's dynamic properties (Aspire's Component Properties): they change how its
@@ -302,6 +314,7 @@ impl Component {
             shaping: Shaping::default(),
             unsculpted: None,
             level: 0,
+            group: None,
         }
     }
 
@@ -349,6 +362,7 @@ impl Component {
             shaping: Shaping::default(),
             unsculpted: None,
             level: 0,
+            group: None,
         }
     }
 
@@ -440,6 +454,8 @@ impl Component {
         );
         out.visible = self.visible;
         out.shaping = self.shaping.transformed(t);
+        out.level = self.level;
+        out.group.clone_from(&self.group);
         out
     }
 
@@ -559,8 +575,42 @@ pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
     }
 }
 
-/// A shown level with its clip rings and its shown components.
-type Placed<'a> = (&'a Level, Vec<Vec<Point>>, Vec<&'a Component>);
+/// A shown level with its clip rings and what it combines, bottom up.
+type Placed<'a> = (&'a Level, Vec<Vec<Point>>, Vec<Entry<'a>>);
+
+/// One step of a level's combining: a lone component, or a group's members together.
+enum Entry<'a> {
+    One(&'a Component),
+    Group(Combine, Vec<&'a Component>),
+}
+
+/// A level's components (bottom first) as entries, each group where its top member is.
+fn entries<'a>(on: &[&'a Component]) -> Vec<Entry<'a>> {
+    let group_of = |c: &Component| c.group.as_ref().map(|g| g.id);
+    on.iter()
+        .enumerate()
+        .filter_map(|(i, c)| match &c.group {
+            None => Some(Entry::One(c)),
+            Some(g) if on[i + 1..].iter().any(|k| group_of(k) == Some(g.id)) => None,
+            Some(g) => Some(Entry::Group(
+                g.combine,
+                on.iter()
+                    .copied()
+                    .filter(|k| group_of(k) == Some(g.id))
+                    .collect(),
+            )),
+        })
+        .collect()
+}
+
+/// Components combined in turn at `p`, the first onto 0; `None` where none has shape.
+fn combined(on: &[&Component], p: Point) -> Option<f64> {
+    on.iter().fold(None, |under: Option<f64>, c| {
+        c.height_at(p).map_or(under, |height| {
+            Some(c.combine.apply(under.unwrap_or(0.0), height))
+        })
+    })
+}
 
 /// The model's surface over the job, on a flat base at 0: each visible level's visible
 /// components combined (bottom of the tree first), clipped, mirrored and wrapped as the level
@@ -594,16 +644,20 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
                 .collect();
             // ponytail: clip rings flattened at 0.01 mm
             let rings = l.clip.iter().map(|p| p.flatten(0.01)).collect();
-            (l, rings, on)
+            (l, rings, entries(&on))
         })
         .filter(|(_, _, on)| !on.is_empty())
         .collect();
-    let level_at = |on: &[&Component], p: Point| {
-        on.iter().fold(None, |under: Option<f64>, c| {
-            c.height_at(p).map_or(under, |height| {
-                Some(c.combine.apply(under.unwrap_or(0.0), height))
+    let level_at = |on: &[Entry], p: Point| {
+        on.iter()
+            .fold(None, |under: Option<f64>, entry| match entry {
+                Entry::One(c) => c.height_at(p).map_or(under, |height| {
+                    Some(c.combine.apply(under.unwrap_or(0.0), height))
+                }),
+                Entry::Group(combine, members) => combined(members, p).map_or(under, |height| {
+                    Some(combine.apply(under.unwrap_or(0.0), height))
+                }),
             })
-        })
     };
     for row in 0..surface.rows {
         for column in 0..surface.columns {

@@ -182,3 +182,35 @@ fn a_component_on_a_missing_level_counts_on_the_first() {
     );
     assert!((at(&doc, 50.0, 50.0) - 2.0).abs() < 1e-9);
 }
+
+#[test]
+fn a_group_combines_its_members_first_then_where_its_top_member_is() {
+    use cut_craft_core::component::Group;
+    let cut = Group {
+        id: 1,
+        name: "Cut".into(),
+        combine: Combine::Subtract,
+    };
+    let member = |height, combine| {
+        let mut k = flat(rect(0.0, 0.0, 50.0, 100.0), height, combine, 0);
+        k.group = Some(cut.clone());
+        k
+    };
+    // 6 mm plate, then the group (5 mm less a 1 mm plate, so 4 mm comes off), then 0.5 mm on
+    let doc = with(
+        job(100.0, 100.0),
+        &[],
+        vec![
+            flat(rect(0.0, 0.0, 100.0, 100.0), 6.0, Combine::Add, 0),
+            member(5.0, Combine::Add),
+            member(1.0, Combine::Subtract),
+            flat(rect(0.0, 0.0, 100.0, 100.0), 0.5, Combine::Add, 0),
+        ],
+    );
+    assert!(
+        (at(&doc, 25.0, 50.0) - 2.5).abs() < 1e-9,
+        "{}",
+        at(&doc, 25.0, 50.0)
+    );
+    assert!((at(&doc, 75.0, 50.0) - 6.5).abs() < 1e-9);
+}
