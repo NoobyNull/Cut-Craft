@@ -243,6 +243,10 @@ say "not implemented yet".
   narrower than the material, set Material Setup's Gap Inside Model to 0 so it is machined
   from the axis out. Not done: the rotation handles, moving the rotation axis, Resize
   material block.
+- Model ▸ Export as 3D Clipart: the selected components (baked into one, shaping and all)
+  saved as Cut Craft's own `.ccclip` (JSON); Import Component / 3D Model reads them back,
+  centred on the job, on the first level. Aspire's `.3dclip` is encrypted (`re/SPEC.md`),
+  so it is neither read nor written; the Clipart tab is not built.
 - Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by one
   plane square to X, Y or Z at a percentage of its size; the segment beyond the plane and
   the one before it (turned over, if asked, so its far side is machined) are laid out side
@@ -339,7 +343,7 @@ say "not implemented yet".
 **Not built yet.**
 - File: Import Toolpaths.
 - Edit: Swap Sides, Document Variables, Options.
-- Model: Export as 3D Clipart.
+- Model: (nothing left from the menu but Aspire-format clipart, see below).
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Materials.

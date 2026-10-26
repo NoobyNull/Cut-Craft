@@ -1928,6 +1928,7 @@ dependencies = [
  "egui_extras",
  "env_logger",
  "fmt-create-job-sheet",
+ "fmt-export-as-3d-clipart",
  "fmt-export-as-grayscale-bitmap",
  "fmt-export-as-stl",
  "fmt-export-dxf",
@@ -2369,6 +2370,15 @@ version = "0.1.0"
 dependencies = [
  "cut-craft-core",
  "fmt-export-svg",
+]
+
+[[package]]
+name = "fmt-export-as-3d-clipart"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

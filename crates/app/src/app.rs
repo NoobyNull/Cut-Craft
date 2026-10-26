@@ -117,7 +117,7 @@ const MESH_CELLS: usize = 250;
 const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
-const MODEL_IMPORTERS: [&str; 1] = ["import_stl"];
+const MODEL_IMPORTERS: [&str; 2] = ["import_stl", "import_3d_clipart"];
 /// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
 const LAYOUT_KEYS: [(&str, &str); 3] = [
     ("design_layout", "F11"),

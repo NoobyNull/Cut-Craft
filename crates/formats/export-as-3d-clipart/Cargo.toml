@@ -1,0 +1,16 @@
+[package]
+name = "fmt-export-as-3d-clipart"
+description = "Cut Craft 3D clipart: export components and import them again"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

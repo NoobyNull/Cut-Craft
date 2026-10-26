@@ -154,6 +154,8 @@ pub fn registry() -> Registry {
     r.add_importer::<fmt_import_svg::ImportSvg>();
     r.add_importer::<fmt_import_bitmap::ImportBitmap>();
     r.add_importer::<fmt_import_stl::ImportStl>();
+    r.add_importer::<fmt_export_as_3d_clipart::ImportClipart>();
+    r.add_exporter::<fmt_export_as_3d_clipart::ExportClipart>();
     r.add_importer::<fmt_import_crv3d::ImportCrv3d>();
     r.add_exporter::<fmt_export_as_grayscale_bitmap::ExportGrayscaleBitmap>();
     r.add_exporter::<fmt_export_dxf::ExportDxf>();
