@@ -3772,6 +3772,36 @@ impl CutCraftApp {
             None => false,
         };
         let mut clicked = None;
+        // Aspire's toolpath drawing toggles over the top left of the 2D view
+        ui.allocate_ui_at_rect(room, |ui| {
+            ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                let shown = self.display.previews_2d;
+                let drawing = if shown {
+                    "view/2d_toolpath_drawing_on.svg"
+                } else {
+                    "view/2d_toolpath_drawing_off.svg"
+                };
+                for (id, icon, tip, on) in [
+                    (
+                        "draw_2d_previews",
+                        drawing,
+                        "Draw 2D Toolpath Previews",
+                        shown,
+                    ),
+                    (
+                        "make_2d_previews_solid",
+                        "view/solid_2d_toolpath_drawing.svg",
+                        "Make 2D Previews Solid",
+                        self.display.solid_previews,
+                    ),
+                ] {
+                    let button = self.icon_button(icon, "", tip, edge).selected(on);
+                    if ui.add(button).on_hover_text(tip).clicked() {
+                        clicked = Some(id);
+                    }
+                }
+            });
+        });
         ui.allocate_ui_at_rect(room, |ui| {
             // laid out from the right, so the first button is the leftmost
             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
