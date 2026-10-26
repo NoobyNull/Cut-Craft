@@ -84,7 +84,8 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
   Move Selection Here. Merge Visible is greyed.
 - **Toolpath list (968):** right-click selects the row. Show ▸, Hide ▸, Rename, Recalculate ▸
   This / Visible / All, Preview, Delete ▸ This / Invisible / Visible / All.
-- **Component list (613):** Combine Mode ▸ (current one ticked), Delete, Move to Level ▸
+- **Component list (613):** Combine Mode ▸ (current one ticked), Duplicate (a copy in place,
+  on top), Delete, Move to Level ▸
   each level (ours: Aspire moves components between levels by dragging), Rename, Show ▸,
   Hide ▸, Properties. Right-clicking an unpicked component picks it first.
 - **Levels (1046), the headers of the component tree:** Combine Mode ▸, Show ▸, Hide ▸,

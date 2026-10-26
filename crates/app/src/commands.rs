@@ -139,6 +139,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_vector_unwrapper::VectorUnwrapper>();
     r.add::<cmd_reorder_component::ReorderComponent>();
     r.add::<cmd_reorder_level::ReorderLevel>();
+    r.add::<cmd_duplicate_component::DuplicateComponent>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

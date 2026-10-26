@@ -639,6 +639,10 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
             ],
         ),
         MenuItem::separator(),
+        MenuItem::run::<cmd_duplicate_component::DuplicateComponent>(
+            "Duplicate",
+            &cmd_duplicate_component::Params { component: id },
+        ),
         MenuItem::run::<cmd_delete_component::DeleteComponent>(
             "Delete",
             &cmd_delete_component::Params { component: id },

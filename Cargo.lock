@@ -834,6 +834,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-duplicate-component"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-emboss"
 version = "0.1.0"
 dependencies = [
@@ -1780,6 +1789,7 @@ dependencies = [
  "cmd-draw-star",
  "cmd-draw-text",
  "cmd-drilling-toolpath",
+ "cmd-duplicate-component",
  "cmd-emboss",
  "cmd-extrude-and-weave",
  "cmd-fit-curves-to-vectors",

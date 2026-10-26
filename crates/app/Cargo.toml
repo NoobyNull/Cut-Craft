@@ -29,6 +29,7 @@ fmt-import-stl = { path = "../formats/import-stl" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-duplicate-component = { path = "../commands/duplicate-component" }
 cmd-reorder-level = { path = "../commands/reorder-level" }
 cmd-reorder-component = { path = "../commands/reorder-component" }
 cmd-vector-unwrapper = { path = "../commands/vector-unwrapper" }
