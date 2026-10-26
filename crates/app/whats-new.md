@@ -1,9 +1,9 @@
-- Sheets, Components and Clipart side tabs
-- Top bar: split 2D and 3D, sheet, layer and level drop-downs, snapping toggles
-- Smart snapping
-- Menus in bordered categories
-- Number fields take sums, such as w/2
-- Duplicate Toolpath, Edit Picture, Crop Bitmap
-- Orientate 3D Model laid out in Aspire's sections, with its pictures
-- A tool's form takes the place of the tools while it is open
-- Light theme; the window keeps its size between runs
+- Each sheet keeps its own objects; double-sided jobs with Swap Sides
+- Edit > Options and Document Variables ({name} in sums)
+- Keep-Out Zones, Toolpath Tiling
+- Transform mode handles; guide lines from the rulers
+- Plate Production
+- Gadgets: Wrapped Fluting / Spiral Layout, Celtic Weave Creator
+- Sheets, Components and Clipart side tabs; the top bar; smart snapping
+- Number fields take sums; Duplicate Toolpath, Edit Picture, Crop Bitmap
+- Light theme; menus in bordered categories
