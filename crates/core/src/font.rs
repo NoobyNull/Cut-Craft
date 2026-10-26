@@ -430,8 +430,11 @@ pub(crate) mod tests {
 fn a_system_true_type_font_gives_capitals_of_the_asked_height() {
     let name = installed()
         .into_iter()
-        .find(|n| n.starts_with("DejaVu Sans") || n == "Liberation Sans" || n == "Noto Sans")
-        .expect("these tests need DejaVu Sans, Liberation Sans or Noto Sans installed");
+        .find(|n| {
+            n.starts_with("DejaVu Sans")
+                || ["Liberation Sans", "Noto Sans", "Arial"].contains(&n.as_str())
+        })
+        .expect("these tests need DejaVu Sans, Liberation Sans, Noto Sans or Arial installed");
     let font = load(&name, false, false, "HI").unwrap();
     let paths = font.layout("H", 10.0, Align::Left, Point::ZERO);
     assert!(!paths.is_empty() && paths.iter().all(|p| p.closed));

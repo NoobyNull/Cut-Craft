@@ -225,6 +225,13 @@ say "not implemented yet".
   ratio, centre or position, depth below top, discard below the zero plane. No OBJ; no
   undercut highlighting, perspective or segmenting.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
+  - Component Properties' dynamic properties (help: Component Properties): Shape Height
+    (%), Base Height, Fade (kept at one point, lowered by a percentage toward another) and
+    Tilt (pivot and raised point, angle), kept apart from the heights and applied as the
+    model is built; Bake makes them permanent. Tools that change a component's heights
+    bake them first. The anchors are typed in the form (Aspire sets them with two clicks);
+    tilt is a plane through the pivot line, so it also lowers behind it [inf]. Several
+    components at once and levels' base heights are not done.
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the

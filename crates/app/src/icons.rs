@@ -37,9 +37,13 @@ impl Icons {
                         .by_stem
                         .entry(stem.to_string_lossy().into_owned())
                         .or_insert_with(|| path.clone());
-                    icons
-                        .by_path
-                        .insert(rel.to_string_lossy().into_owned(), path);
+                    // keyed with `/` as commands name them, whatever the platform's separator
+                    let key = rel
+                        .components()
+                        .map(|c| c.as_os_str().to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("/");
+                    icons.by_path.insert(key, path);
                 }
             }
         }

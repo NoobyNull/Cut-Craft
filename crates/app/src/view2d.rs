@@ -310,11 +310,11 @@ impl Canvas {
     fn paint_components(&self, ui: &egui::Ui, painter: &egui::Painter, doc: &Document) {
         let t = self.transform;
         // components as greyscale depth maps, as Aspire's 2D view shows them; the texture is
-        // remade when the heights change (their bit pattern is hashed each frame)
+        // remade when the shaped heights change (their bit pattern is hashed each frame)
         for (id, component) in doc.components.iter().filter(|(_, c)| c.visible) {
             let hash = component
-                .heights
-                .iter()
+                .shaped_heights()
+                .into_iter()
                 .fold(0xcbf2_9ce4_8422_2325_u64, |h, z| {
                     (h ^ z.map_or(0, f64::to_bits)).wrapping_mul(0x0100_0000_01b3)
                 });

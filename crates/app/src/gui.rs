@@ -495,12 +495,7 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
 /// Aspire's component menu (MENU 613) for component `id`, its combine mode ticked.
 pub fn component_menu(id: EntityId, component: &Component) -> Vec<MenuItem> {
     use cmd_component_properties::{ComponentProperties, Params};
-    let properties = Params {
-        component: id,
-        name: component.name.clone(),
-        combine: component.combine,
-        visible: component.visible,
-    };
+    let properties = Params::of(id, component);
     let mode = |name: &str, combine| {
         let params = Params {
             combine,

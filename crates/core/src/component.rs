@@ -3,6 +3,7 @@
 use crate::CommandError;
 use crate::document::{Document, EntityId};
 use crate::geometry::{Point, Rect};
+use crate::params::Xy;
 use crate::simulation::Material;
 use crate::toolpath::Tool;
 use schemars::JsonSchema;
@@ -53,6 +54,87 @@ pub struct Component {
     /// Hidden components are left out of the model (added after the first job format).
     #[serde(default = "shown")]
     pub visible: bool,
+    /// Shape and base height, fade and tilt: applied as heights are read, until baked.
+    #[serde(default)]
+    pub shaping: Shaping,
+}
+
+/// A component's dynamic properties (Aspire's Component Properties): they change how its
+/// heights enter the model without changing the heights, until the component is baked.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct Shaping {
+    /// Height as a percentage of the component's own
+    #[schemars(title = "Shape Height", extend("x-unit" = "%"))]
+    pub shape_height: f64,
+    /// Raised on a flat plane this thick
+    #[schemars(title = "Base Height", extend("x-unit" = "mm"))]
+    pub base_height: f64,
+    /// Fades the heights down from one point toward another
+    pub fade: Option<Fade>,
+    /// Tilts the component up toward a point
+    pub tilt: Option<Tilt>,
+}
+
+impl Default for Shaping {
+    fn default() -> Self {
+        Self {
+            shape_height: 100.0,
+            base_height: 0.0,
+            fade: None,
+            tilt: None,
+        }
+    }
+}
+
+/// Heights kept at `from` and lowered by `percent` at `to`, linearly between.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Fade {
+    pub from: Xy,
+    pub to: Xy,
+    #[schemars(extend("x-unit" = "%"))]
+    pub percent: f64,
+}
+
+/// The component tilted about the line through `pivot` square to `toward`, so that `toward`
+/// rises by `angle` degrees.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Tilt {
+    pub pivot: Xy,
+    pub toward: Xy,
+    #[schemars(extend("x-unit" = "deg"))]
+    pub angle: f64,
+}
+
+impl Shaping {
+    /// Whether it leaves heights as they are.
+    pub fn is_identity(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// A raw height `z` at `p`, shaped.
+    pub fn apply(&self, p: Point, z: f64) -> f64 {
+        let along = |from: Xy, to: Xy| {
+            let (from, to) = (Point::from(from), Point::from(to));
+            let axis = to - from;
+            let length = axis.length();
+            (length > f64::EPSILON).then(|| ((p - from).dot(axis) / length, length))
+        };
+        let mut z = z * self.shape_height / 100.0;
+        if let Some(f) = self.fade
+            && let Some((d, length)) = along(f.from, f.to)
+        {
+            z *= 1.0 - (d / length).clamp(0.0, 1.0) * f.percent / 100.0;
+        }
+        z += self.base_height;
+        if let Some(t) = self.tilt
+            && let Some((d, _)) = along(t.pivot, t.toward)
+        {
+            // ponytail: a plane through the pivot line, lowering behind it too [inf]
+            z += d * t.angle.to_radians().tan();
+        }
+        z
+    }
 }
 
 fn shown() -> bool {
@@ -91,6 +173,7 @@ impl Component {
             rows,
             heights,
             visible: true,
+            shaping: Shaping::default(),
         }
     }
 
@@ -102,7 +185,7 @@ impl Component {
         }
         let (column, row) = (local.x as usize, local.y as usize);
         if column < self.columns && row < self.rows {
-            self.heights[row * self.columns + column]
+            self.shaped(row * self.columns + column)
         } else {
             None
         }
@@ -135,6 +218,7 @@ impl Component {
             rows: material.rows,
             heights: material.heights.iter().map(|&h| Some(h)).collect(),
             visible: true,
+            shaping: Shaping::default(),
         }
     }
 
@@ -145,11 +229,39 @@ impl Component {
         Rect::new(self.origin, self.origin + size)
     }
 
-    /// Lowest and highest of its heights, or `None` when it has no shape.
-    pub fn height_range(&self) -> Option<(f64, f64)> {
-        self.heights.iter().flatten().fold(None, |range, &h| {
-            Some(range.map_or((h, h), |(lo, hi): (f64, f64)| (lo.min(h), hi.max(h))))
+    /// Cell `index`'s height with the shaping applied; `None` where there is no shape.
+    pub fn shaped(&self, index: usize) -> Option<f64> {
+        let z = self.heights[index]?;
+        Some(if self.shaping.is_identity() {
+            z
+        } else {
+            self.shaping.apply(self.centre_of(index), z)
         })
+    }
+
+    /// Every cell's height with the shaping applied, row by row from the bottom.
+    pub fn shaped_heights(&self) -> Vec<Option<f64>> {
+        (0..self.heights.len()).map(|i| self.shaped(i)).collect()
+    }
+
+    /// The same shape with its shaping made permanent (Component Properties' Bake).
+    #[must_use]
+    pub fn baked(&self) -> Self {
+        Self {
+            heights: self.shaped_heights(),
+            shaping: Shaping::default(),
+            ..self.clone()
+        }
+    }
+
+    /// Lowest and highest of its shaped heights, or `None` when it has no shape.
+    pub fn height_range(&self) -> Option<(f64, f64)> {
+        self.shaped_heights()
+            .into_iter()
+            .flatten()
+            .fold(None, |range, h| {
+                Some(range.map_or((h, h), |(lo, hi): (f64, f64)| (lo.min(h), hi.max(h))))
+            })
     }
 
     /// The component as a picture, top row first: each shaped cell's height as a grey level
@@ -162,9 +274,10 @@ impl Component {
     pub fn shade(&self) -> Vec<Option<u8>> {
         let (lo, hi) = self.height_range().unwrap_or((0.0, 0.0));
         let span = (hi - lo).max(f64::EPSILON);
+        let heights = self.shaped_heights();
         (0..self.rows)
             .rev()
-            .flat_map(|row| &self.heights[row * self.columns..(row + 1) * self.columns])
+            .flat_map(|row| &heights[row * self.columns..(row + 1) * self.columns])
             .map(|h| h.map(|z| ((z - lo) / span * 255.0).round().clamp(0.0, 255.0) as u8))
             .collect()
     }
@@ -226,7 +339,7 @@ pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
     }
     match ids.as_slice() {
         [] => None,
-        [one] => Some((ids.clone(), doc.components[one].clone())),
+        [one] => Some((ids.clone(), doc.components[one].baked())),
         _ => {
             let mut only = doc.clone();
             for (id, c) in &mut only.components {
@@ -314,5 +427,78 @@ mod shade_tests {
         );
         // rows from the bottom: [0.5, 0.5] under [1.5, 1.5]; the right column has no shape
         assert_eq!(k.shade(), vec![Some(255), None, Some(0), None]);
+    }
+}
+
+#[cfg(test)]
+mod shaping_tests {
+    use super::*;
+
+    fn flat(z: f64) -> Component {
+        Component::from_fn(
+            "flat",
+            Combine::Add,
+            Rect::new(Point::ZERO, Point::new(10.0, 10.0)),
+            1.0,
+            |_| Some(z),
+        )
+    }
+
+    fn at(k: &Component, x: f64) -> f64 {
+        k.height_at(Point::new(x, 5.5)).unwrap()
+    }
+
+    #[test]
+    fn shape_height_scales_and_base_height_raises() {
+        let mut k = flat(4.0);
+        k.shaping.shape_height = 50.0;
+        k.shaping.base_height = 1.0;
+        assert!((at(&k, 5.5) - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn fade_keeps_the_first_point_and_lowers_toward_the_second() {
+        let mut k = flat(4.0);
+        k.shaping.fade = Some(Fade {
+            from: Xy::new(0.5, 5.5),
+            to: Xy::new(8.5, 5.5),
+            percent: 50.0,
+        });
+        assert!((at(&k, 0.5) - 4.0).abs() < 1e-9);
+        assert!((at(&k, 4.5) - 3.0).abs() < 1e-9);
+        assert!(
+            (at(&k, 9.5) - 2.0).abs() < 1e-9,
+            "past the second point stays faded"
+        );
+    }
+
+    #[test]
+    fn tilt_raises_toward_the_second_point_by_the_angle() {
+        let mut k = flat(1.0);
+        k.shaping.tilt = Some(Tilt {
+            pivot: Xy::new(0.5, 5.5),
+            toward: Xy::new(5.5, 5.5),
+            angle: 45.0,
+        });
+        assert!((at(&k, 0.5) - 1.0).abs() < 1e-9);
+        assert!((at(&k, 4.5) - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn baking_keeps_the_heights_and_resets_the_shaping() {
+        let mut k = flat(4.0);
+        k.shaping.shape_height = 25.0;
+        let baked = k.baked();
+        assert!(baked.shaping.is_identity());
+        assert!((at(&baked, 3.5) - 1.0).abs() < 1e-9);
+        assert_eq!(baked.height_range(), k.height_range());
+    }
+
+    #[test]
+    fn old_job_files_without_shaping_still_read() {
+        let mut json = serde_json::to_value(flat(1.0)).unwrap();
+        json.as_object_mut().unwrap().remove("shaping");
+        let k: Component = serde_json::from_value(json).unwrap();
+        assert!(k.shaping.is_identity());
     }
 }

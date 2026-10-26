@@ -119,10 +119,8 @@ fn set_visible(
             cmd_component_properties::ComponentProperties::run(
                 doc,
                 &cmd_component_properties::Params {
-                    component,
-                    name: c.name.clone(),
-                    combine: c.combine,
                     visible,
+                    ..cmd_component_properties::Params::of(component, c)
                 },
             )
         }
