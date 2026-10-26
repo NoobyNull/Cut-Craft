@@ -148,6 +148,9 @@ const STARTUP_TASKS: [(&str, &str, &str); 3] = [
     ),
     ("open", "Open an existing file", "file/open.svg"),
 ];
+/// The level menu's Select Components and Export as 3D Clipart: these, then the level's id.
+pub const SELECT_LEVEL: &str = "select_level_components:";
+pub const EXPORT_LEVEL: &str = "export_level_clipart:";
 /// Beside each recently opened file.
 const RECENT_FILE_ICON: &str = "file/new.svg";
 /// This version's changes, one `- ` line each, shown on the start page.
@@ -333,6 +336,10 @@ impl CutCraftApp {
             "close" => self.screen != Screen::Start,
             "zoom_selected" => self.doc.selection_bounds().is_some(),
             id if id.starts_with("open_recent:") => true,
+            id if id.starts_with(SELECT_LEVEL) => true,
+            id if id.starts_with(EXPORT_LEVEL) => {
+                self.registry.exporter("export_as_3d_clipart").is_some()
+            }
             "redo" => self.history.can_redo(),
             "recalculate_toolpath"
             | "delete_toolpath"
@@ -458,6 +465,9 @@ impl CutCraftApp {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
                     self.open_recent(index);
                 }
+            }
+            id if id.starts_with(SELECT_LEVEL) || id.starts_with(EXPORT_LEVEL) => {
+                self.level_action(id);
             }
             id if self.registry.exporter(id).is_some() => self.export(id),
             _ => self.start_command(id),
@@ -1951,6 +1961,18 @@ impl CutCraftApp {
         }
     }
 
+    /// The level menu's Select Components (`SELECT_LEVEL<id>`) and Export as 3D Clipart
+    /// (`EXPORT_LEVEL<id>`, which selects them and exports).
+    fn level_action(&mut self, id: &str) {
+        let (how, level) = id.split_once(':').unwrap_or_default();
+        if let Ok(level) = level.parse() {
+            self.doc.selected_components = self.doc.level_components(level).into_iter().collect();
+            if format!("{how}:") == EXPORT_LEVEL {
+                self.export("export_as_3d_clipart");
+            }
+        }
+    }
+
     /// The Sheets tab: Aspire's Sheets List (each sheet's name and size, the active one
     /// marked) and its Add New Sheet button. A click activates a sheet; a right-click has its
     /// menu.
@@ -2120,6 +2142,10 @@ impl CutCraftApp {
     /// under it, the model being built from the bottom up. Aspire's level and component
     /// menus on a right-click; right-clicking an unpicked component picks it first.
     fn component_list(&mut self, ui: &mut egui::Ui) {
+        // the tree is the active sheet's, as Aspire's heading says
+        if let Some(sheet) = self.doc.sheets.get(self.doc.active_sheet) {
+            ui.strong(format!("Components ({})", sheet.name));
+        }
         if self.doc.components.is_empty() {
             ui.weak("No components yet");
         }
@@ -3959,6 +3985,30 @@ mod tests {
     }
 
     #[test]
+    fn the_level_menu_selects_its_components_and_exports_them() {
+        let mut h = Harness::new();
+        h.app.doc = cut_craft_core::testing::two_components();
+        let level_menu = |app: &CutCraftApp| {
+            let (&id, level) = app.doc.levels.iter().next().unwrap();
+            gui::level_menu(&app.doc, id, level)
+        };
+        h.choose(level_menu, &["Select Components"]);
+        let all: Vec<EntityId> = h.app.doc.components.keys().copied().collect();
+        assert_eq!(
+            h.app
+                .doc
+                .selected_components
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            all
+        );
+        let menu = level_menu(&h.app);
+        let export = leaf(&menu, &["Export as 3D Clipart"]);
+        assert!(export.is_enabled && h.app.available(&export.action));
+    }
+
+    #[test]
     fn the_component_menu_acts_on_the_component_clicked() {
         use cut_craft_core::component::Combine;
         let mut h = Harness::new();
@@ -4709,7 +4759,7 @@ mod tests {
             "exit",
             "recent_files",
         ];
-        ASKS.contains(&id) || app.registry.exporter(id).is_some()
+        ASKS.contains(&id) || app.registry.exporter(id).is_some() || id.starts_with(EXPORT_LEVEL)
     }
 
     /// Every enabled menu item and tool button, run through the app as a click would be on a

@@ -411,6 +411,24 @@ impl Document {
         Ok(())
     }
 
+    /// The components on level `level`, a component on a level that is gone counting as on
+    /// the first.
+    pub fn level_components(&self, level: u64) -> Vec<EntityId> {
+        let first = self.levels.keys().next().copied().unwrap_or(0);
+        self.components
+            .iter()
+            .filter(|(_, k)| {
+                let on = if self.levels.contains_key(&k.level) {
+                    k.level
+                } else {
+                    first
+                };
+                on == level
+            })
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
     /// Sheet `index`'s setup: the job itself for the active sheet.
     pub fn sheet_job(&self, index: usize) -> Option<Job> {
         if index == self.active_sheet {

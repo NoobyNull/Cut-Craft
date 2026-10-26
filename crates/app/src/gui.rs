@@ -498,6 +498,28 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
 
 /// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
 /// and (rotary jobs) wrapping.
+/// A level's Combine Mode submenu, in Aspire's order.
+const COMBINE_MODES: [(&str, Combine); 5] = [
+    ("Add", Combine::Add),
+    ("Subtract", Combine::Subtract),
+    ("Merge", Combine::Merge),
+    ("Low", Combine::Low),
+    ("Multiply", Combine::Multiply),
+];
+
+/// A level's Mirror Mode submenu, in Aspire's order.
+const MIRROR_MODES: [(&str, Mirror); 9] = [
+    ("Off", Mirror::Off),
+    ("Left to Right", Mirror::LeftToRight),
+    ("Right to Left", Mirror::RightToLeft),
+    ("Top to Bottom", Mirror::TopToBottom),
+    ("Bottom to Top", Mirror::BottomToTop),
+    ("Top Left Quadrant", Mirror::TopLeft),
+    ("Top Right Quadrant", Mirror::TopRight),
+    ("Bottom Left Quadrant", Mirror::BottomLeft),
+    ("Bottom Right Quadrant", Mirror::BottomRight),
+];
+
 pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
     use cmd_level_clipping::{Action, LevelClipping};
     use cmd_level_properties::{LevelProperties, Params};
@@ -540,16 +562,17 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
     vec![
         MenuItem::submenu(
             "Combine Mode",
-            vec![
-                mode("Add", Combine::Add),
-                mode("Subtract", Combine::Subtract),
-                mode("Merge", Combine::Merge),
-                mode("Low", Combine::Low),
-                mode("Multiply", Combine::Multiply),
-            ],
+            COMBINE_MODES
+                .iter()
+                .map(|&(name, c)| mode(name, c))
+                .collect(),
         ),
         show,
         hide,
+        MenuItem::with_action(
+            "Select Components",
+            &format!("{}{id}", crate::app::SELECT_LEVEL),
+        ),
         MenuItem::submenu(
             "Clipping",
             vec![
@@ -560,17 +583,10 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
         ),
         MenuItem::submenu(
             "Mirror Mode",
-            vec![
-                mirror("Off", Mirror::Off),
-                mirror("Left to Right", Mirror::LeftToRight),
-                mirror("Right to Left", Mirror::RightToLeft),
-                mirror("Top to Bottom", Mirror::TopToBottom),
-                mirror("Bottom to Top", Mirror::BottomToTop),
-                mirror("Top Left Quadrant", Mirror::TopLeft),
-                mirror("Top Right Quadrant", Mirror::TopRight),
-                mirror("Bottom Left Quadrant", Mirror::BottomLeft),
-                mirror("Bottom Right Quadrant", Mirror::BottomRight),
-            ],
+            MIRROR_MODES
+                .iter()
+                .map(|&(name, m)| mirror(name, m))
+                .collect(),
         ),
         set(
             "Wrapping",
@@ -596,6 +612,11 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
         )
         .enabled(doc.levels.len() > 1),
         MenuItem::form::<LevelProperties>("Rename Level", &properties),
+        MenuItem::with_action(
+            "Export as 3D Clipart",
+            &format!("{}{id}", crate::app::EXPORT_LEVEL),
+        )
+        .enabled(!doc.level_components(id).is_empty()),
         MenuItem::separator(),
         MenuItem::form::<LevelProperties>("Properties", &properties),
     ]
