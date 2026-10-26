@@ -97,7 +97,7 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
   Layer ▸ each layer, Weld, Subtract, Overlap, Join, Align ▸. Object Properties is greyed.
 
 Not built from Aspire's menus yet: toolpath Edit, Duplicate, groups, Activate Sheet, Show All
-With This Tool; component 2D preview order, Export as 3D Clipart, Re-Import, Copy, Duplicate,
+With This Tool; component 2D preview order, Export as 3D Clipart, Re-Import, Copy,
 Ungroup; Move to Front / Back; the no-item menus (layers 982, components 614).
 
 ## Status, top down
