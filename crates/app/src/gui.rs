@@ -148,7 +148,10 @@ fn modeling_groups() -> Vec<ToolGroup> {
         group(
             "Shape Creation",
             &[
-                "create_shape",
+                "create_shape_round",
+                "create_shape_angled",
+                "create_shape_smooth",
+                "create_shape_flat",
                 "extrude_and_weave",
                 "two_rail_sweep",
                 "vector_unwrapper",

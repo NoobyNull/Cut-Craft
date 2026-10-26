@@ -13,7 +13,7 @@ icons are skipped (Matthew: no laser features).
 
 - [x] Align: Left To Right / Right To Left / Top To Bottom / Bottom To Top
       (`drawing/align/*`): the four spacing commands, by pick order.
-- [ ] Create Shape: Round / Angled / Smooth / Flat (`modeling/create_shape_*`): Create Shape
+- [x] Create Shape: Round / Angled / Smooth / Flat (`modeling/create_shape_*`): Create Shape
       with that profile chosen (help: Create Round / Angled / Smooth Shape, Create Flat Plane).
 - [ ] Texture (`modeling/texture.svg`): Create Texture Area.
 - [ ] Component Levels (`modeling/component_levels.svg`): the Components tab.

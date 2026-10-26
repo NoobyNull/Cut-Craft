@@ -23,7 +23,11 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 63] = [
+const BUILT_INS: [&str; 67] = [
+    "create_shape_round",
+    "create_shape_angled",
+    "create_shape_smooth",
+    "create_shape_flat",
     "left_to_right",
     "right_to_left",
     "top_to_bottom",
@@ -471,6 +475,20 @@ impl CutCraftApp {
             | "save_all_visible_toolpaths_as_template"
             | "load_template" => self.template_action(id),
             id if TOP_BAR_TOGGLES.contains(&id) => self.top_bar_toggle(id),
+            // Aspire's four Create Shape icons: the form with that profile chosen
+            "create_shape_round"
+            | "create_shape_angled"
+            | "create_shape_smooth"
+            | "create_shape_flat" => {
+                let profile = match id {
+                    "create_shape_angled" => "angular",
+                    _ => &id["create_shape_".len()..],
+                };
+                self.start_command("create_shape");
+                if let Some(form) = self.form.as_mut().filter(|f| f.id == "create_shape") {
+                    form.params["profile"] = Value::from(profile);
+                }
+            }
             // the Align Objects group's spacing buttons, by pick order
             "left_to_right" | "right_to_left" | "top_to_bottom" | "bottom_to_top" => {
                 let command = if id.contains("left") {
@@ -4950,7 +4968,7 @@ mod tests {
                 .toolbar
                 .modeling_groups
                 .iter()
-                .any(|g| g.tools.contains(&"create_shape"))
+                .any(|g| g.tools.contains(&"create_shape_round"))
         );
         h.rectangle(10.0, 10.0, 50.0, 50.0);
         let shape = h.app.registry.get("create_shape").unwrap().default_params();
@@ -5034,6 +5052,24 @@ mod tests {
             .find(|g| g.name == "Align Objects")
             .unwrap();
         assert!(group.tools.contains(&"left_to_right") && group.tools.contains(&"align_left"));
+    }
+
+    #[test]
+    fn the_create_shape_icons_open_it_with_their_profile() {
+        let mut h = Harness::new();
+        for (id, profile) in [
+            ("create_shape_round", "round"),
+            ("create_shape_angled", "angular"),
+            ("create_shape_smooth", "smooth"),
+            ("create_shape_flat", "flat"),
+        ] {
+            h.app.invoke(&h.ctx, id);
+            let form = h.app.form.as_ref().expect("Create Shape's form");
+            assert_eq!(
+                (form.id, form.params["profile"].as_str()),
+                ("create_shape", Some(profile))
+            );
+        }
     }
 
     #[test]

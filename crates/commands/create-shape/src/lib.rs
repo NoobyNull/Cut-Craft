@@ -18,6 +18,8 @@ pub enum Profile {
     Round,
     /// Rises at the angle all the way
     Angular,
+    /// Rises in an S, curving smoothly out of the edge and over the top
+    Smooth,
     /// One height all over
     Flat,
 }
@@ -32,10 +34,18 @@ pub struct Params {
     /// The flat top's height; round and angular shapes stop rising here (0: no limit)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
+    /// Smooth shapes: how pronounced the S is, from a straight slope (0) to steep in the middle
+    #[serde(default = "half")]
+    #[schemars(range(min = 0, max = 1), extend("x-show-when" = {"profile": "smooth"}))]
+    pub smoothing: f64,
     /// Added everywhere inside the shape
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub base: f64,
     pub combine: Combine,
+}
+
+fn half() -> f64 {
+    0.5
 }
 
 impl Default for Params {
@@ -45,6 +55,7 @@ impl Default for Params {
             profile: Profile::Round,
             angle: 45.0,
             height: 0.0,
+            smoothing: 0.5,
             base: 0.0,
             combine: Combine::Add,
         }
@@ -110,6 +121,19 @@ impl Command for CreateShape {
                 let radius = deepest / sin;
                 (radius * radius - (deepest - d).powi(2)).max(0.0).sqrt() - deepest / tan
             }
+            // [inf] the angular rise to the deepest point, eased in and out: t^k / (t^k +
+            // (1 - t)^k), k from 1 (straight) to 4 as the smoothing goes from 0 to 1
+            Profile::Smooth => {
+                let along = if deepest > 0.0 { d / deepest } else { 0.0 };
+                let ease = 1.0 + 3.0 * p.smoothing.clamp(0.0, 1.0);
+                let (rising, left) = (along.powf(ease), (1.0 - along).powf(ease));
+                let share = if rising + left > 0.0 {
+                    rising / (rising + left)
+                } else {
+                    0.0
+                };
+                deepest * tan * share
+            }
             Profile::Flat => p.height,
         };
         let limit = if p.height > 0.0 {
@@ -149,6 +173,25 @@ mod tests {
 
     fn near(a: f64, b: f64, within: f64) -> bool {
         (a - b).abs() <= within
+    }
+
+    #[test]
+    fn a_smooth_shape_rises_in_an_s() {
+        let p = |profile| Params {
+            profile,
+            ..Params::default()
+        };
+        let smooth = shape(vec![square(0.0, 0.0, 40.0)], &p(Profile::Smooth)).unwrap();
+        let angular = shape(vec![square(0.0, 0.0, 40.0)], &p(Profile::Angular)).unwrap();
+        // 20 in from every edge is the deepest point: the same height as the angular shape
+        let (top_s, top_a) = (height(&smooth, 20.0, 20.0), height(&angular, 20.0, 20.0));
+        assert!(near(top_s, top_a, 1.0), "{top_s} vs {top_a}");
+        // near the edge it starts flatter than the straight slope, and rises smoothly
+        assert!(height(&smooth, 2.0, 20.0) < height(&angular, 2.0, 20.0));
+        let ups: Vec<f64> = (1..20)
+            .map(|x| height(&smooth, f64::from(x), 20.0))
+            .collect();
+        assert!(ups.windows(2).all(|w| w[1] >= w[0] - 1e-9), "{ups:?}");
     }
 
     #[test]
