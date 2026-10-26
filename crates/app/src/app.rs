@@ -378,6 +378,8 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
+    /// Component tree levels collapsed (Aspire's Expand / Collapse).
+    collapsed_levels: std::collections::HashSet<u64>,
     /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).
     guide_drag: Option<(bool, Option<usize>)>,
     /// Transform mode's corners rotate rather than scale.
@@ -436,6 +438,7 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
+            collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
             rotating: false,
             options: crate::options::Options::default(),
@@ -2563,6 +2566,32 @@ impl CutCraftApp {
     /// The component tree, top first: each level (the last on top) with its components
     /// under it, the model being built from the bottom up. Aspire's level and component
     /// menus on a right-click; right-clicking an unpicked component picks it first.
+    /// A level's row in the component tree: Expand or Collapse, then its name and combine
+    /// mode; the name's response (for its menu) and whether the icon was clicked.
+    fn level_header(
+        &self,
+        ui: &mut egui::Ui,
+        level: &cut_craft_core::component::Level,
+        collapsed: bool,
+    ) -> (egui::Response, bool) {
+        let shown = if level.visible { "" } else { " (hidden)" };
+        ui.horizontal(|ui| {
+            let (icon, tip) = if collapsed {
+                ("view/expand.svg", "Expand")
+            } else {
+                ("view/collapse.svg", "Collapse")
+            };
+            let edge = ui.spacing().interact_size.y;
+            let toggled = ui
+                .add(self.icon_button(icon, "", tip, edge))
+                .on_hover_text(tip)
+                .clicked();
+            let name = format!("{}{shown} ({:?})", level.name, level.combine);
+            (ui.label(egui::RichText::new(name).strong()), toggled)
+        })
+        .inner
+    }
+
     fn component_list(&mut self, ui: &mut egui::Ui) {
         // the tree is the active sheet's, as Aspire's heading says
         if let Some(sheet) = self.doc.sheets.get(self.doc.active_sheet) {
@@ -2586,16 +2615,20 @@ impl CutCraftApp {
         };
         let (mut chosen, mut picked) = (None, None);
         let moved = self.tree_arrows(ui);
+        let mut toggle = None;
         for (&level_id, level) in self.doc.levels.iter().rev() {
-            let shown = if level.visible { "" } else { " (hidden)" };
-            let header = ui.label(
-                egui::RichText::new(format!("{}{shown} ({:?})", level.name, level.combine))
-                    .strong(),
-            );
+            let collapsed = self.collapsed_levels.contains(&level_id);
+            let (header, toggled) = self.level_header(ui, level, collapsed);
+            if toggled {
+                toggle = Some(level_id);
+            }
             if let Some(action) =
                 self.popup(&header, || gui::level_menu(&self.doc, level_id, level))
             {
                 chosen = Some(action);
+            }
+            if collapsed {
+                continue;
             }
             ui.indent(("level", level_id), |ui| {
                 let on_this: Vec<(EntityId, &cut_craft_core::component::Component)> = self
@@ -2644,6 +2677,11 @@ impl CutCraftApp {
             }
             Some((id, false)) => self.doc.selected_components = [id].into(),
             None => {}
+        }
+        if let Some(level) = toggle
+            && !self.collapsed_levels.remove(&level)
+        {
+            self.collapsed_levels.insert(level);
         }
         if let Some((component, direction, to)) = moved {
             let params = cmd_reorder_component::Params {
@@ -5405,6 +5443,25 @@ mod tests {
             h.app.status.message.contains("Clipart library"),
             "{}",
             h.app.status.message
+        );
+    }
+
+    #[test]
+    fn a_collapsed_level_hides_its_components() {
+        let mut h = Harness::new();
+        h.app.doc = cut_craft_core::testing::domed();
+        h.app.pages.set_pinned(Page::Design, true);
+        h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Components").unwrap();
+        h.frame(vec![]);
+        let k = h.app.doc.components.values().next().unwrap();
+        let name = format!("{} ({:?})", k.name, k.combine);
+        assert!(h.text_at(&name).is_some(), "{name} listed");
+        let level = *h.app.doc.levels.keys().next().unwrap();
+        h.app.collapsed_levels.insert(level);
+        h.frame(vec![]);
+        assert!(
+            h.text_at(&name).is_none(),
+            "hidden under its collapsed level"
         );
     }
 

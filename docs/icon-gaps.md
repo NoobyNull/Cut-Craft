@@ -22,7 +22,7 @@ icons are skipped (Matthew: no laser features).
       (`toolpaths/*`): the toolpath list's buttons (help: edit-toolpath, Preview Toolpaths,
       save-toolpath-template, save-all-visible-toolpaths-as-a-template).
 - [x] 2D toolpath drawing on / off / solid (`view/*`): Toolpath Drawing toggles.
-- [ ] Expand / Collapse (`view/*`): the component tree's levels.
+- [x] Expand / Collapse (`view/*`): the component tree's levels.
 - [x] Start page social links (strip 35069 slots 14–25: YouTube, Facebook, Twitter,
       Instagram, Pinterest, forum): beside the Links (needs Matthew's addresses).
 
