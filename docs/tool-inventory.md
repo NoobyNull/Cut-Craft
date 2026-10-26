@@ -243,6 +243,12 @@ say "not implemented yet".
   rotation handles, moving the rotation axis, Resize material block, and Material Setup's
   gap (the model's top is machined at the material surface, so a full model narrower than
   the material should be fitted to it).
+- Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by one
+  plane square to X, Y or Z at a percentage of its size; the segment beyond the plane and
+  the one before it (turned over, if asked, so its far side is machined) are laid out side
+  by side across the job, a gap apart, tops at the surface, as two components. Faces lying
+  in the plane go to neither. Aspire's segment tree (several cuts), dragging the plane,
+  the layout mode's orientations and the undercut highlighting are not done.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
   - Component Properties' dynamic properties (help: Component Properties): Shape Height
     (%), Base Height, Fade (kept at one point, lowered by a percentage toward another) and

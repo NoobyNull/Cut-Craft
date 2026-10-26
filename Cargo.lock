@@ -1258,6 +1258,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-segment-3d-model"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "fmt-import-stl",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-select-all-duplicate-vectors"
 version = "0.1.0"
 dependencies = [
@@ -1836,6 +1846,7 @@ dependencies = [
  "cmd-rounding-toolpath",
  "cmd-scale-model-z-height",
  "cmd-sculpt",
+ "cmd-segment-3d-model",
  "cmd-select-all-duplicate-vectors",
  "cmd-select-all-open-vectors",
  "cmd-select-all-vectors",

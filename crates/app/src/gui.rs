@@ -754,6 +754,7 @@ impl MenuSystem {
                             vec![
                                 k("Import Vectors / Bitmap...", "Ctrl+I"),
                                 i("Import Component / 3D Model..."),
+                                a("Segment 3D Model...", "segment_3d_model_file"),
                                 i("Import Toolpaths..."),
                             ],
                         ),

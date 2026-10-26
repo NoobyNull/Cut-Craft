@@ -21,7 +21,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 53] = [
+const BUILT_INS: [&str; 54] = [
+    "segment_3d_model_file",
     "snap_options",
     "node_edit",
     "measure_inspect",
@@ -389,6 +390,7 @@ impl CutCraftApp {
             | "save_as"
             | "import_vectors_bitmap"
             | "import_component_3d_model"
+            | "segment_3d_model_file"
             | "install_post_processor" => self.file_action(id),
             "save_as_template"
             | "new_from_template"
@@ -522,6 +524,15 @@ impl CutCraftApp {
                     let change = files::import(&self.registry, &self.doc, &path)
                         .map_err(cut_craft_core::CommandError::Failed);
                     self.record(change, &format!("Imported {}", path.display()));
+                }
+            }
+            "segment_3d_model_file" => {
+                // the segmenting form, on an STL picked first
+                if let Some(path) = file_dialog().add_filter("STL", &["stl"]).pick_file() {
+                    self.start_command("segment_3d_model");
+                    if let Some(form) = self.form.as_mut().filter(|f| f.id == "segment_3d_model") {
+                        form.params["file"] = Value::from(path.display().to_string());
+                    }
                 }
             }
             "install_post_processor" => {
@@ -4431,7 +4442,8 @@ mod tests {
     /// save-changes question (the smoke test's job has unsaved work), the file manager and
     /// quitting. Running one in a test puts a real window on the desktop.
     fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-        const ASKS: [&str; 20] = [
+        const ASKS: [&str; 21] = [
+            "segment_3d_model_file",
             "new",
             "open",
             "close",
