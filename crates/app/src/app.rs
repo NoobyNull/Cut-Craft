@@ -23,7 +23,8 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 76] = [
+const BUILT_INS: [&str; 77] = [
+    "edit_text",
     "join_straight_line",
     "join_smooth_curve",
     "join_move_end_points",
@@ -474,6 +475,12 @@ impl CutCraftApp {
             | "preview_toolpath"
             | "save_selected_toolpath_as_template"
             | "edit_toolpath" => self.selected_toolpath.is_some(),
+            "edit_text" => self.doc.selection.iter().any(|id| {
+                self.doc
+                    .vector_groups
+                    .get(id)
+                    .is_some_and(|g| self.doc.texts.contains_key(g))
+            }),
             "save_all_visible_toolpaths_as_template" => {
                 self.doc.toolpaths.values().any(|t| t.visible)
             }
@@ -566,6 +573,8 @@ impl CutCraftApp {
                 }
             }
             "edit_toolpath" => self.edit_toolpath(),
+            // Edit Text: Draw Text opens on the selected text's settings
+            "edit_text" => self.start_command("draw_text"),
             // Aspire's three Join icons: Join / Close Vectors their way
             "join_straight_line" | "join_smooth_curve" | "join_move_end_points" => {
                 let method = id.trim_start_matches("join_");
@@ -5500,6 +5509,25 @@ mod tests {
             .find(|g| g.name == "Edit Objects")
             .unwrap();
         assert!(edit.tools.contains(&"join_move_end_points"));
+    }
+
+    #[test]
+    fn edit_text_opens_draw_text_on_the_selected_text() {
+        let mut h = Harness::new();
+        assert!(!h.app.available("edit_text"), "no text selected");
+        let params = serde_json::json!({ "text": "HI", "font": "Test Boxes" });
+        let mut full = h.app.registry.get("draw_text").unwrap().default_params();
+        for (k, v) in params.as_object().unwrap() {
+            full[k] = v.clone();
+        }
+        h.app.apply("draw_text", &full).unwrap();
+        assert!(h.app.available("edit_text"));
+        h.app.invoke(&h.ctx, "edit_text");
+        let form = h.app.form.as_ref().expect("Draw Text's form");
+        assert_eq!(
+            (form.id, form.params["text"].as_str()),
+            ("draw_text", Some("HI"))
+        );
     }
 
     #[test]

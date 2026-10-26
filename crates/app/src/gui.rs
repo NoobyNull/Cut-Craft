@@ -81,6 +81,8 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "draw_curve",
                 "draw_freehand",
                 "draw_text",
+                "edit_text",
+                "convert_text_to_curves",
                 "text_on_a_curve",
                 "auto_layout_text",
                 "dimensions",

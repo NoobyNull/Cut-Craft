@@ -30,7 +30,7 @@ icons are skipped (Matthew: no laser features).
 
 - [x] Join: straight line, smooth curve, move end points (`drawing/join/*`; help:
       join-close-vector-with-a-straight-line, -with-a-smooth-curve, join-close-by-moving-end-points).
-- [ ] Convert Text to Curves (`drawing/create_vectors/convert_text_to_curves.svg`; help:
+- [x] Convert Text to Curves (`drawing/create_vectors/convert_text_to_curves.svg`; help:
       Convert Text To Curves) and Edit Text (`edit_text.svg`).
 - [ ] Vector Boundary (`drawing/create_vectors/vector_boundary.svg`; help: Vector Boundary).
 - [ ] Paste in Place (`file/paste_in_place.svg`; help: paste-operation).
