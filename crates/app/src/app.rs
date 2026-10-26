@@ -3107,6 +3107,9 @@ pub fn run(title: &str) {
             .with_title(title)
             .with_app_id(APP_ID),
         renderer: eframe::Renderer::Wgpu,
+        // light, as Aspire is, whatever the desktop's theme
+        follow_system_theme: false,
+        default_theme: eframe::Theme::Light,
         ..Default::default()
     };
     eframe::run_native(
