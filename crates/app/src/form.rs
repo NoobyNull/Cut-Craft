@@ -75,6 +75,21 @@ pub struct Look<'a> {
     pub units: Units,
     /// A picture by icon path, sized for a section; `None` when the icon is missing.
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
+    /// The material's size in the units shown, for sums typed into number fields (W, H, T).
+    pub material: cut_craft_core::calc::Values,
+}
+
+/// The job's material for [`Look::material`], in `units`.
+pub fn material(job: &cut_craft_core::document::Job, units: Units) -> cut_craft_core::calc::Values {
+    let factor = match units {
+        Units::Inch => 25.4,
+        Units::Mm => 1.0,
+    };
+    cut_craft_core::calc::Values {
+        width: job.width / factor,
+        height: job.height / factor,
+        thickness: job.thickness / factor,
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -255,10 +270,14 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
                 None => (1.0, None),
             };
             let mut n = value.as_f64().unwrap_or_default() / factor;
-            let mut drag = egui::DragValue::new(&mut n).clamp_range(
-                min.map_or(f64::NEG_INFINITY, |m| m / factor)
-                    ..=max.map_or(f64::INFINITY, |m| m / factor),
-            );
+            // a sum typed in (Aspire's calculation edit boxes) is worked out
+            let material = look.material;
+            let mut drag = egui::DragValue::new(&mut n)
+                .custom_parser(move |text| cut_craft_core::calc::evaluate(text, &material))
+                .clamp_range(
+                    min.map_or(f64::NEG_INFINITY, |m| m / factor)
+                        ..=max.map_or(f64::INFINITY, |m| m / factor),
+                );
             if let Some(unit) = unit {
                 drag = drag.suffix(format!(" {unit}"));
             }

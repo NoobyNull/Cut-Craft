@@ -1404,9 +1404,11 @@ impl CutCraftApp {
                 .find(path, "")
                 .map(|p| Icons::image(p).fit_to_exact_size(egui::vec2(edge, edge)))
         };
+        let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
         let look = form::Look {
-            units: form::units_chosen(&open.params).unwrap_or(self.doc.job.units),
+            units,
             picture: &picture,
+            material: form::material(&self.doc.job, units),
         };
         form::show(ui, &open.fields, &mut open.params, &look);
         if let Some(error) = &open.error {
@@ -1794,6 +1796,7 @@ fn summary_table(
     let look = crate::form::Look {
         units,
         picture: &picture,
+        material: cut_craft_core::calc::Values::default(),
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
         *rapid = values["rapid_rate"].as_f64().unwrap_or(*rapid);
@@ -1844,6 +1847,7 @@ impl CutCraftApp {
                 let look = form::Look {
                     units: self.doc.job.units,
                     picture: &|_| None,
+                    material: form::material(&self.doc.job, self.doc.job.units),
                 };
                 if form::show(ui, &fields, &mut value, &look)
                     && let Ok(changed) = serde_json::from_value(value)
@@ -3284,6 +3288,7 @@ impl CutCraftApp {
                 let look = crate::form::Look {
                     units,
                     picture: &picture,
+                    material: crate::form::material(&self.doc.job, units),
                 };
                 if crate::form::show(ui, &fields, &mut values, &look)
                     && let Ok(options) = serde_json::from_value(values)
