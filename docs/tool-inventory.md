@@ -153,6 +153,9 @@ say "not implemented yet".
 - Double-sided jobs (Job Setup's Double Sided, Flip Direction Between Sides): each side keeps
   its own objects; Edit ▸ Swap Sides or the top bar's side button turns over; the other side
   is drawn faint and mirrored; the 2D right-click Copy to Other Side mirrors copies across.
+- Plate Production (Offset and Layout): a template's !!variables!! filled from a data file's
+  columns or a counter, plates laid out inside margins, a layer per sheet of material when
+  they need more. Not done: copying the template's toolpaths onto each plate.
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.

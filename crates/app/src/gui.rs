@@ -111,7 +111,12 @@ fn drawing_groups() -> Vec<ToolGroup> {
         ),
         group(
             "Offset and Layout",
-            &["offset_vectors", "nest_parts", "copy_along_vectors"],
+            &[
+                "offset_vectors",
+                "nest_parts",
+                "copy_along_vectors",
+                "plate_production",
+            ],
         ),
         group("Array Objects", &["array_copy", "circular_copy"]),
     ]
