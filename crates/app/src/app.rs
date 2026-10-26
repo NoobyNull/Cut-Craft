@@ -23,7 +23,11 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
-const BUILT_INS: [&str; 59] = [
+const BUILT_INS: [&str; 63] = [
+    "left_to_right",
+    "right_to_left",
+    "top_to_bottom",
+    "bottom_to_top",
     "delete_all_guides",
     "lock_all_existing_guides",
     "unlock_all_existing_guides",
@@ -467,6 +471,17 @@ impl CutCraftApp {
             | "save_all_visible_toolpaths_as_template"
             | "load_template" => self.template_action(id),
             id if TOP_BAR_TOGGLES.contains(&id) => self.top_bar_toggle(id),
+            // the Align Objects group's spacing buttons, by pick order
+            "left_to_right" | "right_to_left" | "top_to_bottom" | "bottom_to_top" => {
+                let command = if id.contains("left") {
+                    "space_horizontally"
+                } else {
+                    "space_vertically"
+                };
+                if let Err(e) = self.apply(command, &serde_json::json!({ "order": id })) {
+                    self.status.set_message(&e);
+                }
+            }
             "delete_all_guides" => self.set_guides(vec![]),
             "lock_all_existing_guides" | "unlock_all_existing_guides" => {
                 let locked = id.starts_with("lock");
@@ -4986,6 +5001,39 @@ mod tests {
     fn the_window_is_titled_cut_craft() {
         let h = Harness::new();
         assert_eq!(h.app.title, "Untitled - Cut Craft");
+    }
+
+    #[test]
+    fn the_align_objects_group_spaces_by_pick_order() {
+        let mut h = Harness::new();
+        h.rectangle(100.0, 10.0, 10.0, 10.0);
+        let first = *h.app.doc.selection.iter().next().unwrap();
+        h.rectangle(10.0, 10.0, 10.0, 10.0);
+        h.rectangle(50.0, 10.0, 10.0, 10.0);
+        let all: Vec<EntityId> = h.app.doc.vectors.keys().copied().collect();
+        h.app.doc.selection = all.into_iter().collect();
+        for id in [
+            "left_to_right",
+            "right_to_left",
+            "top_to_bottom",
+            "bottom_to_top",
+        ] {
+            assert!(h.app.available(id), "{id}");
+        }
+        h.app.invoke(&h.ctx, "left_to_right");
+        let left = h.app.doc.vectors[&first].bounds().min.x;
+        assert!(
+            (left - 10.0).abs() < 1e-6,
+            "the first picked goes leftmost: {left}"
+        );
+        let group = h
+            .app
+            .toolbar
+            .groups
+            .iter()
+            .find(|g| g.name == "Align Objects")
+            .unwrap();
+        assert!(group.tools.contains(&"left_to_right") && group.tools.contains(&"align_left"));
     }
 
     #[test]

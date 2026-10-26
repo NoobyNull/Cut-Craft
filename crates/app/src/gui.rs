@@ -105,6 +105,26 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "crop_bitmap",
             ],
         ),
+        // Aspire's Align Objects section (help: Alignment Tools): the common alignments
+        group(
+            "Align Objects",
+            &[
+                "center_in_material",
+                "center_horizontally_in_material",
+                "center_vertically_in_material",
+                "center",
+                "align_left",
+                "align_right",
+                "align_top",
+                "align_bottom",
+                "center_horizontally",
+                "center_vertically",
+                "left_to_right",
+                "right_to_left",
+                "top_to_bottom",
+                "bottom_to_top",
+            ],
+        ),
         group(
             "Transform Objects",
             &["move", "rotate", "set_size", "mirror", "distort_object"],

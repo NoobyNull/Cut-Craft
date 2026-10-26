@@ -11,7 +11,7 @@ icons are skipped (Matthew: no laser features).
 
 ## Icons whose tool exists but is not wired to them
 
-- [ ] Align: Left To Right / Right To Left / Top To Bottom / Bottom To Top
+- [x] Align: Left To Right / Right To Left / Top To Bottom / Bottom To Top
       (`drawing/align/*`): the four spacing commands, by pick order.
 - [ ] Create Shape: Round / Angled / Smooth / Flat (`modeling/create_shape_*`): Create Shape
       with that profile chosen (help: Create Round / Angled / Smooth Shape, Create Flat Plane).
