@@ -1,7 +1,7 @@
 //! The job being edited. Only [`Document::apply`](crate::Change) changes it.
 
 use crate::bitmap::Bitmap;
-use crate::component::Component;
+use crate::component::{Component, Level};
 use crate::geometry::{Path, Point, Rect, polyline_distance, polyline_touches};
 use crate::selection::Selection;
 use crate::toolpath::Toolpath;
@@ -295,6 +295,10 @@ pub struct Document {
     /// can be edited again; ungrouping turns it into plain curves.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub texts: BTreeMap<u64, serde_json::Value>,
+    /// The component tree's levels, first (bottom) first (added with levels; older files get
+    /// the one level every job has).
+    #[serde(default = "crate::component::default_levels")]
+    pub levels: BTreeMap<u64, Level>,
 }
 
 impl Default for Document {
@@ -314,6 +318,7 @@ impl Default for Document {
             vector_groups: BTreeMap::new(),
             notes: String::new(),
             texts: BTreeMap::new(),
+            levels: crate::component::default_levels(),
         }
     }
 }

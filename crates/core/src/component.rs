@@ -62,6 +62,9 @@ pub struct Component {
     /// when the grid changes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unsculpted: Option<Vec<Option<f64>>>,
+    /// The level it is on (added with levels; older files put everything on the first).
+    #[serde(default)]
+    pub level: u64,
 }
 
 /// A component's dynamic properties (Aspire's Component Properties): they change how its
@@ -168,6 +171,102 @@ fn shown() -> bool {
     true
 }
 
+/// A level of the component tree: its components combine with each other first, then the
+/// result combines with the levels below it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct Level {
+    pub name: String,
+    /// How the level combines with the levels below it
+    #[schemars(title = "Combine Mode")]
+    pub combine: Combine,
+    /// Hidden levels are left out of the model
+    pub visible: bool,
+    /// Raises the whole level on a flat plane this thick
+    #[schemars(title = "Base Height", extend("x-unit" = "mm"))]
+    pub base_height: f64,
+    /// Level Clipping: the level is kept only inside these closed vectors (none: no clipping)
+    #[schemars(skip)]
+    pub clip: Vec<crate::geometry::Path>,
+    /// The vectors the clipping was made from, so Clipping ▸ Update can read them again
+    #[schemars(skip)]
+    pub clip_vectors: Vec<EntityId>,
+    /// Mirrors one half or quarter of the job onto the rest
+    #[schemars(title = "Mirror Mode")]
+    pub mirror: Mirror,
+    /// Rotary jobs: what runs off one side of the unrolled job comes back on the other
+    pub wrapping: bool,
+}
+
+impl Default for Level {
+    fn default() -> Self {
+        Self {
+            name: "Level 1".into(),
+            combine: Combine::Add,
+            visible: true,
+            base_height: 0.0,
+            clip: vec![],
+            clip_vectors: vec![],
+            mirror: Mirror::Off,
+            wrapping: false,
+        }
+    }
+}
+
+/// A level's mirror mode: which part of the job is drawn, the rest being its reflection.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Mirror {
+    #[default]
+    Off,
+    #[schemars(title = "Left to Right")]
+    LeftToRight,
+    #[schemars(title = "Right to Left")]
+    RightToLeft,
+    #[schemars(title = "Top to Bottom")]
+    TopToBottom,
+    #[schemars(title = "Bottom to Top")]
+    BottomToTop,
+    #[schemars(title = "Top Left Quadrant")]
+    TopLeft,
+    #[schemars(title = "Top Right Quadrant")]
+    TopRight,
+    #[schemars(title = "Bottom Left Quadrant")]
+    BottomLeft,
+    #[schemars(title = "Bottom Right Quadrant")]
+    BottomRight,
+}
+
+impl Mirror {
+    /// Where the level's heights at `p` come from, reflected about the middle of `job`.
+    pub fn source(self, p: Point, job: Rect) -> Point {
+        let c = job.center();
+        // (keep the left half, keep the bottom half): Some(true) keeps the low side
+        let (x, y) = match self {
+            Self::Off => (None, None),
+            Self::LeftToRight => (Some(true), None),
+            Self::RightToLeft => (Some(false), None),
+            Self::TopToBottom => (None, Some(false)),
+            Self::BottomToTop => (None, Some(true)),
+            Self::TopLeft => (Some(true), Some(false)),
+            Self::TopRight => (Some(false), Some(false)),
+            Self::BottomLeft => (Some(true), Some(true)),
+            Self::BottomRight => (Some(false), Some(true)),
+        };
+        let reflect = |v: f64, middle: f64, keep_low: Option<bool>| match keep_low {
+            Some(true) if v > middle => 2.0 * middle - v,
+            Some(false) if v < middle => 2.0 * middle - v,
+            _ => v,
+        };
+        Point::new(reflect(p.x, c.x, x), reflect(p.y, c.y, y))
+    }
+}
+
+/// The level every component starts on, and the one a job always has.
+pub fn default_levels() -> std::collections::BTreeMap<u64, Level> {
+    [(0, Level::default())].into()
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -202,6 +301,7 @@ impl Component {
             visible: true,
             shaping: Shaping::default(),
             unsculpted: None,
+            level: 0,
         }
     }
 
@@ -248,6 +348,7 @@ impl Component {
             visible: true,
             shaping: Shaping::default(),
             unsculpted: None,
+            level: 0,
         }
     }
 
@@ -458,25 +559,79 @@ pub fn chosen_or_baked(doc: &Document) -> Option<(Vec<EntityId>, Component)> {
     }
 }
 
-/// The model's surface over the job: every component combined onto a flat base at 0.
+/// A shown level with its clip rings and its shown components.
+type Placed<'a> = (&'a Level, Vec<Vec<Point>>, Vec<&'a Component>);
+
+/// The model's surface over the job, on a flat base at 0: each visible level's visible
+/// components combined (bottom of the tree first), clipped, mirrored and wrapped as the level
+/// says, then the levels combined from the first up.
 pub fn model(doc: &Document, cells_across: usize) -> Material {
+    use crate::document::Along;
     let mut surface = Material::new(&doc.job, cells_across);
-    for row in 0..surface.rows {
-        for column in 0..surface.columns {
-            let centre = surface.centre(column, row);
-            surface.heights[row * surface.columns + column] = doc
+    let job = doc.job.area();
+    let first = doc.levels.keys().next().copied().unwrap_or(0);
+    let wrap = doc.job.rotary.map(|r| match r.along {
+        Along::X => Point::new(0.0, job.size().y),
+        Along::Y => Point::new(job.size().x, 0.0),
+    });
+    let levels: Vec<Placed> = doc
+        .levels
+        .iter()
+        .filter(|(_, l)| l.visible)
+        .map(|(&id, l)| {
+            let on: Vec<&Component> = doc
                 .components
                 .values()
                 .filter(|c| c.visible)
-                .fold(0.0, |under, c| {
-                    c.height_at(centre)
-                        .map_or(under, |height| c.combine.apply(under, height))
-                });
+                .filter(|c| {
+                    let level = if doc.levels.contains_key(&c.level) {
+                        c.level
+                    } else {
+                        first
+                    };
+                    level == id
+                })
+                .collect();
+            // ponytail: clip rings flattened at 0.01 mm
+            let rings = l.clip.iter().map(|p| p.flatten(0.01)).collect();
+            (l, rings, on)
+        })
+        .filter(|(_, _, on)| !on.is_empty())
+        .collect();
+    let level_at = |on: &[&Component], p: Point| {
+        on.iter().fold(None, |under: Option<f64>, c| {
+            c.height_at(p).map_or(under, |height| {
+                Some(c.combine.apply(under.unwrap_or(0.0), height))
+            })
+        })
+    };
+    for row in 0..surface.rows {
+        for column in 0..surface.columns {
+            let centre = surface.centre(column, row);
+            let mut total = 0.0;
+            for (level, rings, on) in &levels {
+                if !rings.is_empty() && !crate::geometry::inside(rings, centre) {
+                    continue;
+                }
+                let from = level.mirror.source(centre, job);
+                let shifts = match wrap {
+                    Some(w) if level.wrapping => vec![Point::ZERO, w, -w],
+                    _ => vec![Point::ZERO],
+                };
+                // where a wrapped level meets itself, the higher part is kept
+                let height = shifts
+                    .into_iter()
+                    .filter_map(|s| level_at(on, from + s))
+                    .reduce(f64::max);
+                if let Some(h) = height {
+                    total = level.combine.apply(total, h + level.base_height);
+                }
+            }
+            surface.heights[row * surface.columns + column] = total;
         }
     }
     surface
 }
-
 /// The model as a 3D toolpath machines it: cells a twentieth of `tool` across, but no finer
 /// than the job's modeling resolution, its top at z = 0 (the material surface). It must
 /// exist and fit in the material.

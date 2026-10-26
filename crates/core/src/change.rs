@@ -2,7 +2,7 @@
 
 use crate::CommandError;
 use crate::bitmap::Bitmap;
-use crate::component::Component;
+use crate::component::{Component, Level};
 use crate::document::{Document, EntityId, Job, Layer, LayerId};
 use crate::geometry::{Path, Point, Rect};
 use crate::selection::Selection;
@@ -113,6 +113,12 @@ pub enum Edit {
         before: Option<serde_json::Value>,
         after: Option<serde_json::Value>,
     },
+    /// Adds, changes or removes (`None`) a level of the component tree.
+    SetLevel {
+        id: u64,
+        before: Option<Level>,
+        after: Option<Level>,
+    },
 }
 
 impl Edit {
@@ -188,6 +194,11 @@ impl Edit {
                 before: after.clone(),
                 after: before.clone(),
             },
+            Self::SetLevel { id, before, after } => Self::SetLevel {
+                id,
+                before: after,
+                after: before,
+            },
         }
     }
 }
@@ -205,6 +216,8 @@ pub enum ApplyError {
     LayerConflict(LayerId),
     /// Vectors are still on it, or it is the last layer.
     LayerInUse(LayerId),
+    /// The level was changed by something else.
+    LevelConflict(u64),
 }
 
 impl fmt::Display for ApplyError {
@@ -222,6 +235,7 @@ impl fmt::Display for ApplyError {
                 "layer {} still has vectors on it, or is the last layer",
                 id.0
             ),
+            Self::LevelConflict(id) => write!(f, "level {id} was changed by something else"),
         }
     }
 }
@@ -249,6 +263,7 @@ impl Change {
             layers: doc.layers.clone(),
             current_layer: doc.current_layer,
             vector_layers: BTreeMap::new(),
+            levels: BTreeMap::new(),
             edits: vec![],
         }
     }
@@ -505,6 +520,22 @@ impl Document {
         };
     }
 
+    fn set_level(
+        &mut self,
+        id: u64,
+        before: Option<&Level>,
+        after: Option<&Level>,
+    ) -> Result<(), ApplyError> {
+        if self.levels.get(&id) != before {
+            return Err(ApplyError::LevelConflict(id));
+        }
+        match after {
+            Some(level) => self.levels.insert(id, level.clone()),
+            None => self.levels.remove(&id),
+        };
+        Ok(())
+    }
+
     fn apply_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
             Edit::Add { id, path } => insert_new(&mut self.vectors, *id, path.clone())?,
@@ -601,6 +632,9 @@ impl Document {
             }
             Edit::SetNotes { after, .. } => self.notes.clone_from(after),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
+            Edit::SetLevel { id, before, after } => {
+                self.set_level(*id, before.as_ref(), after.as_ref())?;
+            }
         }
         Ok(())
     }
@@ -676,6 +710,8 @@ pub struct ChangeBuilder<'a> {
     layers: Vec<Layer>,
     current_layer: LayerId,
     vector_layers: BTreeMap<EntityId, Option<LayerId>>,
+    /// Levels as this change has left them (`None` = removed), shadowing `doc`.
+    levels: BTreeMap<u64, Option<Level>>,
     edits: Vec<Edit>,
 }
 
@@ -957,6 +993,23 @@ impl ChangeBuilder<'_> {
                 before,
                 after,
             });
+        }
+    }
+
+    /// Level `id` as this change has left it.
+    pub fn level(&self, id: u64) -> Option<&Level> {
+        match self.levels.get(&id) {
+            Some(pending) => pending.as_ref(),
+            None => self.doc.levels.get(&id),
+        }
+    }
+
+    /// Adds, changes or (with `None`) removes level `id`.
+    pub fn set_level(&mut self, id: u64, after: Option<Level>) {
+        let before = self.level(id).cloned();
+        if before != after {
+            self.levels.insert(id, after.clone());
+            self.edits.push(Edit::SetLevel { id, before, after });
         }
     }
 
