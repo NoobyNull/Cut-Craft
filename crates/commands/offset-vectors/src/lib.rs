@@ -36,7 +36,7 @@ impl Command for OffsetVectors {
         Meta {
             label: "Offset Vectors",
             group: "Offset and Layout",
-            icon: "drawing/weld_and_offset/offset_vectors.svg",
+            icon: "drawing/weld_and_offset/offset_vectors.png",
             shortcut: "",
         }
     }
