@@ -112,8 +112,7 @@ size it as they change.
 ![Importing a 3D model](docs/screenshots/08-import-3d-model.png)
 
 These pictures are made by the app itself and can be made again at any time (see
-[Screenshots](#screenshots)). They are taken without the icons, so the buttons show their
-names; the app itself shows its icons.
+[Screenshots](#screenshots)).
 
 ## Getting Cut Craft
 

@@ -5344,8 +5344,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             }
             let mut app = CutCraftApp::new();
             if let Some(dir) = shots {
-                // what a fresh clone shows: no icons, the starter tools, nothing of the user's
-                app.icons = Icons::load(std::path::Path::new(""));
+                // what a fresh clone shows: its icons, the starter tools, nothing of the user's
                 app.shots = Some(screenshots::Shots::new(dir));
                 return Box::new(app);
             }
