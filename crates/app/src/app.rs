@@ -901,6 +901,12 @@ impl CutCraftApp {
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
+        // a form that edits what it made (Draw Text) goes on editing it, not adding another
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == id)
+            && let Some(made) = cmd.initial_params(&self.doc).get("replaces").cloned()
+        {
+            form.params["replaces"] = made;
+        }
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
         Ok(())
@@ -3225,6 +3231,27 @@ mod tests {
         };
         assert_eq!(d.start, Point::new(30.0, 20.0), "onto the corner");
         assert_eq!(d.end, Point::new(50.0, 50.0), "nothing near");
+    }
+
+    #[test]
+    fn editing_placed_text_replaces_it() {
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "draw_text");
+        h.app.form.as_mut().unwrap().params["font"] = "Test Boxes".into();
+        let at = Point::new(20.0, 20.0);
+        let click = Drag {
+            start: at,
+            end: at,
+            from_center: false,
+            constrain: false,
+        };
+        h.app.draw("draw_text", click);
+        let form = h.app.form.as_mut().unwrap();
+        form.params["text"] = "HI".into();
+        let params = form.params.clone();
+        h.app.apply("draw_text", &params).unwrap();
+        assert_eq!(h.app.doc.texts.len(), 1, "the placeholder was replaced");
+        assert_eq!(h.app.doc.texts.values().next().unwrap()["text"], "HI");
     }
 
     #[test]
