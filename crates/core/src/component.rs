@@ -39,8 +39,25 @@ impl Combine {
     }
 }
 
+/// Whether two height grids match cell by cell, a hole (NaN) matching a hole.
+#[expect(
+    clippy::float_cmp,
+    reason = "the same height exactly, as a Vec<Option<f64>> compared"
+)]
+pub fn same_heights(a: &[f64], b: &[f64]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| x == y || (x.is_nan() && y.is_nan()))
+}
+
+/// A cell's height, or `fallback` where it has no shape.
+pub fn height_or(h: f64, fallback: f64) -> f64 {
+    if h.is_nan() { fallback } else { h }
+}
+
 /// Heights over a grid of square cells in the job.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Component {
     pub name: String,
     pub combine: Combine,
@@ -49,9 +66,10 @@ pub struct Component {
     pub cell: f64,
     pub columns: usize,
     pub rows: usize,
-    /// Row by row from the bottom; `None` where the component has no shape.
+    /// Row by row from the bottom; NaN where the component has no shape (half the memory of
+    /// an `Option<f64>`, and what [`Material`] uses too).
     #[serde(with = "crate::packed::heights")]
-    pub heights: Vec<Option<f64>>,
+    pub heights: Vec<f64>,
     /// Hidden components are left out of the model (added after the first job format).
     #[serde(default = "shown")]
     pub visible: bool,
@@ -65,13 +83,34 @@ pub struct Component {
         skip_serializing_if = "Option::is_none",
         with = "crate::packed::heights::option"
     )]
-    pub unsculpted: Option<Vec<Option<f64>>>,
+    pub unsculpted: Option<Vec<f64>>,
     /// The level it is on (added with levels; older files put everything on the first).
     #[serde(default)]
     pub level: u64,
     /// The component group it is in, if any (added with groups).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Group>,
+}
+
+impl PartialEq for Component {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.combine == other.combine
+            && self.origin == other.origin
+            && self.cell == other.cell
+            && self.columns == other.columns
+            && self.rows == other.rows
+            && same_heights(&self.heights, &other.heights)
+            && self.visible == other.visible
+            && self.shaping == other.shaping
+            && match (&self.unsculpted, &other.unsculpted) {
+                (None, None) => true,
+                (Some(a), Some(b)) => same_heights(a, b),
+                _ => false,
+            }
+            && self.level == other.level
+            && self.group == other.group
+    }
 }
 
 /// A component group: its members combine with each other first, then the result combines
@@ -304,6 +343,7 @@ impl Component {
             .flat_map(|row| (0..columns).map(move |column| (column, row)))
             .map(|(column, row)| {
                 height(area.min + Point::new(column as f64 + 0.5, row as f64 + 0.5) * cell)
+                    .unwrap_or(f64::NAN)
             })
             .collect();
         Self {
@@ -361,7 +401,7 @@ impl Component {
             cell: material.cell,
             columns: material.columns,
             rows: material.rows,
-            heights: material.heights.iter().map(|&h| Some(h)).collect(),
+            heights: material.heights.clone(),
             visible: true,
             shaping: Shaping::default(),
             unsculpted: None,
@@ -379,7 +419,10 @@ impl Component {
 
     /// Cell `index`'s height with the shaping applied; `None` where there is no shape.
     pub fn shaped(&self, index: usize) -> Option<f64> {
-        let z = self.heights[index]?;
+        let z = self.heights[index];
+        if z.is_nan() {
+            return None;
+        }
         Some(if self.shaping.is_identity() {
             z
         } else {
@@ -387,9 +430,12 @@ impl Component {
         })
     }
 
-    /// Every cell's height with the shaping applied, row by row from the bottom.
-    pub fn shaped_heights(&self) -> Vec<Option<f64>> {
-        (0..self.heights.len()).map(|i| self.shaped(i)).collect()
+    /// Every cell's height with the shaping applied, row by row from the bottom; NaN where
+    /// there is no shape.
+    pub fn shaped_heights(&self) -> Vec<f64> {
+        (0..self.heights.len())
+            .map(|i| self.shaped(i).unwrap_or(f64::NAN))
+            .collect()
     }
 
     /// The same shape with its shaping made permanent (Component Properties' Bake).
@@ -406,7 +452,7 @@ impl Component {
     pub fn height_range(&self) -> Option<(f64, f64)> {
         self.shaped_heights()
             .into_iter()
-            .flatten()
+            .filter(|h| !h.is_nan())
             .fold(None, |range, h| {
                 Some(range.map_or((h, h), |(lo, hi): (f64, f64)| (lo.min(h), hi.max(h))))
             })
@@ -426,7 +472,9 @@ impl Component {
         (0..self.rows)
             .rev()
             .flat_map(|row| &heights[row * self.columns..(row + 1) * self.columns])
-            .map(|h| h.map(|z| ((z - lo) / span * 255.0).round().clamp(0.0, 255.0) as u8))
+            .map(|&z| {
+                (!z.is_nan()).then(|| ((z - lo) / span * 255.0).round().clamp(0.0, 255.0) as u8)
+            })
             .collect()
     }
 
@@ -478,7 +526,7 @@ impl Component {
                 && (row as usize) < self.rows;
             inside
                 .then(|| self.heights[row as usize * self.columns + column as usize])
-                .flatten()
+                .filter(|h| !h.is_nan())
         };
         let local = (p - self.origin) / self.cell;
         if local.x < 0.0 || local.y < 0.0 {

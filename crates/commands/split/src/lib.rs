@@ -39,13 +39,13 @@ impl Command for Split {
         let ring = [cutter.flatten(cut_craft_core::polygon::TOLERANCE)];
         let (mut a, mut b) = (part.clone(), part.clone());
         for (i, h) in part.heights.iter().enumerate() {
-            if h.is_some() {
+            if !h.is_nan() {
                 let into = if inside(&ring, part.centre_of(i)) {
                     &mut b
                 } else {
                     &mut a
                 };
-                into.heights[i] = None;
+                into.heights[i] = f64::NAN;
             }
         }
         if a.height_range().is_none() || b.height_range().is_none() {

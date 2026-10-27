@@ -70,7 +70,7 @@ impl Command for ScaleModelZHeight {
             .filter(|(_, k)| k.visible && k.combine != Combine::Multiply)
         {
             let mut scaled = component.clone();
-            for h in scaled.heights.iter_mut().flatten() {
+            for h in scaled.heights.iter_mut().filter(|h| !h.is_nan()) {
                 *h *= factor;
             }
             c.replace_component(id, scaled);

@@ -176,3 +176,37 @@ fn every_applied_undone_or_redone_change_bumps_the_revision() {
     history.apply(&mut doc, Change::default()).unwrap();
     assert_eq!(history.revision(), r2 + 1, "empty changes do not count");
 }
+
+#[test]
+fn a_failed_change_puts_back_the_models_it_added_and_replaced() {
+    use cut_craft_core::component::{Combine, Component};
+    use cut_craft_core::geometry::Rect;
+    let shape = |name: &str, z: f64| {
+        let area = Rect::new(Point::ZERO, Point::splat(10.0));
+        Component::from_fn(name, Combine::Add, area, 1.0, move |_| Some(z))
+    };
+    let mut doc = Document::default();
+    let mut c = Change::builder(&doc);
+    let kept = c.add_component(shape("kept", 1.0));
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    let other = {
+        let mut d = doc.clone();
+        d.apply(&add_squares(&d, &[5.0])).unwrap();
+        d
+    };
+    // adds a model, replaces the kept one twice, then fails on a vector `doc` lacks
+    let mut c = Change::builder(&other);
+    let added = c.add_component(shape("new", 2.0));
+    c.replace_component(kept, shape("kept", 3.0));
+    c.replace_component(kept, shape("kept", 4.0));
+    c.replace_component(added, shape("new", 5.0));
+    c.remove(EntityId(2));
+    let before = doc.clone();
+    assert!(matches!(
+        doc.apply(&c.finish()),
+        Err(ApplyError::Missing(EntityId(2)))
+    ));
+    assert_eq!(doc, before, "the models are as they were");
+    assert_eq!(doc.components.len(), 1);
+}

@@ -74,7 +74,7 @@ impl Command for TurnAndSpin {
         if p.scale_to_exact_height
             && let Some((_, top)) = made.height_range().filter(|r| r.1 > 0.0)
         {
-            for h in made.heights.iter_mut().flatten() {
+            for h in made.heights.iter_mut().filter(|h| !h.is_nan()) {
                 *h *= p.height / top;
             }
         }

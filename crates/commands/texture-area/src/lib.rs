@@ -159,7 +159,7 @@ fn shaped_extent(k: &Component) -> Option<Rect> {
     k.heights
         .iter()
         .enumerate()
-        .filter(|(_, h)| h.is_some())
+        .filter(|(_, h)| !h.is_nan())
         .map(|(i, _)| {
             let c = k.centre_of(i);
             Rect::new(c - half, c + half)

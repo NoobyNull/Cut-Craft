@@ -562,16 +562,127 @@ impl Change {
     }
 }
 
+/// What [`Document::apply`] puts back when an edit fails partway: the document apart from
+/// its heavy maps, and of those maps (models, pictures, toolpaths, the other sheets' objects)
+/// only the entries the change touches, so a stroke on one model never copies the others.
+struct Kept {
+    light: Document,
+    components: Vec<(EntityId, Option<Component>)>,
+    bitmaps: Vec<(EntityId, Option<Bitmap>)>,
+    toolpaths: Vec<(EntityId, Option<Toolpath>)>,
+    /// The sheets and the active one, when the change replaces them.
+    sheets: Option<(Vec<Sheet>, usize)>,
+    /// The other side, when the change turns the job over.
+    side: Option<(bool, SheetObjects)>,
+}
+
+impl Kept {
+    fn before(doc: &mut Document, change: &Change) -> Self {
+        let (components, bitmaps, toolpaths, sheets, other_side) = (
+            std::mem::take(&mut doc.components),
+            std::mem::take(&mut doc.bitmaps),
+            std::mem::take(&mut doc.toolpaths),
+            std::mem::take(&mut doc.sheets),
+            std::mem::take(&mut doc.other_side),
+        );
+        let light = doc.clone();
+        doc.components = components;
+        doc.bitmaps = bitmaps;
+        doc.toolpaths = toolpaths;
+        doc.sheets = sheets;
+        doc.other_side = other_side;
+        let mut kept = Self {
+            light,
+            components: vec![],
+            bitmaps: vec![],
+            toolpaths: vec![],
+            sheets: None,
+            side: None,
+        };
+        for edit in &change.edits {
+            match edit {
+                Edit::AddComponent { id, .. }
+                | Edit::RemoveComponent { id, .. }
+                | Edit::ReplaceComponent { id, .. } => {
+                    kept.components.push((*id, doc.components.get(id).cloned()));
+                }
+                Edit::AddBitmap { id, .. }
+                | Edit::RemoveBitmap { id, .. }
+                | Edit::ReplaceBitmap { id, .. } => {
+                    kept.bitmaps.push((*id, doc.bitmaps.get(id).cloned()));
+                }
+                Edit::AddToolpath { id, .. }
+                | Edit::RemoveToolpath { id, .. }
+                | Edit::ReplaceToolpath { id, .. } => {
+                    kept.toolpaths.push((*id, doc.toolpaths.get(id).cloned()));
+                }
+                Edit::SetSheets { .. } if kept.sheets.is_none() => {
+                    kept.sheets = Some((doc.sheets.clone(), doc.active_sheet));
+                }
+                Edit::SetSide { .. } if kept.side.is_none() => {
+                    kept.side = Some((doc.bottom_side, doc.other_side.clone()));
+                }
+                _ => {}
+            }
+        }
+        kept
+    }
+
+    /// The document as it was before the change began.
+    fn restore(self, doc: &mut Document) {
+        let (components, bitmaps, toolpaths, sheets, other_side) = (
+            std::mem::take(&mut doc.components),
+            std::mem::take(&mut doc.bitmaps),
+            std::mem::take(&mut doc.toolpaths),
+            std::mem::take(&mut doc.sheets),
+            std::mem::take(&mut doc.other_side),
+        );
+        *doc = self.light;
+        doc.components = components;
+        doc.bitmaps = bitmaps;
+        doc.toolpaths = toolpaths;
+        doc.sheets = sheets;
+        doc.other_side = other_side;
+        // the first entry kept for an id is what was there before any edit touched it
+        for (id, before) in self.components.into_iter().rev() {
+            put_back(&mut doc.components, id, before);
+        }
+        for (id, before) in self.bitmaps.into_iter().rev() {
+            put_back(&mut doc.bitmaps, id, before);
+        }
+        for (id, before) in self.toolpaths.into_iter().rev() {
+            put_back(&mut doc.toolpaths, id, before);
+        }
+        if let Some((sheets, active)) = self.sheets {
+            (doc.sheets, doc.active_sheet) = (sheets, active);
+        }
+        if let Some(side) = self.side {
+            (doc.bottom_side, doc.other_side) = side;
+        }
+    }
+}
+
+fn put_back<T>(map: &mut BTreeMap<EntityId, T>, id: EntityId, before: Option<T>) {
+    match before {
+        Some(value) => {
+            map.insert(id, value);
+        }
+        None => {
+            map.remove(&id);
+        }
+    }
+}
+
 impl Document {
     /// Applies every edit or none of them.
     pub fn apply(&mut self, change: &Change) -> Result<(), ApplyError> {
-        // ponytail: whole-document copy per change keeps this atomic; validate-then-apply
-        // in place if documents get big enough for the copy to show up in profiles
-        let mut next = self.clone();
+        let kept = Kept::before(self, change);
         for edit in &change.edits {
-            next.apply_edit(edit)?;
+            if let Err(e) = self.apply_edit(edit) {
+                kept.restore(self);
+                return Err(e);
+            }
         }
-        *self = next;
         Ok(())
     }
 

@@ -46,46 +46,44 @@ fn records<const N: usize, T>(bytes: &[u8], from: impl Fn([u8; N]) -> T) -> Resu
     Ok(chunks.iter().map(|c| from(*c)).collect())
 }
 
-/// `Vec<Option<f64>>`: `None` kept as NaN.
+/// A component's heights, `Vec<f64>` with NaN where it has no shape; older files hold an
+/// array with `null` there.
 pub mod heights {
-    use super::{Deserializer, Serializer, decode, encode, records};
+    use super::{Deserialize, Deserializer, STANDARD, Serializer, Stored, encode, records};
+    use base64::Engine as _;
+    use serde::de::Error as _;
 
-    pub fn serialize<S: Serializer>(v: &[Option<f64>], s: S) -> Result<S::Ok, S::Error> {
-        let bytes: Vec<u8> = v
-            .iter()
-            .flat_map(|h| h.unwrap_or(f64::NAN).to_le_bytes())
-            .collect();
+    pub fn serialize<S: Serializer>(v: &[f64], s: S) -> Result<S::Ok, S::Error> {
+        let bytes: Vec<u8> = v.iter().flat_map(|h| h.to_le_bytes()).collect();
         encode(&bytes, s)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Option<f64>>, D::Error> {
-        decode(d, |b| {
-            records(b, |c| {
-                let h = f64::from_le_bytes(c);
-                (!h.is_nan()).then_some(h)
-            })
-        })
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<f64>, D::Error> {
+        match Stored::<Option<f64>>::deserialize(d)? {
+            Stored::Plain(values) => {
+                Ok(values.into_iter().map(|h| h.unwrap_or(f64::NAN)).collect())
+            }
+            Stored::Packed(text) => {
+                let bytes = STANDARD.decode(text).map_err(D::Error::custom)?;
+                records(&bytes, f64::from_le_bytes).map_err(D::Error::custom)
+            }
+        }
     }
 
-    /// `Option<Vec<Option<f64>>>`.
+    /// `Option<Vec<f64>>`.
     pub mod option {
         use super::super::{Deserialize, Deserializer, Serializer};
 
-        pub fn serialize<S: Serializer>(
-            v: &Option<Vec<Option<f64>>>,
-            s: S,
-        ) -> Result<S::Ok, S::Error> {
+        pub fn serialize<S: Serializer>(v: &Option<Vec<f64>>, s: S) -> Result<S::Ok, S::Error> {
             match v {
                 Some(v) => super::serialize(v, s),
                 None => s.serialize_none(),
             }
         }
 
-        pub fn deserialize<'de, D: Deserializer<'de>>(
-            d: D,
-        ) -> Result<Option<Vec<Option<f64>>>, D::Error> {
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<f64>>, D::Error> {
             #[derive(Deserialize)]
-            struct Inner(#[serde(with = "super")] Vec<Option<f64>>);
+            struct Inner(#[serde(with = "super")] Vec<f64>);
             Ok(Option::<Inner>::deserialize(d)?.map(|i| i.0))
         }
     }
@@ -171,12 +169,12 @@ mod tests {
     use super::*;
     use serde::Serialize;
 
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Serialize, Deserialize)]
     struct Everything {
         #[serde(with = "heights")]
-        heights: Vec<Option<f64>>,
+        heights: Vec<f64>,
         #[serde(default, with = "heights::option")]
-        unsculpted: Option<Vec<Option<f64>>>,
+        unsculpted: Option<Vec<f64>>,
         #[serde(with = "u8s")]
         grey: Vec<u8>,
         #[serde(with = "f32s")]
@@ -185,10 +183,15 @@ mod tests {
         moves: Vec<Move>,
     }
 
+    /// Equal field by field; NaN prints as NaN, so holes match holes.
+    fn same(a: &Everything, b: &Everything) -> bool {
+        format!("{a:?}") == format!("{b:?}")
+    }
+
     fn sample() -> Everything {
         Everything {
-            heights: vec![Some(1.5), None, Some(-0.25), Some(f64::MAX)],
-            unsculpted: Some(vec![None, Some(2.0)]),
+            heights: vec![1.5, f64::NAN, -0.25, f64::MAX],
+            unsculpted: Some(vec![f64::NAN, 2.0]),
             grey: vec![0, 127, 255],
             depth: vec![0.0, 0.5, 1.0],
             moves: vec![
@@ -215,7 +218,7 @@ mod tests {
         assert!(json["grey"].is_string() && json["depth"].is_string());
         assert!(json["unsculpted"].is_string());
         let back: Everything = serde_json::from_value(json).unwrap();
-        assert_eq!(back, sample());
+        assert!(same(&back, &sample()), "{back:?}");
     }
 
     #[test]
@@ -232,18 +235,18 @@ mod tests {
             ],
         });
         let back: Everything = serde_json::from_value(old).unwrap();
-        assert_eq!(back, sample());
+        assert!(same(&back, &sample()), "{back:?}");
         let none: Everything =
             serde_json::from_str(r#"{"heights":[],"grey":[],"depth":[],"moves":[]}"#).unwrap();
-        assert_eq!(none.unsculpted, None);
+        assert!(none.unsculpted.is_none());
         assert!(none.heights.is_empty() && none.moves.is_empty());
         let empty: Everything =
             serde_json::from_str(&serde_json::to_string(&none).unwrap()).unwrap();
-        assert_eq!(empty, none, "empty packs round trip too");
+        assert!(same(&empty, &none), "empty packs round trip too");
     }
 
     #[derive(Serialize)]
-    struct Heights<'a>(#[serde(with = "heights")] &'a [Option<f64>]);
+    struct Heights<'a>(#[serde(with = "heights")] &'a [f64]);
 
     #[derive(Serialize)]
     struct Moves<'a>(#[serde(with = "moves")] &'a [Move]);
@@ -252,8 +255,8 @@ mod tests {
     /// pretty JSON, 10.7 packed; a 3D finishing toolpath 187 bytes a move, 33 packed.
     #[test]
     fn packed_is_a_fraction_of_the_pretty_json_size() {
-        let heights: Vec<Option<f64>> = (0..10_000)
-            .map(|i| Some((f64::from(i % 100) * 0.3).sin() + f64::from(i / 100) * 0.01))
+        let heights: Vec<f64> = (0..10_000)
+            .map(|i| (f64::from(i % 100) * 0.3).sin() + f64::from(i / 100) * 0.01)
             .collect();
         let packed = serde_json::to_string(&Heights(&heights)).unwrap().len();
         let plain = serde_json::to_string_pretty(&heights).unwrap().len();
@@ -277,7 +280,7 @@ mod tests {
 
     #[derive(Deserialize)]
     #[expect(dead_code, reason = "only whether it loads matters")]
-    struct LoadedHeights(#[serde(with = "heights")] Vec<Option<f64>>);
+    struct LoadedHeights(#[serde(with = "heights")] Vec<f64>);
 
     #[derive(Deserialize)]
     #[expect(dead_code, reason = "only whether it loads matters")]

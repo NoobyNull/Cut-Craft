@@ -96,8 +96,8 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
                 }
                 let z = a.z + u * ab.z + v * ac.z;
                 let h = &mut k.heights[row * k.columns + col];
-                if h.is_none_or(|old| z > old) {
-                    *h = Some(z);
+                if h.is_nan() || z > *h {
+                    *h = z;
                 }
             }
         }

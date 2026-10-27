@@ -336,7 +336,7 @@ impl Canvas {
                 .shaped_heights()
                 .into_iter()
                 .fold(0xcbf2_9ce4_8422_2325_u64, |h, z| {
-                    (h ^ z.map_or(0, f64::to_bits)).wrapping_mul(0x0100_0000_01b3)
+                    (h ^ z.to_bits()).wrapping_mul(0x0100_0000_01b3)
                 });
             let key = egui::Id::unique(("component", id.0, hash));
             let ctx = ui.ctx();

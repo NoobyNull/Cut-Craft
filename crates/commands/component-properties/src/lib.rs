@@ -228,9 +228,8 @@ mod tests {
         };
         run_on::<ComponentProperties>(&mut doc, &p);
         assert!((top(&doc) - (high / 2.0 + 2.0)).abs() < 1e-9);
-        assert_eq!(
-            doc.components[&EntityId(1)].heights,
-            raw,
+        assert!(
+            cut_craft_core::component::same_heights(&doc.components[&EntityId(1)].heights, &raw),
             "kept until baked"
         );
         let again = ComponentProperties::initial_params(&doc);

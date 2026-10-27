@@ -65,18 +65,18 @@ impl Command for Emboss {
         let reach = ((part.columns.max(part.rows) as f64 * BROAD).ceil() as usize).max(1);
         let broad = blur(&part, reach);
         let s = p.scale_height / 100.0;
-        let mut embossed: Vec<Option<f64>> = part
+        let mut embossed: Vec<f64> = part
             .heights
             .iter()
             .zip(&broad)
-            .map(|(h, b)| h.map(|z| s * b + (z - b)))
+            .map(|(&z, b)| if z.is_nan() { z } else { s * b + (z - b) })
             .collect();
         for _ in 0..p.detail_smoothness {
             part.heights = embossed;
             embossed = blur(&part, 1)
                 .into_iter()
                 .zip(&part.heights)
-                .map(|(b, h)| h.map(|_| b))
+                .map(|(b, &h)| if h.is_nan() { h } else { b })
                 .collect();
         }
         part.heights = embossed;
@@ -97,7 +97,12 @@ fn blur(part: &Component, reach: usize) -> Vec<f64> {
     let mut count = vec![0.0; (w + 1) * (h + 1)];
     for r in 0..h {
         for c in 0..w {
-            let (v, n) = part.heights[r * w + c].map_or((0.0, 0.0), |z| (z, 1.0));
+            let here = part.heights[r * w + c];
+            let (v, n) = if here.is_nan() {
+                (0.0, 0.0)
+            } else {
+                (here, 1.0)
+            };
             let at = (r + 1) * (w + 1) + c + 1;
             sum[at] = v + sum[at - 1] + sum[at - w - 1] - sum[at - w - 2];
             count[at] = n + count[at - 1] + count[at - w - 1] - count[at - w - 2];

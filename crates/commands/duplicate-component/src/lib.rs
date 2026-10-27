@@ -64,7 +64,11 @@ mod tests {
         run_on::<DuplicateComponent>(&mut doc, &p);
         let [one, two] = [EntityId(1), EntityId(2)].map(|id| doc.components[&id].clone());
         assert_eq!(two.name, "dome copy");
-        assert_eq!((two.heights, two.level), (one.heights, one.level));
+        assert!(cut_craft_core::component::same_heights(
+            &two.heights,
+            &one.heights
+        ));
+        assert_eq!(two.level, one.level);
     }
 
     #[test]

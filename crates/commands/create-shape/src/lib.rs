@@ -108,11 +108,7 @@ impl Command for CreateShape {
                     .fold(f64::INFINITY, f64::min)
             })
         });
-        let deepest = component
-            .heights
-            .iter()
-            .flatten()
-            .fold(0.0, |a: f64, &d| a.max(d));
+        let deepest = component.heights.iter().fold(0.0, |a: f64, &d| a.max(d));
         let (sin, tan) = (p.angle.to_radians().sin(), p.angle.to_radians().tan());
         let rise = |d: f64| match p.profile {
             Profile::Angular => d * tan,
@@ -141,7 +137,7 @@ impl Command for CreateShape {
         } else {
             f64::INFINITY
         };
-        for height in component.heights.iter_mut().flatten() {
+        for height in component.heights.iter_mut().filter(|h| !h.is_nan()) {
             *height = rise(*height).min(limit) + p.base;
         }
         let mut c = Change::builder(doc);

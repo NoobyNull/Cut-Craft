@@ -73,19 +73,20 @@ impl Command for SmoothSelectedComponents {
             let before = smooth.heights.clone();
             for row in 0..h {
                 for column in 0..w {
-                    if before[row * w + column].is_none() {
+                    if before[row * w + column].is_nan() {
                         continue;
                     }
                     let (mut sum, mut count) = (0.0, 0.0);
                     for r in row.saturating_sub(1)..(row + 2).min(h) {
                         for c in column.saturating_sub(1)..(column + 2).min(w) {
-                            if let Some(v) = before[r * w + c] {
+                            let v = before[r * w + c];
+                            if !v.is_nan() {
                                 sum += v;
                                 count += 1.0;
                             }
                         }
                     }
-                    smooth.heights[row * w + column] = Some(sum / count);
+                    smooth.heights[row * w + column] = sum / count;
                 }
             }
         }
@@ -113,8 +114,8 @@ mod tests {
         let after = &doc.components[&EntityId(1)];
         assert!(after.height_range().unwrap().1 < before.height_range().unwrap().1);
         assert_eq!(
-            after.heights.iter().filter(|h| h.is_some()).count(),
-            before.heights.iter().filter(|h| h.is_some()).count()
+            after.heights.iter().filter(|h| !h.is_nan()).count(),
+            before.heights.iter().filter(|h| !h.is_nan()).count()
         );
     }
 }

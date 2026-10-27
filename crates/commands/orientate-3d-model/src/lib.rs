@@ -261,7 +261,9 @@ impl Command for Orientate3dModel {
         fmt_import_stl::top_down(&mut k, &tris);
         if p.placing.discard_below_zero {
             for h in &mut k.heights {
-                *h = h.filter(|z| *z >= 0.0);
+                if *h < 0.0 {
+                    *h = f64::NAN;
+                }
             }
         }
         if k.height_range().is_none() {
@@ -448,7 +450,8 @@ impl Unrolled {
                     continue;
                 }
                 let h = &mut made.heights[row * made.columns + column];
-                *h = Some(h.map_or(out, |z| z.max(out)));
+                // the higher of what is there and this (NaN, no shape yet, loses to any height)
+                *h = h.max(out);
             }
         }
     }
