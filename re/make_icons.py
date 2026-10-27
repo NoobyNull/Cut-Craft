@@ -9,7 +9,7 @@ from PIL import Image
 SCALE_TO = 384      # trace at this many px on the longest side: smoother curves from small rasters
 COLORS = 8          # colour layers per icon; shaded art gets posterized to this many
 TURDSIZE = 40       # potrace: drop specks smaller than this many px (at SCALE_TO)
-RAW = {"import", "tool_database"}    # dialog pictures: Aspire's bitmaps copied as they are, not traced
+RAW = {"import", "tool_database", "drawing_forms"}    # dialog pictures: Aspire's bitmaps copied as they are, not traced
 SAME_ART = 12       # feature distance below which a larger single PNG is the same art as a strip slot
 
 src_dir, labels_f, out_dir, manifest_f = sys.argv[1:5]
@@ -32,6 +32,7 @@ SINGLES = {
     "common": ["png/34241", "png/34243", "png/34245", "png/34246", "png/34247", "png/34248", "png/34278",
                "png/34242", "png/35075", "png/34829", "ico/35038"],
     "import": ["bmp/4018", "bmp/4023", "bmp/34746"],
+    "drawing_forms": ["bmp/34704", "bmp/34705", "bmp/34703", "bmp/34885", "bmp/34886", "bmp/34533", "bmp/34535", "bmp/34894", "bmp/34889", "bmp/34893", "bmp/34890", "bmp/34891"],
     "tool_database": ["bmp/34614", "bmp/34615", "bmp/34612", "bmp/34643"],
     "modeling": ["png/34199"],
 }

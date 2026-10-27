@@ -1496,5 +1496,89 @@
   "guess": false,
   "slot": "bmp/34643",
   "source": "bmp/34643"
+ },
+ {
+  "path": "drawing_forms/corner_square.bmp",
+  "label": "Corner square",
+  "guess": false,
+  "slot": "bmp/34704",
+  "source": "bmp/34704"
+ },
+ {
+  "path": "drawing_forms/corner_rounded.bmp",
+  "label": "Corner rounded",
+  "guess": false,
+  "slot": "bmp/34705",
+  "source": "bmp/34705"
+ },
+ {
+  "path": "drawing_forms/corner_notched.bmp",
+  "label": "Corner notched",
+  "guess": false,
+  "slot": "bmp/34703",
+  "source": "bmp/34703"
+ },
+ {
+  "path": "drawing_forms/width.bmp",
+  "label": "Width",
+  "guess": false,
+  "slot": "bmp/34885",
+  "source": "bmp/34885"
+ },
+ {
+  "path": "drawing_forms/height.bmp",
+  "label": "Height",
+  "guess": false,
+  "slot": "bmp/34886",
+  "source": "bmp/34886"
+ },
+ {
+  "path": "drawing_forms/circle_center.bmp",
+  "label": "Circle center",
+  "guess": false,
+  "slot": "bmp/34533",
+  "source": "bmp/34533"
+ },
+ {
+  "path": "drawing_forms/circle_radius.bmp",
+  "label": "Circle radius",
+  "guess": false,
+  "slot": "bmp/34535",
+  "source": "bmp/34535"
+ },
+ {
+  "path": "drawing_forms/polygon_center.bmp",
+  "label": "Polygon center",
+  "guess": false,
+  "slot": "bmp/34894",
+  "source": "bmp/34894"
+ },
+ {
+  "path": "drawing_forms/polygon_radius.bmp",
+  "label": "Polygon radius",
+  "guess": false,
+  "slot": "bmp/34889",
+  "source": "bmp/34889"
+ },
+ {
+  "path": "drawing_forms/star_center.bmp",
+  "label": "Star center",
+  "guess": false,
+  "slot": "bmp/34893",
+  "source": "bmp/34893"
+ },
+ {
+  "path": "drawing_forms/star_outer_radius.bmp",
+  "label": "Star outer radius",
+  "guess": false,
+  "slot": "bmp/34890",
+  "source": "bmp/34890"
+ },
+ {
+  "path": "drawing_forms/star_inner_radius.bmp",
+  "label": "Star inner radius",
+  "guess": false,
+  "slot": "bmp/34891",
+  "source": "bmp/34891"
  }
 ]

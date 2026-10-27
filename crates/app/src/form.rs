@@ -12,6 +12,10 @@ const CORNER_PICKER_ROWS: f32 = 3.0;
 /// The picture the face radio buttons sit round, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const FACES_PICTURE_ROWS: f32 = 4.0;
+/// A field's own picture beside its label (Aspire's small width / radius pictures), in rows
+/// of the theme's interactive height.
+// ponytail: fixed ratio until a preferences dialog exists
+const FIELD_PICTURE_ROWS: f32 = 1.5;
 
 #[derive(Debug, PartialEq)]
 pub struct Field {
@@ -210,7 +214,17 @@ fn grid(ui: &mut egui::Ui, fields: &[&Field], params: &mut Value, look: &Look) -
         .num_columns(2)
         .show(ui, |ui| {
             for f in fields {
-                hover(ui.label(&f.label), f.help.as_ref());
+                let picture = f
+                    .icon
+                    .as_ref()
+                    .and_then(|template| (look.picture)(&icon_path(template, &params[&f.key])));
+                ui.horizontal(|ui| {
+                    if let Some(picture) = picture {
+                        let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
+                        ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
+                    }
+                    hover(ui.label(&f.label), f.help.as_ref());
+                });
                 changed |= edit(ui, &f.kind, &mut params[&f.key], look);
                 ui.end_row();
             }

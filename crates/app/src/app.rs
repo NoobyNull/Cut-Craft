@@ -327,6 +327,9 @@ struct OpenForm {
     page: Page,
     /// Edit Toolpath: the toolpath Apply replaces rather than adding a new one.
     editing: Option<EntityId>,
+    /// The shape a drawing tool's form last made: its Apply makes it again, in its place,
+    /// while it is the one shape selected (as Aspire's drawing forms do).
+    drawn: Option<EntityId>,
 }
 
 #[expect(
@@ -954,6 +957,7 @@ impl CutCraftApp {
                 new_job: false,
                 page,
                 editing: None,
+                drawn: None,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -1312,15 +1316,61 @@ impl CutCraftApp {
     /// A form's Apply: its command, or for an edited toolpath that toolpath made again with
     /// the form's settings, in its place.
     fn apply_form(&mut self, id: &str, params: &Value) -> Result<(), String> {
-        match self.form.as_ref().and_then(|f| f.editing) {
-            Some(toolpath) => {
-                let change = self.registry.edit(&self.doc, toolpath, Some(params));
-                let failed = change.as_ref().err().map(ToString::to_string);
-                self.record(change, "Toolpath edited");
-                failed.map_or(Ok(()), Err)
-            }
-            None => self.apply(id, params),
+        if let Some(toolpath) = self.form.as_ref().and_then(|f| f.editing) {
+            let change = self.registry.edit(&self.doc, toolpath, Some(params));
+            let failed = change.as_ref().err().map(ToString::to_string);
+            self.record(change, "Toolpath edited");
+            return failed.map_or(Ok(()), Err);
         }
+        match self.drawn_shape() {
+            Some(old) => self.redraw(id, params, old)?,
+            None => self.apply(id, params)?,
+        }
+        self.remember_drawn();
+        Ok(())
+    }
+
+    /// The shape the open drawing tool made, while it is the one shape selected.
+    fn drawn_shape(&self) -> Option<EntityId> {
+        let form = self.form.as_ref()?;
+        let id = form.drawn?;
+        let only = self.doc.selection.len() == 1 && self.doc.selection.contains(&id);
+        (self.drawing_tool() == Some(form.id) && only && self.doc.vectors.contains_key(&id))
+            .then_some(id)
+    }
+
+    /// After a drawing tool makes a shape, its form goes on to change that shape.
+    fn remember_drawn(&mut self) {
+        let tool = self.drawing_tool();
+        let made = (self.doc.selection.len() == 1)
+            .then(|| self.doc.selection.iter().next().copied())
+            .flatten();
+        if let Some(form) = self.form.as_mut().filter(|f| Some(f.id) == tool) {
+            form.drawn = made;
+        }
+    }
+
+    /// `id`'s command run again with `params`, its shape taking the place of `old`: one undo.
+    fn redraw(&mut self, id: &str, params: &Value, old: EntityId) -> Result<(), String> {
+        let cmd = self
+            .registry
+            .get(id)
+            .expect("only registered commands are applied");
+        let mut taken = Change::builder(&self.doc);
+        taken.remove(old);
+        let taken = taken.finish();
+        let mut without = self.doc.clone();
+        without.apply(&taken).map_err(|e| e.to_string())?;
+        let made = cmd.run_json(&without, params).map_err(|e| e.to_string())?;
+        let change = Change {
+            edits: taken.edits.into_iter().chain(made.edits).collect(),
+        };
+        self.history
+            .apply(&mut self.doc, change)
+            .map_err(|e| e.to_string())?;
+        self.status
+            .set_message(&format!("{} changed", cmd.meta().label));
+        Ok(())
     }
 
     /// Runs a command and records it for undo.
@@ -4552,6 +4602,9 @@ impl CutCraftApp {
                 }
                 self.apply(id, &params)
             });
+        if result.is_ok() {
+            self.remember_drawn();
+        }
         if let Some(form) = &mut self.form {
             form.error = result.err();
         }
@@ -5647,6 +5700,41 @@ mod tests {
     }
 
     #[test]
+    fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
+        use cut_craft_core::geometry::Segment;
+        let arcs = |app: &CutCraftApp| {
+            let only: Vec<_> = app.doc.vectors.values().collect();
+            assert_eq!(only.len(), 1, "one shape, not a second on top");
+            only[0]
+                .segments
+                .iter()
+                .filter(|s| matches!(s, Segment::Arc { .. }))
+                .count()
+        };
+        let mut h = Harness::new();
+        h.app.invoke(&h.ctx, "draw_rectangle");
+        h.frame(vec![]);
+        let (from, to) = (h.at(100.0, 100.0), h.at(200.0, 160.0));
+        h.drag(from, to);
+        assert_eq!(arcs(&h.app), 0, "drawn square");
+        // issue #2: choosing rounded corners afterwards changes the rectangle just drawn
+        let rounded = h.text_at("Rounded").expect("the corner choices");
+        h.click(rounded, Modifiers::NONE);
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply_form("draw_rectangle", &params).unwrap();
+        assert_eq!(arcs(&h.app), 4, "the same rectangle, rounded");
+        let rect = h.app.doc.vectors.values().next().unwrap().bounds();
+        assert!((rect.size().x - 100.0).abs() < 1e-6, "same size: {rect:?}");
+        h.app.invoke(&h.ctx, "undo");
+        assert_eq!(arcs(&h.app), 0, "one undo puts the square back");
+        // once let go, Apply draws a new shape
+        h.app.invoke(&h.ctx, "redo");
+        h.app.doc.selection.clear();
+        h.app.apply_form("draw_rectangle", &params).unwrap();
+        assert_eq!(h.app.doc.vectors.len(), 2);
+    }
+
+    #[test]
     fn right_clicking_anywhere_offers_a_bug_report_saying_where() {
         let mut h = Harness::new();
         h.rectangle(10.0, 10.0, 50.0, 50.0);
@@ -6072,14 +6160,25 @@ mod tests {
     }
 
     #[test]
-    fn start_page_and_job_setup_icons_are_in_the_icon_set() {
+    fn start_page_and_form_pictures_are_in_the_icon_set() {
         let known = icon_set();
         for (_, _, icon) in STARTUP_TASKS {
             assert!(known.contains(icon), "{icon}");
         }
         assert!(known.contains(RECENT_FILE_ICON));
-        // every picture a Job Setup section can show, whatever is chosen
-        let fields = form::fields(&commands::registry().get("job_setup").unwrap().schema());
+        // every picture these forms can show, whatever is chosen
+        let forms = [
+            "job_setup",
+            "orientate_3d_model",
+            "draw_rectangle",
+            "draw_circle",
+            "draw_polygon",
+            "draw_star",
+        ];
+        let fields: Vec<form::Field> = forms
+            .iter()
+            .flat_map(|id| form::fields(&commands::registry().get(id).unwrap().schema()))
+            .collect();
         let mut pictures = 0;
         for f in &fields {
             let Some(template) = &f.icon else { continue };
@@ -6108,8 +6207,8 @@ mod tests {
             }
         }
         assert!(
-            pictures >= 9,
-            "job type, size, Z zero and datum pictures: {pictures}"
+            pictures >= 9 + 3 + 12,
+            "Job Setup's, Orientate 3D Model's and the shape tools' pictures: {pictures}"
         );
     }
 

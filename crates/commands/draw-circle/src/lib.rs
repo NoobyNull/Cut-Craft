@@ -11,8 +11,9 @@ pub struct DrawCircle;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    #[schemars(title = "Center Point", extend("x-icon" = "drawing_forms/circle_center.bmp"))]
     pub center: Xy,
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/circle_radius.bmp"), range(min = 0))]
     pub radius: f64,
 }
 
