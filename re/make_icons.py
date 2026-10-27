@@ -2,7 +2,8 @@
 """Build our SVG icon set from the extracted Aspire icons (re/extracted, see icons.py).
 Each icon is traced in colour layers with potrace and named after its label in re/icon_labels.json.
 usage: make_icons.py <extracted_dir> <icon_labels.json> <out_dir> <manifest.json>
-The SVGs are derived from Vectric's artwork: out_dir stays gitignored; the manifest (ids + names) is ours."""
+The SVGs are redrawn (traced, recoloured) and kept in git (Matthew, 2026-10-26); the RAW folders' bitmaps
+are copied unchanged and stay gitignored. The manifest (ids + names) is ours."""
 import glob, json, os, re, shutil, subprocess, sys, tempfile
 from PIL import Image
 

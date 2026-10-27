@@ -1,8 +1,8 @@
 //! `cut-craft --screenshots DIR`: the README's pictures, taken by the app of its own window.
 //! Each scene is set up as a person would leave it, given a moment to settle (the 3D view
 //! draws finely once still), captured, and saved as `DIR/NN-name.png`; then the app quits.
-//! Icons are left out (they come from Aspire's art and never leave this machine), so the
-//! pictures show what a fresh clone shows; nothing of the user's is read or saved.
+//! Icons are left out (Matthew wants none in the README's pictures), so the
+//! buttons show their names; nothing of the user's is read or saved.
 
 use super::{CutCraftApp, Split, View};
 use cut_craft_core::component::{Combine, Component};

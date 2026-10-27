@@ -112,8 +112,8 @@ size it as they change.
 ![Importing a 3D model](docs/screenshots/08-import-3d-model.png)
 
 These pictures are made by the app itself and can be made again at any time (see
-[Screenshots](#screenshots)). The tool icons aren't in the repository, so in these pictures,
-as in a fresh build, the buttons show their names.
+[Screenshots](#screenshots)). They are taken without the icons, so the buttons show their
+names; the app itself shows its icons.
 
 ## Getting Cut Craft
 
@@ -229,9 +229,10 @@ settings and saves nothing.
 
 ### Icons
 
-The tool icons aren't part of the repository. Without them every button shows its name, and
-everything still works. With an icon set installed, `CUT_CRAFT_ICON_DIR` or `assets/icons`
-says where it is.
+The icons are in `assets/icons`, and the macOS app carries them in its Resources.
+`CUT_CRAFT_ICON_DIR` points Cut Craft at another set; without any, every button shows its name
+and everything still works. A few form pictures aren't in the repository yet; those forms
+show no picture until they are. The third-party icons are credited under **Help ▸ Third Party Licenses**.
 
 ## How the code is laid out
 

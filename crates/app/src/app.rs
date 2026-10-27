@@ -171,7 +171,7 @@ const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-const THIRD_PARTY: [(&str, &str); 16] = [
+const THIRD_PARTY: [(&str, &str); 17] = [
     ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
     ("glam", "MIT or Apache-2.0"),
     ("i_overlay", "MIT or Apache-2.0"),
@@ -193,6 +193,10 @@ const THIRD_PARTY: [(&str, &str); 16] = [
     (
         "Offset icon",
         "Creaticca Creative Agency from Freepik (magnific.com), free with this credit",
+    ),
+    (
+        "Chess knight (Initial Orientation)",
+        "Icons8 (icons8.com), free with this credit",
     ),
 ];
 

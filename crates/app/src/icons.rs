@@ -1,5 +1,5 @@
-//! Tool icons: SVGs under the icon directory, dialog pictures kept as Aspire's own bitmaps
-//! (both from `re/make_icons.py`), and a few PNGs for links Aspire has no icon for; not in git.
+//! Tool icons: SVGs under the icon directory (redrawn by `re/make_icons.py`, in git), a few
+//! credited PNGs (in git), and dialog pictures kept as Aspire's own bitmaps (not in git).
 
 use eframe::egui;
 use std::collections::HashMap;
