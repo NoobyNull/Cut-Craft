@@ -20,9 +20,26 @@ pub struct Machine {
     pub posts: Vec<String>,
     /// The one toolpaths are saved through; else the first.
     pub default_post: Option<String>,
+    /// An automatic tool changer: the tool loaded in each slot by name, slot 1 first;
+    /// empty when the machine has none (tool changes are by hand).
+    pub slots: Vec<Option<String>>,
 }
 
 impl Machine {
+    /// Sets how many slots the tool changer has (0: none), keeping what is loaded in the
+    /// slots that remain.
+    pub fn set_slot_count(&mut self, count: usize) {
+        self.slots.resize(count, None);
+    }
+
+    /// The slot `tool` is loaded in, counted from 1.
+    pub fn slot_of(&self, tool: &str) -> Option<usize> {
+        self.slots
+            .iter()
+            .position(|s| s.as_deref() == Some(tool))
+            .map(|i| i + 1)
+    }
+
     /// The post toolpaths are saved through, by name.
     pub fn post(&self) -> Option<&str> {
         self.default_post
@@ -160,6 +177,23 @@ mod tests {
             "a default no longer associated is passed over"
         );
         assert_eq!(Machine::default().post(), None);
+    }
+
+    #[test]
+    fn a_tool_changer_keeps_its_loaded_tools_as_it_is_resized() {
+        let mut machine = Machine::default();
+        machine.set_slot_count(5);
+        machine.slots[3] = Some("6 mm End Mill".into());
+        assert_eq!(machine.slot_of("6 mm End Mill"), Some(4));
+        machine.set_slot_count(4);
+        assert_eq!(machine.slot_of("6 mm End Mill"), Some(4));
+        machine.set_slot_count(3);
+        assert_eq!(
+            machine.slot_of("6 mm End Mill"),
+            None,
+            "a slot taken away unloads it"
+        );
+        assert_eq!(machine.slots.len(), 3);
     }
 
     #[test]

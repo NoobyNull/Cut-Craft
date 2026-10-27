@@ -663,7 +663,17 @@ impl CutCraftApp {
                 self.post_window = Some(cut_craft_machines::PostManager::default());
             }
             "tool_database" => {
-                self.tool_manager = Some(cut_craft_tool_database::Manager::new(&self.tools));
+                let mut manager = cut_craft_tool_database::Manager::new(&self.tools);
+                // the active machine's tool changer, its tools loaded with the tools
+                manager.changer = self
+                    .machines
+                    .active()
+                    .filter(|m| !m.slots.is_empty())
+                    .map(|m| cut_craft_tool_database::Changer {
+                        machine: m.name.clone(),
+                        slots: m.slots.clone(),
+                    });
+                self.tool_manager = Some(manager);
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
             "refresh_2d_view" => ctx.request_repaint(),
@@ -929,13 +939,14 @@ impl CutCraftApp {
                                     .with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
                                 files::save_through(
                                     &post,
+                                    &self.slots(),
                                     &tiling.tiled(&self.doc, tile),
                                     &named,
                                     job,
                                 )
                             })
                         }
-                        None => files::save_through(&post, &self.doc, &path, job),
+                        None => files::save_through(&post, &self.slots(), &self.doc, &path, job),
                     };
                     self.status.set_message(
                         &result.map_or_else(
@@ -960,6 +971,14 @@ impl CutCraftApp {
             Some(name) => self.posts.load(name),
             None => Ok(cut_craft_post::Post::default_for(&self.doc.job)),
         }
+    }
+
+    /// The active machine's tool changer slots (empty without one), for `[T]`.
+    fn slots(&self) -> Vec<Option<String>> {
+        self.machines
+            .active()
+            .map(|m| m.slots.clone())
+            .unwrap_or_default()
     }
 
     /// Reads the machines and finds the custom posts, kept in the config folder.
@@ -2116,6 +2135,7 @@ impl CutCraftApp {
     fn command_form(&mut self, ui: &mut egui::Ui) {
         let form = self.form.as_ref().map_or("none", |f| f.label);
         cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
+        let slots = self.slots();
         let Some(open) = &mut self.form else { return };
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
@@ -2132,10 +2152,29 @@ impl CutCraftApp {
         if open.params.get("tool").is_some_and(Value::is_object) {
             let current = open.params["tool"]["name"].as_str().unwrap_or_default();
             ui.horizontal(|ui| {
+                // the tools loaded in the machine's tool changer first, by slot
+                let loaded: Vec<(usize, &str)> = slots
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
+                    .filter(|(_, t)| self.tools.get(t).is_some())
+                    .collect();
                 egui::ComboBox::from_label("Tool database")
                     .selected_text(current)
                     .show_ui(ui, |ui| {
+                        for &(n, name) in &loaded {
+                            let label = format!("T{n}  {name}");
+                            if ui.selectable_label(name == current, label).clicked() {
+                                chosen = Some(name.to_owned());
+                            }
+                        }
+                        if !loaded.is_empty() {
+                            ui.separator();
+                        }
                         for tool in &self.tools.tools {
+                            if loaded.iter().any(|&(_, t)| t == tool.name) {
+                                continue;
+                            }
                             if ui
                                 .selectable_label(tool.name == current, &tool.name)
                                 .clicked()
@@ -2586,10 +2625,25 @@ impl CutCraftApp {
         match outcome {
             Outcome::Apply | Outcome::Ok => {
                 self.tools = manager.draft.clone();
+                let changer = manager.changer.clone();
                 if outcome == Outcome::Ok {
                     self.tool_manager = None;
                 }
                 self.tools_changed("Tool database saved");
+                if let Some(changer) = changer
+                    && let Some(machine) = self
+                        .machines
+                        .machines
+                        .iter_mut()
+                        .find(|m| m.name == changer.machine)
+                    && machine.slots != changer.slots
+                {
+                    machine.slots = changer.slots;
+                    self.machines_changed(&format!(
+                        "Tool database saved; {} loaded",
+                        changer.machine
+                    ));
+                }
             }
             Outcome::Cancel => self.tool_manager = None,
             Outcome::Import => {
@@ -7103,6 +7157,49 @@ mod tests {
             assert!(!h.app.available(id), "{id} needs Vectric's service");
         }
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
+        let mut h = Harness::new();
+        h.app.machines.add();
+        h.app.machines.active_mut().unwrap().set_slot_count(5);
+        // load the 3 mm end mill into slot 3 in the Tool Database, kept on OK
+        h.app.invoke(&h.ctx, "tool_database");
+        let manager = h.app.tool_manager.as_mut().unwrap();
+        manager
+            .changer
+            .as_mut()
+            .expect("the machine's tool changer")
+            .load("3 mm End Mill", Some(3));
+        // a new window is drawn unseen for a frame while egui sizes it
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert!(h.text_at("Tool changer: My Machine").is_some());
+        let ok = *h.texts_at("OK").last().unwrap();
+        h.click(ok, Modifiers::NONE);
+        assert_eq!(
+            h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
+            Some(3)
+        );
+        // the toolpath form offers it first
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        h.frame(vec![]);
+        h.app.choose_tool("3 mm End Mill");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        // the G-code calls slot 3
+        let post = h.app.output_post().unwrap();
+        let out = std::env::temp_dir().join(format!("cut-craft-atc-{}.nc", std::process::id()));
+        files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap();
+        let gcode = std::fs::read_to_string(&out).unwrap();
+        assert!(gcode.contains("M6 T3"), "{gcode}");
+        // a tool not loaded is refused
+        h.app.machines.active_mut().unwrap().slots[2] = None;
+        let why = files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap_err();
+        assert!(why.contains("3 mm End Mill"), "{why}");
+        let _ = std::fs::remove_file(out);
     }
 
     #[test]

@@ -121,6 +121,7 @@ impl MachineManager {
                     return;
                 };
                 details(ui, machine);
+                tool_changer(ui, machine);
                 if names_clash {
                     ui.colored_label(
                         ui.visuals().error_fg_color,
@@ -241,6 +242,51 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine) {
                 });
                 ui.end_row();
             });
+    });
+}
+
+/// The most slots a tool changer can be given here.
+// ponytail: a generous ceiling for router carousels; raise it for big machining centres
+const MOST_SLOTS: usize = 99;
+
+/// Automatic Tool Changer: how many slots, and what is loaded in them (tools are loaded in
+/// the Tool Database).
+fn tool_changer(ui: &mut egui::Ui, machine: &mut Machine) {
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("Automatic Tool Changer");
+        let mut has = !machine.slots.is_empty();
+        if ui
+            .checkbox(&mut has, "This machine has a tool changer")
+            .changed()
+        {
+            machine.set_slot_count(usize::from(has));
+        }
+        if !has {
+            ui.weak("Tool changes are by hand; tools are numbered in the order they are used");
+            return;
+        }
+        let mut count = machine.slots.len();
+        ui.horizontal(|ui| {
+            ui.label("Slots");
+            if ui
+                .add(egui::DragValue::new(&mut count).clamp_range(1..=MOST_SLOTS))
+                .changed()
+            {
+                machine.set_slot_count(count);
+            }
+        });
+        egui::Grid::new("atc_slots").num_columns(2).show(ui, |ui| {
+            for (i, tool) in machine.slots.iter().enumerate() {
+                ui.label(format!("T{}", i + 1));
+                match tool {
+                    Some(name) => ui.label(name),
+                    None => ui.weak("(empty)"),
+                };
+                ui.end_row();
+            }
+        });
+        ui.weak("Load tools into the slots in the Tool Database");
     });
 }
 

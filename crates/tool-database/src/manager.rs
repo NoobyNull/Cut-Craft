@@ -52,6 +52,56 @@ pub struct Look<'a> {
 pub struct Manager {
     pub draft: ToolDatabase,
     pub pick: Option<Pick>,
+    /// The active machine's tool changer, its tools loaded here; kept with the tools.
+    pub changer: Option<Changer>,
+}
+
+/// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Changer {
+    pub machine: String,
+    pub slots: Vec<Option<String>>,
+}
+
+impl Changer {
+    /// The slot `tool` is loaded in, counted from 1.
+    pub fn slot_of(&self, tool: &str) -> Option<usize> {
+        self.slots
+            .iter()
+            .position(|s| s.as_deref() == Some(tool))
+            .map(|i| i + 1)
+    }
+
+    /// Loads `tool` into `slot` (counted from 1), taking out what was there and the tool
+    /// from any other slot; `None` unloads it.
+    pub fn load(&mut self, tool: &str, slot: Option<usize>) {
+        for s in &mut self.slots {
+            if s.as_deref() == Some(tool) {
+                *s = None;
+            }
+        }
+        if let Some(s) = slot.and_then(|n| self.slots.get_mut(n.wrapping_sub(1))) {
+            *s = Some(tool.to_owned());
+        }
+    }
+
+    /// A tool renamed keeps its slot.
+    pub fn rename(&mut self, from: &str, to: &str) {
+        for s in &mut self.slots {
+            if s.as_deref() == Some(from) {
+                *s = Some(to.to_owned());
+            }
+        }
+    }
+
+    /// Slots whose tool is no longer in `db` are emptied.
+    pub fn unload_missing(&mut self, db: &ToolDatabase) {
+        for s in &mut self.slots {
+            if s.as_deref().is_some_and(|t| db.get(t).is_none()) {
+                *s = None;
+            }
+        }
+    }
 }
 
 /// The picture of a tool shape, Aspire's own.
@@ -95,6 +145,7 @@ impl Manager {
         Self {
             draft: db.clone(),
             pick: None,
+            changer: None,
         }
     }
 
@@ -160,8 +211,33 @@ impl Manager {
     /// The tree: groups that open and close, each over its groups and tools.
     fn tree(&mut self, ui: &mut egui::Ui, look: &Look) {
         cut_craft_bug_report::mark(ui, "Tool Database tree");
+        self.changer_list(ui);
         let all = tree::groups(&self.draft);
         self.branch(ui, look, &all, "");
+    }
+
+    /// The tool changer's slots above the tree; a click picks the tool in it.
+    fn changer_list(&mut self, ui: &mut egui::Ui) {
+        let Some(changer) = &self.changer else { return };
+        let mut picked = None;
+        egui::CollapsingHeader::new(format!("Tool changer: {}", changer.machine))
+            .default_open(true)
+            .show(ui, |ui| {
+                for (i, slot) in changer.slots.iter().enumerate() {
+                    let text = format!("T{}  {}", i + 1, slot.as_deref().unwrap_or("(empty)"));
+                    let at = slot
+                        .as_deref()
+                        .and_then(|t| self.draft.tools.iter().position(|x| x.name == t));
+                    let on = at.is_some() && self.pick == at.map(Pick::Tool);
+                    if ui.selectable_label(on, text).clicked() {
+                        picked = at;
+                    }
+                }
+            });
+        if let Some(i) = picked {
+            self.pick = Some(Pick::Tool(i));
+        }
+        ui.separator();
     }
 
     fn branch(&mut self, ui: &mut egui::Ui, look: &Look, all: &[String], group: &str) {
@@ -190,6 +266,10 @@ impl Manager {
                 let picked = self.pick == Some(Pick::Tool(i));
                 if ui.selectable_label(picked, &tool.name).clicked() {
                     self.pick = Some(Pick::Tool(i));
+                }
+                if let Some(n) = self.changer.as_ref().and_then(|c| c.slot_of(&tool.name)) {
+                    ui.weak(format!("T{n}"))
+                        .on_hover_text("Loaded in the tool changer");
                 }
             });
         }
@@ -251,6 +331,16 @@ impl Manager {
             Some(Pick::Tool(i)) => self.draft.tools[*i].group.clone(),
             None => String::new(),
         };
+        let outcome = self.do_action(action, &group);
+        // a tool deleted leaves its slot
+        if let Some(changer) = &mut self.changer {
+            changer.unload_missing(&self.draft);
+        }
+        outcome
+    }
+
+    fn do_action(&mut self, action: TreeAction, group: &str) -> Option<Outcome> {
+        let group = group.to_owned();
         match action {
             TreeAction::NewTool => {
                 self.pick = Some(Pick::Tool(tree::add_tool(&mut self.draft, &group)));
@@ -294,7 +384,13 @@ impl Manager {
             Some(Pick::Group(group)) => self.group_details(ui, &group),
             Some(Pick::Tool(i)) if i < self.draft.tools.len() => {
                 let groups = tree::groups(&self.draft);
+                let before = self.draft.tools[i].name.clone();
                 tool_details(ui, &mut self.draft.tools[i], &groups, look);
+                let name = self.draft.tools[i].name.clone();
+                if let Some(changer) = &mut self.changer {
+                    changer.rename(&before, &name);
+                    section(ui, "Tool Changer", |ui| load_slot(ui, changer, &name));
+                }
             }
             _ => {
                 ui.weak("Pick a group or tool in the tree");
@@ -328,6 +424,37 @@ impl Manager {
                 );
                 ui.end_row();
             });
+    }
+}
+
+/// Which slot of the tool changer `tool` is loaded in, to change.
+fn load_slot(ui: &mut egui::Ui, changer: &mut Changer, tool: &str) {
+    let now = changer.slot_of(tool);
+    let shown = now.map_or_else(|| "(not loaded)".to_owned(), |n| format!("T{n}"));
+    let mut chosen = None;
+    ui.horizontal(|ui| {
+        ui.label(format!("Loaded in {}", changer.machine));
+        egui::ComboBox::from_id_source("tool_changer_slot")
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                if ui.selectable_label(now.is_none(), "(not loaded)").clicked() {
+                    chosen = Some(None);
+                }
+                for (i, slot) in changer.slots.iter().enumerate() {
+                    let holding = slot
+                        .as_deref()
+                        .map_or_else(|| "empty".to_owned(), str::to_owned);
+                    if ui
+                        .selectable_label(now == Some(i + 1), format!("T{} ({holding})", i + 1))
+                        .clicked()
+                    {
+                        chosen = Some(Some(i + 1));
+                    }
+                }
+            });
+    });
+    if let Some(slot) = chosen {
+        changer.load(tool, slot);
     }
 }
 
@@ -531,6 +658,48 @@ mod tests {
         assert_eq!(first, later, "panels inside the window do not grow it");
         m.pick = Some(Pick::Group("Metric Tools".into()));
         assert_eq!(frame(&mut m, &ctx), None);
+    }
+
+    #[test]
+    fn tools_load_into_one_slot_each_and_follow_renames_and_deletes() {
+        let mut changer = Changer {
+            machine: "Router".into(),
+            slots: vec![None; 5],
+        };
+        changer.load("6 mm End Mill", Some(2));
+        changer.load("3 mm End Mill", Some(2));
+        assert_eq!(
+            changer.slot_of("3 mm End Mill"),
+            Some(2),
+            "it takes the slot"
+        );
+        assert_eq!(
+            changer.slot_of("6 mm End Mill"),
+            None,
+            "what was there comes out"
+        );
+        changer.load("3 mm End Mill", Some(5));
+        assert_eq!(
+            (changer.slots[1].clone(), changer.slot_of("3 mm End Mill")),
+            (None, Some(5))
+        );
+        changer.load("3 mm End Mill", Some(9));
+        assert_eq!(
+            changer.slot_of("3 mm End Mill"),
+            None,
+            "no such slot: unloaded"
+        );
+        let mut m = Manager::new(&ToolDatabase::starter());
+        let name = m.draft.tools[0].name.clone();
+        changer.load(&name, Some(1));
+        m.changer = Some(changer);
+        m.pick = Some(Pick::Tool(0));
+        m.act(TreeAction::Delete);
+        assert_eq!(
+            m.changer.as_ref().unwrap().slots[0],
+            None,
+            "a deleted tool leaves its slot"
+        );
     }
 
     #[test]

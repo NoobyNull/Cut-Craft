@@ -5,4 +5,4 @@ pub mod fusion;
 pub mod manager;
 pub mod tree;
 
-pub use manager::{Look, Manager, Outcome, Pick};
+pub use manager::{Changer, Look, Manager, Outcome, Pick};

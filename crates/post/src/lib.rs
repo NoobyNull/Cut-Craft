@@ -82,6 +82,10 @@ pub struct File<'a> {
     pub job: Option<&'a Path>,
     /// When it was made, local time.
     pub made: chrono::NaiveDateTime,
+    /// The machine's tool changer: the tool loaded in each slot by name, slot 1 first. A
+    /// tool prints its slot as `[T]`; every tool used must be loaded. Empty for a machine
+    /// without one: tools are numbered in the order they are first used.
+    pub slots: &'a [Option<String>],
 }
 
 #[derive(Clone, Debug)]
@@ -375,6 +379,7 @@ impl Post {
         };
         let tools = tools_used(&toolpaths);
         self.can_write(doc, &toolpaths)?;
+        let number = tool_numbers(&tools, file.slots)?;
         let mut out = Output {
             post: self,
             text: String::new(),
@@ -397,7 +402,7 @@ impl Post {
         );
         v.texts.insert("TOOLPATH_NAME", first.name.clone());
         v.texts.insert("TOOLNAME", first.tool.name.clone());
-        v.tool(&first.tool, &tools);
+        v.tool(&first.tool, number(&first.tool.name));
         out.block("HEADER", &v);
 
         let mut previous_tool: Option<&str> = None;
@@ -409,7 +414,7 @@ impl Post {
         for toolpath in &toolpaths {
             v.texts.insert("TOOLPATH_NAME", toolpath.name.clone());
             v.texts.insert("TOOLNAME", toolpath.tool.name.clone());
-            v.tool(&toolpath.tool, &tools);
+            v.tool(&toolpath.tool, number(&toolpath.tool.name));
             match previous_tool {
                 Some(t) if t != toolpath.tool.name => {
                     out.block("TOOLCHANGE", &v);
@@ -596,13 +601,8 @@ struct Values {
 }
 
 impl Values {
-    fn tool(&mut self, tool: &cut_craft_core::toolpath::Tool, tools: &[&str]) {
-        let number = tools
-            .iter()
-            .position(|t| *t == tool.name)
-            .map_or(1, |i| i + 1);
-        self.numbers
-            .insert("T", f64::from(u32::try_from(number).unwrap_or(u32::MAX)));
+    fn tool(&mut self, tool: &cut_craft_core::toolpath::Tool, number: u32) {
+        self.numbers.insert("T", f64::from(number));
         self.numbers.insert("S", tool.spindle_speed);
         self.numbers.insert("FC", tool.feed_rate);
         self.numbers.insert("FP", tool.plunge_rate);
@@ -611,6 +611,43 @@ impl Values {
 }
 
 /// Each tool's name once, in the order the toolpaths use them.
+/// Each tool's `[T]`: its tool changer slot, or without one the order it is first used.
+/// A tool changer missing a tool used is an error naming them, as the machine would pick
+/// up whatever is in the slot the number says.
+fn tool_numbers<'a>(
+    tools: &[&str],
+    slots: &'a [Option<String>],
+) -> Result<impl Fn(&str) -> u32 + 'a, String> {
+    let slot = |name: &str| {
+        slots
+            .iter()
+            .position(|s| s.as_deref() == Some(name))
+            .and_then(|i| u32::try_from(i + 1).ok())
+    };
+    let missing: Vec<&str> = tools
+        .iter()
+        .copied()
+        .filter(|t| slot(t).is_none())
+        .collect();
+    if !slots.is_empty() && !missing.is_empty() {
+        return Err(format!(
+            "not loaded in the tool changer: {} (load them in the Tool Database)",
+            missing.join(", ")
+        ));
+    }
+    let order: Vec<String> = tools.iter().map(|&t| t.to_owned()).collect();
+    Ok(move |name: &str| {
+        slot(name)
+            .or_else(|| {
+                order
+                    .iter()
+                    .position(|t| t == name)
+                    .and_then(|i| u32::try_from(i + 1).ok())
+            })
+            .unwrap_or(1)
+    })
+}
+
 fn tools_used<'a>(toolpaths: &[&'a cut_craft_core::toolpath::Toolpath]) -> Vec<&'a str> {
     let mut tools: Vec<&str> = vec![];
     for t in toolpaths {
@@ -869,6 +906,7 @@ begin FOOTER
             path: std::path::Path::new("/jobs/sign/front.nc"),
             job: Some(std::path::Path::new("/jobs/sign.ccjob")),
             made,
+            slots: &[],
         };
         let text = Post::parse(post).unwrap().render(&doc, &file).unwrap();
         assert!(text.ends_with("\r\n"), "LINE_ENDING is honoured");
@@ -920,6 +958,7 @@ begin FOOTER
             path: Path::new("x.nc"),
             job: None,
             made: chrono::NaiveDateTime::default(),
+            slots: &[],
         };
         let why = Post::parse(BASIC).unwrap().render(&doc, &file).unwrap_err();
         assert!(why.contains("LASER_SUPPORT"), "{why}");
@@ -1084,6 +1123,7 @@ begin FOOTER
             path: std::path::Path::new("/out.nc"),
             job: None,
             made: chrono::NaiveDateTime::default(),
+            slots: &[],
         };
         let why = Post::parse(&post).unwrap().render(&doc, &file).unwrap_err();
         assert!(why.contains("rotary"), "{why}");
@@ -1112,6 +1152,7 @@ begin FOOTER
             path: std::path::Path::new("/out.nc"),
             job: None,
             made: chrono::NaiveDateTime::default(),
+            slots: &[],
         };
         Post::default_for(&doc.job).render(&doc, &file).unwrap()
     }
@@ -1214,6 +1255,32 @@ begin FOOTER
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn a_tool_changer_numbers_tools_by_their_slot_and_refuses_unloaded_ones() {
+        let post = BASIC.replace("begin TOOLCHANGE\n", "begin TOOLCHANGE\n\"M6 T[T]\"\n");
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        for t in [toolpath("A", "6 mm"), toolpath("B", "3 mm")] {
+            c.add_toolpath(t);
+        }
+        doc.apply(&c.finish()).unwrap();
+        let slots = [None, Some("3 mm".to_owned()), None, Some("6 mm".to_owned())];
+        let file = |slots| File {
+            path: std::path::Path::new("/out.nc"),
+            job: None,
+            made: chrono::NaiveDateTime::default(),
+            slots,
+        };
+        let post = Post::parse(&post).unwrap();
+        let text = post.render(&doc, &file(&slots)).unwrap();
+        assert!(text.contains("M6 T2"), "3 mm is in slot 2: {text}");
+        let unloaded = [Some("6 mm".to_owned())];
+        let why = post.render(&doc, &file(&unloaded)).unwrap_err();
+        assert!(why.contains("3 mm") && !why.contains("6 mm"), "{why}");
+        // no tool changer: numbered in the order used
+        assert!(post.render(&doc, &file(&[])).unwrap().contains("M6 T2"));
     }
 
     #[test]

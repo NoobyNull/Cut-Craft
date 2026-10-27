@@ -75,16 +75,23 @@ pub fn export(registry: &Registry, id: &str, doc: &Document, path: &Path) -> Res
     std::fs::write(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// Writes the toolpaths as the post's output.
-/// Writes the toolpaths through `post` to `path`; `job` is the saved job they come from.
+/// Writes the toolpaths through `post` to `path`, tools numbered by their tool changer
+/// `slots` (empty: in the order used); `job` is the saved job they come from.
 pub fn save_through(
     post: &Post,
+    slots: &[Option<String>],
     doc: &Document,
     path: &Path,
     job: Option<&Path>,
 ) -> Result<(), String> {
     let made = chrono::Local::now().naive_local();
-    let text = post.render(doc, &cut_craft_post::File { path, job, made })?;
+    let file = cut_craft_post::File {
+        path,
+        job,
+        made,
+        slots,
+    };
+    let text = post.render(doc, &file)?;
     std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
@@ -503,7 +510,7 @@ mod tests {
         let change = made.run_json(&doc, &params).unwrap();
         doc.apply(&change).unwrap();
         let out = temp("out.tap");
-        save_through(&post, &doc, &out, None).unwrap();
+        save_through(&post, &[], &doc, &out, None).unwrap();
         assert!(
             fs::read_to_string(&out)
                 .unwrap()
