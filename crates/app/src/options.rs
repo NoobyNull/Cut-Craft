@@ -43,7 +43,8 @@ pub struct General {
     #[schemars(range(min = 1, max = 20))]
     pub recent_file_list_size: u32,
     /// Read every icon at startup, so none shows a loading spinner the first time it is
-    /// drawn; off reads each when first drawn, for low-end systems (from the next start)
+    /// drawn; off reads each when first drawn, for low-end systems (from the next start).
+    /// Dialog pictures are always read at startup
     #[serde(default = "on")]
     pub preload_icons: bool,
     /// The GitHub repository (owner/name) Report a Bug Here… makes issues in, through the

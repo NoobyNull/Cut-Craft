@@ -3627,9 +3627,7 @@ impl CutCraftApp {
     }
 
     fn draw_window(&mut self, ctx: &egui::Context) {
-        if self.options.general.preload_icons {
-            self.icons.preload(ctx);
-        }
+        self.icons.preload(ctx, self.options.general.preload_icons);
         // picks are view state: undo or another sheet can take what they name away
         let doc = &mut self.doc;
         doc.selected_components

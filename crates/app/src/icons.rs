@@ -13,6 +13,8 @@ pub struct Icons {
     by_stem: HashMap<String, PathBuf>,
     /// Whether every icon's bytes are already in egui (see [`Icons::preload`]).
     preloaded: bool,
+    /// Whether the bitmaps are, which always are (for their alpha).
+    bitmaps_loaded: bool,
 }
 
 impl Icons {
@@ -24,6 +26,7 @@ impl Icons {
             by_path: HashMap::new(),
             by_stem: HashMap::new(),
             preloaded: false,
+            bitmaps_loaded: false,
         };
         let mut pending = vec![dir.to_path_buf()];
         while let Some(folder) = pending.pop() {
@@ -66,16 +69,27 @@ impl Icons {
             .map_or_else(|| PathBuf::from("assets/icons"), PathBuf::from)
     }
 
-    /// Reads every icon into egui once, so none shows a loading spinner the first time it is
-    /// drawn (egui's own `file://` loader reads on a thread and draws a frame without it).
+    /// Reads the bitmaps into egui once, keeping their alpha (see [`with_alpha`]); with
+    /// `all`, every other icon too, so none shows a loading spinner the first time it is drawn
+    /// (egui's own `file://` loader reads on a thread and draws a frame without it).
     // ponytail: every icon at startup (~200 files, ~10 MB); load per folder if that grows slow
-    pub fn preload(&mut self, ctx: &egui::Context) {
-        if std::mem::replace(&mut self.preloaded, true) {
-            return;
-        }
+    pub fn preload(&mut self, ctx: &egui::Context, all: bool) {
+        let bitmaps = !std::mem::replace(&mut self.bitmaps_loaded, true);
+        let others = all && !std::mem::replace(&mut self.preloaded, true);
         for path in self.by_path.values() {
+            let bitmap = is_bitmap(path);
+            if !(bitmap && bitmaps || !bitmap && others) {
+                continue;
+            }
             match fs::read(path) {
-                Ok(bytes) => ctx.include_bytes(uri(path), bytes),
+                Ok(bytes) => {
+                    let bytes = if bitmap {
+                        with_alpha(&bytes).unwrap_or(bytes)
+                    } else {
+                        bytes
+                    };
+                    ctx.include_bytes(uri(path), bytes);
+                }
                 Err(e) => log::warn!("icon {}: {e}", path.display()),
             }
         }
@@ -83,7 +97,7 @@ impl Icons {
 
     /// An indexed icon: from the bytes [`Icons::preload`] read, else read when first drawn.
     pub fn image(&self, path: &Path) -> egui::Image<'static> {
-        if self.preloaded {
+        if self.preloaded || self.bitmaps_loaded && is_bitmap(path) {
             egui::Image::new(uri(path))
         } else {
             egui::Image::new(format!("file://{}", path.display()))
@@ -102,6 +116,52 @@ impl Icons {
 /// Where an icon's bytes are kept in egui; the extension tells the loaders what it is.
 fn uri(path: &Path) -> String {
     format!("bytes://{}", path.display())
+}
+
+fn is_bitmap(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("bmp"))
+}
+
+/// A 32-bit bitmap with its alpha kept, as a PNG: Aspire's dialog pictures are drawn on a
+/// see-through background, and egui's bitmap reader takes the fourth byte for padding and
+/// shows that background black. `None` for any other bitmap, or one whose alpha is all
+/// zero (which then is padding).
+// ponytail: uncompressed bitmaps with the 40-byte header, which is what Aspire's are
+fn with_alpha(bmp: &[u8]) -> Option<Vec<u8>> {
+    let u32_at = |at: usize| Some(u32::from_le_bytes(bmp.get(at..at + 4)?.try_into().ok()?));
+    let i32_at = |at: usize| Some(i32::from_le_bytes(bmp.get(at..at + 4)?.try_into().ok()?));
+    let bpp = u16::from_le_bytes(bmp.get(28..30)?.try_into().ok()?);
+    if !bmp.starts_with(b"BM") || bpp != 32 || u32_at(30)? != 0 {
+        return None;
+    }
+    let start = usize::try_from(u32_at(10)?).ok()?;
+    let (w, h) = (i32_at(18)?, i32_at(22)?);
+    let (width, rows) = (
+        usize::try_from(w).ok()?,
+        usize::try_from(h.unsigned_abs()).ok()?,
+    );
+    let pixels = bmp.get(start..start + width * rows * 4)?;
+    if pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 0) {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(pixels.len());
+    for row in 0..rows {
+        // rows run bottom up unless the height is negative
+        let from = if h > 0 { rows - 1 - row } else { row };
+        for p in pixels[from * width * 4..(from + 1) * width * 4]
+            .as_chunks::<4>()
+            .0
+        {
+            rgba.extend([p[2], p[1], p[0], p[3]]);
+        }
+    }
+    let image = image_egui::RgbaImage::from_raw(w.unsigned_abs(), h.unsigned_abs(), rgba)?;
+    let mut png = std::io::Cursor::new(vec![]);
+    image
+        .write_to(&mut png, image_egui::ImageFormat::Png)
+        .ok()?;
+    Some(png.into_inner())
 }
 
 /// A 1×1 24-bit BMP: file header, info header, one pixel padded to 4 bytes.
@@ -210,7 +270,7 @@ mod tests {
         egui_extras::install_image_loaders(&ctx);
         let lazy = icons.image(&path).source().uri().unwrap().to_owned();
         assert!(lazy.starts_with("file://"), "read when first drawn: {lazy}");
-        icons.preload(&ctx);
+        icons.preload(&ctx, true);
         let uri = icons.image(&path).source().uri().unwrap().to_owned();
         let loaded = ctx.try_load_image(&uri, egui::SizeHint::default());
         assert!(
@@ -218,6 +278,48 @@ mod tests {
             "no loading spinner: {:?}",
             loaded.err().map(|e| e.to_string())
         );
+    }
+
+    /// A 2 × 1 32-bit bitmap, as Aspire's dialog pictures are: a clear white pixel, then an
+    /// opaque black one (blue, green, red, alpha).
+    fn clear_and_black_bmp() -> Vec<u8> {
+        let mut bmp = b"BM".to_vec();
+        for n in [62_u32, 0, 54, 40, 2, 1] {
+            bmp.extend(n.to_le_bytes());
+        }
+        bmp.extend(1_u16.to_le_bytes());
+        bmp.extend(32_u16.to_le_bytes());
+        bmp.extend([0_u8; 24]);
+        bmp.extend([255, 255, 255, 0, 0, 0, 0, 255]);
+        bmp
+    }
+
+    #[test]
+    fn bitmaps_keep_their_see_through_parts() {
+        let dir = icon_dir("alpha");
+        fs::create_dir_all(dir.join("drawing_forms")).unwrap();
+        let path = dir.join("drawing_forms/corner.bmp");
+        fs::write(&path, clear_and_black_bmp()).unwrap();
+        let mut icons = Icons::load(&dir);
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        // bitmaps are read up front even when other icons are not, for their alpha
+        icons.preload(&ctx, false);
+        let uri = icons.image(&path).source().uri().unwrap().to_owned();
+        let Ok(egui::load::ImagePoll::Ready { image }) =
+            ctx.try_load_image(&uri, egui::SizeHint::default())
+        else {
+            panic!("the bitmap is ready");
+        };
+        assert_eq!(image.size, [2, 1]);
+        assert_eq!(
+            image.pixels[0].a(),
+            0,
+            "the clear pixel shows what is behind it"
+        );
+        assert_eq!(image.pixels[1], egui::Color32::BLACK);
+        // a 24-bit bitmap has no alpha to keep, and is left as it is
+        assert!(with_alpha(&tiny_bmp()).is_none());
     }
 
     #[test]
