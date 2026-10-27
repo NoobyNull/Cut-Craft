@@ -501,6 +501,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-celtic-weave"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-center"
 version = "0.1.0"
 dependencies = [
@@ -602,11 +611,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-convert-text-to-curves"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-copy-along-vectors"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
  "glam",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-copy-to-other-side"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
  "schemars",
  "serde",
 ]
@@ -640,6 +668,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-create-shape"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-crop-bitmap"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -750,6 +787,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-distort-object"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-document-variables"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -876,6 +922,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-duplicate-toolpath"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-edit-picture"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-emboss"
 version = "0.1.0"
 dependencies = [
@@ -985,7 +1049,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-join-close-vectors"
+version = "0.1.0"
+dependencies = [
+ "cmd-close-extend-vector",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-join-vectors"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-keep-out-zones"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1189,6 +1272,17 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+]
+
+[[package]]
+name = "cmd-plate-production"
+version = "0.1.0"
+dependencies = [
+ "cmd-draw-text",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1490,6 +1584,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-swap-sides"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-text-on-a-curve"
 version = "0.1.0"
 dependencies = [
@@ -1528,6 +1631,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-toolpath-properties"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-toolpath-tiling"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1607,6 +1719,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-vector-boundary"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-vector-selector"
 version = "0.1.0"
 dependencies = [
@@ -1648,6 +1769,25 @@ name = "cmd-weld-vectors"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
+]
+
+[[package]]
+name = "cmd-wrapped-fluting-layout"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-wrapped-spiral-layout"
+version = "0.1.0"
+dependencies = [
+ "cmd-wrapped-fluting-layout",
+ "cut-craft-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]
@@ -1839,6 +1979,7 @@ dependencies = [
  "cmd-array-copy-toolpath",
  "cmd-bake-components",
  "cmd-bitmap-properties",
+ "cmd-celtic-weave",
  "cmd-center",
  "cmd-center-horizontally",
  "cmd-center-horizontally-in-material",
@@ -1851,11 +1992,14 @@ dependencies = [
  "cmd-close-with-line",
  "cmd-component-boundary",
  "cmd-component-properties",
+ "cmd-convert-text-to-curves",
  "cmd-copy-along-vectors",
+ "cmd-copy-to-other-side",
  "cmd-create-component-from-bitmap",
  "cmd-create-component-from-visible-model",
  "cmd-create-fillets",
  "cmd-create-shape",
+ "cmd-crop-bitmap",
  "cmd-cross-section",
  "cmd-cut-vector",
  "cmd-delete",
@@ -1868,6 +2012,7 @@ dependencies = [
  "cmd-delete-toolpath",
  "cmd-dimensions",
  "cmd-distort-object",
+ "cmd-document-variables",
  "cmd-drag-knife-toolpath",
  "cmd-draw-arc",
  "cmd-draw-circle",
@@ -1881,6 +2026,8 @@ dependencies = [
  "cmd-draw-text",
  "cmd-drilling-toolpath",
  "cmd-duplicate-component",
+ "cmd-duplicate-toolpath",
+ "cmd-edit-picture",
  "cmd-emboss",
  "cmd-extrude-and-weave",
  "cmd-fit-curves-to-vectors",
@@ -1893,7 +2040,9 @@ dependencies = [
  "cmd-insert-point",
  "cmd-interactive-vector-trim",
  "cmd-job-setup",
+ "cmd-join-close-vectors",
  "cmd-join-vectors",
+ "cmd-keep-out-zones",
  "cmd-keyhole-toolpath",
  "cmd-laser-cut-fill-toolpath",
  "cmd-laser-picture-toolpath",
@@ -1916,6 +2065,7 @@ dependencies = [
  "cmd-orientate-3d-model",
  "cmd-overlap-intersect",
  "cmd-photo-vcarve-toolpath",
+ "cmd-plate-production",
  "cmd-pocket-toolpath",
  "cmd-prism-toolpath",
  "cmd-profile-toolpath",
@@ -1949,11 +2099,13 @@ dependencies = [
  "cmd-span-to-line",
  "cmd-split",
  "cmd-subtract-vectors",
+ "cmd-swap-sides",
  "cmd-text-on-a-curve",
  "cmd-texture-area",
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",
  "cmd-toolpath-properties",
+ "cmd-toolpath-tiling",
  "cmd-trace-bitmap",
  "cmd-turn-and-spin",
  "cmd-two-rail-sweep",
@@ -1962,13 +2114,17 @@ dependencies = [
  "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
  "cmd-vcarve-inlay-toolpath",
+ "cmd-vector-boundary",
  "cmd-vector-selector",
  "cmd-vector-texture",
  "cmd-vector-unwrapper",
  "cmd-vector-validator",
  "cmd-weld-vectors",
+ "cmd-wrapped-fluting-layout",
+ "cmd-wrapped-spiral-layout",
  "cut-craft-core",
  "cut-craft-post",
+ "cut-craft-tool-database",
  "cut-craft-vtdb",
  "eframe",
  "egui_extras",
@@ -1989,6 +2145,7 @@ dependencies = [
  "log",
  "rfd",
  "schemars",
+ "serde",
  "serde_json",
 ]
 
@@ -2025,6 +2182,16 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cut-craft-core",
+ "serde_json",
+]
+
+[[package]]
+name = "cut-craft-tool-database"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
+ "eframe",
+ "flate2",
  "serde_json",
 ]
 

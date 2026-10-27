@@ -163,6 +163,23 @@ pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
     ToolDatabase::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Tool database files Tool Database ▸ Import Tools reads.
+pub const TOOL_FILE_EXTENSIONS: [&str; 3] = ["vtdb", "tools", "json"];
+
+/// The tools in a Vectric `.vtdb`, a Fusion 360 `.tools` or a Cut Craft `.json` database.
+pub fn read_tool_file(path: &Path) -> Result<ToolDatabase, String> {
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "vtdb" => cut_craft_vtdb::read(path),
+        "tools" => cut_craft_tool_database::fusion::read(&read(path)?)
+            .map_err(|e| format!("{}: {e}", path.display())),
+        _ => ToolDatabase::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display())),
+    }
+}
+
 pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
     write_creating(path, &db.to_json())
 }

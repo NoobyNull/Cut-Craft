@@ -56,6 +56,14 @@ pub struct Tool {
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
     pub flutes: u32,
+    /// The Tool Database group it sits in, `/` between levels (`Metric Tools/End Mills`);
+    /// empty at the top (added with tool groups)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub group: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub notes: String,
 }
 
 fn default_angle() -> f64 {
@@ -108,15 +116,29 @@ impl Default for Tool {
             plunge_rate: 300.0,
             spindle_speed: 18000.0,
             flutes: default_flutes(),
+            group: String::new(),
+            notes: String::new(),
         }
     }
 }
 
 /// The shared tools. A toolpath copies its tool, so editing the database never changes
 /// toolpaths already made.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ToolDatabase {
     pub tools: Vec<Tool>,
+    /// The groups the tools sit in, with their notes, in tree order; a group any tool names
+    /// is in the tree whether listed here or not (added with tool groups)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<ToolGroup>,
+}
+
+/// A Tool Database group: `/` between levels, as [`Tool::group`].
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ToolGroup {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
 }
 
 impl ToolDatabase {
@@ -138,25 +160,42 @@ impl ToolDatabase {
                 stepover,
                 ..end_mill(name, diameter, 3.0, 1500.0, 500.0)
             };
+        let mut tools = vec![
+            end_mill("3 mm End Mill", 3.0, 1.5, 800.0, 250.0),
+            Tool::default(),
+            end_mill("12 mm End Mill", 12.0, 4.0, 2000.0, 500.0),
+            end_mill("1/8 in End Mill", 3.175, 1.5, 800.0, 250.0),
+            end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
+            shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
+            shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
+            shaped(
+                "6 mm Radiused End Mill",
+                ToolShape::RadiusedEndMill,
+                6.0,
+                90.0,
+                0.2,
+            ),
+            // a V-bit's stepover spaces V-carving passes, so it is small
+            shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
+            shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),
+        ];
+        for tool in &mut tools {
+            let set = if tool.name.contains(" in ") {
+                "Imperial Tools"
+            } else {
+                "Metric Tools"
+            };
+            tool.group = format!("{set}/{}", shape_group(tool.shape));
+        }
+        let group = |path: &str, notes: &str| ToolGroup {
+            path: path.into(),
+            notes: notes.into(),
+        };
         Self {
-            tools: vec![
-                end_mill("3 mm End Mill", 3.0, 1.5, 800.0, 250.0),
-                Tool::default(),
-                end_mill("12 mm End Mill", 12.0, 4.0, 2000.0, 500.0),
-                end_mill("1/8 in End Mill", 3.175, 1.5, 800.0, 250.0),
-                end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
-                shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
-                shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
-                shaped(
-                    "6 mm Radiused End Mill",
-                    ToolShape::RadiusedEndMill,
-                    6.0,
-                    90.0,
-                    0.2,
-                ),
-                // a V-bit's stepover spaces V-carving passes, so it is small
-                shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
-                shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),
+            tools,
+            groups: vec![
+                group("Metric Tools", "Starter tools sized in millimetres."),
+                group("Imperial Tools", "Starter tools sized in inches."),
             ],
         }
     }
@@ -179,6 +218,16 @@ impl ToolDatabase {
 
     pub fn from_json(bytes: &[u8]) -> Result<Self, serde_json::Error> {
         serde_json::from_slice(bytes)
+    }
+}
+
+/// The group a starter tool of `shape` goes in.
+pub fn shape_group(shape: ToolShape) -> &'static str {
+    match shape {
+        ToolShape::EndMill => "End Mills",
+        ToolShape::BallNose => "Ball Nose",
+        ToolShape::VBit => "V-Bits",
+        ToolShape::RadiusedEndMill => "Radiused End Mills",
     }
 }
 

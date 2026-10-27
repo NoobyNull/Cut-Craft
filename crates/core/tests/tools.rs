@@ -16,12 +16,19 @@ fn the_starter_database_has_uniquely_named_tools_including_the_default() {
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), db.tools.len());
-    assert_eq!(db.get(&Tool::default().name), Some(&Tool::default()));
+    // the default tool's settings, filed in the starter groups
+    let mut default = db
+        .get(&Tool::default().name)
+        .cloned()
+        .expect("the default tool");
+    assert_eq!(default.group, "Metric Tools/End Mills");
+    default.group.clear();
+    assert_eq!(default, Tool::default());
 }
 
 #[test]
 fn putting_a_tool_replaces_the_one_with_its_name_or_adds_it() {
-    let mut db = ToolDatabase { tools: vec![] };
+    let mut db = ToolDatabase::default();
     db.put(tool("A", 3.0));
     db.put(tool("B", 6.0));
     db.put(tool("A", 4.0));

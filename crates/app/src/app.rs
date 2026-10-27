@@ -365,7 +365,8 @@ struct CutCraftApp {
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
-    tool_window: bool,
+    /// The open Tool Database window.
+    tool_manager: Option<cut_craft_tool_database::Manager>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// An open Help window.
@@ -379,8 +380,6 @@ struct CutCraftApp {
     snap_window: bool,
     /// What the views draw.
     display: crate::display::Display,
-    /// The tool shown in the Tool Database window.
-    tool_selected: usize,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
     simulation: Option<Material>,
     /// `simulation` at the 3D view's mesh resolution.
@@ -440,7 +439,7 @@ impl CutCraftApp {
             post: None,
             tools: ToolDatabase::starter(),
             tools_path: None,
-            tool_window: false,
+            tool_manager: None,
             clipboard: vec![],
             info: None,
             summary: SUMMARY_DEFAULTS,
@@ -448,7 +447,6 @@ impl CutCraftApp {
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
             display: crate::display::Display::default(),
-            tool_selected: 0,
             simulation: None,
             simulation_coarse: None,
             orbit: view3d::Orbit::default(),
@@ -620,7 +618,9 @@ impl CutCraftApp {
                     .collect();
                 self.set_guides(guides);
             }
-            "tool_database" => self.tool_window = true,
+            "tool_database" => {
+                self.tool_manager = Some(cut_craft_tool_database::Manager::new(&self.tools));
+            }
             id if self.display.toggle(id) => ctx.request_repaint(),
             "refresh_2d_view" => ctx.request_repaint(),
             "create_component_from_toolpath_preview" => self.component_from_preview(),
@@ -1948,13 +1948,6 @@ impl CutCraftApp {
         }
     }
 
-    fn delete_tool(&mut self, index: usize) {
-        if index < self.tools.tools.len() {
-            let tool = self.tools.tools.remove(index);
-            self.tools_changed(&format!("Deleted {} from the tool database", tool.name));
-        }
-    }
-
     /// Writes the tool database, if it has a file, and reports `done` or the failure.
     fn tools_changed(&mut self, done: &str) {
         let result = self
@@ -2275,80 +2268,74 @@ fn summary_table(
 }
 
 impl CutCraftApp {
-    /// Pick a tool to edit or delete; edits are saved as they are made.
+    /// The Tool Database manager; its edits are kept on Apply or OK.
     fn tool_database_window(&mut self, ctx: &egui::Context) {
-        let (mut open, mut delete, mut edited) = (self.tool_window, None, false);
-        let mut imported = None;
-        egui::Window::new("Tool Database")
-            .open(&mut open)
-            .show(ctx, |ui| {
-                if ui
-                    .button("Import Vectric tool database…")
-                    .on_hover_text("Adds the tools of a .vtdb file (Aspire / VCarve 12.5)")
-                    .clicked()
-                    && let Some(path) = file_dialog()
-                        .add_filter("Vectric tool database", &["vtdb"])
-                        .pick_file()
+        use cut_craft_tool_database::Outcome;
+        let Some(manager) = &mut self.tool_manager else {
+            return;
+        };
+        let icons = &self.icons;
+        let picture = |path: &str| icons.find(path, "").map(|p| icons.image(p));
+        let look = cut_craft_tool_database::Look {
+            inch: self.doc.job.units == cut_craft_core::document::Units::Inch,
+            picture: &picture,
+        };
+        let Some(outcome) = manager.show(ctx, &look) else {
+            return;
+        };
+        match outcome {
+            Outcome::Apply | Outcome::Ok => {
+                self.tools = manager.draft.clone();
+                if outcome == Outcome::Ok {
+                    self.tool_manager = None;
+                }
+                self.tools_changed("Tool database saved");
+            }
+            Outcome::Cancel => self.tool_manager = None,
+            Outcome::Import => {
+                if let Some(path) = file_dialog()
+                    .add_filter("Tool databases", &files::TOOL_FILE_EXTENSIONS)
+                    .pick_file()
                 {
-                    imported = Some(path);
+                    self.import_tools(&path);
                 }
-                let Some(last) = self.tools.tools.len().checked_sub(1) else {
-                    ui.weak("No tools: save one from a toolpath form");
-                    return;
-                };
-                self.tool_selected = self.tool_selected.min(last);
-                ui.horizontal(|ui| {
-                    egui::ComboBox::from_id_source("tool_database_tools")
-                        .selected_text(&self.tools.tools[self.tool_selected].name)
-                        .show_ui(ui, |ui| {
-                            for (i, tool) in self.tools.tools.iter().enumerate() {
-                                ui.selectable_value(&mut self.tool_selected, i, &tool.name);
-                            }
-                        });
-                    if ui.button("Delete").clicked() {
-                        delete = Some(self.tool_selected);
-                    }
-                });
-                let fields = form::fields(
-                    &serde_json::to_value(schemars::schema_for!(Tool)).expect("schemas serialize"),
-                );
-                let tool = &mut self.tools.tools[self.tool_selected];
-                let mut value = serde_json::to_value(&*tool).expect("tools serialize");
-                let look = form::Look {
-                    units: self.doc.job.units,
-                    picture: &|_| None,
-                    material: form::material(&self.doc, self.doc.job.units),
-                };
-                if form::show(ui, &fields, &mut value, &look)
-                    && let Ok(changed) = serde_json::from_value(value)
+            }
+            Outcome::Export(tools) => {
+                if let Some(path) = file_dialog()
+                    .add_filter("Cut Craft tool database", &["json"])
+                    .save_file()
                 {
-                    *tool = changed;
-                    edited = true;
+                    let done = format!(
+                        "Exported {} tools to {}",
+                        tools.tools.len(),
+                        file_name(&path)
+                    );
+                    let result = files::save_tools(&tools, &path);
+                    self.status
+                        .set_message(&result.map_or_else(|e| e, |()| done));
                 }
-                // Aspire shows the feed per tooth beside the feeds, to check against the maker's
-                if let Some(load) = tool.chip_load() {
-                    let (per, unit) = form::shown_in("mm", look.units).unwrap_or((1.0, "mm"));
-                    let places = if unit == "mm" { 3 } else { 4 };
-                    ui.label(format!("Chip load: {:.places$} {unit}", load / per));
-                }
-            });
-        self.tool_window = open;
-        if let Some(path) = imported {
-            self.import_tools(&path);
-        } else if let Some(index) = delete {
-            self.delete_tool(index);
-        } else if edited {
-            self.tools_changed("Tool database saved");
+            }
         }
     }
 
-    /// Adds the tools of a Vectric `.vtdb` file to the database and saves it.
+    /// Adds the tools of a tool database file in a group named after it: to the open Tool
+    /// Database window, kept on its OK, else to the database, saved now.
     fn import_tools(&mut self, path: &std::path::Path) {
-        match cut_craft_vtdb::read(path) {
+        let name = path.file_stem().map_or_else(
+            || "Imported".to_owned(),
+            |s| s.to_string_lossy().into_owned(),
+        );
+        match files::read_tool_file(path) {
             Ok(tools) => {
-                let n = tools.len();
-                self.tools.tools.extend(tools);
-                self.tools_changed(&format!("Imported {n} tools from {}", file_name(path)));
+                let n = tools.tools.len();
+                let done = format!("Imported {n} tools from {}", file_name(path));
+                if let Some(manager) = &mut self.tool_manager {
+                    manager.import(tools, &name);
+                    self.status.set_message(&format!("{done}; OK keeps them"));
+                } else {
+                    cut_craft_tool_database::tree::import(&mut self.tools, tools, &name);
+                    self.tools_changed(&done);
+                }
             }
             Err(e) => self.status.set_message(&e),
         }
@@ -4766,6 +4753,15 @@ mod tests {
         };
         h.app.import_tools(&file);
         assert!(h.app.tools.tools.len() > before + 10, "{}", file.display());
+        let name = file.file_stem().unwrap().to_string_lossy();
+        assert!(
+            h.app
+                .tools
+                .tools
+                .iter()
+                .any(|t| t.group.starts_with(&*name)),
+            "in a group named after the file"
+        );
     }
 
     #[test]
@@ -5556,15 +5552,24 @@ mod tests {
     }
 
     #[test]
-    fn the_tool_database_window_lists_and_deletes_tools() {
+    fn the_tool_database_window_keeps_edits_only_on_ok() {
         let mut h = Harness::new();
         h.app.invoke(&h.ctx, "tool_database");
         h.frame(vec![]);
-        assert!(h.app.tool_window);
         let count = h.app.tools.tools.len();
-        h.app.delete_tool(0);
+        h.app.tool_manager.as_mut().unwrap().draft.tools.remove(0);
         h.frame(vec![]);
+        assert_eq!(h.app.tools.tools.len(), count, "not until OK");
+        let ok = *h.texts_at("OK").last().expect("the window has OK");
+        h.click(ok, Modifiers::NONE);
+        assert!(h.app.tool_manager.is_none());
         assert_eq!(h.app.tools.tools.len(), count - 1);
+        h.app.invoke(&h.ctx, "tool_database");
+        h.app.tool_manager.as_mut().unwrap().draft.tools.clear();
+        h.frame(vec![]);
+        let cancel = *h.texts_at("Cancel").last().expect("and Cancel");
+        h.click(cancel, Modifiers::NONE);
+        assert_eq!(h.app.tools.tools.len(), count - 1, "Cancel drops the edits");
     }
 
     #[test]
@@ -5581,8 +5586,10 @@ mod tests {
         let mut h = Harness::new();
         h.app.tools = ToolDatabase {
             tools: vec![Tool::default()],
+            groups: vec![],
         };
         h.app.invoke(&h.ctx, "tool_database");
+        h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(0));
         h.frame(vec![]);
         h.frame(vec![]);
         // 1000 mm/min over 18000 rpm x 2 flutes

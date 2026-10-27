@@ -1,0 +1,14 @@
+[package]
+name = "cut-craft-tool-database"
+description = "The Tool Database manager: tools in groups, edited in a window and kept on OK"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+eframe.workspace = true
+flate2 = "1.1.10"
+serde_json.workspace = true
+
+[lints]
+workspace = true

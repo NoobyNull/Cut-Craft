@@ -8,6 +8,7 @@ edition.workspace = true
 chrono.workspace = true
 cut-craft-core.workspace = true
 cut-craft-vtdb = { path = "../vtdb" }
+cut-craft-tool-database = { path = "../tool-database" }
 cut-craft-post = { path = "../post" }
 eframe.workspace = true
 egui_extras.workspace = true

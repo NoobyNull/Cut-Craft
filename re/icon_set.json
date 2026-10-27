@@ -1468,5 +1468,33 @@
   "guess": true,
   "slot": "png/34199",
   "source": "png/34199"
+ },
+ {
+  "path": "tool_database/end_mill.bmp",
+  "label": "End mill",
+  "guess": false,
+  "slot": "bmp/34614",
+  "source": "bmp/34614"
+ },
+ {
+  "path": "tool_database/ball_nose.bmp",
+  "label": "Ball nose",
+  "guess": false,
+  "slot": "bmp/34615",
+  "source": "bmp/34615"
+ },
+ {
+  "path": "tool_database/v_bit.bmp",
+  "label": "V-bit",
+  "guess": false,
+  "slot": "bmp/34612",
+  "source": "bmp/34612"
+ },
+ {
+  "path": "tool_database/radiused_end_mill.bmp",
+  "label": "Radiused end mill",
+  "guess": false,
+  "slot": "bmp/34643",
+  "source": "bmp/34643"
  }
 ]

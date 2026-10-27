@@ -8,20 +8,23 @@
 //! `units` / `length_units` 0 mm, 1 inches; `rate_units` 1 mm/min, 4 in/min (Aspire's rate
 //! list is mm/sec, mm/min, m/min, in/sec, in/min, ft/min). All [inf].
 
-use cut_craft_core::toolpath::{Tool, ToolShape};
+use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolGroup, ToolShape};
 use rusqlite::{Connection, OpenFlags};
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Every tool in the file that Cut Craft has a shape for, each paired with its cutting data
-/// (one tool per material and machine it has data for; the name says which).
-pub fn read(path: &Path) -> Result<Vec<Tool>, String> {
+/// (one tool per material and machine it has data for; the name says which), in the
+/// file's groups.
+pub fn read(path: &Path) -> Result<ToolDatabase, String> {
     let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| format!("{}: {e}", path.display()))?;
     let mut q = db
         .prepare(
             "select g.name_format, g.tool_type, g.units, g.diameter, g.included_angle, \
              g.tip_radius, g.num_flutes, c.rate_units, c.length_units, c.feed_rate, \
-             c.plunge_rate, c.spindle_speed, c.stepdown, c.stepover, m.name, mt.name \
+             c.plunge_rate, c.spindle_speed, c.stepdown, c.stepover, m.name, mt.name, \
+             g.id, g.notes \
              from tool_geometry g \
              join tool_entity e on e.tool_geometry_id = g.id \
              join tool_cutting_data c on c.id = e.tool_cutting_data_id \
@@ -49,19 +52,79 @@ pub fn read(path: &Path) -> Result<Vec<Tool>, String> {
                 stepover: r.get(13)?,
                 machine: r.get(14)?,
                 material: r.get(15)?,
+                geometry_id: r.get(16)?,
+                notes: r.get(17)?,
             })
         })
         .map_err(|e| e.to_string())?;
+    let (groups, group_of) = tree(&db);
     let mut tools = Vec::new();
     for row in rows {
-        if let Some(tool) = row.map_err(|e| e.to_string())?.tool() {
+        let row = row.map_err(|e| e.to_string())?;
+        if let Some(mut tool) = row.tool() {
+            tool.group = group_of.get(&row.geometry_id).cloned().unwrap_or_default();
+            tool.notes = row.notes.unwrap_or_default();
             tools.push(tool);
         }
     }
     if tools.is_empty() {
         return Err("no tools Cut Craft can use were found in the file".into());
     }
-    Ok(tools)
+    Ok(ToolDatabase { tools, groups })
+}
+
+/// The file's tool tree: its groups in order, and the group each tool geometry is in.
+/// A file without a tree has none.
+fn tree(db: &Connection) -> (Vec<ToolGroup>, HashMap<String, String>) {
+    struct Entry {
+        id: String,
+        parent: Option<String>,
+        geometry: Option<String>,
+        name: String,
+        notes: String,
+    }
+    let entries: Vec<Entry> = db
+        .prepare(
+            "select id, parent_group_id, tool_geometry_id, name, notes from tool_tree_entry \
+             order by sibling_order",
+        )
+        .and_then(|mut q| {
+            q.query_map([], |r| {
+                Ok(Entry {
+                    id: r.get(0)?,
+                    parent: r.get::<_, Option<String>>(1)?.filter(|p| !p.is_empty()),
+                    geometry: r.get(2)?,
+                    name: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                    notes: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                })
+            })?
+            .collect()
+        })
+        .unwrap_or_default();
+    let (mut groups, mut group_of) = (vec![], HashMap::new());
+    // depth first from the top, children in sibling order, so groups come in tree order
+    let mut pending: Vec<(Option<&Entry>, String)> = vec![(None, String::new())];
+    while let Some((group, path)) = pending.pop() {
+        if let Some(group) = group {
+            groups.push(ToolGroup {
+                path: path.clone(),
+                notes: group.notes.clone(),
+            });
+        }
+        let parent = group.map(|g| g.id.as_str());
+        let mut next = vec![];
+        for child in entries.iter().filter(|e| e.parent.as_deref() == parent) {
+            if let Some(geometry) = &child.geometry {
+                group_of.insert(geometry.clone(), path.clone());
+            } else if path.is_empty() {
+                next.push((Some(child), child.name.clone()));
+            } else {
+                next.push((Some(child), format!("{path}/{}", child.name)));
+            }
+        }
+        pending.extend(next.into_iter().rev());
+    }
+    (groups, group_of)
 }
 
 struct Row {
@@ -81,6 +144,8 @@ struct Row {
     stepover: Option<f64>,
     machine: Option<String>,
     material: Option<String>,
+    geometry_id: String,
+    notes: Option<String>,
 }
 
 const INCH: f64 = 25.4;
@@ -144,6 +209,7 @@ impl Row {
                 .and_then(|f| u32::try_from(f).ok())
                 .filter(|f| *f > 0)
                 .unwrap_or(base.flutes),
+            ..base
         })
     }
 
@@ -215,6 +281,8 @@ mod tests {
             stepover: Some(0.1),
             machine: None,
             material: Some("Softwood".into()),
+            geometry_id: String::new(),
+            notes: None,
         };
         let t = row.tool().unwrap();
         assert_eq!(t.name, "End Mill (0.25in) DOWN CUT [Softwood]");
@@ -224,6 +292,29 @@ mod tests {
         assert!((t.pass_depth - 3.175).abs() < 1e-9);
         assert!((t.stepover - 0.4).abs() < 1e-9, "0.1 in of a 0.25 in tool");
         assert_eq!(t.flutes, 2);
+    }
+
+    #[test]
+    fn the_tool_tree_gives_groups_in_order_and_each_tools_group() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "create table tool_tree_entry (id text, parent_group_id text, sibling_order int, \
+             tool_geometry_id text, name text, notes text);
+             insert into tool_tree_entry values ('m', null, 1, null, 'Metric', 'mm tools');
+             insert into tool_tree_entry values ('i', null, 0, null, 'Imperial', '');
+             insert into tool_tree_entry values ('e', 'i', 0, null, 'End Mills', 'flat');
+             insert into tool_tree_entry values ('t', 'e', 0, 'g1', null, null);
+             insert into tool_tree_entry values ('u', 'm', 0, 'g2', null, null);",
+        )
+        .unwrap();
+        let (groups, group_of) = tree(&db);
+        let paths: Vec<&str> = groups.iter().map(|g| g.path.as_str()).collect();
+        assert_eq!(paths, ["Imperial", "Imperial/End Mills", "Metric"]);
+        assert_eq!(groups[2].notes, "mm tools");
+        assert_eq!(group_of["g1"], "Imperial/End Mills");
+        assert_eq!(group_of["g2"], "Metric");
+        let bare = Connection::open_in_memory().unwrap();
+        assert_eq!(tree(&bare).0, vec![], "no tree, no groups");
     }
 
     /// Reads whichever vendor databases are in `~/Downloads` (not part of the repo).
@@ -239,8 +330,15 @@ mod tests {
         for e in entries.flatten() {
             let p = e.path();
             if p.extension().is_some_and(|x| x == "vtdb") {
-                let tools = read(&p).unwrap_or_else(|err| panic!("{}: {err}", p.display()));
+                let db = read(&p).unwrap_or_else(|err| panic!("{}: {err}", p.display()));
+                let tools = db.tools;
                 assert!(tools.len() > 10, "{}", p.display());
+                assert!(!db.groups.is_empty(), "{} has a tool tree", p.display());
+                assert!(
+                    tools
+                        .iter()
+                        .all(|t| t.group.is_empty() || db.groups.iter().any(|g| g.path == t.group))
+                );
                 assert!(tools.iter().all(|t| t.diameter > 0.0 && t.feed_rate > 0.0));
             }
         }
