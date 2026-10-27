@@ -115,6 +115,7 @@ impl Manager {
             .resizable(true)
             .collapsible(false)
             .show(ctx, |ui| {
+                cut_craft_bug_report::mark(ui, "Tool Database window");
                 egui::TopBottomPanel::bottom("tool_database_buttons").show_inside(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("Cancel").clicked() {
@@ -158,6 +159,7 @@ impl Manager {
 
     /// The tree: groups that open and close, each over its groups and tools.
     fn tree(&mut self, ui: &mut egui::Ui, look: &Look) {
+        cut_craft_bug_report::mark(ui, "Tool Database tree");
         let all = tree::groups(&self.draft);
         self.branch(ui, look, &all, "");
     }
@@ -287,6 +289,7 @@ impl Manager {
 
     /// The picked group's name and notes, or the picked tool's settings.
     fn details(&mut self, ui: &mut egui::Ui, look: &Look) {
+        cut_craft_bug_report::mark(ui, "Tool Database details");
         match self.pick.clone() {
             Some(Pick::Group(group)) => self.group_details(ui, &group),
             Some(Pick::Tool(i)) if i < self.draft.tools.len() => {

@@ -2122,6 +2122,7 @@ dependencies = [
  "cmd-weld-vectors",
  "cmd-wrapped-fluting-layout",
  "cmd-wrapped-spiral-layout",
+ "cut-craft-bug-report",
  "cut-craft-core",
  "cut-craft-post",
  "cut-craft-tool-database",
@@ -2146,6 +2147,17 @@ dependencies = [
  "rfd",
  "schemars",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cut-craft-bug-report"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "chrono",
+ "eframe",
+ "image 0.25.10",
  "serde_json",
 ]
 
@@ -2189,6 +2201,7 @@ dependencies = [
 name = "cut-craft-tool-database"
 version = "0.1.0"
 dependencies = [
+ "cut-craft-bug-report",
  "cut-craft-core",
  "eframe",
  "flate2",

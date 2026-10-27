@@ -46,6 +46,16 @@ pub struct General {
     /// drawn; off reads each when first drawn, for low-end systems (from the next start)
     #[serde(default = "on")]
     pub preload_icons: bool,
+    /// The GitHub repository (owner/name) Report a Bug Here… makes issues in, through the
+    /// GitHub CLI (gh)
+    #[serde(default = "bug_repo")]
+    #[schemars(title = "Bug reports go to")]
+    pub bug_report_repo: String,
+}
+
+/// Where bug reports go unless the options say otherwise: Cut Craft's own repository.
+fn bug_repo() -> String {
+    "NoobyNull/cut-craft".into()
 }
 
 /// What a setting added after options were first saved starts as.
@@ -84,6 +94,7 @@ impl Default for Options {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
                     .expect("a small count"),
                 preload_icons: on(),
+                bug_report_repo: bug_repo(),
             },
         }
     }

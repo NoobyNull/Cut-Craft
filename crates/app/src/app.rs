@@ -298,7 +298,7 @@ enum ViewTool {
     Transform,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 enum View {
     TwoD,
     ThreeD,
@@ -367,6 +367,8 @@ struct CutCraftApp {
     tools_path: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
+    /// Right-click ▸ Report a Bug Here…
+    reporter: cut_craft_bug_report::Reporter,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// An open Help window.
@@ -440,6 +442,10 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
+            reporter: cut_craft_bug_report::Reporter::new(
+                &crate::options::Options::default().general.bug_report_repo,
+                files::config_dir().map(|d| d.join("bug-reports")),
+            ),
             clipboard: vec![],
             info: None,
             summary: SUMMARY_DEFAULTS,
@@ -1438,6 +1444,7 @@ impl CutCraftApp {
     }
 
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Menu bar");
         let mut clicked = None;
         let recent: Vec<gui::MenuItem> = self
             .recent
@@ -1489,6 +1496,7 @@ impl CutCraftApp {
 
     /// No job open: Aspire's startup tasks and the jobs opened lately.
     fn start_page(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Start page");
         let edge = ui.spacing().interact_size.y;
         let mut clicked = None;
         ui.strong("Startup Tasks");
@@ -1579,6 +1587,7 @@ impl CutCraftApp {
 
     /// The Design page: the chosen design tab's tools, under any form opened from them.
     fn design_page(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Design page");
         self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
         egui::ScrollArea::vertical().show(ui, |ui| {
             // a tool's form takes the page's place, as Aspire's does
@@ -1816,6 +1825,8 @@ impl CutCraftApp {
     }
 
     fn command_form(&mut self, ui: &mut egui::Ui) {
+        let form = self.form.as_ref().map_or("none", |f| f.label);
+        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
         let Some(open) = &mut self.form else { return };
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
@@ -2388,6 +2399,7 @@ impl CutCraftApp {
     /// Layers, top first: visibility and lock toggles, the current layer highlighted, and
     /// Aspire's layer menu on a right-click.
     fn layers_panel(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Layers tab");
         let edge = ui.spacing().interact_size.y;
         let label = |id: &str| self.registry.get(id).map_or("", |c| c.meta().label);
         let mut clicked: Option<(LayerId, &str)> = None;
@@ -2459,6 +2471,7 @@ impl CutCraftApp {
 
     /// The Clipart tab: its library, and the chosen folder's clipart to double-click in.
     fn clipart_panel(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Clipart tab");
         let registry = &self.registry;
         let importable = |ext: &str| registry.importer_for(ext).is_some();
         match crate::clipart::panel(ui, &mut self.clipart, &importable) {
@@ -2493,6 +2506,7 @@ impl CutCraftApp {
     /// marked) and its Add New Sheet button. A click activates a sheet; a right-click has its
     /// menu.
     fn sheets_panel(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Sheets tab");
         ui.strong("Sheets List");
         let units = self.doc.job.units;
         let (mut activate, mut chosen) = (None, None);
@@ -2538,6 +2552,9 @@ impl CutCraftApp {
         menu: impl FnOnce() -> Vec<gui::MenuItem>,
     ) -> Option<String> {
         let mut clicked = None;
+        if response.secondary_clicked() {
+            cut_craft_bug_report::claim(&response.ctx);
+        }
         response.context_menu(|ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
@@ -2546,6 +2563,11 @@ impl CutCraftApp {
                 recent: &[],
             };
             menu_items(ui, &menu(), &menus, &mut clicked);
+            ui.separator();
+            if ui.button("Report a Bug Here…").clicked() {
+                cut_craft_bug_report::open_here(ui.ctx());
+                ui.close_menu();
+            }
         });
         clicked
     }
@@ -2655,6 +2677,7 @@ impl CutCraftApp {
     /// Retract and Stop, the tool's place along the path (drag to scrub) and the speed. A
     /// playing preview moves on here each frame.
     fn playback_bar(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Toolpath playback bar");
         let Some(playback) = self.playback.as_mut() else {
             return;
         };
@@ -2913,6 +2936,7 @@ impl CutCraftApp {
     /// rotates, middle-drag (or Ctrl+right, or left and right together) pans, the wheel zooms
     /// about the cursor, and a double-click or F fits it again.
     fn view_3d(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "3D view");
         self.playback_bar(ui);
         if self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty() {
             ui.centered_and_justified(|ui| {
@@ -3110,6 +3134,7 @@ impl CutCraftApp {
 
     /// The Toolpaths page: strategies, any form opened from them, and the toolpath list.
     fn toolpaths_page(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Toolpaths page");
         self.page_header(ui, Page::Toolpaths, "Toolpaths");
         let groups = self.toolbar.toolpath_groups.clone();
         if self
@@ -3133,6 +3158,7 @@ impl CutCraftApp {
     /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
     /// a right-click on one opening its menu.
     fn toolpath_list(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Toolpath list");
         ui.strong("Toolpath List");
         self.toolpath_list_buttons(ui);
         let actions = [gui::ToolGroup {
@@ -3175,6 +3201,7 @@ impl CutCraftApp {
     }
 
     fn status_bar(&self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Status bar");
         ui.horizontal(|ui| {
             ui.label(&self.status.message);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -3484,6 +3511,72 @@ impl eframe::App for CutCraftApp {
 impl CutCraftApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
+        self.draw_window(ctx);
+        self.report_bugs(ctx);
+    }
+
+    /// Right-click ▸ Report a Bug Here…, over whatever was drawn.
+    fn report_bugs(&mut self, ctx: &egui::Context) {
+        // the reporter is taken out while the app answers its questions
+        let mut reporter = std::mem::replace(
+            &mut self.reporter,
+            cut_craft_bug_report::Reporter::new("", None),
+        );
+        reporter
+            .repo
+            .clone_from(&self.options.general.bug_report_repo);
+        let state = || self.bug_state();
+        let pick = || {
+            file_dialog()
+                .add_filter("Pictures", &["png", "jpg", "jpeg", "gif", "bmp"])
+                .pick_files()
+                .unwrap_or_default()
+        };
+        let host = cut_craft_bug_report::Host {
+            state: &state,
+            pick_pictures: &pick,
+        };
+        let message = reporter.frame(ctx, &host);
+        self.reporter = reporter;
+        if let Some(message) = message {
+            self.status.set_message(&message);
+        }
+    }
+
+    /// What a bug report says the app was doing.
+    fn bug_state(&self) -> String {
+        let job = &self.doc.job;
+        let form = self.form.as_ref().map_or("none", |f| f.id);
+        [
+            format!(
+                "Cut Craft {} ({}), {}",
+                env!("CARGO_PKG_VERSION"),
+                option_env!("CUT_CRAFT_COMMIT").unwrap_or("unknown commit"),
+                std::env::consts::OS
+            ),
+            format!("Screen: {:?}; view: {:?}; split: {:?}", self.screen, self.view, self.split),
+            format!(
+                "Design tab: {}; form: {form}; view tool: {:?}",
+                DESIGN_TABS.get(self.design_tab).copied().unwrap_or_default(),
+                self.view_tool
+            ),
+            format!(
+                "Job: {} x {} x {} mm ({:?}); {} vectors ({} selected), {} components, {} toolpaths",
+                job.width,
+                job.height,
+                job.thickness,
+                job.units,
+                self.doc.vectors.len(),
+                self.doc.selection.len(),
+                self.doc.components.len(),
+                self.doc.toolpaths.len()
+            ),
+            format!("Status: {}", self.status.message),
+        ]
+        .join("\n")
+    }
+
+    fn draw_window(&mut self, ctx: &egui::Context) {
         if self.options.general.preload_icons {
             self.icons.preload(ctx);
         }
@@ -3693,6 +3786,7 @@ impl CutCraftApp {
     /// Aspire's top bar over the views: 2D / 3D and the split, the sheet, layer and level
     /// drop-downs, and the geometry, smart and grid snapping toggles.
     fn top_bar(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Top bar");
         let edge = ui.spacing().interact_size.y;
         let (mut clicked, mut apply) = (None::<&str>, None::<(&str, Value)>);
         let height = edge + 2.0 * ui.spacing().button_padding.y;
@@ -3836,6 +3930,7 @@ impl CutCraftApp {
     }
 
     fn view_2d(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "2D view");
         let job = self.shown_job();
         let mut canvas = Canvas::new(ui, &job, self.camera);
         let area = canvas.area;
@@ -5552,6 +5647,41 @@ mod tests {
     }
 
     #[test]
+    fn right_clicking_anywhere_offers_a_bug_report_saying_where() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        // the 2D view's own menu carries the item
+        let canvas = h.at(80.0, 80.0);
+        h.right_click(canvas);
+        assert!(
+            h.text_at("Report a Bug Here…").is_some(),
+            "in the 2D view's menu"
+        );
+        h.frame(vec![Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }]);
+        h.frame(vec![]);
+        // the status bar has no menu of its own: the small one shows
+        let status = h.ctx.screen_rect().left_bottom() + egui::vec2(5.0, -5.0);
+        h.right_click(status);
+        // a new menu is drawn unseen for a frame while egui sizes it
+        h.frame(vec![]);
+        let item = h.text_at("Report a Bug Here…").expect("the small menu");
+        h.click(item, Modifiers::NONE);
+        assert!(h.app.reporter.is_open(), "the form opens");
+        assert!(h.text_at("Report a Bug").is_some());
+        let state = h.app.bug_state();
+        assert!(
+            state.contains("Cut Craft") && state.contains("1 vectors"),
+            "{state}"
+        );
+    }
+
+    #[test]
     fn the_tool_database_window_keeps_edits_only_on_ok() {
         let mut h = Harness::new();
         h.app.invoke(&h.ctx, "tool_database");
@@ -5609,7 +5739,7 @@ mod tests {
             h.app.apply(id, &params).unwrap();
         }
         h.app.invoke(&h.ctx, "preview_all_toolpaths");
-        assert!(h.app.view == View::ThreeD, "previewing shows the 3D view");
+        assert_eq!(h.app.view, View::ThreeD, "previewing shows the 3D view");
         h.frame(vec![]);
         let all = h.app.simulation.clone().expect("a preview");
         h.app.invoke(&h.ctx, "reset_preview");
@@ -6205,7 +6335,7 @@ mod tests {
         h.app.display.animate_preview = true;
         h.app.invoke(&h.ctx, "preview_all_toolpaths");
         assert!(h.app.playing && h.app.playback.is_some(), "it plays");
-        assert!(h.app.view == View::ThreeD);
+        assert_eq!(h.app.view, View::ThreeD);
         h.frame(vec![]);
         h.frame(vec![]);
         let along = h.app.playback.as_ref().unwrap().at();
