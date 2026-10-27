@@ -2691,6 +2691,7 @@ version = "0.1.0"
 dependencies = [
  "cut-craft-core",
  "image 0.25.10",
+ "tiff",
 ]
 
 [[package]]

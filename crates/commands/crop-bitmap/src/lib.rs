@@ -81,17 +81,25 @@ impl Command for CropBitmap {
             ));
         }
         let mut grey = Vec::with_capacity(columns.len() * rows.len());
+        // a depth map is cut with the picture
+        let deep = bitmap.depth.len() == bitmap.grey.len();
+        let mut depth = Vec::new();
         for row in rows.clone() {
             for column in columns.clone() {
                 let centre = Point::new(
                     r.min.x + (column as f64 + 0.5) * pixel.x,
                     r.max.y - (row as f64 + 0.5) * pixel.y,
                 );
-                grey.push(if inside(&rings, centre) {
-                    bitmap.grey[row * bitmap.columns + column]
-                } else {
-                    CLEARED
-                });
+                let at = row * bitmap.columns + column;
+                let kept = inside(&rings, centre);
+                grey.push(if kept { bitmap.grey[at] } else { CLEARED });
+                if deep {
+                    depth.push(if kept {
+                        bitmap.depth[at]
+                    } else {
+                        f32::from(CLEARED) / 255.0
+                    });
+                }
             }
         }
         let rect = Rect::new(
@@ -112,6 +120,7 @@ impl Command for CropBitmap {
                 rows: rows.len(),
                 grey,
                 rect,
+                depth,
                 ..bitmap.clone()
             },
         );
@@ -137,6 +146,7 @@ mod tests {
             rows: 10,
             grey: vec![0; 100],
             rect: Rect::new(Point::ZERO, Point::new(10.0, 10.0)),
+            depth: Vec::new(),
         });
         let frame = c.add(square(2.0, 2.0, 4.0));
         c.select([frame]);

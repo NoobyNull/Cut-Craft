@@ -5330,6 +5330,7 @@ mod tests {
             rows: 1,
             grey: vec![0],
             rect,
+            depth: Vec::new(),
         });
         h.app.record(Ok(c.finish()), "added");
         h.frame(vec![]);

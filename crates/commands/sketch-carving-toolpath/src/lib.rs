@@ -318,6 +318,7 @@ mod tests {
             rows: 40,
             grey,
             rect: Rect::new(Point::ZERO, Point::new(40.0, 40.0)),
+            depth: Vec::new(),
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

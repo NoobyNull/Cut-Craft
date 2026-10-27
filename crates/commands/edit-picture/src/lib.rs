@@ -126,38 +126,52 @@ fn edited(picture: &Bitmap, params: &Params) -> Bitmap {
     let tones = &params.tones;
     let (columns, rows) = (picture.columns as f64, picture.rows as f64);
     let reach = params.border.width / 100.0 * columns.min(rows);
+    // one pixel's tone (0 black to 1 white) edited
+    let adjust = |i: usize, tone: f64| {
+        let mut v = (tone - 0.5) * (1.0 + tones.contrast / 100.0) + 0.5 + tones.brightness / 100.0;
+        v = v.clamp(0.0, 1.0).powf(1.0 / tones.gamma);
+        if tones.invert {
+            v = 1.0 - v;
+        }
+        if params.border.add && reach > 0.0 {
+            // how far in from the border this pixel's centre is, in pixels
+            let (x, y) = (
+                (i % picture.columns) as f64 + 0.5,
+                (i / picture.columns) as f64 + 0.5,
+            );
+            let inward = match params.border.shape {
+                Shape::Rectangular => x.min(y).min(columns - x).min(rows - y),
+                Shape::Oval => {
+                    let (dx, dy) = (x / columns * 2.0 - 1.0, y / rows * 2.0 - 1.0);
+                    (1.0 - dx.hypot(dy)) * columns.min(rows) / 2.0
+                }
+            };
+            let kept = (inward / reach).clamp(0.0, 1.0);
+            v = v * kept + (1.0 - kept);
+        }
+        v
+    };
     let grey = picture
         .grey
         .iter()
         .enumerate()
         .map(|(i, &level)| {
-            let mut v = f64::from(level) / 255.0;
-            v = (v - 0.5) * (1.0 + tones.contrast / 100.0) + 0.5 + tones.brightness / 100.0;
-            v = v.clamp(0.0, 1.0).powf(1.0 / tones.gamma);
-            if tones.invert {
-                v = 1.0 - v;
-            }
-            if params.border.add && reach > 0.0 {
-                // how far in from the border this pixel's centre is, in pixels
-                let (x, y) = (
-                    (i % picture.columns) as f64 + 0.5,
-                    (i / picture.columns) as f64 + 0.5,
-                );
-                let inward = match params.border.shape {
-                    Shape::Rectangular => x.min(y).min(columns - x).min(rows - y),
-                    Shape::Oval => {
-                        let (dx, dy) = (x / columns * 2.0 - 1.0, y / rows * 2.0 - 1.0);
-                        (1.0 - dx.hypot(dy)) * columns.min(rows) / 2.0
-                    }
-                };
-                let kept = (inward / reach).clamp(0.0, 1.0);
-                v = v * kept + (1.0 - kept);
-            }
-            (v * 255.0).round().clamp(0.0, 255.0) as u8
+            (adjust(i, f64::from(level) / 255.0) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8
         })
+        .collect();
+    // a depth map is edited at its own precision
+    #[expect(clippy::cast_possible_truncation, reason = "a tone from 0 to 1")]
+    let depth = picture
+        .depth
+        .iter()
+        .enumerate()
+        .map(|(i, &tone)| adjust(i, f64::from(tone)) as f32)
         .collect();
     Bitmap {
         grey,
+        depth,
         ..picture.clone()
     }
 }
@@ -180,6 +194,7 @@ mod tests {
             rows: 10,
             grey,
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
+            depth: Vec::new(),
         });
         doc.apply(&c.finish()).unwrap();
         doc

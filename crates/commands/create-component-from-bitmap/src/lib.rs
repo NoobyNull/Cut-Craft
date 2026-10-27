@@ -1,4 +1,5 @@
-//! Create Component from Bitmap: the newest picture as a relief, its tones as heights.
+//! Create Component from Bitmap: the newest picture as a relief, its tones as heights (a
+//! depth map's at full precision, so a 16-bit or floating point one does not terrace).
 
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
@@ -59,8 +60,8 @@ impl Command for CreateComponentFromBitmap {
             bitmap.rect,
             doc.job.model_cell(),
             |at| {
-                bitmap.darkness(at).map(|dark| {
-                    let tone = if p.white_high { 1.0 - dark } else { dark };
+                bitmap.tone(at).map(|light| {
+                    let tone = if p.white_high { light } else { 1.0 - light };
                     p.base_height + p.max_height * tone
                 })
             },
@@ -87,6 +88,7 @@ mod tests {
             rows: 1,
             grey: vec![0, 255],
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
+            depth: Vec::new(),
         });
         let change = c.finish();
         doc.apply(&change).unwrap();
@@ -94,6 +96,37 @@ mod tests {
     }
 
     cut_craft_core::contract_tests!(CreateComponentFromBitmap, with_picture);
+
+    #[test]
+    fn a_depth_map_gives_heights_finer_than_grey_levels() {
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_bitmap(Bitmap {
+            name: "deep".into(),
+            columns: 2,
+            rows: 1,
+            grey: vec![128, 128],
+            rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
+            // two 16-bit levels apart, one grey level on screen
+            depth: vec![0.5, 0.5 + 1.0 / 65_535.0],
+        });
+        doc.apply(&c.finish()).unwrap();
+        let params = Params {
+            max_height: 20.0,
+            ..Params::default()
+        };
+        doc.apply(&CreateComponentFromBitmap::run(&doc, &params).unwrap())
+            .unwrap();
+        let relief = doc.components.values().next().unwrap();
+        let (left, right) = (
+            relief.height_at(Point::new(1.0, 5.0)).unwrap(),
+            relief.height_at(Point::new(19.0, 5.0)).unwrap(),
+        );
+        assert!(
+            right > left && right - left < 20.0 / 255.0,
+            "{left} {right}"
+        );
+    }
 
     #[test]
     fn white_is_high_unless_asked_otherwise() {
