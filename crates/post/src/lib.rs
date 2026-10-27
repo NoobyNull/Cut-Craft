@@ -69,6 +69,11 @@ const WRITTEN: [&str; 14] = [
 /// Cut Craft's own posts, used until one is installed (`crates/post/posts/`).
 const DEFAULT_FLAT: &str = include_str!("../posts/fluidnc_atc_mm.pp");
 const DEFAULT_ROTARY: &str = include_str!("../posts/fluidnc_atc_wrap_a_mm.pp");
+/// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
+pub const BUILT_IN: [(&str, &str); 2] = [
+    ("fluidnc_atc_mm.pp", DEFAULT_FLAT),
+    ("fluidnc_atc_wrap_a_mm.pp", DEFAULT_ROTARY),
+];
 
 /// The file being written, for the variables that describe it.
 pub struct File<'a> {

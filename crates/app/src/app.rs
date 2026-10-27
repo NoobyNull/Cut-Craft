@@ -26,7 +26,10 @@ const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Cli
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 78] = [
+const BUILT_INS: [&str; 81] = [
+    "machine_configuration",
+    "add_machine",
+    "post_processor_management",
     "paste_in_place",
     "edit_text",
     "join_straight_line",
@@ -373,8 +376,16 @@ struct CutCraftApp {
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
-    /// Installed post-processor; without one, toolpaths save through Cut Craft's default.
-    post: Option<cut_craft_post::Post>,
+    /// The machines (Machine Configuration), the active one's default post saving
+    /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
+    machines: cut_craft_machines::Machines,
+    /// Where `machines` is kept; `None` keeps them in memory (tests).
+    machines_path: Option<std::path::PathBuf>,
+    /// Cut Craft's posts and the user's custom ones.
+    posts: cut_craft_machines::Library,
+    /// The open Machine Configuration Management and Post-Processor Management windows.
+    machine_window: Option<cut_craft_machines::MachineManager>,
+    post_window: Option<cut_craft_machines::PostManager>,
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
@@ -451,7 +462,11 @@ impl CutCraftApp {
             pages: Pages::default(),
             session: Session::default(),
             selected_toolpath: None,
-            post: None,
+            machines: cut_craft_machines::Machines::default(),
+            machines_path: None,
+            posts: cut_craft_machines::Library::new(None),
+            machine_window: None,
+            post_window: None,
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
@@ -637,6 +652,16 @@ impl CutCraftApp {
                     .collect();
                 self.set_guides(guides);
             }
+            "machine_configuration" => {
+                self.machine_window = Some(cut_craft_machines::MachineManager::new(&self.machines));
+            }
+            "add_machine" => {
+                self.machine_window =
+                    Some(cut_craft_machines::MachineManager::adding(&self.machines));
+            }
+            "post_processor_management" => {
+                self.post_window = Some(cut_craft_machines::PostManager::default());
+            }
             "tool_database" => {
                 self.tool_manager = Some(cut_craft_tool_database::Manager::new(&self.tools));
             }
@@ -784,14 +809,7 @@ impl CutCraftApp {
                     .add_filter("Post-processor", &["pp"])
                     .pick_file()
                 {
-                    match files::load_post(&path) {
-                        Ok(post) => {
-                            self.status
-                                .set_message(&format!("Post-processor: {}", post.name));
-                            self.post = Some(post);
-                        }
-                        Err(e) => self.status.set_message(&e),
-                    }
+                    self.install_post(&path);
                 }
             }
             _ => unreachable!("not a file action: {id}"),
@@ -892,7 +910,10 @@ impl CutCraftApp {
                 }
             }
             "save_toolpaths" => {
-                let post = self.output_post();
+                let post = match self.output_post() {
+                    Ok(post) => post,
+                    Err(e) => return self.status.set_message(&e),
+                };
                 let extension = post.extension.clone();
                 let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
                 if let Some(path) = dialog.save_file() {
@@ -928,13 +949,138 @@ impl CutCraftApp {
         }
     }
 
-    /// The post toolpaths are saved through: the installed one, else Cut Craft's `FluidNC` post
-    /// for this kind of job.
-    fn output_post(&self) -> Cow<'_, cut_craft_post::Post> {
-        self.post.as_ref().map_or_else(
-            || Cow::Owned(cut_craft_post::Post::default_for(&self.doc.job)),
-            Cow::Borrowed,
-        )
+    /// The post toolpaths are saved through: the active machine's default, else Cut Craft's
+    /// `FluidNC` post for this kind of job.
+    fn output_post(&self) -> Result<cut_craft_post::Post, String> {
+        match self
+            .machines
+            .active()
+            .and_then(cut_craft_machines::Machine::post)
+        {
+            Some(name) => self.posts.load(name),
+            None => Ok(cut_craft_post::Post::default_for(&self.doc.job)),
+        }
+    }
+
+    /// Reads the machines and finds the custom posts, kept in the config folder.
+    fn load_machines(&mut self) {
+        let dir = files::config_dir();
+        self.machines_path = dir.as_ref().map(|d| d.join("machines.json"));
+        if let Some(path) = &self.machines_path {
+            self.machines = cut_craft_machines::Machines::load(path);
+        }
+        self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
+    }
+
+    /// Writes the machines, if they have a file, and reports `done` or the failure.
+    fn machines_changed(&mut self, done: &str) {
+        let result = self
+            .machines_path
+            .as_deref()
+            .map_or(Ok(()), |path| self.machines.save(path));
+        self.status
+            .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
+    }
+
+    /// Install Post-Processor: copied into the custom posts. A machine with no posts yet (or
+    /// none at all) takes it, so toolpaths save through it as soon as it is installed.
+    fn install_post(&mut self, path: &std::path::Path) {
+        let entry = match self.posts.install(path) {
+            Ok(entry) => entry,
+            Err(e) => return self.status.set_message(&e),
+        };
+        if self.machines.active().is_none() {
+            self.machines.add();
+        }
+        let machine = self.machines.active_mut().expect("a machine was just made");
+        if machine.posts.is_empty() {
+            machine.posts.push(entry.name.clone());
+            let done = format!(
+                "Installed {}; {} saves toolpaths through it",
+                entry.name, machine.name
+            );
+            self.machines_changed(&done);
+        } else {
+            self.status
+                .set_message(&format!("Installed {}", entry.name));
+        }
+    }
+
+    /// The Machine menu's windows, and what they ask for.
+    fn machine_windows(&mut self, ctx: &egui::Context) {
+        let icons = &self.icons;
+        let picture = |path: &str| icons.find(path, "").map(|p| icons.image(p));
+        let look = cut_craft_machines::Look { picture: &picture };
+        let machine = self.machine_window.as_mut().and_then(|w| {
+            w.show(ctx, &self.posts, &look)
+                .map(|o| (o, w.draft.clone()))
+        });
+        let post = self
+            .post_window
+            .as_mut()
+            .and_then(|w| w.show(ctx, &self.posts, &look));
+        if let Some((outcome, draft)) = machine {
+            use cut_craft_machines::MachineOutcome;
+            match outcome {
+                MachineOutcome::Apply | MachineOutcome::Ok => {
+                    self.machines = draft;
+                    if outcome == MachineOutcome::Ok {
+                        self.machine_window = None;
+                    }
+                    self.machines_changed("Machines saved");
+                }
+                MachineOutcome::Cancel => self.machine_window = None,
+                MachineOutcome::ManagePosts => {
+                    self.post_window = Some(cut_craft_machines::PostManager::default());
+                }
+            }
+        }
+        if let Some(outcome) = post {
+            self.post_outcome(outcome);
+        }
+    }
+
+    fn post_outcome(&mut self, outcome: cut_craft_machines::PostOutcome) {
+        use cut_craft_machines::PostOutcome;
+        match outcome {
+            PostOutcome::Install => {
+                if let Some(path) = file_dialog()
+                    .add_filter("Post-processor", &["pp"])
+                    .pick_file()
+                {
+                    self.install_post(&path);
+                }
+            }
+            PostOutcome::Select(name) => {
+                // into Machine Configuration's edits when it is open, else the machines
+                let machines = match &mut self.machine_window {
+                    Some(window) => &mut window.draft,
+                    None => &mut self.machines,
+                };
+                if machines.active().is_none() {
+                    machines.add();
+                }
+                let machine = machines.active_mut().expect("a machine was just made");
+                if !machine.posts.contains(&name) {
+                    machine.posts.push(name.clone());
+                }
+                let done = format!("{} can save through {name}", machine.name);
+                if self.machine_window.is_some() {
+                    self.status
+                        .set_message(&format!("{done} once Machine Configuration is applied"));
+                } else {
+                    self.machines_changed(&done);
+                }
+            }
+            PostOutcome::OpenFolder(dir) => {
+                on_the_desktop();
+                if let Err(e) = files::show_folder(&dir) {
+                    self.status.set_message(&format!("{}: {e}", dir.display()));
+                }
+            }
+            PostOutcome::Message(m) => self.status.set_message(&m),
+            PostOutcome::Close => self.post_window = None,
+        }
     }
 
     /// Runs a registered command: straight away if it has no settings, else opens its form.
@@ -3746,6 +3892,7 @@ impl CutCraftApp {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| self.menu_bar(ui));
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));
         self.tool_database_window(ctx);
+        self.machine_windows(ctx);
         self.info_window(ctx);
         self.snap_options_window(ctx);
         self.options_window(ctx);
@@ -4799,6 +4946,7 @@ pub fn run(title: &str) {
             }
             let mut app = CutCraftApp::new();
             app.load_tools();
+            app.load_machines();
             app.options = crate::options::Options::load();
             app.options.apply_to(&mut app.display);
             app.load_recent();
@@ -6916,16 +7064,58 @@ mod tests {
     }
 
     #[test]
+    fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
+        let mut h = Harness::new();
+        let dir = std::env::temp_dir().join(format!("cut-craft-app-posts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        h.app.posts = cut_craft_machines::Library::new(Some(dir.join("posts")));
+        let file = dir.join("mine.pp");
+        std::fs::create_dir_all(&dir).unwrap();
+        let text = cut_craft_post::BUILT_IN[0]
+            .1
+            .replace("Cut Craft FluidNC ATC (mm)", "My Router (mm)");
+        std::fs::write(&file, text).unwrap();
+        h.app.install_post(&file);
+        assert_eq!(h.app.machines.machines.len(), 1, "a machine to use it");
+        assert_eq!(h.app.output_post().unwrap().name, "My Router (mm) (*.nc)");
+        std::fs::remove_file(&file).unwrap();
+        assert!(
+            h.app.output_post().is_ok(),
+            "kept in the custom posts, not read from where it was"
+        );
+        // the Machine menu opens its windows; the online ones stay greyed
+        for id in [
+            "machine_configuration",
+            "post_processor_management",
+            "add_machine",
+        ] {
+            assert!(h.app.available(id), "{id}");
+            h.app.invoke(&h.ctx, id);
+            h.frame(vec![]);
+        }
+        assert!(h.app.machine_window.is_some() && h.app.post_window.is_some());
+        assert!(h.text_at("Associated Post-Processors").is_some());
+        for id in [
+            "install_offline_package",
+            "search_for_machine_online",
+            "update_post_processor_database",
+        ] {
+            assert!(!h.app.available(id), "{id} needs Vectric's service");
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
         use cut_craft_core::document::{Along, Job};
         let mut h = Harness::new();
         assert_eq!(
-            h.app.output_post().name,
+            h.app.output_post().unwrap().name,
             "Cut Craft FluidNC ATC (mm) (*.nc)"
         );
         h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
         assert_eq!(
-            h.app.output_post().name,
+            h.app.output_post().unwrap().name,
             "Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)"
         );
     }

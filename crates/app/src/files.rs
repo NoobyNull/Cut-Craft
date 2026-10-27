@@ -75,13 +75,6 @@ pub fn export(registry: &Registry, id: &str, doc: &Document, path: &Path) -> Res
     std::fs::write(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// A `.pp` post-processor, checked as it is read.
-pub fn load_post(path: &Path) -> Result<Post, String> {
-    let text = String::from_utf8(read(path)?)
-        .map_err(|_| format!("{} is not a text file", path.display()))?;
-    Post::parse(&text).map_err(|e| format!("{}: {e}", path.display()))
-}
-
 /// Writes the toolpaths as the post's output.
 /// Writes the toolpaths through `post` to `path`; `job` is the saved job they come from.
 pub fn save_through(
@@ -501,28 +494,8 @@ mod tests {
     }
 
     #[test]
-    fn installing_a_post_reads_it() {
-        let path = temp("good.pp");
-        fs::write(&path, POST).unwrap();
-        assert_eq!(load_post(&path).unwrap().name, "Test post");
-    }
-
-    #[test]
-    fn a_broken_post_names_the_file_and_the_problem() {
-        let path = temp("broken.pp");
-        fs::write(&path, POST.replace("begin FEED_MOVE", "begin NOPE")).unwrap();
-        let err = load_post(&path).unwrap_err();
-        assert!(
-            err.contains("broken.pp") && err.contains("no FEED_MOVE block"),
-            "{err}"
-        );
-    }
-
-    #[test]
     fn toolpaths_save_through_the_post() {
-        let post_path = temp("save.pp");
-        fs::write(&post_path, POST).unwrap();
-        let post = load_post(&post_path).unwrap();
+        let post = Post::parse(POST).unwrap();
         let mut doc = sample_document();
         let registry = crate::commands::registry();
         let made = registry.get("drilling_toolpath").unwrap();

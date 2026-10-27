@@ -2124,6 +2124,7 @@ dependencies = [
  "cmd-wrapped-spiral-layout",
  "cut-craft-bug-report",
  "cut-craft-core",
+ "cut-craft-machines",
  "cut-craft-post",
  "cut-craft-tool-database",
  "cut-craft-vtdb",
@@ -2186,6 +2187,17 @@ dependencies = [
  "serde",
  "serde_json",
  "ttf-parser 0.20.0",
+]
+
+[[package]]
+name = "cut-craft-machines"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-bug-report",
+ "cut-craft-post",
+ "eframe",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

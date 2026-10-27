@@ -1,0 +1,15 @@
+[package]
+name = "cut-craft-machines"
+description = "Machine Configuration and Post-Processor Management: machines, their posts, and the post library"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-bug-report = { path = "../bug-report" }
+cut-craft-post = { path = "../post" }
+eframe.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

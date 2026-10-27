@@ -10,6 +10,7 @@ cut-craft-core.workspace = true
 cut-craft-vtdb = { path = "../vtdb" }
 cut-craft-tool-database = { path = "../tool-database" }
 cut-craft-bug-report = { path = "../bug-report" }
+cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
 eframe.workspace = true
 egui_extras.workspace = true
