@@ -189,7 +189,7 @@ impl MachineManager {
                 ui,
                 look,
                 "common/open.svg",
-                "Install Offline Package (needs Vectric's service)",
+                "Install Offline Package (needs an online machine service)",
                 false,
             );
         });
@@ -369,13 +369,17 @@ fn posts_section(
 /// Apply on its own line, then OK and Cancel, as Aspire's form has them.
 fn buttons(ui: &mut egui::Ui, can_keep: bool) -> Option<MachineOutcome> {
     let mut outcome = None;
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if ui
-            .add_enabled(can_keep, egui::Button::new("Apply"))
-            .clicked()
-        {
-            outcome = Some(MachineOutcome::Apply);
-        }
+    // in a row of its own: a right-to-left layout on its own takes all the height left, and
+    // the window grew down the screen with it
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui
+                .add_enabled(can_keep, egui::Button::new("Apply"))
+                .clicked()
+            {
+                outcome = Some(MachineOutcome::Apply);
+            }
+        });
     });
     ui.separator();
     ui.horizontal(|ui| {
@@ -608,7 +612,7 @@ mod tests {
         let mut one = MachineManager::adding(&Machines::default());
         one.draft.machines[0].posts = vec![library.entries()[0].name.clone(), "Gone (*.nc)".into()];
         let mut posts = PostManager::default();
-        for _ in 0..2 {
+        for _ in 0..10 {
             frame(&ctx, |ctx| {
                 assert_eq!(none.show(ctx, &library, &look), None);
                 assert_eq!(one.show(ctx, &library, &look), None);
@@ -616,6 +620,13 @@ mod tests {
             });
         }
         assert_eq!(one.draft.machines[0].name, "My Machine");
+        let window = ctx
+            .memory(|m| m.area_rect(egui::Id::new("Machine Configuration Management")))
+            .expect("drawn");
+        assert!(
+            window.height() < 600.0,
+            "fits its contents, not the screen: {window:?}"
+        );
     }
 
     #[test]

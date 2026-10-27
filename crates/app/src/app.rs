@@ -1,6 +1,9 @@
 //! The main window: menus, Design and Toolpaths panels, and the 2D/3D views over the
 //! document, its undo history and the command registry.
 
+#[path = "screenshots.rs"]
+mod screenshots;
+
 use crate::files::{self, Session};
 use crate::form::{self, Field};
 use crate::gui;
@@ -441,6 +444,8 @@ struct CutCraftApp {
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
+    /// `--screenshots`: the README's pictures being taken.
+    shots: Option<screenshots::Shots>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// An open Help window.
@@ -522,6 +527,7 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
+            shots: None,
             reporter: cut_craft_bug_report::Reporter::new(
                 &crate::options::Options::default().general.bug_report_repo,
                 files::config_dir().map(|d| d.join("bug-reports")),
@@ -3981,6 +3987,10 @@ impl CutCraftApp {
         self.dropped_files(ctx);
         self.follow_form(ctx);
         self.report_bugs(ctx);
+        if let Some(mut shots) = self.shots.take() {
+            shots.step(self, ctx);
+            self.shots = Some(shots);
+        }
     }
 
     /// Whether Model ▸ Model Resolution's item `id` is the job's resolution; `None` for any
@@ -5275,8 +5285,9 @@ impl CutCraftApp {
     }
 }
 
-/// Opens the main window and runs until it is closed.
-pub fn run(title: &str) {
+/// Opens the main window and runs until it is closed; with `shots`, takes the README's
+/// pictures into that folder instead and quits ([`screenshots`]).
+pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     // winit (0.29) delivers dropped files only on X11, so on a Wayland desktop Cut Craft runs
     // through XWayland unless Options says to use Wayland directly
     let wayland = crate::options::Options::load().general.wayland_native;
@@ -5292,17 +5303,28 @@ pub fn run(title: &str) {
             #[cfg(not(all(unix, not(target_os = "macos"))))]
             let _ = (builder, x11);
         })),
-        viewport: egui::ViewportBuilder::default()
-            .with_title(title)
-            .with_app_id(APP_ID),
+        viewport: match shots {
+            // the same size each time, whatever window size the user's runs keep
+            Some(_) => egui::ViewportBuilder::default().with_inner_size(screenshots::WINDOW),
+            None => egui::ViewportBuilder::default(),
+        }
+        .with_title(title)
+        .with_app_id(APP_ID),
+        persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
         // light, as Aspire is, whatever the desktop's theme
         follow_system_theme: false,
         default_theme: eframe::Theme::Light,
         ..Default::default()
     };
+    // the pictures' run keeps its egui state apart from the user's
+    let name = if shots.is_some() {
+        "Cut Craft screenshots"
+    } else {
+        title
+    };
     eframe::run_native(
-        title,
+        name,
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
@@ -5317,6 +5339,12 @@ pub fn run(title: &str) {
                 );
             }
             let mut app = CutCraftApp::new();
+            if let Some(dir) = shots {
+                // what a fresh clone shows: no icons, the starter tools, nothing of the user's
+                app.icons = Icons::load(std::path::Path::new(""));
+                app.shots = Some(screenshots::Shots::new(dir));
+                return Box::new(app);
+            }
             app.load_tools();
             app.load_machines();
             app.options = crate::options::Options::load();

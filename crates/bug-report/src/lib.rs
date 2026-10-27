@@ -13,7 +13,7 @@ use std::panic::Location;
 use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
 
-pub use github::{Report, compose, submit};
+pub use github::{Report, compose, png, submit};
 
 /// The report form's share of the screen.
 const FORM_SHARE: f32 = 0.5;
