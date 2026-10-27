@@ -212,6 +212,28 @@ mod tests {
         assert!(b.depth[3] > b.depth[1], "finer than a grey level");
     }
 
+    /// Matthew's own 16-bit depth map, when it is on this machine (not part of the repo).
+    #[test]
+    fn a_real_depth_map_keeps_its_levels_when_present() {
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let path =
+            std::path::Path::new(&home).join("Pictures/mermaids_relief/mermaids_hybrid_depth.png");
+        let Ok(bytes) = std::fs::read(&path) else {
+            return;
+        };
+        let b = imported(&bytes);
+        let mut levels: Vec<u32> = b.depth.iter().map(|t| t.to_bits()).collect();
+        levels.sort_unstable();
+        levels.dedup();
+        assert!(levels.len() > 10_000, "{} levels, not 256", levels.len());
+        let mut greys = b.grey.clone();
+        greys.sort_unstable();
+        greys.dedup();
+        assert!(greys.len() <= 256);
+    }
+
     #[test]
     fn rubbish_is_refused() {
         let why = ImportBitmap::import(&Document::default(), b"not a picture").unwrap_err();
