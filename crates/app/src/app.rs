@@ -23,6 +23,15 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
+/// What a select-mode drag holds: the whole selection, or one vector or model picked
+/// under the pointer.
+#[derive(Clone, Copy)]
+enum Grab {
+    Selection,
+    Vector(EntityId),
+    Component(EntityId),
+}
+
 /// How much of the theme's darkest background shades the window while files are dragged
 /// over it.
 const DROP_SHADE: f32 = 0.8;
@@ -4378,11 +4387,7 @@ impl CutCraftApp {
             (Some(Gesture::Dragging(drag)), _, Some(id)) => {
                 Overlay::Preview(self.preview(id, drag))
             }
-            (Some(Gesture::Dragging(drag)), _, None) => Overlay::Window {
-                start: drag.start,
-                end: drag.end,
-                crossing: drag.end.x < drag.start.x,
-            },
+            (Some(Gesture::Dragging(drag)), _, None) => self.select_drag_overlay(drag, reach),
             _ => Overlay::None,
         };
         canvas.paint(
@@ -4435,10 +4440,7 @@ impl CutCraftApp {
             (gesture, Some(ViewTool::Transform), _) => self.transform_gesture(ui, gesture, reach),
             (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
-                let ids = self
-                    .doc
-                    .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);
-                self.select(ids, shift);
+                self.select_drop(drag, shift, reach);
             }
             (Some(Gesture::Click { at, shift }), None, None) => {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
@@ -4536,6 +4538,103 @@ impl CutCraftApp {
             start: drag.start,
             end: drag.end,
             crossing: drag.end.x < drag.start.x,
+        }
+    }
+
+    /// What a select-mode drag starting at `at` takes hold of: the selection when it starts
+    /// inside its box, else the vector or model under it (picked as the drag ends), else
+    /// nothing (the drag selects by window).
+    fn grabbed(&self, at: Point, reach: f64) -> Option<Grab> {
+        let inside = self.doc.selection_bounds().is_some_and(|b| {
+            Rect::new(b.min - Point::splat(reach), b.max + Point::splat(reach)).contains(at)
+        });
+        if inside {
+            return Some(Grab::Selection);
+        }
+        if let Some(id) = self.doc.pick(at, reach) {
+            return Some(Grab::Vector(id));
+        }
+        self.doc.pick_component(at).map(Grab::Component)
+    }
+
+    /// The outlines a grab moves: vectors as they are, models as their boxes.
+    fn grabbed_outlines(&self, grab: Grab) -> Vec<Path> {
+        let boxed = |r: Rect| {
+            Path::polyline(
+                &[
+                    r.min,
+                    Point::new(r.max.x, r.min.y),
+                    r.max,
+                    Point::new(r.min.x, r.max.y),
+                ],
+                true,
+            )
+        };
+        match grab {
+            Grab::Vector(id) => vec![self.doc.vectors[&id].clone()],
+            Grab::Component(id) => vec![boxed(self.doc.components[&id].extent())],
+            Grab::Selection => {
+                let vectors = self
+                    .doc
+                    .selection
+                    .iter()
+                    .map(|id| self.doc.vectors[id].clone());
+                let models = self
+                    .doc
+                    .selected_components
+                    .iter()
+                    .filter_map(|id| self.doc.components.get(id))
+                    .map(|k| boxed(k.extent()));
+                vectors.chain(models).collect()
+            }
+        }
+    }
+
+    /// A select-mode drag in progress: what it moves, followed by the pointer, else the
+    /// selection window.
+    fn select_drag_overlay(&self, drag: Drag, reach: f64) -> Overlay {
+        let Some(grab) = self.grabbed(drag.start, reach) else {
+            return Overlay::Window {
+                start: drag.start,
+                end: drag.end,
+                crossing: drag.end.x < drag.start.x,
+            };
+        };
+        let by = cut_craft_core::glam::DAffine2::from_translation(drag.end - drag.start);
+        Overlay::Preview(
+            self.grabbed_outlines(grab)
+                .iter()
+                .map(|p| p.transformed(&by))
+                .collect(),
+        )
+    }
+
+    /// A select-mode drag let go: what it took hold of moves (as one undo), as Aspire's
+    /// select tool does; a drag from empty space selects by window.
+    fn select_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
+        let Some(grab) = self.grabbed(drag.start, reach) else {
+            let ids = self
+                .doc
+                .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);
+            return self.select(ids, shift);
+        };
+        // a vector or model not yet picked is picked, on its own, as it is dragged
+        match grab {
+            Grab::Vector(id) => {
+                self.doc.selection = [id].into();
+                self.doc.selected_components.clear();
+            }
+            Grab::Component(id) => {
+                self.doc.selection.clear();
+                self.doc.selected_components = [id].into();
+            }
+            Grab::Selection => {}
+        }
+        let by = drag.end - drag.start;
+        let params =
+            serde_json::json!({ "relative": true, "x": by.x, "y": by.y, "anchor": "bottom_left" });
+        if let Err(e) = self.apply("move", &params) {
+            self.status.set_message(&e);
         }
     }
 
@@ -7229,6 +7328,59 @@ mod tests {
             ("layer_properties", Some("Renamed"))
         );
         assert!(!h.app.available("run:no_such_command:{}"));
+    }
+
+    #[test]
+    fn dragging_a_model_in_the_2d_view_moves_it() {
+        use cut_craft_core::component::{Combine, Component};
+        let mut h = Harness::new();
+        let o = h.app.doc.job.area().min;
+        let rect = cut_craft_core::geometry::Rect::new(
+            o + Point::new(100.0, 100.0),
+            o + Point::new(160.0, 140.0),
+        );
+        let mut c = Change::builder(&h.app.doc);
+        c.add_component(Component::from_fn("model", Combine::Add, rect, 1.0, |_| {
+            Some(2.0)
+        }));
+        h.app.record(Ok(c.finish()), "added");
+        h.frame(vec![]);
+        // issue #4: pressed on the model (not yet picked) and dragged, it is picked and moves
+        let (from, to) = (h.at(130.0, 120.0), h.at(180.0, 140.0));
+        h.drag(from, to);
+        let k = h.app.doc.components.values().next().unwrap();
+        let moved = k.extent().min - rect.min;
+        assert!(
+            (moved.x - 50.0).abs() < 1.0 && (moved.y - 20.0).abs() < 1.0,
+            "moved by {moved:?}"
+        );
+        assert_eq!(h.app.doc.selected_components.len(), 1, "and picked");
+        h.app.invoke(&h.ctx, "undo");
+        let k = h.app.doc.components.values().next().unwrap();
+        assert!(
+            (k.extent().min - rect.min).length() < 1e-6,
+            "one undo puts it back"
+        );
+        // a vector selected is dragged by pressing inside its box
+        h.rectangle(10.0, 10.0, 40.0, 30.0);
+        let before = h.app.doc.selection_bounds().unwrap();
+        let (from, to) = (h.at(30.0, 25.0), h.at(40.0, 25.0));
+        h.drag(from, to);
+        let after = h.app.doc.selection_bounds().unwrap();
+        assert!(
+            (after.min.x - before.min.x - 10.0).abs() < 0.5,
+            "{before:?} → {after:?}"
+        );
+        // a drag from empty space still selects by window
+        h.app.doc.selection.clear();
+        h.app.doc.selected_components.clear();
+        let (from, to) = (h.at(5.0, 5.0), h.at(90.0, 80.0));
+        h.drag(from, to);
+        assert_eq!(
+            h.app.doc.selection.len(),
+            1,
+            "the window picked the rectangle"
+        );
     }
 
     #[test]

@@ -19,10 +19,19 @@ impl Command for Delete {
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
-        if doc.selection.is_empty() && doc.selected_bitmaps.is_empty() {
+        let components: Vec<_> = doc
+            .selected_components
+            .iter()
+            .filter(|id| doc.components.contains_key(id))
+            .copied()
+            .collect();
+        if doc.selection.is_empty() && doc.selected_bitmaps.is_empty() && components.is_empty() {
             return Err(CommandError::NothingSelected);
         }
         let mut c = Change::builder(doc);
+        for id in components {
+            c.remove_component(id);
+        }
         for &id in &doc.selection {
             c.remove(id);
         }
@@ -65,6 +74,26 @@ mod tests {
         assert!(doc.bitmaps.is_empty() && doc.selected_bitmaps.is_empty());
         doc.apply(&change.inverse()).unwrap();
         assert_eq!(doc.bitmaps.len(), 1, "undo brings it back");
+    }
+
+    #[test]
+    fn removes_selected_components_too() {
+        use cut_craft_core::component::{Combine, Component};
+        use cut_craft_core::geometry::{Point, Rect};
+        let mut doc = cut_craft_core::document::Document::default();
+        let mut c = Change::builder(&doc);
+        let rect = Rect::new(Point::ZERO, Point::splat(10.0));
+        let id = c.add_component(Component::from_fn("k", Combine::Add, rect, 1.0, |_| {
+            Some(1.0)
+        }));
+        doc.apply(&c.finish()).unwrap();
+        doc.selected_components = [id].into();
+        // issue #4: a component alone selected was "nothing is selected"
+        let change = Delete::run(&doc, &NoParams {}).unwrap();
+        doc.apply(&change).unwrap();
+        assert!(doc.components.is_empty());
+        doc.apply(&change.inverse()).unwrap();
+        assert_eq!(doc.components.len(), 1, "undo brings it back");
     }
 
     #[test]
