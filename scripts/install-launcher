@@ -2,8 +2,8 @@
 # Build Cut Craft for release and put it in the desktop's application menu.
 #   scripts/install-launcher           build, then install or update the launcher
 #   scripts/install-launcher --remove  take the launcher out again
-# The launcher runs this checkout's target/release/cut-craft from the repository folder,
-# where the app finds assets/icons. Re-run after pulling changes to rebuild.
+# The launcher runs this checkout's target/release/cut-craft from the repository folder.
+# Re-run after pulling changes to rebuild.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 repo=$(pwd)

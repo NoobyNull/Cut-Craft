@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/app", "crates/core", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/machines", "crates/calib", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 
 [workspace.dependencies]
@@ -34,9 +34,11 @@ must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
-# geometry-heavy code (toolpaths, simulation) is far too slow unoptimised, in tests and runs
+# geometry-heavy code (toolpaths, simulation) is far too slow unoptimised, in tests and runs;
+# line tables keep panics and backtraces readable at a fraction of full debug info's size
 [profile.dev]
 opt-level = 1
+debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3

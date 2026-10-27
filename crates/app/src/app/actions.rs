@@ -4,13 +4,13 @@
 use super::{
     APP_NAME, AUTOSAVE_SECONDS, Align, BUILT_INS, Change, CutCraftApp, DESIGN_PANEL_WIDTHS,
     DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
-    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers,
-    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, SECTION_PICTURE_ROWS,
-    SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SUMMARY_DEFAULTS, Screen, Session, Shown, TEMPLATE,
-    THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, Tool, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, egui, file_dialog, file_name, files, form,
-    gui, job_dialog, menu_items, on_the_desktop, rest_section, shortcut, side_tabs, summary_table,
-    template_dialog, toolpath_template_dialog, view3d,
+    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout, MODEL_IMPORTERS, Menus,
+    Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SUMMARY_DEFAULTS, Screen,
+    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, Tool, ToolDatabase,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, egui, file_dialog,
+    file_name, files, form, gui, job_dialog, menu_items, on_the_desktop, rest_section, shortcut,
+    side_tabs, summary_table, template_dialog, toolpath_template_dialog, view3d,
 };
 
 impl CutCraftApp {
@@ -22,7 +22,7 @@ impl CutCraftApp {
             doc: Document::default(),
             history: History::default(),
             registry: commands::registry(),
-            icons: Icons::load(&Icons::default_dir()),
+            icons: Icons::default_set(),
             menus,
             toolbar: gui::Toolbar::new(),
             status: gui::StatusBar::new(),
@@ -1564,17 +1564,14 @@ impl CutCraftApp {
 
     /// The middle of the window with no job open: the Cut Craft mark.
     pub(super) fn splash(ui: &mut egui::Ui) {
-        let logo = files::assets_dir().join(files::LOGO_FILE);
         let space = ui.available_size();
         let edge = space.min_elem() * SPLASH_SHARE;
         ui.vertical_centered(|ui| {
             ui.add_space((space.y - edge) / 2.0);
-            if logo.exists() {
-                ui.add(
-                    egui::Image::new(format!("file://{}", logo.display()))
-                        .fit_to_exact_size(egui::vec2(edge, edge)),
-                );
-            }
+            ui.add(
+                egui::Image::from_bytes("bytes://cut-craft.svg", LOGO)
+                    .fit_to_exact_size(egui::vec2(edge, edge)),
+            );
             ui.heading(APP_NAME);
         });
     }

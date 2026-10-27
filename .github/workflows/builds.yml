@@ -52,13 +52,12 @@ jobs:
             libxcursor-dev libxrandr-dev libxi-dev libvulkan-dev
       - name: Build
         run: cargo build --release -p cut-craft
-      - name: Package the program beside its assets
+      - name: Package the program
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           name="cut-craft-${version}-linux-x86_64"
           mkdir -p "dist/$name"
           cp target/release/cut-craft README.md "dist/$name/"
-          cp -R assets "dist/$name/assets"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
       - uses: actions/upload-artifact@v4
         with:
@@ -103,14 +102,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release -p cut-craft
-      - name: Package the program beside its assets
+      - name: Package the program
         shell: pwsh
         run: |
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
           $name = "cut-craft-$version-windows-x86_64"
           New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
           Copy-Item target/release/cut-craft.exe, README.md -Destination "dist/$name"
-          Copy-Item -Recurse assets -Destination "dist/$name/assets"
           Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
       - uses: actions/upload-artifact@v4
         with:

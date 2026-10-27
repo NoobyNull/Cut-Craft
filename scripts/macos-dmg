@@ -3,7 +3,6 @@
 #   scripts/macos-dmg            (on a Mac; .github/workflows/builds.yml runs it on GitHub)
 # Needs rustup's aarch64-apple-darwin and x86_64-apple-darwin targets, librsvg
 # (rsvg-convert, for the app icon) and the system's lipo, iconutil and hdiutil.
-# The logo and the icons (assets/icons) go in the app's Resources, where it finds them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,10 +16,6 @@ app="dist/Cut Craft.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 lipo -create -output "$app/Contents/MacOS/cut-craft" \
     target/aarch64-apple-darwin/release/cut-craft target/x86_64-apple-darwin/release/cut-craft
-# the app finds its logo and icons here (files::assets_dir)
-cp assets/cut-craft.svg "$app/Contents/Resources/"
-cp -R assets/icons "$app/Contents/Resources/icons"
-
 # the app's icon, from the logo, at each size macOS asks for
 iconset=dist/AppIcon.iconset
 mkdir -p "$iconset"

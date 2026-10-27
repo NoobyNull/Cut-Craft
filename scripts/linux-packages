@@ -10,12 +10,11 @@ program=${1:-target/release/cut-craft}
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 mkdir -p dist
 
-# AppImage: one file holding the program, its assets, a launcher, the desktop entry and icon
+# AppImage: one file holding the program (its icons are built in), a launcher, the desktop
+# entry and icon
 appdir=dist/CutCraft.AppDir
 rm -rf "$appdir"
 install -Dm755 "$program" "$appdir/usr/bin/cut-craft"
-mkdir -p "$appdir/usr/share/cut-craft"
-cp -R assets "$appdir/usr/share/cut-craft/assets"
 install -m755 packaging/linux/AppRun "$appdir/AppRun"
 cp packaging/linux/family.yax.CutCraft.desktop "$appdir/"
 rsvg-convert -w 256 -h 256 assets/cut-craft.svg -o "$appdir/family.yax.CutCraft.png"
@@ -34,7 +33,7 @@ stage=packaging/linux/stage
 rm -rf "$stage"
 mkdir -p "$stage"
 cp "$program" "$stage/cut-craft"
-cp -R assets "$stage/assets"
+cp assets/cut-craft.svg "$stage/"
 cp packaging/linux/family.yax.CutCraft.desktop "$stage/"
 flatpak-builder --user --force-clean --repo=dist/flatpak-repo dist/flatpak-build \
     packaging/linux/family.yax.CutCraft.yml

@@ -1,5 +1,4 @@
 #!/bin/bash
-# The AppImage's entry: Cut Craft with its logo and icons from inside the image.
+# The AppImage's entry: Cut Craft, its icons built in.
 here="$(dirname "$(readlink -f "$0")")"
-export CUT_CRAFT_ASSETS="$here/usr/share/cut-craft/assets"
 exec "$here/usr/bin/cut-craft" "$@"

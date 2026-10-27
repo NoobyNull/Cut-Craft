@@ -1,3 +1,4 @@
+- The icons are built into the program: nothing to keep beside it
 - Unsaved work is kept for recovery after a crash; saves never damage the old file
 - Auto Layout Text: words wrapped and sized to fill a selected shape
 - Ctrl + X / C / V work, and copy through the system clipboard between windows

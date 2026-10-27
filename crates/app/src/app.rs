@@ -212,6 +212,8 @@ const MESH_CELLS: usize = 250;
 /// own cells up to this. Built once per view (about 45 ms at 1200, measured in release).
 // ponytail: CPU-drawn mesh; a GPU one with a depth buffer could draw every cell, moving too
 const FINE_MESH_CELLS: usize = 1200;
+/// Cut Craft's own mark, built in.
+const LOGO: &[u8] = include_bytes!("../../../assets/cut-craft.svg");
 /// How long the 3D view stays still before it is drawn finely, seconds.
 const SETTLE_SECONDS: f64 = 0.25;
 /// How often unsaved work is copied for recovery after a crash, seconds.
