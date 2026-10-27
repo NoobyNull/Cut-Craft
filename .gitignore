@@ -1,8 +1,5 @@
 target/
 re/extracted/
-# the icons are Cut Craft's own redrawn SVGs and credited PNGs; the dialog pictures are
-# byte-for-byte copies of another program's bitmaps, kept on this machine only
-assets/icons/**/*.bmp
 /config/
 /output/
 dist/

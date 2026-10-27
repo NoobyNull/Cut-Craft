@@ -231,8 +231,7 @@ settings and saves nothing.
 
 The icons are in `assets/icons`, and the macOS app carries them in its Resources.
 `CUT_CRAFT_ICON_DIR` points Cut Craft at another set; without any, every button shows its name
-and everything still works. A few form pictures aren't in the repository yet; those forms
-show no picture until they are. The third-party icons are credited under **Help ▸ Third Party Licenses**.
+and everything still works. The third-party icons are credited under **Help ▸ Third Party Licenses**.
 
 ## How the code is laid out
 
