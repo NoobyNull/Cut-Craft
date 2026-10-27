@@ -10,10 +10,10 @@ edition = "2024"
 cut-craft-core = { path = "crates/core" }
 base64 = "0.21"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-eframe = { version = "0.27", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
 dxf = "0.6"
 flate2 = "1"
-egui_extras = { version = "0.27", default-features = false, features = ["file", "svg", "image"] }
+egui_extras = { version = "0.37", default-features = false, features = ["file", "svg", "image"] }
 glam = { version = "0.30", features = ["serde"] }
 i_overlay = "9.1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff"] }

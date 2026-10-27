@@ -338,7 +338,7 @@ impl Canvas {
                 .fold(0xcbf2_9ce4_8422_2325_u64, |h, z| {
                     (h ^ z.map_or(0, f64::to_bits)).wrapping_mul(0x0100_0000_01b3)
                 });
-            let key = egui::Id::new(("component", id.0, hash));
+            let key = egui::Id::unique(("component", id.0, hash));
             let ctx = ui.ctx();
             let texture = ctx
                 .data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
@@ -348,10 +348,7 @@ impl Canvas {
                         .into_iter()
                         .map(|g| g.map_or(egui::Color32::TRANSPARENT, egui::Color32::from_gray))
                         .collect();
-                    let image = egui::ColorImage {
-                        size: [component.columns, component.rows],
-                        pixels,
-                    };
+                    let image = egui::ColorImage::new([component.columns, component.rows], pixels);
                     let texture = ctx.load_texture(
                         format!("component {}", id.0),
                         image,
@@ -514,7 +511,7 @@ impl Canvas {
                 for (r, stroke) in [(reach, overlap), (tile, edge)] {
                     let screen_rect =
                         egui::Rect::from_two_pos(t.to_screen(r.min), t.to_screen(r.max));
-                    painter.rect_stroke(screen_rect, 0.0, stroke);
+                    painter.rect_stroke(screen_rect, 0, stroke, egui::StrokeKind::Middle);
                 }
             }
         }
@@ -552,7 +549,7 @@ impl Canvas {
         let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
         painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
         for (id, bitmap) in &doc.bitmaps {
-            let key = egui::Id::new(("bitmap", id.0, bitmap.columns, bitmap.rows));
+            let key = egui::Id::unique(("bitmap", id.0, bitmap.columns, bitmap.rows));
             let ctx = ui.ctx();
             // uploaded once; kept while the bitmap is the same size
             let texture = ctx
@@ -617,7 +614,7 @@ impl Canvas {
                 for q in at {
                     let r = Rect::from_center_size(t.to_screen(*q), egui::vec2(half, half) * 2.0);
                     painter.rect_filled(r, 0.0, ui.visuals().extreme_bg_color);
-                    painter.rect_stroke(r, 0.0, selected);
+                    painter.rect_stroke(r, 0, selected, egui::StrokeKind::Middle);
                 }
                 for path in moving {
                     painter.add(Shape::line(screen(path), selected));
@@ -639,7 +636,7 @@ impl Canvas {
                     ];
                     painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
                 } else {
-                    painter.rect_stroke(r, 0.0, selected);
+                    painter.rect_stroke(r, 0, selected, egui::StrokeKind::Middle);
                 }
             }
         }

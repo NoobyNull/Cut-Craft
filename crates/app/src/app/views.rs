@@ -11,9 +11,11 @@ use super::{
 };
 
 impl CutCraftApp {
-    /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
-    pub(super) fn ui(&mut self, ctx: &egui::Context) {
-        self.draw_window(ctx);
+    /// One pass of the whole window on the root `ui`; apart from the eframe entry so tests
+    /// can drive it headlessly.
+    pub(super) fn pass(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
+        self.draw_window(ui);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         self.autosave(ctx);
@@ -55,22 +57,23 @@ impl CutCraftApp {
     /// imported or installed as the menus would.
     pub(super) fn dropped_files(&mut self, ctx: &egui::Context) {
         let (hovering, dropped) = ctx.input(|i| {
-            let paths = |files: Vec<Option<std::path::PathBuf>>| {
-                files.into_iter().flatten().collect::<Vec<_>>()
-            };
             (
                 !i.raw.hovered_files.is_empty(),
-                paths(i.raw.dropped_files.iter().map(|f| f.path.clone()).collect()),
+                i.raw
+                    .dropped_files
+                    .iter()
+                    .map(|f| f.path().to_path_buf())
+                    .collect::<Vec<_>>(),
             )
         });
         if hovering {
-            let screen = ctx.screen_rect();
+            let screen = ctx.content_rect();
             let painter = ctx.layer_painter(egui::LayerId::new(
                 egui::Order::Foreground,
-                egui::Id::new("file_drop"),
+                egui::Id::unique("file_drop"),
             ));
             let shade = ctx
-                .style()
+                .global_style()
                 .visuals
                 .extreme_bg_color
                 .gamma_multiply(DROP_SHADE);
@@ -79,8 +82,8 @@ impl CutCraftApp {
                 screen.center(),
                 egui::Align2::CENTER_CENTER,
                 "Drop to open or import",
-                egui::TextStyle::Heading.resolve(&ctx.style()),
-                ctx.style().visuals.strong_text_color(),
+                egui::TextStyle::Heading.resolve(&ctx.global_style()),
+                ctx.global_style().visuals.strong_text_color(),
             );
         }
         for path in dropped {
@@ -177,7 +180,8 @@ impl CutCraftApp {
         .join("\n")
     }
 
-    pub(super) fn draw_window(&mut self, ctx: &egui::Context) {
+    pub(super) fn draw_window(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         self.icons.preload(ctx, self.options.general.preload_icons);
         // picks are view state: undo or another sheet can take what they name away
         let doc = &mut self.doc;
@@ -202,8 +206,8 @@ impl CutCraftApp {
             self.title = title;
         }
         self.shortcuts(ctx);
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| self.menu_bar(ui));
-        egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| self.status_bar(ui));
+        egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui));
+        egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));
         self.tool_database_window(ctx);
         self.machine_windows(ctx);
         self.info_window(ctx);
@@ -211,23 +215,23 @@ impl CutCraftApp {
         self.options_window(ctx);
         match self.screen {
             Screen::Start => {
-                egui::SidePanel::left("start_page").show(ctx, |ui| self.start_page(ui));
-                egui::CentralPanel::default().show(ctx, Self::splash);
+                egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
+                egui::CentralPanel::default().show(ui, Self::splash);
                 (self.view_transform, self.cursor) = (None, None);
                 return;
             }
             Screen::NewJob => {
-                egui::SidePanel::left("design_panel")
-                    .default_width(DESIGN_PANEL_WIDTHS * ctx.style().spacing.interact_size.x)
-                    .show(ctx, |ui| {
-                        egui::TopBottomPanel::bottom("form_buttons")
-                            .show_inside(ui, |ui| self.form_buttons(ui));
+                let width = DESIGN_PANEL_WIDTHS * ctx.global_style().spacing.interact_size.x;
+                egui::Panel::left("design_panel")
+                    .default_size(width)
+                    .show(ui, |ui| {
+                        egui::Panel::bottom("form_buttons").show(ui, |ui| self.form_buttons(ui));
                         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
                     });
             }
-            Screen::Job => self.job_pages(ctx),
+            Screen::Job => self.job_pages(ui),
         }
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             self.top_bar(ui);
             ui.separator();
             if let Some(split) = self.split {
@@ -236,11 +240,11 @@ impl CutCraftApp {
                     Split::Stacked => whole.split_top_bottom_at_fraction(0.5),
                     Split::SideBySide => whole.split_left_right_at_fraction(0.5),
                 };
-                ui.allocate_ui_at_rect(first, |ui| {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(first), |ui| {
                     ui.set_clip_rect(first);
                     self.view_2d(ui);
                 });
-                ui.allocate_ui_at_rect(second, |ui| {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(second), |ui| {
                     ui.set_clip_rect(second);
                     self.view_3d(ui);
                 });
@@ -276,7 +280,7 @@ impl CutCraftApp {
                             .fit_to_exact_size(egui::vec2(edge, edge)),
                     );
                 }
-                egui::ComboBox::from_id_source(icon)
+                egui::ComboBox::from_id_salt(icon)
                     .selected_text(name)
                     .show_ui(ui, |ui| contents(ui));
             };
@@ -289,14 +293,14 @@ impl CutCraftApp {
                 for (i, s) in doc.sheets.iter().enumerate() {
                     if ui.radio(i == doc.active_sheet, &s.name).clicked() {
                         apply = Some(("activate_sheet", serde_json::json!({ "sheet": i })));
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
             });
             bordered(ui, |ui| {
                 if ui.button("Add New Sheet...").clicked() {
                     *clicked = Some("add_sheet");
-                    ui.close_menu();
+                    ui.close();
                 }
             });
         });
@@ -307,14 +311,14 @@ impl CutCraftApp {
                     if ui.radio(l.id == doc.current_layer, &l.name).clicked() {
                         let params = serde_json::json!({ "layer": l.id });
                         apply = Some(("set_current_layer", params));
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
             });
             bordered(ui, |ui| {
                 if ui.button("Add New Layer...").clicked() {
                     *clicked = Some("add_layer");
-                    ui.close_menu();
+                    ui.close();
                 }
             });
         });
@@ -404,7 +408,7 @@ impl CutCraftApp {
             egui::Sense::hover(),
         );
         // left: the views and their split
-        ui.allocate_ui_at_rect(bar, |ui| {
+        ui.scope_builder(egui::UiBuilder::new().max_rect(bar), |ui| {
             ui.horizontal_centered(|ui| {
                 ui.selectable_value(&mut self.view, View::TwoD, "2D View (F2)");
                 ui.selectable_value(&mut self.view, View::ThreeD, "3D View (F3)");
@@ -432,17 +436,17 @@ impl CutCraftApp {
             });
         });
         // right: snapping
-        ui.allocate_ui_at_rect(bar, |ui| {
+        ui.scope_builder(egui::UiBuilder::new().max_rect(bar), |ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 self.snap_toggles(ui, edge, &mut clicked);
             });
         });
         // middle: the side, sheet, layer and level, centred on the bar by last frame's width
-        let width_id = ui.id().with("top_bar_middle_width");
+        let width_id = ui.scope_id().with("top_bar_middle_width");
         let width: f32 = ui.data(|d| d.get_temp(width_id)).unwrap_or_default();
         let middle = egui::Rect::from_center_size(bar.center(), egui::vec2(width, height));
         let drawn = ui
-            .allocate_ui_at_rect(middle, |ui| {
+            .scope_builder(egui::UiBuilder::new().max_rect(middle), |ui| {
                 ui.horizontal_centered(|ui| {
                     if self.doc.job.double_sided.is_some() {
                         let side = if self.doc.bottom_side {
@@ -520,7 +524,7 @@ impl CutCraftApp {
                 "Zoom Box"
             }
             "zoom_selected" => {
-                let margin = ctx.style().spacing.interact_size.y;
+                let margin = ctx.global_style().spacing.interact_size.y;
                 match (self.doc.selection_bounds(), self.view_area) {
                     (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
                         self.camera = Some(ViewTransform::fit(area, margin, bounds));
@@ -895,7 +899,7 @@ impl CutCraftApp {
                 }
                 Handle::Scale { .. } => {
                     painter.rect_filled(square, 0.0, visuals.extreme_bg_color);
-                    painter.rect_stroke(square, 0.0, stroke);
+                    painter.rect_stroke(square, 0, stroke, egui::StrokeKind::Middle);
                 }
                 Handle::Rotate { .. } => {
                     painter.rect_filled(square, 0.0, visuals.text_color());
@@ -923,7 +927,7 @@ impl CutCraftApp {
         };
         let mut clicked = None;
         // Aspire's toolpath drawing toggles over the top left of the 2D view
-        ui.allocate_ui_at_rect(room, |ui| {
+        ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                 let shown = self.display.previews_2d;
                 let drawing = if shown {
@@ -952,7 +956,7 @@ impl CutCraftApp {
                 }
             });
         });
-        ui.allocate_ui_at_rect(room, |ui| {
+        ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
             // laid out from the right, so the first button is the leftmost
             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                 for (id, label, icon) in VIEW_BUTTONS.into_iter().rev() {
@@ -1202,7 +1206,7 @@ impl CutCraftApp {
         let area = canvas.area;
         // the wheel zooms about the cursor: a quarter of the view's height doubles the zoom
         if let Some(at) = canvas.hover() {
-            let scroll = ui.input(|i| i.raw_scroll_delta.y);
+            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
             if scroll != 0.0 {
                 let factor = 2f32.powf(scroll / (area.height() / VIEW_ZOOM_QUARTERS));
                 canvas.transform = canvas.transform.zoomed_about(at, factor);

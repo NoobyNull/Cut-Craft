@@ -319,7 +319,7 @@ impl CutCraftApp {
             ui.separator();
             if ui.button("Report a Bug Here…").clicked() {
                 cut_craft_bug_report::open_here(ui.ctx());
-                ui.close_menu();
+                ui.close();
             }
         });
         clicked
@@ -721,7 +721,7 @@ impl CutCraftApp {
                 i.pointer.secondary_down(),
                 i.pointer.middle_down(),
                 i.modifiers.ctrl,
-                i.raw_scroll_delta.y,
+                i.smooth_scroll_delta.y,
                 i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::F6),
             )
         });
@@ -962,10 +962,10 @@ impl CutCraftApp {
             return;
         }
         // the toolpath list in its own bottom half, as Aspire's, so it never scrolls away
-        egui::TopBottomPanel::bottom("toolpath_list")
+        egui::Panel::bottom("toolpath_list")
             .resizable(true)
-            .default_height(ui.available_height() / 2.0)
-            .show_inside(ui, |ui| self.toolpath_list(ui));
+            .default_size(ui.available_height() / 2.0)
+            .show(ui, |ui| self.toolpath_list(ui));
         egui::ScrollArea::vertical().show(ui, |ui| {
             self.tool_groups(ui, &groups, Page::Toolpaths);
         });

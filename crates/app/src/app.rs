@@ -718,7 +718,7 @@ fn menu_items(
     clicked: &mut Option<String>,
 ) {
     // one line per item: the menu widens to its longest name instead
-    ui.style_mut().wrap = Some(false);
+    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     // each category in a border, all as wide as the widest item
     let font = egui::TextStyle::Button.resolve(ui.style());
     let text = |t: &str| {
@@ -754,7 +754,9 @@ fn readable(ctx: &egui::Context) {
     if let Some((name, data, index)) = cut_craft_core::font::system_face(&UI_FONTS) {
         let mut data = egui::FontData::from_owned(data);
         data.index = index;
-        fonts.font_data.insert(name.clone(), data);
+        fonts
+            .font_data
+            .insert(name.clone(), std::sync::Arc::new(data));
         fonts
             .families
             .entry(egui::FontFamily::Proportional)
@@ -762,7 +764,7 @@ fn readable(ctx: &egui::Context) {
             .insert(0, name);
     }
     ctx.set_fonts(fonts);
-    ctx.style_mut(|style| {
+    ctx.all_styles_mut(|style| {
         for font in style.text_styles.values_mut() {
             font.size *= TEXT_SCALE;
         }
@@ -795,13 +797,14 @@ fn paint_focus_ring(ctx: &egui::Context) {
     let Some(rect) = focus_ring(ctx) else {
         return;
     };
-    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("focus_ring"));
-    let stroke = ctx.style().visuals.selection.stroke;
+    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("focus_ring"));
+    let stroke = ctx.global_style().visuals.selection.stroke;
     let width = stroke.width * 2.0;
     ctx.layer_painter(layer).rect_stroke(
         rect.expand(width),
-        ctx.style().visuals.widgets.inactive.rounding,
+        ctx.global_style().visuals.widgets.inactive.corner_radius,
         egui::Stroke::new(width, stroke.color),
+        egui::StrokeKind::Outside,
     );
 }
 
@@ -849,7 +852,7 @@ fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
                     ui.add(
                         egui::DragValue::new(&mut rest.minimum_detail)
                             .suffix(" mm")
-                            .clamp_range(0.0..=f64::INFINITY),
+                            .range(0.0..=f64::INFINITY),
                     );
                     ui.end_row();
                     ui.label("Overlap")
@@ -857,7 +860,7 @@ fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
                     ui.add(
                         egui::DragValue::new(&mut rest.overlap)
                             .suffix(" mm")
-                            .clamp_range(0.0..=f64::INFINITY),
+                            .range(0.0..=f64::INFINITY),
                     );
                     ui.end_row();
                 });
@@ -896,7 +899,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             .on_disabled_hover_text("Not implemented yet");
         if response.clicked() {
             *clicked = Some(item.action.clone());
-            ui.close_menu();
+            ui.close();
         }
     }
 }
@@ -923,8 +926,13 @@ fn side_tabs(
         let look = ui
             .style()
             .interact_selectable(&response, current == Some(i));
-        ui.painter()
-            .rect(rect, look.rounding, look.weak_bg_fill, look.bg_stroke);
+        ui.painter().rect(
+            rect,
+            look.corner_radius,
+            look.weak_bg_fill,
+            look.bg_stroke,
+            egui::StrokeKind::Middle,
+        );
         // turned a quarter clockwise about its top-left corner, so it reads downwards
         let at = egui::pos2(rect.center().x + text.y / 2.0, rect.top() + pad.x);
         let mut shape = egui::epaint::TextShape::new(at, galley, look.text_color())
@@ -950,16 +958,17 @@ fn file_name(path: &std::path::Path) -> String {
 }
 
 impl eframe::App for CutCraftApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.ui(ctx);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.pass(ui);
     }
 }
 
 /// Opens the main window and runs until it is closed; with `shots`, takes the README's
 /// pictures into that folder instead and quits ([`screenshots`]).
 pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
-    // winit (0.29) delivers dropped files only on X11, so on a Wayland desktop Cut Craft runs
-    // through XWayland unless Options says to use Wayland directly
+    // winit 0.29 delivered dropped files only on X11; 0.30 should on Wayland too, but until that
+    // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
+    // use Wayland directly
     let wayland = crate::options::Options::load().general.wayland_native;
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
@@ -982,9 +991,6 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         .with_app_id(APP_ID),
         persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
-        // light, as Aspire is, whatever the desktop's theme
-        follow_system_theme: false,
-        default_theme: eframe::Theme::Light,
         ..Default::default()
     };
     // the pictures' run keeps its egui state apart from the user's
@@ -997,6 +1003,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         name,
         options,
         Box::new(|cc| {
+            // light, as Aspire is, whatever the desktop's theme
+            cc.egui_ctx.set_theme(egui::ThemePreference::Light);
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx);
             if let Some(rs) = &cc.wgpu_render_state {
@@ -1010,7 +1018,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             if let Some(dir) = shots {
                 // what a fresh clone shows: its icons, the starter tools, nothing of the user's
                 app.shots = Some(screenshots::Shots::new(dir));
-                return Box::new(app);
+                return Ok(Box::new(app));
             }
             app.load_tools();
             app.load_machines();
@@ -1020,7 +1028,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.clipart = crate::clipart::Clipart::load();
             app.recovery_path = files::config_dir().map(|d| d.join("recovery.ccjob"));
             app.open_recovery();
-            Box::new(app)
+            Ok(Box::new(app))
         }),
     )
     .expect("event loop error");

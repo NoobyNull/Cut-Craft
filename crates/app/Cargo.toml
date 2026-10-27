@@ -14,8 +14,8 @@ cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
 eframe.workspace = true
 egui_extras.workspace = true
-# egui_extras decodes pictures with image 0.24; this turns on its readers (dialog pictures, clipart)
-image-egui = { package = "image", version = "0.24", default-features = false, features = ["bmp", "png", "jpeg", "gif"] }
+# egui_extras decodes pictures with image; this turns on its readers (dialog pictures, clipart)
+image.workspace = true
 rfd.workspace = true
 schemars.workspace = true
 serde.workspace = true
@@ -187,4 +187,4 @@ workspace = true
 
 # eframe's windowing library, to open on X11 (XWayland): only there does it deliver dropped files
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-winit = { version = "0.29", default-features = false, features = ["x11"] }
+winit = { version = "0.30", default-features = false, features = ["x11"] }

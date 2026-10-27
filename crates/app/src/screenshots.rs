@@ -39,6 +39,8 @@ pub struct Shots {
     since: Option<f64>,
     /// Asked for the window's picture, waiting for it.
     asked: bool,
+    /// Where it lands.
+    shot: cut_craft_bug_report::Shot,
 }
 
 impl Shots {
@@ -48,6 +50,7 @@ impl Shots {
             scene: 0,
             since: None,
             asked: false,
+            shot: cut_craft_bug_report::Shot::default(),
         }
     }
 
@@ -65,18 +68,12 @@ impl Shots {
         };
         if !self.asked {
             if now - since >= HOLD_SECONDS {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
+                cut_craft_bug_report::take_screenshot(ctx, &self.shot);
                 self.asked = true;
             }
             return;
         }
-        let shot = ctx.input(|i| {
-            i.raw.events.iter().find_map(|e| match e {
-                egui::Event::Screenshot { image, .. } => Some(image.clone()),
-                _ => None,
-            })
-        });
-        if let Some(image) = shot {
+        if let Some(image) = cut_craft_bug_report::taken(&self.shot) {
             let path = self.dir.join(format!("{:02}-{name}.png", self.scene + 1));
             let saved = cut_craft_bug_report::png(&image)
                 .map_err(std::io::Error::other)

@@ -11,7 +11,7 @@ mod github;
 use eframe::egui;
 use std::panic::Location;
 use std::path::PathBuf;
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Mutex, mpsc};
 
 pub use github::{Report, compose, issue_url, open_with_platform, png, submit};
 
@@ -40,11 +40,31 @@ struct Frame {
 }
 
 fn frame_id() -> egui::Id {
-    egui::Id::new("bug_report_frame")
+    egui::Id::unique("bug_report_frame")
+}
+
+/// Where a window picture lands once egui has drawn it (a frame or more later).
+pub type Shot = Arc<Mutex<Option<Arc<egui::ColorImage>>>>;
+
+/// Asks egui for a picture of the window as it is drawn this frame; it lands in `shot`.
+pub fn take_screenshot(ctx: &egui::Context, shot: &Shot) {
+    let landing = shot.clone();
+    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+        egui::ScreenshotCallback::new(move |image| {
+            if let Ok(mut taken) = landing.lock() {
+                *taken = Some(image);
+            }
+        }),
+    ));
+}
+
+/// The picture `take_screenshot` asked for, once it has landed.
+pub fn taken(shot: &Shot) -> Option<Arc<egui::ColorImage>> {
+    shot.lock().ok()?.take()
 }
 
 fn with_frame<R>(ctx: &egui::Context, f: impl FnOnce(&mut Frame) -> R) -> R {
-    let number = ctx.frame_nr();
+    let number = ctx.cumulative_pass_nr();
     ctx.data_mut(|d| {
         let frame = d.get_temp_mut_or_default::<Frame>(frame_id());
         if frame.number != number {
@@ -143,8 +163,9 @@ pub struct Reporter {
     clicked: Option<(egui::Pos2, Vec<Region>)>,
     /// Shows the small Report a Bug menu at the right-click.
     menu: bool,
-    /// The window as it was at the last right-click.
+    /// The window as it was at the last right-click, and where egui delivers it.
     screenshot: Option<Arc<egui::ColorImage>>,
+    shot: Shot,
     draft: Option<Draft>,
     sending: Option<mpsc::Receiver<Result<String, String>>>,
 }
@@ -164,6 +185,7 @@ impl Reporter {
             clicked: None,
             menu: false,
             screenshot: None,
+            shot: Shot::default(),
             draft: None,
             sending: None,
         }
@@ -189,15 +211,9 @@ impl Reporter {
             self.clicked = Some((at, regions_at(&regions, at)));
             self.menu = !claimed;
             // the window as it is now, before any menu is drawn over it
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
+            take_screenshot(ctx, &self.shot);
         }
-        let shot = ctx.input(|i| {
-            i.raw.events.iter().find_map(|e| match e {
-                egui::Event::Screenshot { image, .. } => Some(image.clone()),
-                _ => None,
-            })
-        });
-        if let Some(image) = shot {
+        if let Some(image) = taken(&self.shot) {
             self.screenshot = Some(image);
         }
         if self.menu && clicked.is_none() && self.small_menu(ctx) {
@@ -232,7 +248,7 @@ impl Reporter {
             return false;
         };
         let mut chosen = false;
-        let area = egui::Area::new(egui::Id::new("bug_report_menu"))
+        let area = egui::Area::new(egui::Id::unique("bug_report_menu"))
             .order(egui::Order::Foreground)
             .fixed_pos(*at)
             // kept inside the window, as a right-click near an edge would put it outside
@@ -261,7 +277,7 @@ impl Reporter {
         };
         let sending = self.sending.is_some();
         let (mut open, mut submit_now, mut cancel) = (true, false, false);
-        let width = ctx.screen_rect().width() * FORM_SHARE;
+        let width = ctx.content_rect().width() * FORM_SHARE;
         egui::Window::new("Report a Bug")
             .open(&mut open)
             .default_width(width)
@@ -384,7 +400,7 @@ impl Reporter {
         match result {
             Ok(url) => {
                 self.draft = None;
-                ctx.output_mut(|o| o.copied_text.clone_from(&url));
+                ctx.copy_text(url.clone());
                 Some(format!("Bug reported: {url} (address copied)"))
             }
             Err(e) => {
@@ -410,7 +426,8 @@ mod tests {
             events,
             ..Default::default()
         };
-        let _ = ctx.run(input, draw);
+        // no renderer takes a headless frame's texture changes
+        ctx.run_pass(input, draw).textures_delta.clear();
     }
 
     fn right_click(at: egui::Pos2) -> Vec<egui::Event> {
@@ -430,18 +447,20 @@ mod tests {
         let ctx = egui::Context::default();
         let mut found = vec![];
         run(&ctx, vec![], |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                mark(ui, "Whole");
-                mark_rect(
-                    ctx,
-                    egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(50.0, 50.0)),
-                    "Box",
-                );
-                mark_rect(
-                    ctx,
-                    egui::Rect::from_min_size(egui::pos2(500.0, 10.0), egui::vec2(50.0, 50.0)),
-                    "Elsewhere",
-                );
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    mark(ui, "Whole");
+                    mark_rect(
+                        ctx,
+                        egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(50.0, 50.0)),
+                        "Box",
+                    );
+                    mark_rect(
+                        ctx,
+                        egui::Rect::from_min_size(egui::pos2(500.0, 10.0), egui::vec2(50.0, 50.0)),
+                        "Elsewhere",
+                    );
+                });
             });
             found = with_frame(ctx, |f| regions_at(&f.regions, egui::pos2(20.0, 20.0)));
         });
@@ -465,7 +484,7 @@ mod tests {
         let at = egui::pos2(100.0, 100.0);
         let frame = |events, claim_it: bool, reporter: &mut Reporter| {
             run(&ctx, events, |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| mark(ui, "Canvas"));
+                ctx.root_ui(|ui| egui::CentralPanel::default().show(ui, |ui| mark(ui, "Canvas")));
                 if claim_it {
                     claim(ctx);
                 }

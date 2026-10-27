@@ -296,7 +296,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
             let material = look.material.clone();
             let mut drag = egui::DragValue::new(&mut n)
                 .custom_parser(move |text| cut_craft_core::calc::evaluate(text, &material))
-                .clamp_range(
+                .range(
                     min.map_or(f64::NEG_INFINITY, |m| m / factor)
                         ..=max.map_or(f64::INFINITY, |m| m / factor),
                 );
@@ -423,7 +423,7 @@ fn drop_down(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<Str
         .iter()
         .find(|o| o.value == current)
         .map_or(current.to_owned(), |o| o.label.clone());
-    egui::ComboBox::from_id_source(ui.next_auto_id())
+    egui::ComboBox::from_id_salt(ui.next_auto_id())
         .selected_text(shown)
         .show_ui(ui, |ui| {
             for o in options {
@@ -446,7 +446,12 @@ fn corners(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<Strin
     let square = rect.shrink(spot);
     let visuals = ui.visuals();
     let painter = ui.painter_at(rect);
-    painter.rect_stroke(square, 0.0, visuals.widgets.inactive.fg_stroke);
+    painter.rect_stroke(
+        square,
+        0,
+        visuals.widgets.inactive.fg_stroke,
+        egui::StrokeKind::Middle,
+    );
     for o in options {
         if let Some(at) = corner_spot(&o.value) {
             let fill = if o.value == current {
@@ -934,14 +939,16 @@ mod tests {
             .collect();
         let ctx = egui::Context::default();
         // bigger text, as the app's readable style has
-        ctx.style_mut(|s| {
+        ctx.all_styles_mut(|s| {
             for font in s.text_styles.values_mut() {
                 font.size *= 1.15;
             }
         });
-        let out = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| faces(ui, &options, "top", None));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| faces(ui, &options, "top", None));
         });
+        // no renderer takes a headless frame's texture changes
+        out.textures_delta.clear();
         let mut labels = 0;
         for clipped in &out.shapes {
             if let egui::Shape::Text(t) = &clipped.shape {

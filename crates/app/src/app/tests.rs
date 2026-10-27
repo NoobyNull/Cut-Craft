@@ -67,11 +67,11 @@ fn drawing_snaps_to_nearby_corners() {
     };
     let mut snapped = None;
     let ctx = h.ctx.clone();
-    let _ = ctx.run(RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
+    headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             snapped = h.app.snapped(ui, Some(Gesture::Dragging(drag)), scale);
         });
-    });
+    }));
     let Some(Gesture::Dragging(d)) = snapped else {
         panic!("still a drag")
     };
@@ -334,6 +334,26 @@ fn clicking_one_of_a_group_picks_the_group() {
     assert_eq!(h.app.doc.selection.len(), 1, "ungrouped, one at a time");
 }
 
+/// A headless frame's output: no renderer takes its texture changes, so they are let go.
+fn headless(mut out: egui::FullOutput) -> egui::FullOutput {
+    out.textures_delta.clear();
+    out
+}
+
+/// A file dropped on the window, as the windowing layer reports one.
+#[derive(Debug)]
+struct Dropped(std::path::PathBuf);
+
+impl egui::DroppedFile for Dropped {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
+
 struct Harness {
     ctx: egui::Context,
     app: CutCraftApp,
@@ -386,10 +406,7 @@ impl Harness {
             dropped_files: if dropped {
                 files
                     .iter()
-                    .map(|p| egui::DroppedFile {
-                        path: Some(p.clone()),
-                        ..Default::default()
-                    })
+                    .map(|p| std::sync::Arc::new(Dropped(p.clone())) as egui::DroppedFileHandle)
                     .collect()
             } else {
                 vec![]
@@ -407,22 +424,31 @@ impl Harness {
             },
             ..Default::default()
         };
-        self.shapes = self.ctx.run(input, |ctx| self.app.ui(ctx)).shapes;
+        self.shapes = headless(self.ctx.run_ui(input, |ui| self.app.pass(ui))).shapes;
     }
 
     /// One frame with `modifiers` held, as the windowing layer reports them every frame.
     fn frame_holding(&mut self, modifiers: Modifiers, events: Vec<Event>) {
         self.time += 0.1;
+        let mut events = events;
+        events.insert(0, Event::ModifiersChanged(modifiers));
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
             time: Some(self.time),
-            modifiers,
             events,
             ..Default::default()
         };
-        let out = self.ctx.run(input, |ctx| self.app.ui(ctx));
+        let out = headless(self.ctx.run_ui(input, |ui| self.app.pass(ui)));
         self.shapes = out.shapes;
-        self.copied = out.platform_output.copied_text;
+        self.copied = out
+            .platform_output
+            .commands
+            .iter()
+            .find_map(|c| match c {
+                egui::OutputCommand::CopyText(text) => Some(text.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
     }
 
     /// Every place the last frame drew `text`.
@@ -642,7 +668,7 @@ fn guides_come_out_of_the_rulers_move_and_go_back_in() {
     let mut h = Harness::new();
     h.frame(vec![]);
     let area = h.app.view_area.unwrap();
-    let ruler = h.ctx.style().spacing.interact_size.y / 2.0;
+    let ruler = h.ctx.global_style().spacing.interact_size.y / 2.0;
     let top_ruler = egui::pos2(area.center().x, area.min.y + ruler);
     h.drag(top_ruler, h.at(100.0, 80.0));
     assert_eq!(h.app.doc.guides.len(), 1, "a guide across the job");
@@ -1092,7 +1118,8 @@ fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
     h.app.apply_form("draw_rectangle", &params).unwrap();
     assert_eq!(arcs(&h.app), 4);
     let rect = h.app.doc.vectors.values().next().unwrap().bounds();
-    assert!((rect.size().x - 100.0).abs() < 1e-6, "same size: {rect:?}");
+    // drawn from screen pixels: the same to a hundredth of a millimetre
+    assert!((rect.size().x - 100.0).abs() < 1e-2, "same size: {rect:?}");
     h.app.invoke(&h.ctx, "undo");
     assert_eq!(arcs(&h.app), 0, "one undo puts the square back");
     // once let go, Apply draws a new shape
@@ -1122,7 +1149,7 @@ fn right_clicking_anywhere_offers_a_bug_report_saying_where() {
     }]);
     h.frame(vec![]);
     // the status bar has no menu of its own: the small one shows
-    let status = h.ctx.screen_rect().left_bottom() + egui::vec2(5.0, -5.0);
+    let status = h.ctx.content_rect().left_bottom() + egui::vec2(5.0, -5.0);
     h.right_click(status);
     // a new menu is drawn unseen for a frame while egui sizes it
     h.frame(vec![]);
@@ -1634,7 +1661,13 @@ fn the_wheel_zooms_about_the_cursor() {
         (t.scale, t.to_job(at))
     };
     h.frame(vec![Event::PointerMoved(at)]);
-    h.frame(vec![Event::Scroll(vec2(0.0, 120.0))]);
+    h.frame(vec![Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, 120.0),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+        modifiers: Modifiers::NONE,
+    }]);
     h.frame(vec![]);
     let t = h.app.view_transform.unwrap();
     assert!(t.scale > before, "scrolling up zooms in");
@@ -1831,10 +1864,10 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     // the section, drawn on its own (it is below the fold of the pocket form)
     let ctx = egui::Context::default();
     let mut section = serde_json::json!({});
-    let out = ctx.run(RawInput::default(), |ctx| {
+    let out = headless(ctx.run_ui(RawInput::default(), |ui| {
         egui::CentralPanel::default()
-            .show(ctx, |ui| rest_section(ui, &mut section, &h.app.tools.tools));
-    });
+            .show(ui, |ui| rest_section(ui, &mut section, &h.app.tools.tools));
+    }));
     let drawn = |text: &str| {
         out.shapes
             .iter()
@@ -2272,8 +2305,8 @@ fn files_dropped_on_the_window_open_import_or_install() {
     std::fs::create_dir_all(&dir).unwrap();
     let picture = dir.join("photo.png");
     let mut png = std::io::Cursor::new(vec![]);
-    image_egui::GrayImage::from_pixel(4, 4, image_egui::Luma([128]))
-        .write_to(&mut png, image_egui::ImageFormat::Png)
+    image::GrayImage::from_pixel(4, 4, image::Luma([128]))
+        .write_to(&mut png, image::ImageFormat::Png)
         .unwrap();
     std::fs::write(&picture, png.into_inner()).unwrap();
     // on the start page there is no job to import into

@@ -7,7 +7,11 @@ use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape};
 use eframe::egui;
 
 /// The window's share of the screen when it first opens.
-const WINDOW_SHARE: f32 = 0.6;
+/// The window's own id (its title's hashing is egui's).
+fn tool_window() -> egui::Id {
+    egui::Id::unique("tool_database_window")
+}
+const WINDOW_SHARE: f32 = 0.7;
 /// The tree's share of the window's width when it first opens.
 const TREE_SHARE: f32 = 0.35;
 /// A tool's picture beside its geometry, in rows of the theme's interactive height.
@@ -159,15 +163,16 @@ impl Manager {
     pub fn show(&mut self, ctx: &egui::Context, look: &Look) -> Option<Outcome> {
         let mut open = true;
         let mut outcome = None;
-        let size = ctx.screen_rect().size() * WINDOW_SHARE;
+        let size = ctx.content_rect().size() * WINDOW_SHARE;
         egui::Window::new("Tool Database")
+            .id(tool_window())
             .open(&mut open)
             .default_size(size)
             .resizable(true)
             .collapsible(false)
             .show(ctx, |ui| {
                 cut_craft_bug_report::mark(ui, "Tool Database window");
-                egui::TopBottomPanel::bottom("tool_database_buttons").show_inside(ui, |ui| {
+                egui::Panel::bottom("tool_database_buttons").show(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("Cancel").clicked() {
                             outcome = Some(Outcome::Cancel);
@@ -177,22 +182,19 @@ impl Manager {
                         }
                     });
                 });
-                egui::SidePanel::left("tool_database_tree")
+                egui::Panel::left("tool_database_tree")
                     .resizable(true)
-                    .default_width(size.x * TREE_SHARE)
-                    .show_inside(ui, |ui| {
-                        egui::TopBottomPanel::bottom("tool_database_tree_buttons").show_inside(
-                            ui,
-                            |ui| {
-                                if let Some(action) = self.tree_buttons(ui, look) {
-                                    outcome = self.act(action).or(outcome.take());
-                                }
-                            },
-                        );
+                    .default_size(size.x * TREE_SHARE)
+                    .show(ui, |ui| {
+                        egui::Panel::bottom("tool_database_tree_buttons").show(ui, |ui| {
+                            if let Some(action) = self.tree_buttons(ui, look) {
+                                outcome = self.act(action).or(outcome.take());
+                            }
+                        });
                         egui::ScrollArea::both().show(ui, |ui| self.tree(ui, look));
                     });
-                egui::CentralPanel::default().show_inside(ui, |ui| {
-                    egui::TopBottomPanel::bottom("tool_database_apply").show_inside(ui, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    egui::Panel::bottom("tool_database_apply").show(ui, |ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.button("Apply").clicked() {
                                 outcome = Some(Outcome::Apply);
@@ -434,7 +436,7 @@ fn load_slot(ui: &mut egui::Ui, changer: &mut Changer, tool: &str) {
     let mut chosen = None;
     ui.horizontal(|ui| {
         ui.label(format!("Loaded in {}", changer.machine));
-        egui::ComboBox::from_id_source("tool_changer_slot")
+        egui::ComboBox::from_id_salt("tool_changer_slot")
             .selected_text(shown)
             .show_ui(ui, |ui| {
                 if ui.selectable_label(now.is_none(), "(not loaded)").clicked() {
@@ -473,7 +475,7 @@ fn length(ui: &mut egui::Ui, value: &mut f64, look: &Look, per_minute: bool) -> 
         .add(
             egui::DragValue::new(&mut shown)
                 .speed(speed)
-                .clamp_range(0.0..=f64::MAX)
+                .range(0.0..=f64::MAX)
                 .max_decimals(4)
                 .suffix(format!(" {unit}")),
         )
@@ -507,7 +509,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
         ui.add(egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY));
         ui.end_row();
         ui.label("Tool Type");
-        egui::ComboBox::from_id_source("tool_type")
+        egui::ComboBox::from_id_salt("tool_type")
             .selected_text(shape_name(tool.shape))
             .show_ui(ui, |ui| {
                 for (shape, name) in SHAPES {
@@ -517,7 +519,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
         ui.end_row();
         // stands in for dragging a tool between groups
         ui.label("Group");
-        egui::ComboBox::from_id_source("tool_group")
+        egui::ComboBox::from_id_salt("tool_group")
             .selected_text(if tool.group.is_empty() {
                 "(top)"
             } else {
@@ -550,7 +552,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                     ui.label("Included Angle (A)");
                     ui.add(
                         egui::DragValue::new(&mut tool.angle)
-                            .clamp_range(1.0..=179.0)
+                            .range(1.0..=179.0)
                             .suffix("°"),
                     );
                     ui.end_row();
@@ -561,7 +563,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                     ui.end_row();
                 }
                 ui.label("Number of Flutes");
-                ui.add(egui::DragValue::new(&mut tool.flutes).clamp_range(1..=12));
+                ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
                 ui.end_row();
             });
         if let Some(image) = (look.picture)(picture_path(tool.shape)) {
@@ -583,7 +585,7 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
             if ui
                 .add(
                     egui::DragValue::new(&mut percent)
-                        .clamp_range(0.0..=100.0)
+                        .range(0.0..=100.0)
                         .max_decimals(2)
                         .suffix(" %"),
                 )
@@ -600,7 +602,7 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
         ui.label("Spindle Speed");
         ui.add(
             egui::DragValue::new(&mut tool.spindle_speed)
-                .clamp_range(0.0..=f64::MAX)
+                .range(0.0..=f64::MAX)
                 .suffix(" r.p.m."),
         );
         ui.end_row();
@@ -639,7 +641,10 @@ mod tests {
             )),
             ..Default::default()
         };
-        let _ = ctx.run(input, |ctx| outcome = manager.show(ctx, &look));
+        // no renderer takes a headless frame's texture changes
+        ctx.run_pass(input, |ctx| outcome = manager.show(ctx, &look))
+            .textures_delta
+            .clear();
         outcome
     }
 
@@ -650,11 +655,12 @@ mod tests {
         frame(&mut m, &ctx);
         m.pick = Some(Pick::Tool(0));
         frame(&mut m, &ctx);
-        let first = ctx.memory(|mem| mem.area_rect(egui::Id::new("Tool Database")));
+        let first = ctx.memory(|mem| mem.area_rect(tool_window()));
+        assert!(first.is_some(), "the window is drawn");
         for _ in 0..3 {
             frame(&mut m, &ctx);
         }
-        let later = ctx.memory(|mem| mem.area_rect(egui::Id::new("Tool Database")));
+        let later = ctx.memory(|mem| mem.area_rect(tool_window()));
         assert_eq!(first, later, "panels inside the window do not grow it");
         m.pick = Some(Pick::Group("Metric Tools".into()));
         assert_eq!(frame(&mut m, &ctx), None);

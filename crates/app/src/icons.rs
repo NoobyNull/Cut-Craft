@@ -89,6 +89,8 @@ impl Icons {
                         bytes
                     };
                     ctx.include_bytes(uri(path), bytes);
+                    // decoding runs on a thread of egui's: started now, ready by the first draw
+                    let _ = ctx.try_load_image(&uri(path), egui::SizeHint::default());
                 }
                 Err(e) => eprintln!("icon {}: {e}", path.display()),
             }
@@ -156,11 +158,9 @@ fn with_alpha(bmp: &[u8]) -> Option<Vec<u8>> {
             rgba.extend([p[2], p[1], p[0], p[3]]);
         }
     }
-    let image = image_egui::RgbaImage::from_raw(w.unsigned_abs(), h.unsigned_abs(), rgba)?;
+    let image = image::RgbaImage::from_raw(w.unsigned_abs(), h.unsigned_abs(), rgba)?;
     let mut png = std::io::Cursor::new(vec![]);
-    image
-        .write_to(&mut png, image_egui::ImageFormat::Png)
-        .ok()?;
+    image.write_to(&mut png, image::ImageFormat::Png).ok()?;
     Some(png.into_inner())
 }
 
@@ -245,18 +245,28 @@ mod tests {
         assert!(icons.find("import/link.png", "").is_some(), "PNG icons too");
     }
 
+    /// The picture at `uri` once egui's decoding thread has it (a few milliseconds).
+    fn decoded(ctx: &egui::Context, uri: &str) -> Result<std::sync::Arc<egui::ColorImage>, String> {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match ctx.try_load_image(uri, egui::SizeHint::default()) {
+                Ok(egui::load::ImagePoll::Ready { image }) => return Ok(image),
+                Ok(egui::load::ImagePoll::Pending { .. }) if std::time::Instant::now() < until => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Ok(egui::load::ImagePoll::Pending { .. }) => return Err("still pending".into()),
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+    }
+
     #[test]
     fn egui_decodes_bitmaps() {
         let bmp = tiny_bmp();
         let ctx = egui::Context::default();
         egui_extras::install_image_loaders(&ctx);
         ctx.include_bytes("bytes://picture.bmp", bmp);
-        let loaded = ctx.try_load_image("bytes://picture.bmp", egui::SizeHint::default());
-        let error = loaded.as_ref().err().map(ToString::to_string);
-        assert!(
-            matches!(loaded, Ok(egui::load::ImagePoll::Ready { .. })),
-            "{error:?}"
-        );
+        assert!(decoded(&ctx, "bytes://picture.bmp").is_ok());
     }
 
     #[test]
@@ -268,16 +278,12 @@ mod tests {
         let mut icons = Icons::load(&dir);
         let ctx = egui::Context::default();
         egui_extras::install_image_loaders(&ctx);
-        let lazy = icons.image(&path).source().uri().unwrap().to_owned();
+        let lazy = icons.image(&path).source(&ctx).uri().unwrap().to_owned();
         assert!(lazy.starts_with("file://"), "read when first drawn: {lazy}");
         icons.preload(&ctx, true);
-        let uri = icons.image(&path).source().uri().unwrap().to_owned();
-        let loaded = ctx.try_load_image(&uri, egui::SizeHint::default());
-        assert!(
-            matches!(loaded, Ok(egui::load::ImagePoll::Ready { .. })),
-            "no loading spinner: {:?}",
-            loaded.err().map(|e| e.to_string())
-        );
+        let uri = icons.image(&path).source(&ctx).uri().unwrap().to_owned();
+        assert!(uri.starts_with("bytes://"), "read already: {uri}");
+        assert!(decoded(&ctx, &uri).is_ok(), "decoded from the bytes read");
     }
 
     /// A 2 × 1 32-bit bitmap, as Aspire's dialog pictures are: a clear white pixel, then an
@@ -305,12 +311,8 @@ mod tests {
         egui_extras::install_image_loaders(&ctx);
         // bitmaps are read up front even when other icons are not, for their alpha
         icons.preload(&ctx, false);
-        let uri = icons.image(&path).source().uri().unwrap().to_owned();
-        let Ok(egui::load::ImagePoll::Ready { image }) =
-            ctx.try_load_image(&uri, egui::SizeHint::default())
-        else {
-            panic!("the bitmap is ready");
-        };
+        let uri = icons.image(&path).source(&ctx).uri().unwrap().to_owned();
+        let image = decoded(&ctx, &uri).expect("the bitmap decodes");
         assert_eq!(image.size, [2, 1]);
         assert_eq!(
             image.pixels[0].a(),

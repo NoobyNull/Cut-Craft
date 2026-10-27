@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn screenshots_become_pngs() {
-        let image = egui::ColorImage::new([2, 1], egui::Color32::RED);
+        let image = egui::ColorImage::filled([2, 1], egui::Color32::RED);
         assert!(png(&image).unwrap().starts_with(&[0x89, b'P', b'N', b'G']));
     }
 }

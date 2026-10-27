@@ -8,6 +8,10 @@ use eframe::egui;
 use std::path::PathBuf;
 
 /// The windows' share of the screen when they first open.
+/// The Machine Configuration Management window's own id (its title's hashing is egui's).
+fn machine_window() -> egui::Id {
+    egui::Id::unique("machine_configuration_management")
+}
 const WINDOW_SHARE: f32 = 0.4;
 /// A post's text in View, in rows of the theme's interactive height.
 const VIEW_ROWS: f32 = 20.0;
@@ -37,11 +41,11 @@ fn viewer(ctx: &egui::Context, viewing: &mut Option<(String, String)>) {
     let Some((name, text)) = viewing else { return };
     let mut open = true;
     egui::Window::new(format!("Post-Processor Content: {name}"))
-        .id(egui::Id::new("post_processor_content"))
+        .id(egui::Id::unique("post_processor_content"))
         .open(&mut open)
         .show(ctx, |ui| {
             if ui.button("Copy").clicked() {
-                ui.ctx().output_mut(|o| o.copied_text.clone_from(text));
+                ui.ctx().copy_text(text.clone());
             }
             let height = ui.spacing().interact_size.y * VIEW_ROWS;
             egui::ScrollArea::both().max_height(height).show(ui, |ui| {
@@ -107,8 +111,9 @@ impl MachineManager {
         let mut open = true;
         let mut outcome = None;
         egui::Window::new("Machine Configuration Management")
+            .id(machine_window())
             .open(&mut open)
-            .default_width(ctx.screen_rect().width() * WINDOW_SHARE)
+            .default_width(ctx.content_rect().width() * WINDOW_SHARE)
             .collapsible(false)
             .show(ctx, |ui| {
                 cut_craft_bug_report::mark(ui, "Machine Configuration Management");
@@ -158,7 +163,7 @@ impl MachineManager {
                 .active()
                 .map_or("(none)", |m| m.name.as_str())
                 .to_owned();
-            egui::ComboBox::from_id_source("machine_configuration")
+            egui::ComboBox::from_id_salt("machine_configuration")
                 .selected_text(shown)
                 .show_ui(ui, |ui| {
                     for (i, m) in self.draft.machines.iter().enumerate() {
@@ -227,7 +232,7 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine) {
                     let speed = (shown.abs() / 100.0).max(f64::EPSILON);
                     let drag = egui::DragValue::new(&mut shown)
                         .speed(speed)
-                        .clamp_range(0.0..=f64::MAX)
+                        .range(0.0..=f64::MAX)
                         .max_decimals(3)
                         .suffix(unit);
                     if ui.add(drag).changed() {
@@ -270,7 +275,7 @@ fn tool_changer(ui: &mut egui::Ui, machine: &mut Machine) {
         ui.horizontal(|ui| {
             ui.label("Slots");
             if ui
-                .add(egui::DragValue::new(&mut count).clamp_range(1..=MOST_SLOTS))
+                .add(egui::DragValue::new(&mut count).range(1..=MOST_SLOTS))
                 .changed()
             {
                 machine.set_slot_count(count);
@@ -327,11 +332,11 @@ fn posts_section(
             row.context_menu(|ui| {
                 if ui.button("View").clicked() {
                     *viewing = entries.iter().find(|e| &e.name == name).and_then(view);
-                    ui.close_menu();
+                    ui.close();
                 }
                 if ui.button("Make Default").clicked() {
                     make_default = Some(name.clone());
-                    ui.close_menu();
+                    ui.close();
                 }
             });
         }
@@ -343,7 +348,7 @@ fn posts_section(
                 .iter()
                 .filter(|e| e.broken.is_none() && !machine.posts.contains(&e.name))
                 .collect();
-            egui::ComboBox::from_id_source("add_post")
+            egui::ComboBox::from_id_salt("add_post")
                 .selected_text("Add a post-processor")
                 .show_ui(ui, |ui| {
                     for e in unused {
@@ -429,7 +434,7 @@ impl PostManager {
         let mut outcome = None;
         egui::Window::new("Post-Processor Management")
             .open(&mut open)
-            .default_width(ctx.screen_rect().width() * WINDOW_SHARE)
+            .default_width(ctx.content_rect().width() * WINDOW_SHARE)
             .collapsible(false)
             .show(ctx, |ui| {
                 cut_craft_bug_report::mark(ui, "Post-Processor Management");
@@ -528,7 +533,7 @@ impl PostManager {
         let mut asked = None;
         if ui.button("View").clicked() {
             self.viewing = view(entry);
-            ui.close_menu();
+            ui.close();
         }
         match &entry.source {
             Source::BuiltIn(_) => {
@@ -540,7 +545,7 @@ impl PostManager {
                         }
                         Err(e) => PostOutcome::Message(e),
                     });
-                    ui.close_menu();
+                    ui.close();
                 }
             }
             Source::Custom(path) => {
@@ -548,11 +553,11 @@ impl PostManager {
                     asked = path
                         .parent()
                         .map(|d| PostOutcome::OpenFolder(d.to_path_buf()));
-                    ui.close_menu();
+                    ui.close();
                 }
                 if ui.button("Delete…").clicked() {
                     self.deleting = Some(entry.clone());
-                    ui.close_menu();
+                    ui.close();
                 }
             }
         }
@@ -600,7 +605,8 @@ mod tests {
             )),
             ..Default::default()
         };
-        let _ = ctx.run(input, draw);
+        // no renderer takes a headless frame's texture changes
+        ctx.run_pass(input, draw).textures_delta.clear();
     }
 
     #[test]
@@ -621,7 +627,7 @@ mod tests {
         }
         assert_eq!(one.draft.machines[0].name, "My Machine");
         let window = ctx
-            .memory(|m| m.area_rect(egui::Id::new("Machine Configuration Management")))
+            .memory(|m| m.area_rect(machine_window()))
             .expect("drawn");
         assert!(
             window.height() < 600.0,
@@ -640,8 +646,10 @@ mod tests {
         };
         let ctx = egui::Context::default();
         frame(&ctx, |ctx| {
-            egui::CentralPanel::default()
-                .show(ctx, |ui| assert_eq!(posts.confirm_delete(ui), None));
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default()
+                    .show(ui, |ui| assert_eq!(posts.confirm_delete(ui), None));
+            });
         });
         assert!(
             library.find(&copy.name).is_some(),

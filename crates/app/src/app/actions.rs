@@ -1320,7 +1320,7 @@ impl CutCraftApp {
     /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
     /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl + Shift).
     pub(super) fn nudge(&mut self, ctx: &egui::Context) {
-        if self.screen != Screen::Job || ctx.wants_keyboard_input() {
+        if self.screen != Screen::Job || ctx.egui_wants_keyboard_input() {
             return;
         }
         let (shift, ctrl) = ctx.input(|i| (i.modifiers.shift, i.modifiers.command));
@@ -1365,7 +1365,7 @@ impl CutCraftApp {
                     _ => (x, c, p),
                 })
         });
-        if !ctx.wants_keyboard_input() && self.screen == Screen::Job {
+        if !ctx.egui_wants_keyboard_input() && self.screen == Screen::Job {
             if cut && self.available("cut") {
                 self.invoke(ctx, "cut");
             } else if copy && self.available("copy") {
@@ -1377,7 +1377,7 @@ impl CutCraftApp {
             }
         }
         // single-letter shortcuts must not fire while typing in a form field
-        if !ctx.wants_keyboard_input() {
+        if !ctx.egui_wants_keyboard_input() {
             let job = self.screen == Screen::Job;
             let fired: Vec<String> = self
                 .bindings()
@@ -1391,7 +1391,7 @@ impl CutCraftApp {
             }
         }
         // Escape in a field being typed in only leaves the field
-        if !ctx.wants_keyboard_input()
+        if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {
                 i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Escape))
             })
@@ -1444,7 +1444,7 @@ impl CutCraftApp {
                 gui::MenuItem::with_action(&file_name(path), &format!("open_recent:{i}"))
             })
             .collect();
-        egui::menu::bar(ui, |ui| {
+        egui::MenuBar::new().ui(ui, |ui| {
             for menu in &self.current_menus().menus {
                 ui.menu_button(&menu.name, |ui| {
                     menu_items(
@@ -1654,36 +1654,37 @@ impl CutCraftApp {
     }
 
     /// The side tabs and the docked pages around the view; flown-out pages over it.
-    pub(super) fn job_pages(&mut self, ctx: &egui::Context) {
-        let style = ctx.style();
+    pub(super) fn job_pages(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
+        let style = ctx.global_style();
         let (row, margin) = (style.spacing.interact_size.y, style.spacing.item_spacing.y);
         let width = DESIGN_PANEL_WIDTHS * style.spacing.interact_size.x;
         let strip = || egui::Frame::side_top_panel(&style).inner_margin(margin);
-        let left_tabs = egui::SidePanel::left("design_tabs")
+        let left_tabs = egui::Panel::left("design_tabs")
             .resizable(false)
-            .exact_width(row + 2.0 * margin)
+            .exact_size(row + 2.0 * margin)
             .frame(strip())
-            .show(ctx, |ui| self.design_tabs(ui))
+            .show(ui, |ui| self.design_tabs(ui))
             .response
             .rect;
-        let right_tabs = egui::SidePanel::right("toolpath_tabs")
+        let right_tabs = egui::Panel::right("toolpath_tabs")
             .resizable(false)
-            .exact_width(row + 2.0 * margin)
+            .exact_size(row + 2.0 * margin)
             .frame(strip())
-            .show(ctx, |ui| self.toolpath_tabs(ui))
+            .show(ui, |ui| self.toolpath_tabs(ui))
             .response
             .rect;
         if self.pages.shown(Page::Design) == Shown::Docked {
-            egui::SidePanel::left("design_panel")
-                .default_width(width)
-                .show(ctx, |ui| self.design_page(ui));
+            egui::Panel::left("design_panel")
+                .default_size(width)
+                .show(ui, |ui| self.design_page(ui));
         }
         if self.pages.shown(Page::Toolpaths) == Shown::Docked {
-            egui::SidePanel::right("toolpaths_panel")
-                .default_width(width)
-                .show(ctx, |ui| self.toolpaths_page(ui));
+            egui::Panel::right("toolpaths_panel")
+                .default_size(width)
+                .show(ui, |ui| self.toolpaths_page(ui));
         }
-        let room = ctx.available_rect();
+        let room = ui.available_rect_before_wrap();
         // a click on the view puts a flown-out page away, unless its form is open
         let pressed = ctx.input(|i| {
             i.pointer
@@ -1764,14 +1765,14 @@ impl CutCraftApp {
         page: Page,
         room: egui::Rect,
     ) -> egui::Rect {
-        let width = DESIGN_PANEL_WIDTHS * ctx.style().spacing.interact_size.x;
-        let frame = egui::Frame::side_top_panel(&ctx.style());
+        let width = DESIGN_PANEL_WIDTHS * ctx.global_style().spacing.interact_size.x;
+        let frame = egui::Frame::side_top_panel(&ctx.global_style());
         let height = room.height() - frame.inner_margin.sum().y - frame.outer_margin.sum().y;
         let left = match page {
             Page::Design => room.left(),
             Page::Toolpaths => room.right() - width - frame.inner_margin.sum().x,
         };
-        egui::Area::new(egui::Id::new(("flyout", page)))
+        egui::Area::new(egui::Id::unique(("flyout", page)))
             .fixed_pos(egui::pos2(left, room.top()))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
@@ -2019,7 +2020,7 @@ impl CutCraftApp {
                     .map(|id| self.doc.vectors[id].clone())
                     .collect();
                 let text = serde_json::to_string(&self.clipboard).expect("paths serialize");
-                ctx.output_mut(|o| o.copied_text = text);
+                ctx.copy_text(text);
                 if id == "cut"
                     && let Err(e) = self.apply("delete", &serde_json::json!({}))
                 {

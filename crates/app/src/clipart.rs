@@ -145,13 +145,13 @@ pub fn panel(
                 let thumbnail = if picture {
                     let image = egui::Image::new(format!("file://{}", file.display()))
                         .fit_to_exact_size(egui::vec2(edge, edge));
-                    ui.add(egui::ImageButton::new(image))
+                    ui.add(egui::Button::image(image))
                 } else {
                     ui.add_sized(egui::vec2(edge, edge), egui::Button::new("3D"))
                 };
                 let caption = ui.add(
                     egui::Label::new(egui::RichText::new(&label).small())
-                        .truncate(true)
+                        .truncate()
                         .sense(egui::Sense::click()),
                 );
                 if thumbnail.double_clicked() || caption.double_clicked() {
