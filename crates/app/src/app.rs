@@ -23,6 +23,17 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
+/// What the 3D view's fine mesh was made for: the model as at this revision, seen so.
+#[derive(Clone, Debug, PartialEq)]
+struct FineKey {
+    revision: u64,
+    job: cut_craft_core::document::Job,
+    orbit: view3d::Orbit,
+    framing: view3d::Framing,
+    fit: egui::Rect,
+    look: view3d::Look,
+}
+
 /// What a select-mode drag holds: the whole selection, or one vector or model picked
 /// under the pointer.
 #[derive(Clone, Copy)]
@@ -163,9 +174,15 @@ const THIRD_PARTY: [(&str, &str); 16] = [
     ),
 ];
 
-/// 3D view mesh cells along the longer side of the job.
+/// 3D view mesh cells along the longer side of the job while the view moves.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
+/// The most mesh cells along the job's longer side once the 3D view is still: the model's
+/// own cells up to this. Built once per view (about 45 ms at 1200, measured in release).
+// ponytail: CPU-drawn mesh; a GPU one with a depth buffer could draw every cell, moving too
+const FINE_MESH_CELLS: usize = 1200;
+/// How long the 3D view stays still before it is drawn finely, seconds.
+const SETTLE_SECONDS: f64 = 0.25;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
 const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
 /// Importers that make components; Import Component / 3D Model offers these, Import
@@ -423,6 +440,10 @@ struct CutCraftApp {
     simulation: Option<Material>,
     /// `simulation` at the 3D view's mesh resolution.
     simulation_coarse: Option<Material>,
+    /// The 3D view's fine mesh once it is still, with what it was made for.
+    fine_3d: Option<(FineKey, egui::Mesh)>,
+    /// When the 3D view last moved (input time, seconds).
+    moved_3d: f64,
     orbit: view3d::Orbit,
     framing: view3d::Framing,
     /// Jobs opened or saved lately, newest first.
@@ -496,6 +517,8 @@ impl CutCraftApp {
             display: crate::display::Display::default(),
             simulation: None,
             simulation_coarse: None,
+            fine_3d: None,
+            moved_3d: 0.0,
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             recent: vec![],
@@ -742,7 +765,7 @@ impl CutCraftApp {
             }
             "preview_all_toolpaths" => self.preview_all(),
             "reset_preview" => {
-                (self.simulation, self.simulation_coarse) = (None, None);
+                (self.simulation, self.simulation_coarse, self.fine_3d) = (None, None, None);
                 (self.playback, self.playing) = (None, false);
             }
             id if id.starts_with("open_recent:") => {
@@ -1237,7 +1260,8 @@ impl CutCraftApp {
             self.selected_toolpath,
             self.simulation,
             self.simulation_coarse,
-        ) = (None, None, None);
+            self.fine_3d,
+        ) = (None, None, None, None);
     }
 
     /// OK in Job Setup for a new job: the job is made, with nothing to undo yet.
@@ -2997,7 +3021,7 @@ impl CutCraftApp {
             .filter_map(|id| self.doc.toolpaths.get(id))
             .collect();
         self.playback = Some(cut_craft_core::playback::Playback::new(start, &list));
-        (self.playing, self.simulation_coarse) = (true, None);
+        (self.playing, self.simulation_coarse, self.fine_3d) = (true, None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
         }
@@ -3007,7 +3031,7 @@ impl CutCraftApp {
     fn finish_playback(&mut self) {
         if let Some(playback) = self.playback.take() {
             self.simulation = Some(playback.material().clone());
-            (self.playing, self.simulation_coarse) = (false, None);
+            (self.playing, self.simulation_coarse, self.fine_3d) = (false, None, None);
         }
     }
 
@@ -3023,7 +3047,7 @@ impl CutCraftApp {
         self.simulation
             .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()))
             .cut(toolpath);
-        self.simulation_coarse = None;
+        (self.simulation_coarse, self.fine_3d) = (None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
         }
@@ -3330,6 +3354,7 @@ impl CutCraftApp {
                 i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::F6),
             )
         });
+        let before = (self.orbit, self.framing);
         let delta = response.drag_delta();
         if response.dragged() && delta != egui::Vec2::ZERO {
             match view3d::drag_mode([left, right, middle], ctrl) {
@@ -3363,7 +3388,69 @@ impl CutCraftApp {
         } else if double.is_some() || (response.hovered() && fit_key) {
             self.framing = view3d::Framing::default();
         }
+        if response.dragged() || before != (self.orbit, self.framing) {
+            self.moved_3d = ui.input(|i| i.time);
+        }
         self.paint_3d(ui, area);
+    }
+
+    /// The 3D view's surface: quick (`surface`) while it moves, then once still the
+    /// model's own detail, made once.
+    fn surface_mesh(
+        &mut self,
+        ui: &egui::Ui,
+        surface: &Material,
+        (orbit, framing): (view3d::Orbit, view3d::Framing),
+        look: view3d::Look,
+        fit: egui::Rect,
+    ) -> egui::Mesh {
+        let since = ui.input(|i| i.time) - self.moved_3d;
+        if self.playback.is_none() && since >= SETTLE_SECONDS {
+            return self.fine_mesh(orbit, framing, look, fit);
+        }
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs_f64(SETTLE_SECONDS));
+        view3d::mesh(surface, orbit, framing, &look, fit)
+    }
+
+    /// The 3D view's mesh at the model's (or preview's) own detail, kept while nothing it
+    /// shows changes.
+    fn fine_mesh(
+        &mut self,
+        orbit: view3d::Orbit,
+        framing: view3d::Framing,
+        look: view3d::Look,
+        fit: egui::Rect,
+    ) -> egui::Mesh {
+        let key = FineKey {
+            revision: self.history.revision(),
+            job: self.doc.job,
+            orbit,
+            framing,
+            fit,
+            look,
+        };
+        if let Some((kept, mesh)) = &self.fine_3d
+            && *kept == key
+        {
+            return mesh.clone();
+        }
+        let surface = if let Some(material) = &self.simulation {
+            view3d::coarse(material, FINE_MESH_CELLS)
+        } else {
+            let job = &self.doc.job;
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a small cell count"
+            )]
+            let own = (job.width.max(job.height) / job.model_cell()).ceil() as usize;
+            let cells = own.clamp(MESH_CELLS, FINE_MESH_CELLS);
+            cut_craft_core::component::model_shape(&self.doc, cells)
+        };
+        let mesh = view3d::mesh(&surface, orbit, framing, &look, fit);
+        self.fine_3d = Some((key, mesh.clone()));
+        mesh
     }
 
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
@@ -3423,12 +3510,12 @@ impl CutCraftApp {
             .as_ref()
             .and_then(cut_craft_core::playback::Playback::tool)
             .map(|(tip, tool)| (tip, tool.diameter));
-        let Some(surface) = self.surface_3d() else {
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
             return;
         };
         let wrap = wrap_for(&job, shown.auto_wrapping, previewing, &surface);
         let look = view3d::Look { wrap, ..look };
-        painter.add(view3d::mesh(&surface, orbit, framing, &look, fit));
+        painter.add(self.surface_mesh(ui, &surface, (orbit, framing), look, fit));
         if wrap.is_some() {
             // ponytail: the overlays are drawn flat, so they are left off the wrapped view
             return;
@@ -7328,6 +7415,68 @@ mod tests {
             ("layer_properties", Some("Renamed"))
         );
         assert!(!h.app.available("run:no_such_command:{}"));
+    }
+
+    #[test]
+    fn a_still_3d_view_draws_the_model_at_its_own_detail() {
+        use cut_craft_core::component::{Combine, Component};
+        let mut h = Harness::new();
+        let o = h.app.doc.job.area().min;
+        let rect = cut_craft_core::geometry::Rect::new(
+            o + Point::new(150.0, 100.0),
+            o + Point::new(450.0, 250.0),
+        );
+        let cell = h.app.doc.job.model_cell();
+        let mut c = Change::builder(&h.app.doc);
+        c.add_component(Component::from_fn(
+            "relief",
+            Combine::Add,
+            rect,
+            cell,
+            |p| Some((p.x * 0.5).sin() + 2.0),
+        ));
+        h.app.record(Ok(c.finish()), "added");
+        h.app.view = View::ThreeD;
+        h.frame(vec![]);
+        // a moment after anything moved, the view settles and is drawn finely
+        h.time += 1.0;
+        h.frame(vec![]);
+        let fine = h
+            .app
+            .fine_3d
+            .as_ref()
+            .map(|(_, mesh)| mesh.indices.len() / 3);
+        let (key, _) = h.app.fine_3d.as_ref().unwrap();
+        let quick = view3d::mesh(
+            &cut_craft_core::component::model_shape(&h.app.doc, MESH_CELLS),
+            key.orbit,
+            key.framing,
+            &key.look,
+            key.fit,
+        );
+        let quick = quick.indices.len() / 3;
+        // issue: the mermaid had no detail, drawn at 2.4 mm on a 600 mm job
+        assert!(
+            fine.is_some_and(|t| t > 4 * quick),
+            "fine {fine:?} against {quick} quick triangles"
+        );
+        let kept = h.app.fine_3d.as_ref().map(|(key, _)| key.clone());
+        h.time += 1.0;
+        h.frame(vec![]);
+        assert_eq!(
+            h.app.fine_3d.as_ref().map(|(key, _)| key.clone()),
+            kept,
+            "kept, not rebuilt"
+        );
+        // an edit to the model makes it again
+        let mut c = Change::builder(&h.app.doc);
+        c.add_component(Component::from_fn("dome", Combine::Add, rect, cell, |_| {
+            Some(4.0)
+        }));
+        h.app.record(Ok(c.finish()), "added");
+        h.time += 1.0;
+        h.frame(vec![]);
+        assert_ne!(h.app.fine_3d.as_ref().map(|(key, _)| key.clone()), kept);
     }
 
     #[test]

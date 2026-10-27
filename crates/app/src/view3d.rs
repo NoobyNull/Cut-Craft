@@ -755,6 +755,46 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "timing only: cargo test --release -- --ignored mesh_timing --nocapture"]
+    fn mesh_timing() {
+        use cut_craft_core::component::{Combine, Component};
+        let mut doc = cut_craft_core::document::Document::default();
+        let o = doc.job.area().min;
+        let rect = cut_craft_core::geometry::Rect::new(
+            o + cut_craft_core::geometry::Point::new(150.0, 100.0),
+            o + cut_craft_core::geometry::Point::new(450.0, 250.0),
+        );
+        let mut c = cut_craft_core::Change::builder(&doc);
+        c.add_component(Component::from_fn(
+            "m",
+            Combine::Add,
+            rect,
+            doc.job.model_cell(),
+            |p| Some((p.x * 0.3).sin() + (p.y * 0.2).cos() + 3.0),
+        ));
+        doc.apply(&c.finish()).unwrap();
+        let area = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(1400.0, 900.0));
+        let look = Look {
+            colour: Color32::GRAY,
+            light: DVec3::new(-1.0, 1.0, 1.0),
+            sides: true,
+            wrap: None,
+        };
+        for cells in [250, 500, 1000, 1500] {
+            let t = std::time::Instant::now();
+            let m = cut_craft_core::component::model_shape(&doc, cells);
+            let built = t.elapsed();
+            let t = std::time::Instant::now();
+            let mesh = mesh(&m, Orbit::default(), Framing::default(), &look, area);
+            eprintln!(
+                "{cells} cells: model {built:?}, mesh {:?}, {} triangles",
+                t.elapsed(),
+                mesh.indices.len() / 3
+            );
+        }
+    }
+
+    #[test]
     fn coarse_cells_keep_the_deepest_point() {
         let mut m = slotted();
         m.heights[5 * m.columns + 7] = -9.0;
