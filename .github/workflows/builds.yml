@@ -1,8 +1,8 @@
-# Cut Craft for macOS (a DMG, Apple Silicon and Intel in one app), Linux (x86-64, .tar.gz)
-# and Windows (x86-64, .zip), built side by side on GitHub's runners. It runs when the
+# Cut Craft for macOS (a DMG, Apple Silicon and Intel in one app), Linux (x86-64: .tar.gz,
+# AppImage and Flatpak) and Windows (x86-64, .zip), built side by side on GitHub's runners. It runs when the
 # packaging changes on a pushed branch and from the Actions tab (once on the default
-# branch); each build is the run's artifact. A pushed tag such as v0.1.0 attaches all
-# three to that release. Unsigned: macOS and Windows ask before the first open.
+# branch); each build is the run's artifact. A pushed tag such as v0.1.0 attaches them all
+# to that release. Unsigned: macOS and Windows ask before the first open.
 name: Builds
 
 on:
@@ -14,6 +14,8 @@ on:
     paths:
       - ".github/workflows/builds.yml"
       - "scripts/macos-dmg"
+      - "scripts/linux-packages"
+      - "packaging/**"
 
 permissions:
   contents: write
@@ -63,6 +65,36 @@ jobs:
           name: cut-craft-linux
           path: dist/*.tar.gz
 
+  linux-packages:
+    # the Linux program above, packed as an AppImage and a Flatpak bundle
+    needs: linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cut-craft-linux
+          path: built
+      - name: Tools for the packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder librsvg2-bin
+          # Ubuntu 24.04 stops the sandbox flatpak-builder runs in; let it for this build
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+      - name: Pack the AppImage and the Flatpak
+        run: |
+          tar -C built -xzf built/*.tar.gz
+          scripts/linux-packages built/cut-craft-*-linux-x86_64/cut-craft
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cut-craft-linux-packages
+          path: |
+            dist/*.AppImage
+            dist/*.flatpak
+
   windows:
     runs-on: windows-latest
     steps:
@@ -87,14 +119,14 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [macos, linux, windows]
+    needs: [macos, linux, linux-packages, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - name: Attach all three to the release
+      - name: Attach them all to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

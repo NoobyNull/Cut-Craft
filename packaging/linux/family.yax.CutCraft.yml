@@ -1,0 +1,30 @@
+# The Flatpak: the Linux program built by `cargo build --release`, prepared beside this file
+# by scripts/linux-packages (program, assets, desktop entry), on the freedesktop runtime.
+app-id: family.yax.CutCraft
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: cut-craft
+finish-args:
+  # the window: X11 (where dropped files arrive) and Wayland, the GPU
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  # jobs, pictures, models and post-processors from anywhere in the home folder
+  - --filesystem=home
+  # the start page's links and Report a Bug
+  - --share=network
+  - --env=CUT_CRAFT_ASSETS=/app/share/cut-craft/assets
+modules:
+  - name: cut-craft
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 cut-craft /app/bin/cut-craft
+      - mkdir -p /app/share/cut-craft
+      - cp -R assets /app/share/cut-craft/assets
+      - install -Dm644 family.yax.CutCraft.desktop /app/share/applications/family.yax.CutCraft.desktop
+      - install -Dm644 assets/cut-craft.svg /app/share/icons/hicolor/scalable/apps/family.yax.CutCraft.svg
+    sources:
+      - type: dir
+        path: stage

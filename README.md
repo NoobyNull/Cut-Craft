@@ -120,10 +120,12 @@ names; the app itself shows its icons.
 | Platform | How |
 |---|---|
 | macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed, so the first time, right-click it and choose **Open**. |
-| Linux (x86-64) | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft` (keep the `assets` folder beside it). Or [build from source](#building-from-source); `scripts/install-launcher` adds it to the desktop's application menu. |
+| Linux (x86-64), AppImage | Download `CutCraft-…-x86_64.AppImage`, make it executable (`chmod +x`) and run it. One file, nothing to install; it needs FUSE 2 (`libfuse2`), which most desktops have. |
+| Linux (x86-64), Flatpak | Download `cut-craft-…-x86_64.flatpak` and install it with `flatpak install --user cut-craft-…-x86_64.flatpak` (Flathub's freedesktop runtime comes with it). Inside its sandbox Report a Bug can't reach `gh`, so reports are kept on disk. |
+| Linux (x86-64), archive | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft` (keep the `assets` folder beside it). Or [build from source](#building-from-source); `scripts/install-launcher` adds it to the desktop's application menu. |
 | Windows (x86-64) | Download `cut-craft-…-windows-x86_64.zip`, unpack it and run `cut-craft.exe` (keep the `assets` folder beside it). It isn't signed, so SmartScreen may ask first: **More info ▸ Run anyway**. Not tested much yet. |
 
-Each release has all three, and so does each run of **Builds** under Actions.
+Each release has all of them, and so does each run of **Builds** under Actions.
 
 ## Using it
 
@@ -217,11 +219,12 @@ git config core.hooksPath .githooks
 
 - **macOS:** `scripts/macos-dmg` builds for Apple Silicon and Intel, joins them into one
   `Cut Craft.app` (logo and icons in its Resources) and packs it in a DMG. It runs on any Mac too.
-- **Linux:** a release build on Ubuntu 22.04, packed as a `.tar.gz` with `assets` beside it.
+- **Linux:** a release build on Ubuntu 22.04, packed as a `.tar.gz` with `assets` beside it,
+  and by `scripts/linux-packages` as an AppImage and a Flatpak bundle (`packaging/linux`).
 - **Windows:** a release build, packed as a `.zip` with `assets` beside it.
 
-It runs when the workflow or the DMG script changes on a pushed branch, from the Actions tab,
-and on a `v*` tag, which attaches all three to that release.
+It runs when the workflow or the packaging changes on a pushed branch, from the Actions tab,
+and on a `v*` tag, which attaches them all to that release.
 
 ### Screenshots
 
@@ -253,7 +256,8 @@ crates/machines/          machines, tool changers, the post-processor library
 crates/bug-report/        Report a Bug Here… and GitHub issues
 crates/vtdb/              .vtdb tool database reading
 crates/app/               the desktop app (the cut-craft binary)
-scripts/                  new-command scaffolding, the launcher, the macOS DMG
+scripts/                  new-command scaffolding, the launcher, the macOS DMG, Linux packages
+packaging/linux/          the AppImage launcher, the Flatpak manifest, the desktop entry
 docs/                     design notes, the tool inventory, screenshots
 ```
 

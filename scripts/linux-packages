@@ -1,0 +1,44 @@
+#!/bin/bash
+# Packs the Linux program as an AppImage and a Flatpak bundle, in dist/.
+#   scripts/linux-packages [PROGRAM]        (default: target/release/cut-craft)
+# .github/workflows/builds.yml runs it on GitHub. Needs rsvg-convert, and for the Flatpak
+# flatpak and flatpak-builder with the freedesktop 25.08 runtime and SDK from Flathub;
+# appimagetool is fetched when it is not installed.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+program=${1:-target/release/cut-craft}
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+mkdir -p dist
+
+# AppImage: one file holding the program, its assets, a launcher, the desktop entry and icon
+appdir=dist/CutCraft.AppDir
+rm -rf "$appdir"
+install -Dm755 "$program" "$appdir/usr/bin/cut-craft"
+mkdir -p "$appdir/usr/share/cut-craft"
+cp -R assets "$appdir/usr/share/cut-craft/assets"
+install -m755 packaging/linux/AppRun "$appdir/AppRun"
+cp packaging/linux/family.yax.CutCraft.desktop "$appdir/"
+rsvg-convert -w 256 -h 256 assets/cut-craft.svg -o "$appdir/family.yax.CutCraft.png"
+tool=$(command -v appimagetool || true)
+if [[ -z $tool ]]; then
+    tool=dist/appimagetool
+    curl -sSL -o "$tool" \
+        https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+    chmod +x "$tool"
+fi
+# runs without FUSE, as on GitHub's runners
+APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$tool" "$appdir" "dist/CutCraft-${version}-x86_64.AppImage"
+
+# Flatpak: a bundle to install with `flatpak install --user`
+stage=packaging/linux/stage
+rm -rf "$stage"
+mkdir -p "$stage"
+cp "$program" "$stage/cut-craft"
+cp -R assets "$stage/assets"
+cp packaging/linux/family.yax.CutCraft.desktop "$stage/"
+flatpak-builder --user --force-clean --repo=dist/flatpak-repo dist/flatpak-build \
+    packaging/linux/family.yax.CutCraft.yml
+flatpak build-bundle dist/flatpak-repo "dist/cut-craft-${version}-x86_64.flatpak" family.yax.CutCraft \
+    --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+rm -rf "$stage"
+ls -l dist/*.AppImage dist/*.flatpak
