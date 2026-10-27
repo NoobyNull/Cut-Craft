@@ -1580,5 +1580,12 @@
   "guess": false,
   "slot": "bmp/34891",
   "source": "bmp/34891"
+ },
+ {
+  "path": "import/chess_knight.png",
+  "label": "Chess knight (Initial Orientation)",
+  "guess": false,
+  "slot": "icons8/16450",
+  "source": "icons8/16450"
  }
 ]

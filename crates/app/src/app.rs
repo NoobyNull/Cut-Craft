@@ -23,6 +23,9 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
+/// Forms whose model is made as soon as they open and then follows their settings.
+const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
+
 const BUILT_INS: [&str; 78] = [
     "paste_in_place",
     "edit_text",
@@ -330,6 +333,13 @@ struct OpenForm {
     /// The shape a drawing tool's form last made: its Apply makes it again, in its place,
     /// while it is the one shape selected (as Aspire's drawing forms do).
     drawn: Option<EntityId>,
+    /// Settings changed since the shape it made last followed them.
+    dirty: bool,
+    /// Orientate 3D Model's Model Size as the form filled it in from the model, while the
+    /// user has not typed one: it follows the orientation then.
+    auto_size: Option<(f64, f64)>,
+    /// The settings the shape it made was last made with.
+    applied: Option<Value>,
 }
 
 #[expect(
@@ -958,6 +968,9 @@ impl CutCraftApp {
                 page,
                 editing: None,
                 drawn: None,
+                dirty: false,
+                auto_size: None,
+                applied: None,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -1322,31 +1335,107 @@ impl CutCraftApp {
             self.record(change, "Toolpath edited");
             return failed.map_or(Ok(()), Err);
         }
+        let before = self.entity_ids();
+        let same = self.form.as_ref().and_then(|f| f.applied.as_ref()) == Some(params);
         match self.drawn_shape() {
+            // the shape already follows these settings: nothing to do again
+            Some(_) if same => return Ok(()),
             Some(old) => self.redraw(id, params, old)?,
             None => self.apply(id, params)?,
         }
-        self.remember_drawn();
+        self.remember_drawn(&before);
+        if let Some(form) = &mut self.form {
+            form.applied = form.drawn.map(|_| params.clone());
+        }
         Ok(())
     }
 
-    /// The shape the open drawing tool made, while it is the one shape selected.
+    /// Every vector and component, to tell what a command made.
+    fn entity_ids(&self) -> std::collections::BTreeSet<EntityId> {
+        self.doc
+            .vectors
+            .keys()
+            .chain(self.doc.components.keys())
+            .copied()
+            .collect()
+    }
+
+    /// Whether form `id` makes one shape or model that it goes on to change: the drawing
+    /// tools, and the forms whose model follows them as they change.
+    fn makes_one(&self, id: &str) -> bool {
+        self.drawing_tool() == Some(id) || LIVE_FORMS.contains(&id)
+    }
+
+    /// Once a frame: a form's shape or model made again with its settings once they have
+    /// changed and the pointer is let go (so a dragged value is not re-run every frame).
+    fn follow_form(&mut self, ctx: &egui::Context) {
+        let pressed = ctx.input(|i| i.pointer.any_down());
+        let Some(form) = self.form.as_mut().filter(|f| f.dirty && !pressed) else {
+            return;
+        };
+        form.dirty = false;
+        if self.drawn_shape().is_some() {
+            self.apply_live();
+        }
+    }
+
+    /// Applies the open form, Orientate 3D Model's Model Size following the model's own
+    /// while the user has not typed one.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a model grid's columns and rows"
+    )]
+    fn apply_live(&mut self) {
+        let Some(form) = &self.form else { return };
+        let (id, mut params) = (form.id, form.params.clone());
+        let size = |p: &Value| (p["size"]["x"].as_f64(), p["size"]["y"].as_f64());
+        let auto = params.get("size").is_some()
+            && (size(&params) == (Some(0.0), Some(0.0))
+                || form.auto_size.map(|(x, y)| (Some(x), Some(y))) == Some(size(&params)));
+        if auto {
+            params["size"]["x"] = Value::from(0.0);
+            params["size"]["y"] = Value::from(0.0);
+        }
+        let result = self.apply_form(id, &params);
+        let made = self
+            .form
+            .as_ref()
+            .and_then(|f| f.drawn)
+            .and_then(|k| self.doc.components.get(&k))
+            .map(|k| (k.cell * k.columns as f64, k.cell * k.rows as f64));
+        if let Some(form) = &mut self.form {
+            form.error = result.err();
+            if let (true, Some((x, y))) = (auto, made) {
+                // to the hundredth of a millimetre shown, not the cell's float noise
+                let (x, y) = ((x * 100.0).round() / 100.0, (y * 100.0).round() / 100.0);
+                form.params["size"]["x"] = Value::from(x);
+                form.params["size"]["y"] = Value::from(y);
+                form.auto_size = Some((x, y));
+            }
+        }
+    }
+
+    /// The shape (while it is the one selected) or model the open form made.
     fn drawn_shape(&self) -> Option<EntityId> {
         let form = self.form.as_ref()?;
         let id = form.drawn?;
         let only = self.doc.selection.len() == 1 && self.doc.selection.contains(&id);
-        (self.drawing_tool() == Some(form.id) && only && self.doc.vectors.contains_key(&id))
-            .then_some(id)
+        let vector = only && self.doc.vectors.contains_key(&id);
+        (vector || self.doc.components.contains_key(&id)).then_some(id)
     }
 
-    /// After a drawing tool makes a shape, its form goes on to change that shape.
-    fn remember_drawn(&mut self) {
-        let tool = self.drawing_tool();
-        let made = (self.doc.selection.len() == 1)
-            .then(|| self.doc.selection.iter().next().copied())
-            .flatten();
-        if let Some(form) = self.form.as_mut().filter(|f| Some(f.id) == tool) {
-            form.drawn = made;
+    /// After a form that makes one shape or model makes it, the form goes on to change it.
+    fn remember_drawn(&mut self, before: &std::collections::BTreeSet<EntityId>) {
+        let made: Vec<EntityId> = self.entity_ids().difference(before).copied().collect();
+        let one = self.form.as_ref().is_some_and(|f| self.makes_one(f.id));
+        let ids = self.entity_ids();
+        if let (true, Some(form)) = (one, self.form.as_mut()) {
+            form.drawn = match made[..] {
+                [made] => Some(made),
+                // made again in its own place, it keeps its id
+                [] => form.drawn.filter(|id| ids.contains(id)),
+                _ => None,
+            };
         }
     }
 
@@ -1357,7 +1446,11 @@ impl CutCraftApp {
             .get(id)
             .expect("only registered commands are applied");
         let mut taken = Change::builder(&self.doc);
-        taken.remove(old);
+        if self.doc.components.contains_key(&old) {
+            taken.remove_component(old);
+        } else {
+            taken.remove(old);
+        }
         let taken = taken.finish();
         let mut without = self.doc.clone();
         without.apply(&taken).map_err(|e| e.to_string())?;
@@ -1936,7 +2029,7 @@ impl CutCraftApp {
             picture: &picture,
             material: form::material(&self.doc, units),
         };
-        form::show(ui, &open.fields, &mut open.params, &look);
+        open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
         // every toolpath can rest machine (3D Finishing has its own, as `after`)
         if open.page == Page::Toolpaths && open.params.get("after").is_none() {
             rest_section(ui, &mut open.params, &self.tools.tools);
@@ -2545,6 +2638,8 @@ impl CutCraftApp {
             if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
                 form.params["file"] = Value::from(path.display().to_string());
             }
+            // issue #3: the model is in the scene at once, and follows the form from then on
+            self.apply_live();
             return;
         }
         let change = files::import(&self.registry, &self.doc, path)
@@ -3562,6 +3657,7 @@ impl CutCraftApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
         self.draw_window(ctx);
+        self.follow_form(ctx);
         self.report_bugs(ctx);
     }
 
@@ -4591,6 +4687,7 @@ impl CutCraftApp {
             return;
         };
         self.stroke.clear();
+        let before = self.entity_ids();
         let result = cmd
             .drag_params(drag, &current)
             .map_err(|e| e.to_string())
@@ -4601,7 +4698,7 @@ impl CutCraftApp {
                 self.apply(id, &params)
             });
         if result.is_ok() {
-            self.remember_drawn();
+            self.remember_drawn(&before);
         }
         if let Some(form) = &mut self.form {
             form.error = result.err();
@@ -5697,6 +5794,74 @@ mod tests {
         assert_eq!(files::load_tools(&path).unwrap(), h.app.tools);
     }
 
+    /// A 20 × 10 mm, 5 mm high pyramid as an ASCII STL, in a file of its own.
+    fn pyramid_stl(name: &str) -> std::path::PathBuf {
+        use std::fmt::Write as _;
+        let base = [
+            [0.0, 0.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [20.0, 10.0, 0.0],
+            [0.0, 10.0, 0.0],
+        ];
+        let top = [10.0, 5.0, 5.0];
+        let mut faces: Vec<[[f64; 3]; 3]> =
+            (0..4).map(|i| [base[i], base[(i + 1) % 4], top]).collect();
+        faces.extend([[base[0], base[2], base[1]], [base[0], base[3], base[2]]]);
+        let mut text = String::from("solid pyramid\n");
+        for face in faces {
+            text += "facet normal 0 0 0\n outer loop\n";
+            for v in face {
+                let _ = writeln!(text, "  vertex {} {} {}", v[0], v[1], v[2]);
+            }
+            text += " endloop\nendfacet\n";
+        }
+        text += "endsolid pyramid\n";
+        let path =
+            std::env::temp_dir().join(format!("cut-craft-{name}-{}.stl", std::process::id()));
+        std::fs::write(&path, text).unwrap();
+        path
+    }
+
+    #[test]
+    fn an_imported_model_shows_at_once_and_follows_its_form() {
+        let mut h = Harness::new();
+        let file = pyramid_stl("live-import");
+        h.app.import_file(&file);
+        assert_eq!(
+            h.app.doc.components.len(),
+            1,
+            "issue #3: the model is in the scene at once"
+        );
+        let size = &h.app.form.as_ref().unwrap().params["size"];
+        assert!(
+            (size["x"].as_f64().unwrap() - 20.0).abs() < 1.0,
+            "Model Size shows its size: {size}"
+        );
+        // moving it in the form moves the same model
+        let form = h.app.form.as_mut().unwrap();
+        form.params["placing"]["center"] = Value::Bool(false);
+        form.params["placing"]["position"] = serde_json::json!({ "x": 50.0, "y": 60.0 });
+        form.dirty = true;
+        h.frame(vec![]);
+        assert_eq!(h.app.doc.components.len(), 1, "moved, not added");
+        let k = h.app.doc.components.values().next().unwrap();
+        let o = h.app.doc.job.area().min;
+        assert!(
+            (k.origin.x - 50.0).abs() < 1.0 && (k.origin.y - 60.0).abs() < 1.0,
+            "at {:?} of {o:?}",
+            k.origin
+        );
+        // and sizing it sizes it
+        let form = h.app.form.as_mut().unwrap();
+        form.params["size"]["x"] = Value::from(40.0);
+        form.dirty = true;
+        h.frame(vec![]);
+        let k = h.app.doc.components.values().next().unwrap();
+        let width = k.cell * f64::from(u32::try_from(k.columns).unwrap());
+        assert!((width - 40.0).abs() < 2.0 * k.cell, "{} columns", k.columns);
+        let _ = std::fs::remove_file(file);
+    }
+
     #[test]
     fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
         use cut_craft_core::geometry::Segment;
@@ -5715,12 +5880,14 @@ mod tests {
         let (from, to) = (h.at(100.0, 100.0), h.at(200.0, 160.0));
         h.drag(from, to);
         assert_eq!(arcs(&h.app), 0, "drawn square");
-        // issue #2: choosing rounded corners afterwards changes the rectangle just drawn
+        // issue #2: choosing rounded corners afterwards changes the rectangle just drawn, as
+        // soon as it is chosen (issue #3), and Apply has nothing more to do
         let rounded = h.text_at("Rounded").expect("the corner choices");
         h.click(rounded, Modifiers::NONE);
+        assert_eq!(arcs(&h.app), 4, "the same rectangle, rounded");
         let params = h.app.form.as_ref().unwrap().params.clone();
         h.app.apply_form("draw_rectangle", &params).unwrap();
-        assert_eq!(arcs(&h.app), 4, "the same rectangle, rounded");
+        assert_eq!(arcs(&h.app), 4);
         let rect = h.app.doc.vectors.values().next().unwrap().bounds();
         assert!((rect.size().x - 100.0).abs() < 1e-6, "same size: {rect:?}");
         h.app.invoke(&h.ctx, "undo");

@@ -129,5 +129,8 @@ for folder, key, label in jobs:
         source, im = best_source(key) if key.startswith("slot/") else (key, load(key))
         open(f"{out_dir}/{path}", "w").write(trace(im))
     manifest.append({"path": path, "label": label.rstrip(" ?"), "guess": label.endswith("?"), "slot": key, "source": source})
+# icons fetched by hand from an icon library (source "icons8/<id>") are not Aspire's: kept as listed
+if os.path.exists(manifest_f):
+    manifest += [e for e in json.load(open(manifest_f)) if e["source"].startswith("icons8/")]
 json.dump(manifest, open(manifest_f, "w"), indent=1)
 print(len(manifest), "icons ->", out_dir)

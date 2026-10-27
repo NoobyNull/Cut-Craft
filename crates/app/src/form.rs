@@ -214,9 +214,12 @@ fn grid(ui: &mut egui::Ui, fields: &[&Field], params: &mut Value, look: &Look) -
         .num_columns(2)
         .show(ui, |ui| {
             for f in fields {
+                // the faces widget draws its picture itself, with the radio buttons round it
+                let own = !matches!(f.kind, Kind::Choice(_, Widget::Faces { .. }));
                 let picture = f
                     .icon
                     .as_ref()
+                    .filter(|_| own)
                     .and_then(|template| (look.picture)(&icon_path(template, &params[&f.key])));
                 ui.horizontal(|ui| {
                     if let Some(picture) = picture {
@@ -519,7 +522,9 @@ fn faces(
                 font.clone(),
                 egui::Color32::PLACEHOLDER,
             );
-            text.size().x + ui.spacing().icon_width + ui.spacing().icon_spacing
+            // a radio button wraps its text in what is left after its padding either side
+            let padding = 2.0 * ui.spacing().button_padding.x;
+            text.size().x + ui.spacing().icon_width + ui.spacing().icon_spacing + padding
         })
         .collect();
     let side = options
@@ -909,12 +914,42 @@ mod tests {
         assert!(matches!(
             &field(orientation, "face").kind,
             Kind::Choice(faces, Widget::Faces { picture: Some(p) })
-                if faces.len() == 6 && p == "import/initial_orientation.bmp"
+                if faces.len() == 6 && p == "import/chess_knight.png"
         ));
         assert!(matches!(
             &field(orientation, "rotation").kind,
             Kind::Number { steps, .. } if *steps == [-180.0, -90.0, 0.0, 90.0, 180.0]
         ));
+    }
+
+    #[test]
+    fn face_labels_stay_on_one_line() {
+        let options: Vec<Choice> = ["top", "bottom", "front", "back", "left", "right"]
+            .iter()
+            .map(|v| Choice {
+                value: (*v).into(),
+                label: crate::gui::title_case(v),
+                help: None,
+            })
+            .collect();
+        let ctx = egui::Context::default();
+        // bigger text, as the app's readable style has
+        ctx.style_mut(|s| {
+            for font in s.text_styles.values_mut() {
+                font.size *= 1.15;
+            }
+        });
+        let out = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| faces(ui, &options, "top", None));
+        });
+        let mut labels = 0;
+        for clipped in &out.shapes {
+            if let egui::Shape::Text(t) = &clipped.shape {
+                assert_eq!(t.galley.rows.len(), 1, "{:?} wraps", t.galley.text());
+                labels += 1;
+            }
+        }
+        assert_eq!(labels, 6);
     }
 
     #[test]

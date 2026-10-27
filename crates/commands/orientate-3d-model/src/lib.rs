@@ -41,7 +41,7 @@ pub struct Orientation {
     #[schemars(
         title = "Face up",
         extend("x-widget" = "faces"),
-        extend("x-icon" = "import/initial_orientation.bmp")
+        extend("x-icon" = "import/chess_knight.png")
     )]
     pub face: Face,
     #[schemars(
