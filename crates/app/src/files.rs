@@ -97,17 +97,23 @@ pub fn save_through(
 
 pub use cut_craft_core::file::config_dir;
 
-/// Where Cut Craft's own files (its logo, and icons where they are installed) are:
-/// `CUT_CRAFT_ASSETS`, else a macOS app's `Resources` folder, else `assets` under the
-/// working directory (running from the source tree).
+/// Where Cut Craft's own files (its logo and icons) are: `CUT_CRAFT_ASSETS`, else a macOS
+/// app's `Resources` folder, else an `assets` folder beside the program (the Linux and
+/// Windows packages), else `assets` under the working directory (the source tree).
 pub fn assets_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("CUT_CRAFT_ASSETS") {
         return PathBuf::from(dir);
     }
     std::env::current_exe()
         .ok()
-        .and_then(|exe| bundle_resources(&exe))
+        .and_then(|exe| bundle_resources(&exe).or_else(|| beside(&exe)))
         .unwrap_or_else(|| PathBuf::from("assets"))
+}
+
+/// The `assets` folder beside the program `exe`, if it holds Cut Craft's logo.
+pub fn beside(exe: &Path) -> Option<PathBuf> {
+    let assets = exe.parent()?.join("assets");
+    assets.join(LOGO_FILE).exists().then_some(assets)
 }
 
 /// The `Resources` folder of the macOS app `exe` runs from (`….app/Contents/MacOS/exe`),
@@ -527,6 +533,15 @@ mod tests {
         fs::write(app.join("Contents/Resources").join(LOGO_FILE), "<svg/>").unwrap();
         assert_eq!(bundle_resources(&exe), Some(app.join("Contents/Resources")));
         assert_eq!(bundle_resources(Path::new("/usr/bin/cut-craft")), None);
+        // the Linux and Windows packages: assets beside the program
+        let package = temp("cut-craft-package");
+        let _ = fs::remove_dir_all(&package);
+        fs::create_dir_all(package.join("assets")).unwrap();
+        let program = package.join("cut-craft.exe");
+        assert_eq!(beside(&program), None, "no logo there yet");
+        fs::write(package.join("assets").join(LOGO_FILE), "<svg/>").unwrap();
+        assert_eq!(beside(&program), Some(package.join("assets")));
+        let _ = fs::remove_dir_all(package);
         let _ = fs::remove_dir_all(app);
     }
 

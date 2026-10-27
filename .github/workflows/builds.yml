@@ -1,0 +1,104 @@
+# Cut Craft for macOS (a DMG, Apple Silicon and Intel in one app), Linux (x86-64, .tar.gz)
+# and Windows (x86-64, .zip), built side by side on GitHub's runners. It runs when the
+# packaging changes on a pushed branch and from the Actions tab (once on the default
+# branch); each build is the run's artifact. A pushed tag such as v0.1.0 attaches all
+# three to that release. Unsigned: macOS and Windows ask before the first open.
+name: Builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    # macOS and Windows runners cost private repositories more minutes: not on every push
+    branches: ["**"]
+    paths:
+      - ".github/workflows/builds.yml"
+      - "scripts/macos-dmg"
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Tools for the app icon
+        run: brew install librsvg
+      - name: Build the app and its DMG
+        run: scripts/macos-dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cut-craft-macos
+          path: dist/*.dmg
+
+  linux:
+    # the oldest supported Ubuntu, so the program runs on most distributions since
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Libraries for windows, input and graphics
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libxkbcommon-dev libwayland-dev libx11-dev \
+            libxcursor-dev libxrandr-dev libxi-dev libvulkan-dev
+      - name: Build
+        run: cargo build --release -p cut-craft
+      - name: Package the program beside its assets
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          name="cut-craft-${version}-linux-x86_64"
+          mkdir -p "dist/$name"
+          cp target/release/cut-craft README.md "dist/$name/"
+          cp -R assets "dist/$name/assets"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cut-craft-linux
+          path: dist/*.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release -p cut-craft
+      - name: Package the program beside its assets
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
+          $name = "cut-craft-$version-windows-x86_64"
+          New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
+          Copy-Item target/release/cut-craft.exe, README.md -Destination "dist/$name"
+          Copy-Item -Recurse assets -Destination "dist/$name/assets"
+          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cut-craft-windows
+          path: dist/*.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [macos, linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Attach all three to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+                 --title "Cut Craft $GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/* -R "$GITHUB_REPOSITORY" --clobber

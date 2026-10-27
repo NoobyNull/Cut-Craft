@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds Cut Craft for macOS, Apple Silicon and Intel in one app, and packs it in a DMG.
-#   scripts/macos-dmg            (on a Mac; .github/workflows/macos-dmg.yml runs it on GitHub)
+#   scripts/macos-dmg            (on a Mac; .github/workflows/builds.yml runs it on GitHub)
 # Needs rustup's aarch64-apple-darwin and x86_64-apple-darwin targets, librsvg
 # (rsvg-convert, for the app icon) and the system's lipo, iconutil and hdiutil.
 # The logo and the icons (assets/icons) go in the app's Resources, where it finds them.

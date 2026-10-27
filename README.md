@@ -119,9 +119,11 @@ names; the app itself shows its icons.
 
 | Platform | How |
 |---|---|
-| macOS (Apple Silicon and Intel) | Download the DMG from the repository's Releases, or from the latest **macOS DMG** run under Actions. Drag Cut Craft to Applications. It isn't signed, so the first time, right-click it and choose **Open**. |
-| Linux | [Build from source](#building-from-source). `scripts/install-launcher` adds it to the desktop's application menu. |
-| Windows | Builds from source; not tested yet. |
+| macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed, so the first time, right-click it and choose **Open**. |
+| Linux (x86-64) | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft` (keep the `assets` folder beside it). Or [build from source](#building-from-source); `scripts/install-launcher` adds it to the desktop's application menu. |
+| Windows (x86-64) | Download `cut-craft-…-windows-x86_64.zip`, unpack it and run `cut-craft.exe` (keep the `assets` folder beside it). It isn't signed, so SmartScreen may ask first: **More info ▸ Run anyway**. Not tested much yet. |
+
+Each release has all three, and so does each run of **Builds** under Actions.
 
 ## Using it
 
@@ -209,12 +211,17 @@ errors (pedantic), and the tests through `cargo nextest`. Turn it on after cloni
 git config core.hooksPath .githooks
 ```
 
-### The macOS DMG
+### Release builds
 
-`scripts/macos-dmg` builds for Apple Silicon and Intel, joins them into one `Cut Craft.app` and
-packs it in a DMG. It runs on a Mac, and on GitHub through `.github/workflows/macos-dmg.yml`:
-when the packaging changes on a pushed branch, from the Actions tab, or on a `v*` tag, which
-attaches the DMG to that release.
+`.github/workflows/builds.yml` builds all three on GitHub's runners, side by side:
+
+- **macOS:** `scripts/macos-dmg` builds for Apple Silicon and Intel, joins them into one
+  `Cut Craft.app` (logo and icons in its Resources) and packs it in a DMG. It runs on any Mac too.
+- **Linux:** a release build on Ubuntu 22.04, packed as a `.tar.gz` with `assets` beside it.
+- **Windows:** a release build, packed as a `.zip` with `assets` beside it.
+
+It runs when the workflow or the DMG script changes on a pushed branch, from the Actions tab,
+and on a `v*` tag, which attaches all three to that release.
 
 ### Screenshots
 
