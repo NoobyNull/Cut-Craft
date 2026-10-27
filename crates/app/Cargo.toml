@@ -34,6 +34,9 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-align = { path = "../commands/align" }
+cmd-select = { path = "../commands/select" }
+cmd-convert-span = { path = "../commands/convert-span" }
 cmd-vector-boundary = { path = "../commands/vector-boundary" }
 cmd-convert-text-to-curves = { path = "../commands/convert-text-to-curves" }
 cmd-join-close-vectors = { path = "../commands/join-close-vectors" }
@@ -77,9 +80,6 @@ cmd-vector-texture = { path = "../commands/vector-texture" }
 cmd-interactive-vector-trim = { path = "../commands/interactive-vector-trim" }
 cmd-close-with-line = { path = "../commands/close-with-line" }
 cmd-reverse-direction = { path = "../commands/reverse-direction" }
-cmd-span-to-arc = { path = "../commands/span-to-arc" }
-cmd-span-to-bezier = { path = "../commands/span-to-bezier" }
-cmd-span-to-line = { path = "../commands/span-to-line" }
 cmd-make-start-point = { path = "../commands/make-start-point" }
 cmd-cut-vector = { path = "../commands/cut-vector" }
 cmd-delete-point = { path = "../commands/delete-point" }
@@ -121,8 +121,6 @@ cmd-bake-components = { path = "../commands/bake-components" }
 cmd-create-component-from-bitmap = { path = "../commands/create-component-from-bitmap" }
 cmd-scale-model-z-height = { path = "../commands/scale-model-z-height" }
 cmd-add-zero-plane = { path = "../commands/add-zero-plane" }
-cmd-select-all-duplicate-vectors = { path = "../commands/select-all-duplicate-vectors" }
-cmd-select-all-open-vectors = { path = "../commands/select-all-open-vectors" }
 cmd-space-vertically = { path = "../commands/space-vertically" }
 cmd-space-horizontally = { path = "../commands/space-horizontally" }
 cmd-inlay-toolpath = { path = "../commands/inlay-toolpath" }
@@ -168,16 +166,6 @@ cmd-overlap-intersect = { path = "../commands/overlap-intersect" }
 cmd-subtract-vectors = { path = "../commands/subtract-vectors" }
 cmd-weld-vectors = { path = "../commands/weld-vectors" }
 cmd-job-setup = { path = "../commands/job-setup" }
-cmd-align-bottom = { path = "../commands/align-bottom" }
-cmd-align-left = { path = "../commands/align-left" }
-cmd-align-right = { path = "../commands/align-right" }
-cmd-align-top = { path = "../commands/align-top" }
-cmd-center = { path = "../commands/center" }
-cmd-center-horizontally = { path = "../commands/center-horizontally" }
-cmd-center-horizontally-in-material = { path = "../commands/center-horizontally-in-material" }
-cmd-center-in-material = { path = "../commands/center-in-material" }
-cmd-center-vertically = { path = "../commands/center-vertically" }
-cmd-center-vertically-in-material = { path = "../commands/center-vertically-in-material" }
 cmd-delete = { path = "../commands/delete" }
 cmd-draw-arc = { path = "../commands/draw-arc" }
 cmd-draw-circle = { path = "../commands/draw-circle" }
@@ -189,9 +177,7 @@ cmd-draw-star = { path = "../commands/draw-star" }
 cmd-mirror = { path = "../commands/mirror" }
 cmd-move = { path = "../commands/move" }
 cmd-rotate = { path = "../commands/rotate" }
-cmd-select-all-vectors = { path = "../commands/select-all-vectors" }
 cmd-set-size = { path = "../commands/set-size" }
-cmd-unselect-all = { path = "../commands/unselect-all" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

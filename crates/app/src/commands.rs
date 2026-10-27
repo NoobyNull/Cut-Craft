@@ -6,16 +6,16 @@ use cut_craft_core::Registry;
 #[expect(clippy::too_many_lines, reason = "one line per command")]
 pub fn registry() -> Registry {
     let mut r = Registry::default();
-    r.add::<cmd_align_bottom::AlignBottom>();
-    r.add::<cmd_align_left::AlignLeft>();
-    r.add::<cmd_align_right::AlignRight>();
-    r.add::<cmd_align_top::AlignTop>();
-    r.add::<cmd_center::Center>();
-    r.add::<cmd_center_horizontally::CenterHorizontally>();
-    r.add::<cmd_center_horizontally_in_material::CenterHorizontallyInMaterial>();
-    r.add::<cmd_center_in_material::CenterInMaterial>();
-    r.add::<cmd_center_vertically::CenterVertically>();
-    r.add::<cmd_center_vertically_in_material::CenterVerticallyInMaterial>();
+    r.add::<cmd_align::AlignBottom>();
+    r.add::<cmd_align::AlignLeft>();
+    r.add::<cmd_align::AlignRight>();
+    r.add::<cmd_align::AlignTop>();
+    r.add::<cmd_align::Center>();
+    r.add::<cmd_align::CenterHorizontally>();
+    r.add::<cmd_align::CenterHorizontallyInMaterial>();
+    r.add::<cmd_align::CenterInMaterial>();
+    r.add::<cmd_align::CenterVertically>();
+    r.add::<cmd_align::CenterVerticallyInMaterial>();
     r.add::<cmd_delete::Delete>();
     r.add::<cmd_draw_arc::DrawArc>();
     r.add_interactive::<cmd_draw_circle::DrawCircle>();
@@ -27,9 +27,9 @@ pub fn registry() -> Registry {
     r.add::<cmd_mirror::Mirror>();
     r.add::<cmd_move::Move>();
     r.add::<cmd_rotate::Rotate>();
-    r.add::<cmd_select_all_vectors::SelectAllVectors>();
+    r.add::<cmd_select::SelectAllVectors>();
     r.add::<cmd_set_size::SetSize>();
-    r.add::<cmd_unselect_all::UnselectAll>();
+    r.add::<cmd_select::UnselectAll>();
     r.add::<cmd_job_setup::JobSetup>();
     r.add::<cmd_weld_vectors::WeldVectors>();
     r.add::<cmd_subtract_vectors::SubtractVectors>();
@@ -75,8 +75,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_inlay_toolpath::InlayToolpath>();
     r.add::<cmd_space_horizontally::SpaceHorizontally>();
     r.add::<cmd_space_vertically::SpaceVertically>();
-    r.add::<cmd_select_all_open_vectors::SelectAllOpenVectors>();
-    r.add::<cmd_select_all_duplicate_vectors::SelectAllDuplicateVectors>();
+    r.add::<cmd_select::SelectAllOpenVectors>();
+    r.add::<cmd_select::SelectAllDuplicateVectors>();
     r.add::<cmd_add_zero_plane::AddZeroPlane>();
     r.add::<cmd_scale_model_z_height::ScaleModelZHeight>();
     r.add::<cmd_create_component_from_bitmap::CreateComponentFromBitmap>();
@@ -118,9 +118,9 @@ pub fn registry() -> Registry {
     r.add::<cmd_delete_point::DeletePoint>();
     r.add::<cmd_cut_vector::CutVector>();
     r.add::<cmd_make_start_point::MakeStartPoint>();
-    r.add::<cmd_span_to_line::SpanToLine>();
-    r.add::<cmd_span_to_bezier::SpanToBezier>();
-    r.add::<cmd_span_to_arc::SpanToArc>();
+    r.add::<cmd_convert_span::SpanToLine>();
+    r.add::<cmd_convert_span::SpanToBezier>();
+    r.add::<cmd_convert_span::SpanToArc>();
     r.add::<cmd_reverse_direction::ReverseDirection>();
     r.add::<cmd_close_with_line::CloseWithLine>();
     r.add_interactive::<cmd_interactive_vector_trim::InteractiveVectorTrim>();
@@ -187,15 +187,18 @@ pub fn registry() -> Registry {
 mod tests {
     use std::path::Path;
 
+    /// A crate is one command named after it, or a family (`align`, `select`,
+    /// `convert-span`) whose commands the registry lists by the crate's name.
     #[test]
     fn every_command_crate_is_registered() {
         let registry = super::registry();
+        let source = include_str!("commands.rs");
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../commands");
         for entry in std::fs::read_dir(dir).unwrap() {
             let name = entry.unwrap().file_name().to_string_lossy().into_owned();
             let id = name.replace('-', "_");
             assert!(
-                registry.get(&id).is_some(),
+                registry.get(&id).is_some() || source.contains(&format!("cmd_{id}::")),
                 "crates/commands/{name} is not registered in crates/app/src/commands.rs"
             );
         }

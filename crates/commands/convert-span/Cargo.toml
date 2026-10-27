@@ -1,6 +1,6 @@
 [package]
-name = "cmd-center-horizontally-in-material"
-description = "Center Horizontally In Material"
+name = "cmd-convert-span"
+description = "Node editing's Convert Span to Line / Arc / Bezier"
 version.workspace = true
 edition.workspace = true
 

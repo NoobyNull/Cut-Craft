@@ -247,7 +247,7 @@ and everything still works. The third-party icons are credited under **Help ▸ 
 ```
 crates/core/              the document, invertible changes (undo), the Command contract,
                           geometry, components, simulation, rest machining
-crates/commands/<name>/   one crate per command: its settings, run(), tests
+crates/commands/<name>/   one crate per command (or per family: align, select, convert-span): its settings, run(), tests
 crates/formats/<name>/    one crate per importer or exporter
 crates/post/              post-processors: toolpaths to G-code
 crates/tool-database/     the Tool Database window, tool groups, tool library imports

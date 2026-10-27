@@ -427,28 +427,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmd-align-bottom"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-align-left"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-align-right"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-align-top"
+name = "cmd-align"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -498,52 +477,6 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
-]
-
-[[package]]
-name = "cmd-center"
-version = "0.1.0"
-dependencies = [
- "cmd-center-horizontally",
- "cmd-center-vertically",
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-center-horizontally"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-center-horizontally-in-material"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-center-in-material"
-version = "0.1.0"
-dependencies = [
- "cmd-center-horizontally-in-material",
- "cmd-center-vertically-in-material",
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-center-vertically"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
-]
-
-[[package]]
-name = "cmd-center-vertically-in-material"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
 ]
 
 [[package]]
@@ -599,6 +532,13 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+]
+
+[[package]]
+name = "cmd-convert-span"
+version = "0.1.0"
+dependencies = [
+ "cut-craft-core",
 ]
 
 [[package]]
@@ -1413,25 +1353,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmd-select-all-duplicate-vectors"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cmd-select-all-open-vectors"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cmd-select-all-vectors"
+name = "cmd-select"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1524,33 +1446,6 @@ dependencies = [
 
 [[package]]
 name = "cmd-space-vertically"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cmd-span-to-arc"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cmd-span-to-bezier"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cmd-span-to-line"
 version = "0.1.0"
 dependencies = [
  "cut-craft-core",
@@ -1681,13 +1576,6 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
-]
-
-[[package]]
-name = "cmd-unselect-all"
-version = "0.1.0"
-dependencies = [
- "cut-craft-core",
 ]
 
 [[package]]
@@ -1962,27 +1850,19 @@ dependencies = [
  "cmd-add-layer",
  "cmd-add-sheet",
  "cmd-add-zero-plane",
- "cmd-align-bottom",
- "cmd-align-left",
- "cmd-align-right",
- "cmd-align-top",
+ "cmd-align",
  "cmd-array-copy",
  "cmd-array-copy-toolpath",
  "cmd-bake-components",
  "cmd-bitmap-properties",
  "cmd-celtic-weave",
- "cmd-center",
- "cmd-center-horizontally",
- "cmd-center-horizontally-in-material",
- "cmd-center-in-material",
- "cmd-center-vertically",
- "cmd-center-vertically-in-material",
  "cmd-chamfer-toolpath",
  "cmd-circular-copy",
  "cmd-close-extend-vector",
  "cmd-close-with-line",
  "cmd-component-boundary",
  "cmd-component-properties",
+ "cmd-convert-span",
  "cmd-convert-text-to-curves",
  "cmd-copy-along-vectors",
  "cmd-copy-to-other-side",
@@ -2072,9 +1952,7 @@ dependencies = [
  "cmd-scale-model-z-height",
  "cmd-sculpt",
  "cmd-segment-3d-model",
- "cmd-select-all-duplicate-vectors",
- "cmd-select-all-open-vectors",
- "cmd-select-all-vectors",
+ "cmd-select",
  "cmd-select-layer-vectors",
  "cmd-set-current-layer",
  "cmd-set-size",
@@ -2085,9 +1963,6 @@ dependencies = [
  "cmd-smooth-selected-components",
  "cmd-space-horizontally",
  "cmd-space-vertically",
- "cmd-span-to-arc",
- "cmd-span-to-bezier",
- "cmd-span-to-line",
  "cmd-split",
  "cmd-subtract-vectors",
  "cmd-swap-sides",
@@ -2102,7 +1977,6 @@ dependencies = [
  "cmd-two-rail-sweep",
  "cmd-ungroup",
  "cmd-ungroup-components",
- "cmd-unselect-all",
  "cmd-vcarve-engrave-toolpath",
  "cmd-vcarve-inlay-toolpath",
  "cmd-vector-boundary",

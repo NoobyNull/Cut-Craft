@@ -1,6 +1,6 @@
 [package]
-name = "cmd-center-vertically"
-description = "Center Vertically"
+name = "cmd-align"
+description = "Align Objects: Align Left / Right / Top / Bottom, Center, Center Horizontally / Vertically, and the three Center In Material commands"
 version.workspace = true
 edition.workspace = true
 

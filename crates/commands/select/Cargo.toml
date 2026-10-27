@@ -1,6 +1,6 @@
 [package]
-name = "cmd-align-right"
-description = "Align Right"
+name = "cmd-select"
+description = "Select All Vectors / Open Vectors / Duplicate Vectors and Unselect All"
 version.workspace = true
 edition.workspace = true
 
