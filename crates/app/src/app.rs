@@ -23,6 +23,10 @@ use std::borrow::Cow;
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
 /// Actions the app handles itself rather than through a command.
+/// How much of the theme's darkest background shades the window while files are dragged
+/// over it.
+const DROP_SHADE: f32 = 0.8;
+
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
@@ -3857,8 +3861,74 @@ impl CutCraftApp {
     /// One frame of the whole window; separate from `update` so tests can drive it headlessly.
     fn ui(&mut self, ctx: &egui::Context) {
         self.draw_window(ctx);
+        self.dropped_files(ctx);
         self.follow_form(ctx);
         self.report_bugs(ctx);
+    }
+
+    /// Files dragged over the window are shown a drop will take them; dropped, each is opened,
+    /// imported or installed as the menus would.
+    fn dropped_files(&mut self, ctx: &egui::Context) {
+        let (hovering, dropped) = ctx.input(|i| {
+            let paths = |files: Vec<Option<std::path::PathBuf>>| {
+                files.into_iter().flatten().collect::<Vec<_>>()
+            };
+            (
+                !i.raw.hovered_files.is_empty(),
+                paths(i.raw.dropped_files.iter().map(|f| f.path.clone()).collect()),
+            )
+        });
+        if hovering {
+            let screen = ctx.screen_rect();
+            let painter = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("file_drop"),
+            ));
+            let shade = ctx
+                .style()
+                .visuals
+                .extreme_bg_color
+                .gamma_multiply(DROP_SHADE);
+            painter.rect_filled(screen, 0.0, shade);
+            painter.text(
+                screen.center(),
+                egui::Align2::CENTER_CENTER,
+                "Drop to open or import",
+                egui::TextStyle::Heading.resolve(&ctx.style()),
+                ctx.style().visuals.strong_text_color(),
+            );
+        }
+        for path in dropped {
+            self.drop_file(&path);
+        }
+    }
+
+    /// One dropped file: a job opens; a post-processor installs; a tool database's tools are
+    /// added; anything else is imported into the open job.
+    fn drop_file(&mut self, path: &std::path::Path) {
+        let ext = path
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        let job = [
+            JOB_EXTENSION,
+            OLD_JOB_EXTENSION,
+            cut_craft_core::file::TEMPLATE_EXTENSION,
+        ];
+        match ext.as_str() {
+            e if job.contains(&e) => {
+                if self.confirm_discard() {
+                    self.open_path(path);
+                }
+            }
+            "pp" => self.install_post(path),
+            e if files::TOOL_FILE_EXTENSIONS.contains(&e) && e != "json" => self.import_tools(path),
+            _ if self.screen != Screen::Job => self.status.set_message(&format!(
+                "Open or make a job to import {} into",
+                file_name(path)
+            )),
+            _ => self.import_file(path),
+        }
     }
 
     /// Right-click ▸ Report a Bug Here…, over whatever was drawn.
@@ -4973,7 +5043,17 @@ impl CutCraftApp {
 
 /// Opens the main window and runs until it is closed.
 pub fn run(title: &str) {
+    // winit (0.29) delivers dropped files only on X11, so on a Wayland desktop Cut Craft runs
+    // through XWayland unless Options says to use Wayland directly
+    let wayland = crate::options::Options::load().general.wayland_native;
+    let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
+        event_loop_builder: Some(Box::new(move |builder| {
+            use winit::platform::x11::EventLoopBuilderExtX11;
+            if x11 {
+                builder.with_x11();
+            }
+        })),
         viewport: egui::ViewportBuilder::default()
             .with_title(title)
             .with_app_id(APP_ID),
@@ -5405,6 +5485,39 @@ mod tests {
 
         fn frame(&mut self, events: Vec<Event>) {
             self.frame_holding(Modifiers::NONE, events);
+        }
+
+        /// One frame with `files` dropped on the window (or only dragged over it).
+        fn drop_files(&mut self, files: &[std::path::PathBuf], dropped: bool) {
+            self.time += 0.1;
+            let input = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+                time: Some(self.time),
+                dropped_files: if dropped {
+                    files
+                        .iter()
+                        .map(|p| egui::DroppedFile {
+                            path: Some(p.clone()),
+                            ..Default::default()
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                },
+                hovered_files: if dropped {
+                    vec![]
+                } else {
+                    files
+                        .iter()
+                        .map(|p| egui::HoveredFile {
+                            path: Some(p.clone()),
+                            ..Default::default()
+                        })
+                        .collect()
+                },
+                ..Default::default()
+            };
+            self.shapes = self.ctx.run(input, |ctx| self.app.ui(ctx)).shapes;
         }
 
         /// One frame with `modifiers` held, as the windowing layer reports them every frame.
@@ -7116,6 +7229,47 @@ mod tests {
             ("layer_properties", Some("Renamed"))
         );
         assert!(!h.app.available("run:no_such_command:{}"));
+    }
+
+    #[test]
+    fn files_dropped_on_the_window_open_import_or_install() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-drop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let picture = dir.join("photo.png");
+        let mut png = std::io::Cursor::new(vec![]);
+        image_egui::GrayImage::from_pixel(4, 4, image_egui::Luma([128]))
+            .write_to(&mut png, image_egui::ImageFormat::Png)
+            .unwrap();
+        std::fs::write(&picture, png.into_inner()).unwrap();
+        // on the start page there is no job to import into
+        let mut h = Harness::at_start();
+        h.drop_files(std::slice::from_ref(&picture), true);
+        assert!(h.app.doc.bitmaps.is_empty());
+        assert!(
+            h.app.status.message.contains("job"),
+            "{}",
+            h.app.status.message
+        );
+        // in a job a picture is imported; dragging over says what a drop will do
+        let mut h = Harness::new();
+        h.drop_files(std::slice::from_ref(&picture), false);
+        assert!(h.text_at("Drop to open or import").is_some());
+        h.drop_files(&[picture], true);
+        assert_eq!(h.app.doc.bitmaps.len(), 1, "imported");
+        // a post-processor is installed
+        h.app.posts = cut_craft_machines::Library::new(Some(dir.join("posts")));
+        let post = dir.join("router.pp");
+        std::fs::write(&post, cut_craft_post::BUILT_IN[0].1).unwrap();
+        h.drop_files(&[post], true);
+        assert!(
+            h.app
+                .posts
+                .entries()
+                .iter()
+                .any(cut_craft_machines::Entry::is_custom)
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

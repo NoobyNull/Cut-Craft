@@ -52,6 +52,11 @@ pub struct General {
     #[serde(default = "bug_repo")]
     #[schemars(title = "Bug reports go to")]
     pub bug_report_repo: String,
+    /// On a Wayland desktop, open the window there directly rather than through `XWayland`;
+    /// files cannot be dragged into it then (from the next start)
+    #[serde(default)]
+    #[schemars(title = "Use Wayland directly (no file drag and drop)")]
+    pub wayland_native: bool,
 }
 
 /// Where bug reports go unless the options say otherwise: Cut Craft's own repository.
@@ -96,6 +101,7 @@ impl Default for Options {
                     .expect("a small count"),
                 preload_icons: on(),
                 bug_report_repo: bug_repo(),
+                wayland_native: false,
             },
         }
     }
