@@ -1,9 +1,6 @@
-- Each sheet keeps its own objects; double-sided jobs with Swap Sides
-- Edit > Options and Document Variables ({name} in sums)
-- Keep-Out Zones, Toolpath Tiling
-- Transform mode handles; guide lines from the rulers
-- Plate Production
-- Gadgets: Wrapped Fluting / Spiral Layout, Celtic Weave Creator
-- Sheets, Components and Clipart side tabs; the top bar; smart snapping
-- Number fields take sums; Duplicate Toolpath, Edit Picture, Crop Bitmap
-- Light theme; menus in bordered categories
+- Unsaved work is kept for recovery after a crash; saves never damage the old file
+- Auto Layout Text: words wrapped and sized to fill a selected shape
+- Ctrl + X / C / V work, and copy through the system clipboard between windows
+- Job files pack their models, pictures and toolpaths; older jobs still open
+- Report a Bug opens a filled-in GitHub issue in the browser without the GitHub CLI
+- A faster, leaner build: egui 0.37, half the memory per model, changes applied in place

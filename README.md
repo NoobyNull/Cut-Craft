@@ -25,7 +25,8 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 ### Design (2D)
 
 - Rectangles (square, rounded or notched corners), circles, ellipses, polygons, stars, arcs,
-  curves, polylines and freehand lines; text, text on a curve, dimensions.
+  curves, polylines and freehand lines; text, text on a curve, auto layout text (words
+  wrapped and sized to fill a shape), dimensions.
 - Node editing, joining and closing vectors, fillets, offsets, weld / subtract / overlap,
   trimming, mirroring, array and circular copies, nesting.
 - Drag selected objects to move them; the arrow keys nudge by a grid square (Shift: half,
@@ -68,7 +69,12 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 
 ### Files
 
-- Jobs (`.ccjob`) and templates; Recent Files on the start page.
+- Jobs (`.ccjob`) and templates; Recent Files on the start page. Models, pictures and
+  toolpaths are stored packed, so a job with a dense 3D toolpath is a fraction of the size it
+  was; jobs saved by earlier builds still open.
+- Every file is written whole: a save that fails (a full disk, a crash) leaves the old file as
+  it was. Unsaved work is copied to `recovery.ccjob` in the settings folder every 30 seconds
+  and opened again after a crash; saving or closing the job on purpose removes the copy.
 - Import DXF, SVG, pictures (PNG, JPG, GIF, BMP, TIFF) and STL. Export DXF, SVG, PDF, STL and
   grayscale bitmaps, plus a job sheet.
 - Drag files onto the window to open, import or install them (see [the table](#drag-and-drop)).
@@ -145,6 +151,8 @@ can be opened again later from the File Operations group.
   double-click a model to select it; **F** fits the view.
 - **Tab** and **Shift + Tab** move between controls without the mouse; the one with focus is
   ringed.
+- **Ctrl + X / C / V** cut, copy and paste the selected vectors. Copy puts them on the system
+  clipboard, so a second Cut Craft window can paste them.
 
 ### Drag and drop
 
@@ -188,7 +196,9 @@ went wrong. Cut Craft adds, without you doing anything:
 - a screenshot of the window, and any pictures you add.
 
 **Submit to GitHub** files it as an issue through the [GitHub CLI](https://cli.github.com)
-(`gh`, signed in). A report that can't be sent is kept in the settings folder instead.
+(`gh`, signed in). Without `gh`, your browser opens GitHub's new-issue page with the report
+filled in, to finish by hand; either way a report that can't be sent is kept in the settings
+folder, pictures included.
 
 ## Building from source
 
@@ -211,6 +221,10 @@ errors (pedantic), and the tests through `cargo nextest`. Turn it on after cloni
 ```bash
 git config core.hooksPath .githooks
 ```
+
+The tests that try real vendor files (`.vtdb` and Fusion `.tools` libraries, a 16-bit
+`depth.png`) read them from the folder `CUT_CRAFT_VENDOR_FILES` names, and pass silently
+when it is unset.
 
 ### Release builds
 

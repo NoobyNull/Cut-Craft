@@ -395,9 +395,7 @@ say "not implemented yet".
 - View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
 - Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.
-- Drawing tab:
-  - Transform, Trim Objects.
-  - Auto Layout Text.
+- Drawing tab: Transform, Trim Objects.
 - 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
   not hidden behind it.
 - Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
