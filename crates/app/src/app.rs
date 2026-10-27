@@ -43,6 +43,25 @@ enum Grab {
     Component(EntityId),
 }
 
+/// Model ▸ Model Resolution's items, the resolution each sets and its name.
+const RESOLUTIONS: [(&str, cut_craft_core::document::Resolution, &str); 3] = [
+    (
+        "model_resolution_standard",
+        cut_craft_core::document::Resolution::Standard,
+        "Standard",
+    ),
+    (
+        "model_resolution_high",
+        cut_craft_core::document::Resolution::High,
+        "High",
+    ),
+    (
+        "model_resolution_highest",
+        cut_craft_core::document::Resolution::Highest,
+        "Highest",
+    ),
+];
+
 /// How much of the theme's darkest background shades the window while files are dragged
 /// over it.
 const DROP_SHADE: f32 = 0.8;
@@ -573,6 +592,7 @@ impl CutCraftApp {
             "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
+            id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
             "cut" | "copy" => !self.doc.selection.is_empty(),
             "create_component_from_toolpath_preview" => self.simulation.is_some(),
             "paste" | "paste_in_place" => !self.clipboard.is_empty(),
@@ -712,6 +732,7 @@ impl CutCraftApp {
                 self.tool_manager = Some(manager);
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
+            id if self.resolution_checked(id).is_some() => self.set_resolution(id),
             "refresh_2d_view" => ctx.request_repaint(),
             "create_component_from_toolpath_preview" => self.component_from_preview(),
             "copy"
@@ -1807,7 +1828,11 @@ impl CutCraftApp {
                         &menu.items,
                         &Menus {
                             available: &|id| self.available(id),
-                            checked: &|id| self.display.checked(id),
+                            checked: &|id| {
+                                self.display
+                                    .checked(id)
+                                    .or_else(|| self.resolution_checked(id))
+                            },
                             shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
                             recent: &recent,
                         },
@@ -3960,6 +3985,33 @@ impl CutCraftApp {
         self.dropped_files(ctx);
         self.follow_form(ctx);
         self.report_bugs(ctx);
+    }
+
+    /// Whether Model ▸ Model Resolution's item `id` is the job's resolution; `None` for any
+    /// other item.
+    fn resolution_checked(&self, id: &str) -> Option<bool> {
+        RESOLUTIONS
+            .iter()
+            .find(|(item, ..)| *item == id)
+            .map(|&(_, resolution, _)| self.doc.job.resolution == resolution)
+    }
+
+    /// Model ▸ Model Resolution: the job's level of detail for models made from now on, as
+    /// Job Setup sets it.
+    fn set_resolution(&mut self, id: &str) {
+        let Some(&(_, resolution, name)) = RESOLUTIONS.iter().find(|(item, ..)| *item == id) else {
+            return;
+        };
+        let mut c = Change::builder(&self.doc);
+        c.set_job(cut_craft_core::document::Job {
+            resolution,
+            ..self.doc.job
+        });
+        let cell = c.finish();
+        // models already made keep their cells; their detail came from what they were made from
+        let done =
+            format!("Model resolution: {name}; new models (and those imported again) use it");
+        self.record(Ok(cell), &done);
     }
 
     /// Files dragged over the window are shown a drop will take them; dropped, each is opened,
@@ -7415,6 +7467,41 @@ mod tests {
             ("layer_properties", Some("Renamed"))
         );
         assert!(!h.app.available("run:no_such_command:{}"));
+    }
+
+    #[test]
+    fn the_model_resolution_is_changed_from_the_model_menu() {
+        use cut_craft_core::document::Resolution;
+        let mut h = Harness::new();
+        assert_eq!(h.app.doc.job.resolution, Resolution::Standard);
+        assert_eq!(
+            h.app.resolution_checked("model_resolution_standard"),
+            Some(true)
+        );
+        assert!(h.app.available("model_resolution_highest"));
+        let standard = h.app.doc.job.model_cell();
+        h.app.invoke(&h.ctx, "model_resolution_highest");
+        assert_eq!(h.app.doc.job.resolution, Resolution::Highest);
+        assert!(
+            h.app.doc.job.model_cell() < standard / 2.0,
+            "finer cells for new models"
+        );
+        assert_eq!(
+            h.app.resolution_checked("model_resolution_highest"),
+            Some(true)
+        );
+        assert_eq!(
+            h.app.resolution_checked("model_resolution_standard"),
+            Some(false)
+        );
+        assert!(
+            h.app.status.message.contains("Highest"),
+            "{}",
+            h.app.status.message
+        );
+        h.app.invoke(&h.ctx, "undo");
+        assert_eq!(h.app.doc.job.resolution, Resolution::Standard, "undone");
+        assert_eq!(h.app.resolution_checked("preview_quality_1"), None);
     }
 
     #[test]

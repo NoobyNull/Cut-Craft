@@ -1046,6 +1046,22 @@ impl MenuSystem {
                         i("Export as Grayscale Bitmap"),
                         i("Export as 3D Clipart"),
                         sep(),
+                        // Job Setup's Resolution (Aspire's level of detail), here too
+                        sub(
+                            "Model Resolution",
+                            vec![
+                                MenuItem::with_action(
+                                    "Standard (fastest)",
+                                    "model_resolution_standard",
+                                ),
+                                MenuItem::with_action("High (3x slower)", "model_resolution_high"),
+                                MenuItem::with_action(
+                                    "Highest (7x slower)",
+                                    "model_resolution_highest",
+                                ),
+                            ],
+                        ),
+                        sep(),
                         a("Sculpt Visible Model", "sculpt"),
                         i("Smooth Selected Components"),
                         i("Reset Inside Selected Vectors"),
