@@ -4,7 +4,8 @@
 //!
 //! Learned from one vendor file: `unit` is `inches` or `millimeters`, for lengths and
 //! per-minute rates; `geometry` `DC` cutting diameter, `NOF` flutes, `RE` corner radius, `TA`
-//! half the included angle; `type` is Fusion's tool kind. All [inf].
+//! half the included angle (a tapered mill's taper), `LCF` flute length, `SFDM` shank
+//! diameter; `type` is Fusion's tool kind. All [inf].
 //!
 //! Some `.tools` files are plain JSON instead: groups (`Bits`) of tools keyed by id, lengths
 //! in mm and rates in mm/s whatever `MetricTool` says. Also [inf], from one file (Amana's).
@@ -174,8 +175,6 @@ fn tools(entry: &Value) -> Vec<Tool> {
     let num = |v: &Value| v.as_f64();
     let corner = num(&g["RE"]).unwrap_or(0.0);
     let kind = entry["type"].as_str().unwrap_or_default();
-    // ponytail: a tapered mill keeps its tip and loses the taper, as a tapered ball nose
-    // from a .vtdb does [inf]
     let shape = match kind {
         "tapered mill" if corner > 0.0 => ToolShape::BallNose,
         "flat end mill" | "face mill" | "tapered mill" => ToolShape::EndMill,
@@ -211,6 +210,13 @@ fn tools(entry: &Value) -> Vec<Tool> {
             0.0
         },
         angle: num(&g["TA"]).map_or(base.angle, |half| half * 2.0),
+        // a tapered mill's `TA` is its taper, widening from `DC` at the tip to the shank
+        taper: match kind {
+            "tapered mill" => num(&g["TA"]).unwrap_or(0.0),
+            _ => 0.0,
+        },
+        shank_diameter: num(&g["SFDM"]).unwrap_or(0.0) * scale,
+        flute_length: num(&g["LCF"]).unwrap_or(0.0) * scale,
         flutes: g["NOF"]
             .as_u64()
             .and_then(|f| u32::try_from(f).ok())
@@ -297,6 +303,21 @@ mod tests {
         out.extend(directory.to_le_bytes());
         out.extend([0; 2]);
         out
+    }
+
+    #[test]
+    fn a_tapered_mill_keeps_its_taper_shank_and_flute_length() {
+        let library = serde_json::json!({ "data": [
+            { "type": "tapered mill", "unit": "inches",
+              "geometry": { "DC": 0.03125, "RE": 0.015_625, "TA": 6.2, "SFDM": 0.25, "LCF": 1 } }
+        ]});
+        let db = read(&zip("tools.json", library.to_string().as_bytes())).unwrap();
+        let t = &db.tools[0];
+        assert_eq!(t.shape, ToolShape::BallNose);
+        assert!((t.diameter - 0.793_75).abs() < 1e-9);
+        assert!((t.taper - 6.2).abs() < 1e-9);
+        assert!((t.shank_diameter - 6.35).abs() < 1e-9);
+        assert!((t.flute_length - 25.4).abs() < 1e-9);
     }
 
     #[test]

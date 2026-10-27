@@ -3,6 +3,7 @@
 pub mod bitmap;
 pub mod calc;
 mod change;
+pub mod checks;
 mod command;
 pub mod component;
 pub mod document;

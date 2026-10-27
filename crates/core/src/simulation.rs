@@ -81,14 +81,37 @@ impl Material {
     /// How low the tool's tip can go over `at` before its cutting edge touches the surface
     /// at any cell centre it covers ("drop cutter").
     pub fn drop_tool(&self, tool: &Tool, at: Point) -> f64 {
-        let radius = tool.diameter / 2.0;
+        self.drop_tool_on(tool, at, &self.peaks())
+    }
+
+    /// [`Self::drop_tool`] with this grid's [`Self::peaks`] worked out once: a taper is only
+    /// searched in the tiles it could touch, which keeps a long taper quick.
+    pub fn drop_tool_on(&self, tool: &Tool, at: Point, peaks: &Tiles) -> f64 {
+        let near = (tool.diameter / 2.0).min(tool.reach());
         let mut tip = f64::NEG_INFINITY;
-        for row in self.rows_between(at.y - radius, at.y + radius) {
-            for column in self.columns_between(at.x - radius, at.x + radius) {
-                if let Some(rise) = tool.profile(self.centre(column, row).distance(at)) {
-                    tip = tip.max(self.heights[row * self.columns + column] - rise);
+        let rest_on = |columns: Range<usize>, rows: Range<usize>, tip: &mut f64| {
+            for row in rows {
+                for column in columns.clone() {
+                    if let Some(rise) = tool.profile(self.centre(column, row).distance(at)) {
+                        *tip = tip.max(self.heights[row * self.columns + column] - rise);
+                    }
                 }
             }
+        };
+        rest_on(
+            self.columns_between(at.x - near, at.x + near),
+            self.rows_between(at.y - near, at.y + near),
+            &mut tip,
+        );
+        if tool.reach() > near {
+            self.tiles_near(peaks, at, at, tool.reach(), |tile, gap, columns, rows| {
+                if tool
+                    .profile(gap)
+                    .is_some_and(|rise| peaks.values[tile] - rise > tip)
+                {
+                    rest_on(columns, rows, &mut tip);
+                }
+            });
         }
         // a tool narrower than a cell may cover no centre: rest on the cell under it
         if tip.is_finite() {
@@ -98,26 +121,92 @@ impl Material {
         }
     }
 
+    /// The highest cell in each tile of the grid.
+    pub fn peaks(&self) -> Tiles {
+        Tiles::of(
+            &self.heights,
+            self.columns,
+            self.rows,
+            f64::NEG_INFINITY,
+            f64::max,
+        )
+    }
+
+    /// Calls `visit` with each tile that may have cells within `radius` of the line from
+    /// `a` to `b`: its index, how near to the line its cells can be, and its cells.
+    fn tiles_near(
+        &self,
+        tiles: &Tiles,
+        a: Point,
+        b: Point,
+        radius: f64,
+        mut visit: impl FnMut(usize, f64, Range<usize>, Range<usize>),
+    ) {
+        let n = tiles.size;
+        let (lo, hi) = (
+            a.min(b) - Point::splat(radius),
+            a.max(b) + Point::splat(radius),
+        );
+        let (columns, rows) = (
+            self.columns_between(lo.x, hi.x),
+            self.rows_between(lo.y, hi.y),
+        );
+        for ty in rows.start / n..rows.end.div_ceil(n) {
+            for tx in columns.start / n..columns.end.div_ceil(n) {
+                let cells_x = tx * n..((tx + 1) * n).min(self.columns);
+                let cells_y = ty * n..((ty + 1) * n).min(self.rows);
+                let size = Point::new(cells_x.len() as f64, cells_y.len() as f64) * self.cell;
+                let corner = self.origin
+                    + Point::new(cells_x.start as f64, cells_y.start as f64) * self.cell;
+                let centre = corner + size / 2.0;
+                let gap = (distance_to_line(centre, a, b) - size.length() / 2.0).max(0.0);
+                if gap <= radius {
+                    visit(ty * tiles.columns + tx, gap, cells_x, cells_y);
+                }
+            }
+        }
+    }
+
     /// The surface `tool` leaves after finishing everywhere over this one, from every cell
     /// centre as low as it goes: what its cutting edge cannot reach stays.
     #[must_use]
     pub fn left_by(&self, tool: &Tool) -> Self {
-        let radius = tool.diameter / 2.0;
+        let peaks = self.peaks();
         let tips: Vec<f64> = (0..self.rows)
             .flat_map(|row| (0..self.columns).map(move |column| (column, row)))
-            .map(|(column, row)| self.drop_tool(tool, self.centre(column, row)))
+            .map(|(column, row)| self.drop_tool_on(tool, self.centre(column, row), &peaks))
             .collect();
+        let floors = Tiles::of(&tips, self.columns, self.rows, f64::INFINITY, f64::min);
+        let near = (tool.diameter / 2.0).min(tool.reach());
         let mut left = self.clone();
         for row in 0..self.rows {
             for column in 0..self.columns {
                 let at = self.centre(column, row);
                 let mut lowest = f64::INFINITY;
-                for r in self.rows_between(at.y - radius, at.y + radius) {
-                    for c in self.columns_between(at.x - radius, at.x + radius) {
-                        if let Some(rise) = tool.profile(self.centre(c, r).distance(at)) {
-                            lowest = lowest.min(tips[r * self.columns + c] + rise);
+                let edge_over = |columns: Range<usize>, rows: Range<usize>, lowest: &mut f64| {
+                    for r in rows {
+                        for c in columns.clone() {
+                            if let Some(rise) = tool.profile(self.centre(c, r).distance(at)) {
+                                *lowest = lowest.min(tips[r * self.columns + c] + rise);
+                            }
                         }
                     }
+                };
+                edge_over(
+                    self.columns_between(at.x - near, at.x + near),
+                    self.rows_between(at.y - near, at.y + near),
+                    &mut lowest,
+                );
+                // the taper only matters in tiles where it could come lower than that
+                if tool.reach() > near {
+                    self.tiles_near(&floors, at, at, tool.reach(), |tile, gap, columns, rows| {
+                        if tool
+                            .profile(gap)
+                            .is_some_and(|rise| floors.values[tile] + rise < lowest)
+                        {
+                            edge_over(columns, rows, &mut lowest);
+                        }
+                    });
                 }
                 let height = &mut left.heights[row * self.columns + column];
                 if lowest.is_finite() {
@@ -141,7 +230,8 @@ impl Material {
         if a.z >= 0.0 && b.z >= 0.0 {
             return;
         }
-        let (columns, rows) = self.swept(a, b, tool);
+        // the material is nowhere above its top, 0
+        let (columns, rows) = self.swept(a, b, tool.reach_below(-a.z.min(b.z)));
         for row in rows {
             for column in columns.clone() {
                 if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
@@ -155,18 +245,53 @@ impl Material {
     /// How far below the surface the tool would cut going straight from `a` to `b`, at the
     /// deepest cell centre it passes over; zero or less when it clears everything.
     pub fn overcut(&self, tool: &Tool, a: DVec3, b: DVec3) -> f64 {
-        let (columns, rows) = self.swept(a, b, tool);
-        rows.flat_map(|row| columns.clone().map(move |column| (column, row)))
-            .filter_map(|(column, row)| {
-                let z = lowest_edge(tool, a, b, self.centre(column, row))?;
-                Some(self.heights[row * self.columns + column] - z)
-            })
-            .fold(f64::NEG_INFINITY, f64::max)
+        self.overcut_on(tool, a, b, &self.peaks())
     }
 
-    /// The columns and rows under the tool's footprint anywhere from `a` to `b`.
-    fn swept(&self, a: DVec3, b: DVec3, tool: &Tool) -> (Range<usize>, Range<usize>) {
-        let radius = tool.diameter / 2.0;
+    /// [`Self::overcut`] with this grid's [`Self::peaks`] worked out once.
+    pub fn overcut_on(&self, tool: &Tool, a: DVec3, b: DVec3, peaks: &Tiles) -> f64 {
+        let mut worst = f64::NEG_INFINITY;
+        let (low, from, to) = (a.z.min(b.z), a.truncate(), b.truncate());
+        let dig = |columns: Range<usize>, rows: Range<usize>, worst: &mut f64| {
+            for row in rows {
+                for column in columns.clone() {
+                    let (centre, height) = (
+                        self.centre(column, row),
+                        self.heights[row * self.columns + column],
+                    );
+                    // the edge comes no lower than the lowest end at the nearest the line
+                    // passes: past that, the exact search cannot find worse
+                    let nearest = distance_to_line(centre, from, to);
+                    if !tool
+                        .profile(nearest)
+                        .is_some_and(|rise| height - (low + rise) > *worst)
+                    {
+                        continue;
+                    }
+                    if let Some(z) = lowest_edge(tool, a, b, centre) {
+                        *worst = worst.max(height - z);
+                    }
+                }
+            }
+        };
+        let near = (tool.diameter / 2.0).min(tool.reach());
+        let (columns, rows) = self.swept(a, b, near);
+        dig(columns, rows, &mut worst);
+        if tool.reach() > near {
+            self.tiles_near(peaks, from, to, tool.reach(), |tile, gap, columns, rows| {
+                if tool
+                    .profile(gap)
+                    .is_some_and(|rise| peaks.values[tile] - (low + rise) > worst)
+                {
+                    dig(columns, rows, &mut worst);
+                }
+            });
+        }
+        worst
+    }
+
+    /// The columns and rows within `radius` of the tool's axis anywhere from `a` to `b`.
+    fn swept(&self, a: DVec3, b: DVec3, radius: f64) -> (Range<usize>, Range<usize>) {
         let (lo, hi) = (
             a.truncate().min(b.truncate()) - radius,
             a.truncate().max(b.truncate()) + radius,
@@ -178,10 +303,61 @@ impl Material {
     }
 }
 
+/// The highest (or lowest) value in each square tile of a grid, so a search can pass over
+/// tiles nothing in which could matter.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tiles {
+    /// Cells along a tile's side.
+    size: usize,
+    /// Tiles across.
+    columns: usize,
+    values: Vec<f64>,
+}
+
+impl Tiles {
+    // ponytail: 8-cell tiles, one level; a deeper pyramid if long tapers still crawl
+    const SIZE: usize = 8;
+
+    /// `pick` (max or min) of each tile's cells of a `columns` by `rows` grid, from `start`.
+    fn of(
+        values: &[f64],
+        columns: usize,
+        rows: usize,
+        start: f64,
+        pick: fn(f64, f64) -> f64,
+    ) -> Self {
+        let n = Self::SIZE;
+        let across = columns.div_ceil(n);
+        let mut tiles = vec![start; across * rows.div_ceil(n)];
+        for row in 0..rows {
+            for column in 0..columns {
+                let t = &mut tiles[row / n * across + column / n];
+                *t = pick(*t, values[row * columns + column]);
+            }
+        }
+        Self {
+            size: n,
+            columns: across,
+            values: tiles,
+        }
+    }
+}
+
+/// How far `p` is from the line from `a` to `b`.
+fn distance_to_line(p: Point, a: Point, b: Point) -> f64 {
+    let along = b - a;
+    let t = if along == Point::ZERO {
+        0.0
+    } else {
+        ((p - a).dot(along) / along.length_squared()).clamp(0.0, 1.0)
+    };
+    p.distance(a + along * t)
+}
+
 /// The lowest the cutting edge of `tool` reaches over `centre` while its tip moves straight
 /// from `a` to `b`; `None` if the tool never covers it.
 fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
-    let radius = tool.diameter / 2.0;
+    let radius = tool.reach();
     let (start, along) = (a.truncate(), (b - a).truncate());
     let (t0, t1) = covered(start - centre, along, radius)?;
     let edge = |t: f64| {
@@ -190,8 +366,10 @@ fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
         tip.z + tool.profile(r).unwrap_or(0.0)
     };
     Some(match tool.shape {
-        // z is linear in t, so a flat end is lowest at one end of the covered span
-        ToolShape::EndMill => a.lerp(b, t0).z.min(a.lerp(b, t1).z),
+        // z is linear in t, so a flat end (untapered) is lowest at one end of the covered span
+        ToolShape::EndMill if tool.reach() <= tool.diameter / 2.0 => {
+            a.lerp(b, t0).z.min(a.lerp(b, t1).z)
+        }
         // a level move is lowest where it passes closest
         _ if (b.z - a.z).abs() < 1e-9 && along != DVec2::ZERO => {
             edge((-(start - centre).dot(along) / along.length_squared()).clamp(t0, t1))

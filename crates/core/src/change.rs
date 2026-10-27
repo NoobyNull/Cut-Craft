@@ -316,6 +316,10 @@ pub type Step<'a> = &'a dyn Fn(&Document) -> Result<Change, CommandError>;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Change {
     pub edits: Vec<Edit>,
+    /// What the command would have the person know about what it made (an imported model's
+    /// undercuts...), shown with its result; not part of the document.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
 
 impl Change {
@@ -335,6 +339,7 @@ impl Change {
             side: (doc.bottom_side, doc.other_side.clone()),
             job: doc.job,
             edits: vec![],
+            notes: vec![],
         }
     }
 
@@ -527,12 +532,14 @@ impl Change {
     pub fn inverse(&self) -> Self {
         Self {
             edits: self.edits.iter().rev().map(Edit::inverse).collect(),
+            notes: vec![],
         }
     }
 
     #[must_use]
     pub fn then(mut self, next: Self) -> Self {
         self.edits.extend(next.edits);
+        self.notes.extend(next.notes);
         self
     }
 
@@ -941,6 +948,7 @@ pub struct ChangeBuilder<'a> {
     /// The job as this change has left it.
     job: Job,
     edits: Vec<Edit>,
+    notes: Vec<String>,
 }
 
 impl ChangeBuilder<'_> {
@@ -1432,8 +1440,16 @@ impl ChangeBuilder<'_> {
         }
     }
 
+    /// Something for the person to know about what this change makes.
+    pub fn note(&mut self, note: impl Into<String>) {
+        self.notes.push(note.into());
+    }
+
     pub fn finish(self) -> Change {
-        Change { edits: self.edits }
+        Change {
+            edits: self.edits,
+            notes: self.notes,
+        }
     }
 }
 

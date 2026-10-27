@@ -24,7 +24,7 @@ pub fn read(path: &Path) -> Result<ToolDatabase, String> {
             "select g.name_format, g.tool_type, g.units, g.diameter, g.included_angle, \
              g.tip_radius, g.num_flutes, c.rate_units, c.length_units, c.feed_rate, \
              c.plunge_rate, c.spindle_speed, c.stepdown, c.stepover, m.name, mt.name, \
-             g.id, g.notes \
+             g.id, g.notes, g.flute_length \
              from tool_geometry g \
              join tool_entity e on e.tool_geometry_id = g.id \
              join tool_cutting_data c on c.id = e.tool_cutting_data_id \
@@ -54,6 +54,7 @@ pub fn read(path: &Path) -> Result<ToolDatabase, String> {
                 material: r.get(15)?,
                 geometry_id: r.get(16)?,
                 notes: r.get(17)?,
+                flute_length: r.get(18)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -146,6 +147,7 @@ struct Row {
     material: Option<String>,
     geometry_id: String,
     notes: Option<String>,
+    flute_length: Option<f64>,
 }
 
 const INCH: f64 = 25.4;
@@ -189,7 +191,6 @@ impl Row {
         let cut_scale = length(self.length_units);
         let base = Tool::default();
         let name = self.name();
-        // ponytail: a tapered ball nose keeps its tip and loses the taper [inf]
         Some(Tool {
             name,
             shape,
@@ -201,6 +202,17 @@ impl Row {
                 ToolShape::VBit => self.included_angle.unwrap_or(base.angle),
                 _ => 0.0,
             },
+            // a tapered tool's included angle is both sides of its taper; it widens to the
+            // diameter the file gives
+            taper: match self.tool_type {
+                5 => self.included_angle.unwrap_or(0.0).max(0.0) / 2.0,
+                _ => 0.0,
+            },
+            shank_diameter: match self.tool_type {
+                5 => self.diameter.unwrap_or(0.0) * scale,
+                _ => 0.0,
+            },
+            flute_length: self.flute_length.filter(|l| *l > 0.0).unwrap_or(0.0) * scale,
             diameter,
             pass_depth: self.stepdown.map_or(base.pass_depth, |s| s * cut_scale),
             stepover: self.stepover.map_or(base.stepover, |s| {
@@ -289,6 +301,7 @@ mod tests {
             material: Some("Softwood".into()),
             geometry_id: String::new(),
             notes: None,
+            flute_length: Some(0.875),
         }
     }
 
@@ -317,6 +330,12 @@ mod tests {
         let t = tapered.tool().unwrap();
         assert_eq!(t.shape, ToolShape::BallNose);
         assert!((t.diameter - 0.793_75).abs() < 1e-9, "{}", t.diameter);
+        assert!((t.taper - 6.2).abs() < 1e-9, "half the included angle");
+        assert!(
+            (t.shank_diameter - 6.35).abs() < 1e-9,
+            "the file's diameter"
+        );
+        assert!((t.flute_length - 22.225).abs() < 1e-9, "7/8 in");
         assert!((t.stepover - 0.32).abs() < 1e-9, "0.01 in of a 1/32 in tip");
         // a tapered flat bottom (no tip radius) cuts like an end mill its diameter across
         let flat = Row {

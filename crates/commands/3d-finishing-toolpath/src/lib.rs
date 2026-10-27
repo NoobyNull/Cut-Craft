@@ -201,6 +201,56 @@ mod tests {
     }
 
     #[test]
+    fn a_tapered_ball_nose_keeps_its_taper_off_a_tall_wall() {
+        use cut_craft_core::component::{Combine, Component};
+        use cut_craft_core::geometry::Rect;
+        let mut doc = domed();
+        doc.components.clear();
+        // a block 15 mm tall: a 1 mm ball fits beside it, its 8° taper leans into it
+        let area = Rect::new(Point::new(15.0, 15.0), Point::new(25.0, 25.0));
+        let block = Component::from_fn("block", Combine::Add, area, 0.2, |_| Some(15.0));
+        let mut c = cut_craft_core::Change::builder(&doc);
+        c.add_component(block);
+        doc.apply(&c.finish()).unwrap();
+        doc.job.thickness = 20.0;
+        let tool = Tool {
+            name: "tapered".into(),
+            shape: ToolShape::BallNose,
+            diameter: 1.0,
+            taper: 8.0,
+            shank_diameter: 6.0,
+            stepover: 0.5,
+            ..Tool::default()
+        };
+        let params = Params {
+            tool: tool.clone(),
+            ..Params::default()
+        };
+        let toolpath = finish(&doc, &params);
+        let cells = 400;
+        let mut cut = Material::new(&doc.job, cells);
+        cut.cut(&toolpath);
+        let shape = model(&doc, cells);
+        let gouges = cut
+            .heights
+            .iter()
+            .zip(&shape.heights)
+            .filter(|&(&z, &h)| z < h - 15.0 - 0.02)
+            .count();
+        assert_eq!(
+            gouges, 0,
+            "cells the taper cut more than 0.02 mm into the model"
+        );
+        // at the foot of the wall the taper holds the tip up: material is left there
+        let foot = Point::new(25.6, 20.0);
+        assert!(
+            cut.at(foot).unwrap() > -15.0 + 1.0,
+            "{}",
+            cut.at(foot).unwrap()
+        );
+    }
+
+    #[test]
     fn rest_machining_cuts_only_what_the_earlier_tools_left() {
         let starter = ToolDatabase::starter();
         let ball = |name: &str| starter.get(name).unwrap().clone();

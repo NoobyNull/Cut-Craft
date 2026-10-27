@@ -59,6 +59,25 @@ impl Importer for ImportStl {
     }
 }
 
+/// Undercuts, mm² seen from above: faces turned down that are higher than the model's
+/// lowest point, with air under them a cutter coming from above cannot reach.
+pub fn undercut(triangles: &[[DVec3; 3]]) -> f64 {
+    // ponytail: a tenth of a millimetre clear of the base counts; a bowed base would count too
+    const ABOVE: f64 = 0.1;
+    let lowest = triangles
+        .iter()
+        .flatten()
+        .map(|p| p.z)
+        .fold(f64::INFINITY, f64::min);
+    triangles
+        .iter()
+        .filter(|t| t.iter().map(|p| p.z).fold(f64::INFINITY, f64::min) > lowest + ABOVE)
+        .map(|[a, b, c]| (b - a).cross(c - a).z / 2.0)
+        .filter(|&up| up < 0.0)
+        .map(|up| -up)
+        .sum()
+}
+
 /// Raises each cell of `k` to the highest triangle above its centre.
 #[expect(
     clippy::cast_possible_truncation,
@@ -151,6 +170,18 @@ pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn faces_turned_down_above_the_base_are_undercuts() {
+        let v = DVec3::new;
+        // the base faces down at the bottom: not an undercut
+        let base = [v(0.0, 0.0, 0.0), v(0.0, 10.0, 0.0), v(10.0, 0.0, 0.0)];
+        let top = [v(0.0, 0.0, 5.0), v(10.0, 0.0, 5.0), v(0.0, 10.0, 5.0)];
+        assert!(undercut(&[base, top]).abs() < 1e-12);
+        // a ledge's underside 3 mm up is
+        let ledge = [v(0.0, 0.0, 3.0), v(0.0, 4.0, 3.0), v(4.0, 0.0, 3.0)];
+        assert!((undercut(&[base, top, ledge]) - 8.0).abs() < 1e-12);
+    }
 
     /// A square pyramid 20 mm across and 10 mm high, as four sloping faces and a base.
     fn pyramid() -> Vec<[[f32; 3]; 3]> {

@@ -3,7 +3,7 @@
 
 use crate::document::EntityId;
 use crate::geometry::{Path, Point};
-use crate::simulation::Material;
+use crate::simulation::{Material, Tiles};
 use crate::{Command, polygon};
 use glam::DVec3;
 use schemars::JsonSchema;
@@ -52,6 +52,21 @@ pub struct Tool {
     pub plunge_rate: f64,
     #[schemars(extend("x-unit" = "rpm"), range(min = 0))]
     pub spindle_speed: f64,
+    /// Side angle of a tapered ball nose or tapered flat bottom, each side of the axis; 0
+    /// for a straight tool. The taper widens to the shank, and toolpaths keep all of it off
+    /// the model (added with tapers).
+    #[serde(default)]
+    #[schemars(title = "Taper Angle", extend("x-unit" = "°"), range(min = 0, max = 45))]
+    pub taper: f64,
+    /// Where a tapered tool's taper ends (added with tapers; 0 if not given)
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub shank_diameter: f64,
+    /// How deep the tool can cut; toolpaths going deeper are flagged (added with tapers;
+    /// 0 if not given)
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub flute_length: f64,
     /// Cutting edges, for the chip load (added after the first tool format)
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
@@ -86,10 +101,55 @@ impl Tool {
         (teeth_per_minute > 0.0).then(|| self.feed_rate / teeth_per_minute)
     }
 
+    /// The side angle (radians) of a tool that tapers out to its shank, if it does.
+    fn tapered(&self) -> Option<f64> {
+        let tapers = matches!(self.shape, ToolShape::BallNose | ToolShape::EndMill)
+            && self.taper > 0.0
+            && self.taper < 90.0
+            && self.shank_diameter > self.diameter;
+        tapers.then(|| self.taper.to_radians())
+    }
+
+    /// How far from its axis the tool reaches: its shank for a tapered tool.
+    pub fn reach(&self) -> f64 {
+        match self.tapered() {
+            Some(_) => self.shank_diameter / 2.0,
+            None => self.diameter / 2.0,
+        }
+    }
+
+    /// How far out the tool can touch something up to `height` above its tip: anything
+    /// further away is above the tool's profile.
+    pub fn reach_below(&self, height: f64) -> f64 {
+        let radius = self.diameter / 2.0;
+        let r = match (self.tapered(), self.shape) {
+            (Some(a), ToolShape::BallNose) => {
+                radius * a.cos() + (height - radius * (1.0 - a.sin())).max(0.0) * a.tan()
+            }
+            (Some(a), _) => radius + height.max(0.0) * a.tan(),
+            (None, _) => radius,
+        };
+        r.min(self.reach())
+    }
+
     /// How far above its tip the cutting edge is at `r` from the axis; `None` beyond the tool.
+    /// A tapered tool's taper counts as edge, out to its shank.
     pub fn profile(&self, r: f64) -> Option<f64> {
         let radius = self.diameter / 2.0;
-        (r <= radius).then(|| match self.shape {
+        if r > self.reach() {
+            return None;
+        }
+        if let Some(a) = self.tapered() {
+            // a ball meets its taper where the ball is as steep as the taper
+            let (turn, rise) = match self.shape {
+                ToolShape::BallNose => (radius * a.cos(), radius * (1.0 - a.sin())),
+                _ => (radius, 0.0),
+            };
+            if r > turn {
+                return Some(rise + (r - turn) / a.tan());
+            }
+        }
+        Some(match self.shape {
             ToolShape::EndMill => 0.0,
             ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
             ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
@@ -115,6 +175,9 @@ impl Default for Tool {
             feed_rate: 1000.0,
             plunge_rate: 300.0,
             spindle_speed: 18000.0,
+            taper: 0.0,
+            shank_diameter: 0.0,
+            flute_length: 0.0,
             flutes: default_flutes(),
             group: String::new(),
             notes: String::new(),
@@ -458,12 +521,13 @@ pub fn zigzag_within(
         grid.centre(grid.columns - 1, grid.rows - 1),
     );
     let lines = ((last.y - first.y) / step).floor() as usize + 1;
+    let peaks = grid.peaks();
     let mut runs: Vec<Vec<DVec3>> = vec![];
     for line in 0..lines {
         let y = first.y + line as f64 * step;
         let at = |x: f64| {
             let p = Point::new(x, y);
-            p.extend(grid.drop_tool(tool, p).max(floor))
+            p.extend(grid.drop_tool_on(tool, p, &peaks).max(floor))
         };
         let mut line_runs: Vec<Vec<DVec3>> = vec![];
         let mut run: Vec<DVec3> = vec![];
@@ -481,6 +545,7 @@ pub fn zigzag_within(
                     grid,
                     tool,
                     tolerance,
+                    peaks: &peaks,
                     at: &at,
                 }
                 .between(previous, next, HALVINGS, &mut run);
@@ -516,6 +581,8 @@ struct Refine<'a, F> {
     grid: &'a Material,
     tool: &'a Tool,
     tolerance: f64,
+    /// The grid's highest cell in each tile.
+    peaks: &'a Tiles,
     /// The point on the line at an x, as low as the tool goes there.
     at: &'a F,
 }
@@ -523,7 +590,7 @@ struct Refine<'a, F> {
 impl<F: Fn(f64) -> DVec3> Refine<'_, F> {
     /// Points to put between `a` and `b` so the moves through them stay out of the grid.
     fn between(&self, a: DVec3, b: DVec3, halvings: u32, out: &mut Vec<DVec3>) {
-        if self.grid.overcut(self.tool, a, b) <= self.tolerance {
+        if self.grid.overcut_on(self.tool, a, b, self.peaks) <= self.tolerance {
             return;
         }
         if halvings == 0 {
@@ -531,7 +598,11 @@ impl<F: Fn(f64) -> DVec3> Refine<'_, F> {
             let level = a.z.max(b.z);
             let across = |z: f64| (a.truncate().extend(z), b.truncate().extend(z));
             let (from, to) = across(level);
-            let lifted = level + self.grid.overcut(self.tool, from, to).max(0.0);
+            let lifted = level
+                + self
+                    .grid
+                    .overcut_on(self.tool, from, to, self.peaks)
+                    .max(0.0);
             let (from, to) = across(lifted);
             out.extend([from, to]);
             return;

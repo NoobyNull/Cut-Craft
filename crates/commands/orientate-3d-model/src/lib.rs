@@ -273,6 +273,15 @@ impl Command for Orientate3dModel {
         }
         let mut c = Change::builder(doc);
         c.add_component(k);
+        let hidden = fmt_import_stl::undercut(&tris);
+        // ponytail: under a square millimetre is mesh noise, not an undercut
+        if hidden >= 1.0 {
+            c.note(format!(
+                "the model has undercuts: {:.1} cm² of it faces down, which a cutter from \
+                 above cannot reach; it is cut as straight walls there",
+                hidden / 100.0
+            ));
+        }
         Ok(c.finish())
     }
 }
@@ -546,6 +555,42 @@ mod tests {
         doc.apply(&change).unwrap();
         let k = doc.components.values().next().unwrap().clone();
         (doc, k)
+    }
+
+    #[test]
+    fn undercuts_are_noted_and_a_plain_box_has_none() {
+        let doc = Document::default();
+        let plain = Orientate3dModel::run(&doc, &with_file("plain", &Params::default())).unwrap();
+        assert_eq!(plain.notes, Vec::<String>::new());
+        // the box on a stalk: its underside is 5 mm clear of the stalk's foot
+        let (s, b) = (2.0_f32, 5.0_f32);
+        let v = |x: f32, y: f32, z: f32| [x, y, z];
+        let mut faces = vec![
+            [v(0.0, 0.0, 0.0), v(0.0, s, 0.0), v(s, 0.0, 0.0)],
+            [v(0.0, 0.0, b), v(0.0, 20.0, b), v(20.0, 0.0, b)],
+            [
+                v(0.0, 0.0, b + 3.0),
+                v(20.0, 0.0, b + 3.0),
+                v(0.0, 20.0, b + 3.0),
+            ],
+        ];
+        faces.push([v(0.0, 0.0, 0.0), v(s, 0.0, 0.0), v(0.0, 0.0, b)]);
+        let mut out = vec![0u8; 80];
+        out.extend(u32::try_from(faces.len()).unwrap().to_le_bytes());
+        for t in &faces {
+            out.extend([0u8; 12]);
+            out.extend(t.iter().flatten().flat_map(|x| x.to_le_bytes()));
+            out.extend([0u8; 2]);
+        }
+        let path = std::env::temp_dir().join(format!("cut-craft-stalk-{}.stl", std::process::id()));
+        std::fs::write(&path, out).unwrap();
+        let p = Params {
+            file: path.display().to_string(),
+            ..Params::default()
+        };
+        let change = Orientate3dModel::run(&doc, &p).unwrap();
+        assert_eq!(change.notes.len(), 1, "{:?}", change.notes);
+        assert!(change.notes[0].contains("2.0 cm²"), "{:?}", change.notes);
     }
 
     #[test]

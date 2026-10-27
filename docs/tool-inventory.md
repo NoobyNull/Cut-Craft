@@ -175,11 +175,16 @@ say "not implemented yet".
   again. The rest grid is a quarter of the tool across [inf].
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
-- Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
+- Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools; taper angle, shank
+  diameter and flute length (tapered ball noses and flat bottoms are cut with their whole
+  taper, read from .vtdb and Fusion .tools files).
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
-  (as a ball nose), drill (as an end mill); one tool per material it has cutting data for.
+  (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.
   Form tools and diamond drags are skipped.
+- Checks before cutting (Cut Craft's own; Aspire has none): a toolpath deeper than its tool's
+  flute length (or with none set), a 3D finish whose taper cannot reach part of the model, and
+  an STL's undercuts; shown when made, and Save Toolpaths asks before writing them.
 - Every toolpath strategy in `re/SPEC.md` (backlog item 19): Profile, Pocket, Drilling,
   V-Carve (with Start Depth), V-Carve Inlay, Inlay (pocket / plug), Quick Engrave (Ctrl+Q),
   Chamfer, Fluting, Prism, Thread Milling, Keyhole, Drag Knife, Moulding, Texture, Photo V-Carve,

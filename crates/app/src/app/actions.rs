@@ -510,6 +510,15 @@ impl CutCraftApp {
                     Ok(post) => post,
                     Err(e) => return self.status.set_message(&e),
                 };
+                let problems: Vec<String> = self
+                    .doc
+                    .toolpaths
+                    .values()
+                    .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
+                    .collect();
+                if !problems.is_empty() && !Self::save_anyway(&problems) {
+                    return self.status.set_message("Toolpaths not saved");
+                }
                 let extension = post.extension.clone();
                 let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
                 if let Some(path) = dialog.save_file() {
@@ -971,31 +980,49 @@ impl CutCraftApp {
         change: Result<Change, cut_craft_core::CommandError>,
         done: &str,
     ) {
-        let mut made = vec![];
+        let (mut made, mut notes) = (vec![], vec![]);
         let result = change.map_err(|e| e.to_string()).and_then(|c| {
             made = c.toolpaths_made();
+            notes.clone_from(&c.notes);
             self.history
                 .apply(&mut self.doc, c)
                 .map_err(|e| e.to_string())
         });
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
-        self.warn_of_keep_out(&made);
+        self.warn(&made, &notes);
     }
 
-    /// A warning in the status bar for each toolpath in `made` that passes over a keep-out
-    /// zone.
-    pub(super) fn warn_of_keep_out(&mut self, made: &[EntityId]) {
-        let over: Vec<&str> = made
-            .iter()
-            .filter_map(|id| self.doc.toolpaths.get(id))
-            .filter(|t| cut_craft_core::keep_out::crossed(&self.doc.keep_out, &t.moves))
-            .map(|t| t.name.as_str())
-            .collect();
-        if !over.is_empty() {
-            let message = format!("Warning: {} passes over a keep-out zone", over.join(", "));
-            self.status.set_message(&message);
+    /// A warning in the status bar about what was just made: the command's `notes`, and for
+    /// each toolpath in `made`, crossing a keep-out zone and the problems the checks before
+    /// cutting find.
+    pub(super) fn warn(&mut self, made: &[EntityId], notes: &[String]) {
+        let mut warnings = notes.to_vec();
+        for t in made.iter().filter_map(|id| self.doc.toolpaths.get(id)) {
+            if cut_craft_core::keep_out::crossed(&self.doc.keep_out, &t.moves) {
+                warnings.push(format!("{} passes over a keep-out zone", t.name));
+            }
+            warnings.extend(cut_craft_core::checks::problems(&self.doc, t));
         }
+        if !warnings.is_empty() {
+            self.status
+                .set_message(&format!("Warning: {}", warnings.join("; ")));
+        }
+    }
+
+    /// Asks whether to save toolpaths the checks before cutting found `problems` in.
+    fn save_anyway(problems: &[String]) -> bool {
+        on_the_desktop();
+        let answer = rfd::MessageDialog::new()
+            .set_title(APP_NAME)
+            .set_level(rfd::MessageLevel::Warning)
+            .set_description(format!(
+                "Check before cutting:\n\n• {}\n\nSave the toolpaths anyway?",
+                problems.join("\n• ")
+            ))
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .show();
+        answer == rfd::MessageDialogResult::Yes
     }
 
     /// Aspire's icons over the toolpath list: edit and hide the selected toolpath, and save
@@ -1280,12 +1307,15 @@ impl CutCraftApp {
         let made = cmd.run_json(&without, params).map_err(|e| e.to_string())?;
         let change = Change {
             edits: taken.edits.into_iter().chain(made.edits).collect(),
+            notes: made.notes,
         };
+        let (toolpaths, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
         self.status
             .set_message(&format!("{} changed", cmd.meta().label));
+        self.warn(&toolpaths, &notes);
         Ok(())
     }
 
@@ -1299,7 +1329,7 @@ impl CutCraftApp {
         // rest machining, for any toolpath whose settings ask for it
         let change = cut_craft_core::rest::with_rest(&self.doc.job, params, change)
             .map_err(|e| e.to_string())?;
-        let made = change.toolpaths_made();
+        let (made, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
@@ -1313,7 +1343,7 @@ impl CutCraftApp {
             self.status
                 .set_message(&format!("Each strand makes {turns:.2} revolutions"));
         }
-        self.warn_of_keep_out(&made);
+        self.warn(&made, &notes);
         Ok(())
     }
 
