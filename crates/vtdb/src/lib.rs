@@ -168,21 +168,28 @@ fn rate(units: i64) -> f64 {
 
 impl Row {
     fn tool(&self) -> Option<Tool> {
+        // a tapered ball nose's diameter is its shank; its tip radius is the ball (none: a
+        // tapered flat bottom, cut as an end mill)
+        let tip = self.tip_radius.filter(|r| *r > 0.0);
         let shape = match self.tool_type {
-            0 | 5 => ToolShape::BallNose,
-            1 | 6 => ToolShape::EndMill,
+            0 => ToolShape::BallNose,
+            5 if tip.is_some() => ToolShape::BallNose,
+            1 | 5 | 6 => ToolShape::EndMill,
             2 => ToolShape::RadiusedEndMill,
             3 | 4 => ToolShape::VBit,
             _ => return None, // form tools, diamond drags and unknown kinds
         };
         let scale = length(self.units);
-        let diameter = self.diameter.filter(|d| *d > 0.0)? * scale;
+        let diameter = match (self.tool_type, tip) {
+            (5, Some(r)) => 2.0 * r,
+            _ => self.diameter.filter(|d| *d > 0.0)?,
+        } * scale;
         // an entry without a feed rate is a placeholder (a machine with no cutting data)
         let feed = self.feed_rate.filter(|f| *f > 0.0)?;
         let cut_scale = length(self.length_units);
         let base = Tool::default();
         let name = self.name();
-        // ponytail: a tapered ball nose keeps its tip diameter and loses the taper [inf]
+        // ponytail: a tapered ball nose keeps its tip and loses the taper [inf]
         Some(Tool {
             name,
             shape,
@@ -262,9 +269,8 @@ fn trim(x: f64) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn names_fill_in_aspires_fields() {
-        let row = Row {
+    fn end_mill() -> Row {
+        Row {
             name_format: "{Tool Type} ({Diameter|F}{Units Short}) DOWN CUT".into(),
             tool_type: 1,
             units: 1,
@@ -283,8 +289,12 @@ mod tests {
             material: Some("Softwood".into()),
             geometry_id: String::new(),
             notes: None,
-        };
-        let t = row.tool().unwrap();
+        }
+    }
+
+    #[test]
+    fn names_fill_in_aspires_fields() {
+        let t = end_mill().tool().unwrap();
         assert_eq!(t.name, "End Mill (0.25in) DOWN CUT [Softwood]");
         assert_eq!(t.shape, ToolShape::EndMill);
         assert!((t.diameter - 6.35).abs() < 1e-9);
@@ -292,6 +302,30 @@ mod tests {
         assert!((t.pass_depth - 3.175).abs() < 1e-9);
         assert!((t.stepover - 0.4).abs() < 1e-9, "0.1 in of a 0.25 in tool");
         assert_eq!(t.flutes, 2);
+    }
+
+    #[test]
+    fn a_tapered_ball_nose_cuts_with_its_tip_not_its_shank() {
+        // Amana #46280: 1/4 in shank, 1/64 in tip radius, 0.01 in stepover
+        let tapered = Row {
+            tool_type: 5,
+            tip_radius: Some(0.015_625),
+            included_angle: Some(12.4),
+            stepover: Some(0.01),
+            ..end_mill()
+        };
+        let t = tapered.tool().unwrap();
+        assert_eq!(t.shape, ToolShape::BallNose);
+        assert!((t.diameter - 0.793_75).abs() < 1e-9, "{}", t.diameter);
+        assert!((t.stepover - 0.32).abs() < 1e-9, "0.01 in of a 1/32 in tip");
+        // a tapered flat bottom (no tip radius) cuts like an end mill its diameter across
+        let flat = Row {
+            tip_radius: Some(0.0),
+            ..tapered
+        };
+        let t = flat.tool().unwrap();
+        assert_eq!(t.shape, ToolShape::EndMill);
+        assert!((t.diameter - 6.35).abs() < 1e-9);
     }
 
     #[test]
