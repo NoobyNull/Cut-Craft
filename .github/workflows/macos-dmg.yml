@@ -1,6 +1,7 @@
 # Cut Craft for macOS as a DMG (Apple Silicon and Intel in one app), built on GitHub's
-# macOS runner by scripts/macos-dmg. Run it from the Actions tab (the DMG is the run's
-# artifact), or push a tag such as v0.1.0 to attach it to that release.
+# macOS runner by scripts/macos-dmg. It runs when the packaging changes on a pushed branch
+# and from the Actions tab (once on the default branch); the DMG is the run's artifact. A
+# pushed tag such as v0.1.0 attaches it to that release.
 # Unsigned: macOS asks before the first open (right-click > Open).
 name: macOS DMG
 
@@ -8,6 +9,11 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    # macOS runners cost private repositories ten times the minutes: not on every push
+    branches: ["**"]
+    paths:
+      - ".github/workflows/macos-dmg.yml"
+      - "scripts/macos-dmg"
 
 permissions:
   contents: write
