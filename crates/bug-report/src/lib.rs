@@ -13,7 +13,7 @@ use std::panic::Location;
 use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
 
-pub use github::{Report, compose, png, submit};
+pub use github::{Report, compose, issue_url, open_with_platform, png, submit};
 
 /// The report form's share of the screen.
 const FORM_SHARE: f32 = 0.5;
@@ -123,7 +123,7 @@ impl Draft {
             state: self.state.clone(),
             screenshot: self
                 .send_screenshot
-                .then(|| self.screenshot.as_deref().map(github::png))
+                .then(|| self.screenshot.as_deref().and_then(|i| github::png(i).ok()))
                 .flatten(),
             pictures: self.pictures.clone(),
         }
@@ -136,6 +136,9 @@ pub struct Reporter {
     pub repo: String,
     /// Where a report that cannot be sent is kept.
     pub keep_dir: Option<PathBuf>,
+    /// Without the GitHub CLI, the browser opens a new-issue page with the report filled in
+    /// (off in tests).
+    pub browser: bool,
     /// The last right-click: where, and the regions there then.
     clicked: Option<(egui::Pos2, Vec<Region>)>,
     /// Shows the small Report a Bug menu at the right-click.
@@ -157,6 +160,7 @@ impl Reporter {
         Self {
             repo: repo.to_owned(),
             keep_dir,
+            browser: true,
             clicked: None,
             menu: false,
             screenshot: None,
@@ -344,17 +348,28 @@ impl Reporter {
         }
     }
 
-    /// Sends `report` on a thread of its own; a report that cannot go is kept on disk.
+    /// Sends `report` on a thread of its own; a report that cannot go is kept on disk, and
+    /// without the GitHub CLI the browser gets it as a new issue to finish by hand.
     fn send(&mut self, ctx: &egui::Context, report: Report) {
-        let (repo, keep) = (self.repo.clone(), self.keep_dir.clone());
+        let (repo, keep, browser) = (self.repo.clone(), self.keep_dir.clone(), self.browser);
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let result = submit(&report, &repo, &github::run_gh).map_err(|e| {
-                match keep.map(|dir| github::keep(&report, &dir)) {
+                let kept = match keep.map(|dir| github::keep(&report, &dir)) {
                     Some(Ok(path)) => format!("{e}; the report is kept in {}", path.display()),
                     _ => e,
+                };
+                if browser && !github::gh_installed() {
+                    let url = github::issue_url(&repo, &report);
+                    if github::open_with_platform(url.as_ref()).is_ok() {
+                        return format!(
+                            "{kept}. The GitHub CLI (gh) is not installed, so your browser has \
+                             the report as a new issue: add the pictures there and submit it"
+                        );
+                    }
                 }
+                kept
             });
             let _ = tx.send(result);
             ctx.request_repaint();

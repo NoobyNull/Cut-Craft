@@ -33,7 +33,7 @@ pub struct Report {
 }
 
 /// The window as a PNG.
-pub fn png(image: &egui::ColorImage) -> Vec<u8> {
+pub fn png(image: &egui::ColorImage) -> Result<Vec<u8>, String> {
     let [w, h] = image.size;
     let rgba: Vec<u8> = image
         .pixels
@@ -41,11 +41,64 @@ pub fn png(image: &egui::ColorImage) -> Vec<u8> {
         .flat_map(egui::Color32::to_array)
         .collect();
     let mut out = std::io::Cursor::new(vec![]);
-    let (w, h) = (u32::try_from(w).unwrap_or(0), u32::try_from(h).unwrap_or(0));
+    let (w, h) = (
+        u32::try_from(w).map_err(|e| e.to_string())?,
+        u32::try_from(h).map_err(|e| e.to_string())?,
+    );
     image::RgbaImage::from_raw(w, h, rgba)
-        .map(|img| img.write_to(&mut out, image::ImageFormat::Png))
-        .and_then(Result::ok);
-    out.into_inner()
+        .ok_or_else(|| format!("a {w} x {h} picture needs more pixels than there are"))?
+        .write_to(&mut out, image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(out.into_inner())
+}
+
+/// GitHub's new-issue page for `repo` with the report filled in, for when `gh` is not there
+/// to send it; the pictures cannot go this way.
+pub fn issue_url(repo: &str, report: &Report) -> String {
+    format!(
+        "https://github.com/{repo}/issues/new?labels={LABEL}&title={}&body={}",
+        percent(&report.title),
+        percent(&compose(report, &[]))
+    )
+}
+
+/// `text` as a URL query value: everything but unreserved characters as `%XX`.
+fn percent(text: &str) -> String {
+    let mut out = String::new();
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(char::from(byte));
+            }
+            _ => {
+                let _ = write!(out, "%{byte:02X}");
+            }
+        }
+    }
+    out
+}
+
+/// Whether the GitHub CLI is installed.
+pub fn gh_installed() -> bool {
+    Command::new("gh")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok()
+}
+
+/// Opens `target` (a folder, a file such as a PDF to print, or a web address) with the
+/// platform's own program for it.
+pub fn open_with_platform(target: &std::ffi::OsStr) -> std::io::Result<()> {
+    let opener = if cfg!(windows) {
+        "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    Command::new(opener).arg(target).spawn().map(drop)
 }
 
 /// The issue's text: the reporter's words, where it was, the state, then the pictures.
@@ -226,6 +279,20 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
+    #[test]
+    fn the_browser_fallback_fills_in_the_issue() {
+        let url = issue_url("me/app", &report());
+        assert!(url.starts_with(
+            "https://github.com/me/app/issues/new?labels=bug&title=Apply%20does%20nothing&body="
+        ));
+        assert!(
+            url.contains("Clicked%20Apply.") && url.contains("%23%23%23%20Where"),
+            "{url}"
+        );
+        assert!(!url.contains('\n') && !url.contains(' '), "{url}");
+        assert_eq!(percent("a-b_c.d~e Z/9"), "a-b_c.d~e%20Z%2F9");
+    }
+
     fn report() -> Report {
         Report {
             title: "Apply does nothing".into(),
@@ -311,6 +378,6 @@ mod tests {
     #[test]
     fn screenshots_become_pngs() {
         let image = egui::ColorImage::new([2, 1], egui::Color32::RED);
-        assert!(png(&image).starts_with(&[0x89, b'P', b'N', b'G']));
+        assert!(png(&image).unwrap().starts_with(&[0x89, b'P', b'N', b'G']));
     }
 }

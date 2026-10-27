@@ -317,13 +317,13 @@ mod tests {
         assert_eq!(tree(&bare).0, vec![], "no tree, no groups");
     }
 
-    /// Reads whichever vendor databases are in `~/Downloads` (not part of the repo).
+    /// Reads the vendor databases in the folder `CUT_CRAFT_VENDOR_FILES` names (they are not
+    /// part of the repo).
     #[test]
-    fn vendor_databases_read_when_present() {
-        let Some(home) = std::env::var_os("HOME") else {
+    fn vendor_databases_read_when_given() {
+        let Some(dir) = std::env::var_os("CUT_CRAFT_VENDOR_FILES") else {
             return;
         };
-        let dir = Path::new(&home).join("Downloads");
         let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };

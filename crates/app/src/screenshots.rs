@@ -78,8 +78,9 @@ impl Shots {
         });
         if let Some(image) = shot {
             let path = self.dir.join(format!("{:02}-{name}.png", self.scene + 1));
-            let saved = std::fs::create_dir_all(&self.dir)
-                .and_then(|()| std::fs::write(&path, cut_craft_bug_report::png(&image)));
+            let saved = cut_craft_bug_report::png(&image)
+                .map_err(std::io::Error::other)
+                .and_then(|png| cut_craft_core::file::write_atomic(&path, &png));
             match saved {
                 Ok(()) => println!("{}", path.display()),
                 Err(e) => eprintln!("{}: {e}", path.display()),

@@ -18,7 +18,6 @@ mod view2d;
 mod view3d;
 
 fn main() {
-    env_logger::init();
     // cut-craft --screenshots DIR: the README's pictures (see app/screenshots.rs)
     let mut args = std::env::args().skip(1);
     let shots = match args.next().as_deref() {

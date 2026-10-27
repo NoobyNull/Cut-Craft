@@ -259,6 +259,7 @@ pub struct Toolpath {
     /// The vectors it was made from: recalculating re-runs the strategy on these.
     #[serde(default)]
     pub vectors: Vec<EntityId>,
+    #[serde(with = "crate::packed::moves")]
     pub moves: Vec<Move>,
     /// Hidden toolpaths are not drawn or previewed (added after the first job format).
     #[serde(default = "shown")]

@@ -209,6 +209,8 @@ const MESH_CELLS: usize = 250;
 const FINE_MESH_CELLS: usize = 1200;
 /// How long the 3D view stays still before it is drawn finely, seconds.
 const SETTLE_SECONDS: f64 = 0.25;
+/// How often unsaved work is copied for recovery after a crash, seconds.
+const AUTOSAVE_SECONDS: f64 = 30.0;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
 const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
 /// Importers that make components; Import Component / 3D Model offers these, Import
@@ -495,6 +497,13 @@ struct CutCraftApp {
     clipart: crate::clipart::Clipart,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
     recent_path: Option<std::path::PathBuf>,
+    /// Where unsaved work is copied every [`AUTOSAVE_SECONDS`] for the next run to recover;
+    /// `None` keeps no copy (tests).
+    recovery_path: Option<std::path::PathBuf>,
+    /// The history revision and input time (seconds) of the last recovery copy.
+    autosaved: (u64, f64),
+    /// A recovery copy being written.
+    autosave: Option<std::thread::JoinHandle<Result<(), String>>>,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -561,6 +570,9 @@ impl CutCraftApp {
             split: None,
             clipart: crate::clipart::Clipart::default(),
             recent_path: None,
+            recovery_path: None,
+            autosaved: (0, 0.0),
+            autosave: None,
             title: String::new(),
         }
     }
@@ -752,7 +764,7 @@ impl CutCraftApp {
             | "open_application_data_folder"
             | "print"
             | "print_preview" => {
-                self.clipboard_or_file_action(id);
+                self.clipboard_or_file_action(ctx, id);
             }
             "keyboard_shortcuts"
             | "third_party_licenses"
@@ -901,7 +913,10 @@ impl CutCraftApp {
                     .save_file()
                 {
                     let path = path.with_extension(TEMPLATE);
-                    match std::fs::write(&path, cut_craft_core::file::save_job(&self.doc)) {
+                    match cut_craft_core::file::write_atomic(
+                        &path,
+                        &cut_craft_core::file::save_job(&self.doc),
+                    ) {
                         Ok(()) => self
                             .status
                             .set_message(&format!("Saved template {}", path.display())),
@@ -927,11 +942,11 @@ impl CutCraftApp {
                     .save_file()
                 {
                     let path = path.with_extension(files::TOOLPATH_TEMPLATE_EXTENSION);
-                    let message =
-                        match std::fs::write(&path, files::toolpath_template(&self.doc, &ids)) {
-                            Ok(()) => format!("Saved toolpath template {}", path.display()),
-                            Err(e) => format!("could not save {}: {e}", path.display()),
-                        };
+                    let template = files::toolpath_template(&self.doc, &ids);
+                    let message = match cut_craft_core::file::write_atomic(&path, &template) {
+                        Ok(()) => format!("Saved toolpath template {}", path.display()),
+                        Err(e) => format!("could not save {}: {e}", path.display()),
+                    };
                     self.status.set_message(&message);
                 }
             }
@@ -1216,6 +1231,7 @@ impl CutCraftApp {
                 self.status
                     .set_message(&format!("Saved {}", path.display()));
                 self.remember(path);
+                self.clear_recovery();
             }
             Err(e) => self.status.set_message(&e),
         }
@@ -1282,6 +1298,71 @@ impl CutCraftApp {
         }
     }
 
+    /// Once a frame: unsaved work copied to the recovery file every [`AUTOSAVE_SECONDS`],
+    /// on a thread of its own so a big job does not stall the window.
+    fn autosave(&mut self, ctx: &egui::Context) {
+        if let Some(writing) = self.autosave.take() {
+            if writing.is_finished() {
+                let outcome = writing
+                    .join()
+                    .unwrap_or_else(|_| Err("the recovery copy could not be written".into()));
+                if let Err(e) = outcome {
+                    self.status.set_message(&e);
+                }
+            } else {
+                self.autosave = Some(writing);
+            }
+        }
+        let now = ctx.input(|i| i.time);
+        let unsaved = self.screen == Screen::Job
+            && self.session.is_dirty(&self.history)
+            && self.history.revision() != self.autosaved.0;
+        if unsaved
+            && now - self.autosaved.1 >= AUTOSAVE_SECONDS
+            && self.autosave.is_none()
+            && let Some(path) = self.recovery_path.clone()
+        {
+            self.autosaved = (self.history.revision(), now);
+            let doc = self.doc.clone();
+            self.autosave = Some(std::thread::spawn(move || {
+                cut_craft_core::file::write_atomic(&path, &cut_craft_core::file::save_job(&doc))
+                    .map_err(|e| format!("could not keep a recovery copy: {e}"))
+            }));
+        }
+    }
+
+    /// The work is saved or let go on purpose: nothing is left to recover.
+    fn clear_recovery(&mut self) {
+        if let Some(writing) = self.autosave.take() {
+            let _ = writing.join();
+        }
+        if let Some(path) = &self.recovery_path {
+            let _ = std::fs::remove_file(path);
+        }
+        self.autosaved.0 = self.history.revision();
+    }
+
+    /// The recovery copy a run that ended badly left, opened as an unsaved job; whether
+    /// there was one. It stays until the job is saved or closed.
+    fn open_recovery(&mut self) -> bool {
+        let Some(doc) = self
+            .recovery_path
+            .as_ref()
+            .and_then(|p| std::fs::read(p).ok())
+            .and_then(|bytes| cut_craft_core::file::load_job(&bytes).ok())
+        else {
+            return false;
+        };
+        self.reset_job();
+        self.doc = doc;
+        self.session = Session::unsaved();
+        self.screen = Screen::Job;
+        self.status.set_message(
+            "Recovered unsaved work from the last run: save it (File ▸ Save As) or close it",
+        );
+        true
+    }
+
     /// Back to nothing: no job, no form, no preview.
     fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
@@ -1292,6 +1373,7 @@ impl CutCraftApp {
             self.simulation_coarse,
             self.fine_3d,
         ) = (None, None, None, None);
+        self.clear_recovery();
     }
 
     /// OK in Job Setup for a new job: the job is made, with nothing to undo yet.
@@ -1761,6 +1843,30 @@ impl CutCraftApp {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
+        // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
+        // clipboard carries what Copy took, so another Cut Craft window pastes it too
+        let (cut, copy, pasted) = ctx.input(|i| {
+            i.raw
+                .events
+                .iter()
+                .fold((false, false, None), |(x, c, p), e| match e {
+                    egui::Event::Cut => (true, c, p),
+                    egui::Event::Copy => (x, true, p),
+                    egui::Event::Paste(text) => (x, c, Some(text.clone())),
+                    _ => (x, c, p),
+                })
+        });
+        if !ctx.wants_keyboard_input() && self.screen == Screen::Job {
+            if cut && self.available("cut") {
+                self.invoke(ctx, "cut");
+            } else if copy && self.available("copy") {
+                self.invoke(ctx, "copy");
+            }
+            if let Some(paths) = pasted.and_then(|text| serde_json::from_str(&text).ok()) {
+                self.clipboard = paths;
+                self.invoke(ctx, "paste");
+            }
+        }
         // single-letter shortcuts must not fire while typing in a form field
         if !ctx.wants_keyboard_input() {
             let job = self.screen == Screen::Job;
@@ -2389,7 +2495,7 @@ impl CutCraftApp {
     }
 
     /// Cut, Copy, Paste, Increment and Save, Open Application Data Folder.
-    fn clipboard_or_file_action(&mut self, id: &str) {
+    fn clipboard_or_file_action(&mut self, ctx: &egui::Context, id: &str) {
         match id {
             "copy" | "cut" => {
                 self.clipboard = self
@@ -2398,6 +2504,8 @@ impl CutCraftApp {
                     .iter()
                     .map(|id| self.doc.vectors[id].clone())
                     .collect();
+                let text = serde_json::to_string(&self.clipboard).expect("paths serialize");
+                ctx.output_mut(|o| o.copied_text = text);
                 if id == "cut"
                     && let Err(e) = self.apply("delete", &serde_json::json!({}))
                 {
@@ -3990,6 +4098,7 @@ impl CutCraftApp {
         self.draw_window(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
+        self.autosave(ctx);
         self.report_bugs(ctx);
         if let Some(mut shots) = self.shots.take() {
             shots.step(self, ctx);
@@ -4158,8 +4267,12 @@ impl CutCraftApp {
             .retain(|id| doc.components.contains_key(id));
         doc.selected_bitmaps
             .retain(|id| doc.bitmaps.contains_key(id));
-        if ctx.input(|i| i.viewport().close_requested()) && !self.confirm_discard() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if ctx.input(|i| i.viewport().close_requested()) {
+            if self.confirm_discard() {
+                self.clear_recovery();
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            }
         }
         paint_focus_ring(ctx);
         let title = match self.screen {
@@ -5335,11 +5448,9 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             readable(&cc.egui_ctx);
             if let Some(rs) = &cc.wgpu_render_state {
                 let info = rs.adapter.get_info();
-                log::info!(
+                eprintln!(
                     "GPU: {} ({:?}, driver: {})",
-                    info.name,
-                    info.backend,
-                    info.driver
+                    info.name, info.backend, info.driver
                 );
             }
             let mut app = CutCraftApp::new();
@@ -5354,6 +5465,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
+            app.recovery_path = files::config_dir().map(|d| d.join("recovery.ccjob"));
+            app.open_recovery();
             Box::new(app)
         }),
     )
@@ -5525,24 +5638,23 @@ mod tests {
         assert!(h.app.doc.vectors.is_empty(), "sculpting draws no vectors");
     }
 
+    /// Vendor tool databases are not part of the repo: `CUT_CRAFT_VENDOR_FILES` names a
+    /// folder holding some to try them.
     #[test]
-    fn a_vendor_tool_database_imports_when_one_is_in_downloads() {
+    fn a_vendor_tool_database_imports_when_one_is_given() {
         let mut h = Harness::new();
         let before = h.app.tools.tools.len();
         h.app
             .import_tools(std::path::Path::new("/nonexistent.vtdb"));
         assert_eq!(h.app.tools.tools.len(), before, "nothing added on failure");
-        let Some(home) = std::env::var_os("HOME") else {
+        let Some(dir) = std::env::var_os("CUT_CRAFT_VENDOR_FILES") else {
             return;
         };
-        let Some(file) = std::fs::read_dir(std::path::Path::new(&home).join("Downloads"))
-            .ok()
-            .and_then(|d| {
-                d.flatten()
-                    .map(|e| e.path())
-                    .find(|p| p.extension().is_some_and(|x| x == "vtdb"))
-            })
-        else {
+        let Some(file) = std::fs::read_dir(dir).ok().and_then(|d| {
+            d.flatten()
+                .map(|e| e.path())
+                .find(|p| p.extension().is_some_and(|x| x == "vtdb"))
+        }) else {
             return;
         };
         h.app.import_tools(&file);
@@ -5724,6 +5836,8 @@ mod tests {
         time: f64,
         /// What the last frame drew.
         shapes: Vec<egui::epaint::ClippedShape>,
+        /// What the last frame put on the system clipboard.
+        copied: String,
     }
 
     impl Harness {
@@ -5734,9 +5848,12 @@ mod tests {
                 app: CutCraftApp::new(),
                 time: 0.0,
                 shapes: vec![],
+                copied: String::new(),
             };
             // previews appear cut at once unless a test plays one
             h.app.display.animate_preview = false;
+            // no browser opens from a test
+            h.app.reporter.browser = false;
             h.frame(vec![]);
             h.frame(vec![]);
             h
@@ -5799,7 +5916,9 @@ mod tests {
                 events,
                 ..Default::default()
             };
-            self.shapes = self.ctx.run(input, |ctx| self.app.ui(ctx)).shapes;
+            let out = self.ctx.run(input, |ctx| self.app.ui(ctx));
+            self.shapes = out.shapes;
+            self.copied = out.platform_output.copied_text;
         }
 
         /// Every place the last frame drew `text`.
@@ -7937,5 +8056,72 @@ mod tests {
         assert!(h.app.doc.toolpaths.is_empty());
         h.app.invoke(&h.ctx, "undo");
         assert_eq!(h.app.doc.toolpaths.len(), 1);
+    }
+
+    #[test]
+    fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-recovery-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let recovery = dir.join("recovery.ccjob");
+        let autosaved = |h: &mut Harness| {
+            h.app.recovery_path = Some(recovery.clone());
+            h.rectangle(10.0, 10.0, 20.0, 20.0);
+            h.frame(vec![]);
+            assert!(!recovery.exists(), "not at once");
+            h.time += AUTOSAVE_SECONDS;
+            h.frame(vec![]);
+            let writing = h.app.autosave.take().expect("a copy is being written");
+            writing.join().unwrap().unwrap();
+            assert!(recovery.exists());
+        };
+        // closing the job on purpose leaves nothing to recover
+        let mut h = Harness::new();
+        autosaved(&mut h);
+        h.app.session.discard_changes(&h.app.history);
+        h.app.invoke(&h.ctx, "close");
+        assert!(!recovery.exists());
+        // a run that ends badly leaves the copy, and the next run opens it
+        let mut h = Harness::new();
+        autosaved(&mut h);
+        drop(h);
+        let mut next = Harness::at_start();
+        next.app.recovery_path = Some(recovery.clone());
+        assert!(next.app.open_recovery());
+        assert_eq!(next.app.screen, Screen::Job);
+        assert_eq!(next.app.doc.vectors.len(), 1);
+        assert!(
+            next.app.session.is_dirty(&next.app.history),
+            "unsaved until saved"
+        );
+        assert!(next.app.status.message.contains("Recovered"));
+        next.app.save_to(&dir.join("kept.ccjob"));
+        assert!(!recovery.exists(), "saved: nothing to recover");
+        assert!(!next.app.open_recovery());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn ctrl_x_c_and_v_arrive_as_clipboard_events_and_work_across_windows() {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 20.0, 20.0);
+        h.frame(vec![Event::Copy]);
+        assert_eq!(h.app.clipboard.len(), 1);
+        assert!(
+            h.copied.starts_with('['),
+            "the system clipboard gets the vectors: {}",
+            h.copied
+        );
+        // what another window copied pastes here
+        let circle = vec![Path::circle(Point::new(50.0, 50.0), 5.0)];
+        h.frame(vec![Event::Paste(serde_json::to_string(&circle).unwrap())]);
+        assert_eq!(h.app.doc.vectors.len(), 2);
+        assert_eq!(h.app.clipboard, circle);
+        // text from elsewhere pastes nothing
+        h.frame(vec![Event::Paste("hello".into())]);
+        assert_eq!(h.app.doc.vectors.len(), 2);
+        // the pasted circle is selected: Ctrl+X takes it
+        h.frame(vec![Event::Cut]);
+        assert_eq!(h.app.doc.vectors.len(), 1);
+        assert_eq!(h.app.clipboard, circle);
     }
 }

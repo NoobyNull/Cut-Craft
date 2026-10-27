@@ -3,7 +3,7 @@
 use crate::document::Document;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub const JOB_EXTENSION: &str = "ccjob";
 /// Jobs saved before the app was renamed Cut Craft; they still open.
@@ -15,9 +15,9 @@ const OLD_FORMAT: &str = "aspire-clone-job";
 /// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.
 const VERSION: u32 = 1;
 
-/// Where Cut Craft keeps its settings: `%APPDATA%\cut-craft` on Windows, elsewhere
-/// `$XDG_CONFIG_HOME/cut-craft`, else `~/.config/cut-craft`.
-// ponytail: macOS uses the XDG path too; ~/Library/Application Support when a Mac build exists
+/// Where Cut Craft keeps its settings: `%APPDATA%\cut-craft` on Windows,
+/// `~/Library/Application Support/cut-craft` on macOS, elsewhere `$XDG_CONFIG_HOME/cut-craft`,
+/// else `~/.config/cut-craft`.
 pub fn config_dir() -> Option<PathBuf> {
     config_base().map(|dir| dir.join("cut-craft"))
 }
@@ -81,6 +81,26 @@ impl fmt::Display for LoadError {
 }
 
 impl std::error::Error for LoadError {}
+
+/// Writes `bytes` to `path` all at once: into a sibling `.tmp` file first, synced, then
+/// renamed over `path`, so a crash, a full disk or a power cut mid-write leaves the old file
+/// as it was. Makes the folder first.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    let written = std::fs::File::create(&tmp)
+        .and_then(|mut f| f.write_all(bytes).and_then(|()| f.sync_all()))
+        .and_then(|()| std::fs::rename(&tmp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written
+}
 
 pub fn save_job(doc: &Document) -> Vec<u8> {
     serde_json::to_vec_pretty(&Saved {

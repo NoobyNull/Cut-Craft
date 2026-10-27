@@ -96,9 +96,8 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
 - **2D view (318, plus ours):** Undo, Redo, Cut / Copy / Paste (greyed), Delete, Move to
   Layer ▸ each layer, Weld, Subtract, Overlap, Join, Align ▸. Object Properties is greyed.
 
-Not built from Aspire's menus yet: toolpath Edit, Duplicate, groups, Activate Sheet, Show All
-With This Tool; component 2D preview order, Export as 3D Clipart, Re-Import, Copy,
-Move to Front / Back; the no-item menus (layers 982, components 614).
+Not built from Aspire's menus yet: toolpath Show All With This Tool; component 2D preview
+order, Re-Import, Copy, Move to Front / Back; the no-item menus (layers 982, components 614).
 
 ## Status, top down
 
@@ -292,7 +291,7 @@ say "not implemented yet".
 - Model ▸ Export as 3D Clipart: the selected components (baked into one, shaping and all)
   saved as Cut Craft's own `.ccclip` (JSON); Import Component / 3D Model reads them back,
   centred on the job, on the first level. Aspire's `.3dclip` is encrypted (`re/SPEC.md`),
-  so it is neither read nor written; the Clipart tab is not built.
+  so it is neither read nor written; the Clipart tab lists folders of your own files instead.
 - Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by one
   plane square to X, Y or Z at a percentage of its size; the segment beyond the plane and
   the one before it (turned over, if asked, so its far side is machined) are laid out side

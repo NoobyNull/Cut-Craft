@@ -120,11 +120,9 @@ impl Options {
         let Some(path) = path() else {
             return Ok(());
         };
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        }
         let json = serde_json::to_vec_pretty(self).expect("options serialise");
-        std::fs::write(&path, json).map_err(|e| format!("{}: {e}", path.display()))
+        cut_craft_core::file::write_atomic(&path, &json)
+            .map_err(|e| format!("{}: {e}", path.display()))
     }
 
     /// Sets what the views draw to these options.

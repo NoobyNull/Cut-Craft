@@ -90,7 +90,7 @@ impl Icons {
                     };
                     ctx.include_bytes(uri(path), bytes);
                 }
-                Err(e) => log::warn!("icon {}: {e}", path.display()),
+                Err(e) => eprintln!("icon {}: {e}", path.display()),
             }
         }
     }

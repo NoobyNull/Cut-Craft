@@ -9,6 +9,7 @@ edition.workspace = true
 testing = []
 
 [dependencies]
+base64.workspace = true
 fontdb = "0.16"
 glam.workspace = true
 i_overlay.workspace = true

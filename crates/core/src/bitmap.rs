@@ -10,14 +10,18 @@ pub struct Bitmap {
     pub columns: usize,
     pub rows: usize,
     /// Grey level of each pixel row by row from the top: 0 black, 255 white.
-    // ponytail: stored as a JSON number array; a packed encoding if job files get large
+    #[serde(with = "crate::packed::u8s")]
     pub grey: Vec<u8>,
     /// Where it lies on the job, in millimetres.
     pub rect: Rect,
     /// A depth map's tones at full precision, laid out as `grey`: 0 black to 1 white. Kept
     /// for 16-bit and floating point pictures, which 256 grey levels would terrace; empty
     /// otherwise (added with depth maps).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        with = "crate::packed::f32s"
+    )]
     pub depth: Vec<f32>,
 }
 

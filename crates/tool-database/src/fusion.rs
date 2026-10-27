@@ -349,13 +349,14 @@ mod tests {
         assert_eq!(db.tools[1].shape, ToolShape::BallNose);
     }
 
-    /// Reads whichever Fusion libraries are in `~/Downloads` (not part of the repo).
+    /// Reads the Fusion libraries in the folder `CUT_CRAFT_VENDOR_FILES` names (they are not
+    /// part of the repo).
     #[test]
-    fn vendor_libraries_read_when_present() {
-        let Some(home) = std::env::var_os("HOME") else {
+    fn vendor_libraries_read_when_given() {
+        let Some(dir) = std::env::var_os("CUT_CRAFT_VENDOR_FILES") else {
             return;
         };
-        let Ok(entries) = std::fs::read_dir(std::path::Path::new(&home).join("Downloads")) else {
+        let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };
         for p in entries.flatten().map(|e| e.path()) {

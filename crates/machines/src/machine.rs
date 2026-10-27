@@ -67,11 +67,9 @@ impl Machines {
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        }
         let json = serde_json::to_vec_pretty(self).expect("machines serialise");
-        std::fs::write(path, json).map_err(|e| format!("{}: {e}", path.display()))
+        cut_craft_core::file::write_atomic(path, &json)
+            .map_err(|e| format!("{}: {e}", path.display()))
     }
 
     pub fn active(&self) -> Option<&Machine> {

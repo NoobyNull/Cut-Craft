@@ -13,6 +13,7 @@ pub mod geometry;
 pub mod handles;
 pub mod keep_out;
 pub mod nodes;
+pub mod packed;
 pub mod params;
 pub mod playback;
 pub mod polygon;

@@ -2,7 +2,7 @@
 
 A desktop app for designing 2D and 3D work and turning it into CNC toolpaths and G-code.
 Draw vectors, build relief models, pick tools from a tool database, preview the cut in 3D and
-save G-code for your machine, all in one window. Written in Rust; runs on Linux and macOS.
+save G-code for your machine, all in one window. Written in Rust; runs on Linux, macOS and Windows.
 
 Cut Craft is a personal, educational project, and an early **alpha**: expect rough edges, and
 please report them (see [Reporting bugs](#reporting-bugs)).

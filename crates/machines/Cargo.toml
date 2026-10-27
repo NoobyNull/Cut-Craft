@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 cut-craft-bug-report = { path = "../bug-report" }
+cut-craft-core.workspace = true
 cut-craft-post = { path = "../post" }
 eframe.workspace = true
 serde.workspace = true

@@ -212,15 +212,14 @@ mod tests {
         assert!(b.depth[3] > b.depth[1], "finer than a grey level");
     }
 
-    /// Matthew's own 16-bit depth map, when it is on this machine (not part of the repo).
+    /// A real 16-bit depth map, `depth.png` in the folder `CUT_CRAFT_VENDOR_FILES` names (not
+    /// part of the repo).
     #[test]
-    fn a_real_depth_map_keeps_its_levels_when_present() {
-        let Some(home) = std::env::var_os("HOME") else {
+    fn a_real_depth_map_keeps_its_levels_when_given() {
+        let Some(dir) = std::env::var_os("CUT_CRAFT_VENDOR_FILES") else {
             return;
         };
-        let path =
-            std::path::Path::new(&home).join("Pictures/mermaids_relief/mermaids_hybrid_depth.png");
-        let Ok(bytes) = std::fs::read(&path) else {
+        let Ok(bytes) = std::fs::read(std::path::Path::new(&dir).join("depth.png")) else {
             return;
         };
         let b = imported(&bytes);

@@ -50,7 +50,7 @@ pub struct Component {
     pub columns: usize,
     pub rows: usize,
     /// Row by row from the bottom; `None` where the component has no shape.
-    // ponytail: plain JSON numbers; a packed encoding if job files grow too big
+    #[serde(with = "crate::packed::heights")]
     pub heights: Vec<Option<f64>>,
     /// Hidden components are left out of the model (added after the first job format).
     #[serde(default = "shown")]
@@ -60,7 +60,11 @@ pub struct Component {
     pub shaping: Shaping,
     /// The heights before it was first sculpted, which the Undo Brush brings back; cleared
     /// when the grid changes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::packed::heights::option"
+    )]
     pub unsculpted: Option<Vec<Option<f64>>>,
     /// The level it is on (added with levels; older files put everything on the first).
     #[serde(default)]

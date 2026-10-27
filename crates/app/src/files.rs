@@ -2,7 +2,7 @@
 //! tests run them without dialogs.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::file::{load_job, save_job};
+use cut_craft_core::file::{load_job, save_job, write_atomic};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_core::{Change, History, Registry};
 use cut_craft_post::Post;
@@ -36,8 +36,17 @@ impl Session {
         format!("{name}{star} - {app}")
     }
 
+    /// A job with no file, whose content is nowhere else yet (recovered after a crash): it
+    /// counts as unsaved until it is saved.
+    pub fn unsaved() -> Self {
+        Self {
+            path: None,
+            saved: u64::MAX,
+        }
+    }
+
     pub fn save(&mut self, doc: &Document, history: &History, path: &Path) -> Result<(), String> {
-        std::fs::write(path, save_job(doc))
+        write_atomic(path, &save_job(doc))
             .map_err(|e| format!("could not save {}: {e}", path.display()))?;
         self.path = Some(path.to_owned());
         self.saved = history.revision();
@@ -72,7 +81,7 @@ pub fn export(registry: &Registry, id: &str, doc: &Document, path: &Path) -> Res
         .exporter(id)
         .ok_or_else(|| format!("no exporter called {id}"))?;
     let bytes = (exporter.export)(doc).map_err(|e| e.to_string())?;
-    std::fs::write(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
+    write_atomic(path, &bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 /// Writes the toolpaths through `post` to `path`, tools numbered by their tool changer
@@ -92,7 +101,8 @@ pub fn save_through(
         slots,
     };
     let text = post.render(doc, &file)?;
-    std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
+    write_atomic(path, text.as_bytes())
+        .map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 pub use cut_craft_core::file::config_dir;
@@ -129,17 +139,7 @@ pub const LOGO_FILE: &str = "cut-craft.svg";
 /// Opens `path` (a folder, or a file such as a PDF to print) with the platform's own
 /// program for it.
 pub fn show_folder(path: &Path) -> std::io::Result<()> {
-    let opener = if cfg!(windows) {
-        "explorer"
-    } else if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    std::process::Command::new(opener)
-        .arg(path)
-        .spawn()
-        .map(drop)
+    cut_craft_bug_report::open_with_platform(path.as_os_str())
 }
 
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
@@ -274,11 +274,7 @@ pub fn save_recent(recent: &[PathBuf], path: &Path) -> Result<(), String> {
 
 /// Writes `bytes` to `path`, making its folder first.
 fn write_creating(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let written = match path.parent() {
-        Some(dir) => std::fs::create_dir_all(dir).and_then(|()| std::fs::write(path, bytes)),
-        None => std::fs::write(path, bytes),
-    };
-    written.map_err(|e| format!("could not write {}: {e}", path.display()))
+    write_atomic(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 fn read(path: &Path) -> Result<Vec<u8>, String> {
