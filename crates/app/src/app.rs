@@ -212,6 +212,19 @@ const MESH_CELLS: usize = 250;
 /// own cells up to this. Built once per view (about 45 ms at 1200, measured in release).
 // ponytail: CPU-drawn mesh; a GPU one with a depth buffer could draw every cell, moving too
 const FINE_MESH_CELLS: usize = 1200;
+/// How wide the Options, Snapping Options and Help windows open, as a share of the main
+/// window's width.
+const DIALOG_WIDTH_SHARE: f32 = 0.4;
+
+/// How big those windows open.
+fn dialog_size(ctx: &egui::Context) -> egui::Vec2 {
+    ctx.content_rect().size()
+        * egui::vec2(
+            DIALOG_WIDTH_SHARE,
+            cut_craft_bug_report::DIALOG_HEIGHT_SHARE,
+        )
+}
+
 /// Cut Craft's own mark, built in.
 const LOGO: &[u8] = include_bytes!("../../../assets/cut-craft.svg");
 /// How long the 3D view stays still before it is drawn finely, seconds.

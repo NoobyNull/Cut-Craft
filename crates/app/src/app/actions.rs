@@ -8,9 +8,9 @@ use super::{
     Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
     SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SUMMARY_DEFAULTS, Screen,
     Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, Tool, ToolDatabase,
-    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, egui, file_dialog,
-    file_name, files, form, gui, job_dialog, menu_items, on_the_desktop, rest_section, shortcut,
-    side_tabs, summary_table, template_dialog, toolpath_template_dialog, view3d,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
+    file_dialog, file_name, files, form, gui, job_dialog, menu_items, on_the_desktop, rest_section,
+    shortcut, side_tabs, summary_table, template_dialog, toolpath_template_dialog, view3d,
 };
 
 impl CutCraftApp {
@@ -2106,39 +2106,37 @@ impl CutCraftApp {
             .collect();
         let summary = &mut self.summary;
         let units = self.doc.job.units;
-        egui::Window::new(title)
-            .open(&mut open)
-            .collapsible(false)
-            .show(ctx, |ui| match info {
-                Info::Summary => summary_table(ui, &times, summary, units),
-                Info::About => {
-                    ui.heading("Cut Craft");
-                    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-                    ui.label("2D and 3D design and CNC toolpaths.");
-                }
-                Info::Shortcuts => {
-                    egui::ScrollArea::vertical()
-                        .max_height(400.0)
-                        .show(ui, |ui| {
-                            egui::Grid::new("shortcuts").striped(true).show(ui, |ui| {
-                                for (keys, label) in &shortcuts {
-                                    ui.monospace(keys);
-                                    ui.label(label);
-                                    ui.end_row();
-                                }
-                            });
+        let (id, size) = (egui::Id::unique(("info", title)), dialog_size(ctx));
+        cut_craft_bug_report::dialog(ctx, id, title, size, &mut open, |ui| match info {
+            Info::Summary => summary_table(ui, &times, summary, units),
+            Info::About => {
+                ui.heading("Cut Craft");
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.label("2D and 3D design and CNC toolpaths.");
+            }
+            Info::Shortcuts => {
+                egui::ScrollArea::vertical()
+                    .max_height(400.0)
+                    .show(ui, |ui| {
+                        egui::Grid::new("shortcuts").striped(true).show(ui, |ui| {
+                            for (keys, label) in &shortcuts {
+                                ui.monospace(keys);
+                                ui.label(label);
+                                ui.end_row();
+                            }
                         });
-                }
-                Info::Licenses => {
-                    egui::Grid::new("licenses").striped(true).show(ui, |ui| {
-                        for (name, licence) in THIRD_PARTY {
-                            ui.label(name);
-                            ui.label(licence);
-                            ui.end_row();
-                        }
                     });
-                }
-            });
+            }
+            Info::Licenses => {
+                egui::Grid::new("licenses").striped(true).show(ui, |ui| {
+                    for (name, licence) in THIRD_PARTY {
+                        ui.label(name);
+                        ui.label(licence);
+                        ui.end_row();
+                    }
+                });
+            }
+        });
         if !open {
             self.info = None;
         }

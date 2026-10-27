@@ -151,6 +151,9 @@ can be opened again later from the File Operations group.
   double-click a model to select it; **F** fits the view.
 - **Tab** and **Shift + Tab** move between controls without the mouse; the one with focus is
   ringed.
+- **Dialogs** (the Tool Database, Machine Configuration, Post-Processor Management, Options,
+  Report a Bug, the Help windows) open in windows of their own, so they can sit beside the
+  main window or on another screen.
 - **Ctrl + X / C / V** cut, copy and paste the selected vectors. Copy puts them on the system
   clipboard, so a second Cut Craft window can paste them.
 

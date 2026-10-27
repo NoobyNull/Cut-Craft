@@ -4,4 +4,4 @@
 - Ctrl + X / C / V work, and copy through the system clipboard between windows
 - Job files pack their models, pictures and toolpaths; older jobs still open
 - Report a Bug opens a filled-in GitHub issue in the browser without the GitHub CLI
-- A faster, leaner build: egui 0.37, half the memory per model, changes applied in place
+- The Tool Database, Machine Configuration and the other dialogs open in their own windows

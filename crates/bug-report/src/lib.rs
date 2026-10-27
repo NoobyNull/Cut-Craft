@@ -43,6 +43,82 @@ fn frame_id() -> egui::Id {
     egui::Id::unique("bug_report_frame")
 }
 
+/// How tall a dialog opens, as a share of the main window's height.
+pub const DIALOG_HEIGHT_SHARE: f32 = 0.8;
+
+/// A dialog in a window of its own beside the main one (the Tool Database, Machine
+/// Configuration, Report a Bug...), closed with the desktop's own button: `open` goes false
+/// then. Its content scrolls when it is taller than the window. Where no second window can
+/// open (the web, tests), an egui window inside the main one instead.
+pub fn dialog<R>(
+    ctx: &egui::Context,
+    id: egui::Id,
+    title: &str,
+    size: egui::Vec2,
+    open: &mut bool,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> Option<R> {
+    dialog_in(ctx, id, title, size, open, true, add)
+}
+
+/// [`dialog`] for content that lays itself out with panels, which a scroll area would break.
+pub fn dialog_with_panels<R>(
+    ctx: &egui::Context,
+    id: egui::Id,
+    title: &str,
+    size: egui::Vec2,
+    open: &mut bool,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> Option<R> {
+    dialog_in(ctx, id, title, size, open, false, add)
+}
+
+fn dialog_in<R>(
+    ctx: &egui::Context,
+    id: egui::Id,
+    title: &str,
+    size: egui::Vec2,
+    open: &mut bool,
+    scroll: bool,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> Option<R> {
+    if ctx.embed_viewports() {
+        return egui::Window::new(title)
+            .id(id)
+            .open(open)
+            .default_size(size)
+            .collapsible(false)
+            .show(ctx, add)
+            .and_then(|shown| shown.inner);
+    }
+    let mut add = Some(add);
+    ctx.show_viewport_immediate(
+        egui::ViewportId::from_hash_of(id),
+        egui::ViewportBuilder::default()
+            .with_title(title)
+            .with_inner_size(size),
+        |ui, _| {
+            let out = egui::CentralPanel::default()
+                .show(ui, |ui| {
+                    let add = add.take()?;
+                    Some(if scroll {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink(false)
+                            .show(ui, add)
+                            .inner
+                    } else {
+                        add(ui)
+                    })
+                })
+                .inner;
+            if ui.ctx().input(|i| i.viewport().close_requested()) {
+                *open = false;
+            }
+            out
+        },
+    )
+}
+
 /// Where a window picture lands once egui has drawn it (a frame or more later).
 pub type Shot = Arc<Mutex<Option<Arc<egui::ColorImage>>>>;
 
@@ -277,83 +353,80 @@ impl Reporter {
         };
         let sending = self.sending.is_some();
         let (mut open, mut submit_now, mut cancel) = (true, false, false);
-        let width = ctx.content_rect().width() * FORM_SHARE;
-        egui::Window::new("Report a Bug")
-            .open(&mut open)
-            .default_width(width)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                ui.label("Title");
-                ui.add(egui::TextEdit::singleline(&mut draft.title).desired_width(f32::INFINITY));
-                ui.label("What went wrong, and what you expected");
-                ui.add(
-                    egui::TextEdit::multiline(&mut draft.text)
-                        .desired_rows(TEXT_ROWS)
-                        .desired_width(f32::INFINITY),
-                );
-                ui.collapsing("Where (sent with the report)", |ui| {
-                    if draft.regions.is_empty() {
-                        ui.weak("No named part of the window here");
-                    }
-                    for r in &draft.regions {
-                        ui.label(format!("{} — {}:{}", r.name, r.at.file(), r.at.line()));
-                    }
-                    ui.weak(&draft.state);
-                });
-                if let Some(image) = &draft.screenshot {
-                    ui.checkbox(
-                        &mut draft.send_screenshot,
-                        "Send a screenshot of the window",
-                    );
-                    if draft.send_screenshot {
-                        let texture = ui.ctx().load_texture(
-                            "bug_report_screenshot",
-                            Arc::clone(image),
-                            egui::TextureOptions::LINEAR,
-                        );
-                        let shown = ui.available_width() * THUMBNAIL_SHARE;
-                        let size = texture.size_vec2() * (shown / texture.size_vec2().x);
-                        ui.image((texture.id(), size));
-                    }
+        let size = ctx.content_rect().size() * egui::vec2(FORM_SHARE, DIALOG_HEIGHT_SHARE);
+        let id = egui::Id::unique("report_a_bug");
+        dialog(ctx, id, "Report a Bug", size, &mut open, |ui| {
+            ui.label("Title");
+            ui.add(egui::TextEdit::singleline(&mut draft.title).desired_width(f32::INFINITY));
+            ui.label("What went wrong, and what you expected");
+            ui.add(
+                egui::TextEdit::multiline(&mut draft.text)
+                    .desired_rows(TEXT_ROWS)
+                    .desired_width(f32::INFINITY),
+            );
+            ui.collapsing("Where (sent with the report)", |ui| {
+                if draft.regions.is_empty() {
+                    ui.weak("No named part of the window here");
                 }
-                ui.horizontal(|ui| {
-                    if ui.button("Add Pictures…").clicked() {
-                        draft.pictures.extend((host.pick_pictures)());
-                    }
-                    let mut remove = None;
-                    for (i, p) in draft.pictures.iter().enumerate() {
-                        let name = p
-                            .file_name()
-                            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-                        if ui
-                            .small_button(format!("{name} ✕"))
-                            .on_hover_text("Leave it out")
-                            .clicked()
-                        {
-                            remove = Some(i);
-                        }
-                    }
-                    if let Some(i) = remove {
-                        draft.pictures.remove(i);
-                    }
-                });
-                if let Some(e) = &draft.error {
-                    ui.colored_label(ui.visuals().error_fg_color, e);
+                for r in &draft.regions {
+                    ui.label(format!("{} — {}:{}", r.name, r.at.file(), r.at.line()));
                 }
-                ui.separator();
-                ui.horizontal(|ui| {
-                    let ready = !draft.title.trim().is_empty() && !sending;
-                    submit_now = ui
-                        .add_enabled(ready, egui::Button::new("Submit to GitHub"))
-                        .on_disabled_hover_text("Give it a title")
-                        .clicked();
-                    cancel = ui.button("Cancel").clicked();
-                    if sending {
-                        ui.spinner();
-                        ui.label("Sending…");
-                    }
-                });
+                ui.weak(&draft.state);
             });
+            if let Some(image) = &draft.screenshot {
+                ui.checkbox(
+                    &mut draft.send_screenshot,
+                    "Send a screenshot of the window",
+                );
+                if draft.send_screenshot {
+                    let texture = ui.ctx().load_texture(
+                        "bug_report_screenshot",
+                        Arc::clone(image),
+                        egui::TextureOptions::LINEAR,
+                    );
+                    let shown = ui.available_width() * THUMBNAIL_SHARE;
+                    let size = texture.size_vec2() * (shown / texture.size_vec2().x);
+                    ui.image((texture.id(), size));
+                }
+            }
+            ui.horizontal(|ui| {
+                if ui.button("Add Pictures…").clicked() {
+                    draft.pictures.extend((host.pick_pictures)());
+                }
+                let mut remove = None;
+                for (i, p) in draft.pictures.iter().enumerate() {
+                    let name = p
+                        .file_name()
+                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    if ui
+                        .small_button(format!("{name} ✕"))
+                        .on_hover_text("Leave it out")
+                        .clicked()
+                    {
+                        remove = Some(i);
+                    }
+                }
+                if let Some(i) = remove {
+                    draft.pictures.remove(i);
+                }
+            });
+            if let Some(e) = &draft.error {
+                ui.colored_label(ui.visuals().error_fg_color, e);
+            }
+            ui.separator();
+            ui.horizontal(|ui| {
+                let ready = !draft.title.trim().is_empty() && !sending;
+                submit_now = ui
+                    .add_enabled(ready, egui::Button::new("Submit to GitHub"))
+                    .on_disabled_hover_text("Give it a title")
+                    .clicked();
+                cancel = ui.button("Cancel").clicked();
+                if sending {
+                    ui.spinner();
+                    ui.label("Sending…");
+                }
+            });
+        });
         if !open || cancel {
             self.draft = None;
             return;

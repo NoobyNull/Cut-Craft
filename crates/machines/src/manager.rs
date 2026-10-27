@@ -36,26 +36,32 @@ fn icon_button(ui: &mut egui::Ui, look: &Look, icon: &str, label: &str, enabled:
         .clicked()
 }
 
+/// How big the windows open: a share of the main window.
+fn dialog_size(ctx: &egui::Context) -> egui::Vec2 {
+    ctx.content_rect().size() * egui::vec2(WINDOW_SHARE, cut_craft_bug_report::DIALOG_HEIGHT_SHARE)
+}
+
 /// A post's instructions, read-only, as Aspire's Post-Processor Content.
 fn viewer(ctx: &egui::Context, viewing: &mut Option<(String, String)>) {
     let Some((name, text)) = viewing else { return };
     let mut open = true;
-    egui::Window::new(format!("Post-Processor Content: {name}"))
-        .id(egui::Id::unique("post_processor_content"))
-        .open(&mut open)
-        .show(ctx, |ui| {
-            if ui.button("Copy").clicked() {
-                ui.ctx().copy_text(text.clone());
-            }
-            let height = ui.spacing().interact_size.y * VIEW_ROWS;
-            egui::ScrollArea::both().max_height(height).show(ui, |ui| {
-                ui.add(
-                    egui::TextEdit::multiline(&mut text.as_str())
-                        .code_editor()
-                        .desired_width(f32::INFINITY),
-                );
-            });
+    let (id, title) = (
+        egui::Id::unique("post_processor_content"),
+        format!("Post-Processor Content: {name}"),
+    );
+    cut_craft_bug_report::dialog(ctx, id, &title, dialog_size(ctx), &mut open, |ui| {
+        if ui.button("Copy").clicked() {
+            ui.ctx().copy_text(text.clone());
+        }
+        let height = ui.spacing().interact_size.y * VIEW_ROWS;
+        egui::ScrollArea::both().max_height(height).show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::multiline(&mut text.as_str())
+                    .code_editor()
+                    .desired_width(f32::INFINITY),
+            );
         });
+    });
     if !open {
         *viewing = None;
     }
@@ -110,42 +116,38 @@ impl MachineManager {
     ) -> Option<MachineOutcome> {
         let mut open = true;
         let mut outcome = None;
-        egui::Window::new("Machine Configuration Management")
-            .id(machine_window())
-            .open(&mut open)
-            .default_width(ctx.content_rect().width() * WINDOW_SHARE)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                cut_craft_bug_report::mark(ui, "Machine Configuration Management");
-                self.machine_row(ui, look);
-                ui.separator();
-                let names_clash = self.draft.names_clash();
-                let Some(machine) = self.draft.active_mut() else {
-                    ui.weak("No machines yet: Add Machine makes one");
-                    outcome = buttons(ui, false);
-                    return;
-                };
-                details(ui, machine);
-                tool_changer(ui, machine);
-                if names_clash {
-                    ui.colored_label(
-                        ui.visuals().error_fg_color,
-                        "Two machines cannot have the same name",
-                    );
-                }
-                let entries = library.entries();
-                if let Some(asked) = posts_section(
-                    ui,
-                    look,
-                    machine,
-                    &entries,
-                    &mut self.picked,
-                    &mut self.viewing,
-                ) {
-                    outcome = Some(asked);
-                }
-                outcome = buttons(ui, !names_clash).or(outcome.take());
-            });
+        let (id, title) = (machine_window(), "Machine Configuration Management");
+        cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
+            cut_craft_bug_report::mark(ui, "Machine Configuration Management");
+            self.machine_row(ui, look);
+            ui.separator();
+            let names_clash = self.draft.names_clash();
+            let Some(machine) = self.draft.active_mut() else {
+                ui.weak("No machines yet: Add Machine makes one");
+                outcome = buttons(ui, false);
+                return;
+            };
+            details(ui, machine);
+            tool_changer(ui, machine);
+            if names_clash {
+                ui.colored_label(
+                    ui.visuals().error_fg_color,
+                    "Two machines cannot have the same name",
+                );
+            }
+            let entries = library.entries();
+            if let Some(asked) = posts_section(
+                ui,
+                look,
+                machine,
+                &entries,
+                &mut self.picked,
+                &mut self.viewing,
+            ) {
+                outcome = Some(asked);
+            }
+            outcome = buttons(ui, !names_clash).or(outcome.take());
+        });
         viewer(ctx, &mut self.viewing);
         if !open {
             outcome = Some(MachineOutcome::Cancel);
@@ -432,46 +434,46 @@ impl PostManager {
     ) -> Option<PostOutcome> {
         let mut open = true;
         let mut outcome = None;
-        egui::Window::new("Post-Processor Management")
-            .open(&mut open)
-            .default_width(ctx.content_rect().width() * WINDOW_SHARE)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                cut_craft_bug_report::mark(ui, "Post-Processor Management");
-                let height = ui.spacing().interact_size.y * VIEW_ROWS;
-                egui::ScrollArea::vertical()
-                    .max_height(height)
-                    .show(ui, |ui| {
-                        for entry in library.entries() {
-                            if let Some(asked) = self.row(ui, look, library, &entry) {
-                                outcome = Some(asked);
-                            }
+        let (id, title) = (
+            egui::Id::unique("post_processor_management"),
+            "Post-Processor Management",
+        );
+        cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
+            cut_craft_bug_report::mark(ui, "Post-Processor Management");
+            let height = ui.spacing().interact_size.y * VIEW_ROWS;
+            egui::ScrollArea::vertical()
+                .max_height(height)
+                .show(ui, |ui| {
+                    for entry in library.entries() {
+                        if let Some(asked) = self.row(ui, look, library, &entry) {
+                            outcome = Some(asked);
                         }
-                    });
-                if let Some(asked) = self.confirm_delete(ui) {
-                    outcome = Some(asked);
-                }
-                ui.separator();
-                ui.horizontal(|ui| {
-                    if icon_button(ui, look, "common/open.svg", "Install Post-Processor", true) {
-                        outcome = Some(PostOutcome::Install);
                     }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Close").clicked() {
-                            outcome = Some(PostOutcome::Close);
-                        }
-                        let picked = self.picked.clone();
-                        let select = ui
-                            .add_enabled(picked.is_some(), egui::Button::new("Select"))
-                            .on_hover_text("Use it with the active machine");
-                        if select.clicked()
-                            && let Some(name) = picked
-                        {
-                            outcome = Some(PostOutcome::Select(name));
-                        }
-                    });
+                });
+            if let Some(asked) = self.confirm_delete(ui) {
+                outcome = Some(asked);
+            }
+            ui.separator();
+            ui.horizontal(|ui| {
+                if icon_button(ui, look, "common/open.svg", "Install Post-Processor", true) {
+                    outcome = Some(PostOutcome::Install);
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Close").clicked() {
+                        outcome = Some(PostOutcome::Close);
+                    }
+                    let picked = self.picked.clone();
+                    let select = ui
+                        .add_enabled(picked.is_some(), egui::Button::new("Select"))
+                        .on_hover_text("Use it with the active machine");
+                    if select.clicked()
+                        && let Some(name) = picked
+                    {
+                        outcome = Some(PostOutcome::Select(name));
+                    }
                 });
             });
+        });
         viewer(ctx, &mut self.viewing);
         if !open {
             outcome = Some(PostOutcome::Close);

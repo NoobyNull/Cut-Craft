@@ -6,7 +6,7 @@ use super::{
     DROP_SHADE, Drag, EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout,
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, STROKE_TOOLS, Screen, Split,
     TOOL_ICON_ROWS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, ViewTransform,
-    bordered, egui, file_dialog, file_name, files, gui, handles, inspected, measured,
+    bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles, inspected, measured,
     paint_focus_ring, view2d,
 };
 
@@ -1150,19 +1150,17 @@ impl CutCraftApp {
         let fields = crate::form::fields(&schema);
         let mut values = serde_json::to_value(&self.options).expect("options serialise");
         let mut changed = None;
-        egui::Window::new("Options")
-            .open(&mut open)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                let look = crate::form::Look {
-                    units: self.doc.job.units,
-                    picture: &|_| None,
-                    material: crate::form::material(&self.doc, self.doc.job.units),
-                };
-                if crate::form::show(ui, &fields, &mut values, &look) {
-                    changed = serde_json::from_value::<crate::options::Options>(values).ok();
-                }
-            });
+        let (id, size) = (egui::Id::unique("options"), dialog_size(ctx));
+        cut_craft_bug_report::dialog(ctx, id, "Options", size, &mut open, |ui| {
+            let look = crate::form::Look {
+                units: self.doc.job.units,
+                picture: &|_| None,
+                material: crate::form::material(&self.doc, self.doc.job.units),
+            };
+            if crate::form::show(ui, &fields, &mut values, &look) {
+                changed = serde_json::from_value::<crate::options::Options>(values).ok();
+            }
+        });
         self.options_window = open;
         if let Some(options) = changed {
             options.apply_to(&mut self.display);
@@ -1182,22 +1180,20 @@ impl CutCraftApp {
         let fields = crate::form::fields(&schema);
         let mut values = serde_json::to_value(&self.snap).expect("options serialise");
         let units = self.doc.job.units;
-        egui::Window::new("Snapping Options")
-            .open(&mut open)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                let picture = |_: &str| None;
-                let look = crate::form::Look {
-                    units,
-                    picture: &picture,
-                    material: crate::form::material(&self.doc, units),
-                };
-                if crate::form::show(ui, &fields, &mut values, &look)
-                    && let Ok(options) = serde_json::from_value(values)
-                {
-                    self.snap = options;
-                }
-            });
+        let (id, size) = (egui::Id::unique("snapping_options"), dialog_size(ctx));
+        cut_craft_bug_report::dialog(ctx, id, "Snapping Options", size, &mut open, |ui| {
+            let picture = |_: &str| None;
+            let look = crate::form::Look {
+                units,
+                picture: &picture,
+                material: crate::form::material(&self.doc, units),
+            };
+            if crate::form::show(ui, &fields, &mut values, &look)
+                && let Ok(options) = serde_json::from_value(values)
+            {
+                self.snap = options;
+            }
+        });
         self.snap_window = open;
     }
 

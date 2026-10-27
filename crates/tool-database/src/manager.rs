@@ -164,13 +164,13 @@ impl Manager {
         let mut open = true;
         let mut outcome = None;
         let size = ctx.content_rect().size() * WINDOW_SHARE;
-        egui::Window::new("Tool Database")
-            .id(tool_window())
-            .open(&mut open)
-            .default_size(size)
-            .resizable(true)
-            .collapsible(false)
-            .show(ctx, |ui| {
+        cut_craft_bug_report::dialog_with_panels(
+            ctx,
+            tool_window(),
+            "Tool Database",
+            size,
+            &mut open,
+            |ui| {
                 cut_craft_bug_report::mark(ui, "Tool Database window");
                 egui::Panel::bottom("tool_database_buttons").show(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -203,7 +203,8 @@ impl Manager {
                     });
                     egui::ScrollArea::vertical().show(ui, |ui| self.details(ui, look));
                 });
-            });
+            },
+        );
         if !open {
             outcome = Some(Outcome::Cancel);
         }
