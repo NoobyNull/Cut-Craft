@@ -149,7 +149,7 @@ impl Command for PhotoVcarveToolpath {
         Meta {
             label: "Photo V-Carve Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/engraving.svg",
+            icon: "toolpaths/engraving.png",
             shortcut: "",
         }
     }

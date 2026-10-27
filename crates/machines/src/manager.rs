@@ -173,20 +173,20 @@ impl MachineManager {
                     }
                 });
             let some = self.draft.active().is_some();
-            if icon_button(ui, look, "common/add.svg", "Add Machine", true) {
+            if icon_button(ui, look, "common/add.png", "Add Machine", true) {
                 self.draft.add();
                 self.picked = None;
             }
             if icon_button(
                 ui,
                 look,
-                "common/copy_duplicate.svg",
+                "common/copy_duplicate.png",
                 "Duplicate Machine",
                 some,
             ) {
                 self.draft.duplicate();
             }
-            if icon_button(ui, look, "common/delete.svg", "Delete Machine", some) {
+            if icon_button(ui, look, "common/delete.png", "Delete Machine", some) {
                 self.draft.delete();
                 self.picked = None;
             }
@@ -195,7 +195,7 @@ impl MachineManager {
             icon_button(
                 ui,
                 look,
-                "common/open.svg",
+                "common/open.png",
                 "Install Offline Package (needs an online machine service)",
                 false,
             );
@@ -359,7 +359,7 @@ fn posts_section(
                         }
                     }
                 });
-            if icon_button(ui, look, "common/delete.svg", "Remove", picked.is_some())
+            if icon_button(ui, look, "common/delete.png", "Remove", picked.is_some())
                 && let Some(i) = picked.take().filter(|&i| i < machine.posts.len())
             {
                 machine.posts.remove(i);
@@ -455,7 +455,7 @@ impl PostManager {
             }
             ui.separator();
             ui.horizontal(|ui| {
-                if icon_button(ui, look, "common/open.svg", "Install Post-Processor", true) {
+                if icon_button(ui, look, "common/open.png", "Install Post-Processor", true) {
                     outcome = Some(PostOutcome::Install);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -493,7 +493,7 @@ impl PostManager {
         let mut asked = None;
         ui.horizontal(|ui| {
             let edge = ui.spacing().interact_size.y;
-            match (entry.is_custom(), (look.picture)("common/edit.svg")) {
+            match (entry.is_custom(), (look.picture)("common/edit.png")) {
                 (true, Some(pencil)) => {
                     ui.add(pencil.fit_to_exact_size(egui::vec2(edge, edge)));
                 }

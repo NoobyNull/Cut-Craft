@@ -21,7 +21,7 @@ impl Command for AlignLeft {
     type Params = NoParams;
 
     fn meta() -> Meta {
-        meta("Align Left", "drawing/align/left.svg", "")
+        meta("Align Left", "drawing/align/left.png", "")
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
@@ -36,7 +36,7 @@ impl Command for AlignRight {
     type Params = NoParams;
 
     fn meta() -> Meta {
-        meta("Align Right", "drawing/align/right.svg", "")
+        meta("Align Right", "drawing/align/right.png", "")
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
@@ -51,7 +51,7 @@ impl Command for AlignTop {
     type Params = NoParams;
 
     fn meta() -> Meta {
-        meta("Align Top", "drawing/align/top.svg", "")
+        meta("Align Top", "drawing/align/top.png", "")
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
@@ -66,7 +66,7 @@ impl Command for AlignBottom {
     type Params = NoParams;
 
     fn meta() -> Meta {
-        meta("Align Bottom", "drawing/align/bottom.svg", "")
+        meta("Align Bottom", "drawing/align/bottom.png", "")
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
@@ -83,7 +83,7 @@ impl Command for CenterHorizontally {
     fn meta() -> Meta {
         meta(
             "Center Horizontally",
-            "drawing/align/center_horizontally.svg",
+            "drawing/align/center_horizontally.png",
             "",
         )
     }
@@ -104,7 +104,7 @@ impl Command for CenterVertically {
     fn meta() -> Meta {
         meta(
             "Center Vertically",
-            "drawing/align/center_vertically.svg",
+            "drawing/align/center_vertically.png",
             "",
         )
     }
@@ -123,7 +123,7 @@ impl Command for Center {
     type Params = NoParams;
 
     fn meta() -> Meta {
-        meta("Center", "drawing/align/center.svg", "")
+        meta("Center", "drawing/align/center.png", "")
     }
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
@@ -146,7 +146,7 @@ impl Command for CenterHorizontallyInMaterial {
     fn meta() -> Meta {
         meta(
             "Center Horizontally In Material",
-            "drawing/align/center_horizontally_in_material.svg",
+            "drawing/align/center_horizontally_in_material.png",
             "",
         )
     }
@@ -168,7 +168,7 @@ impl Command for CenterVerticallyInMaterial {
     fn meta() -> Meta {
         meta(
             "Center Vertically In Material",
-            "drawing/align/center_vertically_in_material.svg",
+            "drawing/align/center_vertically_in_material.png",
             "",
         )
     }
@@ -190,7 +190,7 @@ impl Command for CenterInMaterial {
     fn meta() -> Meta {
         meta(
             "Center In Material",
-            "drawing/align/center_in_material.svg",
+            "drawing/align/center_in_material.png",
             "F9",
         )
     }

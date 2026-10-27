@@ -65,7 +65,7 @@ impl Command for TextureArea {
         Meta {
             label: "Create Texture Area",
             group: "Modeling",
-            icon: "modeling/create_texture_area.svg",
+            icon: "modeling/create_texture_area.png",
             shortcut: "",
         }
     }

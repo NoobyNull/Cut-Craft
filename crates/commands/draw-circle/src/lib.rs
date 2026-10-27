@@ -11,9 +11,9 @@ pub struct DrawCircle;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    #[schemars(title = "Center Point", extend("x-icon" = "drawing_forms/circle_center.bmp"))]
+    #[schemars(title = "Center Point", extend("x-icon" = "drawing_forms/circle_center.png"))]
     pub center: Xy,
-    #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/circle_radius.bmp"), range(min = 0))]
+    #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/circle_radius.png"), range(min = 0))]
     pub radius: f64,
 }
 
@@ -34,7 +34,7 @@ impl Command for DrawCircle {
         Meta {
             label: "Draw Circle",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_circle.svg",
+            icon: "drawing/create_vectors/draw_circle.png",
             shortcut: "",
         }
     }

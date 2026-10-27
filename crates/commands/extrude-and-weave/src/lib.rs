@@ -41,7 +41,7 @@ impl Command for ExtrudeAndWeave {
         Meta {
             label: "Extrude and Weave",
             group: "Modeling",
-            icon: "modeling/extrude_and_weave.svg",
+            icon: "modeling/extrude_and_weave.png",
             shortcut: "",
         }
     }

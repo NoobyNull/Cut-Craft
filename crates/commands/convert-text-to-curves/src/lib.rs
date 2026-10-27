@@ -15,7 +15,7 @@ impl Command for ConvertTextToCurves {
         Meta {
             label: "Convert Text to Curves",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/convert_text_to_curves.svg",
+            icon: "drawing/create_vectors/convert_text_to_curves.png",
             shortcut: "",
         }
     }

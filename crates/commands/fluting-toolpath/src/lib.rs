@@ -135,7 +135,7 @@ impl Command for FlutingToolpath {
         Meta {
             label: "Fluting Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/fluting_toolpath.svg",
+            icon: "toolpaths/fluting_toolpath.png",
             shortcut: "",
         }
     }

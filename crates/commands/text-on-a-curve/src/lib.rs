@@ -89,7 +89,7 @@ impl Command for TextOnACurve {
         Meta {
             label: "Text on a Curve",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/text_on_a_curve.svg",
+            icon: "drawing/create_vectors/text_on_a_curve.png",
             shortcut: "",
         }
     }

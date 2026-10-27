@@ -255,9 +255,16 @@ settings and saves nothing.
 
 ### Icons
 
-The icons are in `assets/icons` and built into the program, so nothing has to travel beside
-it. `CUT_CRAFT_ICON_DIR` points Cut Craft at a folder instead while icons are being worked on;
-an icon that is missing leaves its button showing its name, and everything still works. The third-party icons are credited under **Help ▸ Third Party Licenses**.
+The icons are drawn for Cut Craft and kept in `assets/icons` as transparent PNGs, built into
+the program so nothing has to travel beside it. `scripts/build-icons` draws them all again:
+`scripts/make_icons.py` holds the flat drawings, `scripts/make_3d_icons.py` the shaded solids of
+the 3D tools, and `scripts/model_pictures.py` renders the Orientate 3D Model pictures from two
+STL models given on the command line (the models are not kept here). It needs `python3` with
+`numpy`, and `rsvg-convert`.
+
+`CUT_CRAFT_ICON_DIR` points Cut Craft at a folder instead while icons are being worked on; an
+icon that is missing leaves its button showing its name, and everything still works. The
+third-party icons and models are credited under **Help ▸ Third Party Licenses**.
 
 ## How the code is laid out
 

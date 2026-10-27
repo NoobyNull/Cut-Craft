@@ -33,7 +33,7 @@ impl Command for DrawPolyline {
         Meta {
             label: "Draw Line / Polyline",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_line_polyline.svg",
+            icon: "drawing/create_vectors/draw_line_polyline.png",
             shortcut: "",
         }
     }

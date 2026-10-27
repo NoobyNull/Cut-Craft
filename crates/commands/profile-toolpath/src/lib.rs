@@ -51,7 +51,7 @@ impl Command for ProfileToolpath {
         Meta {
             label: "Profile Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/profile_toolpath.svg",
+            icon: "toolpaths/profile_toolpath.png",
             shortcut: "",
         }
     }

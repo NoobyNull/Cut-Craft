@@ -37,7 +37,7 @@ impl Command for PocketToolpath {
         Meta {
             label: "Pocket Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/pocket_toolpath.svg",
+            icon: "toolpaths/pocket_toolpath.png",
             shortcut: "",
         }
     }

@@ -38,7 +38,7 @@ impl Command for DrawCurve {
         Meta {
             label: "Draw Curve",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_curve.svg",
+            icon: "drawing/create_vectors/draw_curve.png",
             shortcut: "",
         }
     }

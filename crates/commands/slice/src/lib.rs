@@ -55,7 +55,7 @@ impl Command for Slice {
         Meta {
             label: "Slice Model",
             group: "Modeling",
-            icon: "modeling/slice_model.svg",
+            icon: "modeling/slice_model.png",
             shortcut: "",
         }
     }

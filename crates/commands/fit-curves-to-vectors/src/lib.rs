@@ -56,7 +56,7 @@ impl Command for FitCurvesToVectors {
         Meta {
             label: "Fit Curves to Vectors",
             group: "Edit Objects",
-            icon: "drawing/create_vectors/fit_curves_to_vectors.svg",
+            icon: "drawing/create_vectors/fit_curves_to_vectors.png",
             shortcut: "",
         }
     }

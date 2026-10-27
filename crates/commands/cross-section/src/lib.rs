@@ -36,7 +36,7 @@ impl Command for CrossSection {
         Meta {
             label: "Create Cross Section Vector",
             group: "Modeling",
-            icon: "modeling/create_cross_section_vector.svg",
+            icon: "modeling/create_cross_section_vector.png",
             shortcut: "",
         }
     }

@@ -29,20 +29,20 @@ pub struct Params {
     pub y: f64,
     #[schemars(
         title = "Width (X)",
-        extend("x-unit" = "mm", "x-icon" = "drawing_forms/width.bmp"),
+        extend("x-unit" = "mm", "x-icon" = "drawing_forms/width.png"),
         range(min = 0)
     )]
     pub width: f64,
     #[schemars(
         title = "Height (Y)",
-        extend("x-unit" = "mm", "x-icon" = "drawing_forms/height.bmp"),
+        extend("x-unit" = "mm", "x-icon" = "drawing_forms/height.png"),
         range(min = 0)
     )]
     pub height: f64,
     /// One of square, rounded or notched corners, as the picture shows
     #[schemars(
         title = "Corner Type",
-        extend("x-section" = true, "x-icon" = "drawing_forms/corner_{}.bmp")
+        extend("x-section" = true, "x-icon" = "drawing_forms/corner_{}.png")
     )]
     pub corners: Corners,
     /// Corner radius
@@ -74,7 +74,7 @@ impl Command for DrawRectangle {
         Meta {
             label: "Draw Rectangle",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_rectangle.svg",
+            icon: "drawing/create_vectors/draw_rectangle.png",
             shortcut: "",
         }
     }

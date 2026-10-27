@@ -36,7 +36,7 @@ impl Command for InteractiveVectorTrim {
         Meta {
             label: "Interactive Vector Trim",
             group: "Edit Objects",
-            icon: "drawing/edit_objects/interactive_vector_trim.svg",
+            icon: "drawing/edit_objects/interactive_vector_trim.png",
             shortcut: "",
         }
     }

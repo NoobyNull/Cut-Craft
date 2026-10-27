@@ -176,7 +176,7 @@ const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-const THIRD_PARTY: [(&str, &str); 17] = [
+const THIRD_PARTY: [(&str, &str); 16] = [
     ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
     ("glam", "MIT or Apache-2.0"),
     ("i_overlay", "MIT or Apache-2.0"),
@@ -196,12 +196,8 @@ const THIRD_PARTY: [(&str, &str); 17] = [
         "Icons8 (icons8.com), free with this credit",
     ),
     (
-        "Offset icon",
-        "Creaticca Creative Agency from Freepik (magnific.com), free with this credit",
-    ),
-    (
-        "Chess knight (Initial Orientation)",
-        "Icons8 (icons8.com), free with this credit",
+        "Pointing hand and statue pictures (Orientate 3D Model)",
+        "Rendered from free models shared on printables.com",
     ),
 ];
 
@@ -253,13 +249,13 @@ const LAYOUT_KEYS: [(&str, &str); 3] = [
 ];
 /// The view buttons over the top right of the 2D view: action, label and icon.
 const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
-    ("pan", "Pan", "view/pan.svg"),
-    ("zoom_box", "Zoom Box", "view/zoom_box.svg"),
-    ("zoom_to_job", "Zoom to Job", "view/zoom_to_job.svg"),
+    ("pan", "Pan", "view/pan.png"),
+    ("zoom_box", "Zoom Box", "view/zoom_box.png"),
+    ("zoom_to_job", "Zoom to Job", "view/zoom_to_job.png"),
     (
         "zoom_selected",
         "Zoom to Selection",
-        "view/zoom_selected.svg",
+        "view/zoom_selected.png",
     ),
 ];
 /// Scrolling a view's height divided by this doubles the zoom.
@@ -267,13 +263,13 @@ const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
 const VIEW_ZOOM_QUARTERS: f32 = 4.0;
 /// Aspire's startup tasks: action, label and icon.
 const STARTUP_TASKS: [(&str, &str, &str); 3] = [
-    ("new", "Create a new file", "file/new.svg"),
+    ("new", "Create a new file", "file/new.png"),
     (
         "new_from_template",
         "New file from template",
-        "toolpaths/load_toolpath_template.svg",
+        "toolpaths/load_toolpath_template.png",
     ),
-    ("open", "Open an existing file", "file/open.svg"),
+    ("open", "Open an existing file", "file/open.png"),
 ];
 /// The top bar's split and snapping toggles.
 const TOP_BAR_TOGGLES: [&str; 5] = [
@@ -300,7 +296,7 @@ const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 5.0..=20_000.0;
 /// The tool drawn in the 3D view while a preview plays: this many diameters tall.
 const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
 /// Beside each recently opened file.
-const RECENT_FILE_ICON: &str = "file/new.svg";
+const RECENT_FILE_ICON: &str = "file/new.png";
 /// This version's changes, one `- ` line each, shown on the start page.
 const WHATS_NEW: &str = include_str!("../whats-new.md");
 /// Where Cut Craft is found online, shown on the start page: label, address and icon (the
@@ -314,23 +310,23 @@ const LINKS: [(&str, &str, &str); 7] = [
     (
         "Facebook",
         "https://www.facebook.com",
-        "file/facebook_link.svg",
+        "file/facebook_link.png",
     ),
-    ("X", "https://x.com", "file/twitter_link.svg"),
+    ("X", "https://x.com", "file/twitter_link.png"),
     (
         "YouTube",
         "https://www.youtube.com",
-        "file/youtube_link.svg",
+        "file/youtube_link.png",
     ),
     (
         "Instagram",
         "https://www.instagram.com",
-        "file/instagram_link.svg",
+        "file/instagram_link.png",
     ),
     (
         "Pinterest",
         "https://www.pinterest.com",
-        "file/pinterest_link.svg",
+        "file/pinterest_link.png",
     ),
     (
         "Thingiverse",

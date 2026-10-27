@@ -19,7 +19,7 @@ impl Command for CropBitmap {
         Meta {
             label: "Crop Bitmap",
             group: "Edit Objects",
-            icon: "drawing/edit_objects/crop_bitmap.svg",
+            icon: "drawing/edit_objects/crop_bitmap.png",
             shortcut: "",
         }
     }

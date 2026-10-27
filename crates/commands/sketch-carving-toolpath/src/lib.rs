@@ -227,7 +227,7 @@ impl Command for SketchCarvingToolpath {
         Meta {
             label: "Sketch Carving Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/sketch_carving.svg",
+            icon: "toolpaths/sketch_carving.png",
             shortcut: "",
         }
     }

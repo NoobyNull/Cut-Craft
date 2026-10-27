@@ -13,7 +13,7 @@ impl Command for Group {
         Meta {
             label: "Group",
             group: "Edit",
-            icon: "drawing/create_vectors/group.svg",
+            icon: "drawing/create_vectors/group.png",
             shortcut: "",
         }
     }

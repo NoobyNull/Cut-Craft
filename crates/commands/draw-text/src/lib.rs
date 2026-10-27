@@ -110,7 +110,7 @@ impl Command for DrawText {
         Meta {
             label: "Draw Text",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_text.svg",
+            icon: "drawing/create_vectors/draw_text.png",
             shortcut: "",
         }
     }

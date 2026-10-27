@@ -51,7 +51,7 @@ impl Command for VcarveEngraveToolpath {
         Meta {
             label: "V-Carve / Engrave Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/vcarve_engrave_toolpath.svg",
+            icon: "toolpaths/vcarve_engrave_toolpath.png",
             shortcut: "",
         }
     }

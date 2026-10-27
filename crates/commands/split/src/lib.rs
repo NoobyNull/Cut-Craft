@@ -16,7 +16,7 @@ impl Command for Split {
         Meta {
             label: "Split Component",
             group: "Modeling",
-            icon: "modeling/split_selected_component.svg",
+            icon: "modeling/split_selected_component.png",
             shortcut: "",
         }
     }

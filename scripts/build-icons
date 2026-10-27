@@ -1,0 +1,31 @@
+#!/bin/bash
+# Draw every icon and write it to assets/icons as a transparent PNG.
+#   scripts/build-icons                         the drawings; the model pictures stay as they are
+#   scripts/build-icons HAND.stl STATUE.stl     the model pictures too, rendered from those models
+# Needs python3 with numpy, and rsvg-convert. Toolbar icons are 128 px, dialog pictures 256 px.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+icons=$here/../assets/icons
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+python3 -I "$here/make_icons.py" "$work"
+python3 -I "$here/make_3d_icons.py" "$work"
+# drawn from models (scripts/model_pictures.py), so never from their flat stand-ins
+models=" import/pointing_hand import/model_size_xyz import/position_relative_to_modeling_plane "
+cd "$work"
+find . -name '*.svg' | sort | while read -r svg; do
+    name=${svg#./}
+    name=${name%.svg}
+    [[ $models == *" $name "* ]] && continue
+    case $name in
+        drawing_forms/* | import/* | tool_database/* | job_setup/*) size=256 ;;
+        *) size=128 ;;
+    esac
+    mkdir -p "$icons/$(dirname "$name")"
+    rsvg-convert -w "$size" -h "$size" "$svg" -o "$icons/$name.png"
+done
+if [[ $# -eq 2 ]]; then
+    python3 -I "$here/model_pictures.py" "$1" "$2" "$icons" 256
+fi
+echo "icons written to $(cd "$icons" && pwd)"

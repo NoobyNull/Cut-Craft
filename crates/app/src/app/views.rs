@@ -288,7 +288,7 @@ impl CutCraftApp {
             .sheets
             .get(doc.active_sheet)
             .map_or("", |s| s.name.as_str());
-        drop_down(ui, "view/interface_layout.svg", sheet, &mut |ui| {
+        drop_down(ui, "view/interface_layout.png", sheet, &mut |ui| {
             bordered(ui, |ui| {
                 for (i, s) in doc.sheets.iter().enumerate() {
                     if ui.radio(i == doc.active_sheet, &s.name).clicked() {
@@ -305,7 +305,7 @@ impl CutCraftApp {
             });
         });
         let layer = doc.layer(doc.current_layer).map_or("", |l| l.name.as_str());
-        drop_down(ui, "view/layers.svg", layer, &mut |ui| {
+        drop_down(ui, "view/layers.png", layer, &mut |ui| {
             bordered(ui, |ui| {
                 for l in doc.layers.iter().rev() {
                     if ui.radio(l.id == doc.current_layer, &l.name).clicked() {
@@ -324,7 +324,7 @@ impl CutCraftApp {
         });
         // new components go on the first level
         let level = doc.levels.values().next().map_or("", |l| l.name.as_str());
-        drop_down(ui, "view/component_levels.svg", level, &mut |ui| {
+        drop_down(ui, "view/component_levels.png", level, &mut |ui| {
             bordered(ui, |ui| {
                 for (&id, l) in doc.levels.iter().rev() {
                     let mut shown = l.visible;
@@ -371,7 +371,7 @@ impl CutCraftApp {
             ),
         ] {
             let state = if on { "on" } else { "off" };
-            let path = format!("snapping/{icon}_snapping_{state}.svg");
+            let path = format!("snapping/{icon}_snapping_{state}.png");
             let button = self.icon_button(&path, "", tip, edge).selected(on);
             if ui.add(button).on_hover_text(tip).clicked() {
                 *clicked = Some(id);
@@ -415,13 +415,13 @@ impl CutCraftApp {
                 for (id, icon, tip, split) in [
                     (
                         "split_stacked",
-                        "view/split_over_and_under.svg",
+                        "view/split_over_and_under.png",
                         "2D over 3D",
                         Split::Stacked,
                     ),
                     (
                         "split_side_by_side",
-                        "view/split_side_by_side.svg",
+                        "view/split_side_by_side.png",
                         "2D beside 3D",
                         Split::SideBySide,
                     ),
@@ -931,9 +931,9 @@ impl CutCraftApp {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                 let shown = self.display.previews_2d;
                 let drawing = if shown {
-                    "view/2d_toolpath_drawing_on.svg"
+                    "view/2d_toolpath_drawing_on.png"
                 } else {
-                    "view/2d_toolpath_drawing_off.svg"
+                    "view/2d_toolpath_drawing_off.png"
                 };
                 for (id, icon, tip, on) in [
                     (
@@ -944,7 +944,7 @@ impl CutCraftApp {
                     ),
                     (
                         "make_2d_previews_solid",
-                        "view/solid_2d_toolpath_drawing.svg",
+                        "view/solid_2d_toolpath_drawing.png",
                         "Make 2D Previews Solid",
                         self.display.solid_previews,
                     ),

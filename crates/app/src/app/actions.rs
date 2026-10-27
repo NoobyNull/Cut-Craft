@@ -1007,22 +1007,22 @@ impl CutCraftApp {
             for (id, icon, tip) in [
                 (
                     "edit_toolpath",
-                    "toolpaths/edit_toolpath.svg",
+                    "toolpaths/edit_toolpath.png",
                     "Edit Toolpath",
                 ),
                 (
                     "hide_toolpath",
-                    "toolpaths/hide_toolpaths.svg",
+                    "toolpaths/hide_toolpaths.png",
                     "Show or Hide Toolpath",
                 ),
                 (
                     "save_selected_toolpath_as_template",
-                    "toolpaths/save_toolpath_template.svg",
+                    "toolpaths/save_toolpath_template.png",
                     "Save Toolpath as Template",
                 ),
                 (
                     "save_all_visible_toolpaths_as_template",
-                    "toolpaths/save_all_as_template.svg",
+                    "toolpaths/save_all_as_template.png",
                     "Save All Visible Toolpaths as Template",
                 ),
             ] {
@@ -1635,7 +1635,7 @@ impl CutCraftApp {
                     })
                     .clicked();
                 switch = ui
-                    .add(self.icon_button("view/interface_layout.svg", "", "Switch Layout", row))
+                    .add(self.icon_button("view/interface_layout.png", "", "Switch Layout", row))
                     .on_hover_text("Switch Layout (F11 designing, F12 machining)")
                     .clicked();
             });

@@ -86,7 +86,7 @@ impl Command for QuickEngraveToolpath {
         Meta {
             label: "Quick Engrave",
             group: "Toolpath Operations",
-            icon: "toolpaths/quick_engrave.svg",
+            icon: "toolpaths/quick_engrave.png",
             shortcut: "Ctrl+Q",
         }
     }

@@ -43,7 +43,7 @@ impl Command for DrawFreehand {
         Meta {
             label: "Draw Freehand",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_freehand.svg",
+            icon: "drawing/create_vectors/draw_freehand.png",
             shortcut: "",
         }
     }

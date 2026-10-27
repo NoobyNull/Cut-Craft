@@ -17,7 +17,7 @@ pub struct Meta {
     pub label: &'static str,
     /// Drawing-tab group or menu it belongs to.
     pub group: &'static str,
-    /// Icon path relative to the icon directory, e.g. `drawing/create_vectors/draw_circle.svg`.
+    /// Icon path relative to the icon directory, e.g. `drawing/create_vectors/draw_circle.png`.
     pub icon: &'static str,
     pub shortcut: &'static str,
 }

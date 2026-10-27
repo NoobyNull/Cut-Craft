@@ -158,14 +158,14 @@ impl CutCraftApp {
         for layer in self.doc.layers.iter().rev() {
             ui.horizontal(|ui| {
                 let (eye, eye_tip) = if layer.visible {
-                    ("layers/visible.svg", "Hide")
+                    ("layers/visible.png", "Hide")
                 } else {
-                    ("layers/hidden.svg", "Show")
+                    ("layers/hidden.png", "Show")
                 };
                 let (lock, lock_tip) = if layer.locked {
-                    ("layers/locked.svg", "Unlock")
+                    ("layers/locked.png", "Unlock")
                 } else {
-                    ("layers/unlocked.svg", "Lock")
+                    ("layers/unlocked.png", "Lock")
                 };
                 if ui
                     .add(self.icon_button(eye, "", eye_tip, edge))
@@ -542,9 +542,9 @@ impl CutCraftApp {
         let shown = if level.visible { "" } else { " (hidden)" };
         ui.horizontal(|ui| {
             let (icon, tip) = if collapsed {
-                ("view/expand.svg", "Expand")
+                ("view/expand.png", "Expand")
             } else {
-                ("view/collapse.svg", "Collapse")
+                ("view/collapse.png", "Collapse")
             };
             let edge = ui.spacing().interact_size.y;
             let toggled = ui

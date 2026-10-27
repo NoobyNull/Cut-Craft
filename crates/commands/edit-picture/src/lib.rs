@@ -85,7 +85,7 @@ impl Command for EditPicture {
         Meta {
             label: "Edit Picture",
             group: "Edit Objects",
-            icon: "drawing/edit_objects/edit_picture.svg",
+            icon: "drawing/edit_objects/edit_picture.png",
             shortcut: "",
         }
     }

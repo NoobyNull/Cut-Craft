@@ -57,7 +57,7 @@ impl Command for FinishingToolpath3d {
         Meta {
             label: "3D Finishing Toolpath",
             group: "3D Toolpaths",
-            icon: "toolpaths/3d_finishing_toolpath.svg",
+            icon: "toolpaths/3d_finishing_toolpath.png",
             shortcut: "",
         }
     }

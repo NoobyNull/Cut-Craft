@@ -41,7 +41,7 @@ impl Command for RoughingToolpath3d {
         Meta {
             label: "3D Roughing Toolpath",
             group: "3D Toolpaths",
-            icon: "toolpaths/3d_roughing_toolpath.svg",
+            icon: "toolpaths/3d_roughing_toolpath.png",
             shortcut: "",
         }
     }

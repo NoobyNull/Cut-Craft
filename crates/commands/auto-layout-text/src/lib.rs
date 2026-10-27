@@ -60,7 +60,7 @@ impl Command for AutoLayoutText {
         Meta {
             label: "Auto Layout Text",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/auto_layout_text.svg",
+            icon: "drawing/create_vectors/auto_layout_text.png",
             shortcut: "",
         }
     }

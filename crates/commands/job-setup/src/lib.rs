@@ -82,25 +82,25 @@ pub struct Params {
     #[schemars(
         title = "Job Type",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/{}_job.svg")
+        extend("x-icon" = "job_setup/{}_job.png")
     )]
     pub job_type: JobType,
     #[schemars(
         title = "Job Size",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/material_size_xyz.svg")
+        extend("x-icon" = "job_setup/material_size_xyz.png")
     )]
     pub size: Size,
     #[schemars(
         title = "Z Zero Position",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/z_zero_{}.svg")
+        extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
     #[schemars(
         title = "XY Datum Position",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/xy_datum_{position}.svg")
+        extend("x-icon" = "job_setup/xy_datum_{position}.png")
     )]
     pub datum: DatumPosition,
     /// Rotary jobs: the direction the cylinder's axis runs
@@ -134,7 +134,7 @@ pub struct Params {
     #[schemars(
         title = "Clearance (Z1)",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/clearance_z1.svg"),
+        extend("x-icon" = "job_setup/clearance_z1.png"),
         extend("x-unit" = "mm"),
         range(min = 0)
     )]
@@ -197,7 +197,7 @@ impl Command for JobSetup {
         Meta {
             label: "Job Setup",
             group: "File Operations",
-            icon: "file/job_setup.svg",
+            icon: "file/job_setup.png",
             shortcut: "",
         }
     }

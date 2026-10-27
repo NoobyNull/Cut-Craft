@@ -41,7 +41,7 @@ impl Command for Move {
         Meta {
             label: "Move",
             group: "Transform Objects",
-            icon: "drawing/edit_objects/move.svg",
+            icon: "drawing/edit_objects/move.png",
             shortcut: "M",
         }
     }

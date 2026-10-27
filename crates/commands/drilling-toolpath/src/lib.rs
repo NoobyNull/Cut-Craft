@@ -37,7 +37,7 @@ impl Command for DrillingToolpath {
         Meta {
             label: "Drilling Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/drilling_toolpath.svg",
+            icon: "toolpaths/drilling_toolpath.png",
             shortcut: "",
         }
     }

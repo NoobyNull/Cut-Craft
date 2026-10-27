@@ -53,7 +53,7 @@ impl Command for TurnAndSpin {
         Meta {
             label: "Turn and Spin",
             group: "Modeling",
-            icon: "modeling/turn_and_spin.svg",
+            icon: "modeling/turn_and_spin.png",
             shortcut: "",
         }
     }

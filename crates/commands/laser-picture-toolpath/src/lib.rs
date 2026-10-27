@@ -188,7 +188,7 @@ impl Command for LaserPictureToolpath {
         Meta {
             label: "Laser Picture",
             group: "Toolpath Operations",
-            icon: "toolpaths/laser_picture.svg",
+            icon: "toolpaths/laser_picture.png",
             shortcut: "",
         }
     }

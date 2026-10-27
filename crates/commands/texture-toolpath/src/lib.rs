@@ -166,7 +166,7 @@ impl Command for TextureToolpath {
         Meta {
             label: "Texture Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/texture_toolpath.svg",
+            icon: "toolpaths/texture_toolpath.png",
             shortcut: "",
         }
     }

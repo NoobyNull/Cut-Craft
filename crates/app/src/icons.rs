@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The table `build.rs` writes: every file under `assets/icons` with its bytes.
-mod built_in {
+pub(crate) mod built_in {
     include!(concat!(env!("OUT_DIR"), "/icons.rs"));
 }
 
@@ -19,9 +19,9 @@ enum Source {
 }
 
 pub struct Icons {
-    /// Relative path (`drawing/create_vectors/draw_circle.svg`) → where its bytes are.
+    /// Relative path (`drawing/create_vectors/draw_circle.png`) → where its bytes are.
     by_path: HashMap<String, Source>,
-    /// File stem (`draw_circle`) → that relative path, for SVGs only.
+    /// File stem (`draw_circle`) → that relative path, for button icons only (see [`stands_in`]).
     by_stem: HashMap<String, String>,
     /// Whether every icon's bytes are already in egui (see [`Icons::preload`]).
     preloaded: bool,
@@ -88,9 +88,8 @@ impl Icons {
         }
     }
 
-    /// Only SVGs stand in for a command by their name.
     fn index(&mut self, key: &str, source: Source) {
-        if let Some(stem) = key.strip_suffix(".svg").and_then(|k| k.rsplit('/').next()) {
+        if let Some(stem) = stands_in(key) {
             self.by_stem
                 .entry(stem.to_owned())
                 .or_insert_with(|| key.to_owned());
@@ -158,6 +157,20 @@ impl Icons {
             .map(|(key, _)| key.as_str())
             .or_else(|| self.by_stem.get(id).map(String::as_str))
     }
+}
+
+/// Folders of dialog pictures, found only by their path: a picture never stands in for a
+/// command that happens to share its name.
+const PICTURE_FOLDERS: [&str; 3] = ["drawing_forms", "import", "tool_database"];
+
+/// The command id a button icon (an SVG or PNG outside the picture folders) stands in for: its
+/// file stem.
+fn stands_in(key: &str) -> Option<&str> {
+    let (folder, _) = key.split_once('/')?;
+    let stem = key
+        .strip_suffix(".svg")
+        .or_else(|| key.strip_suffix(".png"))?;
+    (!PICTURE_FOLDERS.contains(&folder)).then(|| stem.rsplit('/').next().unwrap_or(stem))
 }
 
 /// Where an icon's bytes are kept in egui; the extension tells the loaders what it is.
@@ -265,13 +278,18 @@ mod tests {
         assert!(icons.by_path.len() > 200, "{} icons", icons.by_path.len());
         assert_eq!(
             icons.find("", "draw_circle"),
-            Some("drawing/create_vectors/draw_circle.svg")
+            Some("drawing/create_vectors/draw_circle.png")
         );
-        assert!(icons.find("tool_database/end_mill.bmp", "").is_some());
+        assert!(icons.find("tool_database/end_mill.png", "").is_some());
+        assert_eq!(
+            icons.find("", "end_mill"),
+            None,
+            "a picture is found by its path"
+        );
         let ctx = egui::Context::default();
         egui_extras::install_image_loaders(&ctx);
         icons.preload(&ctx, false);
-        for key in ["drawing/align/left.svg", "tool_database/end_mill.bmp"] {
+        for key in ["drawing/align/left.png", "tool_database/end_mill.png"] {
             let uri = icons.image(key).source(&ctx).uri().unwrap().to_owned();
             assert!(uri.starts_with("bytes://icons/"), "{uri}");
             assert!(decoded(&ctx, &uri).is_ok(), "{key} decodes");

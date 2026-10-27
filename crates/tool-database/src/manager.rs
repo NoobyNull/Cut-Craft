@@ -48,7 +48,7 @@ pub enum Outcome {
 /// How the window draws: lengths in inches or millimetres, and its pictures.
 pub struct Look<'a> {
     pub inch: bool,
-    /// The picture at an icon path (`tool_database/end_mill.bmp`), if there is one.
+    /// The picture at an icon path (`tool_database/end_mill.png`), if there is one.
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
 }
 
@@ -111,10 +111,10 @@ impl Changer {
 /// The picture of a tool shape, Aspire's own.
 pub fn picture_path(shape: ToolShape) -> &'static str {
     match shape {
-        ToolShape::EndMill => "tool_database/end_mill.bmp",
-        ToolShape::BallNose => "tool_database/ball_nose.bmp",
-        ToolShape::VBit => "tool_database/v_bit.bmp",
-        ToolShape::RadiusedEndMill => "tool_database/radiused_end_mill.bmp",
+        ToolShape::EndMill => "tool_database/end_mill.png",
+        ToolShape::BallNose => "tool_database/ball_nose.png",
+        ToolShape::VBit => "tool_database/v_bit.png",
+        ToolShape::RadiusedEndMill => "tool_database/radiused_end_mill.png",
     }
 }
 
@@ -249,7 +249,7 @@ impl Manager {
             let id = ui.make_persistent_id(("tool_group", sub.as_str()));
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
                 .show_header(ui, |ui| {
-                    if let Some(image) = (look.picture)("common/tool_database.svg") {
+                    if let Some(image) = (look.picture)("common/tool_database.png") {
                         ui.add(image.fit_to_exact_size(egui::vec2(row, row)));
                     }
                     let picked = self.pick == Some(Pick::Group(sub.clone()));
@@ -286,27 +286,27 @@ impl Manager {
         let mut action = None;
         ui.horizontal(|ui| {
             let buttons = [
-                ("common/add.svg", "New Tool", true, TreeAction::NewTool),
+                ("common/add.png", "New Tool", true, TreeAction::NewTool),
                 (
-                    "common/add_tool.svg",
+                    "common/add_tool.png",
                     "New Tool Group",
                     true,
                     TreeAction::NewGroup,
                 ),
                 (
-                    "common/copy_duplicate.svg",
+                    "common/copy_duplicate.png",
                     "Copy Tool",
                     tool,
                     TreeAction::Copy,
                 ),
-                ("common/open.svg", "Import Tools", true, TreeAction::Import),
+                ("common/open.png", "Import Tools", true, TreeAction::Import),
                 (
-                    "common/save.svg",
+                    "common/save.png",
                     "Export Tools",
                     picked,
                     TreeAction::Export,
                 ),
-                ("common/delete.svg", "Delete", picked, TreeAction::Delete),
+                ("common/delete.png", "Delete", picked, TreeAction::Delete),
             ];
             for (icon, label, enabled, asked) in buttons {
                 let button = match (look.picture)(icon) {

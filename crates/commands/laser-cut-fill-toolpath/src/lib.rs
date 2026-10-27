@@ -104,7 +104,7 @@ impl Command for LaserCutFillToolpath {
         Meta {
             label: "Laser Cut / Fill",
             group: "Toolpath Operations",
-            icon: "toolpaths/laser_cut_fill.svg",
+            icon: "toolpaths/laser_cut_fill.png",
             shortcut: "",
         }
     }

@@ -57,7 +57,7 @@ fn main() {
     std::fs::write(out.join("icons.rs"), table).expect("the icon table is written");
 }
 
-/// `drawing/align/left.svg` for that file under `icons`, whatever the platform's separator.
+/// `drawing/align/left.png` for that file under `icons`, whatever the platform's separator.
 fn key_of(path: &Path, icons: &Path) -> String {
     path.strip_prefix(icons)
         .expect("under the icon folder")

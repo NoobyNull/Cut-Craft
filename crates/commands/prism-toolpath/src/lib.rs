@@ -88,7 +88,7 @@ impl Command for PrismToolpath {
         Meta {
             label: "Prism Carving Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/prism_carving.svg",
+            icon: "toolpaths/prism_carving.png",
             shortcut: "",
         }
     }

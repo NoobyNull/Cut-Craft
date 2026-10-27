@@ -136,7 +136,7 @@ impl Command for Sculpt {
         Meta {
             label: "Sculpting",
             group: "Modeling",
-            icon: "modeling/sculpting.svg",
+            icon: "modeling/sculpting.png",
             shortcut: "",
         }
     }

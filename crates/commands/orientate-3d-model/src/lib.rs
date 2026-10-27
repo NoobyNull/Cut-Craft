@@ -92,13 +92,13 @@ pub struct Params {
     #[schemars(
         title = "Model Size",
         extend("x-section" = true),
-        extend("x-icon" = "import/model_size_xyz.bmp")
+        extend("x-icon" = "import/model_size_xyz.png")
     )]
     pub size: ModelSize,
     #[schemars(
         title = "Position relative to Modeling Plane",
         extend("x-section" = true),
-        extend("x-icon" = "import/position_relative_to_modeling_plane.bmp")
+        extend("x-icon" = "import/position_relative_to_modeling_plane.png")
     )]
     pub placing: Placing,
     /// Rotary jobs: a full 3D model is wrapped round the axis, its distance out at each angle
@@ -164,7 +164,7 @@ impl Command for Orientate3dModel {
         Meta {
             label: "Orientate 3D Model",
             group: "Modeling",
-            icon: "modeling/import_component_3d_model.svg",
+            icon: "modeling/import_component_3d_model.png",
             shortcut: "",
         }
     }

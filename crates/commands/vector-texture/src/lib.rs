@@ -53,7 +53,7 @@ impl Command for VectorTexture {
         Meta {
             label: "Create Vector Texture",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/vector_texture.svg",
+            icon: "drawing/create_vectors/vector_texture.png",
             shortcut: "",
         }
     }

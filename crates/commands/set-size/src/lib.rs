@@ -42,7 +42,7 @@ impl Command for SetSize {
         Meta {
             label: "Set Size",
             group: "Transform Objects",
-            icon: "drawing/edit_objects/set_size.svg",
+            icon: "drawing/edit_objects/set_size.png",
             shortcut: "T",
         }
     }

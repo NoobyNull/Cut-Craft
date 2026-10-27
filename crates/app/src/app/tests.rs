@@ -1539,17 +1539,11 @@ fn cancelling_job_setup_goes_back_to_the_start_page() {
     assert!(h.app.form.is_none());
 }
 
-/// The icons are made from Aspire's and not in git; their manifest is.
+/// The icons built into the program.
 fn icon_set() -> std::collections::HashSet<String> {
-    let manifest = std::fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../re/icon_set.json"
-    ))
-    .expect("re/icon_set.json");
-    serde_json::from_slice::<Vec<Value>>(&manifest)
-        .unwrap()
+    crate::icons::built_in::BUILT_IN
         .iter()
-        .map(|e| e["path"].as_str().unwrap().to_owned())
+        .map(|(key, _)| (*key).to_owned())
         .collect()
 }
 

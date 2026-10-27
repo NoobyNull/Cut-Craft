@@ -186,7 +186,7 @@ impl Command for ThreadMillingToolpath {
         Meta {
             label: "Thread Milling Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/circular_pocket.svg",
+            icon: "toolpaths/circular_pocket.png",
             shortcut: "",
         }
     }

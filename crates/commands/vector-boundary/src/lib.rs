@@ -45,7 +45,7 @@ impl Command for VectorBoundary {
         Meta {
             label: "Vector Boundary",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/vector_boundary.svg",
+            icon: "drawing/create_vectors/vector_boundary.png",
             shortcut: "",
         }
     }

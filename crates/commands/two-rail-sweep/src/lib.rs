@@ -50,7 +50,7 @@ impl Command for TwoRailSweep {
         Meta {
             label: "Two Rail Sweep",
             group: "Modeling",
-            icon: "modeling/two_rail_sweep.svg",
+            icon: "modeling/two_rail_sweep.png",
             shortcut: "",
         }
     }

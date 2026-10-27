@@ -74,7 +74,7 @@ impl Command for CircularCopy {
         Meta {
             label: "Circular Copy",
             group: "Array Objects",
-            icon: "drawing/create_vectors/circular_copy.svg",
+            icon: "drawing/create_vectors/circular_copy.png",
             shortcut: "",
         }
     }

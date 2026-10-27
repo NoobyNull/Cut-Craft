@@ -72,7 +72,7 @@ impl Command for NestParts {
         Meta {
             label: "Nest Parts",
             group: "Offset and Layout",
-            icon: "drawing/weld_and_offset/vector_texture_fill.svg",
+            icon: "drawing/weld_and_offset/vector_texture_fill.png",
             shortcut: "",
         }
     }

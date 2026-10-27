@@ -50,7 +50,7 @@ impl Command for ReplaceBelow {
         Meta {
             label: "Replace Below",
             group: "Modeling",
-            icon: "modeling/replace_below.svg",
+            icon: "modeling/replace_below.png",
             shortcut: "",
         }
     }

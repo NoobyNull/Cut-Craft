@@ -124,7 +124,7 @@ impl Command for InlayToolpath {
         Meta {
             label: "Inlay Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/inlay_toolpath.svg",
+            icon: "toolpaths/inlay_toolpath.png",
             shortcut: "",
         }
     }

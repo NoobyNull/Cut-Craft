@@ -57,7 +57,7 @@ impl Command for TraceBitmap {
         Meta {
             label: "Trace Bitmap",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/trace_bitmap.svg",
+            icon: "drawing/create_vectors/trace_bitmap.png",
             shortcut: "",
         }
     }

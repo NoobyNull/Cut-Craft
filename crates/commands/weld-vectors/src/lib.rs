@@ -14,7 +14,7 @@ impl Command for WeldVectors {
         Meta {
             label: "Weld Vectors",
             group: "Edit Objects",
-            icon: "drawing/weld_and_offset/weld_vectors.svg",
+            icon: "drawing/weld_and_offset/weld_vectors.png",
             shortcut: "",
         }
     }

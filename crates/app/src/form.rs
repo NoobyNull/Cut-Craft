@@ -984,31 +984,31 @@ mod tests {
         let schema = serde_json::json!({
             "type": "object",
             "properties": {
-                "z_zero": { "enum": ["material_surface", "machine_bed"], "x-icon": "job_setup/z_zero_{}.svg" }
+                "z_zero": { "enum": ["material_surface", "machine_bed"], "x-icon": "job_setup/z_zero_{}.png" }
             }
         });
         assert_eq!(
             field(&fields(&schema), "z_zero").icon.as_deref(),
-            Some("job_setup/z_zero_{}.svg")
+            Some("job_setup/z_zero_{}.png")
         );
         let pick = |template, value| icon_path(template, &value);
         assert_eq!(
-            pick("job_setup/z_zero_{}.svg", serde_json::json!("machine_bed")),
-            "job_setup/z_zero_machine_bed.svg"
+            pick("job_setup/z_zero_{}.png", serde_json::json!("machine_bed")),
+            "job_setup/z_zero_machine_bed.png"
         );
         assert_eq!(
             pick(
-                "job_setup/xy_datum_{position}.svg",
+                "job_setup/xy_datum_{position}.png",
                 serde_json::json!({ "position": "centre" })
             ),
-            "job_setup/xy_datum_centre.svg"
+            "job_setup/xy_datum_centre.png"
         );
         assert_eq!(
             pick(
-                "job_setup/material_size_xyz.svg",
+                "job_setup/material_size_xyz.png",
                 serde_json::json!({ "width": 1 })
             ),
-            "job_setup/material_size_xyz.svg"
+            "job_setup/material_size_xyz.png"
         );
     }
 

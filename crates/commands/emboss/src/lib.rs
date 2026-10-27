@@ -42,7 +42,7 @@ impl Command for Emboss {
         Meta {
             label: "Emboss Component",
             group: "Modeling",
-            icon: "modeling/emboss_component.svg",
+            icon: "modeling/emboss_component.png",
             shortcut: "",
         }
     }

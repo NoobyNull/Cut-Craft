@@ -70,7 +70,7 @@ impl Command for VcarveInlayToolpath {
         Meta {
             label: "V-Carve Inlay Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/vcarve_inlay.svg",
+            icon: "toolpaths/vcarve_inlay.png",
             shortcut: "",
         }
     }

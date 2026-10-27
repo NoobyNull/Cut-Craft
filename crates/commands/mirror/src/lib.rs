@@ -33,7 +33,7 @@ impl Command for Mirror {
         Meta {
             label: "Mirror",
             group: "Transform Objects",
-            icon: "drawing/edit_objects/mirror.svg",
+            icon: "drawing/edit_objects/mirror.png",
             shortcut: "",
         }
     }

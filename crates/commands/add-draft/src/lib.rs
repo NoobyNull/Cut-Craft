@@ -32,7 +32,7 @@ impl Command for AddDraft {
         Meta {
             label: "Add Draft to Model",
             group: "Modeling",
-            icon: "modeling/add_draft_to_model.svg",
+            icon: "modeling/add_draft_to_model.png",
             shortcut: "",
         }
     }

@@ -16,7 +16,7 @@ impl Command for ComponentBoundary {
         Meta {
             label: "Create Vector Boundary Around Selected Components",
             group: "Modeling",
-            icon: "modeling/create_vector_boundary_around_selected_components.svg",
+            icon: "modeling/create_vector_boundary_around_selected_components.png",
             shortcut: "",
         }
     }
