@@ -97,8 +97,32 @@ pub fn save_through(
 
 pub use cut_craft_core::file::config_dir;
 
-/// Opens `dir` in the platform's file manager.
-pub fn show_folder(dir: &Path) -> std::io::Result<()> {
+/// Where Cut Craft's own files (its logo, and icons where they are installed) are:
+/// `CUT_CRAFT_ASSETS`, else a macOS app's `Resources` folder, else `assets` under the
+/// working directory (running from the source tree).
+pub fn assets_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("CUT_CRAFT_ASSETS") {
+        return PathBuf::from(dir);
+    }
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| bundle_resources(&exe))
+        .unwrap_or_else(|| PathBuf::from("assets"))
+}
+
+/// The `Resources` folder of the macOS app `exe` runs from (`….app/Contents/MacOS/exe`),
+/// if it holds Cut Craft's logo.
+pub fn bundle_resources(exe: &Path) -> Option<PathBuf> {
+    let resources = exe.parent()?.parent()?.join("Resources");
+    resources.join(LOGO_FILE).exists().then_some(resources)
+}
+
+/// Cut Craft's logo, in the assets folder.
+pub const LOGO_FILE: &str = "cut-craft.svg";
+
+/// Opens `path` (a folder, or a file such as a PDF to print) with the platform's own
+/// program for it.
+pub fn show_folder(path: &Path) -> std::io::Result<()> {
     let opener = if cfg!(windows) {
         "explorer"
     } else if cfg!(target_os = "macos") {
@@ -107,7 +131,7 @@ pub fn show_folder(dir: &Path) -> std::io::Result<()> {
         "xdg-open"
     };
     std::process::Command::new(opener)
-        .arg(dir)
+        .arg(path)
         .spawn()
         .map(drop)
 }
@@ -490,6 +514,20 @@ mod tests {
         db.tools.truncate(1);
         save_tools(&db, &path).unwrap();
         assert_eq!(load_tools(&path).unwrap(), db);
+    }
+
+    #[test]
+    fn a_macos_app_finds_its_files_in_its_resources() {
+        let app = temp("Cut Craft.app");
+        let _ = fs::remove_dir_all(&app);
+        fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
+        fs::create_dir_all(app.join("Contents/Resources")).unwrap();
+        let exe = app.join("Contents/MacOS/cut-craft");
+        assert_eq!(bundle_resources(&exe), None, "no logo there yet");
+        fs::write(app.join("Contents/Resources").join(LOGO_FILE), "<svg/>").unwrap();
+        assert_eq!(bundle_resources(&exe), Some(app.join("Contents/Resources")));
+        assert_eq!(bundle_resources(Path::new("/usr/bin/cut-craft")), None);
+        let _ = fs::remove_dir_all(app);
     }
 
     #[test]

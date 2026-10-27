@@ -27,7 +27,13 @@ fn config_base() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(PathBuf::from)
 }
 
-#[cfg(not(windows))]
+/// macOS keeps applications' settings in the user's Library.
+#[cfg(target_os = "macos")]
+fn config_base() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"))
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn config_base() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)

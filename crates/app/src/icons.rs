@@ -63,10 +63,10 @@ impl Icons {
         icons
     }
 
-    /// `CUT_CRAFT_ICON_DIR`, else `assets/icons` under the working directory.
+    /// `CUT_CRAFT_ICON_DIR`, else `icons` in the assets folder ([`crate::files::assets_dir`]).
     pub fn default_dir() -> PathBuf {
         std::env::var_os("CUT_CRAFT_ICON_DIR")
-            .map_or_else(|| PathBuf::from("assets/icons"), PathBuf::from)
+            .map_or_else(|| crate::files::assets_dir().join("icons"), PathBuf::from)
     }
 
     /// Reads the bitmaps into egui once, keeping their alpha (see [`with_alpha`]); with

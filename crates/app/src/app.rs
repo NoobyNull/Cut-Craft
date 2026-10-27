@@ -317,7 +317,6 @@ const DESIGN_PANEL_WIDTHS: f32 = 7.0;
 // ponytail: fixed ratio until a preferences dialog exists
 const SECTION_PICTURE_ROWS: f32 = 3.0;
 /// The Cut Craft mark, shown with no job open.
-const LOGO: &str = "assets/cut-craft.svg";
 /// How much of the middle of the window the mark takes, by its shorter side.
 // ponytail: fixed share until there is a preferences dialog
 const SPLASH_SHARE: f32 = 1.0 / 3.0;
@@ -1940,7 +1939,7 @@ impl CutCraftApp {
 
     /// The middle of the window with no job open: the Cut Craft mark.
     fn splash(ui: &mut egui::Ui) {
-        let logo = std::path::Path::new(LOGO);
+        let logo = files::assets_dir().join(files::LOGO_FILE);
         let space = ui.available_size();
         let edge = space.min_elem() * SPLASH_SHARE;
         ui.vertical_centered(|ui| {
@@ -2413,10 +2412,7 @@ impl CutCraftApp {
                 let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
                     .and_then(|()| {
                         on_the_desktop();
-                        std::process::Command::new("xdg-open")
-                            .arg(&path)
-                            .spawn()
-                            .map_err(|e| e.to_string())
+                        files::show_folder(&path).map_err(|e| e.to_string())
                     });
                 if let Err(e) = opened {
                     self.status.set_message(&format!("could not print: {e}"));
@@ -5287,10 +5283,14 @@ pub fn run(title: &str) {
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {
-            use winit::platform::x11::EventLoopBuilderExtX11;
+            // only Linux and the BSDs have X11 to choose
+            #[cfg(all(unix, not(target_os = "macos")))]
             if x11 {
+                use winit::platform::x11::EventLoopBuilderExtX11;
                 builder.with_x11();
             }
+            #[cfg(not(all(unix, not(target_os = "macos"))))]
+            let _ = (builder, x11);
         })),
         viewport: egui::ViewportBuilder::default()
             .with_title(title)
