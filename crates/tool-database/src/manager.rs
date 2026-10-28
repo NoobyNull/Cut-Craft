@@ -3,7 +3,7 @@
 //! Edits are made to a copy; only Apply and OK hand it back.
 
 use crate::tree;
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape};
+use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
 
 /// The window's share of the screen when it first opens.
@@ -58,6 +58,8 @@ pub struct Manager {
     pub pick: Option<Pick>,
     /// The active machine's tool changer, its tools loaded here; kept with the tools.
     pub changer: Option<Changer>,
+    /// The name typed for a new material.
+    pub new_material: String,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -115,14 +117,17 @@ pub fn picture_path(shape: ToolShape) -> &'static str {
         ToolShape::BallNose => "tool_database/ball_nose.png",
         ToolShape::VBit => "tool_database/v_bit.png",
         ToolShape::RadiusedEndMill => "tool_database/radiused_end_mill.png",
+        // ponytail: no thread mill picture is drawn yet, so none shows
+        ToolShape::ThreadMill => "tool_database/thread_mill.png",
     }
 }
 
-const SHAPES: [(ToolShape, &str); 4] = [
+const SHAPES: [(ToolShape, &str); 5] = [
     (ToolShape::EndMill, "End Mill"),
     (ToolShape::BallNose, "Ball Nose"),
     (ToolShape::VBit, "V-Bit"),
     (ToolShape::RadiusedEndMill, "Radiused End Mill"),
+    (ToolShape::ThreadMill, "Thread Mill"),
 ];
 
 fn shape_name(shape: ToolShape) -> &'static str {
@@ -150,7 +155,27 @@ impl Manager {
             draft: db.clone(),
             pick: None,
             changer: None,
+            new_material: String::new(),
         }
+    }
+
+    /// Aspire's Add Material: the typed name joins the list and becomes active (the one
+    /// already listed, if it is there under another case).
+    pub fn add_material(&mut self) {
+        let name = self.new_material.trim().to_owned();
+        if name.is_empty() {
+            return;
+        }
+        self.draft.add_material(&name);
+        if let Some(listed) = self
+            .draft
+            .materials
+            .iter()
+            .find(|m| m.eq_ignore_ascii_case(&name))
+        {
+            self.draft.material.clone_from(listed);
+        }
+        self.new_material.clear();
     }
 
     /// Adds the tools of a picked file (named `name`) to the copy, in a group of their own.
@@ -191,6 +216,9 @@ impl Manager {
                                 outcome = self.act(action).or(outcome.take());
                             }
                         });
+                        // the active material is the whole database's, so it sits by the tree
+                        egui::Panel::bottom("tool_database_material")
+                            .show(ui, |ui| self.materials(ui));
                         egui::ScrollArea::both().show(ui, |ui| self.tree(ui, look));
                     });
                 egui::CentralPanel::default().show(ui, |ui| {
@@ -366,10 +394,15 @@ impl Manager {
             TreeAction::Import => return Some(Outcome::Import),
             TreeAction::Export => {
                 return match &self.pick {
-                    Some(Pick::Tool(i)) => Some(Outcome::Export(ToolDatabase {
-                        tools: vec![self.draft.tools[*i].clone()],
-                        groups: vec![],
-                    })),
+                    Some(Pick::Tool(i)) => {
+                        let tool = self.draft.tools[*i].clone();
+                        let materials = tool.materials.iter().map(|m| m.material.clone());
+                        Some(Outcome::Export(ToolDatabase {
+                            materials: materials.collect(),
+                            tools: vec![tool],
+                            ..ToolDatabase::default()
+                        }))
+                    }
                     Some(Pick::Group(g)) => {
                         Some(Outcome::Export(tree::export_group(&self.draft, g)))
                     }
@@ -388,7 +421,8 @@ impl Manager {
             Some(Pick::Tool(i)) if i < self.draft.tools.len() => {
                 let groups = tree::groups(&self.draft);
                 let before = self.draft.tools[i].name.clone();
-                tool_details(ui, &mut self.draft.tools[i], &groups, look);
+                let material = self.draft.material.clone();
+                tool_details(ui, &mut self.draft.tools[i], &groups, look, &material);
                 let name = self.draft.tools[i].name.clone();
                 if let Some(changer) = &mut self.changer {
                     changer.rename(&before, &name);
@@ -399,6 +433,51 @@ impl Manager {
                 ui.weak("Pick a group or tool in the tree");
             }
         }
+    }
+
+    /// Aspire's Material combo and Material Management in one row: the active material,
+    /// whose cutting data tools show and toolpaths get; adding one, and deleting the active
+    /// one with every tool's data for it.
+    // ponytail: no renaming or duplicating materials, and no machine combo (the data is per
+    // material only)
+    fn materials(&mut self, ui: &mut egui::Ui) {
+        const DEFAULT: &str = "(default)";
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Material");
+            let active = &mut self.draft.material;
+            let shown = if active.is_empty() {
+                DEFAULT.to_owned()
+            } else {
+                active.clone()
+            };
+            egui::ComboBox::from_id_salt("tool_material")
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(active, String::new(), DEFAULT);
+                    for m in &self.draft.materials {
+                        ui.selectable_value(active, m.clone(), m);
+                    }
+                });
+            ui.add(egui::TextEdit::singleline(&mut self.new_material).hint_text("New material"));
+            let typed = !self.new_material.trim().is_empty();
+            if ui
+                .add_enabled(typed, egui::Button::new("Add Material"))
+                .clicked()
+            {
+                self.add_material();
+            }
+            if ui
+                .add_enabled(
+                    !self.draft.material.is_empty(),
+                    egui::Button::new("Delete Material"),
+                )
+                .on_hover_text("Deletes every tool's cutting data for it")
+                .clicked()
+            {
+                let gone = self.draft.material.clone();
+                self.draft.delete_material(&gone);
+            }
+        });
     }
 
     fn group_details(&mut self, ui: &mut egui::Ui, group: &str) {
@@ -462,13 +541,18 @@ fn load_slot(ui: &mut egui::Ui, changer: &mut Changer, tool: &str) {
 }
 
 /// A length (mm) shown in the job's units; whether it changed.
-fn length(ui: &mut egui::Ui, value: &mut f64, look: &Look, per_minute: bool) -> bool {
-    let (per, unit) = match (look.inch, per_minute) {
-        (true, false) => (INCH, "in"),
-        (true, true) => (INCH, "in/min"),
-        (false, false) => (1.0, "mm"),
-        (false, true) => (1.0, "mm/min"),
-    };
+fn length(ui: &mut egui::Ui, value: &mut f64, look: &Look) -> bool {
+    let (per, unit) = if look.inch { (INCH, "in") } else { (1.0, "mm") };
+    number(ui, value, per, unit)
+}
+
+/// A rate (mm/min) shown in the tool's rate units; whether it changed.
+fn rate(ui: &mut egui::Ui, value: &mut f64, units: RateUnits) -> bool {
+    number(ui, value, units.mm_per_min(), units.label())
+}
+
+/// `value` shown as so many of `per`, with its unit; whether it changed.
+fn number(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) -> bool {
     let mut shown = *value / per;
     // ponytail: drag speed is a hundredth of the value, so small and large tools both drag well
     let speed = (shown.abs() / 100.0).max(f64::EPSILON);
@@ -497,10 +581,42 @@ fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
     });
 }
 
-fn tool_details(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look) {
+fn tool_details(
+    ui: &mut egui::Ui,
+    tool: &mut Tool,
+    groups: &[String],
+    look: &Look,
+    material: &str,
+) {
     section(ui, "Tool Info", |ui| tool_info(ui, tool, groups, look));
-    section(ui, "Cutting Parameters", |ui| cutting(ui, tool, look));
-    section(ui, "Feeds and Speeds", |ui| feeds(ui, tool, look));
+    // the cutting data shown is the active material's, as Aspire's
+    let own = tool
+        .materials
+        .iter()
+        .any(|m| m.material.eq_ignore_ascii_case(material));
+    if !material.is_empty() && !own {
+        ui.weak(format!(
+            "No cutting data for {material} yet: the default's is shown, and a change \
+             keeps it as {material}'s own"
+        ));
+    }
+    let mut shown = tool.for_material(material);
+    section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown, look));
+    section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown, look));
+    keep_cutting(tool, &shown, material);
+}
+
+/// Keeps what was edited in `shown` (the tool as it cuts `material`) as the tool's data for
+/// that material, or its default for none; rate units are the tool's whatever the material.
+fn keep_cutting(tool: &mut Tool, shown: &Tool, material: &str) {
+    tool.rate_units = shown.rate_units;
+    let edited = CuttingData {
+        material: material.to_owned(),
+        ..shown.cutting("")
+    };
+    if edited != tool.cutting(material) {
+        tool.set_cutting(edited);
+    }
 }
 
 /// Name, type, group and notes, then the geometry beside the tool's picture.
@@ -547,10 +663,14 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
             .num_columns(2)
             .show(ui, |ui| {
                 ui.label("Diameter (D)");
-                length(ui, &mut tool.diameter, look, false);
+                length(ui, &mut tool.diameter, look);
                 ui.end_row();
-                if tool.shape == ToolShape::VBit {
-                    ui.label("Included Angle (A)");
+                if matches!(tool.shape, ToolShape::VBit | ToolShape::ThreadMill) {
+                    ui.label(if tool.shape == ToolShape::VBit {
+                        "Included Angle (A)"
+                    } else {
+                        "Angle (A)"
+                    });
                     ui.add(
                         egui::DragValue::new(&mut tool.angle)
                             .range(1.0..=179.0)
@@ -560,8 +680,11 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                 }
                 if tool.shape == ToolShape::RadiusedEndMill {
                     ui.label("Tip Radius (R)");
-                    length(ui, &mut tool.tip_radius, look, false);
+                    length(ui, &mut tool.tip_radius, look);
                     ui.end_row();
+                }
+                if tool.shape == ToolShape::ThreadMill {
+                    thread_mill(ui, tool, look);
                 }
                 ui.label("Number of Flutes");
                 ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
@@ -574,12 +697,30 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
     });
 }
 
+/// A single-point thread mill's tooth: size, height (which changes the size, the angle
+/// staying, as Aspire's form does) and offset.
+fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
+    ui.label("Tooth Size (S)");
+    length(ui, &mut tool.tooth_size, look);
+    ui.end_row();
+    ui.label("Tooth Height (H)");
+    let mut height = tool.tooth_height();
+    if length(ui, &mut height, look) {
+        tool.set_tooth_height(height);
+    }
+    ui.end_row();
+    ui.label("Tooth Offset (O)")
+        .on_hover_text("From the bottom of the tool up to the tip of the tooth");
+    length(ui, &mut tool.tooth_offset, look);
+    ui.end_row();
+}
+
 fn cutting(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
     egui::Grid::new("tool_cutting")
         .num_columns(2)
         .show(ui, |ui| {
             ui.label("Pass Depth");
-            length(ui, &mut tool.pass_depth, look, false);
+            length(ui, &mut tool.pass_depth, look);
             ui.end_row();
             ui.label("Stepover");
             let mut percent = tool.stepover * 100.0;
@@ -607,11 +748,23 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
                 .suffix(" r.p.m."),
         );
         ui.end_row();
+        // the rate units beside the feed rate, as Aspire's form has them
         ui.label("Feed Rate");
-        length(ui, &mut tool.feed_rate, look, true);
+        ui.horizontal(|ui| {
+            rate(ui, &mut tool.feed_rate, tool.rate_units);
+            egui::ComboBox::from_id_salt("tool_rate_units")
+                .selected_text(tool.rate_units.label())
+                .show_ui(ui, |ui| {
+                    for units in RateUnits::ALL {
+                        ui.selectable_value(&mut tool.rate_units, units, units.label());
+                    }
+                })
+                .response
+                .on_hover_text("Rate Units");
+        });
         ui.end_row();
         ui.label("Plunge Rate");
-        length(ui, &mut tool.plunge_rate, look, true);
+        rate(ui, &mut tool.plunge_rate, tool.rate_units);
         ui.end_row();
     });
     // Aspire shows the feed per tooth, to check against the cutter maker's figure
@@ -665,6 +818,56 @@ mod tests {
         assert_eq!(first, later, "panels inside the window do not grow it");
         m.pick = Some(Pick::Group("Metric Tools".into()));
         assert_eq!(frame(&mut m, &ctx), None);
+    }
+
+    #[test]
+    fn a_material_added_becomes_active_and_the_window_draws_its_data() {
+        let ctx = egui::Context::default();
+        let mut m = Manager::new(&ToolDatabase::starter());
+        m.draft.add_material("Oak");
+        m.new_material = " oak ".into();
+        m.add_material();
+        assert_eq!(
+            (m.draft.materials.len(), m.draft.material.as_str()),
+            (1, "Oak"),
+            "the listed one, whatever the case"
+        );
+        assert_eq!(m.new_material, "");
+        let thread_mill = m
+            .draft
+            .tools
+            .iter()
+            .position(|t| t.shape == ToolShape::ThreadMill)
+            .unwrap();
+        m.pick = Some(Pick::Tool(thread_mill));
+        frame(&mut m, &ctx);
+        assert!(
+            m.draft.tools[thread_mill].materials.is_empty(),
+            "only drawing it makes no data"
+        );
+    }
+
+    #[test]
+    fn edits_shown_for_a_material_become_its_data_and_leave_the_default() {
+        let mut tool = Tool::default();
+        let mut shown = tool.for_material("Oak");
+        keep_cutting(&mut tool, &shown, "Oak");
+        assert!(tool.materials.is_empty(), "nothing changed, nothing kept");
+        shown.feed_rate = 600.0;
+        shown.rate_units = RateUnits::InchPerMin;
+        keep_cutting(&mut tool, &shown, "Oak");
+        assert!((tool.cutting("Oak").feed_rate - 600.0).abs() < 1e-9);
+        assert!((tool.feed_rate - 1000.0).abs() < 1e-9, "the default stays");
+        assert_eq!(
+            tool.rate_units,
+            RateUnits::InchPerMin,
+            "units are the tool's"
+        );
+        let mut default = tool.for_material("");
+        default.plunge_rate = 50.0;
+        keep_cutting(&mut tool, &default, "");
+        assert!((tool.plunge_rate - 50.0).abs() < 1e-9);
+        assert_eq!(tool.materials.len(), 1);
     }
 
     #[test]

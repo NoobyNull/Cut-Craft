@@ -10,7 +10,7 @@
 //! Some `.tools` files are plain JSON instead: groups (`Bits`) of tools keyed by id, lengths
 //! in mm and rates in mm/s whatever `MetricTool` says. Also [inf], from one file (Amana's).
 
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape};
+use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use serde_json::Value;
 use std::io::Read;
 
@@ -31,14 +31,23 @@ pub fn read(bytes: &[u8]) -> Result<ToolDatabase, String> {
     let entries = library["data"]
         .as_array()
         .ok_or("no tools in the library")?;
-    let tools: Vec<Tool> = entries.iter().flat_map(tools).collect();
+    let tools: Vec<Tool> = entries.iter().filter_map(tool).collect();
     if tools.is_empty() {
         return Err("no tools Cut Craft can use were found in the file".into());
     }
-    Ok(ToolDatabase {
+    let mut db = ToolDatabase {
         tools,
-        groups: vec![],
-    })
+        ..ToolDatabase::default()
+    };
+    let materials: Vec<String> = db
+        .tools
+        .iter()
+        .flat_map(|t| t.materials.iter().map(|m| m.material.clone()))
+        .collect();
+    for m in &materials {
+        db.add_material(m);
+    }
+    Ok(db)
 }
 
 /// A plain JSON library: each group's tools, in their `Index` order.
@@ -59,7 +68,7 @@ fn read_plain(library: &Value) -> Result<ToolDatabase, String> {
     }
     Ok(ToolDatabase {
         tools,
-        groups: vec![],
+        ..ToolDatabase::default()
     })
 }
 
@@ -102,6 +111,7 @@ fn plain_tool(group: &str, e: &Value) -> Option<Tool> {
             .unwrap_or(base.flutes),
         group: group.to_owned(),
         notes: text("Notes"),
+        rate_units: RateUnits::MmPerSec,
         ..base
     })
 }
@@ -168,9 +178,10 @@ fn title(kind: &str) -> String {
         .join(" ")
 }
 
-/// One tool per preset (one with Cut Craft's feeds when there are none); none for a kind Cut
-/// Craft has no shape for.
-fn tools(entry: &Value) -> Vec<Tool> {
+/// The tool, with each preset's feeds as its cutting data for the material the preset names
+/// (a preset named as a default, else the first, is also its default data); none for a kind
+/// Cut Craft has no shape for.
+fn tool(entry: &Value) -> Option<Tool> {
     let g = &entry["geometry"];
     let num = |v: &Value| v.as_f64();
     let corner = num(&g["RE"]).unwrap_or(0.0);
@@ -181,12 +192,10 @@ fn tools(entry: &Value) -> Vec<Tool> {
         "ball end mill" => ToolShape::BallNose,
         "bull nose end mill" => ToolShape::RadiusedEndMill,
         "chamfer mill" => ToolShape::VBit,
-        _ => return vec![], // round-over and other form tools, drills, lathe tools
+        _ => return None, // round-over and other form tools, drills, lathe tools
     };
     let scale = if entry["unit"] == "inches" { INCH } else { 1.0 };
-    let Some(diameter) = num(&g["DC"]).filter(|d| *d > 0.0).map(|d| d * scale) else {
-        return vec![];
-    };
+    let diameter = num(&g["DC"]).filter(|d| *d > 0.0).map(|d| d * scale)?;
     let base = Tool::default();
     let unit = if scale == INCH { "in" } else { "mm" };
     let named = |s: &str| entry[s].as_str().unwrap_or_default().trim().to_owned();
@@ -200,9 +209,14 @@ fn tools(entry: &Value) -> Vec<Tool> {
     .filter(|s| !s.is_empty())
     .collect::<Vec<_>>()
     .join(" ");
-    let tool = Tool {
-        name: name.clone(),
+    let mut tool = Tool {
+        name,
         shape,
+        rate_units: if scale == INCH {
+            RateUnits::InchPerMin
+        } else {
+            RateUnits::MmPerMin
+        },
         diameter,
         tip_radius: if shape == ToolShape::RadiusedEndMill {
             corner * scale
@@ -230,30 +244,30 @@ fn tools(entry: &Value) -> Vec<Tool> {
         .as_array()
         .cloned()
         .unwrap_or_default();
-    if presets.is_empty() {
-        return vec![tool];
+    let data = |p: &Value| {
+        let length = |key: &str| num(&p[key]).map(|v| v * scale);
+        CuttingData {
+            material: p["name"].as_str().unwrap_or_default().trim().to_owned(),
+            pass_depth: length("stepdown").unwrap_or(tool.pass_depth),
+            stepover: length("stepover").map_or(tool.stepover, |s| (s / diameter).clamp(0.01, 1.0)),
+            feed_rate: length("v_f").unwrap_or(tool.feed_rate),
+            plunge_rate: length("v_f_plunge").unwrap_or(tool.plunge_rate),
+            spindle_speed: num(&p["n"]).unwrap_or(tool.spindle_speed),
+        }
+    };
+    let is_default =
+        |d: &CuttingData| d.material.is_empty() || d.material.to_lowercase().starts_with("default");
+    let presets: Vec<CuttingData> = presets.iter().map(data).collect();
+    if let Some(first) = presets.iter().find(|d| is_default(d)).or(presets.first()) {
+        tool.set_cutting(CuttingData {
+            material: String::new(),
+            ..first.clone()
+        });
     }
-    presets
-        .iter()
-        .map(|p| {
-            let length = |key: &str| num(&p[key]).map(|v| v * scale);
-            let material = p["name"].as_str().unwrap_or_default();
-            Tool {
-                name: if material.is_empty() {
-                    name.clone()
-                } else {
-                    format!("{name} [{material}]")
-                },
-                pass_depth: length("stepdown").unwrap_or(tool.pass_depth),
-                stepover: length("stepover")
-                    .map_or(tool.stepover, |s| (s / diameter).clamp(0.01, 1.0)),
-                feed_rate: length("v_f").unwrap_or(tool.feed_rate),
-                plunge_rate: length("v_f_plunge").unwrap_or(tool.plunge_rate),
-                spindle_speed: num(&p["n"]).unwrap_or(tool.spindle_speed),
-                ..tool.clone()
-            }
-        })
-        .collect()
+    for d in presets.into_iter().filter(|d| !is_default(d)) {
+        tool.set_cutting(d);
+    }
+    Some(tool)
 }
 
 fn trim(x: f64) -> String {
@@ -321,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn presets_become_tools_in_millimetres() {
+    fn presets_become_cutting_data_per_material_in_millimetres() {
         let library = serde_json::json!({ "data": [
             { "type": "flat end mill", "unit": "inches", "vendor": "Acme", "product-id": "E1",
               "description": "Up-cut spiral",
@@ -329,22 +343,30 @@ mod tests {
               "start-values": { "presets": [
                   { "name": "Softwood", "n": 18000, "v_f": 100, "v_f_plunge": 30,
                     "stepdown": 0.125, "stepover": 0.1 },
-                  { "name": "MDF", "n": 16000, "v_f": 120, "v_f_plunge": 40 } ] } },
+                  { "name": "MDF", "n": 16000, "v_f": 120, "v_f_plunge": 40 },
+                  { "name": "Default", "n": 12000, "v_f": 50 } ] } },
             { "type": "chamfer mill", "unit": "millimeters", "geometry": { "DC": 12, "TA": 45 } },
             { "type": "radius mill", "unit": "inches", "geometry": { "DC": 0.5, "RE": 0.25 } }
         ]});
         let db = read(&zip("tools.json", library.to_string().as_bytes())).unwrap();
-        assert_eq!(db.tools.len(), 3, "two presets and a V-bit; no round-over");
+        assert_eq!(db.tools.len(), 2, "an end mill and a V-bit; no round-over");
         let t = &db.tools[0];
-        assert_eq!(t.name, "Acme E1 Flat End Mill 0.25in [Softwood]");
-        assert!((t.diameter - 6.35).abs() < 1e-9 && (t.feed_rate - 2540.0).abs() < 1e-9);
-        assert!((t.pass_depth - 3.175).abs() < 1e-9 && (t.stepover - 0.4).abs() < 1e-9);
+        assert_eq!(t.name, "Acme E1 Flat End Mill 0.25in");
+        assert_eq!(t.rate_units, RateUnits::InchPerMin);
+        let soft = t.cutting("Softwood");
+        assert!((t.diameter - 6.35).abs() < 1e-9 && (soft.feed_rate - 2540.0).abs() < 1e-9);
+        assert!((soft.pass_depth - 3.175).abs() < 1e-9 && (soft.stepover - 0.4).abs() < 1e-9);
+        assert!((t.cutting("MDF").spindle_speed - 16000.0).abs() < 1e-9);
+        assert!(
+            (t.feed_rate - 1270.0).abs() < 1e-9 && t.materials.len() == 2,
+            "a default preset is the tool's default, not a material"
+        );
+        assert_eq!(db.materials, ["Softwood", "MDF"]);
         assert_eq!(
             (t.group.as_str(), t.notes.as_str()),
             ("Flat End Mill", "Up-cut spiral")
         );
-        assert_eq!(db.tools[1].spindle_speed, 16000.0);
-        let v = &db.tools[2];
+        let v = &db.tools[1];
         assert_eq!(
             (v.shape, v.angle, v.diameter),
             (ToolShape::VBit, 90.0, 12.0)
@@ -390,6 +412,14 @@ mod tests {
                         .iter()
                         .all(|t| t.diameter > 0.0 && t.feed_rate > 0.0)
                 );
+                // each material's preset is kept with the tool, not as a tool of its own
+                assert!(db.tools.iter().all(|t| {
+                    t.materials.iter().all(|m| {
+                        db.materials
+                            .iter()
+                            .any(|d| d.eq_ignore_ascii_case(&m.material))
+                    })
+                }));
             }
         }
     }

@@ -1031,6 +1031,25 @@ fn toolpath_forms_take_tools_from_the_database_and_save_them_back() {
     assert_eq!(files::load_tools(&path).unwrap(), h.app.tools);
 }
 
+#[test]
+fn a_tool_chosen_for_a_toolpath_cuts_with_the_active_material() {
+    let mut h = Harness::new();
+    let mut tool = h.app.tools.get("3 mm End Mill").unwrap().clone();
+    tool.set_cutting(cut_craft_core::toolpath::CuttingData {
+        material: "Oak".into(),
+        feed_rate: 450.0,
+        ..tool.cutting("")
+    });
+    h.app.tools.put(tool);
+    h.app.tools.material = "Oak".into();
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.choose_tool("3 mm End Mill");
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["tool"]["feed_rate"],
+        450.0
+    );
+}
+
 /// A 20 × 10 mm, 5 mm high pyramid as an ASCII STL, in a file of its own.
 fn pyramid_stl(name: &str) -> std::path::PathBuf {
     use std::fmt::Write as _;
@@ -1206,7 +1225,7 @@ fn the_tool_database_window_shows_the_chip_load() {
     let mut h = Harness::new();
     h.app.tools = ToolDatabase {
         tools: vec![Tool::default()],
-        groups: vec![],
+        ..ToolDatabase::default()
     };
     h.app.invoke(&h.ctx, "tool_database");
     h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(0));

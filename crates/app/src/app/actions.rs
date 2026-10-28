@@ -2041,9 +2041,10 @@ impl CutCraftApp {
         }
     }
 
-    /// Adds a database tool to the end of the open form's tool list.
+    /// Adds a database tool (cutting the active material) to the end of the open form's
+    /// tool list.
     pub(super) fn add_earlier_tool(&mut self, name: &str) {
-        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.get(name))
+        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name))
             && let Some(tools) = form.params.get_mut("tools").and_then(Value::as_array_mut)
         {
             tools.push(serde_json::to_value(tool).expect("tools serialize"));
@@ -2065,9 +2066,9 @@ impl CutCraftApp {
         }
     }
 
-    /// Copies a database tool into the open form.
+    /// Copies a database tool, cutting the active material, into the open form.
     pub(super) fn choose_tool(&mut self, name: &str) {
-        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.get(name)) {
+        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name)) {
             form.params["tool"] = serde_json::to_value(tool).expect("tools serialize");
         }
     }
@@ -2081,7 +2082,7 @@ impl CutCraftApp {
         match tool {
             Some(tool) => {
                 let done = format!("Saved {} to the tool database", tool.name);
-                self.tools.put(tool);
+                self.tools.put_picked(tool);
                 self.tools_changed(&done);
             }
             None => self

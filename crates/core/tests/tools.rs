@@ -1,4 +1,4 @@
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape};
+use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 
 fn tool(name: &str, diameter: f64) -> Tool {
     Tool {
@@ -179,4 +179,211 @@ fn tools_saved_before_tapers_are_straight_with_no_flute_length() {
         (tool.taper, tool.shank_diameter, tool.flute_length),
         (0.0, 0.0, 0.0)
     );
+}
+
+/// A 6 mm end mill with its own cutting data for oak.
+fn with_oak() -> Tool {
+    let mut tool = Tool::default();
+    tool.set_cutting(CuttingData {
+        material: "Oak".into(),
+        feed_rate: 600.0,
+        spindle_speed: 16000.0,
+        ..Tool::default().cutting("")
+    });
+    tool
+}
+
+#[test]
+fn a_tool_cuts_each_material_with_its_own_data_else_its_default() {
+    let tool = with_oak();
+    assert_eq!(tool.feed_rate, 1000.0, "the default data is the tool's own");
+    let oak = tool.for_material("oak");
+    assert_eq!(
+        (oak.feed_rate, oak.spindle_speed),
+        (600.0, 16000.0),
+        "matched whatever the case"
+    );
+    assert_eq!(oak.pass_depth, tool.pass_depth);
+    assert_eq!(
+        tool.for_material("MDF").feed_rate,
+        1000.0,
+        "no data: the default"
+    );
+    assert_eq!(tool.for_material("").feed_rate, 1000.0);
+    // a material with no data shows the default's, under its own name
+    let mdf = tool.cutting("MDF");
+    assert_eq!((mdf.material.as_str(), mdf.feed_rate), ("MDF", 1000.0));
+}
+
+#[test]
+fn setting_cutting_data_changes_the_materials_set_or_the_default() {
+    let mut tool = with_oak();
+    tool.set_cutting(CuttingData {
+        feed_rate: 700.0,
+        ..tool.cutting("Oak")
+    });
+    assert_eq!(
+        tool.materials.len(),
+        1,
+        "oak's set is changed, not added again"
+    );
+    assert_eq!(tool.cutting("Oak").feed_rate, 700.0);
+    tool.set_cutting(CuttingData {
+        plunge_rate: 123.0,
+        ..tool.cutting("")
+    });
+    assert_eq!(
+        tool.plunge_rate, 123.0,
+        "the default is the tool's own fields"
+    );
+    assert_eq!(tool.materials.len(), 1);
+}
+
+#[test]
+fn a_tool_picked_from_the_database_cuts_with_the_active_material() {
+    let mut db = ToolDatabase {
+        tools: vec![with_oak()],
+        ..ToolDatabase::default()
+    };
+    let name = Tool::default().name;
+    assert_eq!(db.pick(&name).unwrap().feed_rate, 1000.0);
+    db.material = "Oak".into();
+    assert_eq!(db.pick(&name).unwrap().feed_rate, 600.0);
+    assert!(db.pick("no such tool").is_none());
+}
+
+#[test]
+fn a_picked_tool_put_back_keeps_its_data_as_the_active_materials() {
+    let mut db = ToolDatabase {
+        tools: vec![with_oak()],
+        material: "Oak".into(),
+        ..ToolDatabase::default()
+    };
+    let name = Tool::default().name;
+    let mut tool = db.pick(&name).unwrap();
+    tool.feed_rate = 650.0;
+    db.put_picked(tool);
+    let stored = db.get(&name).unwrap();
+    assert_eq!(stored.cutting("Oak").feed_rate, 650.0);
+    assert_eq!(stored.feed_rate, 1000.0, "the default stays");
+    // with no material active it is the default that changes
+    db.material.clear();
+    let mut tool = db.pick(&name).unwrap();
+    tool.feed_rate = 900.0;
+    db.put_picked(tool);
+    let stored = db.get(&name).unwrap();
+    assert_eq!(
+        (stored.feed_rate, stored.cutting("Oak").feed_rate),
+        (900.0, 650.0)
+    );
+}
+
+#[test]
+fn materials_are_added_once_and_deleted_with_their_data() {
+    let mut db = ToolDatabase {
+        tools: vec![with_oak()],
+        ..ToolDatabase::default()
+    };
+    db.add_material("Oak");
+    db.add_material("oak");
+    db.add_material("MDF");
+    db.add_material("");
+    assert_eq!(db.materials, ["Oak", "MDF"]);
+    db.material = "Oak".into();
+    db.delete_material("Oak");
+    assert_eq!(db.materials, ["MDF"]);
+    assert!(
+        db.tools[0].materials.is_empty(),
+        "its cutting data goes too"
+    );
+    assert_eq!(db.material, "", "the default is active again");
+}
+
+#[test]
+fn tool_databases_saved_before_materials_load_with_none() {
+    let mut json = serde_json::to_value(ToolDatabase::starter()).unwrap();
+    for tool in json["tools"].as_array_mut().unwrap() {
+        let fields = tool.as_object_mut().unwrap();
+        for field in ["rate_units", "materials", "tooth_size", "tooth_offset"] {
+            fields.remove(field);
+        }
+    }
+    let db: ToolDatabase = serde_json::from_value(json).unwrap();
+    assert!(db.materials.is_empty() && db.material.is_empty());
+    assert!(db.tools.iter().all(|t| t.materials.is_empty()));
+    assert_eq!(db.tools[0].rate_units, RateUnits::MmPerMin);
+}
+
+#[test]
+fn rate_units_convert_to_millimetres_a_minute() {
+    let per_unit = RateUnits::mm_per_min;
+    assert!((per_unit(RateUnits::MmPerSec) - 60.0).abs() < 1e-9);
+    assert!((per_unit(RateUnits::MmPerMin) - 1.0).abs() < 1e-9);
+    assert!((per_unit(RateUnits::MPerMin) - 1000.0).abs() < 1e-9);
+    assert!((per_unit(RateUnits::InchPerSec) - 1524.0).abs() < 1e-9);
+    assert!((per_unit(RateUnits::InchPerMin) - 25.4).abs() < 1e-9);
+    assert!((per_unit(RateUnits::FeetPerMin) - 304.8).abs() < 1e-9);
+    let labels: Vec<&str> = RateUnits::ALL.iter().map(|u| u.label()).collect();
+    assert_eq!(
+        labels,
+        [
+            "mm/sec",
+            "mm/min",
+            "m/min",
+            "inches/sec",
+            "inches/min",
+            "feet/min"
+        ]
+    );
+}
+
+/// A 10 mm, 60° single-point thread mill: a 1 mm tooth whose tip is 2 mm up.
+fn thread_mill() -> Tool {
+    Tool {
+        shape: ToolShape::ThreadMill,
+        diameter: 10.0,
+        angle: 60.0,
+        tooth_size: 1.0,
+        tooth_offset: 2.0,
+        ..Tool::default()
+    }
+}
+
+#[test]
+fn a_thread_mills_tooth_height_follows_its_size_and_angle() {
+    let tool = thread_mill();
+    let height = 2.0 * 30f64.to_radians().tan();
+    assert!((tool.tooth_height() - height).abs() < 1e-12);
+    let mut taller = tool.clone();
+    taller.set_tooth_height(2.0 * height);
+    assert!(
+        (taller.tooth_size - 2.0).abs() < 1e-12,
+        "the angle stays, so the size changes"
+    );
+    assert!((taller.angle - 60.0).abs() < 1e-12);
+}
+
+#[test]
+fn a_thread_mill_is_flat_under_its_core_then_rises_to_its_tooth_tip() {
+    let tool = thread_mill();
+    let half_height = 30f64.to_radians().tan();
+    assert_eq!(tool.profile(3.5), Some(0.0), "the core, 8 mm across");
+    let flank = tool.profile(4.5).unwrap();
+    assert!((flank - (2.0 - half_height + 0.5 * half_height)).abs() < 1e-12);
+    assert!(
+        (tool.profile(5.0).unwrap() - 2.0).abs() < 1e-12,
+        "the tooth tip"
+    );
+    assert_eq!(tool.profile(5.1), None);
+}
+
+#[test]
+fn the_starter_database_has_a_thread_mill() {
+    let db = ToolDatabase::starter();
+    let tool = db
+        .tools
+        .iter()
+        .find(|t| t.shape == ToolShape::ThreadMill)
+        .expect("a thread mill");
+    assert!(tool.tooth_size > 0.0 && tool.tooth_offset >= tool.tooth_size / 2.0);
 }

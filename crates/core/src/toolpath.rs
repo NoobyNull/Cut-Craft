@@ -24,6 +24,72 @@ pub enum ToolShape {
     /// end mill, leaves less cusp than one when 3D roughing or finishing
     #[schemars(title = "Radiused End Mill")]
     RadiusedEndMill,
+    /// A single-point thread mill: a triangular tooth standing out from a narrower shank,
+    /// for the Thread Milling toolpath
+    #[schemars(title = "Thread Mill")]
+    ThreadMill,
+}
+
+/// The units a tool's feed and plunge rates are shown in, as Aspire's list. Rates are kept
+/// in mm/min whatever the tool shows them in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RateUnits {
+    MmPerSec,
+    #[default]
+    MmPerMin,
+    MPerMin,
+    InchPerSec,
+    InchPerMin,
+    FeetPerMin,
+}
+
+impl RateUnits {
+    pub const ALL: [Self; 6] = [
+        Self::MmPerSec,
+        Self::MmPerMin,
+        Self::MPerMin,
+        Self::InchPerSec,
+        Self::InchPerMin,
+        Self::FeetPerMin,
+    ];
+
+    /// One of these units in mm/min.
+    pub fn mm_per_min(self) -> f64 {
+        const INCH: f64 = 25.4;
+        match self {
+            Self::MmPerSec => 60.0,
+            Self::MmPerMin => 1.0,
+            Self::MPerMin => 1000.0,
+            Self::InchPerSec => 60.0 * INCH,
+            Self::InchPerMin => INCH,
+            Self::FeetPerMin => 12.0 * INCH,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::MmPerSec => "mm/sec",
+            Self::MmPerMin => "mm/min",
+            Self::MPerMin => "m/min",
+            Self::InchPerSec => "inches/sec",
+            Self::InchPerMin => "inches/min",
+            Self::FeetPerMin => "feet/min",
+        }
+    }
+}
+
+/// A tool's cutting data for one material: what Aspire keeps per material (and machine),
+/// as against the tool's geometry. Rates in mm/min; stepover a fraction of the diameter.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CuttingData {
+    /// The material it is for; empty for the tool's default data
+    pub material: String,
+    pub pass_depth: f64,
+    pub stepover: f64,
+    pub feed_rate: f64,
+    pub plunge_rate: f64,
+    pub spindle_speed: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -80,10 +146,37 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[schemars(skip)]
     pub notes: String,
+    /// What the feed and plunge rates are shown in (they are kept in mm/min; added with
+    /// rate units)
+    #[serde(default)]
+    #[schemars(skip)]
+    pub rate_units: RateUnits,
+    /// Cutting data for particular materials; the fields above are the default, used for
+    /// any other (added with materials)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub materials: Vec<CuttingData>,
+    /// A thread mill's tooth: how far it stands out from the shank (S). Its angle is
+    /// `angle` (A) and its tip to tip diameter `diameter` (D) (added with thread mills).
+    #[serde(default = "default_tooth_size")]
+    #[schemars(skip)]
+    pub tooth_size: f64,
+    /// From the bottom of a thread mill up to the tip of its tooth (O)
+    #[serde(default = "default_tooth_offset")]
+    #[schemars(skip)]
+    pub tooth_offset: f64,
 }
 
 fn default_angle() -> f64 {
     90.0
+}
+
+fn default_tooth_size() -> f64 {
+    1.0
+}
+
+fn default_tooth_offset() -> f64 {
+    2.0
 }
 
 fn default_flutes() -> u32 {
@@ -100,6 +193,80 @@ impl Tool {
     pub fn chip_load(&self) -> Option<f64> {
         let teeth_per_minute = self.spindle_speed * f64::from(self.flutes);
         (teeth_per_minute > 0.0).then(|| self.feed_rate / teeth_per_minute)
+    }
+
+    /// The cutting data for `material` (`""` for the default): its own set if it has one,
+    /// else the default's values under its name, ready to become its set.
+    pub fn cutting(&self, material: &str) -> CuttingData {
+        if let Some(set) = self.material_data(material) {
+            return set.clone();
+        }
+        CuttingData {
+            material: material.to_owned(),
+            pass_depth: self.pass_depth,
+            stepover: self.stepover,
+            feed_rate: self.feed_rate,
+            plunge_rate: self.plunge_rate,
+            spindle_speed: self.spindle_speed,
+        }
+    }
+
+    /// Keeps `data` as its material's set, or as the default for no material.
+    pub fn set_cutting(&mut self, data: CuttingData) {
+        if data.material.is_empty() {
+            self.pass_depth = data.pass_depth;
+            self.stepover = data.stepover;
+            self.feed_rate = data.feed_rate;
+            self.plunge_rate = data.plunge_rate;
+            self.spindle_speed = data.spindle_speed;
+            return;
+        }
+        let at = self
+            .materials
+            .iter()
+            .position(|m| m.material.eq_ignore_ascii_case(&data.material));
+        match at {
+            Some(i) => self.materials[i] = data,
+            None => self.materials.push(data),
+        }
+    }
+
+    /// A copy that cuts with `material`'s data where it has some: what a toolpath takes.
+    #[must_use]
+    pub fn for_material(&self, material: &str) -> Tool {
+        let mut tool = self.clone();
+        if let Some(set) = self.material_data(material) {
+            tool.set_cutting(CuttingData {
+                material: String::new(),
+                ..set.clone()
+            });
+        }
+        tool
+    }
+
+    /// `material`'s own set, matched whatever the case; none for the default.
+    fn material_data(&self, material: &str) -> Option<&CuttingData> {
+        (!material.is_empty())
+            .then(|| {
+                self.materials
+                    .iter()
+                    .find(|m| m.material.eq_ignore_ascii_case(material))
+            })
+            .flatten()
+    }
+
+    /// A thread mill's tooth height (H): its size and angle make a triangle, so this
+    /// follows from them.
+    pub fn tooth_height(&self) -> f64 {
+        2.0 * self.tooth_size * (self.angle.to_radians() / 2.0).tan()
+    }
+
+    /// Sets the tooth height by changing its size, keeping the angle, as Aspire's form does.
+    pub fn set_tooth_height(&mut self, height: f64) {
+        let slope = (self.angle.to_radians() / 2.0).tan();
+        if slope > 0.0 {
+            self.tooth_size = height / (2.0 * slope);
+        }
     }
 
     /// The side angle (radians) of a tool that tapers out to its shank, if it does.
@@ -159,6 +326,18 @@ impl Tool {
                 let past_flat = (r - (radius - tip)).max(0.0);
                 tip - (tip * tip - past_flat * past_flat).max(0.0).sqrt()
             }
+            // the core under the tooth is flat to the bottom; the tooth's lower flank
+            // rises to its tip
+            // ponytail: the core is taken to reach the bottom, as most single-point mills do
+            ToolShape::ThreadMill => {
+                let core = radius - self.tooth_size.clamp(0.0, radius);
+                if r <= core {
+                    0.0
+                } else {
+                    let slope = (self.angle.to_radians() / 2.0).tan();
+                    self.tooth_offset - (radius - r) * slope
+                }
+            }
         })
     }
 }
@@ -182,6 +361,10 @@ impl Default for Tool {
             flutes: default_flutes(),
             group: String::new(),
             notes: String::new(),
+            rate_units: RateUnits::default(),
+            materials: vec![],
+            tooth_size: default_tooth_size(),
+            tooth_offset: default_tooth_offset(),
         }
     }
 }
@@ -195,6 +378,15 @@ pub struct ToolDatabase {
     /// is in the tree whether listed here or not (added with tool groups)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub groups: Vec<ToolGroup>,
+    /// The materials tools can keep cutting data for, Aspire's Material list (added with
+    /// materials)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub materials: Vec<String>,
+    /// The active material: tools picked from here cut with its data. Empty for each
+    /// tool's default data.
+    // ponytail: active for the whole database, as Aspire's; not kept per job
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
 }
 
 /// A Tool Database group: `/` between levels, as [`Tool::group`].
@@ -242,6 +434,12 @@ impl ToolDatabase {
             // a V-bit's stepover spaces V-carving passes, so it is small
             shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
             shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),
+            // 60° for ISO threads; a 1 mm tooth suits pitches up to about 1.5 mm
+            Tool {
+                tooth_size: 1.0,
+                tooth_offset: 2.0,
+                ..shaped("10 mm Thread Mill", ToolShape::ThreadMill, 10.0, 60.0, 0.1)
+            },
         ];
         for tool in &mut tools {
             let set = if tool.name.contains(" in ") {
@@ -261,11 +459,54 @@ impl ToolDatabase {
                 group("Metric Tools", "Starter tools sized in millimetres."),
                 group("Imperial Tools", "Starter tools sized in inches."),
             ],
+            ..Self::default()
         }
     }
 
     pub fn get(&self, name: &str) -> Option<&Tool> {
         self.tools.iter().find(|t| t.name == name)
+    }
+
+    /// The tool `name` as a toolpath takes it: cutting with the active material's data.
+    pub fn pick(&self, name: &str) -> Option<Tool> {
+        self.get(name).map(|t| t.for_material(&self.material))
+    }
+
+    /// Puts back a tool as [`Self::pick`] gave it: with a material active its cutting data
+    /// become that material's, and the stored tool's default stays.
+    pub fn put_picked(&mut self, mut tool: Tool) {
+        if !self.material.is_empty() {
+            let data = CuttingData {
+                material: self.material.clone(),
+                ..tool.cutting("")
+            };
+            if let Some(stored) = self.get(&tool.name) {
+                tool.set_cutting(stored.cutting(""));
+            }
+            tool.set_cutting(data);
+        }
+        self.put(tool);
+    }
+
+    /// Adds `name` to the material list, unless it is there already (whatever the case).
+    pub fn add_material(&mut self, name: &str) {
+        let name = name.trim();
+        if !name.is_empty() && !self.materials.iter().any(|m| m.eq_ignore_ascii_case(name)) {
+            self.materials.push(name.to_owned());
+        }
+    }
+
+    /// Takes `name` off the material list with every tool's data for it, as Aspire's Delete
+    /// Material does; the default is active again if it was.
+    pub fn delete_material(&mut self, name: &str) {
+        self.materials.retain(|m| !m.eq_ignore_ascii_case(name));
+        for tool in &mut self.tools {
+            tool.materials
+                .retain(|m| !m.material.eq_ignore_ascii_case(name));
+        }
+        if self.material.eq_ignore_ascii_case(name) {
+            self.material.clear();
+        }
     }
 
     /// Replaces the tool with the same name, or adds it at the end.
@@ -292,6 +533,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::BallNose => "Ball Nose",
         ToolShape::VBit => "V-Bits",
         ToolShape::RadiusedEndMill => "Radiused End Mills",
+        ToolShape::ThreadMill => "Thread Mills",
     }
 }
 
