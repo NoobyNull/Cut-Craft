@@ -2910,3 +2910,24 @@ fn options_show_one_category_at_a_time() {
         "reports always go to Cut Craft's repository"
     );
 }
+
+#[test]
+fn the_ribbon_interface_opens_tools_from_its_groups_and_browses_the_job() {
+    let mut h = Harness::new();
+    h.app.options.appearance.interface = crate::options::Interface::Ribbon;
+    h.frame(vec![]);
+    assert!(h.text_at("Model").is_some(), "the ribbon's tabs");
+    assert!(h.text_at("Create Vectors").is_none(), "no Aspire pages");
+    let at = h.text_at("File Operations ▾").expect("a group drops down");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    let at = *h.texts_at("Job Setup").last().expect("its tools by name");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("job_setup"));
+    assert!(h.text_at("Job Type").is_some(), "its form beside the views");
+    let at = h.text_at("Layers").expect("the browser's tabs");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(super::ribbon::BROWSER_TABS[h.app.browser_tab], "Layers");
+}

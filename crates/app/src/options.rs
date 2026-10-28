@@ -239,6 +239,22 @@ pub struct Appearance {
     /// Light, dark, or the desktop's own
     #[serde(default)]
     pub theme: Theme,
+    /// Where the tools are: Aspire's pages down the sides, or a ribbon across the top
+    #[serde(default)]
+    #[schemars(title = "Interface style")]
+    pub interface: Interface,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Interface {
+    /// Aspire's: the Design and Toolpaths pages down the sides, a tool's form in its page
+    #[default]
+    #[schemars(title = "Aspire pages")]
+    Aspire,
+    /// Fusion's: the tools in a ribbon across the top, the sheets, layers, components,
+    /// clipart and toolpaths in a browser on the left, a tool's form on the right
+    Ribbon,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

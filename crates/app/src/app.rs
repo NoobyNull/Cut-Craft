@@ -3,6 +3,7 @@
 
 mod actions;
 mod panels;
+mod ribbon;
 #[path = "screenshots.rs"]
 mod screenshots;
 #[cfg(test)]
@@ -513,6 +514,9 @@ struct CutCraftApp {
     options_window: bool,
     /// The Options category shown, by its place in the list.
     options_page: usize,
+    /// The Ribbon interface's tab, and its browser's (see [`ribbon`]).
+    ribbon_tab: usize,
+    browser_tab: usize,
     /// Both views shown at once.
     split: Option<Split>,
     /// The Clipart tab's library.

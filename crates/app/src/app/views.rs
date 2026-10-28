@@ -226,7 +226,10 @@ impl CutCraftApp {
                         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
                     });
             }
-            Screen::Job => self.job_pages(ui),
+            Screen::Job => match self.options.appearance.interface {
+                crate::options::Interface::Aspire => self.job_pages(ui),
+                crate::options::Interface::Ribbon => self.ribbon_pages(ui),
+            },
         }
         egui::CentralPanel::default().show(ui, |ui| {
             self.top_bar(ui);
