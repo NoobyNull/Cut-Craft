@@ -56,6 +56,15 @@ pub fn offset_regions(regions: &[Path], distance: f64, corners: Corners) -> Vec<
     outline(&oriented, distance, corners)
 }
 
+/// [`offset_regions`] with sharp corners, each mitred out no further than `reach` times the
+/// distance from its corner; a corner too sharp for that is squared off at the limit.
+pub fn offset_regions_mitred(regions: &[Path], distance: f64, reach: f64) -> Vec<Path> {
+    let oriented: Vec<Contour> = regions.iter().filter(|p| p.closed).map(contour).collect();
+    // a mitre reaches the distance over the sine of half the corner's inside angle
+    let sharpest = 2.0 * (1.0 / reach.max(1.0)).asin();
+    joined(&oriented, distance, LineJoin::Miter(sharpest))
+}
+
 fn outline(contours: &[Contour], distance: f64, corners: Corners) -> Vec<Path> {
     let join = match corners {
         // segment angle that keeps each arc chord within TOLERANCE of the true corner arc
@@ -64,6 +73,10 @@ fn outline(contours: &[Contour], distance: f64, corners: Corners) -> Vec<Path> {
         }
         Corners::Sharp => LineJoin::Miter(0.01 * PI),
     };
+    joined(contours, distance, join)
+}
+
+fn joined(contours: &[Contour], distance: f64, join: LineJoin<f64>) -> Vec<Path> {
     to_paths(contours.outline(&OutlineStyle::new(distance).line_join(join)))
 }
 

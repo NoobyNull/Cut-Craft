@@ -180,3 +180,31 @@ fn regions_make_inner_paths_holes_and_shrinking_grows_the_holes() {
         "the outline shrank to 5"
     );
 }
+
+#[test]
+fn mitred_corners_go_out_to_a_point_no_further_than_the_reach() {
+    let p = Point::new;
+    // an 11.3° tip at the origin, whose full mitre 1 mm out reaches about 10 mm from it
+    let thin = polygon::regions(&[Path::polyline(
+        &[p(0.0, 0.0), p(50.0, 0.0), p(50.0, 10.0)],
+        true,
+    )]);
+    let furthest = |reach: f64| {
+        polygon::offset_regions_mitred(&thin, 1.0, reach)
+            .iter()
+            .flat_map(|ring| ring.flatten(0.01))
+            .filter(|q| q.x < 0.0)
+            .map(Point::length)
+            .fold(0.0, f64::max)
+    };
+    assert!(close(
+        furthest(20.0),
+        1.0 / (0.2f64.atan() / 2.0).sin(),
+        0.01
+    ));
+    assert!(furthest(2.0) <= 2.0 + 1e-3, "{}", furthest(2.0));
+    // a square's corners are well inside the reach: mitred all the way
+    let squared =
+        polygon::offset_regions_mitred(&polygon::regions(&[square(0.0, 0.0, 10.0)]), 1.0, 2.0);
+    assert!(close(total_area(&squared), 144.0, 1e-3));
+}
