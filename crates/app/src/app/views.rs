@@ -1235,6 +1235,7 @@ impl CutCraftApp {
         self.options_window = open;
         if let Some(options) = changed {
             options.apply_to(&mut self.display);
+            ctx.set_theme(options.general.theme.preference());
             self.recent.truncate(options.recent_count());
             if let Err(e) = options.save() {
                 self.status.set_message(&e);

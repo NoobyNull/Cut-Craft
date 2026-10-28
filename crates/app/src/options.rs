@@ -223,6 +223,30 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "File dialog default")]
     pub file_dialog_default: FileDialogDefault,
+    /// How the window looks
+    #[serde(default)]
+    pub theme: Theme,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    /// Light, as Aspire is, whatever the desktop's theme
+    #[default]
+    Light,
+    Dark,
+    /// The desktop's own light or dark theme
+    System,
+}
+
+impl Theme {
+    pub fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+            Self::System => egui::ThemePreference::System,
+        }
+    }
 }
 
 // ponytail: Aspire's third choice, a folder remembered for each kind of operation, is left out
@@ -292,6 +316,7 @@ impl Default for Options {
                 bug_report_repo: bug_repo(),
                 wayland_native: false,
                 file_dialog_default: FileDialogDefault::default(),
+                theme: Theme::default(),
             },
             confirmations: Confirmations::default(),
         }
@@ -374,6 +399,7 @@ mod tests {
             "solid_2d_previews": false }, "general": { "recent_file_list_size": 4 } }"#;
         let older: Options = serde_json::from_str(older).expect("options saved before preloading");
         assert!(!older.view_3d.draw_origin && older.general.preload_icons);
+        assert_eq!(older.general.theme, Theme::Light, "light, as before themes");
         let fields =
             crate::form::fields(&serde_json::to_value(schemars::schema_for!(Options)).unwrap());
         let sections: Vec<&str> = fields

@@ -998,7 +998,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
     let settings = crate::options::Options::load();
-    let wayland = settings.general.wayland_native;
+    let (wayland, theme) = (settings.general.wayland_native, settings.general.theme);
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {
@@ -1033,8 +1033,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         name,
         options,
         Box::new(|cc| {
-            // light, as Aspire is, whatever the desktop's theme
-            cc.egui_ctx.set_theme(egui::ThemePreference::Light);
+            cc.egui_ctx.set_theme(theme.preference());
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx);
             if let Some(rs) = &cc.wgpu_render_state {
