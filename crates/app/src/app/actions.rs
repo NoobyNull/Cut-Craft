@@ -243,6 +243,15 @@ impl CutCraftApp {
                 self.machine_window =
                     Some(cut_craft_machines::MachineManager::adding(&self.machines));
             }
+            "install_offline_package" => {
+                let dialog = file_dialog().add_filter("Machine package", &["json"]);
+                if let Some(path) = dialog.pick_file() {
+                    self.install_package(&path);
+                }
+            }
+            "search_for_machine_online" => {
+                ctx.open_url(egui::OpenUrl::new_tab(super::MACHINES_ONLINE));
+            }
             "post_processor_management" => {
                 self.post_window = Some(cut_craft_machines::PostManager::default());
             }
@@ -601,6 +610,29 @@ impl CutCraftApp {
             .map_or(Ok(()), |path| self.machines.save(path));
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
+    }
+
+    /// Install Offline Package: the machines in a package file (`machines/` in the repository)
+    /// that are not here already by name.
+    pub(super) fn install_package(&mut self, path: &std::path::Path) {
+        let package = std::fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        let package: cut_craft_machines::Machines = match package {
+            Ok(package) => package,
+            Err(e) => {
+                return self
+                    .status
+                    .set_message(&format!("{}: not a machine package ({e})", path.display()));
+            }
+        };
+        let (added, here) = self.machines.install(package);
+        let here = if here > 0 {
+            format!(", {here} already here")
+        } else {
+            String::new()
+        };
+        self.machines_changed(&format!("Installed {added} machines{here}"));
     }
 
     /// Install Post-Processor: copied into the custom posts. A machine with no posts yet (or

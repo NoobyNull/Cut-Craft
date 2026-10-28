@@ -117,6 +117,10 @@ say "not implemented yet".
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL, Export as Grayscale Bitmap.
 - Machine: Install Post-Processor (real grbl / FluidNC posts load, rotary G93 ones included).
+  Install Offline Package adds the machines in a package (`machines/*.json`: Genmitsu,
+  FoxAlien, Sienci, Carbide 3D, Two Trees hobby routers, on Cut Craft GRBL (mm), whose tool
+  change pauses with M0), skipping names already there; Search for Machine Online opens
+  `machines/` in the repository.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
@@ -422,8 +426,7 @@ say "not implemented yet".
 - Edit: Options' window layout, software renderer, shading, sheet and toolpath-list
   settings, fonts, help and the folder kept for each kind of file;
   document variables linked to fields (a sum is worked out once, when entered).
-- Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
-  Post-Processor Management, Update Post Database.
+- Machine: Update Post Database.
 - Toolpaths: Materials.
 - View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.

@@ -1,0 +1,43 @@
+{
+  "machines": [
+    {
+      "name": "Sienci LongMill MK2 12x30",
+      "manufacturer": "Sienci",
+      "model": "LongMill MK2 12x30",
+      "controller": "grblHAL",
+      "width": 304.8,
+      "height": 762.0,
+      "inches": true,
+      "posts": [
+        "Cut Craft GRBL (mm) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+    },
+    {
+      "name": "Sienci LongMill MK2 30x30",
+      "manufacturer": "Sienci",
+      "model": "LongMill MK2 30x30",
+      "controller": "grblHAL",
+      "width": 762.0,
+      "height": 762.0,
+      "inches": true,
+      "posts": [
+        "Cut Craft GRBL (mm) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+    },
+    {
+      "name": "Sienci LongMill MK2 48x30",
+      "manufacturer": "Sienci",
+      "model": "LongMill MK2 48x30",
+      "controller": "grblHAL",
+      "width": 1219.2,
+      "height": 762.0,
+      "inches": true,
+      "posts": [
+        "Cut Craft GRBL (mm) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+    }
+  ]
+}

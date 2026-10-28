@@ -2399,13 +2399,11 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
     }
     assert!(h.app.machine_window.is_some() && h.app.post_window.is_some());
     assert!(h.text_at("Associated Post-Processors").is_some());
-    for id in [
-        "install_offline_package",
-        "search_for_machine_online",
-        "update_post_processor_database",
-    ] {
-        assert!(!h.app.available(id), "{id} needs Vectric's service");
-    }
+    // machines come from Cut Craft's own packages; posts have no online database
+    assert!(
+        !h.app.available("update_post_processor_database"),
+        "needs Vectric's service"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -2471,7 +2469,7 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 26] = [
+    const ASKS: [&str; 28] = [
         "add_clipart_folder",
         "segment_3d_model_file",
         "new",
@@ -2491,6 +2489,9 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "print",
         "print_preview",
         "install_post_processor",
+        "install_offline_package",
+        // opens the browser
+        "search_for_machine_online",
         "save_toolpaths",
         "exit",
         "recent_files",
@@ -2881,4 +2882,36 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
         lines(&mut h, low_right, false),
         "from low on the right the block hides it"
     );
+}
+
+#[test]
+fn an_offline_package_installs_its_machines_once() {
+    let mut h = Harness::new();
+    let package =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../machines/genmitsu.json");
+    h.app.install_package(&package);
+    let installed = h.app.machines.machines.len();
+    assert!(installed > 0, "the package's machines are added");
+    assert!(
+        h.app
+            .machines
+            .machines
+            .iter()
+            .all(|m| m.name.starts_with("Genmitsu"))
+    );
+    h.app.install_package(&package);
+    assert_eq!(
+        h.app.machines.machines.len(),
+        installed,
+        "installing again adds none"
+    );
+    h.app.install_package(&package.with_file_name("README.md"));
+    assert_eq!(
+        h.app.machines.machines.len(),
+        installed,
+        "not a package: nothing added"
+    );
+    for id in ["install_offline_package", "search_for_machine_online"] {
+        assert!(h.app.available(id), "{id}");
+    }
 }

@@ -125,6 +125,21 @@ impl Machines {
         }
     }
 
+    /// Install Offline Package: `package`'s machines (a machines file of its own) added after
+    /// these, each unless one of the same name is here already. How many were added, and
+    /// how many were here already.
+    pub fn install(&mut self, package: Self) -> (usize, usize) {
+        let offered = package.machines.len();
+        let before = self.machines.len();
+        for machine in package.machines {
+            if !self.machines.iter().any(|m| m.name == machine.name) {
+                self.machines.push(machine);
+            }
+        }
+        let added = self.machines.len() - before;
+        (added, offered - added)
+    }
+
     /// Whether two machines share a name.
     pub fn names_clash(&self) -> bool {
         self.machines
@@ -205,5 +220,66 @@ mod tests {
         assert_eq!(Machines::load(&path), m);
         let _ = std::fs::remove_file(&path);
         assert_eq!(Machines::load(&path), Machines::default());
+    }
+}
+
+#[cfg(test)]
+mod packages {
+    use super::*;
+
+    /// The machine packages in `machines/`, as Install Offline Package reads them.
+    const PACKAGES: [(&str, &str); 5] = [
+        (
+            "carbide3d",
+            include_str!("../../../machines/carbide3d.json"),
+        ),
+        ("foxalien", include_str!("../../../machines/foxalien.json")),
+        ("genmitsu", include_str!("../../../machines/genmitsu.json")),
+        ("sienci", include_str!("../../../machines/sienci.json")),
+        ("twotrees", include_str!("../../../machines/twotrees.json")),
+    ];
+
+    fn package(text: &str) -> Machines {
+        serde_json::from_str(text).expect("a package reads")
+    }
+
+    #[test]
+    fn installing_adds_the_new_machines_and_leaves_ones_already_here() {
+        let mut mine = Machines::default();
+        mine.add();
+        mine.machines[0].name = "Genmitsu 4040-PRO".into();
+        mine.machines[0].width = 1.0;
+        let offered = package(PACKAGES[2].1).machines.len();
+        assert_eq!(mine.install(package(PACKAGES[2].1)), (offered - 1, 1));
+        assert_eq!(mine.machines[0].width, 1.0, "the user's own is kept");
+        assert_eq!(mine.machines.len(), offered);
+        assert_eq!(
+            mine.install(package(PACKAGES[2].1)),
+            (0, offered),
+            "again adds none"
+        );
+    }
+
+    #[test]
+    fn every_package_reads_names_cut_crafts_posts_and_gives_a_size() {
+        let posts: Vec<String> = cut_craft_post::BUILT_IN
+            .iter()
+            .map(|(_, text)| cut_craft_post::Post::parse(text).unwrap().name)
+            .collect();
+        let mut names = vec![];
+        for (file, text) in PACKAGES {
+            let machines = package(text).machines;
+            assert!(!machines.is_empty(), "{file}");
+            for m in machines {
+                assert!(m.width > 0.0 && m.height > 0.0, "{file}: {}", m.name);
+                assert!(
+                    m.post().is_some_and(|p| posts.iter().any(|n| n == p)),
+                    "{file}: {}",
+                    m.name
+                );
+                assert!(!names.contains(&m.name), "{} is in two packages", m.name);
+                names.push(m.name);
+            }
+        }
     }
 }

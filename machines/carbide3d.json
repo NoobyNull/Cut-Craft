@@ -1,0 +1,56 @@
+{
+  "machines": [
+    {
+      "name": "Carbide 3D Shapeoko 4 Standard",
+      "manufacturer": "Carbide 3D",
+      "model": "Shapeoko 4 Standard",
+      "controller": "Carbide Motion (GRBL)",
+      "width": 444.5,
+      "height": 444.5,
+      "inches": true,
+      "posts": [
+        "Cut Craft GRBL (mm) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+    },
+    {
+      "name": "Carbide 3D Shapeoko 4 XL",
+      "manufacturer": "Carbide 3D",
+      "model": "Shapeoko 4 XL",
+      "controller": "Carbide Motion (GRBL)",
+      "width": 838.2,
+      "height": 444.5,
+      "inches": true,
+      "posts": [
+        "Cut Craft GRBL (mm) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+    },
+    {
+      "name": "Carbide 3D Shapeoko 4 XXL",
+      "manufacturer": "Carbide 3D",
+      "model": "Shapeoko 4 XXL",
+      "controller": "Carbide Motion (GRBL)",
+      "width": 838.2,
+      "height": 838.2,
+      "inches": true,
+      "posts": [
+        "Cut Craft GRBL (mm) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+    },
+    {
+      "name": "Carbide 3D Nomad 3",
+      "manufacturer": "Carbide 3D",
+      "model": "Nomad 3",
+      "controller": "Carbide Motion (GRBL)",
+      "width": 203.2,
+      "height": 203.2,
+      "inches": true,
+      "posts": [
+        "Cut Craft GRBL (mm) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+    }
+  ]
+}

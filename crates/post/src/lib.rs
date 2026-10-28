@@ -179,10 +179,13 @@ const LARGEST_ARC: f64 = 1000.0;
 /// Cut Craft's own posts, used until one is installed (`crates/post/posts/`).
 const DEFAULT_FLAT: &str = include_str!("../posts/fluidnc_atc_mm.pp");
 const DEFAULT_ROTARY: &str = include_str!("../posts/fluidnc_atc_wrap_a_mm.pp");
+/// Hobby routers on grbl, tools changed by hand (the machine packages in `machines/`).
+const GRBL: &str = include_str!("../posts/grbl_mm.pp");
 /// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
-pub const BUILT_IN: [(&str, &str); 2] = [
+pub const BUILT_IN: [(&str, &str); 3] = [
     ("fluidnc_atc_mm.pp", DEFAULT_FLAT),
     ("fluidnc_atc_wrap_a_mm.pp", DEFAULT_ROTARY),
+    ("grbl_mm.pp", GRBL),
 ];
 
 /// The file being written, for the variables that describe it.
