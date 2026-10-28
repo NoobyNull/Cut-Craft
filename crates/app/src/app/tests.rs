@@ -2900,4 +2900,13 @@ fn options_show_one_category_at_a_time() {
     h.frame(vec![]);
     assert!(h.text_at("Theme").is_some());
     assert!(h.text_at("Draw origin").is_none());
+    assert_eq!(
+        h.text_at("Advanced").is_some(),
+        crate::options::Advanced::applies(),
+        "Advanced lists only on a Wayland desktop"
+    );
+    assert!(
+        h.text_at("Bug reports go to").is_none(),
+        "reports always go to Cut Craft's repository"
+    );
 }

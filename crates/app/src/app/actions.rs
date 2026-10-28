@@ -48,7 +48,7 @@ impl CutCraftApp {
             tool_manager: None,
             shots: None,
             reporter: cut_craft_bug_report::Reporter::new(
-                &crate::options::Options::default().general.bug_report_repo,
+                super::BUG_REPO,
                 files::config_dir().map(|d| d.join("bug-reports")),
             ),
             clipboard: vec![],

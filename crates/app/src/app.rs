@@ -160,6 +160,8 @@ const BUILT_INS: [&str; 81] = [
     "preview_all_toolpaths",
     "reset_preview",
 ];
+/// Where every Report a Bug Here… goes: Cut Craft's own repository.
+const BUG_REPO: &str = "NoobyNull/Cut-Craft";
 /// The Help windows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Info {
@@ -1000,7 +1002,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
     let settings = crate::options::Options::load();
-    let (wayland, theme) = (settings.general.wayland_native, settings.appearance.theme);
+    let (wayland, theme) = (settings.advanced.wayland_native, settings.appearance.theme);
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {

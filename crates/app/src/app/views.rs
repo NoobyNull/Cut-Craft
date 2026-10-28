@@ -126,9 +126,6 @@ impl CutCraftApp {
             &mut self.reporter,
             cut_craft_bug_report::Reporter::new("", None),
         );
-        reporter
-            .repo
-            .clone_from(&self.options.general.bug_report_repo);
         let state = || self.bug_state();
         let pick = || {
             file_dialog()
@@ -1218,7 +1215,11 @@ impl CutCraftApp {
         let mut open = self.options_window;
         let schema = serde_json::to_value(schemars::schema_for!(crate::options::Options))
             .expect("a schema serialises");
-        let fields = crate::form::fields(&schema);
+        let mut fields = crate::form::fields(&schema);
+        // Advanced only lists on the desktops its settings are for
+        if !crate::options::Advanced::applies() {
+            fields.retain(|f| f.key != "advanced");
+        }
         let mut values = serde_json::to_value(&self.options).expect("options serialise");
         let mut changed = None;
         let page = &mut self.options_page;

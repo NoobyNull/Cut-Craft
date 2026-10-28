@@ -209,20 +209,28 @@ pub struct General {
     /// Dialog pictures are always read at startup
     #[serde(default = "on")]
     pub preload_icons: bool,
-    /// The GitHub repository (owner/name) Report a Bug Here… makes issues in, through the
-    /// GitHub CLI (gh)
-    #[serde(default = "bug_repo")]
-    #[schemars(title = "Bug reports go to")]
-    pub bug_report_repo: String,
+    /// The folder file dialogs open in
+    #[serde(default)]
+    #[schemars(title = "File dialog default")]
+    pub file_dialog_default: FileDialogDefault,
+}
+
+/// Settings only some desktops need, listed only on those (not one of Aspire's).
+// ponytail: wayland_native moved here from General; one saved there before starts off again
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Advanced {
     /// On a Wayland desktop, open the window there directly rather than through `XWayland`;
     /// files cannot be dragged into it then (from the next start)
     #[serde(default)]
     #[schemars(title = "Use Wayland directly (no file drag and drop)")]
     pub wayland_native: bool,
-    /// The folder file dialogs open in
-    #[serde(default)]
-    #[schemars(title = "File dialog default")]
-    pub file_dialog_default: FileDialogDefault,
+}
+
+impl Advanced {
+    /// Whether this desktop has any of these settings: a Wayland one on Linux or a BSD.
+    pub fn applies() -> bool {
+        cfg!(all(unix, not(target_os = "macos"))) && std::env::var_os("WAYLAND_DISPLAY").is_some()
+    }
 }
 
 /// How Cut Craft looks (not one of Aspire's).
@@ -265,11 +273,6 @@ pub enum FileDialogDefault {
     Job,
 }
 
-/// Where bug reports go unless the options say otherwise: Cut Craft's own repository.
-fn bug_repo() -> String {
-    "NoobyNull/cut-craft".into()
-}
-
 /// What a setting added after options were first saved starts as.
 fn on() -> bool {
     true
@@ -289,6 +292,9 @@ pub struct Options {
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub appearance: Appearance,
+    #[serde(default)]
+    #[schemars(extend("x-section" = true))]
+    pub advanced: Advanced,
 }
 
 impl Default for Options {
@@ -321,12 +327,11 @@ impl Default for Options {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
                     .expect("a small count"),
                 preload_icons: on(),
-                bug_report_repo: bug_repo(),
-                wayland_native: false,
                 file_dialog_default: FileDialogDefault::default(),
             },
             confirmations: Confirmations::default(),
             appearance: Appearance::default(),
+            advanced: Advanced::default(),
         }
     }
 }
@@ -426,7 +431,8 @@ mod tests {
                 "Toolpath Settings",
                 "General Settings",
                 "Confirmation Choices",
-                "Appearance"
+                "Appearance",
+                "Advanced"
             ]
         );
     }
