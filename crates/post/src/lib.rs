@@ -1767,13 +1767,17 @@ begin FOOTER
     }
 
     #[test]
-    fn every_grbl_and_mach3_variant_writes_its_units_tool_changes_arcs_and_wrapping() {
+    fn every_made_variant_writes_its_units_tool_changes_arcs_and_wrapping() {
         use cut_craft_core::document::{Along, Job};
         let mut names: Vec<String> = BUILT_IN
             .iter()
             .map(|(_, text)| Post::parse(text).unwrap().name)
             .collect();
-        for (file, text) in BUILT_IN.iter().filter(|(f, _)| !f.starts_with("fluidnc")) {
+        // the two hand-written FluidNC defaults have tests of their own
+        let made = BUILT_IN
+            .iter()
+            .filter(|(f, _)| !["fluidnc_atc_mm.pp", "fluidnc_atc_wrap_a_mm.pp"].contains(f));
+        for (file, text) in made {
             // the test renderer splits on the CR LF line ending
             let post = text.replace(r#"LINE_ENDING = "[10]""#, r#"LINE_ENDING = "[13][10]""#);
             let along = if file.contains("wrap_y") {
@@ -1791,8 +1795,10 @@ begin FOOTER
             assert_eq!(any("G20"), file.contains("inch"), "{file}");
             if file.starts_with("grbl") {
                 assert!(has("M0") && !any("M6"), "{file}: {lines:?}");
-            } else {
+            } else if file.starts_with("mach3") {
                 assert!(has("T2 M6") && !any("TT"), "{file}: {lines:?}");
+            } else {
+                assert!(has("M6 T2"), "{file}: {lines:?}");
             }
             assert_eq!(has("G91.1"), file.starts_with("mach3_arcs"), "{file}");
             if along.is_some() {

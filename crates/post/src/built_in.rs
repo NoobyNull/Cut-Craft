@@ -1,7 +1,7 @@
 // Made by scripts/make_posts.py: run it again after adding a post.
 
 /// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
-pub const BUILT_IN: [(&str, &str); 26] = [
+pub const BUILT_IN: [(&str, &str); 36] = [
     (
         "fluidnc_atc_mm.pp",
         include_str!("../posts/fluidnc_atc_mm.pp"),
@@ -102,5 +102,45 @@ pub const BUILT_IN: [(&str, &str); 26] = [
     (
         "mach3_wrap_x_a_g93_inch.pp",
         include_str!("../posts/mach3_wrap_x_a_g93_inch.pp"),
+    ),
+    (
+        "fluidnc_atc_straight_mm.pp",
+        include_str!("../posts/fluidnc_atc_straight_mm.pp"),
+    ),
+    (
+        "fluidnc_atc_wrap_y_a_mm.pp",
+        include_str!("../posts/fluidnc_atc_wrap_y_a_mm.pp"),
+    ),
+    (
+        "fluidnc_atc_wrap_x_a_mm.pp",
+        include_str!("../posts/fluidnc_atc_wrap_x_a_mm.pp"),
+    ),
+    (
+        "fluidnc_atc_wrap_x_a_g93_mm.pp",
+        include_str!("../posts/fluidnc_atc_wrap_x_a_g93_mm.pp"),
+    ),
+    (
+        "fluidnc_atc_arcs_inch.pp",
+        include_str!("../posts/fluidnc_atc_arcs_inch.pp"),
+    ),
+    (
+        "fluidnc_atc_straight_inch.pp",
+        include_str!("../posts/fluidnc_atc_straight_inch.pp"),
+    ),
+    (
+        "fluidnc_atc_wrap_y_a_inch.pp",
+        include_str!("../posts/fluidnc_atc_wrap_y_a_inch.pp"),
+    ),
+    (
+        "fluidnc_atc_wrap_y_a_g93_inch.pp",
+        include_str!("../posts/fluidnc_atc_wrap_y_a_g93_inch.pp"),
+    ),
+    (
+        "fluidnc_atc_wrap_x_a_inch.pp",
+        include_str!("../posts/fluidnc_atc_wrap_x_a_inch.pp"),
+    ),
+    (
+        "fluidnc_atc_wrap_x_a_g93_inch.pp",
+        include_str!("../posts/fluidnc_atc_wrap_x_a_g93_inch.pp"),
     ),
 ];

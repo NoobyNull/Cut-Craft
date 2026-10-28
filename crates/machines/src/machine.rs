@@ -277,6 +277,20 @@ mod packages {
                     "{file}: {}",
                     m.name
                 );
+                // metric and SAE, arcs and straight, each a post Cut Craft has
+                assert_eq!(m.posts.len(), 4, "{file}: {}", m.name);
+                assert!(
+                    m.posts.iter().all(|p| posts.contains(p)),
+                    "{file}: {}",
+                    m.name
+                );
+                let units = if m.inches { "(inch)" } else { "(mm)" };
+                let arcs = |p: &str| p.contains("Arcs") && p.contains(units);
+                assert!(
+                    m.post().is_some_and(arcs),
+                    "defaults to its own units: {}",
+                    m.name
+                );
                 assert!(!names.contains(&m.name), "{} is in two packages", m.name);
                 names.push(m.name);
             }

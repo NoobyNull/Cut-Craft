@@ -9,9 +9,12 @@
       "height": 444.5,
       "inches": true,
       "posts": [
-        "Cut Craft GRBL Arcs (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)",
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (inch) (*.nc)"
     },
     {
       "name": "Carbide 3D Shapeoko 4 XL",
@@ -22,9 +25,12 @@
       "height": 444.5,
       "inches": true,
       "posts": [
-        "Cut Craft GRBL Arcs (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)",
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (inch) (*.nc)"
     },
     {
       "name": "Carbide 3D Shapeoko 4 XXL",
@@ -35,9 +41,12 @@
       "height": 838.2,
       "inches": true,
       "posts": [
-        "Cut Craft GRBL Arcs (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)",
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (inch) (*.nc)"
     },
     {
       "name": "Carbide 3D Nomad 3",
@@ -48,9 +57,12 @@
       "height": 203.2,
       "inches": true,
       "posts": [
-        "Cut Craft GRBL Arcs (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)",
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (inch) (*.nc)"
     }
   ]
 }

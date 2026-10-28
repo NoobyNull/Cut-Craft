@@ -9,12 +9,15 @@ the name, maker, model, controller, working area (`width` × `height`, in mm) an
 it saves toolpaths through. Installing adds every machine you don't already have one of the
 same name as; the rest are left alone.
 
-They all use **Cut Craft GRBL Arcs (mm)**, which suits grbl 1.1 and grblHAL: a tool change
-stops the spindle and pauses (M0) for you to change and zero the tool, then resume from your
-sender. Cut Craft also has, for GRBL and for Mach3, in mm and in inches: **Arcs**,
-**Straight** (lines only), and rotary **Wrap Y to A** / **Wrap X to A**, each with feeds in
-units a minute or in inverse time (**G93**). Pick one in Machine Configuration, or customise
-and edit a copy in Post-Processor Management.
+Each machine comes with four posts, **Cut Craft GRBL Arcs** and **GRBL Straight** (lines
+only), in mm and in inches, with Arcs in the machine's own units as its default. They suit
+grbl 1.1 and grblHAL: a tool change stops the spindle and pauses (M0) for you to change and
+zero the tool, then resume from your sender.
+
+Cut Craft also has, for GRBL, Mach3 and FluidNC (with a tool changer), in mm and in inches:
+**Arcs**, **Straight**, and rotary **Wrap Y to A** / **Wrap X to A**, each with feeds in
+units a minute or in inverse time (**G93**). Add one to a machine in Machine Configuration,
+or customise and edit a copy in Post-Processor Management.
 
 **Check the working area against your own machine before cutting.** These are the
 makers' published sizes as the packages were written; extensions, kits and revisions

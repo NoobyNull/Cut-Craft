@@ -3,8 +3,8 @@
 
     scripts/make_posts.py
 
-The templates are crates/post/posts/grbl_arcs_mm.pp and mach3_arcs_mm.pp: edit those, then
-run this. For each it writes, in millimetres and inches:
+The templates are crates/post/posts/grbl_arcs_mm.pp, mach3_arcs_mm.pp and fluidnc_atc_mm.pp:
+edit those, then run this. For each it writes, in millimetres and inches:
   Arcs              the template (G2 / G3, centres from the arc's start)
   Straight          lines only, for controllers without arcs
   Wrap Y to A       rotary, a cylinder along X; feeds in units a minute
@@ -19,9 +19,15 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 POSTS = ROOT / "crates/post/posts"
-# the FluidNC posts are hand-written and listed first: the defaults for flat and rotary jobs
+# the FluidNC posts are hand-written and listed first: the defaults for flat and rotary jobs.
+# Machines know posts by name, so theirs stay as they were; the FluidNC variants come after.
 FIXED = ["fluidnc_atc_mm.pp", "fluidnc_atc_wrap_a_mm.pp"]
-TEMPLATES = {"grbl": "GRBL", "mach3": "Mach3"}
+# stem: (controller, template file, variants the fixed posts already are)
+TEMPLATES = {
+    "grbl": ("GRBL", "grbl_arcs_mm.pp", []),
+    "mach3": ("Mach3", "mach3_arcs_mm.pp", []),
+    "fluidnc_atc": ("FluidNC ATC", "fluidnc_atc_mm.pp", ["fluidnc_atc_wrap_y_a_g93_mm.pp"]),
+}
 ARC_VARS = ("VAR ARC_CENTRE_I_INC_POSITION", "VAR ARC_CENTRE_J_INC_POSITION")
 
 
@@ -127,16 +133,25 @@ INTRO = {
     "mach3": [
         "Cut Craft's post for Mach3 (and Mach4), {units}, with Mach3's tool change (T M6).",
     ],
+    "fluidnc_atc": [
+        "Cut Craft's post for FluidNC with an automatic tool changer (M6), {units}.",
+    ],
 }
 
 
 def main():
     files = list(FIXED)
-    for stem, controller in TEMPLATES.items():
-        template = (POSTS / f"{stem}_arcs_mm.pp").read_text()
+    for stem, (controller, source, already) in TEMPLATES.items():
+        template = (POSTS / source).read_text()
         for file, text in variants(stem, controller, template):
-            if file != f"{stem}_arcs_mm.pp":
-                (POSTS / file).write_text(text)
+            # the template is its own Arcs (mm)
+            if file == f"{stem}_arcs_mm.pp":
+                if source not in files:
+                    files.append(source)
+                continue
+            if file in already:
+                continue
+            (POSTS / file).write_text(text)
             files.append(file)
     rows = "".join(f'    ("{f}", include_str!("../posts/{f}")),\n' for f in files)
     (ROOT / "crates/post/src/built_in.rs").write_text(
