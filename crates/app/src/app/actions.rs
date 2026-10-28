@@ -1520,10 +1520,12 @@ impl CutCraftApp {
         }
         self.nudge(ctx);
         ctx.input(|i| {
-            if i.key_pressed(Key::F1)
-                && let Some(open) = &self.form
-            {
-                self.info = Some(Info::Tool(open.id));
+            if i.key_pressed(Key::F1) {
+                let open = self.form.as_ref();
+                self.info = Some(Info::Help {
+                    page: open.map_or(Page::Design, |f| f.page),
+                    tool: open.map(|f| f.id),
+                });
             }
             if i.key_pressed(Key::F2) {
                 self.view = View::TwoD;
@@ -1740,7 +1742,7 @@ impl CutCraftApp {
     /// A page's title with its push-pin and Aspire's Switch Layout button.
     pub(super) fn page_header(&mut self, ui: &mut egui::Ui, page: Page, title: &str) {
         let row = ui.spacing().interact_size.y;
-        let (mut pin, mut switch) = (false, false);
+        let (mut pin, mut switch, mut help) = (false, false, false);
         ui.horizontal(|ui| {
             ui.strong(title);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -1757,6 +1759,7 @@ impl CutCraftApp {
                     .add(self.icon_button("view/interface_layout.png", "", "Switch Layout", row))
                     .on_hover_text("Switch Layout (F11 designing, F12 machining)")
                     .clicked();
+                help = ui.button("?").on_hover_text("Help (F1)").clicked();
             });
         });
         ui.separator();
@@ -1766,6 +1769,9 @@ impl CutCraftApp {
         }
         if switch {
             self.pages.switch_layout();
+        }
+        if help {
+            self.info = Some(Info::Help { page, tool: None });
         }
     }
 
@@ -1940,9 +1946,11 @@ impl CutCraftApp {
         }
     }
 
-    /// The open form's icon and name, with its ? (F1) help button.
-    fn form_title(&mut self, ui: &mut egui::Ui) {
-        let Some(open) = &self.form else { return };
+    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
+        let form = self.form.as_ref().map_or("none", |f| f.label);
+        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
+        let slots = self.slots();
+        let Some(open) = &mut self.form else { return };
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
                 let edge = ui.spacing().interact_size.y;
@@ -1953,20 +1961,7 @@ impl CutCraftApp {
                 );
             }
             ui.strong(open.label);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.button("?").on_hover_text("Help (F1)").clicked() {
-                    self.info = Some(Info::Tool(open.id));
-                }
-            });
         });
-    }
-
-    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
-        let form = self.form.as_ref().map_or("none", |f| f.label);
-        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
-        let slots = self.slots();
-        self.form_title(ui);
-        let Some(open) = &mut self.form else { return };
         let (mut chosen, mut save_tool) = (None, false);
         if open.params.get("tool").is_some_and(Value::is_object) {
             let current = open.params["tool"]["name"].as_str().unwrap_or_default();
@@ -2205,15 +2200,16 @@ impl CutCraftApp {
             Info::Shortcuts => "Keyboard Shortcuts".to_owned(),
             Info::Licenses => "Third Party Licenses".to_owned(),
             Info::Summary => "Toolpath Summary".to_owned(),
-            Info::Tool(id) => format!(
-                "{} Help",
-                self.registry.get(id).map_or(id, |c| c.meta().label)
+            Info::Help { page, .. } => format!("{page:?} Help"),
+        };
+        let (sections, followed) = match info {
+            Info::Help { page, tool } => (
+                self.help_sections(page),
+                tool.map(|id| (self.tool_label(id), self.tool_help(id))),
             ),
+            _ => (vec![], None),
         };
-        let tool_help = match info {
-            Info::Tool(id) => self.tool_help(id),
-            _ => (None, vec![]),
-        };
+        let mut follow = None;
         let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
             let mut rows: Vec<(String, String)> = self
                 .bindings()
@@ -2247,20 +2243,7 @@ impl CutCraftApp {
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
-            Info::Tool(_) => {
-                let (about, fields) = &tool_help;
-                if let Some(about) = about {
-                    ui.label(about);
-                    ui.separator();
-                }
-                egui::Grid::new("tool_help").striped(true).show(ui, |ui| {
-                    for (label, help) in fields {
-                        ui.strong(label);
-                        ui.label(help);
-                        ui.end_row();
-                    }
-                });
-            }
+            Info::Help { page, .. } => follow = help_page(ui, page, &sections, followed.as_ref()),
             Info::Summary => summary_table(ui, &times, summary, units),
             Info::About => {
                 ui.heading("Cut Craft");
@@ -2290,9 +2273,42 @@ impl CutCraftApp {
                 });
             }
         });
+        if follow.is_some() {
+            self.info = follow;
+        }
         if !open {
             self.info = None;
         }
+    }
+
+    /// A tool's name as its button shows it.
+    fn tool_label(&self, id: &str) -> String {
+        self.registry
+            .get(id)
+            .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())
+    }
+
+    /// A page's tools for its help, by group: each tool's id and name.
+    pub(super) fn help_sections(
+        &self,
+        page: Page,
+    ) -> Vec<(&'static str, Vec<(&'static str, String)>)> {
+        let groups = match page {
+            Page::Design => self.design_groups("Design"),
+            Page::Toolpaths => self.toolbar.toolpath_groups.clone(),
+        };
+        groups
+            .iter()
+            .map(|g| {
+                (
+                    g.name,
+                    g.tools
+                        .iter()
+                        .map(|&id| (id, self.tool_label(id)))
+                        .collect(),
+                )
+            })
+            .collect()
     }
 
     /// A command's help, from its params' doc comments: what it does, then each setting.
@@ -2308,4 +2324,52 @@ impl CutCraftApp {
             .collect();
         (about, fields)
     }
+}
+
+/// A followed tool's name, then its help: what it does and each setting.
+type Followed = (String, (Option<String>, Vec<(String, String)>));
+
+/// A page's help: its tools as links by group, or the one followed with a link back.
+/// The help to show next when a link was clicked.
+fn help_page(
+    ui: &mut egui::Ui,
+    page: Page,
+    sections: &[(&'static str, Vec<(&'static str, String)>)],
+    followed: Option<&Followed>,
+) -> Option<Info> {
+    let mut follow = None;
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        if let Some((label, (about, fields))) = followed {
+            if ui.link("◀ All tools").clicked() {
+                follow = Some(Info::Help { page, tool: None });
+            }
+            ui.heading(label);
+            match about {
+                Some(about) => ui.label(about),
+                None if fields.is_empty() => ui.weak("No help written for this tool yet."),
+                None => ui.weak(""),
+            };
+            egui::Grid::new("tool_help").striped(true).show(ui, |ui| {
+                for (label, help) in fields {
+                    ui.strong(label);
+                    ui.label(help);
+                    ui.end_row();
+                }
+            });
+            return;
+        }
+        for (group, tools) in sections {
+            ui.strong(*group);
+            for (id, label) in tools {
+                if ui.link(label).clicked() {
+                    follow = Some(Info::Help {
+                        page,
+                        tool: Some(id),
+                    });
+                }
+            }
+            ui.add_space(ui.spacing().item_spacing.y);
+        }
+    });
+    follow
 }

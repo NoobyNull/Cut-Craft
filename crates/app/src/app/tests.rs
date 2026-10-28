@@ -2884,14 +2884,31 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
 }
 
 #[test]
-fn a_tool_forms_help_explains_it_and_its_settings() {
+fn the_page_help_links_its_tools_to_their_help() {
     let mut h = Harness::new();
-    h.app.start_command("document_variables");
+    h.app.pages.set_pinned(Page::Design, true);
     let (about, fields) = h.app.tool_help("document_variables");
     assert!(about.unwrap().contains("{depth}"), "how to use one");
     assert!(fields.iter().any(|(label, _)| label == "Variables"));
     h.frame(vec![]);
-    let at = h.text_at("?").expect("the form's ? button");
+    let at = h.text_at("?").expect("the page's ? button");
     h.click(at, Modifiers::NONE);
-    assert_eq!(h.app.info, Some(Info::Tool("document_variables")));
+    assert_eq!(
+        h.app.info,
+        Some(Info::Help {
+            page: Page::Design,
+            tool: None
+        })
+    );
+    h.frame(vec![]);
+    let at = h.text_at("Draw Rectangle").expect("the tools are listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(matches!(
+        h.app.info,
+        Some(Info::Help {
+            tool: Some("draw_rectangle"),
+            ..
+        })
+    ));
 }
