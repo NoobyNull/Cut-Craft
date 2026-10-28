@@ -101,6 +101,7 @@ impl Command for VcarveInlayToolpath {
                 start_depth,
                 flat_depth,
                 tool: p.tool.clone(),
+                project_onto_model: false,
             };
         let pocket = carving("Pocket", 0.0, p.pocket_depth);
         // turned over, the plug's top sits the glue gap above the pocket floor and its

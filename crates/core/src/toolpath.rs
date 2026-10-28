@@ -1,10 +1,11 @@
 //! Toolpaths: the tool, the strategy command that made them (so they can be recalculated),
 //! and the computed moves.
 
-use crate::document::EntityId;
+use crate::component::placed_model;
+use crate::document::{Document, EntityId};
 use crate::geometry::{Path, Point};
 use crate::simulation::Material;
-use crate::{Command, polygon};
+use crate::{Command, CommandError, polygon};
 use glam::DVec3;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -526,6 +527,58 @@ pub fn follow(points: &[DVec3], safe_z: f64) -> Vec<Move> {
     moves
 }
 
+/// Project toolpath onto 3D Model: `moves` dropped in Z onto the job's 3D model, so a depth
+/// below (or a lift above) the material surface becomes the same below (or above) the model's
+/// surface, never below the material's bottom. Cuts are split into steps no longer than one of
+/// the model's cells (sized for `tool`) so they follow it; rapids keep their height.
+pub fn project_onto_model(
+    doc: &Document,
+    tool: &Tool,
+    moves: &[Move],
+) -> Result<Vec<Move>, CommandError> {
+    let surface = placed_model(doc, tool)?;
+    // the grid's far edges belong to its last cells, as does anything past them
+    #[expect(clippy::cast_precision_loss, reason = "cell counts are small")]
+    let far = surface.origin
+        + Point::new(surface.columns as f64, surface.rows as f64) * surface.cell
+        - Point::splat(1e-9);
+    // ponytail: the tip follows the model's height under it, as the option is described; the
+    // cutter is not dropped as a whole, so a wide tool's sides can touch a steep slope
+    let drop = |p: DVec3| {
+        let model = surface
+            .at(p.truncate().clamp(surface.origin, far))
+            .unwrap_or(0.0);
+        p.truncate().extend((model + p.z).max(surface.bottom))
+    };
+    let mut projected = Vec::with_capacity(moves.len());
+    let mut from: Option<DVec3> = None;
+    for m in moves {
+        match (m.kind, from) {
+            (MoveKind::Rapid, _) => projected.push(*m),
+            (kind, Some(a)) => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "a small positive count"
+                )]
+                let steps = (a.truncate().distance(m.to.truncate()) / surface.cell)
+                    .ceil()
+                    .max(1.0) as u32;
+                projected.extend((1..=steps).map(|i| Move {
+                    kind,
+                    to: drop(a.lerp(m.to, f64::from(i) / f64::from(steps))),
+                }));
+            }
+            (kind, None) => projected.push(Move {
+                kind,
+                to: drop(m.to),
+            }),
+        }
+        from = Some(m.to);
+    }
+    Ok(projected)
+}
+
 /// Parallel lines `step` apart at `angle` degrees from the x axis, clipped to `regions`
 /// (holes left out): each row's pieces as (start, end), rows in order across the regions.
 pub fn hatch_lines(regions: &[Path], step: f64, angle: f64) -> Vec<Vec<(Point, Point)>> {
@@ -566,4 +619,99 @@ pub fn hatch_lines(regions: &[Path], step: f64, angle: f64) -> Vec<Vec<(Point, P
         y += step;
     }
     rows
+}
+
+#[cfg(test)]
+mod projection {
+    use super::*;
+    use crate::testing::domed;
+
+    /// A cut `depth` deep along y = 20 over the middle of the dome, from flat to flat.
+    fn across(depth: f64) -> Vec<Move> {
+        let at = |kind, x: f64, z: f64| Move {
+            kind,
+            to: DVec3::new(x, 20.0, z),
+        };
+        vec![
+            at(MoveKind::Rapid, 2.0, 5.0),
+            at(MoveKind::Plunge, 2.0, -depth),
+            at(MoveKind::Cut, 38.0, -depth),
+            at(MoveKind::Rapid, 38.0, 5.0),
+        ]
+    }
+
+    /// The dome's surface along that line: 8 mm tall with its top at the material surface.
+    fn dome(x: f64) -> f64 {
+        let r = (x - 20.0).abs();
+        if r < 8.0 {
+            (64.0 - r * r).sqrt() - 8.0
+        } else {
+            -8.0
+        }
+    }
+
+    fn cuts(moves: &[Move]) -> Vec<DVec3> {
+        moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut)
+            .map(|m| m.to)
+            .collect()
+    }
+
+    #[test]
+    fn a_cut_follows_the_model_at_its_depth_below_it() {
+        let moved = project_onto_model(&domed(), &Tool::default(), &across(1.0)).unwrap();
+        let cuts = cuts(&moved);
+        // split into steps no longer than a model cell, a twentieth of the 6 mm tool
+        assert!(cuts.len() > 100, "{} pieces", cuts.len());
+        assert!(
+            cuts.windows(2)
+                .all(|w| w[0].truncate().distance(w[1].truncate()) <= 0.3 + 1e-9)
+        );
+        for p in &cuts {
+            // off the true dome by no more than its slope across a cell
+            assert!(
+                (p.z - (dome(p.x) - 1.0)).abs() < 0.5,
+                "at x = {} cut at {}, the model at {}",
+                p.x,
+                p.z,
+                dome(p.x)
+            );
+        }
+        assert!(
+            cuts.iter().any(|p| (p.z + 1.0).abs() < 0.05),
+            "over the top"
+        );
+        // right on the material's far edge too
+        let edge = [Move {
+            kind: MoveKind::Plunge,
+            to: DVec3::new(40.0, 40.0, -1.0),
+        }];
+        let dropped = project_onto_model(&domed(), &Tool::default(), &edge).unwrap();
+        assert!((dropped[0].to.z + 9.0).abs() < 0.01, "{}", dropped[0].to.z);
+        // rapids keep their height above the material
+        assert!((moved.first().unwrap().to.z - 5.0).abs() < 1e-12);
+        assert!((moved.last().unwrap().to.z - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn it_never_goes_below_the_material_bottom() {
+        // 3 mm below the flat 8 mm down would be 11 mm into 10 mm thick material
+        let moved = project_onto_model(&domed(), &Tool::default(), &across(3.0)).unwrap();
+        let lowest = moved.iter().map(|m| m.to.z).fold(f64::INFINITY, f64::min);
+        assert!((lowest + 10.0).abs() < 1e-9, "lowest {lowest}");
+        let top = cuts(&moved)
+            .into_iter()
+            .find(|p| (p.x - 20.0).abs() < 0.2)
+            .unwrap();
+        assert!((top.z + 3.0).abs() < 0.05, "over the top at {}", top.z);
+    }
+
+    #[test]
+    fn it_needs_a_model() {
+        let why = project_onto_model(&Document::default(), &Tool::default(), &across(1.0))
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("3D model"), "{why}");
+    }
 }
