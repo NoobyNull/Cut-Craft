@@ -7,6 +7,30 @@ use glam::DVec3;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Which way round a closed path is cut, for a spindle turning clockwise seen from above.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    /// The cutter's edge meets the material head on: anticlockwise round a hole or pocket,
+    /// clockwise round the outside of a part
+    #[default]
+    Climb,
+    /// The other way round
+    Conventional,
+}
+
+impl Direction {
+    /// `points` turned to run the way this direction cuts, with the material kept `inside`
+    /// the closed path (a hole or pocket) or outside it (a part's outline).
+    pub fn orient(self, mut points: Vec<Point>, inside: bool) -> Vec<Point> {
+        let anticlockwise = crate::geometry::winding(&points) > 0.0;
+        if anticlockwise != (inside == (self == Self::Climb)) {
+            points.reverse();
+        }
+        points
+    }
+}
+
 /// How the tool goes down into each pass.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -119,6 +143,21 @@ pub enum TabSpacing {
     ConstantNumber,
     /// A tab about every this far
     ConstantDistance,
+    /// Where clicked: with the form open, click a vector in the 2D view to add a tab there,
+    /// click a tab to take it off
+    Placed,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TabPlacement {
+    /// Spread evenly from half a spacing in
+    #[default]
+    Evenly,
+    /// The first at the machining start point, the rest spread evenly after it
+    AtStart,
+    /// Moved along a little where that keeps them off corners and curves
+    AvoidCorners,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -134,6 +173,9 @@ pub struct TabSettings {
     pub number: u32,
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub distance: f64,
+    /// Where tabs spread by number or distance go (added with tab placement)
+    #[serde(default)]
+    pub placement: TabPlacement,
 }
 
 impl Default for TabSettings {
@@ -145,12 +187,13 @@ impl Default for TabSettings {
             spacing: TabSpacing::ConstantNumber,
             number: 4,
             distance: 100.0,
+            placement: TabPlacement::Evenly,
         }
     }
 }
 
 /// Everything about how one toolpath enters, leaves and bridges its paths.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Entry {
     pub ramp: Ramp,
     pub ramping: Ramping,
@@ -164,6 +207,8 @@ pub struct Entry {
     pub tab_top: f64,
     /// Added to the tab length along the centre line, so the tab left is the length given.
     pub tool_diameter: f64,
+    /// Where this path's tabs go when they are placed by clicking: each moves onto the path.
+    pub placed: Vec<Point>,
 }
 
 /// Points along one path by distance.
@@ -219,6 +264,38 @@ impl Line {
     fn tangent(&self, s: f64) -> Point {
         let i = self.segment(s);
         (self.points[i + 1] - self.points[i]).normalize_or_zero()
+    }
+
+    /// How far along the path (once round) the point nearest `p` is.
+    fn nearest(&self, p: Point) -> f64 {
+        let end = self.at.partition_point(|&a| a < self.length - 1e-12).max(1);
+        let mut best = (f64::INFINITY, 0.0);
+        for i in 0..end.min(self.points.len() - 1) {
+            let (a, b) = (self.points[i], self.points[i + 1]);
+            let span = b - a;
+            let t = if span.length_squared() > 0.0 {
+                ((p - a).dot(span) / span.length_squared()).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let gap = p.distance(a + span * t);
+            if gap < best.0 {
+                best = (gap, self.at[i] + t * span.length());
+            }
+        }
+        best.1
+    }
+
+    /// How much the path turns (radians, either way) between `a` and `b` along it.
+    fn turning(&self, a: f64, b: f64) -> f64 {
+        (1..self.points.len() - 1)
+            .filter(|&i| self.at[i] > a && self.at[i] < b)
+            .map(|i| {
+                let into = self.points[i] - self.points[i - 1];
+                let out = self.points[i + 1] - self.points[i];
+                into.angle_to(out).abs()
+            })
+            .sum()
     }
 
     /// The distances from `a` to `b` (either way round) where the path turns, ends included.
@@ -547,7 +624,7 @@ fn lead(entry: &Entry, at: Point, tangent: Point, side: f64, out: bool) -> Vec<P
     }
 }
 
-/// Where along the path each tab's middle goes, evenly spread.
+/// Where along the path each tab's middle goes.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -559,13 +636,56 @@ fn tab_centres(line: &Line, entry: &Entry) -> Vec<f64> {
     }
     let t = entry.tab;
     let count = match t.spacing {
+        TabSpacing::Placed => {
+            let mut at: Vec<f64> = entry.placed.iter().map(|&p| line.nearest(p)).collect();
+            at.sort_by(f64::total_cmp);
+            return at;
+        }
         TabSpacing::ConstantNumber => t.number,
         TabSpacing::ConstantDistance if t.distance > 0.0 => {
             (line.length / t.distance).round().max(1.0) as u32
         }
         TabSpacing::ConstantDistance => 1,
     };
-    // ponytail: evenly spread from half a spacing in; Aspire can also avoid corners
     let gap = line.length / f64::from(count.max(1));
-    (0..count).map(|i| (f64::from(i) + 0.5) * gap).collect()
+    let first = if t.placement == TabPlacement::AtStart {
+        0.0
+    } else {
+        0.5
+    };
+    let centres = (0..count).map(|i| (f64::from(i) + first) * gap);
+    if t.placement != TabPlacement::AvoidCorners {
+        return centres.collect();
+    }
+    // the nearest place, within half a spacing either way, where the tab sits on a stretch
+    // that turns less than a few degrees
+    let half = f64::midpoint(t.length, entry.tool_diameter);
+    let straight = |c: f64| {
+        let turns = |a: f64, b: f64| line.turning(a, b);
+        let (a, b) = (c - half, c + half);
+        let turned = if line.closed {
+            // wrapped by a turn either way, so a tab across the start is judged whole
+            turns(a + line.length, b + line.length)
+        } else if a < 0.0 || b > line.length {
+            f64::INFINITY
+        } else {
+            turns(a, b)
+        };
+        turned < CORNER
+    };
+    let steps = 50;
+    centres
+        .map(|c| {
+            (0..=steps)
+                .flat_map(|i| {
+                    let d = gap / 2.0 * f64::from(i) / f64::from(steps);
+                    [c + d, c - d]
+                })
+                .find(|&at| straight(at))
+                .map_or(c, |at| at.rem_euclid(line.length))
+        })
+        .collect()
 }
+
+/// How much a tab's stretch of path may turn and still count as straight (radians, 5°).
+const CORNER: f64 = 5.0 * std::f64::consts::PI / 180.0;

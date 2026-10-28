@@ -147,7 +147,7 @@ All work on the existing `Component` height grid; each is a command crate with t
 | Thread-mill and laser tool types in the tool database | M |
 | Feeds and speeds per machine and material; rate units per tool | M |
 | Arc output in posts (fit arcs to straight moves) | M |
-| Toolpath options still missing: tabs placed by clicking or away from corners; Selected Level boundary; Z Level profile pass, avoid machined areas, reverse step; Stepover Retract; Pocket Allowance; climb / conventional (ramps, leads, tabs, raster / offset, Z level / depth first and machining boundaries are done) | M |
+| Toolpath options still missing: tabs dragged along a vector; profile order (selection order, left to right, bottom to top, grid) and start points; sharp corners (tabs, ramps, leads, climb / conventional, allowances, raster / offset, Z level / depth first with profile passes, machining boundaries and linked 3D runs are done) | M |
 
 ### Out of scope unless decided otherwise
 

@@ -2689,3 +2689,35 @@ fn crossing_vectors_go_to_the_vector_validator_or_on_as_options_say() {
     h.app.apply("pocket_toolpath", &params).unwrap();
     assert_eq!(h.app.doc.toolpaths.len(), 1);
 }
+
+#[test]
+fn tabs_are_placed_and_removed_by_clicking_the_vector() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.click(h.at(60.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    {
+        let params = &mut h.app.form.as_mut().unwrap().params;
+        params["tabs"] = "flat".into();
+        params["tab"]["spacing"] = "placed".into();
+    }
+    h.frame(vec![]);
+    h.click(h.at(60.0, 30.0), Modifiers::NONE);
+    let tabs = |h: &Harness| -> Vec<Point> {
+        serde_json::from_value(h.app.form.as_ref().unwrap().params["tab_points"].clone())
+            .unwrap_or_default()
+    };
+    let placed = tabs(&h);
+    assert_eq!(placed.len(), 1, "{}", h.app.status.message);
+    assert!(near(placed[0], Point::new(60.0, 30.0)), "{placed:?}");
+    assert_eq!(
+        h.app.doc.selection.len(),
+        1,
+        "the click placed a tab, not a selection"
+    );
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
+    h.click(h.at(60.0, 30.0), Modifiers::NONE);
+    assert!(tabs(&h).is_empty(), "a second click takes it off");
+}

@@ -8,7 +8,7 @@ use cut_craft_core::entry::{Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{
-    Drop, Move, Tool, cut_points, follow, made_by, pass_depths, raster_lines,
+    Drop, Move, MoveKind, Tool, cut_points, follow, made_by, pass_depths, raster_lines,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use glam::DVec3;
@@ -27,6 +27,18 @@ pub enum Strategy {
     /// Over the model, never deeper than each level: a more even skin for finishing
     #[schemars(title = "3D Raster")]
     Raster3d,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfilePass {
+    /// Round the edge before the raster lines
+    First,
+    /// Round the edge after them
+    Last,
+    /// Raster lines only
+    #[default]
+    None,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -55,6 +67,10 @@ pub struct Params {
     #[schemars(title = "Machining Limit Boundary")]
     pub machining_boundary: MachiningBoundary,
     /// Grows the machining boundary, so the tool can go on past a raised edge
+    /// The level whose components make the boundary
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
+    pub boundary_level: String,
     #[serde(default)]
     #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
     pub machining_boundary_offset: f64,
@@ -64,6 +80,18 @@ pub struct Params {
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": "z_level"}))]
     pub order: Order,
+    /// A pass round the edge of each level, before or after its raster lines
+    #[serde(default)]
+    #[schemars(title = "Profile", extend("x-show-when" = {"strategy": "z_level"}))]
+    pub profile: ProfilePass,
+    /// Step from line to line the other way: top to bottom along X, left to right along Y
+    #[serde(default)]
+    #[schemars(extend("x-show-when" = {"strategy": "z_level"}))]
+    pub reverse_step_direction: bool,
+    /// Leave out what an earlier pass already cut down to the model
+    #[serde(default)]
+    #[schemars(extend("x-show-when" = {"strategy": "raster3d"}))]
+    pub avoid_machined_areas: bool,
     /// 0° along X, 90° along Y
     #[serde(default)]
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 90))]
@@ -87,9 +115,13 @@ impl Default for Params {
             allowance: 0.5,
             tool: Tool::default(),
             machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
             machining_boundary_offset: 0.0,
             strategy: Strategy::ZLevel,
             order: Order::LevelByLevel,
+            profile: ProfilePass::None,
+            reverse_step_direction: false,
+            avoid_machined_areas: false,
             raster_angle: 0.0,
             ramp_plunge_moves: false,
             ramp_distance: ramp_distance(),
@@ -131,59 +163,76 @@ impl Command for RoughingToolpath3d {
             *height += p.allowance;
         }
         let step = tool.stepover * tool.diameter;
-        let regions = machining_boundary(doc, p.machining_boundary, p.machining_boundary_offset)?;
-        let lines = raster_lines(&regions, step, p.raster_angle);
+        let regions = machining_boundary(
+            doc,
+            p.machining_boundary,
+            p.machining_boundary_offset,
+            &p.boundary_level,
+        )?;
+        let mut lines = raster_lines(&regions, step, p.raster_angle);
+        if p.reverse_step_direction {
+            lines.reverse();
+        }
         let material = doc.job.area();
         let inside = |at: Point| material.contains(at);
         let peaks = leave.peaks();
         // down to the lowest of the allowance
         let levels = pass_depths(-(lowest + p.allowance).min(0.0), tool.pass_depth);
         let z_level = p.strategy == Strategy::ZLevel;
-        // ponytail: each run retracts and the next plunges; link neighbouring runs if
-        // roughing time matters, and the allowance is vertical, not a true 3D offset
+        // ponytail: the allowance is vertical, not a true 3D offset
+        let profile = if z_level {
+            p.profile
+        } else {
+            ProfilePass::None
+        };
+        let depth_first_order = z_level && p.order == Order::DepthFirst;
+        let tips = if depth_first_order || profile != ProfilePass::None {
+            tips(&leave, tool, &regions)
+        } else {
+            vec![]
+        };
         let runs: Vec<Vec<Vec<DVec3>>> = levels
             .iter()
-            .map(|&level| {
+            .enumerate()
+            .map(|(i, &level)| {
+                let ceiling = if z_level {
+                    level
+                } else if p.avoid_machined_areas && i > 0 {
+                    // higher than the level above: the last pass cut it already
+                    levels[i - 1]
+                } else {
+                    f64::INFINITY
+                };
                 let drop = Drop {
                     grid: &leave,
                     tool,
                     tolerance: TOLERANCE,
                     floor: level,
-                    ceiling: if z_level { level } else { f64::INFINITY },
+                    ceiling,
+                    // a 3D raster still cuts up to where it rides over the last pass's cut
+                    over_ceiling: !z_level,
                     peaks: &peaks,
                 };
-                lines.iter().flat_map(|l| drop.along(l, &inside)).collect()
+                level_runs(&drop, &lines, &inside, profile, &tips)
             })
             .collect();
-        let order = if z_level && p.order == Order::DepthFirst {
-            depth_first(&leave, tool, &levels, &runs, &regions)
+        let order = if depth_first_order {
+            depth_first(&leave, &levels, &runs, &tips)
         } else {
             (0..levels.len())
                 .flat_map(|i| (0..runs[i].len()).map(move |j| (i, j)))
                 .collect()
         };
-        let entry = Entry {
-            ramp: Ramp::ZigZag,
-            ramping: Ramping {
-                distance: p.ramp_distance,
-                ..Ramping::default()
-            },
-            ..Entry::default()
-        };
-        let safe = doc.job.clearance;
-        let mut moves: Vec<Move> = vec![];
-        for (i, j) in order {
-            let run = &runs[i][j];
-            let level = levels[i];
-            let flat = run.iter().all(|q| (q.z - level).abs() < 1e-9);
-            if p.ramp_plunge_moves && z_level && flat && run.len() > 1 {
-                let above = if i == 0 { 0.0 } else { levels[i - 1] };
-                let points: Vec<Point> = run.iter().map(|q| q.truncate()).collect();
-                moves.extend(path_moves(&points, false, &[level], above, safe, &entry));
-            } else {
-                moves.extend(follow(run, safe));
-            }
-        }
+        let clear = |a, b| leave.overcut_on(tool, a, b, &peaks) <= TOLERANCE;
+        let moves = connect(
+            &runs,
+            order,
+            &levels,
+            p,
+            2.0 * step,
+            doc.job.clearance,
+            &clear,
+        );
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
             p,
@@ -196,14 +245,94 @@ impl Command for RoughingToolpath3d {
     }
 }
 
-/// The separate areas cut at each level, as a label per cell of the grid: where the tool's
-/// tip, inside the boundary, rests no higher than the level.
-fn areas(
-    grid: &Material,
-    tool: &Tool,
+/// One level's runs: along the raster lines, with a profile pass round the edge of what the
+/// level cuts first or last, riding up no more than a cell.
+fn level_runs(
+    drop: &Drop,
+    lines: &[Vec<Point>],
+    inside: &dyn Fn(Point) -> bool,
+    profile: ProfilePass,
+    tips: &[f64],
+) -> Vec<Vec<DVec3>> {
+    let mut runs: Vec<Vec<DVec3>> = lines.iter().flat_map(|l| drop.along(l, inside)).collect();
+    if profile != ProfilePass::None {
+        let edge = Drop {
+            ceiling: drop.floor + drop.grid.cell,
+            over_ceiling: false,
+            ..*drop
+        };
+        let rings: Vec<Vec<DVec3>> = outline(drop.grid, tips, drop.floor)
+            .iter()
+            .flat_map(|ring| edge.along(ring, inside))
+            .collect();
+        if profile == ProfilePass::First {
+            runs.splice(0..0, rings);
+        } else {
+            runs.extend(rings);
+        }
+    }
+    runs
+}
+
+/// The runs cut in `order`, each started with a ramp (Z level, if asked) or a plunge, or
+/// joined at depth to the run before on its level when that ended no more than `reach` away
+/// and `clear` says the move between keeps out of the model.
+fn connect(
+    runs: &[Vec<Vec<DVec3>>],
+    order: Vec<(usize, usize)>,
     levels: &[f64],
-    boundary: &[Path],
-) -> Vec<Vec<Option<usize>>> {
+    p: &Params,
+    reach: f64,
+    safe: f64,
+    clear: &dyn Fn(DVec3, DVec3) -> bool,
+) -> Vec<Move> {
+    let z_level = p.strategy == Strategy::ZLevel;
+    let entry = Entry {
+        ramp: Ramp::ZigZag,
+        ramping: Ramping {
+            distance: p.ramp_distance,
+            ..Ramping::default()
+        },
+        ..Entry::default()
+    };
+    let mut moves: Vec<Move> = vec![];
+    // where the run before ended, and on which level
+    let mut last: Option<(usize, DVec3)> = None;
+    for (i, j) in order {
+        let run = &runs[i][j];
+        let level = levels[i];
+        // stay down to the next run on the same level when it starts close by
+        let near = last.is_some_and(|(at, end)| {
+            at == i && end.truncate().distance(run[0].truncate()) <= reach && clear(end, run[0])
+        });
+        last = run.last().map(|&end| (i, end));
+        if near {
+            moves.pop(); // the rapid up at the end of the run before
+            moves.extend(run.iter().map(|&to| Move {
+                kind: MoveKind::Cut,
+                to,
+            }));
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: run[run.len() - 1].truncate().extend(safe),
+            });
+            continue;
+        }
+        let flat = run.iter().all(|q| (q.z - level).abs() < 1e-9);
+        if p.ramp_plunge_moves && z_level && flat && run.len() > 1 {
+            let above = if i == 0 { 0.0 } else { levels[i - 1] };
+            let points: Vec<Point> = run.iter().map(|q| q.truncate()).collect();
+            moves.extend(path_moves(&points, false, &[level], above, safe, &entry));
+        } else {
+            moves.extend(follow(run, safe));
+        }
+    }
+    moves
+}
+
+/// Where the tool's tip rests at each cell of the grid inside the boundary; infinite
+/// outside it.
+fn tips(grid: &Material, tool: &Tool, boundary: &[Path]) -> Vec<f64> {
     let (columns, rows) = (grid.columns, grid.rows);
     let peaks = grid.peaks();
     // the cells inside the boundary, a row at a time (even-odd, so holes stay out)
@@ -231,8 +360,7 @@ fn areas(
             }
         }
     }
-    // where the tool's tip rests at each cell inside
-    let tips: Vec<f64> = (0..rows * columns)
+    (0..rows * columns)
         .map(|i| {
             if inside[i] {
                 grid.drop_tool_on(tool, grid.centre(i % columns, i / columns), &peaks)
@@ -240,8 +368,13 @@ fn areas(
                 f64::INFINITY
             }
         })
-        .collect();
-    // the separate areas cut at each level, as a label per cell
+        .collect()
+}
+
+/// The separate areas cut at each level, as a label per cell of the grid: where the tool's
+/// tip ([`tips`]) rests no higher than the level.
+fn areas(grid: &Material, levels: &[f64], tips: &[f64]) -> Vec<Vec<Option<usize>>> {
+    let (columns, rows) = (grid.columns, grid.rows);
     levels
         .iter()
         .map(|&level| {
@@ -275,6 +408,28 @@ fn areas(
         .collect()
 }
 
+/// The edges of what a level cuts: round the cells whose tip rests no higher than it, as
+/// closed lines (the first point again at the end).
+fn outline(grid: &Material, tips: &[f64], level: f64) -> Vec<Vec<Point>> {
+    use cut_craft_core::trace::{self, Grid};
+    let at = Grid {
+        columns: grid.columns,
+        rows: grid.rows,
+        origin: grid.origin,
+        cell: grid.cell,
+    };
+    trace::outlines(at, |c, r| tips[r * grid.columns + c] <= level + 1e-9)
+        .iter()
+        .map(|ring| {
+            let mut points = trace::simplify(ring, grid.cell / 2.0);
+            if let Some(&first) = points.first() {
+                points.push(first);
+            }
+            points
+        })
+        .collect()
+}
+
 /// The runs (level, index) in depth-first order: each separate area at a level, then the
 /// areas under it all the way down, before the next area.
 #[expect(
@@ -284,13 +439,12 @@ fn areas(
 )]
 fn depth_first(
     grid: &Material,
-    tool: &Tool,
     levels: &[f64],
     runs: &[Vec<Vec<DVec3>>],
-    boundary: &[Path],
+    tips: &[f64],
 ) -> Vec<(usize, usize)> {
     let (columns, rows) = (grid.columns, grid.rows);
-    let labels = areas(grid, tool, levels, boundary);
+    let labels = areas(grid, levels, tips);
     // the area at a level under a point, or under a cell beside it: a run can start on the
     // boundary, just off the cells inside it
     let label = |level: usize, p: DVec3| {
@@ -361,7 +515,7 @@ mod tests {
     use cut_craft_core::geometry::Point;
     use cut_craft_core::simulation::Material;
     use cut_craft_core::testing::domed;
-    use cut_craft_core::toolpath::{MoveKind, Toolpath};
+    use cut_craft_core::toolpath::Toolpath;
 
     cut_craft_core::contract_tests!(RoughingToolpath3d, domed);
 
@@ -502,5 +656,116 @@ mod tests {
                 assert!(ok, "{a} to {b}");
             }
         }
+    }
+
+    /// What a toolpath leaves of the domed job's material.
+    fn left_by(tp: &Toolpath) -> Vec<f64> {
+        let mut m = Material::new(&domed().job, 134);
+        m.cut(tp);
+        m.heights
+    }
+
+    #[test]
+    fn a_profile_pass_runs_round_the_model_at_each_level_without_cutting_into_it() {
+        let tp = rough(&Params {
+            profile: ProfilePass::Last,
+            ..Params::default()
+        });
+        let top_level = levels(&tp)[0];
+        // the allowance meets the top level about 6.2 mm out; the tool's centre 3 mm further
+        let ring: Vec<Point> = tp
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut && (m.to.z - top_level).abs() < 1e-6)
+            .map(|m| m.to.truncate())
+            .filter(|p| (p.distance(Point::new(20.0, 20.0)) - 9.2).abs() < 0.6)
+            .collect();
+        let quadrants = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
+            .iter()
+            .filter(|(sx, sy)| {
+                ring.iter()
+                    .any(|p| (p.x - 20.0) * sx > 2.0 && (p.y - 20.0) * sy > 2.0)
+            })
+            .count();
+        assert_eq!(quadrants, 4, "all the way round: {ring:?}");
+        let without = left_by(&rough(&Params::default()));
+        let with = left_by(&tp);
+        let shape = model(&domed(), 134);
+        let top = shape
+            .heights
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
+        let into = with
+            .iter()
+            .zip(&shape.heights)
+            .filter(|&(&z, &h)| z < (h - top + 0.5).min(0.0) - 0.01)
+            .count();
+        assert_eq!(into, 0, "into the allowance");
+        assert!(
+            with.iter().sum::<f64>() < without.iter().sum::<f64>(),
+            "it cleans up more"
+        );
+    }
+
+    #[test]
+    fn avoiding_machined_areas_cuts_less_for_the_same_result() {
+        let raster = |avoid| {
+            rough(&Params {
+                strategy: Strategy::Raster3d,
+                avoid_machined_areas: avoid,
+                ..Params::default()
+            })
+        };
+        let (all, avoided) = (raster(false), raster(true));
+        assert!(avoided.moves.len() < all.moves.len());
+        let worst = left_by(&all)
+            .iter()
+            .zip(left_by(&avoided))
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0, f64::max);
+        assert!(worst < 0.05, "{worst}");
+    }
+
+    #[test]
+    fn reversing_the_step_direction_starts_at_the_far_side() {
+        let first_y = |reverse| {
+            let tp = rough(&Params {
+                reverse_step_direction: reverse,
+                ..Params::default()
+            });
+            tp.moves
+                .iter()
+                .find(|m| m.kind == MoveKind::Cut)
+                .unwrap()
+                .to
+                .y
+        };
+        assert!(first_y(false) < 10.0 && first_y(true) > 30.0);
+    }
+
+    #[test]
+    fn lines_beside_each_other_on_a_level_are_linked() {
+        let tp = rough(&Params::default());
+        // across from one line to the next at the same depth, without lifting
+        let step = Params::default().tool.stepover * Params::default().tool.diameter;
+        let links = tp
+            .moves
+            .windows(2)
+            .filter(|w| {
+                let (a, b) = (w[0].to, w[1].to);
+                w[1].kind == MoveKind::Cut
+                    && w[0].kind == MoveKind::Cut
+                    && (a.z - b.z).abs() < 1e-9
+                    && (a.x - b.x).abs() < 1e-9
+                    && ((b.y - a.y).abs() - step).abs() < 1e-6
+            })
+            .count();
+        let plunges = tp
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Plunge)
+            .count();
+        assert!(links > plunges, "{links} links, {plunges} plunges");
     }
 }

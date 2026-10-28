@@ -528,6 +528,7 @@ pub fn zigzag_within(
         tolerance,
         floor,
         ceiling: f64::INFINITY,
+        over_ceiling: false,
         peaks: &peaks,
     };
     let mut runs = vec![];
@@ -545,12 +546,16 @@ pub fn zigzag_within(
 /// How to drop a tool along lines over a grid: never below `floor`, every move checked to
 /// cut no more than `tolerance` into the grid, and runs split where the tool would sit above
 /// `ceiling` (a Z level's flat cut stops where the model stands above it).
+#[derive(Clone, Copy)]
 pub struct Drop<'a> {
     pub grid: &'a Material,
     pub tool: &'a Tool,
     pub tolerance: f64,
     pub floor: f64,
     pub ceiling: f64,
+    /// Runs split at the ceiling keep the point just over it at each end, so the move up to
+    /// it is still cut.
+    pub over_ceiling: bool,
     /// The grid's [`Material::peaks`].
     pub peaks: &'a Tiles,
 }
@@ -588,16 +593,26 @@ impl Drop<'_> {
                 .max(1.0) as u32;
             samples.extend((1..=steps).map(|i| w[0].lerp(w[1], f64::from(i) / f64::from(steps))));
         }
+        // the last point passed over for being above the ceiling, while still inside
+        let mut over: Option<DVec3> = None;
         for p in samples {
-            let next = inside(p)
-                .then(|| at(p))
-                .filter(|q| q.z <= self.ceiling + 1e-9);
+            let point = inside(p).then(|| at(p));
+            let next = point.filter(|q| q.z <= self.ceiling + 1e-9);
             let Some(next) = next else {
+                if let (true, Some(up), Some(&previous)) = (self.over_ceiling, point, run.last()) {
+                    refine.between(previous, up, HALVINGS, &mut run);
+                    run.push(up);
+                }
                 if !run.is_empty() {
                     runs.push(tidy(std::mem::take(&mut run)));
                 }
+                over = point;
                 continue;
             };
+            if let (true, Some(up), true) = (self.over_ceiling, over, run.is_empty()) {
+                run.push(up);
+            }
+            over = None;
             if let Some(&previous) = run.last() {
                 refine.between(previous, next, HALVINGS, &mut run);
             }
@@ -685,6 +700,55 @@ pub fn raster_lines(regions: &[Path], step: f64, angle: f64) -> Vec<Vec<Point>> 
             spans
         })
         .collect()
+}
+
+/// [`follow`] for each run in turn, but staying down from the end of one run to the start
+/// of the next when they are no more than `reach` apart: lifted by `lift` over the gap (a
+/// stepover retract), when `clear` says each move of that keeps out of the work.
+pub fn follow_linked(
+    runs: &[Vec<DVec3>],
+    safe_z: f64,
+    reach: f64,
+    lift: f64,
+    clear: &dyn Fn(DVec3, DVec3) -> bool,
+) -> Vec<Move> {
+    let mut moves = vec![];
+    let mut last: Option<DVec3> = None;
+    for run in runs.iter().filter(|r| !r.is_empty()) {
+        let first = run[0];
+        let link = last
+            .filter(|end| end.truncate().distance(first.truncate()) <= reach)
+            .and_then(|end| {
+                let (up, over) = (end + DVec3::Z * lift, first + DVec3::Z * lift);
+                (clear(end, up) && clear(up, over) && clear(over, first)).then_some([up, over])
+            });
+        if let Some(link) = link {
+            // the run before ended with its rapid up: stay down instead
+            moves.pop();
+            if lift > 0.0 {
+                moves.extend(link.map(|to| Move {
+                    kind: MoveKind::Cut,
+                    to,
+                }));
+            }
+            moves.push(Move {
+                kind: MoveKind::Cut,
+                to: first,
+            });
+            moves.extend(run[1..].iter().map(|&to| Move {
+                kind: MoveKind::Cut,
+                to,
+            }));
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: run[run.len() - 1].truncate().extend(safe_z),
+            });
+        } else {
+            moves.extend(follow(run, safe_z));
+        }
+        last = run.last().copied();
+    }
+    moves
 }
 
 /// Rapid to above the first point, plunge to it, cut through the rest, rapid back up.

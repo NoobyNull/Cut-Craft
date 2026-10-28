@@ -1,7 +1,8 @@
 //! Ramps, leads and tabs on a path.
 
 use cut_craft_core::entry::{
-    Entry, Lead, Leads, Ramp, RampBy, Ramping, TabSettings, TabSpacing, Tabs, path_moves,
+    Entry, Lead, Leads, Ramp, RampBy, Ramping, TabPlacement, TabSettings, TabSpacing, Tabs,
+    path_moves,
 };
 use cut_craft_core::geometry::Point;
 use cut_craft_core::toolpath::{Move, MoveKind};
@@ -216,6 +217,7 @@ fn tabbed(tabs: Tabs) -> Vec<Move> {
             spacing: TabSpacing::ConstantNumber,
             number: 4,
             distance: 0.0,
+            placement: TabPlacement::Evenly,
         },
         tab_top: -6.0 + 2.0,
         tool_diameter: 6.0,
@@ -276,4 +278,49 @@ fn triangular_tabs_peak_at_the_middle() {
         })
         .count();
     assert_eq!(ups, 0, "no straight lifts");
+}
+
+/// Where the tabs' tops are along a 40 mm square, for this many tabs placed this way.
+fn tab_middles(placement: TabPlacement, number: u32) -> Vec<Point> {
+    let entry = Entry {
+        tabs: Tabs::Triangular,
+        tab: TabSettings {
+            length: 4.0,
+            thickness: 2.0,
+            spacing: TabSpacing::ConstantNumber,
+            number,
+            distance: 0.0,
+            placement,
+        },
+        tab_top: -4.0,
+        tool_diameter: 2.0,
+        ..Entry::default()
+    };
+    path_moves(&square(), true, &[-6.0], 0.0, SAFE, &entry)
+        .iter()
+        .filter(|m| (m.to.z + 4.0).abs() < 1e-9)
+        .map(|m| m.to.truncate())
+        .collect()
+}
+
+#[test]
+fn tabs_can_start_at_the_start_point_or_keep_off_corners() {
+    // at the start: the first tab's top is on the start corner itself
+    let at_start = tab_middles(TabPlacement::AtStart, 4);
+    assert!(
+        at_start.iter().any(|p| p.distance(Point::ZERO) < 1e-9),
+        "{at_start:?}"
+    );
+    // three tabs on a 160 mm path: spread evenly, the middle one lands on a corner; kept
+    // off corners, each tab's 6 mm stretch sits wholly on one side
+    let near_corner = |p: &Point| {
+        [(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)]
+            .iter()
+            .any(|&(x, y)| p.distance(Point::new(x, y)) < 3.0 - 1e-6)
+    };
+    let even = tab_middles(TabPlacement::Evenly, 3);
+    assert!(even.iter().any(near_corner), "{even:?}");
+    let kept = tab_middles(TabPlacement::AvoidCorners, 3);
+    assert_eq!(kept.len(), 3);
+    assert!(!kept.iter().any(near_corner), "{kept:?}");
 }

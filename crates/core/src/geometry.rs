@@ -304,6 +304,25 @@ pub fn winding(points: &[Point]) -> f64 {
         .sum()
 }
 
+/// The point on the polyline through `points` nearest `at`.
+pub fn polyline_closest(points: &[Point], at: Point) -> Option<Point> {
+    if let [only] = points {
+        return Some(*only);
+    }
+    points
+        .windows(2)
+        .map(|w| {
+            let (a, d) = (w[0], w[1] - w[0]);
+            let t = if d.length_squared() > 0.0 {
+                ((at - a).dot(d) / d.length_squared()).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            a + d * t
+        })
+        .min_by(|p, q| p.distance(at).total_cmp(&q.distance(at)))
+}
+
 pub fn polyline_distance(points: &[Point], at: Point) -> f64 {
     if let [only] = points {
         return only.distance(at);

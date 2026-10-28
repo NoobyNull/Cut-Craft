@@ -691,13 +691,17 @@ pub enum MachiningBoundary {
     /// Inside the selected closed vectors
     #[schemars(title = "Selected Vector(s)")]
     SelectedVectors,
+    /// Round the visible components on the level named
+    SelectedLevel,
 }
 
-/// The regions (outlines and holes) `limit` gives, grown by `offset`.
+/// The regions (outlines and holes) `limit` gives, grown by `offset`; `level` names the
+/// level for [`MachiningBoundary::SelectedLevel`].
 pub fn machining_boundary(
     doc: &Document,
     limit: MachiningBoundary,
     offset: f64,
+    level: &str,
 ) -> Result<Vec<crate::geometry::Path>, CommandError> {
     use crate::geometry::Path;
     use crate::polygon::{self, Corners};
@@ -717,6 +721,19 @@ pub fn machining_boundary(
             vec![Path::polyline(&corners, true)]
         }
         MachiningBoundary::SelectedVectors => doc.selected_paths(|p| p.closed).1,
+        MachiningBoundary::SelectedLevel => {
+            let Some((&id, _)) = doc.levels.iter().find(|(_, l)| l.name == level) else {
+                return Err(CommandError::Failed(format!(
+                    "there is no level called {level:?}"
+                )));
+            };
+            let parts: Vec<&Component> = doc
+                .components
+                .values()
+                .filter(|c| c.visible && c.level == id)
+                .collect();
+            silhouette(&parts)
+        }
     };
     let mut regions = polygon::regions(&paths);
     if offset != 0.0 {

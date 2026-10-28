@@ -8,7 +8,7 @@ use cut_craft_core::geometry::Point;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::simulation::rest_areas;
 use cut_craft_core::toolpath::{
-    Drop, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by, raster_lines,
+    Drop, Tool, ToolDatabase, ToolShape, cut_points, follow_linked, made_by, raster_lines,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -49,6 +49,10 @@ pub struct Params {
     #[schemars(title = "Machining Limit Boundary")]
     pub machining_boundary: MachiningBoundary,
     /// Grows the machining boundary, so the tool can go on past a raised edge
+    /// The level whose components make the boundary
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
+    pub boundary_level: String,
     #[serde(default)]
     #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
     pub machining_boundary_offset: f64,
@@ -61,6 +65,11 @@ pub struct Params {
         range(min = 0, max = 90)
     )]
     pub raster_angle: f64,
+    /// Lift off the surface by this between offset rings, which can leave fewer marks where
+    /// the tool steps over
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm", "x-show-when" = {"strategy": "offset"}), range(min = 0))]
+    pub stepover_retract: f64,
 }
 
 impl Default for Params {
@@ -77,9 +86,11 @@ impl Default for Params {
             minimum_detail: 1.0,
             boundary_offset: 1.0,
             machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
             machining_boundary_offset: 0.0,
             strategy: Strategy::Raster,
             raster_angle: 0.0,
+            stepover_retract: 0.0,
         }
     }
 }
@@ -121,7 +132,12 @@ impl Command for FinishingToolpath3d {
         }
         let material = doc.job.area();
         let inside = |at: Point| material.contains(at) && rest.iter().all(|area| area(at));
-        let regions = machining_boundary(doc, p.machining_boundary, p.machining_boundary_offset)?;
+        let regions = machining_boundary(
+            doc,
+            p.machining_boundary,
+            p.machining_boundary_offset,
+            &p.boundary_level,
+        )?;
         let step = tool.stepover * tool.diameter;
         let lines: Vec<Vec<Point>> = match p.strategy {
             Strategy::Raster => raster_lines(&regions, step, p.raster_angle),
@@ -147,13 +163,17 @@ impl Command for FinishingToolpath3d {
             tolerance: GOUGE,
             floor: f64::NEG_INFINITY,
             ceiling: f64::INFINITY,
+            over_ceiling: false,
             peaks: &peaks,
         };
         let runs: Vec<_> = lines.iter().flat_map(|l| drop.along(l, &inside)).collect();
-        let moves = runs
-            .iter()
-            .flat_map(|run| follow(run, doc.job.clearance))
-            .collect();
+        // stay down from one line or ring to the next one beside it
+        let lift = match p.strategy {
+            Strategy::Offset => p.stepover_retract.max(0.0),
+            Strategy::Raster => 0.0,
+        };
+        let clear = |a, b| surface.overcut_on(tool, a, b, &peaks) <= GOUGE;
+        let moves = follow_linked(&runs, doc.job.clearance, 2.0 * step, lift, &clear);
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
             p,
@@ -173,7 +193,7 @@ mod tests {
     use cut_craft_core::geometry::Point;
     use cut_craft_core::simulation::Material;
     use cut_craft_core::testing::domed;
-    use cut_craft_core::toolpath::Toolpath;
+    use cut_craft_core::toolpath::{MoveKind, Toolpath};
 
     cut_craft_core::contract_tests!(FinishingToolpath3d, domed);
 
@@ -418,5 +438,85 @@ mod tests {
             let flat = cut.at(Point::new(3.0, 3.0)).unwrap();
             assert!(flat < -7.9, "{:?}: {flat}", params.strategy);
         }
+    }
+
+    #[test]
+    fn a_level_boundary_goes_round_that_levels_components() {
+        let by_level = cut_by(&Params {
+            machining_boundary: MachiningBoundary::SelectedLevel,
+            boundary_level: "Level 1".into(),
+            ..Params::default()
+        });
+        let by_model = cut_by(&Params {
+            machining_boundary: MachiningBoundary::Model,
+            ..Params::default()
+        });
+        assert_eq!(
+            by_level.heights, by_model.heights,
+            "the dome is on the first level"
+        );
+        let mut doc = domed();
+        let mut empty = doc.levels.values().next().unwrap().clone();
+        empty.name = "Empty".into();
+        doc.levels.insert(99, empty);
+        for (name, why) in [("Empty", "empty"), ("Nowhere", "no level")] {
+            let p = Params {
+                machining_boundary: MachiningBoundary::SelectedLevel,
+                boundary_level: name.into(),
+                ..Params::default()
+            };
+            let err = FinishingToolpath3d::run(&doc, &p)
+                .err()
+                .unwrap()
+                .to_string();
+            assert!(err.contains(why), "{err}");
+        }
+    }
+
+    #[test]
+    fn neighbouring_lines_are_linked_without_lifting_to_the_safe_height() {
+        let doc = domed();
+        let raster = finish(&doc, &Params::default());
+        let rapids = raster
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Rapid)
+            .count();
+        // the dome's flat surround links every line: one rapid in and one out
+        assert!(rapids <= 4, "{rapids}");
+        let lifted = finish(
+            &doc,
+            &Params {
+                strategy: Strategy::Offset,
+                stepover_retract: 0.5,
+                ..Params::default()
+            },
+        );
+        let shape = model(&doc, 134);
+        let top = shape
+            .heights
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
+        let mut cut = Material::new(&doc.job, 134);
+        cut.cut(&lifted);
+        let gouges = cut
+            .heights
+            .iter()
+            .zip(&shape.heights)
+            .filter(|&(&z, &h)| z < h - top - 0.01)
+            .count();
+        assert_eq!(gouges, 0);
+        // straight up by the retract somewhere between rings
+        let ups = lifted
+            .moves
+            .windows(2)
+            .filter(|w| {
+                w[1].kind == MoveKind::Cut
+                    && w[0].to.truncate() == w[1].to.truncate()
+                    && (w[1].to.z - w[0].to.z - 0.5).abs() < 1e-9
+            })
+            .count();
+        assert!(ups > 0);
     }
 }

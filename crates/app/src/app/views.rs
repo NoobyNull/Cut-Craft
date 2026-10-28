@@ -557,7 +557,11 @@ impl CutCraftApp {
             self.snapped(ui, gesture, canvas.transform.scale)
         };
         self.track_stroke(gesture);
+        let placing_tabs = self.placing_tabs();
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
+            (None | Some(Gesture::Click { .. }), None, None) if placing_tabs => {
+                self.tab_overlay(reach)
+            }
             (_, Some(ViewTool::NodeEdit), _) => self.node_overlay(gesture, reach),
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Measure), _) => {
                 self.status
@@ -630,6 +634,9 @@ impl CutCraftApp {
             (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.select_drop(drag, shift, reach);
+            }
+            (Some(Gesture::Click { at, .. }), None, None) if placing_tabs => {
+                self.place_tab(at, reach);
             }
             (Some(Gesture::Click { at, shift }), None, None) => {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
@@ -975,6 +982,70 @@ impl CutCraftApp {
         });
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), id);
+        }
+    }
+
+    /// Whether the open form is a profile toolpath placing its tabs by clicking.
+    pub(super) fn placing_tabs(&self) -> bool {
+        self.form.as_ref().is_some_and(|f| {
+            f.id == "profile_toolpath"
+                && f.params["tabs"].as_str().is_some_and(|t| t != "none")
+                && f.params["tab"]["spacing"] == "placed"
+        })
+    }
+
+    /// A ring round each clicked tab, the size a click on it must land within.
+    fn tab_overlay(&self, reach: f64) -> Overlay {
+        Overlay::Preview(
+            self.tab_points()
+                .into_iter()
+                .map(|p| Path::circle(p, reach))
+                .collect(),
+        )
+    }
+
+    /// The open form's clicked tabs.
+    fn tab_points(&self) -> Vec<Point> {
+        self.form
+            .as_ref()
+            .and_then(|f| serde_json::from_value(f.params["tab_points"].clone()).ok())
+            .unwrap_or_default()
+    }
+
+    /// A click while placing tabs: on a tab takes it off, on a selected vector adds one there.
+    pub(super) fn place_tab(&mut self, at: Point, reach: f64) {
+        let mut points = self.tab_points();
+        if let Some(i) = points.iter().position(|p| p.distance(at) <= reach) {
+            points.remove(i);
+            self.status.set_message("Tab removed");
+        } else {
+            let on = self
+                .doc
+                .selection
+                .iter()
+                .filter_map(|id| self.doc.vectors.get(id))
+                .filter_map(|path| {
+                    let mut flat = path.flatten(cut_craft_core::polygon::TOLERANCE);
+                    if path.closed
+                        && let Some(&first) = flat.first()
+                    {
+                        flat.push(first);
+                    }
+                    cut_craft_core::geometry::polyline_closest(&flat, at)
+                })
+                .min_by(|p, q| p.distance(at).total_cmp(&q.distance(at)))
+                .filter(|p| p.distance(at) <= reach);
+            let Some(on) = on else {
+                self.status.set_message(
+                    "click on a selected vector to add a tab, or on a tab to remove it",
+                );
+                return;
+            };
+            points.push(on);
+            self.status.set_message("Tab added");
+        }
+        if let Some(form) = self.form.as_mut() {
+            form.params["tab_points"] = serde_json::json!(points);
         }
     }
 

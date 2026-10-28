@@ -3,7 +3,7 @@
 //! lines and a profile pass round the edge.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::entry::{Entry, Ramp, Ramping, path_moves};
+use cut_craft_core::entry::{Direction, Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, cut_points, hatch_lines, made_by, pass_depths};
@@ -44,6 +44,13 @@ pub struct Params {
     pub tool: Tool,
     #[serde(default)]
     pub strategy: Strategy,
+    /// Which way round the rings and the profile pass run
+    #[serde(default)]
+    pub direction: Direction,
+    /// Left on the walls; negative cuts past the vectors
+    #[serde(default)]
+    #[schemars(title = "Pocket Allowance", extend("x-unit" = "mm"))]
+    pub allowance: f64,
     /// 0° along X, 90° along Y
     #[serde(default)]
     #[schemars(
@@ -73,6 +80,8 @@ impl Default for Params {
             depth: 3.0,
             tool: Tool::default(),
             strategy: Strategy::Offset,
+            direction: Direction::Climb,
+            allowance: 0.0,
             raster_angle: 0.0,
             profile_pass: ProfilePass::Last,
             ramp_plunge_moves: false,
@@ -113,7 +122,7 @@ impl Command for PocketToolpath {
         // are pocketed over; nest-aware regions when islands are needed
         let mut ring = polygon::offset(
             &polygon::union(&paths),
-            -p.tool.diameter / 2.0,
+            -(p.tool.diameter / 2.0 + p.allowance),
             Corners::Round,
         );
         if ring.is_empty() {
@@ -147,7 +156,14 @@ impl Command for PocketToolpath {
         let cut = |paths: &[Path], z: f64, above: f64| -> Vec<Move> {
             paths
                 .iter()
-                .flat_map(|r| path_moves(&cut_points(r), r.closed, &[z], above, safe, &entry))
+                .flat_map(|r| {
+                    let points = if r.closed {
+                        p.direction.orient(cut_points(r), true)
+                    } else {
+                        cut_points(r)
+                    };
+                    path_moves(&points, r.closed, &[z], above, safe, &entry)
+                })
                 .collect()
         };
         // ponytail: each ring or line retracts between cuts; link them with a stepover move
@@ -344,5 +360,43 @@ mod tests {
                 .all(|&z| z.abs() < 1e-9 || (z + 3.0).abs() < 1e-9),
             "{straight:?}"
         );
+    }
+
+    #[test]
+    fn the_allowance_leaves_a_wall_and_rings_run_the_chosen_way() {
+        let p = Params {
+            allowance: 1.0,
+            ..Params::default()
+        };
+        let b = cut_bounds(&pocket(20.0, &p).unwrap());
+        assert!(
+            (b.min.x - 4.0).abs() < 0.02 && (b.max.x - 16.0).abs() < 0.02,
+            "{b:?}"
+        );
+        for (direction, anticlockwise) in
+            [(Direction::Climb, true), (Direction::Conventional, false)]
+        {
+            let tp = pocket(
+                20.0,
+                &Params {
+                    direction,
+                    ..Params::default()
+                },
+            )
+            .unwrap();
+            // the outer ring is the last one cut
+            let start = tp
+                .moves
+                .iter()
+                .rposition(|m| m.kind == MoveKind::Plunge)
+                .unwrap();
+            let ring: Vec<Point> = tp.moves[start..]
+                .iter()
+                .filter(|m| m.kind == MoveKind::Cut)
+                .map(|m| m.to.truncate())
+                .collect();
+            let turn = cut_craft_core::geometry::winding(&ring);
+            assert_eq!(turn > 0.0, anticlockwise, "{direction:?}");
+        }
     }
 }

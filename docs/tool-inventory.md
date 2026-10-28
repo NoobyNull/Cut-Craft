@@ -201,7 +201,11 @@ say "not implemented yet".
   (straight or circular, lead out, overcut) and tabs (2D or 3D, by number or distance); Pocket
   Offset or Raster (angle, profile pass first / last / none) with ramped plunges; 3D Roughing
   Z Level (level by level or depth first) or 3D Raster, and 3D Finishing Raster (any angle) or
-  Offset, both inside a machining boundary (model, material or selected vectors, plus offset).
+  Offset, both inside a machining boundary (model, material, selected vectors or a level,
+  plus offset). Tabs can start at the start point, keep off corners, or be placed by
+  clicking the vectors; climb or conventional and an allowance on Profile and Pocket; Z Level
+  profile pass, reverse step and (3D Raster) avoid machined areas; neighbouring 3D lines are
+  joined without lifting, offset finishing rings lifted by a stepover retract.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
