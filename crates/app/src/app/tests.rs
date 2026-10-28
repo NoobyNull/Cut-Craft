@@ -2882,3 +2882,16 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
         "from low on the right the block hides it"
     );
 }
+
+#[test]
+fn another_design_tab_closes_the_design_form() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.start_command("document_variables");
+    assert!(h.app.form.is_some());
+    h.app.set_design_tab(h.app.design_tab);
+    assert!(h.app.form.is_some(), "the same tab keeps it");
+    let layers = DESIGN_TABS.iter().position(|&t| t == "Layers").unwrap();
+    h.app.set_design_tab(layers);
+    assert!(h.app.form.is_none(), "the Layers tab shows, not the form");
+}

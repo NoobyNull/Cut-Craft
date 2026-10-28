@@ -219,10 +219,12 @@ impl CutCraftApp {
             }
             // the Components tab, as Aspire's Component Levels icon shows
             "component_levels" => {
-                self.design_tab = DESIGN_TABS
-                    .iter()
-                    .position(|&t| t == "Components")
-                    .unwrap_or_default();
+                self.set_design_tab(
+                    DESIGN_TABS
+                        .iter()
+                        .position(|&t| t == "Components")
+                        .unwrap_or_default(),
+                );
                 self.pages.open(Page::Design);
             }
             "delete_all_guides" => self.set_guides(vec![]),
@@ -1854,9 +1856,17 @@ impl CutCraftApp {
         // an auto-hidden page comes out on hover; a docked one changes tab on click
         let unpinned = !self.pages.pinned(Page::Design);
         if let Some(tab) = clicked.or(hovered.filter(|_| unpinned)) {
-            self.design_tab = tab;
+            self.set_design_tab(tab);
             self.pages.open(Page::Design);
         }
+    }
+
+    /// Going to another design tab closes a form open on the Design page, as Aspire's does.
+    pub(super) fn set_design_tab(&mut self, tab: usize) {
+        if tab != self.design_tab && self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
+            self.form = None;
+        }
+        self.design_tab = tab;
     }
 
     /// The Toolpaths tab, down the right edge.
