@@ -4,7 +4,10 @@ use cut_craft_core::document::Document;
 use cut_craft_core::entry::{
     Direction, Entry, Lead, Leads, Ramp, Ramping, TabSettings, TabSpacing, Tabs, path_moves,
 };
-use cut_craft_core::geometry::{Point, polyline_distance, winding};
+use cut_craft_core::geometry::{
+    Path, Point, Rect, inside, polyline_closest, polyline_distance, winding,
+};
+use cut_craft_core::params::Anchor;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Tool, cut_points, made_by, pass_depths};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -24,6 +27,58 @@ pub enum Side {
     /// Along the line itself, open vectors included
     On,
 }
+
+/// The ways of ordering the cuts to try: the one with the shortest moves between cuts is used.
+/// Shapes inside others are always cut first, so a part stays held as long as it can.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+#[expect(clippy::struct_excessive_bools, reason = "one tick box per option")]
+pub struct Order {
+    /// In the order the vectors were selected
+    pub vector_selection_order: bool,
+    /// From the parts on the left across to the right
+    pub left_to_right: bool,
+    /// From the parts at the bottom up to the top
+    pub bottom_to_top: bool,
+    /// Square by square over a grid the size of the biggest part
+    pub grid: bool,
+    /// On each time to the nearest shape not yet cut
+    pub shortest_path: bool,
+}
+
+impl Default for Order {
+    fn default() -> Self {
+        // ponytail: Aspire's defaults are not known; trying them all costs little
+        Self {
+            vector_selection_order: true,
+            left_to_right: true,
+            bottom_to_top: true,
+            grid: true,
+            shortest_path: true,
+        }
+    }
+}
+
+/// Where the cut round each closed shape starts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StartAt {
+    /// At each vector's own start point (Make Start Point moves it)
+    #[schemars(title = "Keep Current Start Points")]
+    KeepCurrent,
+    /// Wherever makes the moves between cuts shortest
+    #[default]
+    #[schemars(title = "Optimize Start Points")]
+    Optimize,
+    /// At the corner of the path nearest a point on each vector's bounding box
+    #[schemars(title = "Closest on Bounding Box")]
+    BoundingBox,
+}
+
+/// How far out a sharp corner may go, in tool radii, before it is squared off: corners down to
+/// about 29° come to a point.
+// ponytail: Aspire's limit is not known
+pub const MITRE_REACH: f64 = 4.0;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
@@ -66,6 +121,24 @@ pub struct Params {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub tab_points: Vec<Point>,
+    #[serde(default)]
+    #[schemars(extend("x-section" = true))]
+    pub order: Order,
+    #[serde(default)]
+    pub start_at: StartAt,
+    /// The point of each vector's bounding box its cut starts nearest
+    #[serde(default = "top_left")]
+    #[schemars(extend("x-show-when" = {"start_at": "bounding_box"}))]
+    pub start_near: Anchor,
+    /// At outside corners the tool follows the vector's angle out to a point instead of
+    /// rolling round the corner
+    #[serde(default)]
+    #[schemars(title = "Sharp External Corners")]
+    pub sharp_corners: bool,
+}
+
+fn top_left() -> Anchor {
+    Anchor::TopLeft
 }
 
 impl Default for Params {
@@ -84,6 +157,10 @@ impl Default for Params {
             tabs: Tabs::None,
             tab: TabSettings::default(),
             tab_points: vec![],
+            order: Order::default(),
+            start_at: StartAt::Optimize,
+            start_near: top_left(),
+            sharp_corners: false,
         }
     }
 }
@@ -110,10 +187,22 @@ impl Command for ProfileToolpath {
             return Err(CommandError::Failed("select the vectors to profile".into()));
         }
         let radius = p.tool.diameter / 2.0 + p.allowance;
+        // a vector inside another is a hole in it (an "O"), so offsetting the regions cuts
+        // each on its proper side
+        // ponytail: overlapping vectors go even-odd too, their overlap a hole; Aspire's way
+        // with overlaps is not known
+        let offset = |by: f64| {
+            let regions = polygon::regions(&paths);
+            if p.sharp_corners {
+                polygon::offset_regions_mitred(&regions, by, MITRE_REACH)
+            } else {
+                polygon::offset_regions(&regions, by, Corners::Round)
+            }
+        };
         let centre_line = match p.side {
-            Side::Outside => polygon::offset(&paths, radius, Corners::Round),
-            Side::Inside => polygon::offset(&paths, -radius, Corners::Round),
-            Side::On => paths,
+            Side::Outside => offset(radius),
+            Side::Inside => offset(-radius),
+            Side::On => paths.clone(),
         };
         if centre_line.is_empty() {
             return Err(CommandError::Failed(
@@ -134,23 +223,11 @@ impl Command for ProfileToolpath {
             tool_diameter: p.tool.diameter,
             placed: vec![],
         };
-        let lines: Vec<(Vec<Point>, bool)> = centre_line
-            .iter()
-            .map(|path| {
-                let points = cut_points(path);
-                // a hole's centre line runs round inside it, a part's round outside
-                let points = if path.closed && p.side != Side::On {
-                    p.direction.orient(points, p.side == Side::Inside)
-                } else {
-                    points
-                };
-                (points, path.closed)
-            })
-            .collect();
+        let lines = ordered(cuts(&centre_line, &paths, p), &paths, p);
         // each clicked tab goes on the path nearest it
         let nearest = |at: Point| {
             (0..lines.len()).min_by(|&a, &b| {
-                let gap = |i: usize| polyline_distance(&lines[i].0, at);
+                let gap = |i: usize| polyline_distance(&lines[i].points, at);
                 gap(a).total_cmp(&gap(b))
             })
         };
@@ -163,15 +240,17 @@ impl Command for ProfileToolpath {
         let moves = lines
             .iter()
             .enumerate()
-            .flat_map(|(i, (points, closed))| {
+            .flat_map(|(i, cut)| {
                 // leads come from the waste: outside a part's outline, inside a hole; an
                 // anticlockwise path has its outside on the right
-                let anticlockwise = *closed && winding(points) > 0.0;
+                let anticlockwise = cut.closed && winding(&cut.points) > 0.0;
                 let outside = if anticlockwise { -1.0 } else { 1.0 };
-                let side = match p.side {
-                    Side::Inside => -outside,
-                    Side::Outside | Side::On if *closed => outside,
-                    _ => 1.0,
+                let side = if !cut.closed {
+                    1.0
+                } else if cut.waste_inside {
+                    -outside
+                } else {
+                    outside
                 };
                 let placed = p
                     .tab_points
@@ -181,8 +260,8 @@ impl Command for ProfileToolpath {
                     .map(|(&t, _)| t)
                     .collect();
                 path_moves(
-                    points,
-                    *closed,
+                    &cut.points,
+                    cut.closed,
                     &depths,
                     0.0,
                     doc.job.clearance,
@@ -204,6 +283,249 @@ impl Command for ProfileToolpath {
         ));
         Ok(c.finish())
     }
+}
+
+/// One path the tool's centre follows.
+struct Cut {
+    points: Vec<Point>,
+    closed: bool,
+    /// Whether the waste is inside it (a hole), not outside (a part).
+    waste_inside: bool,
+    /// Which of the selected vectors it was made from, by selection order.
+    owner: usize,
+}
+
+/// The centre line's paths, each turned to run the way `p.direction` cuts and knowing which
+/// side its waste is and which of the selected `vectors` it was made from.
+fn cuts(centre_line: &[Path], vectors: &[Path], p: &Params) -> Vec<Cut> {
+    let vectors: Vec<Vec<Point>> = vectors
+        .iter()
+        .map(|v| v.flatten(polygon::TOLERANCE))
+        .collect();
+    centre_line
+        .iter()
+        .map(|path| {
+            let points = cut_points(path);
+            let offset = path.closed && p.side != Side::On;
+            // an offset ring running anticlockwise is the outline of where the tool's centre
+            // goes, clockwise a hole in it: outside the vectors the waste is outside outlines
+            // and inside holes, inside them the other way round
+            let waste_inside = offset && (winding(&points) > 0.0) == (p.side == Side::Inside);
+            let points = if offset {
+                p.direction.orient(points, waste_inside)
+            } else {
+                points
+            };
+            Cut {
+                owner: owner(&points, &vectors),
+                points,
+                closed: path.closed,
+                waste_inside,
+            }
+        })
+        .collect()
+}
+
+/// Which of `vectors` the path through `points` was made from: the nearest, over a few points
+/// along it.
+fn owner(points: &[Point], vectors: &[Vec<Point>]) -> usize {
+    let step = (points.len() / 8).max(1);
+    let gaps: Vec<f64> = vectors
+        .iter()
+        .map(|v| {
+            points
+                .iter()
+                .step_by(step)
+                .map(|&q| polyline_distance(v, q))
+                .sum()
+        })
+        .collect();
+    (0..gaps.len())
+        .min_by(|&a, &b| gaps[a].total_cmp(&gaps[b]))
+        .unwrap_or(0)
+}
+
+/// The cuts in the order each option asks for, the one with the shortest moves between cuts,
+/// each closed one starting where `p.start_at` says.
+fn ordered(cuts: Vec<Cut>, vectors: &[Path], p: &Params) -> Vec<Cut> {
+    let n = cuts.len();
+    let area = |c: &Cut| {
+        if c.closed {
+            winding(&c.points).abs()
+        } else {
+            0.0
+        }
+    };
+    // the cuts inside each one, which go first
+    let inner: Vec<Vec<usize>> = (0..n)
+        .map(|i| {
+            let ring = std::slice::from_ref(&cuts[i].points);
+            (0..n)
+                .filter(|&j| {
+                    cuts[i].closed
+                        && area(&cuts[j]) < area(&cuts[i])
+                        && inside(ring, cuts[j].points[0])
+                })
+                .collect()
+        })
+        .collect();
+    let rings: Vec<Vec<Point>> = cuts
+        .iter()
+        .map(|c| c.points.iter().chain(&c.points[..1]).copied().collect())
+        .collect();
+    let boxes: Vec<Rect> = cuts.iter().map(|c| bounds(&c.points)).collect();
+    let start = |i: usize, here: Point| {
+        let c = &cuts[i];
+        if !c.closed {
+            return c.points[0];
+        }
+        let at = match p.start_at {
+            StartAt::KeepCurrent => polyline_closest(&rings[i], vectors[c.owner].start),
+            StartAt::Optimize => polyline_closest(&rings[i], here),
+            StartAt::BoundingBox => {
+                // the box round the path itself: round a corner every point is as near the
+                // vector's own box
+                let near = p.start_near.point(boxes[i]);
+                c.points
+                    .iter()
+                    .copied()
+                    .min_by(|a, b| a.distance(near).total_cmp(&b.distance(near)))
+            }
+        };
+        at.unwrap_or(c.points[0])
+    };
+    let middle = |i: usize| boxes[i].center();
+    let o = p.order;
+    let mut ranks: Vec<Option<Vec<usize>>> = vec![];
+    let none = !(o.vector_selection_order
+        || o.left_to_right
+        || o.bottom_to_top
+        || o.grid
+        || o.shortest_path);
+    if o.vector_selection_order || none {
+        #[expect(clippy::cast_precision_loss, reason = "a count of vectors")]
+        ranks.push(Some(rank(n, |i| (cuts[i].owner as f64, 0.0))));
+    }
+    if o.left_to_right {
+        ranks.push(Some(rank(n, |i| (middle(i).x, middle(i).y))));
+    }
+    if o.bottom_to_top {
+        ranks.push(Some(rank(n, |i| (middle(i).y, middle(i).x))));
+    }
+    if o.grid {
+        let all = boxes.iter().fold(boxes[0], |a, &b| a.union(b));
+        // squares as big as the biggest part, a row at a time from the bottom, along the
+        // first row and back along the next
+        let cell = boxes
+            .iter()
+            .map(|b| b.size().max_element())
+            .fold(0.0, f64::max)
+            .max(1e-9);
+        ranks.push(Some(rank(n, |i| {
+            let at = (middle(i) - all.min) / cell;
+            let (row, column) = (at.y.floor(), at.x.floor());
+            let back = (row.rem_euclid(2.0) - 1.0).abs() < 0.5;
+            (row, if back { -column } else { column })
+        })));
+    }
+    if o.shortest_path {
+        ranks.push(None);
+    }
+    let (order, _) = ranks
+        .iter()
+        .map(|rank| sequence(&cuts, &inner, rank.as_deref(), &start))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .expect("at least one ordering is tried");
+    let mut cuts: Vec<Option<Cut>> = cuts.into_iter().map(Some).collect();
+    order
+        .into_iter()
+        .map(|(i, at)| {
+            let cut = cuts[i].take().expect("each cut once");
+            if cut.closed {
+                Cut {
+                    points: starting_at(&cut.points, at),
+                    ..cut
+                }
+            } else {
+                cut
+            }
+        })
+        .collect()
+}
+
+/// Where each of `n` items comes when sorted by `key`, ties in their own order.
+fn rank(n: usize, key: impl Fn(usize) -> (f64, f64)) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| {
+        let (a, b) = (key(a), key(b));
+        a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1))
+    });
+    let mut rank = vec![0; n];
+    for (place, i) in order.into_iter().enumerate() {
+        rank[i] = place;
+    }
+    rank
+}
+
+/// The cuts in the order they run, each with the point it starts at, and how far the tool
+/// moves between them (from the origin to the first). `rank` puts them in order; without one
+/// each goes on to the nearest. Either way a cut waits for the cuts inside it.
+// ponytail: tries every cut at each step (n² start points); a spatial index if jobs get huge
+fn sequence(
+    cuts: &[Cut],
+    inner: &[Vec<usize>],
+    rank: Option<&[usize]>,
+    start: &dyn Fn(usize, Point) -> Point,
+) -> (Vec<(usize, Point)>, f64) {
+    let mut done = vec![false; cuts.len()];
+    let mut here = Point::ZERO;
+    let mut order = vec![];
+    let mut travel = 0.0;
+    while order.len() < cuts.len() {
+        let ready = (0..cuts.len()).filter(|&i| !done[i] && inner[i].iter().all(|&j| done[j]));
+        let next = match rank {
+            Some(rank) => ready.min_by_key(|&i| rank[i]),
+            None => ready.min_by(|&a, &b| {
+                let gap = |i: usize| here.distance(start(i, here));
+                gap(a).total_cmp(&gap(b))
+            }),
+        }
+        .expect("a cut's inner cuts are smaller than it, so one is always ready");
+        let at = start(next, here);
+        travel += here.distance(at);
+        // a closed cut ends where it began, an open one at its end
+        here = if cuts[next].closed {
+            at
+        } else {
+            cuts[next].points[cuts[next].points.len() - 1]
+        };
+        done[next] = true;
+        order.push((next, at));
+    }
+    (order, travel)
+}
+
+/// The closed path through `points` starting at `at`, a point on it.
+fn starting_at(points: &[Point], at: Point) -> Vec<Point> {
+    let n = points.len();
+    let gap = |i: usize| polyline_distance(&[points[i], points[(i + 1) % n]], at);
+    let span = (0..n)
+        .min_by(|&a, &b| gap(a).total_cmp(&gap(b)))
+        .unwrap_or(0);
+    let mut out = vec![at];
+    out.extend((1..=n).map(|d| points[(span + d) % n]));
+    // a start on a corner is not repeated
+    out.dedup_by(|a, b| a.distance(*b) < 1e-9);
+    if out.len() > 1 && out[out.len() - 1].distance(at) < 1e-9 {
+        out.pop();
+    }
+    out
+}
+
+fn bounds(points: &[Point]) -> Rect {
+    points
+        .iter()
+        .fold(Rect::point(points[0]), |r, &q| r.include(q))
 }
 
 #[cfg(test)]
@@ -488,5 +810,305 @@ mod tests {
         assert!((thickness - 3.0).abs() < 1e-6, "half the cut: {thickness}");
         // a tiny one is not all tab
         assert_eq!(tabs_on(15.0, 15.0, 19.05).0, 1);
+    }
+
+    /// The cutting moves of each path, in the order the paths are cut: each starts where the
+    /// tool comes down from a rapid.
+    fn cuts(tp: &Toolpath) -> Vec<Vec<Point>> {
+        let mut out: Vec<Vec<Point>> = vec![];
+        for w in tp.moves.windows(2) {
+            if w[0].kind == MoveKind::Rapid && w[1].kind == MoveKind::Plunge {
+                out.push(vec![w[1].to.truncate()]);
+            } else if w[1].kind == MoveKind::Cut {
+                out.last_mut().unwrap().push(w[1].to.truncate());
+            }
+        }
+        out
+    }
+
+    fn box_of(points: &[Point]) -> Rect {
+        points
+            .iter()
+            .map(|&q| Rect::point(q))
+            .reduce(Rect::union)
+            .unwrap()
+    }
+
+    fn profiled(paths: Vec<Path>, p: &Params) -> Toolpath {
+        made_toolpath::<ProfileToolpath>(paths, p).unwrap()
+    }
+
+    /// A 30 mm square with a 10 mm square hole in its middle, like the letter "O".
+    fn o_shape() -> Vec<Path> {
+        vec![square(0.0, 0.0, 30.0), square(10.0, 10.0, 10.0)]
+    }
+
+    #[test]
+    fn an_o_is_cut_on_the_right_side_of_both_rings_the_inner_one_first() {
+        for (side, inner, outer) in [
+            (Side::Outside, (13.0, 17.0), (-3.0, 33.0)),
+            (Side::Inside, (7.0, 23.0), (3.0, 27.0)),
+        ] {
+            let tp = profiled(
+                o_shape(),
+                &Params {
+                    side,
+                    ..Params::default()
+                },
+            );
+            let cuts = cuts(&tp);
+            assert_eq!(cuts.len(), 2, "{side:?}");
+            let (a, b) = (box_of(&cuts[0]), box_of(&cuts[1]));
+            assert!(
+                near(a, (inner.0, inner.0), (inner.1, inner.1)),
+                "{side:?} {a:?}"
+            );
+            assert!(
+                near(b, (outer.0, outer.0), (outer.1, outer.1)),
+                "{side:?} {b:?}"
+            );
+            // climb: anticlockwise round the waste inside a ring, clockwise round a part
+            let waste_inside = side == Side::Outside;
+            assert_eq!(winding(&cuts[0]) > 0.0, waste_inside, "{side:?}");
+            assert_eq!(winding(&cuts[1]) > 0.0, !waste_inside, "{side:?}");
+        }
+    }
+
+    /// The middle x (or y, `across` false) of each path cut, in order, with these orderings.
+    fn cut_order(paths: Vec<Path>, order: Order, across: bool) -> Vec<f64> {
+        let tp = profiled(
+            paths,
+            &Params {
+                order,
+                ..Params::default()
+            },
+        );
+        cuts(&tp)
+            .iter()
+            .map(|c| {
+                let b = box_of(c);
+                let mid = (b.min + b.max) / 2.0;
+                (if across { mid.x } else { mid.y }).round()
+            })
+            .collect()
+    }
+
+    const NONE: Order = Order {
+        vector_selection_order: false,
+        left_to_right: false,
+        bottom_to_top: false,
+        grid: false,
+        shortest_path: false,
+    };
+
+    #[test]
+    fn cuts_in_selection_order_left_to_right_or_bottom_to_top() {
+        let row = || {
+            vec![
+                square(80.0, 0.0, 10.0),
+                square(0.0, 0.0, 10.0),
+                square(40.0, 0.0, 10.0),
+            ]
+        };
+        let selection = Order {
+            vector_selection_order: true,
+            ..NONE
+        };
+        assert_eq!(cut_order(row(), selection, true), [85.0, 5.0, 45.0]);
+        let left_to_right = Order {
+            left_to_right: true,
+            ..NONE
+        };
+        assert_eq!(cut_order(row(), left_to_right, true), [5.0, 45.0, 85.0]);
+        let column = vec![
+            square(0.0, 40.0, 10.0),
+            square(0.0, 80.0, 10.0),
+            square(0.0, 0.0, 10.0),
+        ];
+        let bottom_to_top = Order {
+            bottom_to_top: true,
+            ..NONE
+        };
+        assert_eq!(cut_order(column, bottom_to_top, false), [5.0, 45.0, 85.0]);
+        // with both ticked the shorter wins, and so does the default
+        let both = Order {
+            vector_selection_order: true,
+            left_to_right: true,
+            ..NONE
+        };
+        assert_eq!(cut_order(row(), both, true), [5.0, 45.0, 85.0]);
+        assert_eq!(cut_order(row(), Order::default(), true), [5.0, 45.0, 85.0]);
+        // none ticked: as selected
+        assert_eq!(cut_order(row(), NONE, true), [85.0, 5.0, 45.0]);
+    }
+
+    #[test]
+    fn a_grid_finishes_one_row_of_squares_before_the_next_turning_back_along_it() {
+        let parts = vec![
+            square(0.0, 40.0, 10.0),
+            square(40.0, 0.0, 10.0),
+            square(40.0, 40.0, 10.0),
+            square(0.0, 0.0, 10.0),
+        ];
+        let grid = Order { grid: true, ..NONE };
+        let tp = profiled(
+            parts,
+            &Params {
+                order: grid,
+                ..Params::default()
+            },
+        );
+        let middles: Vec<(f64, f64)> = cuts(&tp)
+            .iter()
+            .map(|c| {
+                let b = box_of(c);
+                let mid = (b.min + b.max) / 2.0;
+                (mid.x.round(), mid.y.round())
+            })
+            .collect();
+        assert_eq!(
+            middles,
+            [(5.0, 5.0), (45.0, 5.0), (45.0, 45.0), (5.0, 45.0)]
+        );
+    }
+
+    #[test]
+    fn inner_shapes_are_cut_first_whatever_the_order() {
+        for order in [
+            Order {
+                vector_selection_order: true,
+                ..NONE
+            },
+            Order {
+                left_to_right: true,
+                ..NONE
+            },
+            Order {
+                shortest_path: true,
+                ..NONE
+            },
+        ] {
+            let mut paths = o_shape();
+            // a separate part off to the left, selected last
+            paths.push(square(-40.0, 0.0, 10.0));
+            let tp = profiled(
+                paths,
+                &Params {
+                    order,
+                    ..Params::default()
+                },
+            );
+            let boxes: Vec<Rect> = cuts(&tp).iter().map(|c| box_of(c)).collect();
+            let hole = boxes.iter().position(|b| b.min.x > 10.0).unwrap();
+            let ring = boxes
+                .iter()
+                .position(|b| b.min.x < 0.0 && b.max.x > 30.0)
+                .unwrap();
+            assert!(hole < ring, "{order:?}");
+        }
+    }
+
+    fn first_start(paths: Vec<Path>, start_at: StartAt, start_near: Anchor) -> Point {
+        let tp = profiled(
+            paths,
+            &Params {
+                start_at,
+                start_near,
+                ..Params::default()
+            },
+        );
+        cuts(&tp)[0][0]
+    }
+
+    #[test]
+    fn keeps_the_vectors_own_start_point_moved_out_to_the_tool() {
+        let p = Point::new;
+        // a square starting half way along its bottom edge
+        let drawn = Path::polyline(
+            &[
+                p(5.0, 0.0),
+                p(10.0, 0.0),
+                p(10.0, 10.0),
+                p(0.0, 10.0),
+                p(0.0, 0.0),
+            ],
+            true,
+        );
+        let at = first_start(vec![drawn], StartAt::KeepCurrent, Anchor::TopLeft);
+        assert!(at.distance(p(5.0, -3.0)) < 1e-6, "{at}");
+    }
+
+    #[test]
+    fn optimized_starts_are_the_nearest_points_to_where_the_tool_is() {
+        let p = Point::new;
+        let corner = 20.0 - 3.0 * std::f64::consts::FRAC_1_SQRT_2;
+        let at = first_start(
+            vec![square(20.0, 20.0, 10.0)],
+            StartAt::Optimize,
+            Anchor::TopLeft,
+        );
+        assert!(
+            at.distance(p(corner, corner)) < 0.05,
+            "from the origin: {at}"
+        );
+        // the next part starts on its corner nearest the first's start, not its own start
+        let tp = profiled(
+            vec![square(20.0, 20.0, 10.0), square(60.0, 20.0, 10.0)],
+            &Params::default(),
+        );
+        let cuts = cuts(&tp);
+        let (first, second) = (cuts[0][0], cuts[1][0]);
+        assert!(first.distance(p(corner, corner)) < 0.05, "{first}");
+        assert!(
+            second.x < 57.1 && (second.y - 20.0).abs() < 0.5,
+            "{first} then {second}"
+        );
+    }
+
+    #[test]
+    fn starts_at_the_span_end_nearest_the_chosen_point_of_the_bounding_box() {
+        let at = first_start(
+            vec![square(0.0, 0.0, 10.0)],
+            StartAt::BoundingBox,
+            Anchor::TopRight,
+        );
+        let corner = 10.0 + 3.0 * std::f64::consts::FRAC_1_SQRT_2;
+        assert!(at.distance(Point::new(corner, corner)) < 0.3, "{at}");
+        let at = first_start(
+            vec![square(0.0, 0.0, 10.0)],
+            StartAt::BoundingBox,
+            Anchor::BottomLeft,
+        );
+        assert!(at.x < 0.0 && at.y < 0.0, "{at}");
+    }
+
+    #[test]
+    fn sharp_corners_follow_the_vectors_angle_out_to_a_point_within_the_limit() {
+        let sharp = Params {
+            sharp_corners: true,
+            ..Params::default()
+        };
+        let tp = profiled(vec![square(0.0, 0.0, 10.0)], &sharp);
+        let points: Vec<Point> = cuts(&tp).concat();
+        assert!(
+            points
+                .iter()
+                .any(|q| q.distance(Point::new(-3.0, -3.0)) < 1e-6)
+        );
+        assert!(near(cut_bounds(&tp), (-3.0, -3.0), (13.0, 13.0)));
+        // an 11° tip would mitre out 30 mm; it stops at the limit
+        let p = Point::new;
+        let thin = Path::polyline(&[p(0.0, 0.0), p(50.0, 0.0), p(50.0, 10.0)], true);
+        let tp = profiled(vec![thin], &sharp);
+        let furthest = cuts(&tp)
+            .concat()
+            .iter()
+            .filter(|q| q.x < 0.0)
+            .map(|q| q.length())
+            .fold(0.0, f64::max);
+        assert!(
+            furthest > 3.0 && furthest <= MITRE_REACH * 3.0 + 1e-3,
+            "{furthest}"
+        );
     }
 }
