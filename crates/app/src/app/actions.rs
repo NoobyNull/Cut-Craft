@@ -64,6 +64,7 @@ impl CutCraftApp {
             moved_3d: 0.0,
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
+            view_cube: None,
             recent: vec![],
             playback: None,
             playing: false,

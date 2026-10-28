@@ -2,7 +2,9 @@
 
 use cut_craft_core::glam::{DVec2, DVec3};
 use cut_craft_core::simulation::Material;
-use eframe::egui::{Color32, Mesh, Pos2, Rect, Rgba, Vec2};
+use eframe::egui::{
+    Align2, Color32, FontId, Mesh, Painter, Pos2, Rect, Rgba, Shape, Vec2, Visuals,
+};
 
 // ponytail: fixed lighting until the 3D view has light settings
 /// Where the light comes from: upper left (-x, +y) and above.
@@ -14,9 +16,16 @@ const DEPTH_SHADE: f64 = 0.5;
 /// How near the cursor, in pixels, a surface point picks at least.
 // ponytail: fixed until the 3D view has settings
 const PICK_REACH: f32 = 4.0;
+/// How wide (across the view's shorter side) the perspective view sees, radians.
+// ponytail: fixed until Options has a camera setting; 45 degrees is the usual lens
+const FIELD_OF_VIEW: f64 = std::f64::consts::FRAC_PI_4;
+/// View cube faces nearer edge-on than this (the cosine of their angle to the viewer) are
+/// left out: they have no area to click.
+const EDGE_ON: f64 = 1e-6;
 
 /// Where the view looks from: `yaw` turns the job about the vertical, `pitch` tilts it from
-/// straight down (0) towards side on (a right angle), radians.
+/// straight down (0) through side on (a right angle) to straight up from below (half a
+/// turn), radians.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Orbit {
     pub yaw: f64,
@@ -51,14 +60,36 @@ impl Orbit {
     };
 
     /// Turned by a drag of `by` across a view `size`: across the whole view is half a turn,
-    /// sideways turning and up/down tilting (between straight down and side on).
+    /// sideways turning and up/down tilting (between straight down and straight up, so past
+    /// side on to underneath; the job's up stays up on screen).
     #[must_use]
     pub fn dragged(self, by: Vec2, size: Vec2) -> Self {
         let turn = |d: f32, across: f32| f64::from(d / across.max(1.0)) * std::f64::consts::PI;
         Self {
             yaw: self.yaw + turn(by.x, size.x),
-            pitch: (self.pitch + turn(by.y, size.y)).clamp(0.0, std::f64::consts::FRAC_PI_2),
+            pitch: (self.pitch + turn(by.y, size.y)).clamp(0.0, std::f64::consts::PI),
         }
+    }
+
+    /// Looking from `towards` (a job direction, any length); straight down or up keep the
+    /// plan's x to the right.
+    pub fn facing(towards: DVec3) -> Self {
+        let d = towards.normalize();
+        // `towards_viewer` is (-sin pitch sin yaw, -sin pitch cos yaw, cos pitch)
+        let yaw = if d.x.hypot(d.y) <= f64::EPSILON {
+            0.0
+        } else {
+            (-d.x).atan2(-d.y)
+        };
+        Self {
+            yaw,
+            pitch: d.z.clamp(-1.0, 1.0).acos(),
+        }
+    }
+
+    /// The job direction towards the viewer.
+    pub fn towards_viewer(self) -> DVec3 {
+        self.to_world(DVec3::Z)
     }
 
     /// The job direction that is `v` on screen (x right, y up, z towards the viewer): the
@@ -91,6 +122,8 @@ pub struct Framing {
     pub zoom: f32,
     /// Of the block's centre from the view's, in points.
     pub pan: Vec2,
+    /// Seen in perspective (nearer is larger) rather than orthographic.
+    pub perspective: bool,
 }
 
 impl Default for Framing {
@@ -98,11 +131,21 @@ impl Default for Framing {
         Self {
             zoom: 1.0,
             pan: Vec2::ZERO,
+            perspective: false,
         }
     }
 }
 
 impl Framing {
+    /// Fitted to the view again, in the same projection.
+    #[must_use]
+    pub fn fitted(self) -> Self {
+        Self {
+            perspective: self.perspective,
+            ..Self::default()
+        }
+    }
+
     /// Zoomed by `factor` keeping the point `at` (from the view's centre) still.
     #[must_use]
     pub fn zoomed_about(self, at: Vec2, factor: f32) -> Self {
@@ -111,6 +154,7 @@ impl Framing {
         Self {
             zoom,
             pan: at - (at - self.pan) * (zoom / self.zoom),
+            ..self
         }
     }
 
@@ -273,13 +317,84 @@ fn extent(material: &Material, wrap: Option<Wrap>) -> (DVec3, DVec3) {
     }
 }
 
+/// How the view sees the material: its bounding sphere fitted into the view, so turning
+/// never changes its size, then zoomed and panned. In perspective the eye stands just far
+/// enough off for the sphere to fill [`FIELD_OF_VIEW`].
+#[derive(Clone, Copy, Debug)]
+struct Camera {
+    orbit: Orbit,
+    /// The bounding sphere's middle, in the material's own coordinates.
+    middle: DVec3,
+    /// In perspective, the eye's distance from `middle`.
+    eye: Option<f64>,
+    /// Points on screen per mm (at `middle`'s depth, in perspective).
+    scale: f64,
+    /// Where `middle` shows.
+    centre: Pos2,
+}
+
+impl Camera {
+    fn new(
+        material: &Material,
+        orbit: Orbit,
+        framing: Framing,
+        area: Rect,
+        wrap: Option<Wrap>,
+    ) -> Self {
+        let (lo, hi) = extent(material, wrap);
+        let radius = ((hi - lo).length() / 2.0).max(f64::EPSILON);
+        let half = FIELD_OF_VIEW / 2.0;
+        // the sphere's outline, seen from the eye, is half the field of view off its middle
+        let eye = framing.perspective.then(|| radius / half.sin());
+        // how far from the middle, on the plane through it, the view's edge is
+        let reach = eye.map_or(radius, |e| e * half.tan());
+        Self {
+            orbit,
+            middle: (lo + hi) / 2.0,
+            eye,
+            scale: f64::from(area.width().min(area.height())) / (2.0 * reach)
+                * f64::from(framing.zoom),
+            centre: area.center() + framing.pan,
+        }
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "screen coordinates fit f32"
+    )]
+    fn screen(&self, p: DVec3) -> Pos2 {
+        let (at, depth) = self.orbit.project(p - self.middle);
+        // nearer the eye is larger; nothing drawn is as near as the eye, outside the sphere
+        let nearer = self.eye.map_or(1.0, |e| e / (e - depth).max(f64::EPSILON));
+        let offset = at * nearer * self.scale;
+        Pos2::new(
+            self.centre.x + offset.x as f32,
+            self.centre.y - offset.y as f32,
+        )
+    }
+
+    /// Where the eye is, in perspective.
+    fn eye_at(&self) -> Option<DVec3> {
+        self.eye
+            .map(|e| self.middle + self.orbit.towards_viewer() * e)
+    }
+
+    /// The direction from `p` towards the eye.
+    fn towards_eye(&self, p: DVec3) -> DVec3 {
+        self.eye_at()
+            .map_or(self.orbit.towards_viewer(), |eye| (eye - p).normalize())
+    }
+
+    /// Whether the plane through `p` facing `outward` faces the eye.
+    fn faces(&self, p: DVec3, outward: DVec3) -> bool {
+        self.towards_eye(p).dot(outward) > 0.0
+    }
+}
+
 /// Screen positions of points in the material's own coordinates (x, y from its corner, z up
 /// from the surface) as [`mesh`] draws it: the block's bounding sphere fitted into `area`,
-/// so turning never changes its size, then zoomed and panned by `framing`.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "screen coordinates fit f32"
-)]
+/// so turning never changes its size, then zoomed and panned (and seen in perspective) by
+/// `framing`.
 pub fn screen_of(
     material: &Material,
     orbit: Orbit,
@@ -287,16 +402,80 @@ pub fn screen_of(
     area: Rect,
     wrap: Option<Wrap>,
 ) -> impl Fn(DVec3) -> Pos2 {
-    let (lo, hi) = extent(material, wrap);
-    let radius = ((hi - lo).length() / 2.0).max(f64::EPSILON);
-    let (middle, _) = orbit.project((lo + hi) / 2.0);
-    let scale =
-        f64::from(area.width().min(area.height())) / (2.0 * radius) * f64::from(framing.zoom);
-    let centre = area.center() + framing.pan;
+    let camera = Camera::new(material, orbit, framing, area, wrap);
+    move |p: DVec3| camera.screen(p)
+}
+
+/// Whether points in the material's own coordinates are in sight, or hidden by the surface
+/// (or the block under it) as [`mesh`] draws it unwrapped: the overlays drawn over the mesh
+/// leave out what this hides.
+// ponytail: a ray from the point towards the eye, stepped half a cell at a time over the
+// height grid until it is above (or below) everything or off the material. The surface is a
+// height grid, so this is exact to a cell and needs no depth buffer, and the mesh stays
+// egui's own. The app renders with wgpu, but a paint callback with a depth buffer would
+// mean shaders, a pipeline of its own and a GPU in the headless tests. Walk the cells (DDA)
+// instead if long side-on rays ever show in a profile.
+pub fn seen_of(material: &Material, orbit: Orbit, framing: Framing) -> impl Fn(DVec3) -> bool {
+    let m = material;
+    // only the eye is wanted, which is the same whatever size the view is
+    let camera = Camera::new(m, orbit, framing, Rect::ZERO, None);
+    let (lo, hi) = extent(m, None);
+    let step = m.cell / 2.0;
+    // off the material and heading further off: nothing more can be in the way
+    let leaving = |at: f64, heading: f64, size: f64| {
+        (at < 0.0 && heading <= 0.0) || (at > size && heading >= 0.0)
+    };
     move |p: DVec3| {
-        let offset = (orbit.project(p).0 - middle) * scale;
-        Pos2::new(centre.x + offset.x as f32, centre.y - offset.y as f32)
+        let towards = camera.towards_eye(p);
+        let far = camera
+            .eye_at()
+            .map_or(f64::INFINITY, |eye| (eye - p).length());
+        // a cell clear of the point first, so a line lying on the surface is not hidden by
+        // the cell it lies on
+        let mut t = m.cell;
+        while t < far {
+            let q = p + towards * t;
+            let past = (towards.z >= 0.0 && q.z >= hi.z) || (towards.z <= 0.0 && q.z <= lo.z);
+            if past || leaving(q.x, towards.x, hi.x) || leaving(q.y, towards.y, hi.y) {
+                return true;
+            }
+            let under = m.at(m.origin + q.truncate()).is_some_and(|h| q.z < h);
+            if under && q.z > lo.z {
+                return false;
+            }
+            t += step;
+        }
+        true
     }
+}
+
+/// The parts of the line through `points` that are `seen`, each a line of its own: every
+/// segment is cut into pieces no longer than `step` first, so the surface can hide part of
+/// one.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "a piece count"
+)]
+pub fn visible_runs(points: &[DVec3], step: f64, seen: impl Fn(DVec3) -> bool) -> Vec<Vec<DVec3>> {
+    let mut samples: Vec<DVec3> = points.first().copied().into_iter().collect();
+    for pair in points.windows(2) {
+        let pieces = ((pair[1] - pair[0]).length() / step.max(f64::EPSILON))
+            .ceil()
+            .max(1.0) as usize;
+        samples.extend((1..=pieces).map(|i| pair[0].lerp(pair[1], i as f64 / pieces as f64)));
+    }
+    let mut runs = vec![vec![]];
+    for p in samples {
+        if seen(p) {
+            runs.last_mut().expect("never empty").push(p);
+        } else if runs.last().is_some_and(|run| !run.is_empty()) {
+            runs.push(vec![]);
+        }
+    }
+    runs.retain(|run| run.len() >= 2);
+    runs
 }
 
 /// The height a vector is drawn at: flat, in one plane, at the highest the surface reaches
@@ -424,7 +603,19 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
             ));
         }
     }
-    // the block's sides that face the viewer, from the surface down to the bottom
+    // painter's algorithm: far quads first
+    let mut projected: Vec<(f64, [DVec3; 4], [Color32; 4])> = quads
+        .into_iter()
+        .map(|(corners, colours)| {
+            let depth = corners.iter().map(|&c| orbit.project(c).1).sum::<f64>();
+            (depth, corners, colours)
+        })
+        .collect();
+    projected.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut quads: Vec<_> = projected.into_iter().map(|(_, q, c)| (q, c)).collect();
+    let camera = Camera::new(m, orbit, framing, area, look.wrap);
+    // then the block's sides that face the viewer, from the surface down to the bottom, and
+    // its bottom seen from below: the block is all behind them, so they go last
     let (last_column, last_row) = (m.columns - 1, m.rows - 1);
     let sides: [(DVec3, Vec<(usize, usize)>); 4] = [
         (DVec3::NEG_Y, (0..m.columns).map(|c| (c, 0)).collect()),
@@ -432,11 +623,12 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         (DVec3::NEG_X, (0..m.rows).map(|r| (0, r)).collect()),
         (DVec3::X, (0..m.rows).map(|r| (last_column, r)).collect()),
     ];
+    let down = |p: DVec3| DVec3::new(p.x, p.y, m.bottom);
     for (outward, edge) in sides
         .into_iter()
         .filter(|_| look.sides && look.wrap.is_none())
     {
-        if orbit.project(outward).1 <= 0.0 {
+        if !camera.faces(down(top(edge[0].0, edge[0].1)), outward) {
             continue;
         }
         let colour = shade(lit(outward, look.light));
@@ -445,25 +637,24 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
             if a.z.is_nan() || b.z.is_nan() {
                 continue;
             }
-            let down = |p: DVec3| DVec3::new(p.x, p.y, m.bottom);
             quads.push(([a, b, down(b), down(a)], [colour; 4]));
         }
     }
-    // painter's algorithm: far quads first
-    let mut projected: Vec<([DVec3; 4], f64, [Color32; 4])> = quads
-        .into_iter()
-        .map(|(corners, colours)| {
-            let depth = corners.iter().map(|&c| orbit.project(c).1).sum::<f64>();
-            (corners, depth, colours)
-        })
-        .collect();
-    projected.sort_by(|a, b| a.1.total_cmp(&b.1));
-    let screen = screen_of(m, orbit, framing, area, look.wrap);
+    let bottom = [
+        (0, 0),
+        (last_column, 0),
+        (last_column, last_row),
+        (0, last_row),
+    ]
+    .map(|(c, r)| down(top(c, r)));
+    if look.sides && look.wrap.is_none() && camera.faces(bottom[0], DVec3::NEG_Z) {
+        quads.push((bottom, [shade(lit(DVec3::NEG_Z, look.light)); 4]));
+    }
     let mut mesh = Mesh::default();
-    for (corners, _, colours) in projected {
+    for (corners, colours) in quads {
         let first = u32::try_from(mesh.vertices.len()).expect("mesh fits u32 indices");
         for (corner, colour) in corners.into_iter().zip(colours) {
-            mesh.colored_vertex(screen(corner), colour);
+            mesh.colored_vertex(camera.screen(corner), colour);
         }
         mesh.add_triangle(first, first + 1, first + 2);
         mesh.add_triangle(first, first + 2, first + 3);
@@ -514,6 +705,151 @@ pub fn pick(
         .filter(|n| n.1 >= front - m.cell)
         .min_by(|a, b| a.2.total_cmp(&b.2))
         .map(|n| n.0)
+}
+
+/// The view cube in a corner of the 3D view: a cube turned with the view whose faces, edges
+/// and corners each turn the view to look from there (Aspire's View Controller).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ViewCube {
+    /// Where its middle shows.
+    pub centre: Pos2,
+    /// Half its edge, points.
+    pub half: f32,
+}
+
+/// The cube's faces: the way out of each, the two ways across it, and its name.
+const FACES: [(DVec3, DVec3, DVec3, &str); 6] = [
+    (DVec3::Z, DVec3::X, DVec3::Y, "Top"),
+    (DVec3::NEG_Z, DVec3::X, DVec3::NEG_Y, "Bottom"),
+    (DVec3::NEG_Y, DVec3::X, DVec3::Z, "Front"),
+    (DVec3::Y, DVec3::NEG_X, DVec3::Z, "Back"),
+    (DVec3::X, DVec3::Y, DVec3::Z, "Right"),
+    (DVec3::NEG_X, DVec3::NEG_Y, DVec3::Z, "Left"),
+];
+
+impl ViewCube {
+    /// In the top right of `area`, `margin` in from its edges: each face as wide as the
+    /// longest name in `font` with `margin` either side.
+    pub fn new(area: Rect, painter: &Painter, font: &FontId, margin: f32) -> Self {
+        let longest = FACES
+            .iter()
+            .map(|f| {
+                let galley = painter.layout_no_wrap(f.3.to_owned(), font.clone(), Color32::BLACK);
+                galley.size().x
+            })
+            .fold(0.0, f32::max);
+        let half = longest / 2.0 + margin;
+        let reach = Self {
+            centre: Pos2::ZERO,
+            half,
+        }
+        .rect()
+        .width()
+            / 2.0;
+        Self {
+            centre: area.right_top() + Vec2::new(-(reach + margin), reach + margin),
+            half,
+        }
+    }
+
+    /// The square it turns in: its corners never reach further from its middle.
+    pub fn rect(self) -> Rect {
+        Rect::from_center_size(self.centre, Vec2::splat(2.0 * self.half * 3f32.sqrt()))
+    }
+
+    /// Where the cube's point `p` (each coordinate -1 to 1) shows from `orbit`.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "screen coordinates fit f32"
+    )]
+    pub fn screen(self, orbit: Orbit, p: DVec3) -> Pos2 {
+        let (at, _) = orbit.project(p);
+        self.centre + Vec2::new(at.x as f32, -at.y as f32) * self.half
+    }
+
+    /// Its faces in sight from `orbit`, each cut in thirds both ways: each part's corners on
+    /// screen and the direction it looks from, a face's middle from that face, the strips
+    /// along its edges from those edges and the squares in its corners from those corners.
+    fn tiles(self, orbit: Orbit) -> Vec<([Pos2; 4], DVec3)> {
+        let third = |k: i32| -1.0 + 2.0 * f64::from(k) / 3.0;
+        let mut tiles = vec![];
+        for (out, across, up, _) in FACES {
+            if orbit.project(out).1 <= EDGE_ON {
+                continue;
+            }
+            for (i, j) in (0..3).flat_map(|i| (0..3).map(move |j| (i, j))) {
+                let corners = [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)]
+                    .map(|(u, v)| self.screen(orbit, out + across * third(u) + up * third(v)));
+                let from = out + across * f64::from(i - 1) + up * f64::from(j - 1);
+                tiles.push((corners, from.normalize()));
+            }
+        }
+        tiles
+    }
+
+    /// The direction the part of the cube under `at` looks from; `None` off the cube.
+    pub fn direction_at(self, orbit: Orbit, at: Pos2) -> Option<DVec3> {
+        let inside = |corners: &[Pos2; 4]| {
+            let turns: Vec<f32> = (0..4)
+                .map(|k| {
+                    let (a, b) = (corners[k], corners[(k + 1) % 4]);
+                    (b - a).x * (at - a).y - (b - a).y * (at - a).x
+                })
+                .collect();
+            turns.iter().all(|&t| t >= 0.0) || turns.iter().all(|&t| t <= 0.0)
+        };
+        self.tiles(orbit)
+            .into_iter()
+            .find(|(corners, _)| inside(corners))
+            .map(|(_, from)| from)
+    }
+
+    /// Draws it as seen from `orbit`, the parts that look from `hovered` highlighted and each
+    /// face's name on it where there is room.
+    pub fn paint(
+        self,
+        painter: &Painter,
+        orbit: Orbit,
+        hovered: Option<DVec3>,
+        visuals: &Visuals,
+        font: &FontId,
+    ) {
+        for (corners, from) in self.tiles(orbit) {
+            let lit = hovered.is_some_and(|h| h.abs_diff_eq(from, f64::EPSILON.sqrt()));
+            let fill = if lit {
+                visuals.selection.bg_fill
+            } else {
+                visuals.widgets.inactive.bg_fill
+            };
+            painter.add(Shape::convex_polygon(
+                corners.to_vec(),
+                fill,
+                eframe::egui::Stroke::NONE,
+            ));
+        }
+        let (stroke, text) = (
+            visuals.widgets.noninteractive.bg_stroke,
+            visuals.text_color(),
+        );
+        for (out, across, up, name) in FACES {
+            let facing = orbit.project(out).1;
+            if facing <= EDGE_ON {
+                continue;
+            }
+            let outline = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+                .map(|(u, v)| self.screen(orbit, out + across * u + up * v));
+            painter.add(Shape::closed_line(outline.to_vec(), stroke));
+            // the name where the face, as turned, has at least the name's area
+            let galley = painter.layout_no_wrap(name.to_owned(), font.clone(), text);
+            let room = facing * f64::from((2.0 * self.half).powi(2));
+            if f64::from(galley.size().x * galley.size().y) <= room {
+                let at = Align2::CENTER_CENTER
+                    .anchor_size(self.screen(orbit, out), galley.size())
+                    .min;
+                painter.galley(at, galley, text);
+            }
+        }
+    }
 }
 
 /// The material's surface round the axis as quads, each with its brightness: lit by its own
@@ -923,14 +1259,195 @@ mod tests {
     }
 
     #[test]
-    fn dragging_turns_and_tilts_within_straight_down_and_side_on() {
+    fn dragging_turns_and_tilts_from_straight_down_past_side_on_to_straight_up() {
         let size = Vec2::new(400.0, 300.0);
         let o = Orbit::TOP.dragged(Vec2::new(200.0, -300.0), size);
         assert!((o.yaw - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
         assert_eq!(o.pitch, 0.0, "cannot tilt past straight down");
+        let under = Orbit::FRONT.dragged(Vec2::new(0.0, 50.0), size);
+        assert!(under.pitch > std::f64::consts::FRAC_PI_2, "past side on");
+        assert!(under.towards_viewer().z < 0.0, "from underneath");
         assert_eq!(
             Orbit::TOP.dragged(Vec2::new(0.0, 900.0), size).pitch,
-            std::f64::consts::FRAC_PI_2
+            std::f64::consts::PI
+        );
+    }
+
+    #[test]
+    fn facing_looks_from_each_face_edge_and_corner() {
+        assert_eq!(Orbit::facing(DVec3::Z), Orbit::TOP);
+        let same = |a: Orbit, b: Orbit| a.towards_viewer().abs_diff_eq(b.towards_viewer(), 1e-12);
+        assert!(same(Orbit::facing(DVec3::NEG_Y), Orbit::FRONT));
+        assert!(same(Orbit::facing(DVec3::X * 3.0), Orbit::RIGHT));
+        for from in [
+            DVec3::NEG_Z,
+            DVec3::new(1.0, -1.0, 0.0),
+            DVec3::new(-1.0, 1.0, 1.0),
+            DVec3::new(1.0, 1.0, -1.0),
+        ] {
+            let towards = Orbit::facing(from).towards_viewer();
+            assert!(
+                towards.abs_diff_eq(from.normalize(), 1e-12),
+                "{from}: {towards}"
+            );
+        }
+        let below = Orbit::facing(DVec3::NEG_Z);
+        let (x, _) = below.project(DVec3::X);
+        assert!(x.abs_diff_eq(DVec2::X, 1e-12), "x still to the right");
+    }
+
+    #[test]
+    fn in_perspective_nearer_is_larger_and_the_block_still_fits() {
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let m = slotted();
+        let ortho = Framing::default();
+        let perspective = Framing {
+            perspective: true,
+            ..ortho
+        };
+        // from the front, the front (y 0) and back (y 100) edges' lengths
+        let edges = |framing: Framing| {
+            let screen = screen_of(&m, Orbit::FRONT, framing, area, None);
+            let across = |y: f64| {
+                screen(DVec3::new(0.0, y, 0.0)).distance(screen(DVec3::new(100.0, y, 0.0)))
+            };
+            (across(0.0), across(100.0))
+        };
+        let (front, back) = edges(ortho);
+        assert!((front - back).abs() < 1e-3, "orthographic: the same");
+        let (front, back) = edges(perspective);
+        assert!(front > back * 1.1, "perspective: {front} against {back}");
+        for orbit in [Orbit::TOP, Orbit::default(), Orbit::FRONT] {
+            let drawn = mesh(&m, orbit, perspective, &plain(), area);
+            assert!(
+                drawn
+                    .vertices
+                    .iter()
+                    .all(|v| area.expand(1e-3).contains(v.pos)),
+                "{orbit:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn from_below_the_block_shows_its_bottom_last() {
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let m = slotted();
+        let count = |orbit| {
+            mesh(&m, orbit, Framing::default(), &plain(), area)
+                .vertices
+                .len()
+        };
+        let below = Orbit::facing(DVec3::new(0.3, -1.0, -0.5));
+        let above = Orbit::facing(DVec3::new(0.3, -1.0, 0.5));
+        assert_eq!(count(below), count(above) + 4, "one quad more: the bottom");
+        let drawn = mesh(&m, below, Framing::default(), &plain(), area);
+        let bottom = Rgba::from(drawn.vertices.last().unwrap().color);
+        let lit_bottom = lit(DVec3::NEG_Z, LIGHT);
+        assert!(
+            (f64::from(bottom.r()) - lit_bottom).abs() < 0.01,
+            "drawn last, over the surface"
+        );
+    }
+
+    /// 100 x 100 mm in 1 mm cells, its top at 0, with a 20 mm high ridge from x = 40 to 60.
+    fn ridged() -> Material {
+        let job = Job {
+            width: 100.0,
+            height: 100.0,
+            ..Job::default()
+        };
+        let mut m = Material::new(&job, 100);
+        for row in 0..m.rows {
+            for column in 40..60 {
+                m.heights[row * m.columns + column] = 20.0;
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn the_surface_hides_what_is_behind_it_and_nothing_else() {
+        let m = ridged();
+        let seen = |orbit: Orbit, framing: Framing, p: DVec3| seen_of(&m, orbit, framing)(p);
+        let (ortho, perspective) = (
+            Framing::default(),
+            Framing {
+                perspective: true,
+                ..Framing::default()
+            },
+        );
+        let left = DVec3::new(20.0, 50.0, 0.0);
+        let ridge_top = DVec3::new(50.0, 50.0, 20.0);
+        let (left_view, above_right) = (
+            Orbit::facing(DVec3::NEG_X),
+            Orbit::facing(DVec3::new(1.0, 0.0, 0.3)),
+        );
+        for framing in [ortho, perspective] {
+            assert!(!seen(Orbit::RIGHT, framing, left), "behind the ridge");
+            assert!(seen(Orbit::TOP, framing, left), "from above");
+            assert!(seen(left_view, framing, left), "on the near side");
+            assert!(seen(above_right, framing, ridge_top), "on top of it");
+        }
+        // from low on the right the ridge hides the near part of the floor behind it
+        let low = Orbit::facing(DVec3::new(1.0, 0.0, 0.5));
+        assert!(!seen(low, ortho, DVec3::new(35.0, 50.0, 0.0)));
+        assert!(
+            seen(low, ortho, DVec3::new(-30.0, 50.0, 60.0)),
+            "high off it"
+        );
+        let below = Orbit::facing(DVec3::NEG_Z);
+        assert!(!seen(below, ortho, left), "the block is under the top");
+        assert!(
+            seen(below, ortho, DVec3::new(-5.0, 50.0, 0.0)),
+            "off the block"
+        );
+    }
+
+    #[test]
+    fn a_line_is_cut_where_it_is_hidden() {
+        // a line across the ridge's far side, seen from the right: the part behind it goes
+        let m = ridged();
+        let seen = seen_of(&m, Orbit::RIGHT, Framing::default());
+        let line = [DVec3::new(10.0, 20.0, 0.0), DVec3::new(10.0, 80.0, 0.0)];
+        assert!(visible_runs(&line, m.cell, &seen).is_empty(), "all behind");
+        let across = [DVec3::new(10.0, 50.0, 0.0), DVec3::new(90.0, 50.0, 0.0)];
+        let runs = visible_runs(&across, m.cell, &seen);
+        assert_eq!(runs.len(), 1, "{runs:?}");
+        assert!(
+            runs[0].iter().all(|p| p.x >= 59.0),
+            "only right of the ridge"
+        );
+        let all = |_| true;
+        assert_eq!(visible_runs(&across, 1.0, all)[0].len(), 81, "a point a mm");
+        let gap = |p: DVec3| !(40.0..60.0).contains(&p.x);
+        assert_eq!(visible_runs(&across, 1.0, gap).len(), 2, "split in two");
+    }
+
+    #[test]
+    fn the_view_cube_turns_to_what_is_under_the_pointer() {
+        let cube = ViewCube {
+            centre: pos2(100.0, 100.0),
+            half: 30.0,
+        };
+        let iso = Orbit::default();
+        // the middles of the faces in sight, and a corner and an edge of the top
+        for from in [DVec3::Z, DVec3::NEG_Y, DVec3::X] {
+            let at = cube.screen(iso, from);
+            assert_eq!(cube.direction_at(iso, at), Some(from), "{from}");
+        }
+        let corner = cube.screen(iso, DVec3::new(0.8, -0.8, 1.0));
+        let towards = cube.direction_at(iso, corner).unwrap();
+        assert!(towards.abs_diff_eq(DVec3::new(1.0, -1.0, 1.0).normalize(), 1e-12));
+        let edge = cube.screen(iso, DVec3::new(0.0, 0.8, 1.0));
+        let towards = cube.direction_at(iso, edge).unwrap();
+        assert!(towards.abs_diff_eq(DVec3::new(0.0, 1.0, 1.0).normalize(), 1e-12));
+        assert_eq!(cube.direction_at(iso, pos2(0.0, 0.0)), None, "off it");
+        assert!(cube.rect().contains(cube.screen(iso, DVec3::ONE)));
+        // face on, the faces seen edge-on take no clicks
+        assert_eq!(
+            cube.direction_at(Orbit::RIGHT, cube.screen(Orbit::RIGHT, DVec3::X)),
+            Some(DVec3::X)
         );
     }
 }

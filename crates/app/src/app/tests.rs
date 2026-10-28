@@ -2721,3 +2721,136 @@ fn tabs_are_placed_and_removed_by_clicking_the_vector() {
     h.click(h.at(60.0, 30.0), Modifiers::NONE);
     assert!(tabs(&h).is_empty(), "a second click takes it off");
 }
+
+/// A new job with a shape on it, in the 3D view.
+fn shape_in_3d() -> Harness {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let shape = h.app.registry.get("create_shape").unwrap().default_params();
+    h.app.apply("create_shape", &shape).unwrap();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h
+}
+
+#[test]
+fn the_view_cube_looks_from_the_face_edge_or_corner_clicked() {
+    use cut_craft_core::glam::DVec3;
+    let mut h = shape_in_3d();
+    let looks_from = |h: &Harness, from: DVec3| {
+        let towards = h.app.orbit.towards_viewer();
+        assert!(
+            towards.abs_diff_eq(from.normalize(), 1e-9),
+            "{towards} not {from}"
+        );
+    };
+    let cube = h.app.view_cube.expect("the 3D view draws its view cube");
+    let framing = h.app.framing;
+    // the right face's middle, with its name on it
+    let right = cube.screen(h.app.orbit, DVec3::X);
+    assert!(
+        h.texts_at("Right")
+            .iter()
+            .any(|at| at.distance(right) < 1.0),
+        "named"
+    );
+    h.click(right, Modifiers::NONE);
+    looks_from(&h, DVec3::X);
+    assert_eq!(h.app.framing, framing, "turned, not refitted");
+    // face on now: its top corner at the back, then its top edge
+    let corner = cube.screen(h.app.orbit, DVec3::new(1.0, 0.8, 0.8));
+    h.click(corner, Modifiers::NONE);
+    looks_from(&h, DVec3::new(1.0, 1.0, 1.0));
+    let edge = cube.screen(h.app.orbit, DVec3::new(0.8, 0.0, 1.0));
+    h.click(edge, Modifiers::NONE);
+    looks_from(&h, DVec3::new(1.0, 0.0, 1.0));
+    // a double-click looks from the other side, and the view behind takes no clicks
+    let selected = h.app.doc.selected_components.clone();
+    h.double_click(cube.screen(h.app.orbit, DVec3::new(1.0, 0.0, 1.0)));
+    looks_from(&h, DVec3::new(-1.0, 0.0, -1.0));
+    assert_eq!(h.app.doc.selected_components, selected);
+    assert_eq!(h.app.framing, framing);
+}
+
+#[test]
+fn the_3d_view_turns_to_perspective_and_tilts_underneath() {
+    let mut h = shape_in_3d();
+    let start = h.app.orbit;
+    let button = h.text_at("Perspective").expect("the perspective toggle");
+    h.click(button, Modifiers::NONE);
+    assert!(h.app.framing.perspective);
+    h.click(h.text_at("Fit").unwrap(), Modifiers::NONE);
+    assert!(h.app.framing.perspective, "Fit keeps the projection");
+    // a long drag down, below the cube, tilts the view past side on to under the job
+    let cube = h.app.view_cube.unwrap().rect();
+    let from = cube.left_bottom() + vec2(-cube.width(), cube.height());
+    h.drag(from, from + vec2(0.0, 300.0));
+    let pitch = h.app.orbit.pitch;
+    assert!(
+        pitch > std::f64::consts::FRAC_PI_2 && pitch > start.pitch,
+        "{pitch}"
+    );
+    assert!(h.app.orbit.towards_viewer().z < 0.0, "from underneath");
+    h.click(button, Modifiers::NONE);
+    assert!(!h.app.framing.perspective, "back to orthographic");
+}
+
+#[test]
+fn a_vector_behind_the_model_is_not_drawn_over_it() {
+    // a tall block on the right half; an outline on the floor left of it
+    use cut_craft_core::component::{Combine, Component};
+    let mut h = Harness::new();
+    let job = h.app.doc.job;
+    let o = job.area().min;
+    let wall = cut_craft_core::geometry::Rect::new(
+        o + Point::new(job.width / 2.0, 0.0),
+        o + Point::new(job.width, job.height),
+    );
+    let mut c = Change::builder(&h.app.doc);
+    c.add_component(Component::from_fn(
+        "wall",
+        Combine::Add,
+        wall,
+        job.model_cell(),
+        |_| Some(job.width / 2.0),
+    ));
+    h.app.record(Ok(c.finish()), "added");
+    h.rectangle(
+        job.width / 8.0,
+        job.height / 4.0,
+        job.width / 8.0,
+        job.height / 2.0,
+    );
+    h.app.view = View::ThreeD;
+    // lines drawn in the vectors' colour
+    let lines = |h: &mut Harness, orbit, vectors| {
+        h.app.orbit = orbit;
+        h.app.display.vectors_3d = vectors;
+        h.frame(vec![]);
+        let stroke = h
+            .ctx
+            .global_style()
+            .visuals
+            .widgets
+            .noninteractive
+            .fg_stroke;
+        let colour = egui::epaint::ColorMode::Solid(stroke.color);
+        let drawn = h
+            .shapes
+            .iter()
+            .filter(|c| matches!(&c.shape, egui::Shape::Path(p) if p.stroke.color == colour));
+        drawn.count()
+    };
+    let top = view3d::Orbit::TOP;
+    assert!(
+        lines(&mut h, top, true) > lines(&mut h, top, false),
+        "from above it shows"
+    );
+    let low_right = view3d::Orbit::facing(cut_craft_core::glam::DVec3::new(1.0, 0.0, 0.1));
+    assert_eq!(
+        lines(&mut h, low_right, true),
+        lines(&mut h, low_right, false),
+        "from low on the right the block hides it"
+    );
+}

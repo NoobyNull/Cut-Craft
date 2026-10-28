@@ -706,15 +706,28 @@ impl CutCraftApp {
             ] {
                 if ui.small_button(label).clicked() {
                     self.orbit = orbit;
-                    self.framing = view3d::Framing::default();
+                    self.framing = self.framing.fitted();
                 }
             }
             if ui.small_button("Fit").clicked() {
-                self.framing = view3d::Framing::default();
+                self.framing = self.framing.fitted();
+            }
+            // Aspire's orthographic / perspective toggle
+            let perspective = self.framing.perspective;
+            if ui.selectable_label(perspective, "Perspective").clicked() {
+                self.framing.perspective = !perspective;
             }
         });
         let (area, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+        // the ViewCube over the view's corner, so the view does not see its clicks
+        let font = egui::TextStyle::Small.resolve(ui.style());
+        let cube = view3d::ViewCube::new(area, ui.painter(), &font, ui.spacing().item_spacing.x);
+        let on_cube = ui.interact(
+            cube.rect(),
+            ui.scope_id().with("view_cube"),
+            egui::Sense::click_and_drag(),
+        );
         let (left, right, middle, ctrl, scroll, fit_key) = ui.input(|i| {
             (
                 i.pointer.primary_down(),
@@ -735,6 +748,21 @@ impl CutCraftApp {
                 Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
                 None => {}
             }
+        }
+        // the ViewCube: a drag turns the view, a click looks from the face, edge or corner
+        // clicked, and a double-click from the other side
+        let orbit = self.orbit;
+        let pointed = |at: Option<egui::Pos2>| at.and_then(|at| cube.direction_at(orbit, at));
+        let hovered = pointed(on_cube.hover_pos());
+        if on_cube.dragged() {
+            self.orbit = self.orbit.dragged(on_cube.drag_delta(), area.size());
+        } else if on_cube.double_clicked() {
+            self.orbit = view3d::Orbit::facing(-self.orbit.towards_viewer());
+        } else if let Some(from) =
+            pointed(on_cube.interact_pointer_pos()).filter(|_| on_cube.clicked())
+        {
+            // ponytail: turns at once; Aspire's turns smoothly
+            self.orbit = view3d::Orbit::facing(from);
         }
         if let Some(at) = response.hover_pos().filter(|_| scroll != 0.0) {
             // as in the 2D view: a quarter of the view's height doubles the zoom
@@ -757,12 +785,15 @@ impl CutCraftApp {
                 self.doc.selected_components = [id].into();
             }
         } else if double.is_some() || (response.hovered() && fit_key) {
-            self.framing = view3d::Framing::default();
+            self.framing = self.framing.fitted();
         }
-        if response.dragged() || before != (self.orbit, self.framing) {
+        if response.dragged() || on_cube.dragged() || before != (self.orbit, self.framing) {
             self.moved_3d = ui.input(|i| i.time);
         }
         self.paint_3d(ui, area);
+        let painter = ui.painter_at(area);
+        cube.paint(&painter, self.orbit, hovered, ui.visuals(), &font);
+        self.view_cube = Some(cube);
     }
 
     /// The 3D view's surface: quick (`surface`) while it moves, then once still the
@@ -889,17 +920,6 @@ impl CutCraftApp {
         if shown.shaded_background {
             self.paint_background(ui, &painter, area);
         }
-        let vectors: Vec<Vec<cut_craft_core::geometry::Point>> = if shown.vectors_3d {
-            self.doc
-                .vectors
-                .iter()
-                .filter(|(id, _)| self.doc.shown(**id))
-                .map(|(_, path)| path.flatten(cut_craft_core::polygon::TOLERANCE))
-                .collect()
-        } else {
-            vec![]
-        };
-        let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
         let job = self.shown_job();
         let previewing = self.simulation.is_some() || self.playback.is_some();
         // a playing preview's tool: where its tip is, and its diameter
@@ -923,6 +943,7 @@ impl CutCraftApp {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
         };
         // a playing preview's tool, an upright cylinder at the tip
+        // ponytail: drawn whole, over the surface it is cutting into
         if let Some((tip, diameter)) = tool_at {
             let at = local(tip.truncate(), tip.z);
             let outline = view3d::cylinder(
@@ -938,13 +959,51 @@ impl CutCraftApp {
                 selection.stroke,
             ));
         }
+        self.overlays_3d(ui, &painter, &surface, (orbit, framing), fit);
+    }
+
+    /// The vectors, modeling plane and origin over the 3D view's (unwrapped) `surface`, each
+    /// as the View menu says, leaving out what the surface hides, a cell at a time.
+    fn overlays_3d(
+        &self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        surface: &Material,
+        (orbit, framing): (view3d::Orbit, view3d::Framing),
+        fit: egui::Rect,
+    ) {
+        let shown = self.display;
+        let vectors: Vec<Vec<cut_craft_core::geometry::Point>> = if shown.vectors_3d {
+            self.doc
+                .vectors
+                .iter()
+                .filter(|(id, _)| self.doc.shown(**id))
+                .map(|(_, path)| path.flatten(cut_craft_core::polygon::TOLERANCE))
+                .collect()
+        } else {
+            vec![]
+        };
+        let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
+        let screen = view3d::screen_of(surface, orbit, framing, fit, None);
+        let local = |p: cut_craft_core::geometry::Point, z: f64| {
+            cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
+        };
+        let seen = view3d::seen_of(surface, orbit, framing);
+        let in_sight = |points: &[cut_craft_core::glam::DVec3]| {
+            view3d::visible_runs(points, surface.cell, &seen)
+                .into_iter()
+                .map(|run| run.into_iter().map(&screen).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        };
         // each vector flat, in one plane, on top of what it outlines
         for points in &vectors {
-            let z = view3d::vector_plane(&surface, points);
-            let line = points.iter().map(|&p| screen(local(p, z))).collect();
-            painter.add(egui::Shape::line(line, stroke));
+            let z = view3d::vector_plane(surface, points);
+            let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
+            for run in in_sight(&line) {
+                painter.add(egui::Shape::line(run, stroke));
+            }
         }
-        let size = view3d::plan_size(&surface);
+        let size = view3d::plan_size(surface);
         if shown.modeling_plane {
             let corners = [
                 (0.0, 0.0),
@@ -955,10 +1014,12 @@ impl CutCraftApp {
             ];
             let line = corners
                 .iter()
-                .map(|&(x, y)| screen(cut_craft_core::glam::DVec3::new(x, y, 0.0)))
+                .map(|&(x, y)| cut_craft_core::glam::DVec3::new(x, y, 0.0))
                 .collect::<Vec<_>>();
             let dash = ui.spacing().item_spacing.x;
-            painter.add(egui::Shape::dashed_line(&line, stroke, dash, dash / 2.0));
+            for run in in_sight(&line) {
+                painter.add(egui::Shape::dashed_line(&run, stroke, dash, dash / 2.0));
+            }
         }
         if shown.origin {
             // X, Y and Z from the job's origin, a tenth of the job long, in the usual axis colours
@@ -970,7 +1031,9 @@ impl CutCraftApp {
                 (cut_craft_core::glam::DVec3::Y, egui::Color32::GREEN),
                 (cut_craft_core::glam::DVec3::Z, egui::Color32::BLUE),
             ] {
-                painter.line_segment([screen(o), screen(o + axis * reach)], (width, colour));
+                for run in in_sight(&[o, o + axis * reach]) {
+                    painter.add(egui::Shape::line(run, (width, colour)));
+                }
             }
         }
     }
