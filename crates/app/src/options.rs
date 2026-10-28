@@ -223,7 +223,12 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "File dialog default")]
     pub file_dialog_default: FileDialogDefault,
-    /// How the window looks
+}
+
+/// How Cut Craft looks (not one of Aspire's).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Appearance {
+    /// Light, dark, or the desktop's own
     #[serde(default)]
     pub theme: Theme,
 }
@@ -281,6 +286,9 @@ pub struct Options {
     #[serde(default)]
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
+    #[serde(default)]
+    #[schemars(extend("x-section" = true))]
+    pub appearance: Appearance,
 }
 
 impl Default for Options {
@@ -316,9 +324,9 @@ impl Default for Options {
                 bug_report_repo: bug_repo(),
                 wayland_native: false,
                 file_dialog_default: FileDialogDefault::default(),
-                theme: Theme::default(),
             },
             confirmations: Confirmations::default(),
+            appearance: Appearance::default(),
         }
     }
 }
@@ -399,7 +407,11 @@ mod tests {
             "solid_2d_previews": false }, "general": { "recent_file_list_size": 4 } }"#;
         let older: Options = serde_json::from_str(older).expect("options saved before preloading");
         assert!(!older.view_3d.draw_origin && older.general.preload_icons);
-        assert_eq!(older.general.theme, Theme::Light, "light, as before themes");
+        assert_eq!(
+            older.appearance.theme,
+            Theme::Light,
+            "light, as before themes"
+        );
         let fields =
             crate::form::fields(&serde_json::to_value(schemars::schema_for!(Options)).unwrap());
         let sections: Vec<&str> = fields
@@ -413,7 +425,8 @@ mod tests {
                 "3D View Settings",
                 "Toolpath Settings",
                 "General Settings",
-                "Confirmation Choices"
+                "Confirmation Choices",
+                "Appearance"
             ]
         );
     }

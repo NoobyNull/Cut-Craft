@@ -74,6 +74,7 @@ impl CutCraftApp {
             rotating: false,
             options: crate::options::Options::default(),
             options_window: false,
+            options_page: 0,
             split: None,
             clipart: crate::clipart::Clipart::default(),
             recent_path: None,

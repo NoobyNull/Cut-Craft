@@ -1221,21 +1221,40 @@ impl CutCraftApp {
         let fields = crate::form::fields(&schema);
         let mut values = serde_json::to_value(&self.options).expect("options serialise");
         let mut changed = None;
+        let page = &mut self.options_page;
         let (id, size) = (egui::Id::unique("options"), dialog_size(ctx));
-        cut_craft_bug_report::dialog(ctx, id, "Options", size, &mut open, |ui| {
-            let look = crate::form::Look {
-                units: self.doc.job.units,
-                picture: &|_| None,
-                material: crate::form::material(&self.doc, self.doc.job.units),
-            };
-            if crate::form::show(ui, &fields, &mut values, &look) {
-                changed = serde_json::from_value::<crate::options::Options>(values).ok();
-            }
+        // the categories down the left, the chosen one's settings beside them
+        cut_craft_bug_report::dialog_with_panels(ctx, id, "Options", size, &mut open, |ui| {
+            egui::Panel::left("options_categories")
+                .resizable(false)
+                .show(ui, |ui| {
+                    for (i, f) in fields.iter().enumerate() {
+                        if ui.selectable_label(i == *page, &f.label).clicked() {
+                            *page = i;
+                        }
+                    }
+                });
+            egui::CentralPanel::default().show(ui, |ui| {
+                let Some(category) = fields.get(*page) else {
+                    return;
+                };
+                let look = crate::form::Look {
+                    units: self.doc.job.units,
+                    picture: &|_| None,
+                    material: crate::form::material(&self.doc, self.doc.job.units),
+                };
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    let one = std::slice::from_ref(category);
+                    if crate::form::show(ui, one, &mut values, &look) {
+                        changed = serde_json::from_value::<crate::options::Options>(values).ok();
+                    }
+                });
+            });
         });
         self.options_window = open;
         if let Some(options) = changed {
             options.apply_to(&mut self.display);
-            ctx.set_theme(options.general.theme.preference());
+            ctx.set_theme(options.appearance.theme.preference());
             self.recent.truncate(options.recent_count());
             if let Err(e) = options.save() {
                 self.status.set_message(&e);

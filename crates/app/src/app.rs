@@ -509,6 +509,8 @@ struct CutCraftApp {
     /// Edit ▸ Options, kept between runs, and whether its window is open.
     options: crate::options::Options,
     options_window: bool,
+    /// The Options category shown, by its place in the list.
+    options_page: usize,
     /// Both views shown at once.
     split: Option<Split>,
     /// The Clipart tab's library.
@@ -998,7 +1000,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
     let settings = crate::options::Options::load();
-    let (wayland, theme) = (settings.general.wayland_native, settings.general.theme);
+    let (wayland, theme) = (settings.general.wayland_native, settings.appearance.theme);
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {
