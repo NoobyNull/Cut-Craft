@@ -183,6 +183,18 @@ pub struct ModelPosition {
     pub gap: f64,
 }
 
+/// Material Setup's Home / Start Position: where the tool starts from and goes back to at the
+/// end, X and Y in job coordinates and Z as a gap above the material.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Home {
+    #[schemars(title = "X", extend("x-unit" = "mm"))]
+    pub x: f64,
+    #[schemars(title = "Y", extend("x-unit" = "mm"))]
+    pub y: f64,
+    #[schemars(title = "Z Gap above Material", extend("x-unit" = "mm"), range(min = 0))]
+    pub z: f64,
+}
+
 /// The material block, in millimetres. Job coordinates are the machine's: the datum is at
 /// `offset` (0, 0 unless an offset is used), so the material lies where [`Job::area`] says.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -212,6 +224,13 @@ pub struct Job {
     /// Where the 3D model sits in the material (Material Setup; added with it).
     #[serde(default)]
     pub model_position: ModelPosition,
+    /// Plunge (Z2): the gap above the material that plunges go down to at the rapid rate
+    /// before slowing to the plunge rate; unset, it is the clearance (no rapid plunges).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plunge: Option<f64>,
+    /// Home / Start Position; unset, X0 Y0 at the clearance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<Home>,
 }
 
 fn default_clearance() -> f64 {
@@ -238,6 +257,19 @@ impl Job {
             rotary: Some(Rotary { diameter, along }),
             ..Self::default()
         }
+    }
+
+    /// Plunge (Z2) as a gap above the material.
+    pub fn plunge_gap(&self) -> f64 {
+        self.plunge.unwrap_or(self.clearance)
+    }
+
+    pub fn home(&self) -> Home {
+        self.home.unwrap_or(Home {
+            x: 0.0,
+            y: 0.0,
+            z: self.clearance,
+        })
     }
 
     /// The material in job coordinates.
@@ -287,6 +319,8 @@ impl Default for Job {
             colour: [214, 160, 102],
             rotary: None,
             model_position: ModelPosition::default(),
+            plunge: None,
+            home: None,
         }
     }
 }

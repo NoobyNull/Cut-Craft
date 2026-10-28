@@ -1,7 +1,9 @@
 //! Job Setup: the material block, where the machine's zero is on it, how finely the model is
 //! worked out and how the material looks, laid out in sections as Aspire's form is.
 
-use cut_craft_core::document::{Along, Datum, Document, Job, Resolution, Rotary, Units, ZZero};
+use cut_craft_core::document::{
+    Along, Datum, Document, Home, Job, Resolution, Rotary, Units, ZZero,
+};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -121,15 +123,26 @@ pub struct Params {
         extend("x-kind" = "colour")
     )]
     pub colour: [u8; 3],
-    /// Safe height above the material for rapid moves
     #[schemars(
-        title = "Clearance (Z1)",
+        title = "Rapid Z Gaps above Material",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/clearance_z1.svg"),
-        extend("x-unit" = "mm"),
-        range(min = 0)
+        extend("x-icon" = "job_setup/clearance_z1.svg")
     )]
+    pub gaps: RapidGaps,
+    /// Where the tool starts from and goes back to at the end
+    #[schemars(title = "Home / Start Position", extend("x-section" = true))]
+    pub home: Home,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RapidGaps {
+    /// Safe height above the material for rapid moves
+    #[schemars(title = "Clearance (Z1)", extend("x-unit" = "mm"), range(min = 0))]
     pub clearance: f64,
+    /// Plunges go down to this gap above the material at the rapid rate, then at the plunge
+    /// rate; the same as the clearance means no rapid plunges
+    #[schemars(title = "Plunge (Z2)", extend("x-unit" = "mm"), range(min = 0))]
+    pub plunge: f64,
 }
 
 impl From<&Job> for Params {
@@ -168,7 +181,11 @@ impl From<&Job> for Params {
             orientation: rotary.along,
             resolution: job.resolution,
             colour: job.colour,
-            clearance: job.clearance,
+            gaps: RapidGaps {
+                clearance: job.clearance,
+                plunge: job.plunge_gap(),
+            },
+            home: job.home(),
         }
     }
 }
@@ -197,7 +214,12 @@ impl Command for JobSetup {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        ensure_positive("clearance", p.clearance)?;
+        ensure_positive("clearance", p.gaps.clearance)?;
+        if !(0.0..=p.gaps.clearance).contains(&p.gaps.plunge) {
+            return Err(CommandError::InvalidParams(
+                "Plunge (Z2) must be between 0 and the clearance (Z1)".into(),
+            ));
+        }
         let shape = match p.job_type {
             JobType::DoubleSided => {
                 return Err(CommandError::InvalidParams(
@@ -223,7 +245,9 @@ impl Command for JobSetup {
         };
         let job = Job {
             units: p.size.units,
-            clearance: p.clearance,
+            clearance: p.gaps.clearance,
+            plunge: Some(p.gaps.plunge),
+            home: Some(p.home),
             z_zero: p.z_zero,
             datum: p.datum.position,
             offset: if p.datum.use_offset {
@@ -435,6 +459,41 @@ mod tests {
             ),
             (JobType::Rotary, 50.0, 300.0)
         );
+    }
+
+    #[test]
+    fn sets_the_plunge_gap_and_the_home_position() {
+        let home = Home {
+            x: 10.0,
+            y: 20.0,
+            z: 30.0,
+        };
+        let doc = after::<JobSetup>(&with(|p| {
+            p.gaps.clearance = 15.0;
+            p.gaps.plunge = 2.0;
+            p.home = home;
+        }));
+        assert_eq!(
+            (doc.job.clearance, doc.job.plunge_gap(), doc.job.home()),
+            (15.0, 2.0, home)
+        );
+        let reopened = Params::from(&doc.job);
+        assert_eq!((reopened.gaps.plunge, reopened.home), (2.0, home));
+    }
+
+    #[test]
+    fn a_new_job_plunges_from_the_clearance_and_starts_above_x0_y0() {
+        let p = Params::default();
+        assert!((p.gaps.plunge - p.gaps.clearance).abs() < 1e-12);
+        assert_eq!((p.home.x, p.home.y, p.home.z), (0.0, 0.0, p.gaps.clearance));
+    }
+
+    #[test]
+    fn the_plunge_gap_must_be_under_the_clearance() {
+        let why = after_err::<JobSetup>(&with(|p| p.gaps.plunge = p.gaps.clearance + 1.0));
+        assert!(why.contains("Plunge (Z2)"), "{why}");
+        let why = after_err::<JobSetup>(&with(|p| p.gaps.plunge = -1.0));
+        assert!(why.contains("Plunge (Z2)"), "{why}");
     }
 
     #[test]
