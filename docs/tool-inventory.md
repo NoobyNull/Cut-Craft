@@ -416,7 +416,9 @@ say "not implemented yet".
   the form (thickness, Z zero, Z1 / Z2, home) is in Job Setup; Z2 and home are not done.
 - Toolpaths ▸ Materials (also beside Material Setup): a library of woods, sheet goods,
   plastics and metals that sets the material's colour in the 3D view (Job Setup's colour);
-  Custom keeps Job Setup's. Flat colours only: no grain or other textures yet.
+  Custom keeps Job Setup's. Woods show grain on the 3D view's top (lines along X that drift,
+  bunch, and move across as the surface goes down, so carvings show rings); the wrapped
+  rotary view and the block's sides are plain.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 

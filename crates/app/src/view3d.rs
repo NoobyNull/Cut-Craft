@@ -255,6 +255,60 @@ pub struct Look {
     pub light: DVec3,
     /// Rotary jobs: drawn round the axis; the sides are then left out.
     pub wrap: Option<Wrap>,
+    /// Wood's grain on the top, for a wood from Toolpaths ▸ Materials.
+    pub grain: Option<Grain>,
+}
+
+/// How far grain lines drift from straight, in line spacings, and over how many spacings
+/// along the grain: a long slow drift and a shorter one at an unrelated length, so the
+/// lines never settle into a repeating ripple.
+const GRAIN_DRIFTS: [(f64, f64); 2] = [(1.6, 53.0), (0.45, 17.3)];
+/// Higher makes the dark lines thinner beside the light wood between them.
+const GRAIN_SHARPNESS: i32 = 6;
+/// How far the lines move across the board for each mm the surface goes down into it, as a
+/// plain-sawn board's rings do: carved hollows show rings round them.
+const GRAIN_DEPTH_SHIFT: f64 = 3.0;
+
+/// How far lines bunch together and spread apart across the board (early and late wood),
+/// in line spacings, and how many spacings each bunching spans: two unrelated lengths.
+const GRAIN_BUNCHES: [(f64, f64); 2] = [(0.6, 7.0), (0.3, 3.1)];
+/// The mesh cells a line spacing needs for its lines to be drawn at full strength; fewer,
+/// and the grain fades rather than shimmering between cells.
+const GRAIN_CELLS_PER_LINE: f64 = 6.0;
+
+/// Wood grain: dark lines along X, `spacing` mm apart, `depth` darker than the wood.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Grain {
+    pub spacing: f64,
+    pub depth: f32,
+}
+
+impl Grain {
+    /// As drawn on a mesh of `cell` mm cells: fainter where they are too coarse for it.
+    pub fn on_cells(self, cell: f64) -> Self {
+        #[expect(clippy::cast_possible_truncation, reason = "a share in 0..=1")]
+        let strength = (self.spacing / cell / GRAIN_CELLS_PER_LINE).min(1.0) as f32;
+        Self {
+            depth: self.depth * strength,
+            ..self
+        }
+    }
+
+    /// How lit the wood is at `p` (job space): 1 between lines, `1 - depth` on one.
+    pub fn at(self, p: DVec3) -> f64 {
+        use std::f64::consts::TAU;
+        let s = self.spacing;
+        let waves = |along: f64, waves: &[(f64, f64)]| -> f64 {
+            waves
+                .iter()
+                .map(|&(size, length)| size * s * (TAU * along / (length * s)).sin())
+                .sum()
+        };
+        let across =
+            p.y + waves(p.x, &GRAIN_DRIFTS) + waves(p.y, &GRAIN_BUNCHES) + GRAIN_DEPTH_SHIFT * p.z;
+        let line = (0.5 + 0.5 * (TAU * across / s).cos()).powi(GRAIN_SHARPNESS);
+        1.0 - f64::from(self.depth) * line
+    }
 }
 
 impl Look {
@@ -597,9 +651,10 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
             {
                 continue;
             }
+            let grain = |c, r| look.grain.map_or(1.0, |g| g.on_cells(m.cell).at(top(c, r)));
             quads.push((
                 corners.map(|(c, r)| top(c, r)),
-                corners.map(|(c, r)| shade(brightness(m, c, r, look.light))),
+                corners.map(|(c, r)| shade(brightness(m, c, r, look.light) * grain(c, r))),
             ));
         }
     }
@@ -927,7 +982,32 @@ mod tests {
             sides: true,
             light: LIGHT,
             wrap: None,
+            grain: None,
         }
+    }
+
+    #[test]
+    fn grain_darkens_lines_along_x_that_shift_going_down_into_the_board() {
+        let g = Grain {
+            spacing: 4.0,
+            depth: 0.3,
+        };
+        let on = g.at(DVec3::ZERO);
+        assert!((on - 0.7).abs() < 1e-6, "a line is `depth` darker: {on}");
+        let between = (1..40)
+            .map(|i| g.at(DVec3::new(0.0, f64::from(i) * 0.1, 0.0)))
+            .fold(0.0, f64::max);
+        assert!(between > 0.99, "the wood between lines is not: {between}");
+        let deeper = g.at(DVec3::new(0.0, 0.0, -2.0 / GRAIN_DEPTH_SHIFT));
+        assert!(
+            deeper > on + 0.2,
+            "going down, the line moves off: {deeper}"
+        );
+        let coarse = g.on_cells(g.spacing).depth;
+        assert!(
+            coarse < g.depth / 2.0,
+            "fades on cells too coarse for it: {coarse}"
+        );
     }
 
     #[test]
@@ -1113,6 +1193,7 @@ mod tests {
             light: DVec3::new(-1.0, 1.0, 1.0),
             sides: true,
             wrap: None,
+            grain: None,
         };
         for cells in [250, 500, 1000, 1500] {
             let t = std::time::Instant::now();
@@ -1488,6 +1569,7 @@ mod wrap_tests {
             sides: true,
             light: LIGHT,
             wrap: Some(wrap()),
+            grain: None,
         };
         let quads = wrapped_quads(&m, wrap(), LIGHT);
         assert_eq!(

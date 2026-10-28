@@ -914,6 +914,11 @@ impl CutCraftApp {
             sides: shown.material_block && (self.simulation.is_some() || self.playback.is_some()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
             wrap: None,
+            // a wood from Toolpaths ▸ Materials shows its grain
+            grain: cmd_materials::Material::of([r, g, b])
+                .grain()
+                .filter(|_| shown.colour_shaded)
+                .map(|(spacing, depth)| view3d::Grain { spacing, depth }),
         };
         let (orbit, framing) = (self.orbit, self.framing);
         let painter = ui.painter_at(area);

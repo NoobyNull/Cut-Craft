@@ -127,7 +127,8 @@ impl CutCraftApp {
             "increment_and_save" => self.screen == Screen::Job,
             _ => {
                 BUILT_INS.contains(&id)
-                    || self.registry.get(id).is_some()
+                    // a command's form shows in a job's pages: with no job it could not be seen
+                    || (self.registry.get(id).is_some() && self.screen != Screen::Start)
                     || self.registry.exporter(id).is_some()
             }
         }

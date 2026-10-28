@@ -2913,3 +2913,22 @@ fn toolpaths_materials_opens_the_material_library() {
         cut_craft_core::document::Job::default().colour
     );
 }
+
+#[test]
+fn materials_shows_its_form_in_a_job_and_waits_for_one_on_the_start_page() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    h.app.invoke(&h.ctx, "materials");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Pine").is_some(),
+        "the Toolpaths page flies out with it"
+    );
+    let start = Harness::at_start();
+    assert!(!start.app.available("materials"), "no job to colour");
+    assert!(
+        !start.app.available("wrapped_fluting_layout"),
+        "nor for a gadget"
+    );
+}

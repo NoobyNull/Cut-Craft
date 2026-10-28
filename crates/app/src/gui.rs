@@ -1234,10 +1234,8 @@ impl MenuSystem {
                 ),
                 menu("Edit", vec![i("Options")]),
                 same("Machine"),
-                menu(
-                    "Toolpaths",
-                    vec![i("Materials..."), sep(), i("Tool Database...")],
-                ),
+                // Materials colours a job, so it is in the job's Toolpaths menu only
+                menu("Toolpaths", vec![i("Tool Database...")]),
                 same("Gadgets"),
                 same("Help"),
             ],
