@@ -1,6 +1,6 @@
 //! Orientate 3D Model: Aspire's step between picking an STL and having a component. Which
-//! face is up, a turn about Z, the model's size and units, centring, how far its top sits
-//! below the material surface, and whether anything below the zero plane is kept.
+//! face is up, a turn about Z, the model's size and units, centring, how high above the bed
+//! it sits, and whether anything below the zero plane is kept.
 
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::{Along, Document, Rotary};
@@ -41,7 +41,7 @@ pub struct Orientation {
     #[schemars(
         title = "Face up",
         extend("x-widget" = "faces"),
-        extend("x-icon" = "import/chess_knight.png")
+        extend("x-icon" = "import/initial_orientation.png")
     )]
     pub face: Face,
     #[schemars(
@@ -52,10 +52,10 @@ pub struct Orientation {
     pub rotation: f64,
 }
 
-/// Aspire's Model Size: the footprint, the ratio lock and the file's units.
+/// Aspire's Model Size: the model's size, the ratio lock and the file's units.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ModelSize {
-    /// Scale Z with X and Y; otherwise only the footprint changes
+    /// Keep the model's proportions: the size changed sets the others
     #[schemars(title = "Lock XYZ ratio")]
     pub lock_ratio: bool,
     /// The model's length once placed; 0 keeps the file's size
@@ -64,6 +64,10 @@ pub struct ModelSize {
     /// The model's width once placed; 0 keeps the file's size
     #[schemars(title = "Y", extend("x-unit" = "mm"))]
     pub y: f64,
+    /// The model's height once placed; 0 keeps the file's size
+    #[schemars(title = "Z", extend("x-unit" = "mm"))]
+    #[serde(default)]
+    pub z: f64,
     /// The numbers in the file are in these units
     #[schemars(extend("x-widget" = "row"))]
     pub units: FileUnits,
@@ -76,9 +80,11 @@ pub struct Placing {
     pub center: bool,
     /// Where the model's lower-left corner goes when not centred
     pub position: Xy,
-    /// How far the model's highest point sits below the material surface
-    #[schemars(title = "Depth Below Top", extend("x-unit" = "mm"))]
-    pub depth_below_top: f64,
+    /// How high the model's lowest point sits above the bed (the material's underside);
+    /// below 0 sinks it into the zero plane
+    #[schemars(title = "Height above bed", extend("x-unit" = "mm"))]
+    #[serde(default)]
+    pub height_above_bed: f64,
     #[schemars(title = "Discard data below zero plane")]
     pub discard_below_zero: bool,
 }
@@ -103,14 +109,29 @@ pub struct Params {
     pub placing: Placing,
     /// Rotary jobs: a full 3D model is wrapped round the axis, its distance out at each angle
     /// becoming the height; a flat model is placed on the unrolled surface like clipart
-    #[schemars(title = "Imported model type")]
+    #[schemars(title = "Imported model type", extend("x-hide-when" = {"job": "flat"}))]
     #[serde(default)]
     pub model_type: ModelType,
     /// Full 3D models: scaled to the material's length and diameter (else Model Size's X is
     /// its length; 0 keeps the file's size)
-    #[schemars(title = "Scale model to fit material")]
+    #[schemars(
+        title = "Scale model to fit material",
+        extend("x-hide-when" = {"job": "flat"})
+    )]
     #[serde(default = "yes")]
     pub fit_material: bool,
+    /// The job's kind, so the form shows the rotary choices only in a rotary job; never shown
+    #[schemars(extend("x-hide-when" = {"job": ["flat", "rotary"]}))]
+    #[serde(default)]
+    pub job: JobKind,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum JobKind {
+    #[default]
+    Flat,
+    Rotary,
 }
 
 fn yes() -> bool {
@@ -142,16 +163,18 @@ impl Default for Params {
                 lock_ratio: true,
                 x: 0.0,
                 y: 0.0,
+                z: 0.0,
                 units: FileUnits::Mm,
             },
             placing: Placing {
                 center: true,
                 position: Xy::new(0.0, 0.0),
-                depth_below_top: 0.0,
+                height_above_bed: 0.0,
                 discard_below_zero: true,
             },
             model_type: ModelType::Flat,
             fit_material: true,
+            job: JobKind::Flat,
         }
     }
 }
@@ -171,33 +194,24 @@ impl Command for Orientate3dModel {
 
     /// A rotary job starts on a full 3D model.
     fn initial_params(doc: &Document) -> Params {
+        let rotary = doc.job.rotary.is_some();
         Params {
-            model_type: if doc.job.rotary.is_some() {
+            model_type: if rotary {
                 ModelType::Full
             } else {
                 ModelType::Flat
+            },
+            job: if rotary {
+                JobKind::Rotary
+            } else {
+                JobKind::Flat
             },
             ..Params::default()
         }
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        if p.file.is_empty() {
-            return Err(CommandError::InvalidParams("choose an STL file".into()));
-        }
-        let bytes =
-            std::fs::read(&p.file).map_err(|e| CommandError::Failed(format!("{}: {e}", p.file)))?;
-        let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
-        let turn = DMat3::from_rotation_z(p.orientation.rotation.to_radians())
-            * face_up(p.orientation.face);
-        let unit = match p.size.units {
-            FileUnits::Mm => 1.0,
-            FileUnits::Inches => 25.4,
-        };
-        let mut tris: Vec<[DVec3; 3]> = triangles
-            .iter()
-            .map(|t| t.map(|v| turn * v * unit))
-            .collect();
+        let tris = oriented(p)?;
         if let Some(rotary) = doc.job.rotary
             && p.model_type == ModelType::Full
         {
@@ -206,51 +220,7 @@ impl Command for Orientate3dModel {
             c.add_component(k);
             return Ok(c.finish());
         }
-        let (lo, hi) =
-            bounds(&tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
-        let size = hi - lo;
-        if size.x <= 0.0 || size.y <= 0.0 {
-            return Err(CommandError::Failed(
-                "the model has no area seen from above".into(),
-            ));
-        }
-        // size: 0 keeps the file's; with the ratio locked X sets all, else X and Y each
-        let (sx, sy) = (
-            if p.size.x > 0.0 {
-                p.size.x / size.x
-            } else {
-                1.0
-            },
-            if p.size.y > 0.0 {
-                p.size.y / size.y
-            } else {
-                1.0
-            },
-        );
-        let scale = if p.size.lock_ratio {
-            DVec3::splat(sx)
-        } else {
-            DVec3::new(sx, sy, 1.0)
-        };
-        let area = doc.job.area();
-        let footprint = Point::new(size.x * scale.x, size.y * scale.y);
-        let corner = if p.placing.center {
-            area.center() - footprint / 2.0
-        } else {
-            p.placing.position.into()
-        };
-        let top = doc.job.thickness - p.placing.depth_below_top;
-        let place = |v: DVec3| {
-            DVec3::new(
-                corner.x + (v.x - lo.x) * scale.x,
-                corner.y + (v.y - lo.y) * scale.y,
-                top - (hi.z - v.z) * scale.z,
-            )
-        };
-        for t in &mut tris {
-            *t = t.map(place);
-        }
-        let rect = Rect::new(corner, corner + footprint);
+        let (tris, rect) = placed(doc, p, tris)?;
         let mut k = Component::from_fn(
             "Imported model",
             Combine::Add,
@@ -284,6 +254,108 @@ impl Command for Orientate3dModel {
         }
         Ok(c.finish())
     }
+}
+
+/// The file's triangles turned to the face chosen and in millimetres.
+fn oriented(p: &Params) -> Result<Vec<[DVec3; 3]>, CommandError> {
+    if p.file.is_empty() {
+        return Err(CommandError::InvalidParams("choose an STL file".into()));
+    }
+    let bytes =
+        std::fs::read(&p.file).map_err(|e| CommandError::Failed(format!("{}: {e}", p.file)))?;
+    let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
+    let turn =
+        DMat3::from_rotation_z(p.orientation.rotation.to_radians()) * face_up(p.orientation.face);
+    let unit = match p.size.units {
+        FileUnits::Mm => 1.0,
+        FileUnits::Inches => 25.4,
+    };
+    Ok(triangles
+        .iter()
+        .map(|t| t.map(|v| turn * v * unit))
+        .collect())
+}
+
+/// `tris` sized and placed in a flat job (heights up from the bed), and the footprint
+/// they cover.
+fn placed(
+    doc: &Document,
+    p: &Params,
+    mut tris: Vec<[DVec3; 3]>,
+) -> Result<(Vec<[DVec3; 3]>, Rect), CommandError> {
+    let (lo, hi) =
+        bounds(&tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
+    let size = hi - lo;
+    if size.x <= 0.0 || size.y <= 0.0 {
+        return Err(CommandError::Failed(
+            "the model has no area seen from above".into(),
+        ));
+    }
+    // size: 0 keeps the file's; with the ratio locked the first size given sets all
+    let wanted = |want: f64, have: f64| (want > 0.0 && have > 0.0).then(|| want / have);
+    let each = [
+        wanted(p.size.x, size.x),
+        wanted(p.size.y, size.y),
+        wanted(p.size.z, size.z),
+    ];
+    let scale = if p.size.lock_ratio {
+        DVec3::splat(each.into_iter().flatten().next().unwrap_or(1.0))
+    } else {
+        let [x, y, z] = each.map(|s| s.unwrap_or(1.0));
+        DVec3::new(x, y, z)
+    };
+    let area = doc.job.area();
+    let footprint = Point::new(size.x * scale.x, size.y * scale.y);
+    let corner = if p.placing.center {
+        area.center() - footprint / 2.0
+    } else {
+        p.placing.position.into()
+    };
+    let bottom = p.placing.height_above_bed;
+    let place = |v: DVec3| {
+        DVec3::new(
+            corner.x + (v.x - lo.x) * scale.x,
+            corner.y + (v.y - lo.y) * scale.y,
+            bottom + (v.z - lo.z) * scale.z,
+        )
+    };
+    for t in &mut tris {
+        *t = t.map(place);
+    }
+    Ok((tris, Rect::new(corner, corner + footprint)))
+}
+
+/// A triangle of the previewed model, and whether a cutter from above cannot reach it.
+pub type Seen = ([DVec3; 3], bool);
+
+/// The model as a flat job places it, as triangles in job millimetres, each with whether
+/// a cutter from above cannot reach it (the model is over it: an overhang's underside, or
+/// what is tucked under one): what the 3D view shows while the form is open. `None` for a
+/// full 3D model in a rotary job, which is wrapped instead.
+pub fn preview(doc: &Document, params: &Params) -> Result<Option<Vec<Seen>>, CommandError> {
+    // ponytail: a tenth of a millimetre clear of the base counts, as fmt_import_stl::undercut
+    const ABOVE: f64 = 0.1;
+    if doc.job.rotary.is_some() && params.model_type == ModelType::Full {
+        return Ok(None);
+    }
+    let (tris, rect) = placed(doc, params, oriented(params)?)?;
+    let mut top = Component::from_fn("", Combine::Add, rect, doc.job.model_cell(), |_| None);
+    fmt_import_stl::top_down(&mut top, &tris);
+    let lowest = tris
+        .iter()
+        .flatten()
+        .map(|v| v.z)
+        .fold(f64::INFINITY, f64::min);
+    let hidden = |t: &[DVec3; 3]| {
+        let [a, b, c] = *t;
+        let middle = (a + b + c) / 3.0;
+        // a cell out from the face, so a wall is judged by the air beside it
+        let out = (b - a).cross(c - a).normalize_or_zero() * top.cell;
+        let over = top.height_at(Point::new(middle.x + out.x, middle.y + out.y));
+        let clear = t.iter().map(|v| v.z).fold(f64::INFINITY, f64::min) > lowest + ABOVE;
+        clear && over.is_some_and(|z| middle.z < z - top.cell)
+    };
+    Ok(Some(tris.iter().map(|t| (*t, hidden(t))).collect()))
 }
 
 /// The turn that brings `face` to the top (looking down the Z axis, Y up the screen).
@@ -594,11 +666,14 @@ mod tests {
     }
 
     #[test]
-    fn centred_at_the_file_size_with_its_top_at_the_surface() {
+    fn centred_at_the_file_size_resting_on_the_bed() {
         let (doc, k) = imported("centred", &Params::default());
         let middle = doc.job.area().center();
         let top = k.height_at(middle).unwrap();
-        assert!((top - doc.job.thickness).abs() < 1e-6, "{top}");
+        assert!(
+            (top - 5.0).abs() < 1e-6,
+            "the 5 high box from the bed up: {top}"
+        );
         let e = k.extent();
         assert!(
             (e.size().x - 20.0).abs() < 2.0 * k.cell && (e.size().y - 10.0).abs() < 2.0 * k.cell
@@ -607,7 +682,7 @@ mod tests {
     }
 
     #[test]
-    fn front_face_up_turns_depth_into_height_and_size_rescales() {
+    fn front_face_up_turns_depth_into_height_and_size_rescales_all_three() {
         let (_, k) = imported(
             "front",
             &Params {
@@ -620,7 +695,7 @@ mod tests {
                     ..Params::default().size
                 },
                 placing: Placing {
-                    depth_below_top: 2.0,
+                    height_above_bed: 2.0,
                     discard_below_zero: false,
                     ..Params::default().placing
                 },
@@ -632,7 +707,71 @@ mod tests {
         assert!((e.size().x - 40.0).abs() < 2.0 * k.cell, "{e:?}");
         assert!((e.size().y - 10.0).abs() < 2.0 * k.cell, "{e:?}");
         let (_, hi) = k.height_range().unwrap();
-        assert!((hi - 18.0).abs() < 1e-6, "top 2 below a 20 thick job: {hi}");
+        assert!(
+            (hi - 22.0).abs() < 1e-6,
+            "the 10 tall face doubled, from 2 up: {hi}"
+        );
+    }
+
+    #[test]
+    fn z_sets_the_height_alone_or_with_the_ratio_locked_all_three() {
+        let size = |lock_ratio| ModelSize {
+            lock_ratio,
+            z: 10.0,
+            ..Params::default().size
+        };
+        let (_, k) = imported(
+            "z_alone",
+            &Params {
+                size: size(false),
+                ..Params::default()
+            },
+        );
+        assert!((k.height_range().unwrap().1 - 10.0).abs() < 1e-6);
+        assert!(
+            (k.extent().size().x - 20.0).abs() < 2.0 * k.cell,
+            "footprint kept"
+        );
+        let (_, k) = imported(
+            "z_locked",
+            &Params {
+                size: size(true),
+                ..Params::default()
+            },
+        );
+        assert!((k.height_range().unwrap().1 - 10.0).abs() < 1e-6);
+        assert!(
+            (k.extent().size().x - 40.0).abs() < 2.0 * k.cell,
+            "doubled with it"
+        );
+    }
+
+    #[test]
+    fn a_plain_box_previews_whole_and_reachable() {
+        // the box's bottom faces down but is its base, not an overhang
+        let file = box_file("preview");
+        let p = Params {
+            file: file.display().to_string(),
+            ..Params::default()
+        };
+        let doc = Document::default();
+        let overhangs = |p: &Params| {
+            preview(&doc, p)
+                .unwrap()
+                .unwrap()
+                .iter()
+                .filter(|(_, over)| *over)
+                .count()
+        };
+        assert_eq!(overhangs(&p), 0, "a box's bottom rests on the bed");
+        let tris = preview(&doc, &p).unwrap().unwrap();
+        assert_eq!(tris.len(), 12);
+        assert!(
+            tris.iter()
+                .flat_map(|(t, _)| t)
+                .all(|v| v.z >= 0.0 && v.z <= 5.0)
+        );
+        let _ = std::fs::remove_file(file);
     }
 
     #[test]
@@ -648,13 +787,13 @@ mod tests {
             },
         );
         assert!((k.extent().size().x - 20.0 * 25.4).abs() < 2.0 * k.cell);
-        // top at 20 − 100 = −80: everything is below the zero plane and would be discarded,
+        // sunk 100 into the bed, the 5 high box is all below the zero plane and discarded,
         // so the import refuses
         let p = with_file(
             "deep",
             &Params {
                 placing: Placing {
-                    depth_below_top: 100.0,
+                    height_above_bed: -100.0,
                     ..Params::default().placing
                 },
                 ..Params::default()
@@ -733,6 +872,65 @@ mod rotary {
         doc.apply(&change).unwrap();
         let k = doc.components.values().next().unwrap().clone();
         (doc, k)
+    }
+
+    /// A box from `lo` to `hi`, as twelve triangles facing out.
+    fn cuboid(lo: [f32; 3], hi: [f32; 3]) -> Vec<[[f32; 3]; 3]> {
+        let at = |i: usize| {
+            [0, 1, 2].map(|axis| {
+                if i >> axis & 1 == 1 {
+                    hi[axis]
+                } else {
+                    lo[axis]
+                }
+            })
+        };
+        // each face's corners counter-clockwise seen from outside, by corner number (bit
+        // 0 x, 1 y, 2 z)
+        [
+            [0, 2, 3, 1],
+            [4, 5, 7, 6],
+            [0, 1, 5, 4],
+            [2, 6, 7, 3],
+            [0, 4, 6, 2],
+            [1, 3, 7, 5],
+        ]
+        .iter()
+        .flat_map(|&[a, b, c, d]| [[at(a), at(b), at(c)], [at(a), at(c), at(d)]])
+        .collect()
+    }
+
+    #[test]
+    fn the_preview_marks_an_overhang_and_what_is_under_it() {
+        // a post 10 high with a shelf off its top, over a low step on the bed
+        let post = cuboid([0.0, 0.0, 0.0], [10.0, 10.0, 10.0]);
+        let shelf = cuboid([10.0, 0.0, 8.0], [30.0, 10.0, 10.0]);
+        let step = cuboid([10.0, 0.0, 0.0], [30.0, 10.0, 2.0]);
+        let faces: Vec<_> = [post, shelf, step].concat();
+        let file = stl("shelf", &faces);
+        let p = Params {
+            file: file.clone(),
+            ..Params::default()
+        };
+        let doc = Document::default();
+        let tris = preview(&doc, &p).unwrap().unwrap();
+        let red = |pick: &dyn Fn(&[DVec3; 3]) -> bool| {
+            tris.iter().filter(|(t, _)| pick(t)).all(|(_, red)| *red)
+        };
+        let on = |t: &[DVec3; 3], z: f64| t.iter().all(|v| (v.z - z).abs() < 1e-9);
+        assert!(red(&|t| on(t, 8.0)), "the shelf's underside");
+        assert!(red(&|t| on(t, 2.0)), "the step's top, under the shelf");
+        assert!(
+            tris.iter()
+                .filter(|(t, _)| on(t, 10.0))
+                .all(|(_, red)| !red),
+            "the tops are reached"
+        );
+        assert!(
+            tris.iter().filter(|(t, _)| on(t, 0.0)).all(|(_, red)| !red),
+            "the base rests on the bed"
+        );
+        let _ = std::fs::remove_file(file);
     }
 
     #[test]

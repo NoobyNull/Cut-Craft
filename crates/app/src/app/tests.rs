@@ -2882,3 +2882,43 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
         "from low on the right the block hides it"
     );
 }
+
+#[test]
+fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choices_hidden() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("whole");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    // issue #20: the model whole while the form is open, its component left out of the view
+    assert!(form.model.as_ref().is_some_and(|m| m.len() == 6));
+    let k = form.drawn.unwrap();
+    let shape = h.app.model_shape(MESH_CELLS);
+    assert!(
+        shape.heights.iter().all(|z| z.is_nan()),
+        "the component is not drawn too"
+    );
+    assert!(
+        h.app.doc.components[&k].visible,
+        "and is only hidden while drawing"
+    );
+    // on the bed, and Model Size has the height
+    let (lo, _) = h.app.doc.components[&k].height_range().unwrap();
+    assert!(lo >= 0.0 && lo < 1.0, "from the bed up: {lo}");
+    let size = &h.app.form.as_ref().unwrap().params["size"];
+    assert!((size["z"].as_f64().unwrap() - 5.0).abs() < 1e-6, "{size}");
+    // the ratio locked, a height typed sizes all three
+    let form = h.app.form.as_mut().unwrap();
+    form.params["size"]["z"] = Value::from(10.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    let size = &h.app.form.as_ref().unwrap().params["size"];
+    assert!((size["x"].as_f64().unwrap() - 40.0).abs() < 1e-6, "{size}");
+    // a flat job has no rotary choices
+    for label in ["Imported model type", "Scale model to fit material", "Job"] {
+        assert_eq!(h.text_at(label), None, "{label} is a rotary job's");
+    }
+    assert!(h.text_at("Height above bed").is_some());
+    let _ = std::fs::remove_file(file);
+}
