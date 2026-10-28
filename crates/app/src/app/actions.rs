@@ -706,6 +706,15 @@ impl CutCraftApp {
 
     /// Runs a registered command: straight away if it has no settings, else opens its form.
     pub(super) fn start_command(&mut self, id: &str) {
+        // a new job's setup is accepted, as OK would, before another form takes its place:
+        // the new-job screen shows only that form, so it would be left bare (issue #17)
+        if id != "job_setup" && self.form.as_ref().is_some_and(|f| f.new_job) {
+            self.job_setup_ok();
+            // settings it refuses keep it open, saying why
+            if self.screen == Screen::NewJob {
+                return;
+            }
+        }
         let Some(cmd) = self.registry.get(id) else {
             self.status
                 .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
