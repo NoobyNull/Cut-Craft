@@ -491,6 +491,8 @@ struct CutCraftApp {
     moved_3d: f64,
     orbit: view3d::Orbit,
     framing: view3d::Framing,
+    /// Where the 3D view last drew its view cube.
+    view_cube: Option<view3d::ViewCube>,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
     /// A preview playing (or paused): the tool cutting the material a distance at a time.
