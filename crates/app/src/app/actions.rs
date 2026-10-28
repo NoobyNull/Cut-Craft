@@ -2018,8 +2018,10 @@ impl CutCraftApp {
             material: form::material(&self.doc, units),
         };
         open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
-        // every toolpath can rest machine (3D Finishing has its own, as `after`)
-        if open.page == Page::Toolpaths && open.params.get("after").is_none() {
+        // every toolpath that cuts with a tool can rest machine (3D Finishing has its own, as
+        // `after`); Material Setup, Materials and the toolpath list's tools have no tool
+        let cuts = open.params.get("tool").is_some_and(Value::is_object);
+        if cuts && open.params.get("after").is_none() {
             rest_section(ui, &mut open.params, &self.tools.tools);
         }
         if let Some(error) = &open.error {

@@ -447,7 +447,7 @@ impl Default for Job {
             datum: Datum::BottomLeft,
             offset: Point::ZERO,
             resolution: Resolution::Standard,
-            // ponytail: one wood colour until a Materials dialog offers textures
+            // pine, as Toolpaths ▸ Materials has it
             colour: [214, 160, 102],
             rotary: None,
             double_sided: None,

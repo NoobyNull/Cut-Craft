@@ -153,6 +153,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_crop_bitmap::CropBitmap>();
     r.add::<cmd_edit_picture::EditPicture>();
     r.add::<cmd_document_variables::DocumentVariables>();
+    r.add::<cmd_materials::Materials>();
     r.add::<cmd_keep_out_zones::KeepOutZones>();
     r.add::<cmd_swap_sides::SwapSides>();
     r.add::<cmd_copy_to_other_side::CopyToOtherSide>();

@@ -414,6 +414,9 @@ say "not implemented yet".
   bottom (Gap Inside Model, from the axis); 3D roughing and finishing and the wrapped 3D
   view place the model by it, refusing a model it pushes out of the material. The rest of
   the form (thickness, Z zero, Z1 / Z2, home) is in Job Setup; Z2 and home are not done.
+- Toolpaths ▸ Materials (also beside Material Setup): a library of woods, sheet goods,
+  plastics and metals that sets the material's colour in the 3D view (Job Setup's colour);
+  Custom keeps Job Setup's. Flat colours only: no grain or other textures yet.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview All, Reset Preview.
 
@@ -424,7 +427,6 @@ say "not implemented yet".
   document variables linked to fields (a sum is worked out once, when entered).
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
-- Toolpaths: Materials.
 - View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
 - Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.

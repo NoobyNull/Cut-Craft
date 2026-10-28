@@ -2882,3 +2882,34 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
         "from low on the right the block hides it"
     );
 }
+
+#[test]
+fn toolpaths_materials_opens_the_material_library() {
+    let mut h = Harness::new();
+    let item = h
+        .app
+        .menus
+        .items()
+        .into_iter()
+        .find(|i| i.name == "Materials...")
+        .map(|i| i.action.clone())
+        .expect("Toolpaths ▸ Materials...");
+    h.app.invoke(&h.ctx, &item);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("materials"));
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.page),
+        Some(Page::Toolpaths),
+        "beside Material Setup"
+    );
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Rest Machining").is_none(),
+        "it cuts nothing, so nothing to rest machine"
+    );
+    let walnut = serde_json::json!({ "material": "walnut" });
+    h.app.apply("materials", &walnut).unwrap();
+    assert_ne!(
+        h.app.doc.job.colour,
+        cut_craft_core::document::Job::default().colour
+    );
+}
