@@ -1336,10 +1336,10 @@ impl CutCraftApp {
                 save_tool = ui.button("Save to database").clicked();
             });
         }
-        // rest machining: the tools that ran before this one, picked from the database
+        // a list of tools in running order (rest machining), picked from the database
         let mut earlier = None;
-        if open.params.get("after").is_some_and(Value::is_array) {
-            egui::ComboBox::from_label("Add an earlier tool (rest machining)")
+        if open.params.get("tools").is_some_and(Value::is_array) {
+            egui::ComboBox::from_label("Add a tool from the database")
                 .selected_text("")
                 .show_ui(ui, |ui| {
                     for tool in &self.tools.tools {
@@ -1380,12 +1380,12 @@ impl CutCraftApp {
         }
     }
 
-    /// Adds a database tool to the open form's rest-machining list.
+    /// Adds a database tool to the end of the open form's tool list.
     fn add_earlier_tool(&mut self, name: &str) {
         if let (Some(form), Some(tool)) = (&mut self.form, self.tools.get(name))
-            && let Some(after) = form.params.get_mut("after").and_then(Value::as_array_mut)
+            && let Some(tools) = form.params.get_mut("tools").and_then(Value::as_array_mut)
         {
-            after.push(serde_json::to_value(tool).expect("tools serialize"));
+            tools.push(serde_json::to_value(tool).expect("tools serialize"));
         }
     }
 
@@ -4004,12 +4004,13 @@ mod tests {
     }
 
     #[test]
-    fn rest_machining_takes_earlier_tools_from_the_database() {
+    fn rest_machining_takes_its_tools_from_the_database() {
         let mut h = Harness::new();
         h.app.invoke(&h.ctx, "3d_finishing_toolpath");
         h.app.add_earlier_tool("6 mm Ball Nose");
         let form = h.app.form.as_ref().unwrap();
-        assert_eq!(form.params["after"][0]["name"], "6 mm Ball Nose");
+        // after the ball nose the form starts with
+        assert_eq!(form.params["tools"][1]["name"], "6 mm Ball Nose");
     }
 
     #[test]
