@@ -168,6 +168,8 @@ enum Info {
     Licenses,
     /// Toolpath Summary: estimated machining times.
     Summary,
+    /// A tool form's help (its ? button, or F1), by command id.
+    Tool(&'static str),
 }
 
 /// Toolpath Summary's rapid rate (mm/min) and scale factor until the user changes them.

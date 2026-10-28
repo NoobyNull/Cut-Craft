@@ -2882,3 +2882,16 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
         "from low on the right the block hides it"
     );
 }
+
+#[test]
+fn a_tool_forms_help_explains_it_and_its_settings() {
+    let mut h = Harness::new();
+    h.app.start_command("document_variables");
+    let (about, fields) = h.app.tool_help("document_variables");
+    assert!(about.unwrap().contains("{depth}"), "how to use one");
+    assert!(fields.iter().any(|(label, _)| label == "Variables"));
+    h.frame(vec![]);
+    let at = h.text_at("?").expect("the form's ? button");
+    h.click(at, Modifiers::NONE);
+    assert_eq!(h.app.info, Some(Info::Tool("document_variables")));
+}

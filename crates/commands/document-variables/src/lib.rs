@@ -16,6 +16,11 @@ pub struct Variable {
     pub value: f64,
 }
 
+/// Named values kept with the job. Make them here: add a row, give it a name and a value,
+/// then Apply. Use one in any number field by typing its name in braces, alone or in a
+/// sum: {depth}, {depth}/2 or {width} + 10. The sum is worked out when it is entered, so
+/// changing a variable here changes the fields filled in after, not those already done.
+/// A name starts with a letter, then letters, digits or _.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// Every variable; one taken off the list is deleted

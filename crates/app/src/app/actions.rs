@@ -1520,6 +1520,11 @@ impl CutCraftApp {
         }
         self.nudge(ctx);
         ctx.input(|i| {
+            if i.key_pressed(Key::F1)
+                && let Some(open) = &self.form
+            {
+                self.info = Some(Info::Tool(open.id));
+            }
             if i.key_pressed(Key::F2) {
                 self.view = View::TwoD;
             }
@@ -1935,11 +1940,9 @@ impl CutCraftApp {
         }
     }
 
-    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
-        let form = self.form.as_ref().map_or("none", |f| f.label);
-        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
-        let slots = self.slots();
-        let Some(open) = &mut self.form else { return };
+    /// The open form's icon and name, with its ? (F1) help button.
+    fn form_title(&mut self, ui: &mut egui::Ui) {
+        let Some(open) = &self.form else { return };
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
                 let edge = ui.spacing().interact_size.y;
@@ -1950,7 +1953,20 @@ impl CutCraftApp {
                 );
             }
             ui.strong(open.label);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui.button("?").on_hover_text("Help (F1)").clicked() {
+                    self.info = Some(Info::Tool(open.id));
+                }
+            });
         });
+    }
+
+    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
+        let form = self.form.as_ref().map_or("none", |f| f.label);
+        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
+        let slots = self.slots();
+        self.form_title(ui);
+        let Some(open) = &mut self.form else { return };
         let (mut chosen, mut save_tool) = (None, false);
         if open.params.get("tool").is_some_and(Value::is_object) {
             let current = open.params["tool"]["name"].as_str().unwrap_or_default();
@@ -2185,10 +2201,18 @@ impl CutCraftApp {
         let Some(info) = self.info else { return };
         let mut open = true;
         let title = match info {
-            Info::About => "About Cut Craft",
-            Info::Shortcuts => "Keyboard Shortcuts",
-            Info::Licenses => "Third Party Licenses",
-            Info::Summary => "Toolpath Summary",
+            Info::About => "About Cut Craft".to_owned(),
+            Info::Shortcuts => "Keyboard Shortcuts".to_owned(),
+            Info::Licenses => "Third Party Licenses".to_owned(),
+            Info::Summary => "Toolpath Summary".to_owned(),
+            Info::Tool(id) => format!(
+                "{} Help",
+                self.registry.get(id).map_or(id, |c| c.meta().label)
+            ),
+        };
+        let tool_help = match info {
+            Info::Tool(id) => self.tool_help(id),
+            _ => (None, vec![]),
         };
         let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
             let mut rows: Vec<(String, String)> = self
@@ -2221,8 +2245,22 @@ impl CutCraftApp {
             .collect();
         let summary = &mut self.summary;
         let units = self.doc.job.units;
-        let (id, size) = (egui::Id::unique(("info", title)), dialog_size(ctx));
-        cut_craft_bug_report::dialog(ctx, id, title, size, &mut open, |ui| match info {
+        let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
+        cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
+            Info::Tool(_) => {
+                let (about, fields) = &tool_help;
+                if let Some(about) = about {
+                    ui.label(about);
+                    ui.separator();
+                }
+                egui::Grid::new("tool_help").striped(true).show(ui, |ui| {
+                    for (label, help) in fields {
+                        ui.strong(label);
+                        ui.label(help);
+                        ui.end_row();
+                    }
+                });
+            }
             Info::Summary => summary_table(ui, &times, summary, units),
             Info::About => {
                 ui.heading("Cut Craft");
@@ -2255,5 +2293,19 @@ impl CutCraftApp {
         if !open {
             self.info = None;
         }
+    }
+
+    /// A command's help, from its params' doc comments: what it does, then each setting.
+    pub(super) fn tool_help(&self, id: &str) -> (Option<String>, Vec<(String, String)>) {
+        let Some(cmd) = self.registry.get(id) else {
+            return (None, vec![]);
+        };
+        let schema = cmd.schema();
+        let about = schema["description"].as_str().map(String::from);
+        let fields = form::fields(&schema)
+            .into_iter()
+            .filter_map(|f| Some((f.label, f.help?)))
+            .collect();
+        (about, fields)
     }
 }
