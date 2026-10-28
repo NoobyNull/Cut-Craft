@@ -121,6 +121,7 @@ impl Command for ProfileToolpath {
             ));
         }
         let depths = pass_depths(p.depth, p.tool.pass_depth);
+        let tab = p.tab.sized(p.tool.pass_depth, p.depth);
         let entry = Entry {
             ramp: p.ramp,
             ramping: p.ramping,
@@ -128,8 +129,8 @@ impl Command for ProfileToolpath {
             leads: p.leads,
             side: 1.0,
             tabs: p.tabs,
-            tab: p.tab,
-            tab_top: -p.depth + p.tab.thickness,
+            tab,
+            tab_top: -p.depth + tab.thickness,
             tool_diameter: p.tool.diameter,
             placed: vec![],
         };
@@ -316,7 +317,8 @@ mod tests {
             },
         )
         .unwrap();
-        let tab_top = -6.0 + TabSettings::default().thickness;
+        let sized = TabSettings::default().sized(Tool::default().pass_depth, 6.0);
+        let tab_top = -6.0 + sized.thickness;
         assert!(
             tp.moves
                 .iter()
@@ -379,6 +381,8 @@ mod tests {
                 tabs: Tabs::Flat,
                 tab: TabSettings {
                     spacing: TabSpacing::Placed,
+                    size_from_tool: false,
+                    length: 10.0,
                     thickness: 2.0,
                     ..TabSettings::default()
                 },
@@ -415,5 +419,74 @@ mod tests {
             },
         );
         assert!(none.unwrap_err().contains("click"));
+    }
+
+    /// The tabs a profile round a `w` x `h` rectangle leaves, cut `depth` deep with a 1/4"
+    /// bit in 1/4" passes: (how many, their thickness, lifted length on the centre line).
+    fn tabs_on(w: f64, h: f64, depth: f64) -> (usize, f64, f64) {
+        let quarter = 6.35;
+        let tool = Tool {
+            diameter: quarter,
+            pass_depth: quarter,
+            ..Tool::default()
+        };
+        let tp = made_toolpath::<ProfileToolpath>(
+            vec![cut_craft_core::geometry::Path::polyline(
+                &[(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)].map(|(x, y)| Point::new(x, y)),
+                true,
+            )],
+            &Params {
+                depth,
+                tool,
+                tabs: Tabs::Flat,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        // the last pass: straight up onto each tab and straight down off it
+        let ups: Vec<(Point, f64)> = tp
+            .moves
+            .windows(2)
+            .filter(|w| {
+                w[1].kind == MoveKind::Cut
+                    && w[0].to.truncate() == w[1].to.truncate()
+                    && w[1].to.z > w[0].to.z
+                    && (w[0].to.z + depth).abs() < 1e-9
+            })
+            .map(|w| (w[1].to.truncate(), w[1].to.z))
+            .collect();
+        let downs: Vec<Point> = tp
+            .moves
+            .windows(2)
+            .filter(|w| {
+                w[1].kind == MoveKind::Cut
+                    && w[0].to.truncate() == w[1].to.truncate()
+                    && w[1].to.z < w[0].to.z
+                    && (w[1].to.z + depth).abs() < 1e-9
+            })
+            .map(|w| w[1].to.truncate())
+            .collect();
+        let thickness = ups.first().map_or(0.0, |&(_, z)| z + depth);
+        let length = ups
+            .first()
+            .zip(downs.first())
+            .map_or(0.0, |((a, _), b)| a.distance(*b));
+        (ups.len(), thickness, length)
+    }
+
+    #[test]
+    fn tabs_are_sized_from_the_tool_and_spread_about_every_150_mm() {
+        // 3/4" deep: 1/4" thick, 1/2" long (lifted over that and the bit's 1/4")
+        let (count, thickness, length) = tabs_on(400.0, 800.0, 19.05);
+        assert!((thickness - 6.35).abs() < 1e-6, "{thickness}");
+        assert!((length - 3.0 * 6.35).abs() < 1e-6, "{length}");
+        // round 2,440 mm of centre line: about one every 150 mm
+        assert_eq!(count, 16);
+        // a small part still gets three, and a shallow cut thinner tabs
+        let (count, thickness, _) = tabs_on(60.0, 60.0, 6.0);
+        assert_eq!(count, 3);
+        assert!((thickness - 3.0).abs() < 1e-6, "half the cut: {thickness}");
+        // a tiny one is not all tab
+        assert_eq!(tabs_on(15.0, 15.0, 19.05).0, 1);
     }
 }

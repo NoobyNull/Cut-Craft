@@ -212,6 +212,7 @@ fn tabbed(tabs: Tabs) -> Vec<Move> {
     let entry = Entry {
         tabs,
         tab: TabSettings {
+            size_from_tool: false,
             length: 4.0,
             thickness: 2.0,
             spacing: TabSpacing::ConstantNumber,
@@ -285,6 +286,7 @@ fn tab_middles(placement: TabPlacement, number: u32) -> Vec<Point> {
     let entry = Entry {
         tabs: Tabs::Triangular,
         tab: TabSettings {
+            size_from_tool: false,
             length: 4.0,
             thickness: 2.0,
             spacing: TabSpacing::ConstantNumber,

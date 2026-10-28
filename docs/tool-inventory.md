@@ -202,7 +202,8 @@ say "not implemented yet".
   Offset or Raster (angle, profile pass first / last / none) with ramped plunges; 3D Roughing
   Z Level (level by level or depth first) or 3D Raster, and 3D Finishing Raster (any angle) or
   Offset, both inside a machining boundary (model, material, selected vectors or a level,
-  plus offset). Tabs can start at the start point, keep off corners, or be placed by
+  plus offset). Tabs are sized from the tool (pass depth thick, twice that long) and spaced about every
+  150 mm by default; they can start at the start point, keep off corners, or be placed by
   clicking the vectors; climb or conventional and an allowance on Profile and Pocket; Z Level
   profile pass, reverse step and (3D Raster) avoid machined areas; neighbouring 3D lines are
   joined without lifting, offset finishing rings lifted by a stepover retract.

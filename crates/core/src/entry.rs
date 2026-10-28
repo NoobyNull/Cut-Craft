@@ -138,8 +138,11 @@ pub enum Tabs {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TabSpacing {
-    /// This many tabs spread evenly along each path
+    /// About one every distance, at least three on a path, and no more than a third of the
+    /// path in tabs: big parts get more, small ones are not all tab
     #[default]
+    Automatic,
+    /// This many tabs spread evenly along each path
     ConstantNumber,
     /// A tab about every this far
     ConstantDistance,
@@ -162,6 +165,11 @@ pub enum TabPlacement {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct TabSettings {
+    /// As thick as the tool's pass depth (at most half the cut) and twice as long as thick:
+    /// a 1/4" bit taking 1/4" passes leaves 1/2" x 1/4" tabs. Off: the length and thickness
+    /// below (added with tab sizes)
+    #[serde(default = "yes")]
+    pub size_from_tool: bool,
     /// Of the material left in each tab, along the path
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub length: f64,
@@ -178,16 +186,43 @@ pub struct TabSettings {
     pub placement: TabPlacement,
 }
 
+fn yes() -> bool {
+    true
+}
+
 impl Default for TabSettings {
     fn default() -> Self {
-        // ponytail: Aspire's defaults are not known
+        // ponytail: Aspire's defaults are not known; these are a woodworker's rule of thumb
         Self {
-            length: 10.0,
-            thickness: 3.0,
-            spacing: TabSpacing::ConstantNumber,
+            size_from_tool: true,
+            length: 12.7,
+            thickness: 6.35,
+            spacing: TabSpacing::Automatic,
             number: 4,
-            distance: 100.0,
+            distance: 150.0,
             placement: TabPlacement::Evenly,
+        }
+    }
+}
+
+impl TabSettings {
+    /// The settings with the size worked out from the tool, if asked, for a cut `depth`
+    /// deep taken in passes `pass_depth` deep.
+    #[must_use]
+    pub fn sized(self, pass_depth: f64, depth: f64) -> Self {
+        if !self.size_from_tool {
+            return self;
+        }
+        let half = depth / 2.0;
+        let thickness = if pass_depth > 0.0 {
+            pass_depth.min(half)
+        } else {
+            half
+        };
+        Self {
+            thickness,
+            length: 2.0 * thickness,
+            ..self
         }
     }
 }
@@ -640,6 +675,21 @@ fn tab_centres(line: &Line, entry: &Entry) -> Vec<f64> {
             let mut at: Vec<f64> = entry.placed.iter().map(|&p| line.nearest(p)).collect();
             at.sort_by(f64::total_cmp);
             return at;
+        }
+        TabSpacing::Automatic => {
+            let wanted = if t.distance > 0.0 {
+                (line.length / t.distance).round().max(3.0)
+            } else {
+                3.0
+            };
+            // what is lifted over for each tab, so a third of the path at most
+            let lifted = t.length + entry.tool_diameter;
+            let room = if lifted > 0.0 {
+                (line.length / (3.0 * lifted)).floor()
+            } else {
+                wanted
+            };
+            wanted.min(room).max(1.0) as u32
         }
         TabSpacing::ConstantNumber => t.number,
         TabSpacing::ConstantDistance if t.distance > 0.0 => {
