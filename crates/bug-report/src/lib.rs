@@ -82,6 +82,9 @@ fn dialog_in<R>(
     scroll: bool,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> Option<R> {
+    if !*open {
+        return None;
+    }
     if ctx.embed_viewports() {
         return egui::Window::new(title)
             .id(id)
@@ -501,6 +504,28 @@ mod tests {
         };
         // no renderer takes a headless frame's texture changes
         ctx.run_pass(input, draw).textures_delta.clear();
+    }
+
+    #[test]
+    fn a_closed_dialog_shows_nothing_in_a_window_of_its_own() {
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(false);
+        let mut drawn = false;
+        let mut open = false;
+        run(&ctx, vec![], |ctx| {
+            let id = egui::Id::unique("closed");
+            dialog(
+                ctx,
+                id,
+                "Closed",
+                egui::vec2(200.0, 100.0),
+                &mut open,
+                |_| {
+                    drawn = true;
+                },
+            );
+        });
+        assert!(!drawn, "a closed dialog was drawn");
     }
 
     fn right_click(at: egui::Pos2) -> Vec<egui::Event> {
