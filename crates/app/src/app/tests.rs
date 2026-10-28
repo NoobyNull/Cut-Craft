@@ -2884,31 +2884,43 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
 }
 
 #[test]
-fn the_page_help_links_its_tools_to_their_help() {
+fn help_contents_links_to_the_pages_and_their_tools() {
     let mut h = Harness::new();
     h.app.pages.set_pinned(Page::Design, true);
-    let (about, fields) = h.app.tool_help("document_variables");
-    assert!(about.unwrap().contains("{depth}"), "how to use one");
-    assert!(fields.iter().any(|(label, _)| label == "Variables"));
+    h.app.invoke(&h.ctx, "help_contents");
+    assert_eq!(h.app.info, Some(Info::Help("contents")));
+    // a new window measures itself on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the window's link, drawn over the Design page's own title and side tab
+    let at = *h
+        .texts_at("Design")
+        .last()
+        .expect("Contents links the Design page");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.info, Some(Info::Help("design")));
+    let at = *h
+        .texts_at("Job Setup")
+        .last()
+        .expect("its tools are listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.info, Some(Info::Help("job_setup")));
+    let vars = h.app.help_markdown("document_variables");
+    assert!(
+        vars.contains("{depth}"),
+        "a tool's help is its doc comments"
+    );
+    assert!(vars.contains("**Variables**"), "and its settings'");
+}
+
+#[test]
+fn a_pages_question_mark_opens_its_help() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
     h.frame(vec![]);
     let at = h.text_at("?").expect("the page's ? button");
     h.click(at, Modifiers::NONE);
-    assert_eq!(
-        h.app.info,
-        Some(Info::Help {
-            page: Page::Design,
-            tool: None
-        })
-    );
-    h.frame(vec![]);
-    let at = h.text_at("Draw Rectangle").expect("the tools are listed");
-    h.click(at, Modifiers::NONE);
-    h.frame(vec![]);
-    assert!(matches!(
-        h.app.info,
-        Some(Info::Help {
-            tool: Some("draw_rectangle"),
-            ..
-        })
-    ));
+    assert_eq!(h.app.info, Some(Info::Help("design")));
 }

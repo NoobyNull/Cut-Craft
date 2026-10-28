@@ -13,6 +13,8 @@ cut-craft-bug-report = { path = "../bug-report" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
 eframe.workspace = true
+# Help Contents: the help pages are Markdown, shown in the app
+egui_commonmark.workspace = true
 egui_extras.workspace = true
 # egui_extras decodes pictures with image; this turns on its readers (dialog pictures, clipart)
 image.workspace = true

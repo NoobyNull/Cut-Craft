@@ -13,6 +13,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
 dxf = "0.6"
 flate2 = "1"
+egui_commonmark = { version = "0.26", default-features = false, features = ["pulldown_cmark"] }
 egui_extras = { version = "0.37", default-features = false, features = ["file", "svg", "image"] }
 glam = { version = "0.30", features = ["serde"] }
 i_overlay = "9.1"

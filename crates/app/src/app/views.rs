@@ -1179,6 +1179,7 @@ impl CutCraftApp {
             "third_party_licenses" => Some(Info::Licenses),
             "toolpath_summary" => Some(Info::Summary),
             "about_cut_craft" => Some(Info::About),
+            "help_contents" => Some(Info::Help("contents")),
             _ => {
                 self.snap_window = true;
                 return;
