@@ -333,6 +333,7 @@ name = "cmd-3d-roughing-toolpath"
 version = "0.2.2"
 dependencies = [
  "cut-craft-core",
+ "glam",
  "schemars",
  "serde",
 ]

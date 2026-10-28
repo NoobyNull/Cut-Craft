@@ -454,6 +454,10 @@ impl Canvas {
                         MoveKind::Cut => {
                             painter.line_segment([start, to], cut);
                         }
+                        // a ramp: down at the plunge rate while moving along
+                        MoveKind::Plunge if !vertical => {
+                            painter.line_segment([start, to], cut);
+                        }
                         MoveKind::Plunge if display.plunges => {
                             painter.circle_filled(to, marker, travel.color);
                         }

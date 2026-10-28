@@ -677,6 +677,62 @@ pub fn model_shape(doc: &Document, cells_across: usize) -> Material {
     model_over(doc, cells_across, f64::NAN)
 }
 
+/// Where a 3D toolpath works: the tool's tip stays inside.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MachiningBoundary {
+    /// Round all the visible components
+    #[schemars(title = "Model Boundary")]
+    Model,
+    /// The whole block of material
+    #[default]
+    #[schemars(title = "Material Boundary")]
+    Material,
+    /// Inside the selected closed vectors
+    #[schemars(title = "Selected Vector(s)")]
+    SelectedVectors,
+}
+
+/// The regions (outlines and holes) `limit` gives, grown by `offset`.
+pub fn machining_boundary(
+    doc: &Document,
+    limit: MachiningBoundary,
+    offset: f64,
+) -> Result<Vec<crate::geometry::Path>, CommandError> {
+    use crate::geometry::Path;
+    use crate::polygon::{self, Corners};
+    let paths = match limit {
+        MachiningBoundary::Model => {
+            let parts: Vec<&Component> = doc.components.values().filter(|c| c.visible).collect();
+            silhouette(&parts)
+        }
+        MachiningBoundary::Material => {
+            let a = doc.job.area();
+            let corners = [
+                a.min,
+                Point::new(a.max.x, a.min.y),
+                a.max,
+                Point::new(a.min.x, a.max.y),
+            ];
+            vec![Path::polyline(&corners, true)]
+        }
+        MachiningBoundary::SelectedVectors => doc.selected_paths(|p| p.closed).1,
+    };
+    let mut regions = polygon::regions(&paths);
+    if offset != 0.0 {
+        regions = polygon::offset_regions(&regions, offset, Corners::Round);
+    }
+    if regions.is_empty() {
+        return Err(CommandError::Failed(match limit {
+            MachiningBoundary::SelectedVectors => {
+                "select the closed vectors to machine inside".into()
+            }
+            _ => "the machining boundary is empty".into(),
+        }));
+    }
+    Ok(regions)
+}
+
 /// [`model`], with `empty` in the cells nothing covers.
 fn model_over(doc: &Document, cells_across: usize, empty: f64) -> Material {
     use crate::document::Along;

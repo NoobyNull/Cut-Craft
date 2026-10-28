@@ -2,15 +2,29 @@
 //! point without cutting into it. The model's top sits at the material surface. With earlier
 //! tools named (rest machining) it cuts only what they left.
 
-use cut_craft_core::component::placed_model;
+use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_model};
 use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::simulation::rest_areas;
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, follow, made_by, zigzag_within};
+use cut_craft_core::toolpath::{
+    Drop, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by, raster_lines,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub struct FinishingToolpath3d;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Strategy {
+    /// Straight lines across, at the raster angle
+    #[default]
+    Raster,
+    /// Rings stepping in from the machining boundary
+    Offset,
+}
 
 /// How far a straight move may pass under where the tool should be before it is split.
 const GOUGE: f64 = 0.002;
@@ -30,6 +44,23 @@ pub struct Params {
     /// Rest machining: grow every unmachined area by this before cutting it
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub boundary_offset: f64,
+    /// Where the tool's tip may go
+    #[serde(default)]
+    #[schemars(title = "Machining Limit Boundary")]
+    pub machining_boundary: MachiningBoundary,
+    /// Grows the machining boundary, so the tool can go on past a raised edge
+    #[serde(default)]
+    #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
+    pub machining_boundary_offset: f64,
+    #[serde(default)]
+    pub strategy: Strategy,
+    /// 0° along X, 90° along Y
+    #[serde(default)]
+    #[schemars(
+        extend("x-unit" = "°", "x-show-when" = {"strategy": "raster"}),
+        range(min = 0, max = 90)
+    )]
+    pub raster_angle: f64,
 }
 
 impl Default for Params {
@@ -45,6 +76,10 @@ impl Default for Params {
             // ponytail: Aspire's defaults are not known; a millimetre each
             minimum_detail: 1.0,
             boundary_offset: 1.0,
+            machining_boundary: MachiningBoundary::Material,
+            machining_boundary_offset: 0.0,
+            strategy: Strategy::Raster,
+            raster_angle: 0.0,
         }
     }
 }
@@ -84,16 +119,37 @@ impl Command for FinishingToolpath3d {
                 p.boundary_offset,
             ));
         }
-        let inside = |at| rest.iter().all(|area| area(at));
+        let material = doc.job.area();
+        let inside = |at: Point| material.contains(at) && rest.iter().all(|area| area(at));
+        let regions = machining_boundary(doc, p.machining_boundary, p.machining_boundary_offset)?;
+        let step = tool.stepover * tool.diameter;
+        let lines: Vec<Vec<Point>> = match p.strategy {
+            Strategy::Raster => raster_lines(&regions, step, p.raster_angle),
+            Strategy::Offset => {
+                let mut lines = vec![];
+                let mut rings = regions;
+                while !rings.is_empty() {
+                    lines.extend(rings.iter().map(|r| {
+                        let mut points = cut_points(r);
+                        points.push(points[0]);
+                        points
+                    }));
+                    rings = polygon::offset_regions(&rings, -step, Corners::Round);
+                }
+                lines
+            }
+        };
         // at each point as low as the tool goes without touching the model
-        let runs = zigzag_within(
-            &surface,
+        let peaks = surface.peaks();
+        let drop = Drop {
+            grid: &surface,
             tool,
-            tool.stepover * tool.diameter,
-            GOUGE,
-            f64::NEG_INFINITY,
-            &inside,
-        );
+            tolerance: GOUGE,
+            floor: f64::NEG_INFINITY,
+            ceiling: f64::INFINITY,
+            peaks: &peaks,
+        };
+        let runs: Vec<_> = lines.iter().flat_map(|l| drop.along(l, &inside)).collect();
         let moves = runs
             .iter()
             .flat_map(|run| follow(run, doc.job.clearance))
@@ -299,5 +355,68 @@ mod tests {
             .map(|e| e.to_string())
             .unwrap_or_default();
         assert!(why.contains("3D model"), "{why}");
+    }
+
+    fn cut_by(params: &Params) -> Material {
+        let doc = domed();
+        let mut cut = Material::new(&doc.job, 134);
+        cut.cut(&finish(&doc, params));
+        cut
+    }
+
+    #[test]
+    fn the_model_boundary_keeps_the_tip_on_the_model() {
+        let cut = cut_by(&Params {
+            machining_boundary: MachiningBoundary::Model,
+            ..Params::default()
+        });
+        // the dome is 8 mm across its foot round (20, 20): the corner is left alone
+        assert_eq!(cut.at(Point::new(3.0, 3.0)), Some(0.0));
+        let grown = cut_by(&Params {
+            machining_boundary: MachiningBoundary::Model,
+            machining_boundary_offset: 4.0,
+            ..Params::default()
+        });
+        let foot = Point::new(20.0 + 10.0, 20.0);
+        assert_eq!(cut.at(foot), Some(0.0), "outside the model");
+        assert!(
+            grown.at(foot).unwrap() < 0.0,
+            "the offset reaches past the foot"
+        );
+    }
+
+    #[test]
+    fn offset_rings_and_angled_rasters_follow_the_model_too() {
+        for params in [
+            Params {
+                strategy: Strategy::Offset,
+                ..Params::default()
+            },
+            Params {
+                raster_angle: 45.0,
+                ..Params::default()
+            },
+        ] {
+            let doc = domed();
+            let toolpath = finish(&doc, &params);
+            let cells = 134;
+            let mut cut = Material::new(&doc.job, cells);
+            cut.cut(&toolpath);
+            let shape = model(&doc, cells);
+            let top = shape
+                .heights
+                .iter()
+                .copied()
+                .fold(f64::NEG_INFINITY, f64::max);
+            let gouges = cut
+                .heights
+                .iter()
+                .zip(&shape.heights)
+                .filter(|&(&z, &h)| z < h - top - 0.01)
+                .count();
+            assert_eq!(gouges, 0, "{:?}", params.strategy);
+            let flat = cut.at(Point::new(3.0, 3.0)).unwrap();
+            assert!(flat < -7.9, "{:?}: {flat}", params.strategy);
+        }
     }
 }

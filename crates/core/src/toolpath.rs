@@ -522,72 +522,119 @@ pub fn zigzag_within(
     );
     let lines = ((last.y - first.y) / step).floor() as usize + 1;
     let peaks = grid.peaks();
-    let mut runs: Vec<Vec<DVec3>> = vec![];
+    let drop = Drop {
+        grid,
+        tool,
+        tolerance,
+        floor,
+        ceiling: f64::INFINITY,
+        peaks: &peaks,
+    };
+    let mut runs = vec![];
     for line in 0..lines {
         let y = first.y + line as f64 * step;
-        let at = |x: f64| {
-            let p = Point::new(x, y);
-            p.extend(grid.drop_tool_on(tool, p, &peaks).max(floor))
-        };
-        let mut line_runs: Vec<Vec<DVec3>> = vec![];
-        let mut run: Vec<DVec3> = vec![];
-        for column in 0..grid.columns {
-            let x = grid.centre(column, 0).x;
-            if !inside(Point::new(x, y)) {
-                if !run.is_empty() {
-                    line_runs.push(std::mem::take(&mut run));
-                }
-                continue;
-            }
-            let next = at(x);
-            if let Some(&previous) = run.last() {
-                Refine {
-                    grid,
-                    tool,
-                    tolerance,
-                    peaks: &peaks,
-                    at: &at,
-                }
-                .between(previous, next, HALVINGS, &mut run);
-            }
-            run.push(next);
-        }
-        if !run.is_empty() {
-            line_runs.push(run);
-        }
+        let mut ends = [Point::new(first.x, y), Point::new(last.x, y)];
         if line % 2 == 1 {
-            line_runs.reverse();
-            for run in &mut line_runs {
-                run.reverse();
-            }
+            ends.reverse();
         }
-        for run in line_runs {
-            let mut points: Vec<DVec3> = vec![];
-            for point in run {
-                let n = points.len();
-                if n >= 2 && level_run(points[n - 2], points[n - 1], point) {
-                    points.pop();
-                }
-                points.push(point);
-            }
-            runs.push(points);
-        }
+        runs.extend(drop.along(&ends, inside));
     }
     runs
 }
 
-/// Keeps the moves along one zigzag line from cutting into the grid.
+/// How to drop a tool along lines over a grid: never below `floor`, every move checked to
+/// cut no more than `tolerance` into the grid, and runs split where the tool would sit above
+/// `ceiling` (a Z level's flat cut stops where the model stands above it).
+pub struct Drop<'a> {
+    pub grid: &'a Material,
+    pub tool: &'a Tool,
+    pub tolerance: f64,
+    pub floor: f64,
+    pub ceiling: f64,
+    /// The grid's [`Material::peaks`].
+    pub peaks: &'a Tiles,
+}
+
+impl Drop<'_> {
+    /// The tool along the polyline `line`, sampled about a cell apart, as low as it goes at
+    /// each point; split into runs where `inside` says no or it would be above the ceiling.
+    /// Points in the middle of level runs are left out.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a small positive count"
+    )]
+    pub fn along(&self, line: &[Point], inside: &dyn Fn(Point) -> bool) -> Vec<Vec<DVec3>> {
+        let at = |p: Point| {
+            p.extend(
+                self.grid
+                    .drop_tool_on(self.tool, p, self.peaks)
+                    .max(self.floor),
+            )
+        };
+        let refine = Refine {
+            grid: self.grid,
+            tool: self.tool,
+            tolerance: self.tolerance,
+            peaks: self.peaks,
+            at: &at,
+        };
+        let mut runs: Vec<Vec<DVec3>> = vec![];
+        let mut run: Vec<DVec3> = vec![];
+        let mut samples = line.first().copied().into_iter().collect::<Vec<_>>();
+        for w in line.windows(2) {
+            let steps = (w[0].distance(w[1]) / self.grid.cell - 1e-9)
+                .ceil()
+                .max(1.0) as u32;
+            samples.extend((1..=steps).map(|i| w[0].lerp(w[1], f64::from(i) / f64::from(steps))));
+        }
+        for p in samples {
+            let next = inside(p)
+                .then(|| at(p))
+                .filter(|q| q.z <= self.ceiling + 1e-9);
+            let Some(next) = next else {
+                if !run.is_empty() {
+                    runs.push(tidy(std::mem::take(&mut run)));
+                }
+                continue;
+            };
+            if let Some(&previous) = run.last() {
+                refine.between(previous, next, HALVINGS, &mut run);
+            }
+            run.push(next);
+        }
+        if !run.is_empty() {
+            runs.push(tidy(run));
+        }
+        runs
+    }
+}
+
+/// Leaves out the middle points of straight level runs.
+fn tidy(run: Vec<DVec3>) -> Vec<DVec3> {
+    let mut points: Vec<DVec3> = vec![];
+    for point in run {
+        let n = points.len();
+        if n >= 2 && level_run(points[n - 2], points[n - 1], point) {
+            points.pop();
+        }
+        points.push(point);
+    }
+    points
+}
+
+/// Keeps the moves along one line from cutting into the grid.
 struct Refine<'a, F> {
     grid: &'a Material,
     tool: &'a Tool,
     tolerance: f64,
     /// The grid's highest cell in each tile.
     peaks: &'a Tiles,
-    /// The point on the line at an x, as low as the tool goes there.
+    /// The point on the line, as low as the tool goes there.
     at: &'a F,
 }
 
-impl<F: Fn(f64) -> DVec3> Refine<'_, F> {
+impl<F: Fn(Point) -> DVec3> Refine<'_, F> {
     /// Points to put between `a` and `b` so the moves through them stay out of the grid.
     fn between(&self, a: DVec3, b: DVec3, halvings: u32, out: &mut Vec<DVec3>) {
         if self.grid.overcut_on(self.tool, a, b, self.peaks) <= self.tolerance {
@@ -607,17 +654,37 @@ impl<F: Fn(f64) -> DVec3> Refine<'_, F> {
             out.extend([from, to]);
             return;
         }
-        let middle = (self.at)(f64::midpoint(a.x, b.x));
+        let middle = (self.at)((a.truncate() + b.truncate()) / 2.0);
         self.between(a, middle, halvings - 1, out);
         out.push(middle);
         self.between(middle, b, halvings - 1, out);
     }
 }
 
-/// Three points along one line at one height.
+/// Three points along one straight line at one height.
 fn level_run(a: DVec3, b: DVec3, c: DVec3) -> bool {
     let same = |u: f64, v: f64| (u - v).abs() < 1e-9;
-    same(a.y, b.y) && same(b.y, c.y) && same(a.z, b.z) && same(b.z, c.z)
+    let (first, second) = (b.truncate() - a.truncate(), c.truncate() - b.truncate());
+    same(first.perp_dot(second), 0.0) && first.dot(second) > 0.0 && same(a.z, b.z) && same(b.z, c.z)
+}
+
+/// Raster lines `step` apart at `angle` (degrees from X) across `regions`, every other one
+/// back the other way, as lines to drop a tool along.
+pub fn raster_lines(regions: &[Path], step: f64, angle: f64) -> Vec<Vec<Point>> {
+    hatch_lines(regions, step, angle)
+        .into_iter()
+        .enumerate()
+        .flat_map(|(row, spans)| {
+            let mut spans: Vec<Vec<Point>> = spans.into_iter().map(|(a, b)| vec![a, b]).collect();
+            if row % 2 == 1 {
+                spans.reverse();
+                for span in &mut spans {
+                    span.reverse();
+                }
+            }
+            spans
+        })
+        .collect()
 }
 
 /// Rapid to above the first point, plunge to it, cut through the rest, rapid back up.

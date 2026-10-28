@@ -8,6 +8,7 @@ edition.workspace = true
 cut-craft-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
+glam.workspace = true
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

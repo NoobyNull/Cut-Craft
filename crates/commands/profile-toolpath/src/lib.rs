@@ -1,9 +1,10 @@
 //! Profile Toolpath: cuts along the selected vectors, outside, inside or on the line.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::Point;
+use cut_craft_core::entry::{Entry, Lead, Leads, Ramp, Ramping, TabSettings, Tabs, path_moves};
+use cut_craft_core::geometry::{Point, winding};
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Tool, contour_moves, cut_points, made_by, pass_depths};
+use cut_craft_core::toolpath::{Tool, cut_points, made_by, pass_depths};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,28 @@ pub struct Params {
     pub depth: f64,
     pub side: Side,
     pub tool: Tool,
+    /// How the tool goes down into each pass (ramps run at the plunge rate)
+    #[serde(default)]
+    pub ramp: Ramp,
+    #[serde(default)]
+    #[schemars(
+        title = "Ramps",
+        extend("x-section" = true, "x-show-when" = {"ramp": ["smooth", "zig_zag"]})
+    )]
+    pub ramping: Ramping,
+    /// How the tool comes onto each path, from the waste side; a ramp then runs along the
+    /// lead in, and there is no spiral
+    #[serde(default)]
+    pub lead: Lead,
+    #[serde(default)]
+    #[schemars(extend("x-section" = true, "x-hide-when" = {"lead": "none"}))]
+    pub leads: Leads,
+    /// Bridges left to hold the part in place
+    #[serde(default)]
+    pub tabs: Tabs,
+    #[serde(default)]
+    #[schemars(title = "Tab Size", extend("x-section" = true, "x-hide-when" = {"tabs": "none"}))]
+    pub tab: TabSettings,
 }
 
 impl Default for Params {
@@ -39,6 +62,12 @@ impl Default for Params {
             depth: 6.0,
             side: Side::Outside,
             tool: Tool::default(),
+            ramp: Ramp::None,
+            ramping: Ramping::default(),
+            lead: Lead::None,
+            leads: Leads::default(),
+            tabs: Tabs::None,
+            tab: TabSettings::default(),
         }
     }
 }
@@ -76,11 +105,38 @@ impl Command for ProfileToolpath {
             ));
         }
         let depths = pass_depths(p.depth, p.tool.pass_depth);
+        let entry = Entry {
+            ramp: p.ramp,
+            ramping: p.ramping,
+            lead: p.lead,
+            leads: p.leads,
+            side: 1.0,
+            tabs: p.tabs,
+            tab: p.tab,
+            tab_top: -p.depth + p.tab.thickness,
+            tool_diameter: p.tool.diameter,
+        };
         let moves = centre_line
             .iter()
             .flat_map(|path| {
                 let points: Vec<Point> = cut_points(path);
-                contour_moves(&points, path.closed, &depths, doc.job.clearance)
+                // leads come from the waste: outside a part's outline, inside a hole; an
+                // anticlockwise path has its outside on the right
+                let anticlockwise = path.closed && winding(&points) > 0.0;
+                let outside = if anticlockwise { -1.0 } else { 1.0 };
+                let side = match p.side {
+                    Side::Inside => -outside,
+                    Side::Outside | Side::On if path.closed => outside,
+                    _ => 1.0,
+                };
+                path_moves(
+                    &points,
+                    path.closed,
+                    &depths,
+                    0.0,
+                    doc.job.clearance,
+                    &Entry { side, ..entry },
+                )
             })
             .collect();
         let mut c = Change::builder(doc);
@@ -163,5 +219,55 @@ mod tests {
             profile(Side::Inside, 4.0).unwrap_err(),
             "the tool is too big for the inside of the selected shapes"
         );
+    }
+
+    #[test]
+    fn leads_come_from_outside_for_an_outside_profile_and_inside_for_an_inside_one() {
+        for (side, from_outside) in [(Side::Outside, true), (Side::Inside, false)] {
+            let tp = made_toolpath::<ProfileToolpath>(
+                vec![square(0.0, 0.0, 20.0)],
+                &Params {
+                    side,
+                    lead: Lead::Straight,
+                    leads: Leads {
+                        angle: 90.0,
+                        length: 2.0,
+                        ..Leads::default()
+                    },
+                    ..Params::default()
+                },
+            )
+            .unwrap();
+            let plunge = tp
+                .moves
+                .iter()
+                .find(|m| m.kind == MoveKind::Plunge)
+                .unwrap();
+            let p = plunge.to.truncate();
+            let inside_square = p.x > 0.0 && p.x < 20.0 && p.y > 0.0 && p.y < 20.0;
+            let off_line = !cut_bounds(&tp).contains(p) || inside_square;
+            assert!(off_line, "{side:?}: {p}");
+            assert_eq!(!inside_square, from_outside, "{side:?}: {p}");
+        }
+    }
+
+    #[test]
+    fn tabs_are_left_at_the_bottom_of_the_cut() {
+        let tp = made_toolpath::<ProfileToolpath>(
+            vec![square(0.0, 0.0, 40.0)],
+            &Params {
+                tabs: Tabs::Flat,
+                ramp: Ramp::Smooth,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let tab_top = -6.0 + TabSettings::default().thickness;
+        assert!(
+            tp.moves
+                .iter()
+                .any(|m| m.kind == MoveKind::Cut && (m.to.z - tab_top).abs() < 1e-9)
+        );
+        assert!(tp.moves.iter().any(|m| (m.to.z + 6.0).abs() < 1e-9));
     }
 }

@@ -48,7 +48,7 @@ Position and the start page's Create a new file are Job Setup.
 | Move, Rotate, Mirror, Set Size | one transform-selection block |
 | Weld, Subtract, Overlap, Offset | polygon union / difference / intersection / offset |
 | Profile, Pocket, V-Carve | polygon offsets (V-Carve: regions with holes) + contour moves + pass depths |
-| 3D Roughing, 3D Finishing | placed model + zigzag (each move checked with the simulation) + follow |
+| 3D Roughing, 3D Finishing | placed model + machining boundary + raster or offset lines dropped along (each move checked with the simulation) + follow |
 | Recalculate All Toolpaths | Recalculate, for each toolpath |
 | Preview All Toolpaths | Preview Toolpath, for each toolpath, on fresh material |
 | Delete Layer | removing its vectors (as Delete does) + removing the layer |
@@ -191,6 +191,11 @@ say "not implemented yet".
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- Toolpath options: Profile ramps (smooth, zig zag, spiral; by distance or angle), leads
+  (straight or circular, lead out, overcut) and tabs (2D or 3D, by number or distance); Pocket
+  Offset or Raster (angle, profile pass first / last / none) with ramped plunges; 3D Roughing
+  Z Level (level by level or depth first) or 3D Raster, and 3D Finishing Raster (any angle) or
+  Offset, both inside a machining boundary (model, material or selected vectors, plus offset).
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.

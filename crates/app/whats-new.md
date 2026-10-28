@@ -1,4 +1,4 @@
-- Checks before cutting: flute length, tapers, undercuts; tapered bits keep their taper clear
+- Tabs, ramps and leads; raster pockets; 3D boundaries and Z level; checks before cutting
 - A new set of icons, drawn for Cut Craft; the 3D tools show shaded solids
 - The Tool Database, Machine Configuration and the other dialogs open in their own windows
 - The icons are built into the program: nothing to keep beside it

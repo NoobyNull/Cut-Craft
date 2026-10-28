@@ -7,6 +7,7 @@ pub mod checks;
 mod command;
 pub mod component;
 pub mod document;
+pub mod entry;
 pub mod file;
 pub mod font;
 mod formats;
