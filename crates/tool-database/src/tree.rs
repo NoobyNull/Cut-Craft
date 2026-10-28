@@ -158,12 +158,18 @@ pub fn export_group(db: &ToolDatabase, group: &str) -> ToolDatabase {
             .filter(|g| within(&g.path, group))
             .cloned()
             .collect(),
+        materials: db.materials.clone(),
+        material: String::new(),
     }
 }
 
 /// Adds `incoming` inside a new top-level group named `name` (made unique), so imported tools
-/// stay apart from the database's own; tool names already taken get a number.
+/// stay apart from the database's own; tool names already taken get a number. Its materials
+/// join the material list.
 pub fn import(db: &mut ToolDatabase, incoming: ToolDatabase, name: &str) -> String {
+    for m in &incoming.materials {
+        db.add_material(m);
+    }
     let all = groups(db);
     let top = unique(name, &|p| all.iter().any(|g| g == p));
     db.groups.push(ToolGroup {
@@ -268,5 +274,16 @@ mod tests {
         let names: std::collections::HashSet<_> = d.tools.iter().map(|t| &t.name).collect();
         assert_eq!(names.len(), d.tools.len(), "tool names stay unique");
         assert_eq!(d.tools.len(), db().tools.len() + 2 * n);
+    }
+
+    #[test]
+    fn imported_materials_join_the_list_once() {
+        let mut d = db();
+        d.add_material("Oak");
+        let mut incoming = export_group(&db(), "Metric Tools");
+        incoming.add_material("oak");
+        incoming.add_material("MDF");
+        import(&mut d, incoming, "Vendor");
+        assert_eq!(d.materials, ["Oak", "MDF"]);
     }
 }

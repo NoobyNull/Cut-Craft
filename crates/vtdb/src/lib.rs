@@ -5,32 +5,40 @@
 //! What was learned from three vendor files (nothing in them names the enumerations):
 //! `tool_geometry.tool_type` 0 ball nose, 1 end mill, 2 radiused end mill, 3 V-bit,
 //! 4 engraving (angle + flat), 5 tapered ball nose, 6 drill, 8 form tool, 9 diamond drag;
-//! `units` / `length_units` 0 mm, 1 inches; `rate_units` 1 mm/min, 4 in/min (Aspire's rate
-//! list is mm/sec, mm/min, m/min, in/sec, in/min, ft/min). All [inf].
+//! `units` / `length_units` 0 mm, 1 inches; `rate_units` 1 mm/min, 2 m/min, 4 in/min, taken as
+//! the place in Aspire's rate list (mm/sec, mm/min, m/min, in/sec, in/min, ft/min); a `tooth_size`
+//! makes a thread mill (none seen); each geometry has a placeholder entry with no material
+//! and no feed, and one with data for the file's one material and machine. All [inf].
 
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolGroup, ToolShape};
+use cut_craft_core::toolpath::{RateUnits, Tool, ToolDatabase, ToolGroup, ToolShape};
 use rusqlite::{Connection, OpenFlags};
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Every tool in the file that Cut Craft has a shape for, each paired with its cutting data
-/// (one tool per material and machine it has data for; the name says which), in the
-/// file's groups.
+/// Every tool in the file that Cut Craft has a shape for, with its cutting data for each
+/// material the file has data for, in the file's groups.
 pub fn read(path: &Path) -> Result<ToolDatabase, String> {
     let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| format!("{}: {e}", path.display()))?;
+    from_db(&db)
+}
+
+/// [`read`], from the open file. Each geometry is one tool: its first material's data is
+/// also its default.
+// ponytail: cutting data is kept per material only; a second machine's data for the same
+// material is dropped (every vendor file seen has one machine)
+fn from_db(db: &Connection) -> Result<ToolDatabase, String> {
     let mut q = db
         .prepare(
             "select g.name_format, g.tool_type, g.units, g.diameter, g.included_angle, \
              g.tip_radius, g.num_flutes, c.rate_units, c.length_units, c.feed_rate, \
-             c.plunge_rate, c.spindle_speed, c.stepdown, c.stepover, m.name, mt.name, \
-             g.id, g.notes, g.flute_length \
+             c.plunge_rate, c.spindle_speed, c.stepdown, c.stepover, mt.name, g.id, \
+             g.notes, g.flute_length, g.tooth_size, g.tooth_offset \
              from tool_geometry g \
              join tool_entity e on e.tool_geometry_id = g.id \
              join tool_cutting_data c on c.id = e.tool_cutting_data_id \
              left join material mt on mt.id = e.material_id \
-             left join machine m on m.id = e.machine_id \
-             order by g.name_format, mt.name",
+             order by g.name_format, g.id, mt.name",
         )
         .map_err(|e| e.to_string())?;
     let rows = q
@@ -50,28 +58,52 @@ pub fn read(path: &Path) -> Result<ToolDatabase, String> {
                 spindle_speed: r.get(11)?,
                 stepdown: r.get(12)?,
                 stepover: r.get(13)?,
-                machine: r.get(14)?,
-                material: r.get(15)?,
-                geometry_id: r.get(16)?,
-                notes: r.get(17)?,
-                flute_length: r.get(18)?,
+                material: r.get(14)?,
+                geometry_id: r.get(15)?,
+                notes: r.get(16)?,
+                flute_length: r.get(17)?,
+                tooth_size: r.get(18)?,
+                tooth_offset: r.get(19)?,
             })
         })
         .map_err(|e| e.to_string())?;
-    let (groups, group_of) = tree(&db);
-    let mut tools = Vec::new();
+    let (groups, group_of) = tree(db);
+    let mut out = ToolDatabase {
+        groups,
+        ..ToolDatabase::default()
+    };
+    // rows come geometry by geometry: the first with data makes the tool, the rest add to it
+    let mut last_geometry = None;
     for row in rows {
         let row = row.map_err(|e| e.to_string())?;
-        if let Some(mut tool) = row.tool() {
-            tool.group = group_of.get(&row.geometry_id).cloned().unwrap_or_default();
-            tool.notes = row.notes.unwrap_or_default();
-            tools.push(tool);
+        let Some(mut tool) = row.tool() else { continue };
+        if let Some(material) = &row.material {
+            out.add_material(material);
+            tool.materials = vec![tool.cutting(material)];
+        }
+        match out.tools.last_mut() {
+            Some(last) if last_geometry.as_ref() == Some(&row.geometry_id) => {
+                // a second machine's data for a material already read is dropped
+                let data = tool.materials.pop().filter(|d| {
+                    !last
+                        .materials
+                        .iter()
+                        .any(|m| m.material.eq_ignore_ascii_case(&d.material))
+                });
+                last.materials.extend(data);
+            }
+            _ => {
+                tool.group = group_of.get(&row.geometry_id).cloned().unwrap_or_default();
+                tool.notes = row.notes.unwrap_or_default();
+                out.tools.push(tool);
+                last_geometry = Some(row.geometry_id);
+            }
         }
     }
-    if tools.is_empty() {
+    if out.tools.is_empty() {
         return Err("no tools Cut Craft can use were found in the file".into());
     }
-    Ok(ToolDatabase { tools, groups })
+    Ok(out)
 }
 
 /// The file's tool tree: its groups in order, and the group each tool geometry is in.
@@ -143,11 +175,12 @@ struct Row {
     spindle_speed: Option<f64>,
     stepdown: Option<f64>,
     stepover: Option<f64>,
-    machine: Option<String>,
     material: Option<String>,
     geometry_id: String,
     notes: Option<String>,
     flute_length: Option<f64>,
+    tooth_size: Option<f64>,
+    tooth_offset: Option<f64>,
 }
 
 const INCH: f64 = 25.4;
@@ -156,16 +189,12 @@ fn length(units: i64) -> f64 {
     if units == 1 { INCH } else { 1.0 }
 }
 
-/// A rate in mm/min.
-fn rate(units: i64) -> f64 {
-    match units {
-        0 => 60.0,
-        2 => 1000.0,
-        3 => 60.0 * INCH,
-        4 => INCH,
-        5 => 12.0 * INCH,
-        _ => 1.0,
-    }
+/// The file's rate units, numbered in the order of Aspire's list.
+fn rate_units(units: i64) -> RateUnits {
+    usize::try_from(units)
+        .ok()
+        .and_then(|i| RateUnits::ALL.get(i).copied())
+        .unwrap_or_default()
 }
 
 impl Row {
@@ -173,7 +202,10 @@ impl Row {
         // a tapered ball nose's diameter is its shank; its tip radius is the ball (none: a
         // tapered flat bottom, cut as an end mill)
         let tip = self.tip_radius.filter(|r| *r > 0.0);
+        // no vendor file has a thread mill, so its tool_type is unknown; its tooth says it is
+        let tooth = self.tooth_size.filter(|s| *s > 0.0);
         let shape = match self.tool_type {
+            _ if tooth.is_some() => ToolShape::ThreadMill,
             0 => ToolShape::BallNose,
             5 if tip.is_some() => ToolShape::BallNose,
             1 | 5 | 6 => ToolShape::EndMill,
@@ -191,15 +223,24 @@ impl Row {
         let cut_scale = length(self.length_units);
         let base = Tool::default();
         let name = self.name();
+        let per = rate_units(self.rate_units);
         Some(Tool {
             name,
             shape,
+            rate_units: per,
+            tooth_size: tooth.map_or(base.tooth_size, |s| s * scale),
+            tooth_offset: self
+                .tooth_offset
+                .filter(|_| tooth.is_some())
+                .map_or(base.tooth_offset, |o| o * scale),
             tip_radius: match shape {
                 ToolShape::RadiusedEndMill => self.tip_radius.unwrap_or(0.0) * scale,
                 _ => 0.0,
             },
             angle: match shape {
-                ToolShape::VBit => self.included_angle.unwrap_or(base.angle),
+                ToolShape::VBit | ToolShape::ThreadMill => {
+                    self.included_angle.unwrap_or(base.angle)
+                }
                 _ => 0.0,
             },
             // a tapered tool's included angle is both sides of its taper; it widens to the
@@ -218,10 +259,10 @@ impl Row {
             stepover: self.stepover.map_or(base.stepover, |s| {
                 (s * cut_scale / diameter).clamp(0.01, 1.0)
             }),
-            feed_rate: feed * rate(self.rate_units),
+            feed_rate: feed * per.mm_per_min(),
             plunge_rate: self
                 .plunge_rate
-                .map_or(base.plunge_rate, |f| f * rate(self.rate_units)),
+                .map_or(base.plunge_rate, |f| f * per.mm_per_min()),
             spindle_speed: self.spindle_speed.unwrap_or(base.spindle_speed),
             flutes: self
                 .flutes
@@ -232,7 +273,7 @@ impl Row {
         })
     }
 
-    /// The vendor's name with Aspire's `{...}` fields filled in, plus the material it is for.
+    /// The vendor's name with Aspire's `{...}` fields filled in.
     fn name(&self) -> String {
         let kind = match self.tool_type {
             0 => "Ball Nose",
@@ -264,11 +305,7 @@ impl Row {
             rest = tail;
         }
         name.push_str(rest);
-        let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
-        match self.material.as_ref().or(self.machine.as_ref()) {
-            Some(m) => format!("{name} [{m}]"),
-            None => name,
-        }
+        name.split_whitespace().collect::<Vec<_>>().join(" ")
     }
 }
 
@@ -297,18 +334,19 @@ mod tests {
             spindle_speed: Some(18000.0),
             stepdown: Some(0.125),
             stepover: Some(0.1),
-            machine: None,
             material: Some("Softwood".into()),
             geometry_id: String::new(),
             notes: None,
             flute_length: Some(0.875),
+            tooth_size: None,
+            tooth_offset: None,
         }
     }
 
     #[test]
     fn names_fill_in_aspires_fields() {
         let t = end_mill().tool().unwrap();
-        assert_eq!(t.name, "End Mill (0.25in) DOWN CUT [Softwood]");
+        assert_eq!(t.name, "End Mill (0.25in) DOWN CUT");
         assert_eq!(t.shape, ToolShape::EndMill);
         assert!((t.diameter - 6.35).abs() < 1e-9);
         assert!((t.feed_rate - 2540.0).abs() < 1e-9, "in/min to mm/min");
@@ -345,6 +383,69 @@ mod tests {
         let t = flat.tool().unwrap();
         assert_eq!(t.shape, ToolShape::EndMill);
         assert!((t.diameter - 6.35).abs() < 1e-9);
+    }
+
+    /// A file with one inch end mill: a placeholder entry for no material, then data for
+    /// softwood and oak; and a thread mill with data for oak.
+    fn file() -> Connection {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "create table tool_geometry (id text, name_format text, notes text, tool_type int, \
+             units int, diameter real, included_angle real, tip_radius real, num_flutes int, \
+             flute_length real, tooth_size real, tooth_offset real);
+             create table tool_cutting_data (id text, rate_units int, length_units int, \
+             feed_rate real, plunge_rate real, spindle_speed int, stepdown real, stepover real);
+             create table tool_entity (id text, material_id text, machine_id text, \
+             tool_geometry_id text, tool_cutting_data_id text);
+             create table material (id text, name text);
+             create table machine (id text, name text);
+             insert into material values ('s', 'Softwood'), ('o', 'Oak');
+             insert into machine values ('m', 'Desktop');
+             insert into tool_geometry values ('g', '{Tool Type} ({Diameter|F}{Units Short})', \
+             null, 1, 1, 0.25, null, null, 2, 1.0, null, null);
+             insert into tool_geometry values ('t', 'Thread Mill', null, 1, 0, 10.0, 60.0, \
+             null, 1, 20.0, 1.2, 2.5);
+             insert into tool_cutting_data values ('c0', 4, 1, null, null, null, null, null), \
+             ('c1', 4, 1, 100.0, 30.0, 18000, 0.125, 0.1), \
+             ('c2', 4, 1, 50.0, 20.0, 16000, 0.0625, 0.1), \
+             ('c3', 1, 0, 300.0, 100.0, 12000, 1.0, 0.5);
+             insert into tool_entity values ('e0', null, 'm', 'g', 'c0'), \
+             ('e1', 's', 'm', 'g', 'c1'), ('e2', 'o', 'm', 'g', 'c2'), \
+             ('e3', 'o', 'm', 't', 'c3');",
+        )
+        .unwrap();
+        db
+    }
+
+    #[test]
+    fn each_tool_keeps_its_cutting_data_per_material() {
+        let db = from_db(&file()).unwrap();
+        assert_eq!(db.tools.len(), 2, "one tool per geometry");
+        assert_eq!(db.materials, ["Oak", "Softwood"]);
+        let mill = db
+            .get("End Mill (0.25in)")
+            .expect("named without its material");
+        assert_eq!(mill.rate_units, RateUnits::InchPerMin);
+        let oak = mill.cutting("Oak");
+        assert!((oak.feed_rate - 1270.0).abs() < 1e-9, "50 in/min");
+        assert!((oak.pass_depth - 1.5875).abs() < 1e-9);
+        let soft = mill.cutting("Softwood");
+        assert!((soft.feed_rate - 2540.0).abs() < 1e-9);
+        assert!((soft.spindle_speed - 18000.0).abs() < 1e-9);
+        assert!(
+            (mill.feed_rate - 1270.0).abs() < 1e-9,
+            "the first material's data is the default"
+        );
+    }
+
+    #[test]
+    fn a_geometry_with_a_tooth_is_a_thread_mill() {
+        let db = from_db(&file()).unwrap();
+        let t = db.get("Thread Mill").unwrap();
+        assert_eq!(t.shape, ToolShape::ThreadMill);
+        assert!((t.tooth_size - 1.2).abs() < 1e-9 && (t.tooth_offset - 2.5).abs() < 1e-9);
+        assert!((t.angle - 60.0).abs() < 1e-9 && (t.diameter - 10.0).abs() < 1e-9);
+        assert_eq!(t.rate_units, RateUnits::MmPerMin);
     }
 
     #[test]
@@ -393,6 +494,18 @@ mod tests {
                         .all(|t| t.group.is_empty() || db.groups.iter().any(|g| g.path == t.group))
                 );
                 assert!(tools.iter().all(|t| t.diameter > 0.0 && t.feed_rate > 0.0));
+                // every vendor file seen keeps its data under one material
+                assert!(
+                    !db.materials.is_empty(),
+                    "{} names its material",
+                    p.display()
+                );
+                assert!(tools.iter().all(|t| {
+                    !t.materials.is_empty()
+                        && t.materials
+                            .iter()
+                            .all(|m| db.materials.contains(&m.material) && m.feed_rate > 0.0)
+                }));
             }
         }
         assert!(read(Path::new("/nonexistent.vtdb")).is_err());
