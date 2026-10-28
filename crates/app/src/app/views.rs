@@ -9,6 +9,7 @@ use super::{
     bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles, inspected, measured,
     paint_focus_ring, view2d,
 };
+use crate::options::WindowLayout;
 
 impl CutCraftApp {
     /// One pass of the whole window on the root `ui`; apart from the eframe entry so tests
@@ -213,6 +214,7 @@ impl CutCraftApp {
         self.info_window(ctx);
         self.snap_options_window(ctx);
         self.options_window(ctx);
+        self.tool_search(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
@@ -229,7 +231,11 @@ impl CutCraftApp {
                         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
                     });
             }
-            Screen::Job => self.job_pages(ui),
+            Screen::Job => match self.options.general.layout {
+                WindowLayout::Classic => self.job_pages(ui),
+                WindowLayout::Rail => self.rail_layout(ui),
+                WindowLayout::Ribbon => self.ribbon_layout(ui),
+            },
         }
         egui::CentralPanel::default().show(ui, |ui| {
             self.top_bar(ui);
@@ -1236,10 +1242,8 @@ impl CutCraftApp {
         if let Some(options) = changed {
             options.apply_to(&mut self.display);
             self.recent.truncate(options.recent_count());
-            if let Err(e) = options.save() {
-                self.status.set_message(&e);
-            }
             self.options = options;
+            self.save_options();
         }
     }
 
