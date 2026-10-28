@@ -34,7 +34,7 @@ begin HEADER
 "G94 G21 G17 G90"
 "G0 [ZH]"
 "G0 [XH] [YH]"
-"(Tool [T]: [TOOLNAME], fitted and zeroed before starting)"
+"(First tool [T]: [TOOLNAME], fitted and zeroed before starting)"
 "(Toolpath: [TOOLPATH_NAME], tool: [TOOLNAME])"
 "[S] M3"
 "G4 P3"
@@ -80,7 +80,7 @@ begin CCW_HELICAL_ARC_MOVE
 begin TOOLCHANGE
 "G0 [SAFEZ]"
 "M5"
-"(Change to tool [T]: [TOOLNAME], zero it, then resume)"
+"(Change to [T]: [TOOLNAME], zero it, then resume)"
 "M0"
 "(Toolpath: [TOOLPATH_NAME], tool: [TOOLNAME])"
 "[S] M3"

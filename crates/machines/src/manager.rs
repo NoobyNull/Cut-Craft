@@ -1,6 +1,6 @@
 //! The Machine menu's windows, laid out as Aspire's: Machine Configuration Management (the
 //! machines, each one's details and associated posts; kept on Apply or OK) and Post-Processor
-//! Management (the post library: view, customise, install, delete).
+//! Management (the post library: view, customise, edit, install, delete).
 
 use crate::library::{Entry, Library, Source};
 use crate::machine::{Machine, Machines};
@@ -423,6 +423,101 @@ pub struct PostManager {
     /// A custom post asked to be deleted, waiting for the user to say so again.
     deleting: Option<Entry>,
     viewing: Option<(String, String)>,
+    /// A custom post open in Edit.
+    editing: Option<Editing>,
+}
+
+/// A custom post being edited: its file, the text as last saved, and as it is now.
+#[derive(Clone, Debug, Default)]
+struct Editing {
+    name: String,
+    path: PathBuf,
+    saved: String,
+    text: String,
+}
+
+impl Editing {
+    fn of(entry: &Entry) -> Option<Self> {
+        let Source::Custom(path) = &entry.source else {
+            return None;
+        };
+        let text = Library::text(entry).ok()?;
+        Some(Self {
+            name: entry.name.clone(),
+            path: path.clone(),
+            saved: text.clone(),
+            text,
+        })
+    }
+
+    fn save(&mut self) -> Result<(), String> {
+        Library::save(&self.path, &self.text)?;
+        self.saved.clone_from(&self.text);
+        Ok(())
+    }
+}
+
+/// Edit: a custom post's instructions, saved to its file, with what Cut Craft makes of them
+/// (a post that does not read shows why, and is marked ⚠ in the list until it does).
+fn editor(ctx: &egui::Context, editing: &mut Option<Editing>) -> Option<PostOutcome> {
+    let edit = editing.as_mut()?;
+    let mut open = true;
+    let mut outcome = None;
+    let (id, title) = (
+        egui::Id::unique("post_processor_edit"),
+        format!("Edit Post-Processor: {}", edit.name),
+    );
+    cut_craft_bug_report::dialog(ctx, id, &title, dialog_size(ctx), &mut open, |ui| {
+        cut_craft_bug_report::mark(ui, "Edit Post-Processor");
+        match cut_craft_post::Post::parse(&edit.text) {
+            Ok(post) if post.name == edit.name => {
+                ui.weak("Reads as a post-processor");
+            }
+            // machines know a post by its name, so a new one leaves them looking for the old
+            Ok(post) => {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    format!(
+                        "Renamed {}: machines using {} need it chosen again",
+                        post.name, edit.name
+                    ),
+                );
+            }
+            Err(why) => {
+                ui.colored_label(ui.visuals().error_fg_color, format!("Will not load: {why}"));
+            }
+        }
+        let changed = edit.text != edit.saved;
+        ui.horizontal(|ui| {
+            if ui.add_enabled(changed, egui::Button::new("Save")).clicked() {
+                outcome = Some(PostOutcome::Message(match edit.save() {
+                    Ok(()) => format!("Saved {}", edit.name),
+                    Err(e) => e,
+                }));
+            }
+            if ui
+                .add_enabled(changed, egui::Button::new("Revert"))
+                .clicked()
+            {
+                edit.text.clone_from(&edit.saved);
+            }
+            if changed {
+                ui.weak("Unsaved changes are lost when this closes");
+            }
+        });
+        let height = ui.spacing().interact_size.y * VIEW_ROWS;
+        egui::ScrollArea::both().max_height(height).show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::multiline(&mut edit.text)
+                    .code_editor()
+                    .desired_width(f32::INFINITY),
+            );
+        });
+    });
+    if !open {
+        *editing = None;
+    }
+    outcome
 }
 
 impl PostManager {
@@ -475,6 +570,9 @@ impl PostManager {
             });
         });
         viewer(ctx, &mut self.viewing);
+        if let Some(said) = editor(ctx, &mut self.editing) {
+            outcome = Some(said);
+        }
         if !open {
             outcome = Some(PostOutcome::Close);
         }
@@ -524,8 +622,8 @@ impl PostManager {
         asked
     }
 
-    /// Inspect: View and Customize for Cut Craft's posts; View, Open File Location and
-    /// Delete for custom ones.
+    /// Inspect: View and Customize (which opens the copy in Edit) for Cut Craft's posts;
+    /// View, Edit, Open File Location and Delete for custom ones.
     fn inspect(
         &mut self,
         ui: &mut egui::Ui,
@@ -543,6 +641,7 @@ impl PostManager {
                     asked = Some(match library.customize(entry) {
                         Ok(copy) => {
                             self.picked = Some(copy.name.clone());
+                            self.editing = Editing::of(&copy);
                             PostOutcome::Message(format!("Customised as {}", copy.name))
                         }
                         Err(e) => PostOutcome::Message(e),
@@ -551,6 +650,10 @@ impl PostManager {
                 }
             }
             Source::Custom(path) => {
+                if ui.button("Edit…").clicked() {
+                    self.editing = Editing::of(entry);
+                    ui.close();
+                }
                 if ui.button("Open File Location…").clicked() {
                     asked = path
                         .parent()
@@ -635,6 +738,29 @@ mod tests {
             window.height() < 600.0,
             "fits its contents, not the screen: {window:?}"
         );
+    }
+
+    #[test]
+    fn a_custom_post_is_edited_and_saved_to_its_file() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-edit-{}", std::process::id()));
+        let library = Library::new(Some(dir.clone()));
+        let copy = library.customize(&library.entries()[0]).unwrap();
+        let own = library.entries().into_iter().last().unwrap();
+        assert!(
+            Editing::of(&own).is_none(),
+            "Cut Craft's own are customised, not edited"
+        );
+        let mut edit = Editing::of(&copy).expect("a custom post opens");
+        edit.text.push_str("\n+ my change\n");
+        edit.save().unwrap();
+        assert!(Library::text(&copy).unwrap().ends_with("+ my change\n"));
+        assert_eq!(edit.saved, edit.text);
+        let mut editing = Some(edit);
+        let ctx = egui::Context::default();
+        for _ in 0..3 {
+            frame(&ctx, |ctx| assert_eq!(editor(ctx, &mut editing), None));
+        }
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

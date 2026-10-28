@@ -180,6 +180,12 @@ impl Library {
         })
     }
 
+    /// Edit's Save: a custom post's new text, written whole or not at all.
+    pub fn save(path: &Path, text: &str) -> Result<(), String> {
+        cut_craft_core::file::write_atomic(path, text.as_bytes())
+            .map_err(|e| format!("{}: {e}", path.display()))
+    }
+
     /// Delete: takes a custom post's file away (Cut Craft's own cannot be).
     pub fn delete(entry: &Entry) -> Result<(), String> {
         match &entry.source {

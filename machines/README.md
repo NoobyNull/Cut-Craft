@@ -11,7 +11,8 @@ same name as; the rest are left alone.
 
 They all use **Cut Craft GRBL (mm)**, which suits grbl 1.1 and grblHAL: a tool change stops
 the spindle and pauses (M0) for you to change and zero the tool, then resume from your
-sender.
+sender. **Cut Craft GRBL (inch)** and **Cut Craft Mach3 (mm / inch)** are there too: pick
+one in Machine Configuration, or customise and edit a copy in Post-Processor Management.
 
 **Check the working area against your own machine before cutting.** These are the
 makers' published sizes as the packages were written; extensions, kits and revisions

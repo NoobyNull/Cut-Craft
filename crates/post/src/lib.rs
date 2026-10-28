@@ -179,13 +179,20 @@ const LARGEST_ARC: f64 = 1000.0;
 /// Cut Craft's own posts, used until one is installed (`crates/post/posts/`).
 const DEFAULT_FLAT: &str = include_str!("../posts/fluidnc_atc_mm.pp");
 const DEFAULT_ROTARY: &str = include_str!("../posts/fluidnc_atc_wrap_a_mm.pp");
-/// Hobby routers on grbl, tools changed by hand (the machine packages in `machines/`).
-const GRBL: &str = include_str!("../posts/grbl_mm.pp");
+/// Hobby routers on grbl, tools changed by hand (the machine packages in `machines/`), and
+/// Mach3 with its own tool change: written for Cut Craft, not copies of Vectric's.
+const GRBL_MM: &str = include_str!("../posts/grbl_mm.pp");
+const GRBL_INCH: &str = include_str!("../posts/grbl_inch.pp");
+const MACH3_MM: &str = include_str!("../posts/mach3_mm.pp");
+const MACH3_INCH: &str = include_str!("../posts/mach3_inch.pp");
 /// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
-pub const BUILT_IN: [(&str, &str); 3] = [
+pub const BUILT_IN: [(&str, &str); 6] = [
     ("fluidnc_atc_mm.pp", DEFAULT_FLAT),
     ("fluidnc_atc_wrap_a_mm.pp", DEFAULT_ROTARY),
-    ("grbl_mm.pp", GRBL),
+    ("grbl_mm.pp", GRBL_MM),
+    ("grbl_inch.pp", GRBL_INCH),
+    ("mach3_mm.pp", MACH3_MM),
+    ("mach3_inch.pp", MACH3_INCH),
 ];
 
 /// The file being written, for the variables that describe it.
@@ -1769,6 +1776,38 @@ begin FOOTER
         assert!(why.contains("3 mm") && !why.contains("6 mm"), "{why}");
         // no tool changer: numbered in the order used
         assert!(post.render(&doc, &file(&[])).unwrap().contains("M6 T2"));
+    }
+
+    #[test]
+    fn grbl_posts_pause_for_a_tool_change_and_mach3_ones_change_it() {
+        let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+        let mut names = vec![];
+        for (file, text) in BUILT_IN {
+            names.push(Post::parse(text).unwrap().name);
+            if file.starts_with("fluidnc") {
+                continue;
+            }
+            // the test renderer splits on the CR LF line ending
+            let crlf = text.replace(r#"LINE_ENDING = "[10]""#, r#"LINE_ENDING = "[13][10]""#);
+            let lines = render(&crlf, two());
+            let has = |s: &str| lines.iter().any(|l| l == s);
+            let inches = file.contains("inch");
+            assert_eq!(lines.iter().any(|l| l.contains("G20")), inches, "{file}");
+            if file.starts_with("grbl") {
+                assert!(
+                    has("M0") && !lines.iter().any(|l| l.contains("M6")),
+                    "{file}: {lines:?}"
+                );
+            }
+            if file.starts_with("mach3") {
+                assert!(
+                    has("T2 M6") && has("G91.1") && !lines.iter().any(|l| l.contains("TT")),
+                    "{file}: {lines:?}"
+                );
+            }
+        }
+        names.dedup();
+        assert_eq!(names.len(), BUILT_IN.len(), "each has its own name");
     }
 
     #[test]

@@ -120,7 +120,11 @@ say "not implemented yet".
   Install Offline Package adds the machines in a package (`machines/*.json`: Genmitsu,
   FoxAlien, Sienci, Carbide 3D, Two Trees hobby routers, on Cut Craft GRBL (mm), whose tool
   change pauses with M0), skipping names already there; Search for Machine Online opens
-  `machines/` in the repository.
+  `machines/` in the repository. Cut Craft's own posts: FluidNC ATC (flat and wrapped A),
+  GRBL (mm / inch; tool changes pause with M0) and Mach3 (mm / inch, `.tap`; T M6, G91.1
+  arcs), all written for Cut Craft. Post-Processor Management's Inspect has Edit for custom
+  posts (Customize opens its copy in it): saved to the file, warning while it would not load
+  or after a rename.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
