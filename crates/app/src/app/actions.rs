@@ -571,17 +571,51 @@ impl CutCraftApp {
         }
     }
 
-    /// The post toolpaths are saved through: the active machine's default, else Cut Craft's
+    /// The post toolpaths are saved through: the active machine's default when it suits the
+    /// job, else the machine's first post that does: a flat one for a flat job, and for a
+    /// rotary job (on a machine with a 4th axis) one wrapping the side that goes round, Y
+    /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
-        match self
-            .machines
-            .active()
-            .and_then(cut_craft_machines::Machine::post)
-        {
-            Some(name) => self.posts.load(name),
-            None => Ok(cut_craft_post::Post::default_for(&self.doc.job)),
+        use cut_craft_core::document::Along;
+        let Some(machine) = self.machines.active().filter(|m| !m.posts.is_empty()) else {
+            return Ok(cut_craft_post::Post::default_for(&self.doc.job));
+        };
+        let wraps = self.doc.job.rotary.map(|r| match r.along {
+            Along::X => "Y",
+            Along::Y => "X",
+        });
+        if wraps.is_some() && !machine.rotary {
+            return Err(format!(
+                "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
+                 Configuration",
+                machine.name
+            ));
         }
+        // the default first: one that will not load says so rather than being passed over
+        let default = machine
+            .post()
+            .map(|name| self.posts.load(name))
+            .transpose()?;
+        if let Some(post) = default.filter(|p| p.wraps() == wraps) {
+            return Ok(post);
+        }
+        machine
+            .posts
+            .iter()
+            .filter_map(|name| self.posts.load(name).ok())
+            .find(|p| p.wraps() == wraps)
+            .ok_or_else(|| match wraps {
+                Some(axis) => format!(
+                    "{} has no post wrapping {axis} onto A for this rotary job: add a Wrap \
+                     {axis} to A post in Machine Configuration",
+                    machine.name
+                ),
+                None => format!(
+                    "{} has only rotary posts: add a flat one in Machine Configuration",
+                    machine.name
+                ),
+            })
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.

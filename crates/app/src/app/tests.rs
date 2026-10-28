@@ -2915,3 +2915,30 @@ fn an_offline_package_installs_its_machines_once() {
         assert!(h.app.available(id), "{id}");
     }
 }
+
+#[test]
+fn rotary_jobs_need_a_4th_axis_and_save_through_the_post_wrapping_their_side() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    let package =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../machines/genmitsu.json");
+    h.app.install_package(&package);
+    let wraps = |app: &CutCraftApp| app.output_post().map(|p| p.wraps().map(str::to_owned));
+    assert_eq!(wraps(&h.app), Ok(None), "a flat job: the flat default");
+    h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
+    let why = wraps(&h.app).unwrap_err();
+    assert!(why.contains("4th axis"), "{why}");
+    let names: Vec<String> = h.app.posts.entries().into_iter().map(|e| e.name).collect();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.rotary = true;
+    machine.add_rotary_posts(&names);
+    assert_eq!(
+        wraps(&h.app),
+        Ok(Some("Y".into())),
+        "Y goes round a cylinder along X"
+    );
+    h.app.doc.job = Job::rotary(300.0, 50.0, Along::Y);
+    assert_eq!(wraps(&h.app), Ok(Some("X".into())));
+    h.app.doc.job = Job::default();
+    assert_eq!(wraps(&h.app), Ok(None), "flat jobs keep the flat default");
+}

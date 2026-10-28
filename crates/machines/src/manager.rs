@@ -127,7 +127,7 @@ impl MachineManager {
                 outcome = buttons(ui, false);
                 return;
             };
-            details(ui, machine);
+            details(ui, machine, library);
             tool_changer(ui, machine);
             if names_clash {
                 ui.colored_label(
@@ -203,8 +203,8 @@ impl MachineManager {
     }
 }
 
-/// Name, maker, model, controller and bed size, in a framed block.
-fn details(ui: &mut egui::Ui, machine: &mut Machine) {
+/// Name, maker, model, controller, bed size and 4th axis, in a framed block.
+fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         egui::Grid::new("machine_details")
@@ -247,6 +247,20 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine) {
                     ui.radio_value(&mut machine.inches, false, "mm");
                     ui.radio_value(&mut machine.inches, true, "inches");
                 });
+                ui.end_row();
+                ui.label("4th axis");
+                let ticked = ui
+                    .checkbox(&mut machine.rotary, "A, turning the material (rotary jobs)")
+                    .on_hover_text(
+                        "Rotary jobs are saved through the machine's post that wraps their side \
+                         onto A; ticking this adds Cut Craft's for its posts",
+                    )
+                    .changed();
+                if ticked && machine.rotary {
+                    let names: Vec<String> =
+                        library.entries().into_iter().map(|e| e.name).collect();
+                    machine.add_rotary_posts(&names);
+                }
                 ui.end_row();
             });
     });

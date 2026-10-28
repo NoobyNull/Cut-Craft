@@ -23,6 +23,9 @@ pub struct Machine {
     /// An automatic tool changer: the tool loaded in each slot by name, slot 1 first;
     /// empty when the machine has none (tool changes are by hand).
     pub slots: Vec<Option<String>>,
+    /// A 4th axis (A) turning the material, for rotary jobs (2.5 axes + A): those are saved
+    /// through the machine's post that wraps their side round onto A.
+    pub rotary: bool,
 }
 
 impl Machine {
@@ -38,6 +41,25 @@ impl Machine {
             .iter()
             .position(|s| s.as_deref() == Some(tool))
             .map(|i| i + 1)
+    }
+
+    /// Ticking the 4th axis: for each of Cut Craft's flat posts the machine has, its rotary
+    /// twins in `library` (`… Wrap Y to A G93 (units)` and `… Wrap X to A G93 (units)`), so
+    /// both directions of cylinder can be cut. Custom posts have no twins to find.
+    pub fn add_rotary_posts(&mut self, library: &[String]) {
+        let mut twins = vec![];
+        for post in &self.posts {
+            let base = post.replace(" Arcs (", " (").replace(" Straight (", " (");
+            let Some(at) = base.find(" (") else { continue };
+            for wrapped in ["Y", "X"] {
+                let twin = format!("{} Wrap {wrapped} to A G93{}", &base[..at], &base[at..]);
+                if library.contains(&twin) && !self.posts.contains(&twin) && !twins.contains(&twin)
+                {
+                    twins.push(twin);
+                }
+            }
+        }
+        self.posts.extend(twins);
     }
 
     /// The post toolpaths are saved through, by name.
@@ -241,6 +263,40 @@ mod packages {
 
     fn package(text: &str) -> Machines {
         serde_json::from_str(text).expect("a package reads")
+    }
+
+    #[test]
+    fn a_4th_axis_adds_the_rotary_twins_of_cut_crafts_posts() {
+        let library: Vec<String> = cut_craft_post::BUILT_IN
+            .iter()
+            .map(|(_, text)| cut_craft_post::Post::parse(text).unwrap().name)
+            .collect();
+        let mut genmitsu = package(PACKAGES[2].1).machines.remove(0);
+        genmitsu.posts.push("My Own (*.nc)".into());
+        genmitsu.add_rotary_posts(&library);
+        genmitsu.add_rotary_posts(&library);
+        let added: Vec<&str> = genmitsu.posts[5..].iter().map(String::as_str).collect();
+        assert_eq!(
+            added,
+            [
+                "Cut Craft GRBL Wrap Y to A G93 (mm) (*.nc)",
+                "Cut Craft GRBL Wrap X to A G93 (mm) (*.nc)",
+                "Cut Craft GRBL Wrap Y to A G93 (inch) (*.nc)",
+                "Cut Craft GRBL Wrap X to A G93 (inch) (*.nc)",
+            ],
+            "both directions in both units, once; a custom post has none"
+        );
+        let mut atc = Machine {
+            posts: vec!["Cut Craft FluidNC ATC (mm) (*.nc)".into()],
+            ..Machine::default()
+        };
+        atc.add_rotary_posts(&library);
+        assert_eq!(
+            atc.posts.len(),
+            3,
+            "the default post's twins: {:?}",
+            atc.posts
+        );
     }
 
     #[test]

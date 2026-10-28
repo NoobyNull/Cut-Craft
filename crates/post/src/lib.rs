@@ -366,6 +366,11 @@ impl Post {
         post
     }
 
+    /// The axis it wraps onto the rotary one (`X` or `Y`); `None` for a flat post.
+    pub fn wraps(&self) -> Option<&str> {
+        self.wrap.as_ref().map(|(axis, _)| *axis)
+    }
+
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut post = Self {
             name: String::new(),

@@ -22,11 +22,13 @@ POSTS = ROOT / "crates/post/posts"
 # the FluidNC posts are hand-written and listed first: the defaults for flat and rotary jobs.
 # Machines know posts by name, so theirs stay as they were; the FluidNC variants come after.
 FIXED = ["fluidnc_atc_mm.pp", "fluidnc_atc_wrap_a_mm.pp"]
-# stem: (controller, template file, variants the fixed posts already are)
+# stem: (controller, template file). Every family has every variant, so a machine's 4th axis
+# finds its rotary posts by name (FluidNC's Wrap Y to A G93 (mm) is the default rotary post's
+# twin under that name).
 TEMPLATES = {
-    "grbl": ("GRBL", "grbl_arcs_mm.pp", []),
-    "mach3": ("Mach3", "mach3_arcs_mm.pp", []),
-    "fluidnc_atc": ("FluidNC ATC", "fluidnc_atc_mm.pp", ["fluidnc_atc_wrap_y_a_g93_mm.pp"]),
+    "grbl": ("GRBL", "grbl_arcs_mm.pp"),
+    "mach3": ("Mach3", "mach3_arcs_mm.pp"),
+    "fluidnc_atc": ("FluidNC ATC", "fluidnc_atc_mm.pp"),
 }
 ARC_VARS = ("VAR ARC_CENTRE_I_INC_POSITION", "VAR ARC_CENTRE_J_INC_POSITION")
 
@@ -141,15 +143,13 @@ INTRO = {
 
 def main():
     files = list(FIXED)
-    for stem, (controller, source, already) in TEMPLATES.items():
+    for stem, (controller, source) in TEMPLATES.items():
         template = (POSTS / source).read_text()
         for file, text in variants(stem, controller, template):
             # the template is its own Arcs (mm)
             if file == f"{stem}_arcs_mm.pp":
                 if source not in files:
                     files.append(source)
-                continue
-            if file in already:
                 continue
             (POSTS / file).write_text(text)
             files.append(file)

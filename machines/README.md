@@ -19,6 +19,11 @@ Cut Craft also has, for GRBL, Mach3 and FluidNC (with a tool changer), in mm and
 units a minute or in inverse time (**G93**). Add one to a machine in Machine Configuration,
 or customise and edit a copy in Post-Processor Management.
 
+**Rotary needs a 4th axis.** The machines here are 3-axis as they come. If yours has a rotary
+axis (A) added, tick **4th axis** in Machine Configuration: that adds the Wrap Y to A and
+Wrap X to A (G93) posts for the machine's posts, and rotary jobs are saved through the one
+wrapping their side. Without it, Cut Craft won't save a rotary job for the machine.
+
 **Check the working area against your own machine before cutting.** These are the
 makers' published sizes as the packages were written; extensions, kits and revisions
 differ. Fix one in Machine Configuration after installing, or send a correction here.
