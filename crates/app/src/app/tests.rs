@@ -2915,19 +2915,51 @@ fn options_show_one_category_at_a_time() {
 fn the_ribbon_interface_opens_tools_from_its_groups_and_browses_the_job() {
     let mut h = Harness::new();
     h.app.options.appearance.interface = crate::options::Interface::Ribbon;
+    // the ribbon measures itself on its first frame
     h.frame(vec![]);
-    assert!(h.text_at("Model").is_some(), "the ribbon's tabs");
-    assert!(h.text_at("Create Vectors").is_none(), "no Aspire pages");
-    let at = h.text_at("File Operations ▾").expect("a group drops down");
+    h.frame(vec![]);
+    assert!(h.text_at("Modify").is_some(), "the ribbon's tabs");
+    assert!(
+        h.text_at("Create Vectors").is_some(),
+        "the first tab's groups"
+    );
+    let at = h.text_at("Offset and Layout").expect("a group drops down");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    let at = *h.texts_at("Job Setup").last().expect("its tools by name");
+    let at = *h
+        .texts_at("Offset Vectors")
+        .last()
+        .expect("its tools by name");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("job_setup"));
-    assert!(h.text_at("Job Type").is_some(), "its form beside the views");
-    let at = h.text_at("Layers").expect("the browser's tabs");
-    h.click(at, Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(super::ribbon::BROWSER_TABS[h.app.browser_tab], "Layers");
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("offset_vectors"));
+    assert!(h.text_at("Apply").is_some(), "its form beside the views");
+    assert!(h.text_at("Layers").is_some(), "the browser's sections");
+    assert!(h.text_at("Toolpath List").is_some(), "Toolpaths open in it");
+}
+
+#[test]
+fn every_toolbar_group_has_a_place_in_the_ribbon() {
+    use super::ribbon::{LEFT_OUT, QUICK_ACCESS, RIBBON_TABS};
+    let h = Harness::new();
+    let t = &h.app.toolbar;
+    for g in t
+        .groups
+        .iter()
+        .chain(&t.modeling_groups)
+        .chain(&t.toolpath_groups)
+    {
+        let placed = g.name == QUICK_ACCESS
+            || LEFT_OUT.contains(&g.name)
+            || RIBBON_TABS.iter().any(|(_, names)| names.contains(&g.name));
+        assert!(placed, "{} is in no ribbon tab", g.name);
+    }
+    for (tab, names) in RIBBON_TABS {
+        for name in names {
+            assert!(
+                h.app.toolbar_group(name).is_some(),
+                "{tab}: no group {name}"
+            );
+        }
+    }
 }
