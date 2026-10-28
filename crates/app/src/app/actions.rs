@@ -1655,7 +1655,11 @@ impl CutCraftApp {
         ui.separator();
         ui.strong(format!("What's new in v{}", env!("CARGO_PKG_VERSION")));
         for change in WHATS_NEW.lines().filter(|l| !l.trim().is_empty()) {
-            ui.label(change.trim_start_matches("- "));
+            // a bullet, with the change wrapping beside it
+            ui.horizontal_top(|ui| {
+                ui.label("•");
+                ui.add(egui::Label::new(change.trim_start_matches("- ")).wrap());
+            });
         }
         ui.separator();
         ui.strong("Links");

@@ -1549,6 +1549,7 @@ fn the_start_page_says_whats_new_and_links_out() {
         h.text_at(first.trim_start_matches("- ")).is_some(),
         "{first}"
     );
+    assert!(h.text_at("•").is_some(), "each change is bulleted");
     for (label, url, _) in LINKS {
         assert!(h.text_at(label).is_some(), "{label}");
         assert!(url.starts_with("https://"), "{url}");
