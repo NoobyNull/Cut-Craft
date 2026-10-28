@@ -90,6 +90,78 @@ pub struct Component {
     /// The component group it is in, if any (added with groups).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Group>,
+    /// The file an imported model came from, to import it again (added with re-import).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<Source>,
+}
+
+/// Where an imported model came from: it can be imported again, its settings changed, only
+/// from the same file, still where it was and unchanged.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Source {
+    /// The file as it was imported.
+    pub path: std::path::PathBuf,
+    /// The same file from the job's folder, once the job has one (so the two can move
+    /// together).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relative: Option<std::path::PathBuf>,
+    /// The file's MD5, in hex: what makes sure it is the same file.
+    pub md5: String,
+    /// The import's settings.
+    pub settings: serde_json::Value,
+}
+
+impl Source {
+    pub fn new(path: &std::path::Path, bytes: &[u8], settings: serde_json::Value) -> Self {
+        Self {
+            path: path.to_owned(),
+            relative: None,
+            md5: Self::md5(bytes),
+            settings,
+        }
+    }
+
+    pub fn md5(bytes: &[u8]) -> String {
+        use md5::{Digest, Md5};
+        format!("{:x}", Md5::digest(bytes))
+    }
+
+    /// Records the file's place relative to `folder`, the job's, if it is inside it.
+    // ponytail: only files in the job's folder or below; add `..` steps if models are kept beside it
+    pub fn relate_to(&mut self, folder: &std::path::Path) {
+        if self.relative.is_none() {
+            self.relative = self.path.strip_prefix(folder).ok().map(Into::into);
+        }
+    }
+
+    /// Where the file still is: where it was imported from, else at its place relative to
+    /// the job's `folder`.
+    pub fn find(&self, folder: Option<&std::path::Path>) -> Option<std::path::PathBuf> {
+        let relative = self
+            .relative
+            .as_ref()
+            .zip(folder)
+            .map(|(r, folder)| folder.join(r));
+        std::iter::once(self.path.clone())
+            .chain(relative)
+            .find(|p| p.is_file())
+    }
+
+    /// The file found, read and checked to be the one imported.
+    pub fn verified(&self, folder: Option<&std::path::Path>) -> Result<std::path::PathBuf, String> {
+        let name = self.path.display();
+        let path = self
+            .find(folder)
+            .ok_or_else(|| format!("{name} is no longer where it was imported from"))?;
+        let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        if Self::md5(&bytes) != self.md5 {
+            return Err(format!(
+                "{} has changed since it was imported",
+                path.display()
+            ));
+        }
+        Ok(path)
+    }
 }
 
 impl PartialEq for Component {
@@ -359,6 +431,7 @@ impl Component {
             unsculpted: None,
             level: 0,
             group: None,
+            source: None,
         }
     }
 
@@ -407,6 +480,7 @@ impl Component {
             unsculpted: None,
             level: 0,
             group: None,
+            source: None,
         }
     }
 

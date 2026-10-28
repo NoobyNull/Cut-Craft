@@ -93,6 +93,9 @@ impl CutCraftApp {
             "close" => self.screen != Screen::Start,
             "zoom_selected" => self.doc.selection_bounds().is_some(),
             id if id.starts_with("open_recent:") => true,
+            id if id.starts_with(gui::REIMPORT_MODEL) => self
+                .model_source(id)
+                .is_some_and(|s| s.find(self.job_folder()).is_some()),
             id if id.starts_with(SELECT_LEVEL) => true,
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
@@ -326,7 +329,49 @@ impl CutCraftApp {
                 self.level_action(id);
             }
             id if self.registry.exporter(id).is_some() => self.export(id),
+            id if id.starts_with(gui::REIMPORT_MODEL) => self.reimport_model(id),
             _ => self.start_command(id),
+        }
+    }
+
+    /// The folder the job is saved in, once it is.
+    pub(super) fn job_folder(&self) -> Option<&std::path::Path> {
+        self.session
+            .path
+            .as_deref()
+            .and_then(std::path::Path::parent)
+    }
+
+    /// The component a Re-import Model action names, and where it came from.
+    fn model_source(&self, action: &str) -> Option<&cut_craft_core::component::Source> {
+        let id = action.strip_prefix(gui::REIMPORT_MODEL)?.parse().ok()?;
+        self.doc.components.get(&EntityId(id))?.source.as_ref()
+    }
+
+    /// Orientate 3D Model again on a model's own file, with the settings it was imported
+    /// with, its Apply replacing the model: only while the file is where it was and
+    /// unchanged (its MD5 the same).
+    fn reimport_model(&mut self, action: &str) {
+        let Some(source) = self.model_source(action).cloned() else {
+            return;
+        };
+        let path = match source.verified(self.job_folder()) {
+            Ok(path) => path,
+            Err(e) => {
+                self.status.set_message(&e);
+                return;
+            }
+        };
+        let id = action[gui::REIMPORT_MODEL.len()..]
+            .parse()
+            .map(EntityId)
+            .ok();
+        self.start_command("orientate_3d_model");
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
+            form.params = source.settings;
+            form.params["file"] = Value::from(path.display().to_string());
+            form.drawn = id;
+            self.apply_live();
         }
     }
 
@@ -749,6 +794,17 @@ impl CutCraftApp {
     }
 
     pub(super) fn save_to(&mut self, path: &std::path::Path) {
+        // imported models' files found again from the job's folder, should the two move
+        if let Some(folder) = path.parent() {
+            for source in self
+                .doc
+                .components
+                .values_mut()
+                .filter_map(|k| k.source.as_mut())
+            {
+                source.relate_to(folder);
+            }
+        }
         match self.session.save(&self.doc, &self.history, path) {
             Ok(()) => {
                 self.status
@@ -1320,7 +1376,10 @@ impl CutCraftApp {
         clippy::cast_precision_loss,
         reason = "a model grid's columns and rows"
     )]
-    #[expect(clippy::float_cmp, reason = "a size is edited when not the very value shown")]
+    #[expect(
+        clippy::float_cmp,
+        reason = "a size is edited when not the very value shown"
+    )]
     pub(super) fn apply_live(&mut self) {
         const SIZES: [&str; 3] = ["x", "y", "z"];
         let Some(form) = &mut self.form else { return };

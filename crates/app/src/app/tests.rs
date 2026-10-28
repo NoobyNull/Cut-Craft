@@ -2922,3 +2922,42 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     assert!(h.text_at("Height above bed").is_some());
     let _ = std::fs::remove_file(file);
 }
+
+#[test]
+fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("again");
+    h.app.import_file(&file);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["orientation"]["rotation"] = Value::from(90.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    h.app.form = None;
+    let (&id, k) = h.app.doc.components.iter().next().unwrap();
+    let source = k.source.clone().expect("the import remembers its file");
+    assert_eq!(source.path, file);
+    let again = format!("{}{}", gui::REIMPORT_MODEL, id.0);
+    let menu = gui::component_menu(&h.app.doc, id, k);
+    assert_eq!(menu[0].action, again, "first on the model's menu");
+    assert!(h.app.available(&again));
+    // the form again with the settings it had, its Apply replacing the model
+    h.app.invoke(&h.ctx, &again);
+    let form = h.app.form.as_ref().expect("Orientate 3D Model again");
+    assert_eq!(form.params["orientation"]["rotation"], 90.0);
+    assert_eq!(form.drawn, Some(id));
+    let form = h.app.form.as_mut().unwrap();
+    form.params["orientation"]["rotation"] = Value::from(0.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "replaced, not added");
+    h.app.form = None;
+    // changed, it is refused
+    let mut changed = std::fs::read(&file).unwrap();
+    changed.extend(b"\n");
+    std::fs::write(&file, changed).unwrap();
+    h.app.invoke(&h.ctx, &again);
+    assert!(h.app.form.is_none(), "not from a changed file");
+    // gone, it is not offered
+    std::fs::remove_file(&file).unwrap();
+    assert!(!h.app.available(&again));
+}
