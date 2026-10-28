@@ -2,6 +2,7 @@
 //! Craft acts on are here: what the views draw when it starts, and the recent files kept.
 
 use crate::display::Display;
+use eframe::egui;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -20,6 +21,68 @@ pub struct View3d {
     #[schemars(title = "Use shaded background")]
     pub shaded_background: bool,
     pub light_follows_viewer: bool,
+    /// What fills the 3D view behind the material, when the shaded background is on
+    #[serde(default)]
+    #[schemars(title = "Shaded background style")]
+    pub background_style: BackgroundStyle,
+    /// Solid, and the top of a gradient
+    #[serde(default = "background_top")]
+    #[schemars(extend("x-kind" = "colour"))]
+    pub background_color: [u8; 3],
+    /// The bottom of a gradient
+    #[serde(default = "background_bottom")]
+    #[schemars(extend("x-kind" = "colour"))]
+    pub gradient_background_color: [u8; 3],
+    /// The picture behind an Image background
+    #[serde(default)]
+    pub image_file_path: String,
+    /// Smooths the edges of everything drawn (from the next start)
+    #[serde(default)]
+    #[schemars(title = "Anti-aliasing mode")]
+    pub anti_aliasing: AntiAliasing,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BackgroundStyle {
+    Solid,
+    #[default]
+    Gradient,
+    Image,
+}
+
+/// Multisampling: Aspire offers 2x, 4x and 6x too.
+// ponytail: 4x is the only count every graphics card takes; others can stop the window opening
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AntiAliasing {
+    #[default]
+    None,
+    #[schemars(title = "4X")]
+    X4,
+}
+
+impl AntiAliasing {
+    /// Samples a pixel for the window's renderer.
+    pub fn samples(self) -> u16 {
+        match self {
+            Self::None => 0,
+            Self::X4 => 4,
+        }
+    }
+}
+
+/// The light theme's own background, so the view looks as it did before these settings.
+fn background_top() -> [u8; 3] {
+    rgb(egui::Visuals::light().faint_bg_color)
+}
+
+fn background_bottom() -> [u8; 3] {
+    rgb(egui::Visuals::light().extreme_bg_color)
+}
+
+fn rgb(c: egui::Color32) -> [u8; 3] {
+    [c.r(), c.g(), c.b()]
 }
 
 /// Aspire's Toolpath Settings.
@@ -34,6 +97,105 @@ pub struct ToolpathSettings {
     /// Draw them as the area the tool covers
     #[schemars(title = "Solid 2D previews")]
     pub solid_2d_previews: bool,
+    #[serde(default = "solid_colour")]
+    #[schemars(title = "2D solid preview color", extend("x-kind" = "colour"))]
+    pub solid_2d_preview_color: [u8; 3],
+    /// Saved toolpaths leave out cutting points this close to the line past them, for
+    /// shorter files; 0 keeps every point. Profile, pocket and other 2D toolpaths
+    #[serde(default = "tolerance")]
+    #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    pub tolerance_2d: f64,
+    /// The same for 3D roughing, finishing, texture, moulding and the like
+    #[serde(default = "tolerance")]
+    #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    pub tolerance_3d: f64,
+    /// The same for V-carving, prism, inlay and chamfer toolpaths
+    #[serde(default = "tolerance")]
+    #[schemars(title = "VCarve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    pub tolerance_vcarve: f64,
+}
+
+fn solid_colour() -> [u8; 3] {
+    Display::default().solid_colour
+}
+
+/// A ten-thousandth of an inch.
+// ponytail: Aspire's defaults are not known
+fn tolerance() -> f64 {
+    0.002_54
+}
+
+impl ToolpathSettings {
+    /// The tolerance for a toolpath of this family.
+    pub fn tolerance(&self, family: cut_craft_core::simplify::Family) -> f64 {
+        use cut_craft_core::simplify::Family;
+        match family {
+            Family::TwoD => self.tolerance_2d,
+            Family::ThreeD => self.tolerance_3d,
+            Family::VCarve => self.tolerance_vcarve,
+        }
+    }
+
+    /// `doc` with each toolpath's cuts thinned to its tolerance, ready to save.
+    pub fn thinned(
+        &self,
+        doc: &cut_craft_core::document::Document,
+    ) -> cut_craft_core::document::Document {
+        use cut_craft_core::simplify::{family, simplify};
+        let mut doc = doc.clone();
+        for toolpath in doc.toolpaths.values_mut() {
+            // a laser's power goes move by move, so its moves stay as they are
+            if toolpath.power.is_empty() {
+                toolpath.moves = simplify(&toolpath.moves, self.tolerance(family(toolpath)));
+            }
+        }
+        doc
+    }
+}
+
+/// Aspire's Confirmation Choices: what happens when something looks wrong.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Confirmations {
+    /// Crossing vectors chosen for a V-carve or pocket toolpath
+    #[serde(default)]
+    #[schemars(title = "Toolpath vector intersections check")]
+    pub toolpath_intersections: IntersectionCheck,
+    /// Crossing vectors chosen for a radiused (round-cornered) offset
+    #[serde(default)]
+    #[schemars(title = "Radiused offset intersections check")]
+    pub radiused_offset_intersections: IntersectionCheck,
+    /// Crossing vectors chosen for a sharp-cornered offset
+    #[serde(default)]
+    #[schemars(title = "Sharp offset intersections check")]
+    pub sharp_offset_intersections: IntersectionCheck,
+    /// Problems the checks before cutting find when saving toolpaths (not one of Aspire's)
+    #[serde(default)]
+    #[schemars(title = "Checks before cutting")]
+    pub cutting_checks: CuttingChecks,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IntersectionCheck {
+    /// Ask whether to go on, open the Vector Validator, or stop
+    #[default]
+    Ask,
+    /// Select the crossing vectors in the Vector Validator instead
+    OpenVectorValidator,
+    /// Go on without checking
+    #[schemars(title = "Don't check")]
+    DontCheck,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CuttingChecks {
+    /// List the problems and ask before saving
+    #[default]
+    Ask,
+    /// Save, and say what was found in the status bar
+    #[schemars(title = "Save and tell")]
+    SaveAndTell,
 }
 
 /// Aspire's General Settings.
@@ -57,6 +219,21 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Use Wayland directly (no file drag and drop)")]
     pub wayland_native: bool,
+    /// The folder file dialogs open in
+    #[serde(default)]
+    #[schemars(title = "File dialog default")]
+    pub file_dialog_default: FileDialogDefault,
+}
+
+// ponytail: Aspire's third choice, a folder remembered for each kind of operation, is left out
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum FileDialogDefault {
+    /// The desktop's own choice, usually the last folder used
+    #[default]
+    Global,
+    /// The open job's folder
+    Job,
 }
 
 /// Where bug reports go unless the options say otherwise: Cut Craft's own repository.
@@ -77,6 +254,9 @@ pub struct Options {
     pub toolpaths: ToolpathSettings,
     #[schemars(title = "General Settings", extend("x-section" = true))]
     pub general: General,
+    #[serde(default)]
+    #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
+    pub confirmations: Confirmations,
 }
 
 impl Default for Options {
@@ -90,11 +270,20 @@ impl Default for Options {
                 color_shaded_view: d.colour_shaded,
                 shaded_background: d.shaded_background,
                 light_follows_viewer: d.light_follows,
+                background_style: BackgroundStyle::default(),
+                background_color: background_top(),
+                gradient_background_color: background_bottom(),
+                image_file_path: String::new(),
+                anti_aliasing: AntiAliasing::default(),
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,
                 create_2d_previews: d.previews_2d,
                 solid_2d_previews: d.solid_previews,
+                solid_2d_preview_color: d.solid_colour,
+                tolerance_2d: tolerance(),
+                tolerance_3d: tolerance(),
+                tolerance_vcarve: tolerance(),
             },
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
@@ -102,7 +291,9 @@ impl Default for Options {
                 preload_icons: on(),
                 bug_report_repo: bug_repo(),
                 wayland_native: false,
+                file_dialog_default: FileDialogDefault::default(),
             },
+            confirmations: Confirmations::default(),
         }
     }
 }
@@ -136,6 +327,7 @@ impl Options {
         d.auto_open_3d = t.auto_open_3d_view;
         d.previews_2d = t.create_2d_previews;
         d.solid_previews = t.solid_2d_previews;
+        d.solid_colour = t.solid_2d_preview_color;
     }
 
     /// How many recent files are kept.
@@ -164,9 +356,11 @@ mod tests {
         let mut o = Options::default();
         o.view_3d.draw_origin = false;
         o.toolpaths.solid_2d_previews = true;
+        o.toolpaths.solid_2d_preview_color = [1, 2, 3];
         let mut d = Display::default();
         o.apply_to(&mut d);
         assert!(!d.origin && d.solid_previews);
+        assert_eq!(d.solid_colour, [1, 2, 3]);
     }
 
     #[test]
@@ -189,7 +383,55 @@ mod tests {
             .collect();
         assert_eq!(
             sections,
-            ["3D View Settings", "Toolpath Settings", "General Settings"]
+            [
+                "3D View Settings",
+                "Toolpath Settings",
+                "General Settings",
+                "Confirmation Choices"
+            ]
+        );
+    }
+
+    #[test]
+    fn saving_thins_each_toolpath_to_its_familys_tolerance() {
+        use cut_craft_core::glam::DVec3;
+        use cut_craft_core::toolpath::{Move, MoveKind, Toolpath};
+        let line = |strategy: &str| Toolpath {
+            name: strategy.into(),
+            strategy: strategy.into(),
+            params: serde_json::Value::Null,
+            tool: cut_craft_core::toolpath::Tool::default(),
+            vectors: vec![],
+            moves: (0..=10)
+                .map(|i| Move {
+                    kind: MoveKind::Cut,
+                    to: DVec3::new(f64::from(i), 0.0, -1.0),
+                })
+                .collect(),
+            visible: true,
+            power: vec![],
+        };
+        let mut doc = cut_craft_core::document::Document::default();
+        doc.toolpaths.insert(
+            cut_craft_core::document::EntityId(1),
+            line("profile_toolpath"),
+        );
+        doc.toolpaths.insert(
+            cut_craft_core::document::EntityId(2),
+            line("3d_finishing_toolpath"),
+        );
+        let mut t = Options::default().toolpaths;
+        t.tolerance_3d = 0.0;
+        let thinned = t.thinned(&doc);
+        let count = |id| {
+            thinned.toolpaths[&cut_craft_core::document::EntityId(id)]
+                .moves
+                .len()
+        };
+        assert_eq!(
+            (count(1), count(2)),
+            (2, 11),
+            "2D thinned, 3D kept whole at 0"
         );
     }
 }

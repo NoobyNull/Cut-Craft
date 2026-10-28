@@ -146,7 +146,13 @@ say "not implemented yet".
 - Number fields take sums (Calculation Edit Boxes): + - * / ^, brackets, W H T, P, I, M, '.
 - Sheets keep their own vectors, components, pictures and toolpaths; activating one swaps them.
 - Edit ▸ Options (3D view, toolpath and general settings, in options.json) and Edit ▸
-  Document Variables (used in sums as {name}).
+  Document Variables (used in sums as {name}). Options also has the 3D view's background
+  (solid, gradient or picture, with its colours) and anti-aliasing (4x, from the next start);
+  the 2D, 3D and V-carve toolpath tolerances (saved toolpaths drop cutting points within them,
+  Douglas–Peucker); the 2D solid preview colour; the file dialogs' folder (the desktop's or the
+  job's); and Confirmation Choices: crossing vectors for pocket and V-carve toolpaths and for
+  radiused and sharp offsets (ask, open the Vector Validator, or don't check), and whether the
+  checks before cutting ask before saving.
 - Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
   (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
 - Double-sided jobs (Job Setup's Double Sided, Flip Direction Between Sides): each side keeps
@@ -397,7 +403,8 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: Import Toolpaths.
-- Edit: Options beyond the 3D view, toolpath and recent-file settings;
+- Edit: Options' window layout, software renderer, shading, sheet and toolpath-list
+  settings, fonts, help and the folder kept for each kind of file;
   document variables linked to fields (a sum is worked out once, when entered).
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.

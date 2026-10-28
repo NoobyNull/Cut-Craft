@@ -702,8 +702,16 @@ fn job_dialog() -> rfd::FileDialog {
 /// runs them and waits for an answer.
 fn file_dialog() -> rfd::FileDialog {
     on_the_desktop();
-    rfd::FileDialog::new()
+    let dialog = rfd::FileDialog::new();
+    match DIALOG_FOLDER.lock().ok().and_then(|f| f.clone()) {
+        Some(folder) => dialog.set_directory(folder),
+        None => dialog,
+    }
 }
+
+/// Where file dialogs open (Options ▸ File dialog default), kept up to date each frame; the
+/// dialogs are opened from places that do not have the app to hand.
+static DIALOG_FOLDER: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
 
 /// Every window or program the app puts on the desktop passes here; in tests it fails.
 fn on_the_desktop() {
@@ -970,6 +978,13 @@ fn file_name(path: &std::path::Path) -> String {
 
 impl eframe::App for CutCraftApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let job_folder = (self.options.general.file_dialog_default
+            == crate::options::FileDialogDefault::Job)
+            .then(|| self.session.path.as_deref()?.parent().map(Into::into))
+            .flatten();
+        if let Ok(mut folder) = DIALOG_FOLDER.lock() {
+            *folder = job_folder;
+        }
         self.pass(ui);
     }
 }
@@ -980,7 +995,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     // winit 0.29 delivered dropped files only on X11; 0.30 should on Wayland too, but until that
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
-    let wayland = crate::options::Options::load().general.wayland_native;
+    let settings = crate::options::Options::load();
+    let wayland = settings.general.wayland_native;
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {
@@ -1002,6 +1018,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         .with_app_id(APP_ID),
         persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
+        multisampling: settings.view_3d.anti_aliasing.samples(),
         ..Default::default()
     };
     // the pictures' run keeps its egui state apart from the user's

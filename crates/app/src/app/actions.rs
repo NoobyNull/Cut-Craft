@@ -12,6 +12,7 @@ use super::{
     file_dialog, file_name, files, form, gui, job_dialog, menu_items, on_the_desktop, rest_section,
     shortcut, side_tabs, summary_table, template_dialog, toolpath_template_dialog, view3d,
 };
+use crate::options::{CuttingChecks, IntersectionCheck};
 
 impl CutCraftApp {
     pub(super) fn new() -> Self {
@@ -516,9 +517,11 @@ impl CutCraftApp {
                     .values()
                     .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
                     .collect();
-                if !problems.is_empty() && !Self::save_anyway(&problems) {
+                let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+                if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
                     return self.status.set_message("Toolpaths not saved");
                 }
+                let thinned = self.options.toolpaths.thinned(&self.doc);
                 let extension = post.extension.clone();
                 let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
                 if let Some(path) = dialog.save_file() {
@@ -535,20 +538,23 @@ impl CutCraftApp {
                                 files::save_through(
                                     &post,
                                     &self.slots(),
-                                    &tiling.tiled(&self.doc, tile),
+                                    &tiling.tiled(&thinned, tile),
                                     &named,
                                     job,
                                 )
                             })
                         }
-                        None => files::save_through(&post, &self.slots(), &self.doc, &path, job),
+                        None => files::save_through(&post, &self.slots(), &thinned, &path, job),
                     };
-                    self.status.set_message(
-                        &result.map_or_else(
-                            |e| e,
-                            |()| format!("Saved toolpaths to {}", path.display()),
-                        ),
-                    );
+                    let told = if problems.is_empty() || ask {
+                        String::new()
+                    } else {
+                        format!(" (check before cutting: {})", problems.join("; "))
+                    };
+                    self.status.set_message(&result.map_or_else(
+                        |e| e,
+                        |()| format!("Saved toolpaths to {}{told}", path.display()),
+                    ));
                 }
             }
             _ => unreachable!("not a toolpath action: {id}"),
@@ -1011,6 +1017,82 @@ impl CutCraftApp {
     }
 
     /// Asks whether to save toolpaths the checks before cutting found `problems` in.
+    /// Crossing vectors chosen for a V-carve or pocket toolpath, or for an offset: what the
+    /// Options' confirmation choices say to do. An error stops the command.
+    fn crossings_allowed(&mut self, id: &str, params: &Value) -> Result<(), String> {
+        let c = &self.options.confirmations;
+        let check = match id {
+            "pocket_toolpath" | "vcarve_engrave_toolpath" | "vcarve_inlay_toolpath" => {
+                c.toolpath_intersections
+            }
+            "offset_vectors" if params["corners"] == "sharp" => c.sharp_offset_intersections,
+            "offset_vectors" => c.radiused_offset_intersections,
+            _ => return Ok(()),
+        };
+        if check == IntersectionCheck::DontCheck || self.doc.selection.is_empty() {
+            return Ok(());
+        }
+        let only_crossings = cmd_vector_validator::Params {
+            overlapping: false,
+            intersections: true,
+            zero_length_spans: false,
+            open: false,
+            ..cmd_vector_validator::Params::default()
+        };
+        // the validator fails when it finds nothing
+        let Ok(crossing) = <cmd_vector_validator::VectorValidator as cut_craft_core::Command>::run(
+            &self.doc,
+            &only_crossings,
+        ) else {
+            return Ok(());
+        };
+        let validator = match check {
+            IntersectionCheck::Ask => match Self::crossing_choice() {
+                Some(validator) => validator,
+                None => return Ok(()),
+            },
+            IntersectionCheck::OpenVectorValidator => true,
+            IntersectionCheck::DontCheck => unreachable!("returned above"),
+        };
+        if validator {
+            self.history
+                .apply(&mut self.doc, crossing)
+                .map_err(|e| e.to_string())?;
+            self.start_command("vector_validator");
+            return Err(
+                "The selected vectors cross: they are selected for the Vector Validator".into(),
+            );
+        }
+        Err("Stopped: the selected vectors cross".into())
+    }
+
+    /// Asks what to do about crossing vectors: `None` to go on, `Some(true)` for the Vector
+    /// Validator, `Some(false)` to stop.
+    fn crossing_choice() -> Option<bool> {
+        on_the_desktop();
+        let (go_on, validator) = ("Continue", "Vector Validator");
+        let answer = rfd::MessageDialog::new()
+            .set_title(APP_NAME)
+            .set_level(rfd::MessageLevel::Warning)
+            .set_description(
+                "Some of the selected vectors cross themselves or each other, which can spoil \
+                 the result. Continue anyway, or select them in the Vector Validator?",
+            )
+            .set_buttons(rfd::MessageButtons::YesNoCancelCustom(
+                go_on.into(),
+                validator.into(),
+                "Cancel".into(),
+            ))
+            .show();
+        match answer {
+            rfd::MessageDialogResult::Custom(choice) if choice == go_on => None,
+            rfd::MessageDialogResult::Custom(choice) => Some(choice == validator),
+            rfd::MessageDialogResult::Yes => None,
+            rfd::MessageDialogResult::No => Some(true),
+            _ => Some(false),
+        }
+    }
+
     fn save_anyway(problems: &[String]) -> bool {
         on_the_desktop();
         let answer = rfd::MessageDialog::new()
@@ -1321,6 +1403,7 @@ impl CutCraftApp {
 
     /// Runs a command and records it for undo.
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
+        self.crossings_allowed(id, params)?;
         let cmd = self
             .registry
             .get(id)

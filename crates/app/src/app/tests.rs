@@ -378,6 +378,12 @@ impl Harness {
         h.app.display.animate_preview = false;
         // no browser opens from a test
         h.app.reporter.browser = false;
+        // nor a question about crossing vectors: the controls are clicked with whatever is
+        // selected
+        let checks = &mut h.app.options.confirmations;
+        checks.toolpath_intersections = crate::options::IntersectionCheck::DontCheck;
+        checks.radiused_offset_intersections = crate::options::IntersectionCheck::DontCheck;
+        checks.sharp_offset_intersections = crate::options::IntersectionCheck::DontCheck;
         h.frame(vec![]);
         h.frame(vec![]);
         h
@@ -2646,4 +2652,40 @@ fn ctrl_x_c_and_v_arrive_as_clipboard_events_and_work_across_windows() {
     h.frame(vec![Event::Cut]);
     assert_eq!(h.app.doc.vectors.len(), 1);
     assert_eq!(h.app.clipboard, circle);
+}
+
+#[test]
+fn crossing_vectors_go_to_the_vector_validator_or_on_as_options_say() {
+    use crate::options::IntersectionCheck;
+    use cut_craft_core::geometry::{Path, Point};
+    let mut h = Harness::new();
+    let bow_tie = Path::polyline(
+        &[
+            Point::new(10.0, 10.0),
+            Point::new(50.0, 50.0),
+            Point::new(50.0, 10.0),
+            Point::new(10.0, 50.0),
+        ],
+        true,
+    );
+    let mut c = Change::builder(&h.app.doc);
+    let id = c.add(bow_tie);
+    c.select(vec![id]);
+    let change = c.finish();
+    h.app.history.apply(&mut h.app.doc, change).unwrap();
+    let params = h
+        .app
+        .registry
+        .get("pocket_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    h.app.options.confirmations.toolpath_intersections = IntersectionCheck::OpenVectorValidator;
+    let why = h.app.apply("pocket_toolpath", &params).unwrap_err();
+    assert!(why.contains("cross"), "{why}");
+    assert!(h.app.doc.toolpaths.is_empty());
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("vector_validator"));
+    assert!(h.app.doc.selection.contains(&id));
+    h.app.options.confirmations.toolpath_intersections = IntersectionCheck::DontCheck;
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    assert_eq!(h.app.doc.toolpaths.len(), 1);
 }

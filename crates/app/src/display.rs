@@ -29,6 +29,8 @@ pub struct Display {
     pub guides: bool,
     /// Previews play the tool cutting (Aspire's Animate preview) rather than appearing cut.
     pub animate_preview: bool,
+    /// What solid 2D previews are drawn in ([r, g, b]).
+    pub solid_colour: [u8; 3],
 }
 
 impl Default for Display {
@@ -52,6 +54,11 @@ impl Default for Display {
             auto_wrapping: true,
             guides: true,
             animate_preview: true,
+            // the theme's warning colour, as the line previews are
+            solid_colour: {
+                let c = eframe::egui::Visuals::light().warn_fg_color;
+                [c.r(), c.g(), c.b()]
+            },
         }
     }
 }

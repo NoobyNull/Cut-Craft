@@ -841,6 +841,33 @@ impl CutCraftApp {
             .map(|(&id, _)| id)
     }
 
+    /// Behind the 3D view: Options' solid colour, gradient or picture (the gradient when the
+    /// picture cannot be read).
+    fn paint_background(&self, ui: &egui::Ui, painter: &egui::Painter, area: egui::Rect) {
+        use crate::options::BackgroundStyle;
+        let v = &self.options.view_3d;
+        let colour = |[r, g, b]: [u8; 3]| egui::Color32::from_rgb(r, g, b);
+        let (top, bottom) = (
+            colour(v.background_color),
+            colour(v.gradient_background_color),
+        );
+        match v.background_style {
+            BackgroundStyle::Solid => {
+                painter.rect_filled(area, 0.0, top);
+            }
+            BackgroundStyle::Image if !v.image_file_path.is_empty() => {
+                painter.add(view3d::background(area, top, bottom));
+                let uri = format!("file://{}", v.image_file_path);
+                egui::Image::new(uri)
+                    .fit_to_exact_size(area.size())
+                    .paint_at(ui, area);
+            }
+            _ => {
+                painter.add(view3d::background(area, top, bottom));
+            }
+        }
+    }
+
     /// The 3D view's picture: background, block and the overlays the View menu turns on.
     pub(super) fn paint_3d(&mut self, ui: &egui::Ui, area: egui::Rect) {
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
@@ -860,7 +887,7 @@ impl CutCraftApp {
         let (orbit, framing) = (self.orbit, self.framing);
         let painter = ui.painter_at(area);
         if shown.shaded_background {
-            painter.add(view3d::background(area, ui.visuals()));
+            self.paint_background(ui, &painter, area);
         }
         let vectors: Vec<Vec<cut_craft_core::geometry::Point>> = if shown.vectors_3d {
             self.doc

@@ -359,10 +359,8 @@ pub fn plan_size(material: &Material) -> DVec2 {
     DVec2::new(material.columns as f64, material.rows as f64) * material.cell
 }
 
-/// A background shading from the theme's faint colour at the top to its darkest at the
-/// bottom, behind the block.
-pub fn background(area: Rect, visuals: &eframe::egui::Visuals) -> Mesh {
-    let (top, bottom) = (visuals.faint_bg_color, visuals.extreme_bg_color);
+/// A background shading from `top` to `bottom`, behind the block.
+pub fn background(area: Rect, top: Color32, bottom: Color32) -> Mesh {
     let mut mesh = Mesh::default();
     for (at, colour) in [
         (area.left_top(), top),

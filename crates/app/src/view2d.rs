@@ -422,6 +422,9 @@ impl Canvas {
         {
             let colour = if highlighted == Some(*id) {
                 selected.color
+            } else if display.solid_previews {
+                let [r, g, b] = display.solid_colour;
+                egui::Color32::from_rgb(r, g, b)
             } else {
                 visuals.warn_fg_color
             };
