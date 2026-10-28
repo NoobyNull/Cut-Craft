@@ -207,6 +207,17 @@ say "not implemented yet".
   clicking the vectors; climb or conventional and an allowance on Profile and Pocket; Z Level
   profile pass, reverse step and (3D Raster) avoid machined areas; neighbouring 3D lines are
   joined without lifting, offset finishing rings lifted by a stepover retract.
+- Profile: nested shapes cut on the right side, inner before outer; cut order (selection
+  order, left to right, bottom to top, grid, shortest path; the shortest of those ticked wins);
+  start points (keep, optimise, nearest a point of the bounding box); sharp external corners.
+- Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
+- 3D Finishing takes a list of tools and makes a toolpath for each (rest machining).
+- Posts: G2/G3 arcs (and helices) fitted to curves when the post has arc blocks, Cut Craft's
+  own FluidNC posts included; Plunge (Z2) and the Home / Start Position in Job Setup.
+- Tool Database: cutting data per material (imported from `.vtdb` and Fusion presets), an
+  active material, rate units per tool, thread mills as a tool type.
+- 3D view: ViewCube (faces, edges, corners), perspective, tilting underneath, overlays hidden
+  behind the model.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
@@ -418,14 +429,10 @@ say "not implemented yet".
   window tiling and cascade.
 - Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.
 - Drawing tab: Transform, Trim Objects.
-- 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
-  not hidden behind it.
-- Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
-  (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).
+- Feeds and speeds: cutting data per machine (it is per material now), Lua-scripted posts;
+  toolpath forms still show feeds in mm/min or in/min, not the tool's own units.
 - Double-sided jobs: Zero off same side is kept but not yet used by the posts; the 3D
   view shows one side.
-- 3D Finishing's several-tools form: one toolpath per tool made in one go (today each
-  rest-machining toolpath is made on its own, naming the tools that ran before it).
 
 **Known problems and stand-ins.**
 - Split Component takes closed vectors only (Aspire also extends open ones to the edges).
@@ -440,12 +447,11 @@ say "not implemented yet".
   spacing commands do not yet use it).
 - Groups hold vectors only and do not nest.
 - Display settings (Toolpath Drawing, quality, View toggles) last only for the session.
-- Thread mills and lasers are not tool types in the database: their tooth offset and power
-  are on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
+- Lasers are not a tool type in the database: their power is on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code
   reference to the fluting strings was found in Aspire.exe), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule.
-- Not done inside strategies: Project onto 3D Model, Fill Regionally, Merge By Part, the
+- Not done inside strategies: Fill Regionally, Merge By Part, the
   extra clearance tools, laser passes lowering the focus.
 - The strategies and menu items added on 2026-10-24 have tests but have not been tried by
   hand in the running app.

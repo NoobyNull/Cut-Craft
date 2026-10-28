@@ -6,7 +6,9 @@ use cut_craft_core::document::Document;
 use cut_craft_core::entry::{Direction, Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Move, Tool, cut_points, hatch_lines, made_by, pass_depths};
+use cut_craft_core::toolpath::{
+    Move, Tool, cut_points, hatch_lines, made_by, pass_depths, project_onto_model,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -67,6 +69,11 @@ pub struct Params {
     #[serde(default = "ramp_distance")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub ramp_distance: f64,
+    /// Drop the finished toolpath onto the 3D model: its depth below the material surface
+    /// becomes depth below the model's surface, going no lower than the bottom of the material
+    #[serde(default)]
+    #[schemars(title = "Project toolpath onto 3D Model")]
+    pub project_onto_model: bool,
 }
 
 fn ramp_distance() -> f64 {
@@ -86,6 +93,7 @@ impl Default for Params {
             profile_pass: ProfilePass::Last,
             ramp_plunge_moves: false,
             ramp_distance: ramp_distance(),
+            project_onto_model: false,
         }
     }
 }
@@ -177,22 +185,7 @@ impl Command for PocketToolpath {
                     if p.profile_pass == ProfilePass::First {
                         moves.extend(cut(&edge, z, above));
                     }
-                    let lines: Vec<Path> = hatch_lines(&edge, step, p.raster_angle)
-                        .into_iter()
-                        .enumerate()
-                        .flat_map(|(row, spans)| {
-                            let mut spans: Vec<Path> = spans
-                                .into_iter()
-                                .map(|(a, b)| Path::polyline(&[a, b], false))
-                                .collect();
-                            // every other row back the other way
-                            if row % 2 == 1 {
-                                spans.reverse();
-                                spans = spans.iter().map(Path::reversed).collect();
-                            }
-                            spans
-                        })
-                        .collect();
+                    let lines = raster(&edge, step, p.raster_angle);
                     moves.extend(cut(&lines, z, above));
                     if p.profile_pass == ProfilePass::Last {
                         moves.extend(cut(&edge, z, above));
@@ -200,6 +193,9 @@ impl Command for PocketToolpath {
                 }
             }
             above = z;
+        }
+        if p.project_onto_model {
+            moves = project_onto_model(doc, &p.tool, &moves)?;
         }
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
@@ -211,6 +207,26 @@ impl Command for PocketToolpath {
         ));
         Ok(c.finish())
     }
+}
+
+/// Raster lines `step` apart at `angle` across the region inside `edge`, every other one
+/// back the other way.
+fn raster(edge: &[Path], step: f64, angle: f64) -> Vec<Path> {
+    hatch_lines(edge, step, angle)
+        .into_iter()
+        .enumerate()
+        .flat_map(|(row, spans)| {
+            let mut spans: Vec<Path> = spans
+                .into_iter()
+                .map(|(a, b)| Path::polyline(&[a, b], false))
+                .collect();
+            if row % 2 == 1 {
+                spans.reverse();
+                spans = spans.iter().map(Path::reversed).collect();
+            }
+            spans
+        })
+        .collect()
 }
 
 #[cfg(test)]

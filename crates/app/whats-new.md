@@ -1,3 +1,4 @@
+- Arcs in G-code, cut order and sharp corners, per-material feeds, a 3D ViewCube
 - Tabs (clickable), ramps, leads, climb; raster pockets; 3D boundaries, Z level; checks
 - A new set of icons, drawn for Cut Craft; the 3D tools show shaded solids
 - The Tool Database, Machine Configuration and the other dialogs open in their own windows
@@ -5,4 +6,3 @@
 - Unsaved work is kept for recovery after a crash; saves never damage the old file
 - Auto Layout Text: words wrapped and sized to fill a selected shape
 - Ctrl + X / C / V work, and copy through the system clipboard between windows
-- Job files pack their models, pictures and toolpaths; older jobs still open

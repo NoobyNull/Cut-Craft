@@ -9,7 +9,7 @@ use cut_craft_core::geometry::{
 };
 use cut_craft_core::params::Anchor;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Tool, cut_points, made_by, pass_depths};
+use cut_craft_core::toolpath::{Tool, cut_points, made_by, pass_depths, project_onto_model};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -135,6 +135,11 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Sharp External Corners")]
     pub sharp_corners: bool,
+    /// Drop the finished toolpath onto the 3D model: its depth below the material surface
+    /// becomes depth below the model's surface, going no lower than the bottom of the material
+    #[serde(default)]
+    #[schemars(title = "Project toolpath onto 3D Model")]
+    pub project_onto_model: bool,
 }
 
 fn top_left() -> Anchor {
@@ -157,6 +162,7 @@ impl Default for Params {
             tabs: Tabs::None,
             tab: TabSettings::default(),
             tab_points: vec![],
+            project_onto_model: false,
             order: Order::default(),
             start_at: StartAt::Optimize,
             start_near: top_left(),
@@ -237,7 +243,7 @@ impl Command for ProfileToolpath {
                 "click on the vectors in the 2D view to place the tabs".into(),
             ));
         }
-        let moves = lines
+        let mut moves: Vec<_> = lines
             .iter()
             .enumerate()
             .flat_map(|(i, cut)| {
@@ -273,6 +279,9 @@ impl Command for ProfileToolpath {
                 )
             })
             .collect();
+        if p.project_onto_model {
+            moves = project_onto_model(doc, &p.tool, &moves)?;
+        }
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
             p,
@@ -1109,6 +1118,37 @@ mod tests {
         assert!(
             furthest > 3.0 && furthest <= MITRE_REACH * 3.0 + 1e-3,
             "{furthest}"
+        );
+    }
+
+    #[test]
+    fn projected_onto_the_model_it_follows_the_dome() {
+        let mut doc = cut_craft_core::testing::domed();
+        let mut c = Change::builder(&doc);
+        let id = c.add(square(14.0, 14.0, 12.0));
+        c.select(vec![id]);
+        doc.apply(&c.finish()).unwrap();
+        let p = Params {
+            side: Side::On,
+            depth: 1.0,
+            project_onto_model: true,
+            ..Params::default()
+        };
+        doc.apply(&ProfileToolpath::run(&doc, &p).unwrap()).unwrap();
+        let tp = doc.toolpaths.values().next().unwrap();
+        // the square's corners lie on the dome's slope: lower than its middles
+        let at = |x: f64, y: f64| {
+            tp.moves
+                .iter()
+                .filter(|m| m.kind == MoveKind::Cut)
+                .find(|m| m.to.truncate().distance(Point::new(x, y)) < 0.2)
+                .map(|m| m.to.z)
+                .unwrap()
+        };
+        assert!(at(14.0, 14.0) < at(20.0, 14.0) - 0.5);
+        assert!(
+            at(20.0, 14.0) < -1.0,
+            "a millimetre below the dome's surface"
         );
     }
 }

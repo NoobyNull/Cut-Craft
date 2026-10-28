@@ -218,7 +218,7 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **3D Roughing:** **Machining Limit Boundary** Model (all components' outline) / Material / Selected Vector(s) / Selected Level, plus a **Boundary Offset** (the tool tip, not its side, stays inside); Machining Allowance; **Z Level** (pocket-like levels round the model, Profile First / Last / None, Order **Level by level** or **Depth-first**: each separate region all the way down before the next) or **3D Raster** (over the whole model; more even skin, slower when deep); Raster direction along X or Y, Reverse step direction, Avoid machined areas; Ramp Plunge Moves.
 - **3D Finishing:** the same Machining Limit Boundary and offset; **Offset** or **Raster** (Raster Angle 0–90°) area strategy; Stepover Retract (offset only).
 - **[unk]** Defaults (tab size and count, ramp distance and angle, lead length, angle and radius) are not in the dialogs; the settings keys (`rampingRampingDistance`, `rampingRampingAngle`, `_ppdTabLength`, `_mcldLeadLength`) are in `Aspire.exe` without values. Cut Craft uses a 10 mm ramp at 10° and 5 mm leads at 45° or radius 5. Tabs default to a rule of thumb from the user: as thick as the tool's pass depth (at most half the cut depth) and twice as long as thick (a 1/4" bit in 1/4" passes: 1/2" × 1/4"), spaced automatically about every 150 mm, at least three a path and no more than a third of the path in tabs.
-- **[inf]** Cut Craft: tab length is the material left, so the toolpath lifts over the length plus the tool's diameter on the centre line. Tabs go evenly from half a spacing in, from the start point, or moved up to half a spacing to a stretch turning under 5° (avoid corners); with Placed spacing, a click on a selected vector in the 2D view adds a tab there and a click on one removes it (the points are kept in the toolpath's settings, each tab on the path nearest it). Leads come from the waste side (outside an outside profile, inside an inside one, left of an open or On path) and ramps then run down the lead; Pocket's ramps and 3D Roughing's are zig zags from the level above. Climb runs clockwise round a part and anticlockwise round a hole or pocket (a spindle turning clockwise). Z Level's profile pass follows the traced edge of each level's area; Avoid Machined Areas leaves out points above the level before (keeping the move up to them); Reverse step direction reverses the order of the lines. Neighbouring lines and rings (on one level, for roughing) are joined at depth when the move between them stays out of the model, lifted by the Stepover Retract between offset finishing rings. Selected Level takes a level by name. Not yet: tabs dragged along a vector, Aspire's order options (selection order, left to right, grid), sharp corners.
+- **[inf]** Cut Craft: tab length is the material left, so the toolpath lifts over the length plus the tool's diameter on the centre line. Tabs go evenly from half a spacing in, from the start point, or moved up to half a spacing to a stretch turning under 5° (avoid corners); with Placed spacing, a click on a selected vector in the 2D view adds a tab there and a click on one removes it (the points are kept in the toolpath's settings, each tab on the path nearest it). Leads come from the waste side (outside an outside profile, inside an inside one, left of an open or On path) and ramps then run down the lead; Pocket's ramps and 3D Roughing's are zig zags from the level above. Climb runs clockwise round a part and anticlockwise round a hole or pocket (a spindle turning clockwise). Z Level's profile pass follows the traced edge of each level's area; Avoid Machined Areas leaves out points above the level before (keeping the move up to them); Reverse step direction reverses the order of the lines. Neighbouring lines and rings (on one level, for roughing) are joined at depth when the move between them stays out of the model, lifted by the Stepover Retract between offset finishing rings. Selected Level takes a level by name. Not yet: tabs dragged along a vector; Profile's order, start points and sharp corners are below (2026-10-27).
 
 ### 3D Finishing: several tools (rest machining) [obs] (help: Finish Machining Toolpath)
 - Any number of tools can be chosen, in the order they will run. The first removes as much as it can; each later one removes only material the earlier ones left ("previously unmachined areas"). An allowance may be left for the last tool.
@@ -512,6 +512,229 @@ Horizontal Stretch drop-downs.
 - `re/crv3d.py` extracts the contours per layer; `fmt-import-crv3d` imports them.
   **[unk]** the remaining fields of layers and contours (colours, visibility, groups), the
   toolpath and sheet streams, and `.v3m`.
+
+## Toolpath, post, tool and 3D view work of 2026-10-27 [obs] / [inf]
+
+What was found, and what Cut Craft does where Aspire's behaviour is not known.
+
+### Arc output in posts; Plunge (Z2) and Home
+
+#### Aspire behaviour found (sources)
+- Material Setup help (`re/extracted/help-12.5/material-setup-flat.txt`, "Rapid Z Gaps above
+  Material"): Clearance (Z1) is the safe height for rapid moves; Plunge (Z2) is a smaller gap
+  the tool rapids down to before changing to the plunge rate; by default Z2 equals Z1 (no rapid
+  plunges). Home / Start Position is "the absolute position that the tool will start moving
+  from" and can be returned to at the end.
+- Material Setup dialog (`re/extracted/dialogs-12.5/dialog_205.txt`): the home group is X, Y and
+  "Z Gap above Material", so home Z is a gap above the material, not a machine Z.
+- Post help (`post-processor-editing.txt`): the arc variables and blocks above;
+  `MIN_ARC_RADIUS` turns smaller arcs into a straight line, `MAX_ARC_RADIUS` polygonizes larger
+  ones (example value 1000.0); the help says the arc angle can be multiplied by 57.2957795 to
+  print degrees, so `[Angle]` is in radians.
+- `RAPID_PLUNGE_TO_STARTZ = "YES"` "indicates that plunge moves to Plunge (Z2) height ... are
+  rapid moves".
+
+#### Guessed / not done
+- [inf] The move down to Z2 is always written as a rapid; `RAPID_PLUNGE_TO_STARTZ` is still
+  ignored. Its help line might mean posts without it write that move at the plunge rate; the
+  Material Setup help says it is rapid, so rapid was chosen.
+- [inf] `[Angle]` is signed, anticlockwise positive; Aspire's sign is not known.
+- Arcs are capped at a half turn so `[Radius]` (R-format) posts are never ambiguous; a full
+  circle is two or three arcs.
+- Under `MIN_ARC_RADIUS` Cut Craft keeps the original lines rather than one straight line.
+- The `*_HELICAL_ARC_PLUNGE_MOVE` blocks are never written (arcs are fitted to Cut moves only).
+- Z2 and home are applied at post time; the 3D toolpath preview still shows the plunge from
+  the clearance.
+- The toolpath tolerance is not a user setting yet.
+
+### Profile order, start points, nesting and sharp corners
+
+#### Aspire behaviour found (sources)
+- help `uiProfileMachineForm`: nested vectors cut on the correct side, inner always before
+  outer; Order options may be combined and the shortest machining time wins; Start At three
+  options; "Closest on Bounding Box ... nearest point from all of the spans' endpoints".
+- dialog 626 (order tab): five options incl. **Shortest Path** (not in the help), and "the
+  option which results in the shortest rapid move join ups will be used" — so the measure is
+  rapid link length, which is what is used.
+- dialog 33838 (start tab): Keep Current / Optimize / "Move Start Points to be closest to
+  selected point on vector bounding box" with 8 radio buttons (corners and mid-edges, no
+  centre).
+- dialog 380 (corners tab): "Sharp external corners", "Sharp internal corners (3D)",
+  "Allowance for cut out tool".
+
+#### Guessed defaults
+- All five order options ticked (Aspire's defaults unknown; trying them all costs little).
+- Start At defaults to Optimize (the old help's "Use Vector Start Point" was off by default,
+  which meant optimise); bounding-box point defaults to top left (the first radio button).
+- Mitre limit 4 tool radii (unknown in Aspire).
+- Bounding box is the centre line's own box, not the vector's: round an offset corner every
+  arc point is equally near the vector's box corner, so the vector's box gives no answer.
+- The tool starts from the origin (the job has no home position yet).
+
+#### Not done
+- Sharp Internal Corner (3D) V-bit move and its "Allowance for cut out tool".
+- Open paths are never reversed to shorten links.
+- Overlapping (not nested) vectors are now taken even-odd: their overlap becomes a hole.
+  Before they were unioned. Aspire's handling unknown.
+- The `corners` form widget only knows corners and centre; `start_near` uses the plain
+  choice list (9 anchors incl. centre). A widget with mid-edge spots would match Aspire's
+  picker (app code, not touched).
+- Sequencing is O(n²) per ordering (fine for hundreds of parts).
+- re/SPEC.md "Not yet: ... Aspire's order options ..., sharp corners" line is now stale
+  (shared file, not edited).
+
+### Cutting data per material, rate units and thread mills
+
+#### What the vendor files contain (Amana ×2 copies, CIC, IDC Woodcraft, SpeTool `.vtdb`)
+- Each file has exactly one machine ("Imported", "iQ 2x3 - Default", "Desktop") and one material
+  ("Hardwood", "All Material", "Softwood", "Acrylic").
+- Every geometry has two `tool_entity` rows. One has no material and no feed rate (a
+  placeholder). The other has the material and its data.
+- `rate_units` values seen are 1 and 4, plus a single 2 in IDC: 1.27 / 0.381 for a 1/8" end mill
+  at 22000 rpm, which is plausible as m/min.
+- There is no thread data anywhere: `tooth_*` and `thread_*` are all empty. `tool_type` 12 is a
+  laser (SpeTool, name format "{Max Power}W").
+- `tool_number` is per cutting data (IDC uses 1–215).
+- The SpeTool Fusion library has 1–4 presets per tool: SOFTWOOD, HARDWOOD, MDF/Laminate,
+  ALUMINUM…, plus "default", "Default Preset" and 默认预设.
+
+#### Aspire behaviour found (sources)
+- Cutting data is per machine and per material. The active material and machine are combo boxes
+  in the Tool Database dialog, and switching them switches the data shown. Source: help
+  `Tool Database.txt` § Material / Machine Management.
+- Add Material makes the new one active. Delete Material deletes all its cutting data. Names are
+  unique. Source: help `tool-database-material-management.txt`.
+- Rate units: "distance per second or per minute"; the list order is from `re/SPEC.md` [dec].
+- Thread mill S, H, D, A, O: O must be bigger than half the tool size. H, S and A are linked,
+  and changing H with A fixed changes S. Source: help `ThreadMillingStrategy.txt`.
+- The tool number is per machine, not per material. Source: `Tool Database.txt` § Tool Number.
+
+#### Choices and guesses
+- **No job material field.** Aspire keeps the active material in the tool database, not in the
+  job, so Cut Craft does the same (`ToolDatabase.material`).
+  - Also, `Job` is `Copy`: adding a `String` would break more than 26 `..doc.job` call sites in
+    other agents' crates.
+  - If a per-job material is wanted, the cheapest route is a `Document.material: String` plus a
+    `SetMaterial` edit in `change.rs`, and having the toolpath forms pick by it.
+- **Data is keyed by material only, not by machine.** Every vendor file has one machine, and its
+  name never matches the user's machines. A second machine's data for the same material is
+  dropped on import (`ponytail:` in vtdb).
+- **[guess]** A thread mill's vtdb `tool_type` number is unknown, so the reader goes by
+  `tooth_size > 0`.
+- **[guess]** Thread mill profile: the core is taken to reach the tool's bottom.
+- The vtdb default is the first material's data; in practice that is the file's only material.
+
+#### Not done
+- Toolpath forms still show the tool's feed in mm/min (or in/min in inch jobs) through the
+  schema form's `x-unit`, not in the tool's rate units. Only the Tool Database window uses
+  rate units.
+- No thread mill picture: `tool_database/thread_mill.png` does not exist, so none is drawn. It
+  would come from `scripts/build-icons`.
+- Multi-point thread mills (threaded length), the tool's own pitch, per-machine data, tool
+  number per machine, and renaming or duplicating materials (Duplicate with "Copy Cutting
+  Data").
+- The remaining thread-milling form fields (pitch etc.) still live on the form, as before.
+
+### 3D Finishing with several tools; Project toolpath onto 3D Model
+
+#### Aspire behaviour found (sources)
+- Help "Finish Machining Toolpath": any number of tools in run order; first removes as much as it can,
+  later ones only previously unmachined areas; Minimum Detail; Boundary Offset (rest machining).
+- Help uiProfileMachineForm / Fluting Toolpath / Texture Toolpath / PhotoVCarveStrategy: "Project
+  toolpath onto 3D Model" — after calculating, the toolpath is dropped in Z onto the model; depth below
+  the material surface becomes depth below the model surface; limited to the material bottom; only
+  available when a 3D model exists.
+- Aspire.exe strings: "3D Finish %d" (default name) and "%s [%d]".
+
+#### Guesses
+- [inf] Names of a several-tool set: "<name> [1]", "<name> [2]"… from the "%s [%d]" string; which code
+  uses it was not traced. A single tool keeps the plain name.
+- [inf] Projection moves the tool tip (point drop onto the model's cell height), not the whole cutter;
+  a wide tool's sides can touch a steep slope. Heights are nearest-cell, not interpolated.
+- [inf] Rapids are not projected.
+
+#### Not done
+- Profile and Pocket projection (other agent's crates).
+- The option is not hidden when there is no model (show-when only looks at string params); running
+  with it on and no model gives "there is no 3D model to machine: create a shape first".
+- Each toolpath of a set recomputes the rest areas of all the tools before it (O(n²) model builds);
+  fine for 2–3 tools.
+- Aspire's Machining Limit Boundary, Offset strategy, raster angle and stepover retract for finishing
+  are still not done (unchanged).
+
+### 3D view: ViewCube, perspective, tilt, hidden overlays
+
+#### What was built
+- **ViewCube** (`view3d::ViewCube`) in the top right of the 3D view. Each face facing the
+  viewer is cut in thirds both ways: the middle tile looks from that face, the strips from
+  that edge, the corner squares from that corner (26 directions). The tile under the pointer
+  is highlighted (in every face that shares it). A click turns the view to look from there, a
+  double-click looks from the opposite side, and a drag on it orbits like the view. Face names
+  (Top, Bottom, Front, Back, Right, Left) are drawn on the faces that have room.
+  The cube's size comes from its longest name in the theme's Small text style plus item
+  spacing; its colours come from the theme (inactive widget fill, selection fill,
+  noninteractive stroke, text colour).
+- **Perspective**: a "Perspective" toggle in the 3D view's button row (beside Top, Front,
+  Right, Iso, Fit). It lives in `Framing.perspective`; Fit, the standard view buttons,
+  double-click-off-the-model and F keep it (`Framing::fitted`). The eye stands just far
+  enough off for the block's bounding sphere to fill a 45° field of view, so turning still
+  never changes the block's size and it always fits the view.
+- **Tilt past side-on**: pitch now runs from straight down (0) to straight up from below (π),
+  so up stays up on screen. `Orbit::facing(direction)` / `Orbit::towards_viewer()` added.
+  Seen from below, the material block's bottom is drawn (when the block's sides are).
+- **Overlays hidden behind the surface**: vectors, the modeling plane and the origin axes are
+  cut a cell at a time and only the parts in sight are drawn (`view3d::seen_of`,
+  `view3d::visible_runs`). Works in orthographic and perspective.
+- Block sides (and the bottom) are now drawn after the surface rather than sorted in with
+  it: the block is all behind its own front faces, so this is exact where the depth sort was
+  approximate.
+
+#### Approach and why (no GPU paint callback)
+eframe is configured with the **wgpu** renderer (`Cargo.toml`: eframe features `wgpu`), so a
+`egui_wgpu` paint callback was possible. I didn't use one. The surface is a height grid, so
+whether an overlay point is hidden is answered exactly (to a cell) by stepping a ray from the
+point towards the eye over the grid until it is above (or below) everything or off the
+material. That needs no depth buffer and no change to the mesh, which stays egui's own. It
+also stays testable headless. A paint callback would mean WGSL shaders, a pipeline and depth
+texture of its own, the overlays redrawn on the GPU, and no headless test coverage. This is
+the `ponytail:` comment on `seen_of`.
+Cost: early exit as soon as the ray is above the highest point. The worst case is side-on
+over a low surface, about (footprint / half a cell) steps per sample; samples are one per
+cell along each overlay. Not profiled in the real app. If it shows up, walk the cells (DDA)
+instead of half-cell steps.
+
+#### Aspire behaviour (sources)
+- `re/extracted/help-12.5/3d-view-controls.txt`, "View Controller": drag it to rotate
+  smoothly; highlight a face and click to move smoothly to face it; double-click a
+  highlighted face to rotate to the opposite side. Also "Orthographic or Perspective view:
+  toggle between Orthographic and Perspective camera projection". Both are implemented,
+  except that the turns are instant, not animated.
+- `re/SPEC.md` lines 58–59: the 3D view overlay (`View_Overlay/*.png`) has an
+  ortho/perspective toggle, and there is a ViewCube.
+- Guessed (not in the help): edge and corner clicks (Aspire's help only mentions faces, but
+  its cube has the usual edge/corner highlights; worth a look in Aspire). The 45° field of
+  view. A cube click leaves the zoom/pan alone. The cube sits top right.
+
+#### Hardcoded GUI values noticed (for rectification)
+- `view3d.rs`: `LIGHT`, `AMBIENT`, `DEPTH_SHADE` (already ponytail-marked), `PICK_REACH`
+  4 px, zoom clamp 0.05–200, the tool cylinder's 24 rim points, and my new `FIELD_OF_VIEW`
+  (45°; it belongs in Options ▸ 3D View Settings, which I didn't touch because options.rs is
+  shared).
+- `app/panels.rs` `overlays_3d`: origin axis colours `Color32::RED/GREEN/BLUE`, axis length a
+  tenth of the job, axis width twice the stroke.
+- `app.rs`: `TOOL_HEIGHT_DIAMETERS` 4, `SETTLE_SECONDS`, `MESH_CELLS` / `FINE_MESH_CELLS`.
+
+#### What's left
+- Smooth (animated) turns for cube clicks, as in Aspire.
+- The playing tool's cylinder is still drawn whole over the surface (ponytail-marked).
+- Overlays are still left off the auto-wrapped rotary view (as before).
+- Toolpaths aren't drawn as lines in the 3D view at all (only the preview's cut material),
+  so there was nothing to depth-test there. Aspire draws them.
+- The overlay toolbar's other toggles (keep-out zones, 2D toolpaths, components, bitmap, plan
+  view), zoom to box/selection in 3D, and rotary CW/CCW buttons.
+- Perspective's zoom scales the picture (like a longer lens) rather than moving the eye in.
+- Not tried by hand: how the cube looks and feels, label fit at other font sizes, and
+  side-on overlay speed on a big job.
 
 ## Tool databases: `.vtdb` [obs] (vendor files from Amana, IDC Woodcraft and CIC; Aspire 12.5)
 
