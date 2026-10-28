@@ -2910,3 +2910,16 @@ fn options_show_one_category_at_a_time() {
         "reports always go to Cut Craft's repository"
     );
 }
+
+#[test]
+fn the_window_title_sits_in_the_menu_bar_unless_the_desktop_s_is_chosen() {
+    let mut h = Harness::new();
+    let title = h.app.title.clone();
+    let file = h.text_at("File").expect("the File menu");
+    let at = h.text_at(&title).expect("the title in Cut Craft's own title bar");
+    assert!((at.y - file.y).abs() < 1.0, "in the menus' row");
+    assert!(at.x > file.x, "after the menus");
+    h.app.options.appearance.system_title_bar = true;
+    h.frame(vec![]);
+    assert_eq!(h.text_at(&title), None, "the desktop's title bar shows it");
+}

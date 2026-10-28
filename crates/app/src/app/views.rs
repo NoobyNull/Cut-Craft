@@ -205,6 +205,9 @@ impl CutCraftApp {
         self.shortcuts(ctx);
         egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));
+        if !self.options.appearance.system_title_bar {
+            super::title_bar::resize_edges(ctx);
+        }
         self.tool_database_window(ctx);
         self.machine_windows(ctx);
         self.info_window(ctx);
@@ -1256,6 +1259,10 @@ impl CutCraftApp {
         if let Some(options) = changed {
             options.apply_to(&mut self.display);
             ctx.set_theme(options.appearance.theme.preference());
+            let frame = options.appearance.system_title_bar;
+            if frame != self.options.appearance.system_title_bar {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
+            }
             self.recent.truncate(options.recent_count());
             if let Err(e) = options.save() {
                 self.status.set_message(&e);

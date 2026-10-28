@@ -7,6 +7,7 @@ mod panels;
 mod screenshots;
 #[cfg(test)]
 mod tests;
+mod title_bar;
 mod views;
 
 use crate::files::{self, Session};
@@ -1003,6 +1004,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     // use Wayland directly
     let settings = crate::options::Options::load();
     let (wayland, theme) = (settings.advanced.wayland_native, settings.appearance.theme);
+    let frame = settings.appearance.system_title_bar;
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {
@@ -1021,7 +1023,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             None => egui::ViewportBuilder::default(),
         }
         .with_title(title)
-        .with_app_id(APP_ID),
+        .with_app_id(APP_ID)
+        .with_decorations(frame),
         persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
         multisampling: settings.view_3d.anti_aliasing.samples(),
