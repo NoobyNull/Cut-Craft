@@ -1583,14 +1583,22 @@ fn start_page_and_form_pictures_are_in_the_icon_set() {
         };
         let values: Vec<Value> = match &f.kind {
             form::Kind::Choice(..) => choices(&f.kind).into_iter().map(Value::from).collect(),
-            form::Kind::Group(inner) => inner
-                .iter()
-                .flat_map(|i| {
-                    choices(&i.kind)
-                        .into_iter()
-                        .map(|c| serde_json::json!({ i.key.as_str(): c }))
-                })
-                .collect(),
+            form::Kind::Group(inner) => {
+                let each: Vec<Value> = inner
+                    .iter()
+                    .flat_map(|i| {
+                        choices(&i.kind)
+                            .into_iter()
+                            .map(|c| serde_json::json!({ i.key.as_str(): c }))
+                    })
+                    .collect();
+                // a section of numbers only has the one picture
+                if each.is_empty() {
+                    vec![Value::Null]
+                } else {
+                    each
+                }
+            }
             _ => vec![Value::Null],
         };
         for value in values {
