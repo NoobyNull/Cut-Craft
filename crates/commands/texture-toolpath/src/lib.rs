@@ -7,7 +7,7 @@ use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::random::Random;
 use cut_craft_core::toolpath::{
-    Move, Tool, contour_moves, cut_points, follow, hatch_lines, made_by,
+    Move, Tool, contour_moves, cut_points, follow, hatch_lines, made_by, project_onto_model,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -52,6 +52,11 @@ pub struct Params {
     /// Another number gives another random pattern
     pub seed: u32,
     pub tool: Tool,
+    /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
+    /// model's surface, going no lower than the bottom of the material
+    #[serde(default)]
+    #[schemars(title = "Project toolpath onto 3D Model")]
+    pub project_onto_model: bool,
 }
 
 impl Default for Params {
@@ -71,6 +76,7 @@ impl Default for Params {
             boundary_offset: 0.0,
             seed: 1,
             tool: Tool::default(),
+            project_onto_model: false,
         }
     }
 }
@@ -175,7 +181,7 @@ impl Command for TextureToolpath {
         p.validate()?;
         let mut random = Random(u64::from(p.seed));
         let safe = doc.job.clearance;
-        let (ids, moves) = if p.use_selected_vectors_as_pattern {
+        let (ids, mut moves) = if p.use_selected_vectors_as_pattern {
             let (ids, paths) = doc.selected_paths(|_| true);
             if ids.is_empty() {
                 return Err(CommandError::Failed(
@@ -212,6 +218,9 @@ impl Command for TextureToolpath {
             return Err(CommandError::Failed(
                 "the boundary offset leaves nothing to texture".into(),
             ));
+        }
+        if p.project_onto_model {
+            moves = project_onto_model(doc, &p.tool, &moves)?;
         }
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
@@ -253,6 +262,43 @@ mod tests {
         assert!(cuts(&t).all(|q| within(q.x) && within(q.y)));
         let deepest = cuts(&t).map(|q| -q.z).fold(0.0, f64::max);
         assert!(deepest > p.max_cut_depth * p.min_depth_percent / 100.0);
+    }
+
+    #[test]
+    fn projected_onto_the_model_it_textures_its_surface() {
+        // nothing selected: the whole 40 mm material, with the 8 mm dome in the middle
+        let mut doc = cut_craft_core::testing::domed();
+        let p = Params {
+            stepover: 1.0,
+            project_onto_model: true,
+            ..Params::default()
+        };
+        let change = TextureToolpath::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let t = doc.toolpaths.into_values().next().unwrap();
+        let r = |q: DVec3| q.truncate().distance(Point::new(20.0, 20.0));
+        let surface = |q: DVec3| {
+            let r = r(q);
+            if r < 8.0 {
+                (64.0 - r * r).sqrt() - 8.0
+            } else {
+                -8.0
+            }
+        };
+        // within the scallop depth of the model's surface (and a cell's slope off it), away
+        // from the dome's near-vertical rim
+        let off = cuts(&t)
+            .filter(|&q| !(7.0..8.5).contains(&r(q)))
+            .find(|&q| {
+                let below = surface(q) - q.z;
+                !(-0.5..=p.max_cut_depth + 0.5).contains(&below)
+            });
+        assert!(off.is_none(), "{off:?} against {:?}", off.map(surface));
+        assert!(cuts(&t).any(|q| q.z < -8.0), "the flat round the dome");
+        assert!(
+            cuts(&t).all(|q| q.z >= -10.0 - 1e-9),
+            "not through the bottom"
+        );
     }
 
     #[test]

@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
-use cut_craft_core::toolpath::{Tool, cut_points, follow, made_by};
+use cut_craft_core::toolpath::{Tool, cut_points, follow, made_by, project_onto_model};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -52,6 +52,11 @@ pub struct Params {
     #[schemars(range(min = 0, max = 100))]
     pub ramp_percent: f64,
     pub tool: Tool,
+    /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
+    /// model's surface, going no lower than the bottom of the material
+    #[serde(default)]
+    #[schemars(title = "Project toolpath onto 3D Model")]
+    pub project_onto_model: bool,
 }
 
 impl Default for Params {
@@ -66,6 +71,7 @@ impl Default for Params {
             ramp_length: 10.0,
             ramp_percent: 50.0,
             tool: Tool::default(),
+            project_onto_model: false,
         }
     }
 }
@@ -161,7 +167,7 @@ impl Command for FlutingToolpath {
         if ids.is_empty() {
             return Err(CommandError::Failed("select the vectors to flute".into()));
         }
-        let moves = paths
+        let mut moves: Vec<_> = paths
             .iter()
             .flat_map(|path| {
                 let mut points = cut_points(path);
@@ -189,6 +195,9 @@ impl Command for FlutingToolpath {
                 follow(&cut, doc.job.clearance)
             })
             .collect();
+        if p.project_onto_model {
+            moves = project_onto_model(doc, &p.tool, &moves)?;
+        }
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
             p,
@@ -358,6 +367,36 @@ mod tests {
                 "invalid parameters: ramp % must be greater than 0 and less than 100"
             );
         }
+    }
+
+    #[test]
+    fn projected_onto_the_model_it_flutes_below_its_surface() {
+        let mut doc = cut_craft_core::testing::domed();
+        let across = Path::polyline(&[Point::new(2.0, 20.0), Point::new(38.0, 20.0)], false);
+        let change = Change::swap(&doc, [], vec![across]);
+        doc.apply(&change).unwrap();
+        let p = Params {
+            project_onto_model: true,
+            ..linear(FluteType::RampOverCompleteLength)
+        };
+        let change = FlutingToolpath::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let tp = doc.toolpaths.into_values().next().unwrap();
+        let plunge = tp
+            .moves
+            .iter()
+            .find(|m| m.kind == MoveKind::Plunge)
+            .unwrap();
+        // the start depth below the flat round the 8 mm dome
+        assert!((plunge.to.z + 9.0).abs() < 0.01, "{}", plunge.to.z);
+        // over the top: 1 mm start + 4 mm flute halfway along, on the dome's top
+        let top = tp
+            .moves
+            .iter()
+            .find(|m| (m.to.x - 20.0).abs() < 0.2 && m.kind == MoveKind::Cut)
+            .unwrap();
+        assert!((top.to.z + 3.0).abs() < 0.1, "{}", top.to.z);
+        assert!(tp.moves.iter().all(|m| m.to.z >= -10.0 - 1e-9));
     }
 
     #[test]

@@ -7,6 +7,7 @@ use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{
     Move, MoveKind, Tool, ToolDatabase, ToolShape, cut_points, hatch_lines, made_by,
+    project_onto_model,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -47,6 +48,11 @@ pub struct Params {
     pub line_angle: f64,
     /// A V-bit
     pub tool: Tool,
+    /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
+    /// model's surface, going no lower than the bottom of the material
+    #[serde(default)]
+    #[schemars(title = "Project toolpath onto 3D Model")]
+    pub project_onto_model: bool,
 }
 
 impl Default for Params {
@@ -64,6 +70,7 @@ impl Default for Params {
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
                 .expect("the starter tools include a V-bit"),
+            project_onto_model: false,
         }
     }
 }
@@ -225,7 +232,10 @@ impl Command for PhotoVcarveToolpath {
         let pieces = lines
             .iter()
             .flat_map(|line| carve_along(line, step, bitmap, depth));
-        let moves = link(pieces, lift, safe);
+        let mut moves = link(pieces, lift, safe);
+        if p.project_onto_model {
+            moves = project_onto_model(doc, &p.tool, &moves)?;
+        }
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(
             p,
@@ -285,6 +295,40 @@ mod tests {
         rows.sort_by(f64::total_cmp);
         rows.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
         assert_eq!(rows.len(), 5, "{rows:?}");
+    }
+
+    #[test]
+    fn projected_onto_the_model_it_carves_below_its_surface() {
+        // an all-black picture over the domed 40 mm job: 1 mm deep everywhere
+        let mut doc = cut_craft_core::testing::domed();
+        let mut c = Change::builder(&doc);
+        c.add_bitmap(Bitmap {
+            name: "black".into(),
+            columns: 1,
+            rows: 1,
+            grey: vec![0],
+            depth: Vec::new(),
+            rect: Rect::new(Point::ZERO, Point::new(40.0, 40.0)),
+        });
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let p = Params {
+            project_onto_model: true,
+            ..Params::default()
+        };
+        let change = PhotoVcarveToolpath::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let moves = doc.toolpaths.into_values().next().unwrap().moves;
+        let carved = || moves.iter().filter(|m| m.kind != MoveKind::Rapid);
+        // over the dome's top: 1 mm below it, or lifted half a millimetre above it
+        let top = carved().filter(|m| m.to.truncate().distance(Point::new(20.0, 20.0)) < 1.5);
+        assert!(top.clone().count() > 0);
+        let odd = top.clone().find(|m| !(-1.3..=0.5 + 1e-9).contains(&m.to.z));
+        assert!(odd.is_none(), "{odd:?}");
+        assert!(top.clone().any(|m| m.to.z < -0.9));
+        // 1 mm below the flat round it, and never through the 10 mm material
+        assert!(carved().any(|m| (m.to.z + 9.0).abs() < 0.01));
+        assert!(carved().all(|m| m.to.z >= -10.0 - 1e-9));
     }
 
     #[test]

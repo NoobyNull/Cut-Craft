@@ -6,6 +6,7 @@ use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
     Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
+    project_onto_model,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -26,6 +27,11 @@ pub struct Params {
     pub flat_depth: f64,
     /// A V-bit; its stepover sets how close together the carving passes are
     pub tool: Tool,
+    /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
+    /// model's surface, going no lower than the bottom of the material
+    #[serde(default)]
+    #[schemars(title = "Project toolpath onto 3D Model")]
+    pub project_onto_model: bool,
 }
 
 impl Default for Params {
@@ -39,6 +45,7 @@ impl Default for Params {
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
                 .expect("the starter tools include a V-bit"),
+            project_onto_model: false,
         }
     }
 }
@@ -81,7 +88,10 @@ impl Command for VcarveEngraveToolpath {
                 "start depth cannot be negative".into(),
             ));
         }
-        let moves = carve(&paths, p, doc.job.clearance);
+        let mut moves = carve(&paths, p, doc.job.clearance);
+        if p.project_onto_model {
+            moves = project_onto_model(doc, tool, &moves)?;
+        }
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(p, p.name.clone(), tool.clone(), ids, moves));
         Ok(c.finish())
@@ -242,6 +252,45 @@ mod tests {
         let step = t.tool.stepover * t.tool.diameter;
         let z = carved(&t, &job).at(Point::new(50.0, 1.0)).unwrap();
         assert!((z + 4.0).abs() <= step + 0.25, "{z}");
+    }
+
+    #[test]
+    fn projected_onto_the_model_it_carves_below_its_surface() {
+        // an 8 mm square on the top of the domed job's 8 mm dome
+        let mut doc = cut_craft_core::testing::domed();
+        let change = cut_craft_core::Change::swap(&doc, [], vec![square(16.0, 16.0, 8.0)]);
+        doc.apply(&change).unwrap();
+        let params = Params {
+            project_onto_model: true,
+            ..Params::default()
+        };
+        let change = VcarveEngraveToolpath::run(&doc, &params).unwrap();
+        doc.apply(&change).unwrap();
+        let t = doc.toolpaths.into_values().next().unwrap();
+        let surface = |p: Point| {
+            let r = p.distance(Point::new(20.0, 20.0));
+            (64.0 - r * r).sqrt() - 8.0
+        };
+        // up to the 4 mm the bit reaches in the middle below the dome (and a cell's slope)
+        let cuts: Vec<_> = t
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut)
+            .map(|m| m.to)
+            .collect();
+        let off = cuts.iter().find(|q| {
+            let below = surface(q.truncate()) - q.z;
+            !(-0.3..=4.3).contains(&below)
+        });
+        assert!(off.is_none(), "{off:?}");
+        // the corners are cut where the dome has fallen away, not near the material's top
+        let from_corner =
+            |q: &cut_craft_core::glam::DVec3| q.truncate().distance(Point::new(16.0, 16.0));
+        let corner = cuts
+            .iter()
+            .min_by(|a, b| from_corner(a).total_cmp(&from_corner(b)))
+            .unwrap();
+        assert!(corner.z < -2.0, "{corner:?}");
     }
 
     #[test]
