@@ -9,9 +9,9 @@
       "height": 762.0,
       "inches": true,
       "posts": [
-        "Cut Craft GRBL (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
     },
     {
       "name": "Sienci LongMill MK2 30x30",
@@ -22,9 +22,9 @@
       "height": 762.0,
       "inches": true,
       "posts": [
-        "Cut Craft GRBL (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
     },
     {
       "name": "Sienci LongMill MK2 48x30",
@@ -35,9 +35,9 @@
       "height": 762.0,
       "inches": true,
       "posts": [
-        "Cut Craft GRBL (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
     }
   ]
 }

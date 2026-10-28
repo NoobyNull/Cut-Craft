@@ -121,8 +121,9 @@ say "not implemented yet".
   FoxAlien, Sienci, Carbide 3D, Two Trees hobby routers, on Cut Craft GRBL (mm), whose tool
   change pauses with M0), skipping names already there; Search for Machine Online opens
   `machines/` in the repository. Cut Craft's own posts: FluidNC ATC (flat and wrapped A),
-  GRBL (mm / inch; tool changes pause with M0) and Mach3 (mm / inch, `.tap`; T M6, G91.1
-  arcs), all written for Cut Craft. Post-Processor Management's Inspect has Edit for custom
+  and for GRBL (tool changes pause with M0) and Mach3 (`.tap`; T M6, G91.1 arcs), in mm
+  and inches: Arcs, Straight, and Wrap Y / X to A with or without G93; all written for Cut
+  Craft (`scripts/make_posts.py` makes the variants from the two Arcs (mm) templates). Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's

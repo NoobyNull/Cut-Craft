@@ -9,9 +9,9 @@
       "height": 400,
       "inches": false,
       "posts": [
-        "Cut Craft GRBL (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
     },
     {
       "name": "FoxAlien 4040-XE",
@@ -22,9 +22,9 @@
       "height": 400,
       "inches": false,
       "posts": [
-        "Cut Craft GRBL (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
     },
     {
       "name": "FoxAlien XE-Ultra 8080",
@@ -35,9 +35,9 @@
       "height": 800,
       "inches": false,
       "posts": [
-        "Cut Craft GRBL (mm) (*.nc)"
+        "Cut Craft GRBL Arcs (mm) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL (mm) (*.nc)"
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
     }
   ]
 }

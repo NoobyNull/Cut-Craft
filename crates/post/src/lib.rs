@@ -3,6 +3,9 @@
 //! writes a document's toolpaths through it.
 
 mod arcs;
+mod built_in;
+
+pub use built_in::BUILT_IN;
 
 use cut_craft_core::document::{Along, Datum, Document, Job, ZZero};
 use cut_craft_core::glam::DVec3;
@@ -179,21 +182,6 @@ const LARGEST_ARC: f64 = 1000.0;
 /// Cut Craft's own posts, used until one is installed (`crates/post/posts/`).
 const DEFAULT_FLAT: &str = include_str!("../posts/fluidnc_atc_mm.pp");
 const DEFAULT_ROTARY: &str = include_str!("../posts/fluidnc_atc_wrap_a_mm.pp");
-/// Hobby routers on grbl, tools changed by hand (the machine packages in `machines/`), and
-/// Mach3 with its own tool change: written for Cut Craft, not copies of Vectric's.
-const GRBL_MM: &str = include_str!("../posts/grbl_mm.pp");
-const GRBL_INCH: &str = include_str!("../posts/grbl_inch.pp");
-const MACH3_MM: &str = include_str!("../posts/mach3_mm.pp");
-const MACH3_INCH: &str = include_str!("../posts/mach3_inch.pp");
-/// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
-pub const BUILT_IN: [(&str, &str); 6] = [
-    ("fluidnc_atc_mm.pp", DEFAULT_FLAT),
-    ("fluidnc_atc_wrap_a_mm.pp", DEFAULT_ROTARY),
-    ("grbl_mm.pp", GRBL_MM),
-    ("grbl_inch.pp", GRBL_INCH),
-    ("mach3_mm.pp", MACH3_MM),
-    ("mach3_inch.pp", MACH3_INCH),
-];
 
 /// The file being written, for the variables that describe it.
 pub struct File<'a> {
@@ -1779,33 +1767,44 @@ begin FOOTER
     }
 
     #[test]
-    fn grbl_posts_pause_for_a_tool_change_and_mach3_ones_change_it() {
-        let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
-        let mut names = vec![];
-        for (file, text) in BUILT_IN {
-            names.push(Post::parse(text).unwrap().name);
-            if file.starts_with("fluidnc") {
-                continue;
-            }
+    fn every_grbl_and_mach3_variant_writes_its_units_tool_changes_arcs_and_wrapping() {
+        use cut_craft_core::document::{Along, Job};
+        let mut names: Vec<String> = BUILT_IN
+            .iter()
+            .map(|(_, text)| Post::parse(text).unwrap().name)
+            .collect();
+        for (file, text) in BUILT_IN.iter().filter(|(f, _)| !f.starts_with("fluidnc")) {
             // the test renderer splits on the CR LF line ending
-            let crlf = text.replace(r#"LINE_ENDING = "[10]""#, r#"LINE_ENDING = "[13][10]""#);
-            let lines = render(&crlf, two());
+            let post = text.replace(r#"LINE_ENDING = "[10]""#, r#"LINE_ENDING = "[13][10]""#);
+            let along = if file.contains("wrap_y") {
+                Some(Along::X)
+            } else if file.contains("wrap_x") {
+                Some(Along::Y)
+            } else {
+                None
+            };
+            let two = vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+            let job = along.map_or_else(Job::default, |a| Job::rotary(300.0, 50.0, a));
+            let lines = render_for(&post, job, two);
+            let any = |s: &str| lines.iter().any(|l| l.contains(s));
             let has = |s: &str| lines.iter().any(|l| l == s);
-            let inches = file.contains("inch");
-            assert_eq!(lines.iter().any(|l| l.contains("G20")), inches, "{file}");
+            assert_eq!(any("G20"), file.contains("inch"), "{file}");
             if file.starts_with("grbl") {
-                assert!(
-                    has("M0") && !lines.iter().any(|l| l.contains("M6")),
-                    "{file}: {lines:?}"
-                );
+                assert!(has("M0") && !any("M6"), "{file}: {lines:?}");
+            } else {
+                assert!(has("T2 M6") && !any("TT"), "{file}: {lines:?}");
             }
-            if file.starts_with("mach3") {
-                assert!(
-                    has("T2 M6") && has("G91.1") && !lines.iter().any(|l| l.contains("TT")),
-                    "{file}: {lines:?}"
-                );
+            assert_eq!(has("G91.1"), file.starts_with("mach3_arcs"), "{file}");
+            if along.is_some() {
+                assert!(any(" A"), "{file} turns A: {lines:?}");
+            }
+            if file.contains("g93") {
+                let feeds = lines.iter().filter(|l| l.starts_with("G1"));
+                assert!(feeds.clone().all(|l| l.contains(" F")), "{file}: {lines:?}");
+                assert!(has("G93") && has("G94"), "{file}");
             }
         }
+        names.sort();
         names.dedup();
         assert_eq!(names.len(), BUILT_IN.len(), "each has its own name");
     }
