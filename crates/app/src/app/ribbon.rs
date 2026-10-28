@@ -4,6 +4,7 @@
 //! name; a browser of the job down the left; the open tool's form on the right.
 
 use super::{CutCraftApp, DESIGN_PANEL_WIDTHS, TOOL_ICON_ROWS, egui, gui};
+use cut_craft_core::Registry;
 
 /// The ribbon's tabs and the toolbar groups each holds, by name.
 pub(super) const RIBBON_TABS: [(&str, &[&str]); 4] = [
@@ -145,7 +146,7 @@ impl CutCraftApp {
                         });
                         group_menu(ui, group.name, font.size, |ui| {
                             for &id in group.tools {
-                                let label = self.tool_label(id);
+                                let label = tool_label(&self.registry, id);
                                 let button = egui::Button::new(label);
                                 if ui.add_enabled(self.available(id), button).clicked() {
                                     clicked = Some(id);
@@ -164,7 +165,7 @@ impl CutCraftApp {
 
     /// A tool's icon button, picked out while it is the tool in hand; its id when clicked.
     fn icon_tool(&self, ui: &mut egui::Ui, id: &'static str, edge: f32) -> Option<&'static str> {
-        let label = self.tool_label(id);
+        let label = tool_label(&self.registry, id);
         let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
         let button = self
             .icon_button(explicit, id, &label, edge)
@@ -179,12 +180,6 @@ impl CutCraftApp {
     fn has_icon(&self, id: &str) -> bool {
         let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
         self.icons.find(explicit, id).is_some()
-    }
-
-    fn tool_label(&self, id: &str) -> String {
-        self.registry
-            .get(id)
-            .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())
     }
 
     /// Fusion's browser: the job's parts as sections that fold away.
@@ -227,6 +222,14 @@ fn group_menu(ui: &mut egui::Ui, name: &str, edge: f32, add: impl FnOnce(&mut eg
 )]
 fn as_width(n: usize) -> f32 {
     n as f32
+}
+
+/// A tool's name as its button shows it.
+// a function, not a method: Help Contents has a method of this name
+fn tool_label(registry: &Registry, id: &str) -> String {
+    registry
+        .get(id)
+        .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())
 }
 
 /// How many icons each group shows: one more at a time to each group in turn while the row
