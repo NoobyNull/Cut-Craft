@@ -11,12 +11,13 @@ pub struct DrawStar;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    #[schemars(title = "Center Point", extend("x-icon" = "drawing_forms/star_center.png"))]
     pub center: Xy,
     /// Centre to point tip
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/star_outer_radius.png"), range(min = 0))]
     pub outer_radius: f64,
     /// Centre to the notch between points
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/star_inner_radius.png"), range(min = 0))]
     pub inner_radius: f64,
     #[schemars(range(min = 3, max = 100))]
     pub points: u32,
@@ -45,7 +46,7 @@ impl Command for DrawStar {
         Meta {
             label: "Draw Star",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_star.svg",
+            icon: "drawing/create_vectors/draw_star.png",
             shortcut: "",
         }
     }

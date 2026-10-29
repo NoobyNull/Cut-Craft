@@ -13,6 +13,8 @@ VAR FEED_RATE = [F|C|F|1.1]
 VAR X_POSITION = [X|C|X|1.3]
 VAR Y_POSITION = [Y|C|Y|1.3]
 VAR Z_POSITION = [Z|C|Z|1.3]
+VAR ARC_CENTRE_I_INC_POSITION = [I|A|I|1.3]
+VAR ARC_CENTRE_J_INC_POSITION = [J|A|J|1.3]
 VAR X_HOME_POSITION = [XH|A|X|1.3]
 VAR Y_HOME_POSITION = [YH|A|Y|1.3]
 VAR Z_HOME_POSITION = [ZH|A|Z|1.3]
@@ -29,6 +31,7 @@ begin HEADER
 "( [TOOLS_USED])"
 "G94 G21 G17 G90"
 "G0 [ZH]"
+"G0 [XH] [YH]"
 "M6 [T]"
 "(Toolpath: [TOOLPATH_NAME], tool: [TOOLNAME])"
 "[S] M3"
@@ -46,6 +49,31 @@ begin FIRST_FEED_MOVE
 
 begin FEED_MOVE
 "G1 [X] [Y] [Z]"
+
++ arcs: centres relative to their start (I, J)
+begin FIRST_CW_ARC_MOVE
+"G2 [X] [Y] [Z] [I] [J] [F]"
+
+begin CW_ARC_MOVE
+"G2 [X] [Y] [Z] [I] [J]"
+
+begin FIRST_CCW_ARC_MOVE
+"G3 [X] [Y] [Z] [I] [J] [F]"
+
+begin CCW_ARC_MOVE
+"G3 [X] [Y] [Z] [I] [J]"
+
+begin FIRST_CW_HELICAL_ARC_MOVE
+"G2 [X] [Y] [Z] [I] [J] [F]"
+
+begin CW_HELICAL_ARC_MOVE
+"G2 [X] [Y] [Z] [I] [J]"
+
+begin FIRST_CCW_HELICAL_ARC_MOVE
+"G3 [X] [Y] [Z] [I] [J] [F]"
+
+begin CCW_HELICAL_ARC_MOVE
+"G3 [X] [Y] [Z] [I] [J]"
 
 begin TOOLCHANGE
 "G0 [SAFEZ]"

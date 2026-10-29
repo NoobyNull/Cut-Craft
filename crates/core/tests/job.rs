@@ -1,4 +1,4 @@
-use cut_craft_core::document::{Along, Datum, Document, Job, Resolution, Rotary, ZZero};
+use cut_craft_core::document::{Along, Datum, Document, Home, Job, Resolution, Rotary, ZZero};
 use cut_craft_core::file::{load_job, save_job};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::simulation::Material;
@@ -125,4 +125,39 @@ fn the_simulated_material_lies_where_the_job_is() {
     assert_eq!(m.centre(0, 0), Point::new(-49.5, -49.5));
     assert_eq!(m.at(Point::new(-49.0, 49.0)), Some(0.0));
     assert_eq!(m.at(Point::new(60.0, 0.0)), None);
+}
+
+#[test]
+fn older_jobs_plunge_from_the_clearance_and_start_at_x0_y0_at_it() {
+    let doc = Document {
+        job: Job {
+            clearance: 12.0,
+            ..Job::default()
+        },
+        ..Document::default()
+    };
+    let mut json: serde_json::Value = serde_json::from_slice(&save_job(&doc)).unwrap();
+    let job = json["document"]["job"].as_object_mut().unwrap();
+    assert!(!job.contains_key("plunge") && !job.contains_key("home"));
+    let old = load_job(&serde_json::to_vec(&json).unwrap()).unwrap().job;
+    assert!((old.plunge_gap() - 12.0).abs() < 1e-12, "no rapid plunges");
+    assert_eq!(
+        old.home(),
+        Home {
+            x: 0.0,
+            y: 0.0,
+            z: 12.0
+        }
+    );
+    let set = Job {
+        plunge: Some(2.0),
+        home: Some(Home {
+            x: 10.0,
+            y: 20.0,
+            z: 30.0,
+        }),
+        ..old
+    };
+    assert!((set.plunge_gap() - 2.0).abs() < 1e-12);
+    assert!((set.home().x - 10.0).abs() < 1e-12);
 }

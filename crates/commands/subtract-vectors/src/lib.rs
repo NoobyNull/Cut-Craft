@@ -14,7 +14,7 @@ impl Command for SubtractVectors {
         Meta {
             label: "Subtract Vectors",
             group: "Edit Objects",
-            icon: "drawing/weld_and_offset/subtract_vectors.svg",
+            icon: "drawing/weld_and_offset/subtract_vectors.png",
             shortcut: "",
         }
     }

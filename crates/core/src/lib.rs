@@ -1,23 +1,33 @@
 //! Document model, invertible changes, and the [`Command`] contract every command implements.
 
 pub mod bitmap;
+pub mod calc;
 mod change;
+pub mod checks;
 mod command;
 pub mod component;
 pub mod document;
+pub mod entry;
 pub mod file;
 pub mod font;
 mod formats;
 pub mod geometry;
+pub mod handles;
+pub mod keep_out;
 pub mod nodes;
+pub mod packed;
 pub mod params;
+pub mod playback;
 pub mod polygon;
 pub mod random;
+pub mod rest;
 pub mod selection;
+pub mod simplify;
 pub mod simulation;
 pub mod snap;
 #[cfg(feature = "testing")]
 pub mod testing;
+pub mod tiling;
 pub mod toolpath;
 pub mod trace;
 pub mod vfont;

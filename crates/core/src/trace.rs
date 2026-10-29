@@ -179,6 +179,9 @@ pub enum Fit {
 /// lines, circular arcs or cubic Béziers. Corners turning more than `corner` radians stay
 /// sharp; the curves are smooth across the others; an open run's ends stay where they are.
 pub fn fit(points: &[Point], closed: bool, fit: Fit, tolerance: f64, corner: f64) -> Path {
+    // outlines keep only corners; the smoothing and the tolerance checks below look at the
+    // points alone, so long edges get points along them again
+    let points = &dense(points, closed, tolerance);
     if !closed {
         return fit_open(points, fit, tolerance, corner);
     }
@@ -228,6 +231,32 @@ pub fn fit(points: &[Point], closed: bool, fit: Fit, tolerance: f64, corner: f64
         segments,
         closed: true,
     }
+}
+
+/// `points` with more along any edge longer than `step`, so none is farther than that from
+/// the next.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "a small count of pieces"
+)]
+fn dense(points: &[Point], closed: bool, step: f64) -> Vec<Point> {
+    let n = points.len();
+    if n < 2 || step <= 0.0 {
+        return points.to_vec();
+    }
+    let edges = if closed { n } else { n - 1 };
+    let mut out = Vec::with_capacity(n);
+    for i in 0..edges {
+        let (a, b) = (points[i], points[(i + 1) % n]);
+        let pieces = (a.distance(b) / step).ceil().max(1.0) as usize;
+        out.extend((0..pieces).map(|k| a + (b - a) * (k as f64 / pieces as f64)));
+    }
+    if !closed {
+        out.push(points[n - 1]);
+    }
+    out
 }
 
 /// [`fit`] for an open run: its ends and corners split it into runs.
@@ -557,6 +586,41 @@ mod tests {
             .collect();
         let simple = simplify(&stairs, 1.0);
         assert!(simple.len() <= 4, "{simple:?}");
+    }
+
+    /// The farthest any point of `a` (sampled along its edges) is from the polyline `b`.
+    fn farthest(a: &[Point], b: &[Point], closed: bool) -> f64 {
+        let edges = |p: &[Point]| {
+            let n = p.len();
+            (0..if closed { n } else { n - 1 })
+                .map(|i| (p[i], p[(i + 1) % n]))
+                .collect::<Vec<_>>()
+        };
+        let (from, to) = (edges(a), edges(b));
+        from.iter()
+            .flat_map(|&(s, e)| (0..=8).map(move |k| s + (e - s) * (f64::from(k) / 8.0)))
+            .map(|q| {
+                to.iter()
+                    .map(|&(s, e)| to_segment(q, s, e))
+                    .fold(f64::INFINITY, f64::min)
+            })
+            .fold(0.0, f64::max)
+    }
+
+    #[test]
+    fn long_straight_edges_are_kept_by_the_curves() {
+        // a tall bar beside a long staircase, as a bracket's arm: corners-only rings leave
+        // the bar's sides as two far-apart points
+        let loops = outlines(grid(80, 120), |c, r| c < 6 || (c < 60 && r * 2 < c));
+        assert_eq!(loops.len(), 1);
+        let ring = &loops[0];
+        for kind in [Fit::Arcs, Fit::Beziers] {
+            let path = fit(ring, true, kind, 0.5, 60_f64.to_radians());
+            let drawn = path.flatten(0.01);
+            let (out, missed) = (farthest(&drawn, ring, true), farthest(ring, &drawn, true));
+            assert!(out < 1.0, "{kind:?}: strays {out} off the outline");
+            assert!(missed < 1.0, "{kind:?}: misses the outline by {missed}");
+        }
     }
 
     #[test]

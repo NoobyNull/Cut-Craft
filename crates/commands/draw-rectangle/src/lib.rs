@@ -13,9 +13,9 @@ pub struct DrawRectangle;
 pub enum Corners {
     #[default]
     Square,
-    /// Rounded outwards (external radius)
+    /// Rounded outwards (Aspire's Radiused External)
     Rounded,
-    /// Cut inwards (internal radius)
+    /// Cut inwards (Aspire's Radiused Internal)
     Notched,
 }
 
@@ -27,13 +27,29 @@ pub struct Params {
     /// Bottom edge
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Width (X)",
+        extend("x-unit" = "mm", "x-icon" = "drawing_forms/width.png"),
+        range(min = 0)
+    )]
     pub width: f64,
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Height (Y)",
+        extend("x-unit" = "mm", "x-icon" = "drawing_forms/height.png"),
+        range(min = 0)
+    )]
     pub height: f64,
+    /// One of square, rounded or notched corners, as the picture shows
+    #[schemars(
+        title = "Corner Type",
+        extend("x-section" = true, "x-icon" = "drawing_forms/corner_{}.png")
+    )]
     pub corners: Corners,
-    /// Corner radius (not used for square corners)
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    /// Corner radius
+    #[schemars(
+        extend("x-unit" = "mm", "x-hide-when" = {"corners": "square"}),
+        range(min = 0)
+    )]
     pub radius: f64,
 }
 
@@ -58,7 +74,7 @@ impl Command for DrawRectangle {
         Meta {
             label: "Draw Rectangle",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_rectangle.svg",
+            icon: "drawing/create_vectors/draw_rectangle.png",
             shortcut: "",
         }
     }

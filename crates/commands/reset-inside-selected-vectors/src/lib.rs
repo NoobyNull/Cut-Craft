@@ -36,7 +36,7 @@ impl Command for ResetInsideSelectedVectors {
             let mut reset = component.clone();
             for (i, h) in reset.heights.iter_mut().enumerate() {
                 if inside(&rings, component.centre_of(i)) {
-                    *h = None;
+                    *h = f64::NAN;
                 }
             }
             if reset != *component {

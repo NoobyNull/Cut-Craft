@@ -91,7 +91,7 @@ impl Command for KeyholeToolpath {
         Meta {
             label: "Keyhole Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/keyhole_toolpath.svg",
+            icon: "toolpaths/keyhole_toolpath.png",
             shortcut: "",
         }
     }

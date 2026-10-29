@@ -1,0 +1,4 @@
+#!/bin/bash
+# The AppImage's entry: Cut Craft, its icons built in.
+here="$(dirname "$(readlink -f "$0")")"
+exec "$here/usr/bin/cut-craft" "$@"

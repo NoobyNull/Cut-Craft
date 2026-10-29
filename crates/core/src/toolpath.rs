@@ -1,10 +1,11 @@
 //! Toolpaths: the tool, the strategy command that made them (so they can be recalculated),
 //! and the computed moves.
 
-use crate::document::EntityId;
+use crate::component::placed_model;
+use crate::document::{Document, EntityId};
 use crate::geometry::{Path, Point};
-use crate::simulation::Material;
-use crate::{Command, polygon};
+use crate::simulation::{Material, Tiles};
+use crate::{Command, CommandError, polygon};
 use glam::DVec3;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,72 @@ pub enum ToolShape {
     /// end mill, leaves less cusp than one when 3D roughing or finishing
     #[schemars(title = "Radiused End Mill")]
     RadiusedEndMill,
+    /// A single-point thread mill: a triangular tooth standing out from a narrower shank,
+    /// for the Thread Milling toolpath
+    #[schemars(title = "Thread Mill")]
+    ThreadMill,
+}
+
+/// The units a tool's feed and plunge rates are shown in, as Aspire's list. Rates are kept
+/// in mm/min whatever the tool shows them in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RateUnits {
+    MmPerSec,
+    #[default]
+    MmPerMin,
+    MPerMin,
+    InchPerSec,
+    InchPerMin,
+    FeetPerMin,
+}
+
+impl RateUnits {
+    pub const ALL: [Self; 6] = [
+        Self::MmPerSec,
+        Self::MmPerMin,
+        Self::MPerMin,
+        Self::InchPerSec,
+        Self::InchPerMin,
+        Self::FeetPerMin,
+    ];
+
+    /// One of these units in mm/min.
+    pub fn mm_per_min(self) -> f64 {
+        const INCH: f64 = 25.4;
+        match self {
+            Self::MmPerSec => 60.0,
+            Self::MmPerMin => 1.0,
+            Self::MPerMin => 1000.0,
+            Self::InchPerSec => 60.0 * INCH,
+            Self::InchPerMin => INCH,
+            Self::FeetPerMin => 12.0 * INCH,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::MmPerSec => "mm/sec",
+            Self::MmPerMin => "mm/min",
+            Self::MPerMin => "m/min",
+            Self::InchPerSec => "inches/sec",
+            Self::InchPerMin => "inches/min",
+            Self::FeetPerMin => "feet/min",
+        }
+    }
+}
+
+/// A tool's cutting data for one material: what Aspire keeps per material (and machine),
+/// as against the tool's geometry. Rates in mm/min; stepover a fraction of the diameter.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CuttingData {
+    /// The material it is for; empty for the tool's default data
+    pub material: String,
+    pub pass_depth: f64,
+    pub stepover: f64,
+    pub feed_rate: f64,
+    pub plunge_rate: f64,
+    pub spindle_speed: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -52,14 +119,64 @@ pub struct Tool {
     pub plunge_rate: f64,
     #[schemars(extend("x-unit" = "rpm"), range(min = 0))]
     pub spindle_speed: f64,
+    /// Side angle of a tapered ball nose or tapered flat bottom, each side of the axis; 0
+    /// for a straight tool. The taper widens to the shank, and toolpaths keep all of it off
+    /// the model (added with tapers).
+    #[serde(default)]
+    #[schemars(title = "Taper Angle", extend("x-unit" = "°"), range(min = 0, max = 45))]
+    pub taper: f64,
+    /// Where a tapered tool's taper ends (added with tapers; 0 if not given)
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub shank_diameter: f64,
+    /// How deep the tool can cut; toolpaths going deeper are flagged (added with tapers;
+    /// 0 if not given)
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub flute_length: f64,
     /// Cutting edges, for the chip load (added after the first tool format)
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
     pub flutes: u32,
+    /// The Tool Database group it sits in, `/` between levels (`Metric Tools/End Mills`);
+    /// empty at the top (added with tool groups)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub group: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub notes: String,
+    /// What the feed and plunge rates are shown in (they are kept in mm/min; added with
+    /// rate units)
+    #[serde(default)]
+    #[schemars(skip)]
+    pub rate_units: RateUnits,
+    /// Cutting data for particular materials; the fields above are the default, used for
+    /// any other (added with materials)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub materials: Vec<CuttingData>,
+    /// A thread mill's tooth: how far it stands out from the shank (S). Its angle is
+    /// `angle` (A) and its tip to tip diameter `diameter` (D) (added with thread mills).
+    #[serde(default = "default_tooth_size")]
+    #[schemars(skip)]
+    pub tooth_size: f64,
+    /// From the bottom of a thread mill up to the tip of its tooth (O)
+    #[serde(default = "default_tooth_offset")]
+    #[schemars(skip)]
+    pub tooth_offset: f64,
 }
 
 fn default_angle() -> f64 {
     90.0
+}
+
+fn default_tooth_size() -> f64 {
+    1.0
+}
+
+fn default_tooth_offset() -> f64 {
+    2.0
 }
 
 fn default_flutes() -> u32 {
@@ -78,10 +195,129 @@ impl Tool {
         (teeth_per_minute > 0.0).then(|| self.feed_rate / teeth_per_minute)
     }
 
+    /// The cutting data for `material` (`""` for the default): its own set if it has one,
+    /// else the default's values under its name, ready to become its set.
+    pub fn cutting(&self, material: &str) -> CuttingData {
+        if let Some(set) = self.material_data(material) {
+            return set.clone();
+        }
+        CuttingData {
+            material: material.to_owned(),
+            pass_depth: self.pass_depth,
+            stepover: self.stepover,
+            feed_rate: self.feed_rate,
+            plunge_rate: self.plunge_rate,
+            spindle_speed: self.spindle_speed,
+        }
+    }
+
+    /// Keeps `data` as its material's set, or as the default for no material.
+    pub fn set_cutting(&mut self, data: CuttingData) {
+        if data.material.is_empty() {
+            self.pass_depth = data.pass_depth;
+            self.stepover = data.stepover;
+            self.feed_rate = data.feed_rate;
+            self.plunge_rate = data.plunge_rate;
+            self.spindle_speed = data.spindle_speed;
+            return;
+        }
+        let at = self
+            .materials
+            .iter()
+            .position(|m| m.material.eq_ignore_ascii_case(&data.material));
+        match at {
+            Some(i) => self.materials[i] = data,
+            None => self.materials.push(data),
+        }
+    }
+
+    /// A copy that cuts with `material`'s data where it has some: what a toolpath takes.
+    #[must_use]
+    pub fn for_material(&self, material: &str) -> Tool {
+        let mut tool = self.clone();
+        if let Some(set) = self.material_data(material) {
+            tool.set_cutting(CuttingData {
+                material: String::new(),
+                ..set.clone()
+            });
+        }
+        tool
+    }
+
+    /// `material`'s own set, matched whatever the case; none for the default.
+    fn material_data(&self, material: &str) -> Option<&CuttingData> {
+        (!material.is_empty())
+            .then(|| {
+                self.materials
+                    .iter()
+                    .find(|m| m.material.eq_ignore_ascii_case(material))
+            })
+            .flatten()
+    }
+
+    /// A thread mill's tooth height (H): its size and angle make a triangle, so this
+    /// follows from them.
+    pub fn tooth_height(&self) -> f64 {
+        2.0 * self.tooth_size * (self.angle.to_radians() / 2.0).tan()
+    }
+
+    /// Sets the tooth height by changing its size, keeping the angle, as Aspire's form does.
+    pub fn set_tooth_height(&mut self, height: f64) {
+        let slope = (self.angle.to_radians() / 2.0).tan();
+        if slope > 0.0 {
+            self.tooth_size = height / (2.0 * slope);
+        }
+    }
+
+    /// The side angle (radians) of a tool that tapers out to its shank, if it does.
+    fn tapered(&self) -> Option<f64> {
+        let tapers = matches!(self.shape, ToolShape::BallNose | ToolShape::EndMill)
+            && self.taper > 0.0
+            && self.taper < 90.0
+            && self.shank_diameter > self.diameter;
+        tapers.then(|| self.taper.to_radians())
+    }
+
+    /// How far from its axis the tool reaches: its shank for a tapered tool.
+    pub fn reach(&self) -> f64 {
+        match self.tapered() {
+            Some(_) => self.shank_diameter / 2.0,
+            None => self.diameter / 2.0,
+        }
+    }
+
+    /// How far out the tool can touch something up to `height` above its tip: anything
+    /// further away is above the tool's profile.
+    pub fn reach_below(&self, height: f64) -> f64 {
+        let radius = self.diameter / 2.0;
+        let r = match (self.tapered(), self.shape) {
+            (Some(a), ToolShape::BallNose) => {
+                radius * a.cos() + (height - radius * (1.0 - a.sin())).max(0.0) * a.tan()
+            }
+            (Some(a), _) => radius + height.max(0.0) * a.tan(),
+            (None, _) => radius,
+        };
+        r.min(self.reach())
+    }
+
     /// How far above its tip the cutting edge is at `r` from the axis; `None` beyond the tool.
+    /// A tapered tool's taper counts as edge, out to its shank.
     pub fn profile(&self, r: f64) -> Option<f64> {
         let radius = self.diameter / 2.0;
-        (r <= radius).then(|| match self.shape {
+        if r > self.reach() {
+            return None;
+        }
+        if let Some(a) = self.tapered() {
+            // a ball meets its taper where the ball is as steep as the taper
+            let (turn, rise) = match self.shape {
+                ToolShape::BallNose => (radius * a.cos(), radius * (1.0 - a.sin())),
+                _ => (radius, 0.0),
+            };
+            if r > turn {
+                return Some(rise + (r - turn) / a.tan());
+            }
+        }
+        Some(match self.shape {
             ToolShape::EndMill => 0.0,
             ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
             ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
@@ -89,6 +325,18 @@ impl Tool {
                 let tip = self.tip_radius.clamp(0.0, radius);
                 let past_flat = (r - (radius - tip)).max(0.0);
                 tip - (tip * tip - past_flat * past_flat).max(0.0).sqrt()
+            }
+            // the core under the tooth is flat to the bottom; the tooth's lower flank
+            // rises to its tip
+            // ponytail: the core is taken to reach the bottom, as most single-point mills do
+            ToolShape::ThreadMill => {
+                let core = radius - self.tooth_size.clamp(0.0, radius);
+                if r <= core {
+                    0.0
+                } else {
+                    let slope = (self.angle.to_radians() / 2.0).tan();
+                    self.tooth_offset - (radius - r) * slope
+                }
             }
         })
     }
@@ -107,16 +355,46 @@ impl Default for Tool {
             feed_rate: 1000.0,
             plunge_rate: 300.0,
             spindle_speed: 18000.0,
+            taper: 0.0,
+            shank_diameter: 0.0,
+            flute_length: 0.0,
             flutes: default_flutes(),
+            group: String::new(),
+            notes: String::new(),
+            rate_units: RateUnits::default(),
+            materials: vec![],
+            tooth_size: default_tooth_size(),
+            tooth_offset: default_tooth_offset(),
         }
     }
 }
 
 /// The shared tools. A toolpath copies its tool, so editing the database never changes
 /// toolpaths already made.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ToolDatabase {
     pub tools: Vec<Tool>,
+    /// The groups the tools sit in, with their notes, in tree order; a group any tool names
+    /// is in the tree whether listed here or not (added with tool groups)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<ToolGroup>,
+    /// The materials tools can keep cutting data for, Aspire's Material list (added with
+    /// materials)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub materials: Vec<String>,
+    /// The active material: tools picked from here cut with its data. Empty for each
+    /// tool's default data.
+    // ponytail: active for the whole database, as Aspire's; not kept per job
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
+}
+
+/// A Tool Database group: `/` between levels, as [`Tool::group`].
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ToolGroup {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
 }
 
 impl ToolDatabase {
@@ -138,31 +416,97 @@ impl ToolDatabase {
                 stepover,
                 ..end_mill(name, diameter, 3.0, 1500.0, 500.0)
             };
+        let mut tools = vec![
+            end_mill("3 mm End Mill", 3.0, 1.5, 800.0, 250.0),
+            Tool::default(),
+            end_mill("12 mm End Mill", 12.0, 4.0, 2000.0, 500.0),
+            end_mill("1/8 in End Mill", 3.175, 1.5, 800.0, 250.0),
+            end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
+            shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
+            shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
+            shaped(
+                "6 mm Radiused End Mill",
+                ToolShape::RadiusedEndMill,
+                6.0,
+                90.0,
+                0.2,
+            ),
+            // a V-bit's stepover spaces V-carving passes, so it is small
+            shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
+            shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),
+            // 60° for ISO threads; a 1 mm tooth suits pitches up to about 1.5 mm
+            Tool {
+                tooth_size: 1.0,
+                tooth_offset: 2.0,
+                ..shaped("10 mm Thread Mill", ToolShape::ThreadMill, 10.0, 60.0, 0.1)
+            },
+        ];
+        for tool in &mut tools {
+            let set = if tool.name.contains(" in ") {
+                "Imperial Tools"
+            } else {
+                "Metric Tools"
+            };
+            tool.group = format!("{set}/{}", shape_group(tool.shape));
+        }
+        let group = |path: &str, notes: &str| ToolGroup {
+            path: path.into(),
+            notes: notes.into(),
+        };
         Self {
-            tools: vec![
-                end_mill("3 mm End Mill", 3.0, 1.5, 800.0, 250.0),
-                Tool::default(),
-                end_mill("12 mm End Mill", 12.0, 4.0, 2000.0, 500.0),
-                end_mill("1/8 in End Mill", 3.175, 1.5, 800.0, 250.0),
-                end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
-                shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
-                shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
-                shaped(
-                    "6 mm Radiused End Mill",
-                    ToolShape::RadiusedEndMill,
-                    6.0,
-                    90.0,
-                    0.2,
-                ),
-                // a V-bit's stepover spaces V-carving passes, so it is small
-                shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
-                shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),
+            tools,
+            groups: vec![
+                group("Metric Tools", "Starter tools sized in millimetres."),
+                group("Imperial Tools", "Starter tools sized in inches."),
             ],
+            ..Self::default()
         }
     }
 
     pub fn get(&self, name: &str) -> Option<&Tool> {
         self.tools.iter().find(|t| t.name == name)
+    }
+
+    /// The tool `name` as a toolpath takes it: cutting with the active material's data.
+    pub fn pick(&self, name: &str) -> Option<Tool> {
+        self.get(name).map(|t| t.for_material(&self.material))
+    }
+
+    /// Puts back a tool as [`Self::pick`] gave it: with a material active its cutting data
+    /// become that material's, and the stored tool's default stays.
+    pub fn put_picked(&mut self, mut tool: Tool) {
+        if !self.material.is_empty() {
+            let data = CuttingData {
+                material: self.material.clone(),
+                ..tool.cutting("")
+            };
+            if let Some(stored) = self.get(&tool.name) {
+                tool.set_cutting(stored.cutting(""));
+            }
+            tool.set_cutting(data);
+        }
+        self.put(tool);
+    }
+
+    /// Adds `name` to the material list, unless it is there already (whatever the case).
+    pub fn add_material(&mut self, name: &str) {
+        let name = name.trim();
+        if !name.is_empty() && !self.materials.iter().any(|m| m.eq_ignore_ascii_case(name)) {
+            self.materials.push(name.to_owned());
+        }
+    }
+
+    /// Takes `name` off the material list with every tool's data for it, as Aspire's Delete
+    /// Material does; the default is active again if it was.
+    pub fn delete_material(&mut self, name: &str) {
+        self.materials.retain(|m| !m.eq_ignore_ascii_case(name));
+        for tool in &mut self.tools {
+            tool.materials
+                .retain(|m| !m.material.eq_ignore_ascii_case(name));
+        }
+        if self.material.eq_ignore_ascii_case(name) {
+            self.material.clear();
+        }
     }
 
     /// Replaces the tool with the same name, or adds it at the end.
@@ -179,6 +523,17 @@ impl ToolDatabase {
 
     pub fn from_json(bytes: &[u8]) -> Result<Self, serde_json::Error> {
         serde_json::from_slice(bytes)
+    }
+}
+
+/// The group a starter tool of `shape` goes in.
+pub fn shape_group(shape: ToolShape) -> &'static str {
+    match shape {
+        ToolShape::EndMill => "End Mills",
+        ToolShape::BallNose => "Ball Nose",
+        ToolShape::VBit => "V-Bits",
+        ToolShape::RadiusedEndMill => "Radiused End Mills",
+        ToolShape::ThreadMill => "Thread Mills",
     }
 }
 
@@ -210,6 +565,7 @@ pub struct Toolpath {
     /// The vectors it was made from: recalculating re-runs the strategy on these.
     #[serde(default)]
     pub vectors: Vec<EntityId>,
+    #[serde(with = "crate::packed::moves")]
     pub moves: Vec<Move>,
     /// Hidden toolpaths are not drawn or previewed (added after the first job format).
     #[serde(default = "shown")]
@@ -408,72 +764,138 @@ pub fn zigzag_within(
         grid.centre(grid.columns - 1, grid.rows - 1),
     );
     let lines = ((last.y - first.y) / step).floor() as usize + 1;
-    let mut runs: Vec<Vec<DVec3>> = vec![];
+    let peaks = grid.peaks();
+    let drop = Drop {
+        grid,
+        tool,
+        tolerance,
+        floor,
+        ceiling: f64::INFINITY,
+        over_ceiling: false,
+        peaks: &peaks,
+    };
+    let mut runs = vec![];
     for line in 0..lines {
         let y = first.y + line as f64 * step;
-        let at = |x: f64| {
-            let p = Point::new(x, y);
-            p.extend(grid.drop_tool(tool, p).max(floor))
-        };
-        let mut line_runs: Vec<Vec<DVec3>> = vec![];
-        let mut run: Vec<DVec3> = vec![];
-        for column in 0..grid.columns {
-            let x = grid.centre(column, 0).x;
-            if !inside(Point::new(x, y)) {
-                if !run.is_empty() {
-                    line_runs.push(std::mem::take(&mut run));
-                }
-                continue;
-            }
-            let next = at(x);
-            if let Some(&previous) = run.last() {
-                Refine {
-                    grid,
-                    tool,
-                    tolerance,
-                    at: &at,
-                }
-                .between(previous, next, HALVINGS, &mut run);
-            }
-            run.push(next);
-        }
-        if !run.is_empty() {
-            line_runs.push(run);
-        }
+        let mut ends = [Point::new(first.x, y), Point::new(last.x, y)];
         if line % 2 == 1 {
-            line_runs.reverse();
-            for run in &mut line_runs {
-                run.reverse();
-            }
+            ends.reverse();
         }
-        for run in line_runs {
-            let mut points: Vec<DVec3> = vec![];
-            for point in run {
-                let n = points.len();
-                if n >= 2 && level_run(points[n - 2], points[n - 1], point) {
-                    points.pop();
-                }
-                points.push(point);
-            }
-            runs.push(points);
-        }
+        runs.extend(drop.along(&ends, inside));
     }
     runs
 }
 
-/// Keeps the moves along one zigzag line from cutting into the grid.
+/// How to drop a tool along lines over a grid: never below `floor`, every move checked to
+/// cut no more than `tolerance` into the grid, and runs split where the tool would sit above
+/// `ceiling` (a Z level's flat cut stops where the model stands above it).
+#[derive(Clone, Copy)]
+pub struct Drop<'a> {
+    pub grid: &'a Material,
+    pub tool: &'a Tool,
+    pub tolerance: f64,
+    pub floor: f64,
+    pub ceiling: f64,
+    /// Runs split at the ceiling keep the point just over it at each end, so the move up to
+    /// it is still cut.
+    pub over_ceiling: bool,
+    /// The grid's [`Material::peaks`].
+    pub peaks: &'a Tiles,
+}
+
+impl Drop<'_> {
+    /// The tool along the polyline `line`, sampled about a cell apart, as low as it goes at
+    /// each point; split into runs where `inside` says no or it would be above the ceiling.
+    /// Points in the middle of level runs are left out.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a small positive count"
+    )]
+    pub fn along(&self, line: &[Point], inside: &dyn Fn(Point) -> bool) -> Vec<Vec<DVec3>> {
+        let at = |p: Point| {
+            p.extend(
+                self.grid
+                    .drop_tool_on(self.tool, p, self.peaks)
+                    .max(self.floor),
+            )
+        };
+        let refine = Refine {
+            grid: self.grid,
+            tool: self.tool,
+            tolerance: self.tolerance,
+            peaks: self.peaks,
+            at: &at,
+        };
+        let mut runs: Vec<Vec<DVec3>> = vec![];
+        let mut run: Vec<DVec3> = vec![];
+        let mut samples = line.first().copied().into_iter().collect::<Vec<_>>();
+        for w in line.windows(2) {
+            let steps = (w[0].distance(w[1]) / self.grid.cell - 1e-9)
+                .ceil()
+                .max(1.0) as u32;
+            samples.extend((1..=steps).map(|i| w[0].lerp(w[1], f64::from(i) / f64::from(steps))));
+        }
+        // the last point passed over for being above the ceiling, while still inside
+        let mut over: Option<DVec3> = None;
+        for p in samples {
+            let point = inside(p).then(|| at(p));
+            let next = point.filter(|q| q.z <= self.ceiling + 1e-9);
+            let Some(next) = next else {
+                if let (true, Some(up), Some(&previous)) = (self.over_ceiling, point, run.last()) {
+                    refine.between(previous, up, HALVINGS, &mut run);
+                    run.push(up);
+                }
+                if !run.is_empty() {
+                    runs.push(tidy(std::mem::take(&mut run)));
+                }
+                over = point;
+                continue;
+            };
+            if let (true, Some(up), true) = (self.over_ceiling, over, run.is_empty()) {
+                run.push(up);
+            }
+            over = None;
+            if let Some(&previous) = run.last() {
+                refine.between(previous, next, HALVINGS, &mut run);
+            }
+            run.push(next);
+        }
+        if !run.is_empty() {
+            runs.push(tidy(run));
+        }
+        runs
+    }
+}
+
+/// Leaves out the middle points of straight level runs.
+fn tidy(run: Vec<DVec3>) -> Vec<DVec3> {
+    let mut points: Vec<DVec3> = vec![];
+    for point in run {
+        let n = points.len();
+        if n >= 2 && level_run(points[n - 2], points[n - 1], point) {
+            points.pop();
+        }
+        points.push(point);
+    }
+    points
+}
+
+/// Keeps the moves along one line from cutting into the grid.
 struct Refine<'a, F> {
     grid: &'a Material,
     tool: &'a Tool,
     tolerance: f64,
-    /// The point on the line at an x, as low as the tool goes there.
+    /// The grid's highest cell in each tile.
+    peaks: &'a Tiles,
+    /// The point on the line, as low as the tool goes there.
     at: &'a F,
 }
 
-impl<F: Fn(f64) -> DVec3> Refine<'_, F> {
+impl<F: Fn(Point) -> DVec3> Refine<'_, F> {
     /// Points to put between `a` and `b` so the moves through them stay out of the grid.
     fn between(&self, a: DVec3, b: DVec3, halvings: u32, out: &mut Vec<DVec3>) {
-        if self.grid.overcut(self.tool, a, b) <= self.tolerance {
+        if self.grid.overcut_on(self.tool, a, b, self.peaks) <= self.tolerance {
             return;
         }
         if halvings == 0 {
@@ -481,22 +903,95 @@ impl<F: Fn(f64) -> DVec3> Refine<'_, F> {
             let level = a.z.max(b.z);
             let across = |z: f64| (a.truncate().extend(z), b.truncate().extend(z));
             let (from, to) = across(level);
-            let lifted = level + self.grid.overcut(self.tool, from, to).max(0.0);
+            let lifted = level
+                + self
+                    .grid
+                    .overcut_on(self.tool, from, to, self.peaks)
+                    .max(0.0);
             let (from, to) = across(lifted);
             out.extend([from, to]);
             return;
         }
-        let middle = (self.at)(f64::midpoint(a.x, b.x));
+        let middle = (self.at)((a.truncate() + b.truncate()) / 2.0);
         self.between(a, middle, halvings - 1, out);
         out.push(middle);
         self.between(middle, b, halvings - 1, out);
     }
 }
 
-/// Three points along one line at one height.
+/// Three points along one straight line at one height.
 fn level_run(a: DVec3, b: DVec3, c: DVec3) -> bool {
     let same = |u: f64, v: f64| (u - v).abs() < 1e-9;
-    same(a.y, b.y) && same(b.y, c.y) && same(a.z, b.z) && same(b.z, c.z)
+    let (first, second) = (b.truncate() - a.truncate(), c.truncate() - b.truncate());
+    same(first.perp_dot(second), 0.0) && first.dot(second) > 0.0 && same(a.z, b.z) && same(b.z, c.z)
+}
+
+/// Raster lines `step` apart at `angle` (degrees from X) across `regions`, every other one
+/// back the other way, as lines to drop a tool along.
+pub fn raster_lines(regions: &[Path], step: f64, angle: f64) -> Vec<Vec<Point>> {
+    hatch_lines(regions, step, angle)
+        .into_iter()
+        .enumerate()
+        .flat_map(|(row, spans)| {
+            let mut spans: Vec<Vec<Point>> = spans.into_iter().map(|(a, b)| vec![a, b]).collect();
+            if row % 2 == 1 {
+                spans.reverse();
+                for span in &mut spans {
+                    span.reverse();
+                }
+            }
+            spans
+        })
+        .collect()
+}
+
+/// [`follow`] for each run in turn, but staying down from the end of one run to the start
+/// of the next when they are no more than `reach` apart: lifted by `lift` over the gap (a
+/// stepover retract), when `clear` says each move of that keeps out of the work.
+pub fn follow_linked(
+    runs: &[Vec<DVec3>],
+    safe_z: f64,
+    reach: f64,
+    lift: f64,
+    clear: &dyn Fn(DVec3, DVec3) -> bool,
+) -> Vec<Move> {
+    let mut moves = vec![];
+    let mut last: Option<DVec3> = None;
+    for run in runs.iter().filter(|r| !r.is_empty()) {
+        let first = run[0];
+        let link = last
+            .filter(|end| end.truncate().distance(first.truncate()) <= reach)
+            .and_then(|end| {
+                let (up, over) = (end + DVec3::Z * lift, first + DVec3::Z * lift);
+                (clear(end, up) && clear(up, over) && clear(over, first)).then_some([up, over])
+            });
+        if let Some(link) = link {
+            // the run before ended with its rapid up: stay down instead
+            moves.pop();
+            if lift > 0.0 {
+                moves.extend(link.map(|to| Move {
+                    kind: MoveKind::Cut,
+                    to,
+                }));
+            }
+            moves.push(Move {
+                kind: MoveKind::Cut,
+                to: first,
+            });
+            moves.extend(run[1..].iter().map(|&to| Move {
+                kind: MoveKind::Cut,
+                to,
+            }));
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: run[run.len() - 1].truncate().extend(safe_z),
+            });
+        } else {
+            moves.extend(follow(run, safe_z));
+        }
+        last = run.last().copied();
+    }
+    moves
 }
 
 /// Rapid to above the first point, plunge to it, cut through the rest, rapid back up.
@@ -524,6 +1019,58 @@ pub fn follow(points: &[DVec3], safe_z: f64) -> Vec<Move> {
         to: above(last),
     });
     moves
+}
+
+/// Project toolpath onto 3D Model: `moves` dropped in Z onto the job's 3D model, so a depth
+/// below (or a lift above) the material surface becomes the same below (or above) the model's
+/// surface, never below the material's bottom. Cuts are split into steps no longer than one of
+/// the model's cells (sized for `tool`) so they follow it; rapids keep their height.
+pub fn project_onto_model(
+    doc: &Document,
+    tool: &Tool,
+    moves: &[Move],
+) -> Result<Vec<Move>, CommandError> {
+    let surface = placed_model(doc, tool)?;
+    // the grid's far edges belong to its last cells, as does anything past them
+    #[expect(clippy::cast_precision_loss, reason = "cell counts are small")]
+    let far = surface.origin
+        + Point::new(surface.columns as f64, surface.rows as f64) * surface.cell
+        - Point::splat(1e-9);
+    // ponytail: the tip follows the model's height under it, as the option is described; the
+    // cutter is not dropped as a whole, so a wide tool's sides can touch a steep slope
+    let drop = |p: DVec3| {
+        let model = surface
+            .at(p.truncate().clamp(surface.origin, far))
+            .unwrap_or(0.0);
+        p.truncate().extend((model + p.z).max(surface.bottom))
+    };
+    let mut projected = Vec::with_capacity(moves.len());
+    let mut from: Option<DVec3> = None;
+    for m in moves {
+        match (m.kind, from) {
+            (MoveKind::Rapid, _) => projected.push(*m),
+            (kind, Some(a)) => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "a small positive count"
+                )]
+                let steps = (a.truncate().distance(m.to.truncate()) / surface.cell)
+                    .ceil()
+                    .max(1.0) as u32;
+                projected.extend((1..=steps).map(|i| Move {
+                    kind,
+                    to: drop(a.lerp(m.to, f64::from(i) / f64::from(steps))),
+                }));
+            }
+            (kind, None) => projected.push(Move {
+                kind,
+                to: drop(m.to),
+            }),
+        }
+        from = Some(m.to);
+    }
+    Ok(projected)
 }
 
 /// Parallel lines `step` apart at `angle` degrees from the x axis, clipped to `regions`
@@ -566,4 +1113,99 @@ pub fn hatch_lines(regions: &[Path], step: f64, angle: f64) -> Vec<Vec<(Point, P
         y += step;
     }
     rows
+}
+
+#[cfg(test)]
+mod projection {
+    use super::*;
+    use crate::testing::domed;
+
+    /// A cut `depth` deep along y = 20 over the middle of the dome, from flat to flat.
+    fn across(depth: f64) -> Vec<Move> {
+        let at = |kind, x: f64, z: f64| Move {
+            kind,
+            to: DVec3::new(x, 20.0, z),
+        };
+        vec![
+            at(MoveKind::Rapid, 2.0, 5.0),
+            at(MoveKind::Plunge, 2.0, -depth),
+            at(MoveKind::Cut, 38.0, -depth),
+            at(MoveKind::Rapid, 38.0, 5.0),
+        ]
+    }
+
+    /// The dome's surface along that line: 8 mm tall with its top at the material surface.
+    fn dome(x: f64) -> f64 {
+        let r = (x - 20.0).abs();
+        if r < 8.0 {
+            (64.0 - r * r).sqrt() - 8.0
+        } else {
+            -8.0
+        }
+    }
+
+    fn cuts(moves: &[Move]) -> Vec<DVec3> {
+        moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut)
+            .map(|m| m.to)
+            .collect()
+    }
+
+    #[test]
+    fn a_cut_follows_the_model_at_its_depth_below_it() {
+        let moved = project_onto_model(&domed(), &Tool::default(), &across(1.0)).unwrap();
+        let cuts = cuts(&moved);
+        // split into steps no longer than a model cell, a twentieth of the 6 mm tool
+        assert!(cuts.len() > 100, "{} pieces", cuts.len());
+        assert!(
+            cuts.windows(2)
+                .all(|w| w[0].truncate().distance(w[1].truncate()) <= 0.3 + 1e-9)
+        );
+        for p in &cuts {
+            // off the true dome by no more than its slope across a cell
+            assert!(
+                (p.z - (dome(p.x) - 1.0)).abs() < 0.5,
+                "at x = {} cut at {}, the model at {}",
+                p.x,
+                p.z,
+                dome(p.x)
+            );
+        }
+        assert!(
+            cuts.iter().any(|p| (p.z + 1.0).abs() < 0.05),
+            "over the top"
+        );
+        // right on the material's far edge too
+        let edge = [Move {
+            kind: MoveKind::Plunge,
+            to: DVec3::new(40.0, 40.0, -1.0),
+        }];
+        let dropped = project_onto_model(&domed(), &Tool::default(), &edge).unwrap();
+        assert!((dropped[0].to.z + 9.0).abs() < 0.01, "{}", dropped[0].to.z);
+        // rapids keep their height above the material
+        assert!((moved.first().unwrap().to.z - 5.0).abs() < 1e-12);
+        assert!((moved.last().unwrap().to.z - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn it_never_goes_below_the_material_bottom() {
+        // 3 mm below the flat 8 mm down would be 11 mm into 10 mm thick material
+        let moved = project_onto_model(&domed(), &Tool::default(), &across(3.0)).unwrap();
+        let lowest = moved.iter().map(|m| m.to.z).fold(f64::INFINITY, f64::min);
+        assert!((lowest + 10.0).abs() < 1e-9, "lowest {lowest}");
+        let top = cuts(&moved)
+            .into_iter()
+            .find(|p| (p.x - 20.0).abs() < 0.2)
+            .unwrap();
+        assert!((top.z + 3.0).abs() < 0.05, "over the top at {}", top.z);
+    }
+
+    #[test]
+    fn it_needs_a_model() {
+        let why = project_onto_model(&Document::default(), &Tool::default(), &across(1.0))
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("3D model"), "{why}");
+    }
 }

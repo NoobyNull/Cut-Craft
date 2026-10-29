@@ -3,7 +3,9 @@
 use crate::CommandError;
 use crate::bitmap::Bitmap;
 use crate::component::{Component, Level};
-use crate::document::{Document, EntityId, Job, Layer, LayerId};
+use crate::document::{
+    Document, EntityId, Guide, Job, Layer, LayerId, Sheet, SheetObjects, StoredVector,
+};
 use crate::geometry::{Path, Point, Rect};
 use crate::selection::Selection;
 use crate::toolpath::Toolpath;
@@ -130,6 +132,36 @@ pub enum Edit {
         before: Option<Level>,
         after: Option<Level>,
     },
+    /// Turns toolpath tiling on (with its settings) or off.
+    SetTiling {
+        before: Option<crate::tiling::Tiling>,
+        after: Option<crate::tiling::Tiling>,
+    },
+    /// Replaces the guide lines.
+    SetGuides {
+        before: Vec<Guide>,
+        after: Vec<Guide>,
+    },
+    /// Replaces the keep-out zones.
+    SetKeepOut {
+        before: Vec<Path>,
+        after: Vec<Path>,
+    },
+    /// Replaces the document variables.
+    SetVariables {
+        before: BTreeMap<String, f64>,
+        after: BTreeMap<String, f64>,
+    },
+    /// Double-sided jobs: which side is worked on (bottom or not) and what is on the other.
+    SetSide {
+        before: (bool, SheetObjects),
+        after: (bool, SheetObjects),
+    },
+    /// Replaces the sheet list and which sheet is active.
+    SetSheets {
+        before: (Vec<Sheet>, usize),
+        after: (Vec<Sheet>, usize),
+    },
 }
 
 impl Edit {
@@ -189,6 +221,30 @@ impl Edit {
                 after: before,
             },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
+                before: after,
+                after: before,
+            },
+            Self::SetTiling { before, after } => Self::SetTiling {
+                before: after,
+                after: before,
+            },
+            Self::SetGuides { before, after } => Self::SetGuides {
+                before: after,
+                after: before,
+            },
+            Self::SetKeepOut { before, after } => Self::SetKeepOut {
+                before: after,
+                after: before,
+            },
+            Self::SetVariables { before, after } => Self::SetVariables {
+                before: after,
+                after: before,
+            },
+            Self::SetSide { before, after } => Self::SetSide {
+                before: after,
+                after: before,
+            },
+            Self::SetSheets { before, after } => Self::SetSheets {
                 before: after,
                 after: before,
             },
@@ -260,6 +316,10 @@ pub type Step<'a> = &'a dyn Fn(&Document) -> Result<Change, CommandError>;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Change {
     pub edits: Vec<Edit>,
+    /// What the command would have the person know about what it made (an imported model's
+    /// undercuts...), shown with its result; not part of the document.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
 
 impl Change {
@@ -275,7 +335,11 @@ impl Change {
             current_layer: doc.current_layer,
             vector_layers: BTreeMap::new(),
             levels: BTreeMap::new(),
+            sheets: (doc.sheets.clone(), doc.active_sheet),
+            side: (doc.bottom_side, doc.other_side.clone()),
+            job: doc.job,
             edits: vec![],
+            notes: vec![],
         }
     }
 
@@ -445,6 +509,17 @@ impl Change {
         self.edits.is_empty()
     }
 
+    /// The toolpaths this change adds or replaces.
+    pub fn toolpaths_made(&self) -> Vec<EntityId> {
+        self.edits
+            .iter()
+            .filter_map(|e| match e {
+                Edit::AddToolpath { id, .. } | Edit::ReplaceToolpath { id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The job this change sets, if it sets one: lets a view show a job before it is applied.
     pub fn job(&self) -> Option<&Job> {
         self.edits.iter().rev().find_map(|e| match e {
@@ -457,12 +532,14 @@ impl Change {
     pub fn inverse(&self) -> Self {
         Self {
             edits: self.edits.iter().rev().map(Edit::inverse).collect(),
+            notes: vec![],
         }
     }
 
     #[must_use]
     pub fn then(mut self, next: Self) -> Self {
         self.edits.extend(next.edits);
+        self.notes.extend(next.notes);
         self
     }
 
@@ -492,20 +569,144 @@ impl Change {
     }
 }
 
+/// What [`Document::apply`] puts back when an edit fails partway: the document apart from
+/// its heavy maps, and of those maps (models, pictures, toolpaths, the other sheets' objects)
+/// only the entries the change touches, so a stroke on one model never copies the others.
+struct Kept {
+    light: Document,
+    components: Vec<(EntityId, Option<Component>)>,
+    bitmaps: Vec<(EntityId, Option<Bitmap>)>,
+    toolpaths: Vec<(EntityId, Option<Toolpath>)>,
+    /// The sheets and the active one, when the change replaces them.
+    sheets: Option<(Vec<Sheet>, usize)>,
+    /// The other side, when the change turns the job over.
+    side: Option<(bool, SheetObjects)>,
+}
+
+impl Kept {
+    fn before(doc: &mut Document, change: &Change) -> Self {
+        let (components, bitmaps, toolpaths, sheets, other_side) = (
+            std::mem::take(&mut doc.components),
+            std::mem::take(&mut doc.bitmaps),
+            std::mem::take(&mut doc.toolpaths),
+            std::mem::take(&mut doc.sheets),
+            std::mem::take(&mut doc.other_side),
+        );
+        let light = doc.clone();
+        doc.components = components;
+        doc.bitmaps = bitmaps;
+        doc.toolpaths = toolpaths;
+        doc.sheets = sheets;
+        doc.other_side = other_side;
+        let mut kept = Self {
+            light,
+            components: vec![],
+            bitmaps: vec![],
+            toolpaths: vec![],
+            sheets: None,
+            side: None,
+        };
+        for edit in &change.edits {
+            match edit {
+                Edit::AddComponent { id, .. }
+                | Edit::RemoveComponent { id, .. }
+                | Edit::ReplaceComponent { id, .. } => {
+                    kept.components.push((*id, doc.components.get(id).cloned()));
+                }
+                Edit::AddBitmap { id, .. }
+                | Edit::RemoveBitmap { id, .. }
+                | Edit::ReplaceBitmap { id, .. } => {
+                    kept.bitmaps.push((*id, doc.bitmaps.get(id).cloned()));
+                }
+                Edit::AddToolpath { id, .. }
+                | Edit::RemoveToolpath { id, .. }
+                | Edit::ReplaceToolpath { id, .. } => {
+                    kept.toolpaths.push((*id, doc.toolpaths.get(id).cloned()));
+                }
+                Edit::SetSheets { .. } if kept.sheets.is_none() => {
+                    kept.sheets = Some((doc.sheets.clone(), doc.active_sheet));
+                }
+                Edit::SetSide { .. } if kept.side.is_none() => {
+                    kept.side = Some((doc.bottom_side, doc.other_side.clone()));
+                }
+                _ => {}
+            }
+        }
+        kept
+    }
+
+    /// The document as it was before the change began.
+    fn restore(self, doc: &mut Document) {
+        let (components, bitmaps, toolpaths, sheets, other_side) = (
+            std::mem::take(&mut doc.components),
+            std::mem::take(&mut doc.bitmaps),
+            std::mem::take(&mut doc.toolpaths),
+            std::mem::take(&mut doc.sheets),
+            std::mem::take(&mut doc.other_side),
+        );
+        *doc = self.light;
+        doc.components = components;
+        doc.bitmaps = bitmaps;
+        doc.toolpaths = toolpaths;
+        doc.sheets = sheets;
+        doc.other_side = other_side;
+        // the first entry kept for an id is what was there before any edit touched it
+        for (id, before) in self.components.into_iter().rev() {
+            put_back(&mut doc.components, id, before);
+        }
+        for (id, before) in self.bitmaps.into_iter().rev() {
+            put_back(&mut doc.bitmaps, id, before);
+        }
+        for (id, before) in self.toolpaths.into_iter().rev() {
+            put_back(&mut doc.toolpaths, id, before);
+        }
+        if let Some((sheets, active)) = self.sheets {
+            (doc.sheets, doc.active_sheet) = (sheets, active);
+        }
+        if let Some(side) = self.side {
+            (doc.bottom_side, doc.other_side) = side;
+        }
+    }
+}
+
+fn put_back<T>(map: &mut BTreeMap<EntityId, T>, id: EntityId, before: Option<T>) {
+    match before {
+        Some(value) => {
+            map.insert(id, value);
+        }
+        None => {
+            map.remove(&id);
+        }
+    }
+}
+
 impl Document {
     /// Applies every edit or none of them.
     pub fn apply(&mut self, change: &Change) -> Result<(), ApplyError> {
-        // ponytail: whole-document copy per change keeps this atomic; validate-then-apply
-        // in place if documents get big enough for the copy to show up in profiles
-        let mut next = self.clone();
+        let kept = Kept::before(self, change);
         for edit in &change.edits {
-            next.apply_edit(edit)?;
+            if let Err(e) = self.apply_edit(edit) {
+                kept.restore(self);
+                return Err(e);
+            }
         }
-        *self = next;
         Ok(())
     }
 
     /// The component and bitmap edits.
+    /// The edits of a whole-document setting: notes, variables, keep-out zones, guides.
+    /// Like the selection they are not checked against `before`.
+    fn apply_setting(&mut self, edit: &Edit) {
+        match edit {
+            Edit::SetNotes { after, .. } => self.notes.clone_from(after),
+            Edit::SetVariables { after, .. } => self.variables.clone_from(after),
+            Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
+            Edit::SetGuides { after, .. } => self.guides.clone_from(after),
+            Edit::SetTiling { after, .. } => self.tiling = *after,
+            _ => unreachable!("only settings come here"),
+        }
+    }
+
     fn apply_model_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
             Edit::AddComponent { id, component } => {
@@ -555,6 +756,7 @@ impl Document {
         Ok(())
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per kind of edit")]
     fn apply_edit(&mut self, edit: &Edit) -> Result<(), ApplyError> {
         match edit {
             Edit::Add { id, path } => insert_new(&mut self.vectors, *id, path.clone())?,
@@ -649,10 +851,18 @@ impl Document {
                 }
                 self.current_layer = *after;
             }
-            Edit::SetNotes { after, .. } => self.notes.clone_from(after),
+            Edit::SetNotes { .. }
+            | Edit::SetVariables { .. }
+            | Edit::SetKeepOut { .. }
+            | Edit::SetGuides { .. }
+            | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
             Edit::SetLevel { id, before, after } => {
                 self.set_level(*id, before.as_ref(), after.as_ref())?;
+            }
+            Edit::SetSheets { before, after } => self.set_sheets(before, after)?,
+            Edit::SetSide { after, .. } => {
+                (self.bottom_side, self.other_side) = after.clone();
             }
         }
         Ok(())
@@ -731,7 +941,14 @@ pub struct ChangeBuilder<'a> {
     vector_layers: BTreeMap<EntityId, Option<LayerId>>,
     /// Levels as this change has left them (`None` = removed), shadowing `doc`.
     levels: BTreeMap<u64, Option<Level>>,
+    /// The sheet list and active sheet as this change has left them.
+    sheets: (Vec<Sheet>, usize),
+    /// The side worked on and the other side's objects as this change has left them.
+    side: (bool, SheetObjects),
+    /// The job as this change has left it.
+    job: Job,
     edits: Vec<Edit>,
+    notes: Vec<String>,
 }
 
 impl ChangeBuilder<'_> {
@@ -1041,15 +1258,198 @@ impl ChangeBuilder<'_> {
         }
     }
 
+    /// Replaces the sheet list and which sheet is active (as it stands, not its setup: see
+    /// [`Self::activate_sheet`]).
+    pub fn set_sheets(&mut self, after: Vec<Sheet>, active: usize) {
+        let after = (after, active);
+        if self.sheets != after {
+            let before = std::mem::replace(&mut self.sheets, after.clone());
+            self.edits.push(Edit::SetSheets { before, after });
+        }
+    }
+
+    pub fn set_tiling(&mut self, after: Option<crate::tiling::Tiling>) {
+        if self.doc.tiling != after {
+            let before = self.doc.tiling;
+            self.edits.push(Edit::SetTiling { before, after });
+        }
+    }
+
+    pub fn set_guides(&mut self, after: Vec<Guide>) {
+        if self.doc.guides != after {
+            let before = self.doc.guides.clone();
+            self.edits.push(Edit::SetGuides { before, after });
+        }
+    }
+
+    pub fn set_keep_out(&mut self, after: Vec<Path>) {
+        if self.doc.keep_out != after {
+            let before = self.doc.keep_out.clone();
+            self.edits.push(Edit::SetKeepOut { before, after });
+        }
+    }
+
+    pub fn set_variables(&mut self, after: BTreeMap<String, f64>) {
+        if self.doc.variables != after {
+            let before = self.doc.variables.clone();
+            self.edits.push(Edit::SetVariables { before, after });
+        }
+    }
+
+    /// The sheet list as this change has left it.
+    pub fn sheets(&self) -> &[Sheet] {
+        &self.sheets.0
+    }
+
+    /// Makes sheet `index` the one worked on: the job takes its setup and the document its
+    /// objects (both sides of a double-sided job), and the sheet left keeps the job's setup
+    /// and the document's objects. Call it before anything else in the change.
+    pub fn activate_sheet(&mut self, index: usize) {
+        let (mut sheets, active) = self.sheets.clone();
+        if index == active || index >= sheets.len() {
+            return;
+        }
+        let mut arriving = std::mem::take(&mut sheets[index].objects);
+        let mut left = self.swap_objects(&arriving);
+        let (bottom, other) = self.side.clone();
+        left.bottom = bottom;
+        left.other_side = (!other.is_empty()).then(|| Box::new(other));
+        let other = arriving.other_side.take().map(|o| *o).unwrap_or_default();
+        self.set_side(arriving.bottom, other);
+        sheets[active].objects = left;
+        sheets[active].job = self.job;
+        let job = sheets[index].job;
+        self.set_sheets(sheets, index);
+        self.set_job(job);
+    }
+
+    /// Double-sided jobs: work on the other side. The document's objects are kept as the
+    /// side left, and the other side's come in.
+    pub fn swap_sides(&mut self) {
+        let (bottom, arriving) = self.side.clone();
+        let left = self.swap_objects(&arriving);
+        self.set_side(!bottom, left);
+    }
+
+    /// Which side is worked on and what is on the other one.
+    pub fn set_side(&mut self, bottom: bool, other: SheetObjects) {
+        let after = (bottom, other);
+        if self.side != after {
+            let before = std::mem::replace(&mut self.side, after.clone());
+            self.edits.push(Edit::SetSide { before, after });
+        }
+    }
+
+    /// The side worked on (bottom or not) and what is on the other one, as this change has
+    /// left them.
+    pub fn side(&self) -> &(bool, SheetObjects) {
+        &self.side
+    }
+
+    /// A free id for something stored off the document (on the other side).
+    pub fn fresh_id(&mut self) -> EntityId {
+        let id = EntityId(self.next_id);
+        self.next_id += 1;
+        id
+    }
+
+    /// Takes the document's objects out (returned, to be stored) and puts `arriving`'s in,
+    /// with ordinary edits so undo is exact.
+    fn swap_objects(&mut self, arriving: &SheetObjects) -> SheetObjects {
+        let doc = self.doc;
+        self.select([]);
+        let mut left = SheetObjects::default();
+        for (&id, path) in &doc.vectors {
+            let layer = doc.vector_layers.get(&id).copied();
+            let group = doc.vector_groups.get(&id).copied();
+            if group.is_some() {
+                self.edits.push(Edit::SetGroup {
+                    id,
+                    before: group,
+                    after: None,
+                });
+            }
+            if layer.is_some() {
+                self.edits.push(Edit::SetLayer {
+                    id,
+                    before: layer,
+                    after: None,
+                });
+            }
+            self.edits.push(Edit::Remove {
+                id,
+                path: path.clone(),
+            });
+            let path = path.clone();
+            left.vectors.insert(id, StoredVector { path, layer, group });
+        }
+        for (&id, k) in &doc.components {
+            let component = Box::new(k.clone());
+            self.edits.push(Edit::RemoveComponent { id, component });
+            left.components.insert(id, k.clone());
+        }
+        for (&id, b) in &doc.bitmaps {
+            let bitmap = Box::new(b.clone());
+            self.edits.push(Edit::RemoveBitmap { id, bitmap });
+            left.bitmaps.insert(id, b.clone());
+        }
+        for (&id, t) in &doc.toolpaths {
+            let toolpath = Box::new(t.clone());
+            self.edits.push(Edit::RemoveToolpath { id, toolpath });
+            left.toolpaths.insert(id, t.clone());
+        }
+        for (&id, v) in &arriving.vectors {
+            self.edits.push(Edit::Add {
+                id,
+                path: v.path.clone(),
+            });
+            if v.layer.is_some() {
+                self.edits.push(Edit::SetLayer {
+                    id,
+                    before: None,
+                    after: v.layer,
+                });
+            }
+            if v.group.is_some() {
+                self.edits.push(Edit::SetGroup {
+                    id,
+                    before: None,
+                    after: v.group,
+                });
+            }
+        }
+        for (&id, k) in &arriving.components {
+            let component = Box::new(k.clone());
+            self.edits.push(Edit::AddComponent { id, component });
+        }
+        for (&id, b) in &arriving.bitmaps {
+            let bitmap = Box::new(b.clone());
+            self.edits.push(Edit::AddBitmap { id, bitmap });
+        }
+        for (&id, t) in &arriving.toolpaths {
+            let toolpath = Box::new(t.clone());
+            self.edits.push(Edit::AddToolpath { id, toolpath });
+        }
+        left
+    }
+
     pub fn set_job(&mut self, after: Job) {
-        let before = self.doc.job;
-        if before != after {
+        if self.job != after {
+            let before = std::mem::replace(&mut self.job, after);
             self.edits.push(Edit::SetJob { before, after });
         }
     }
 
+    /// Something for the person to know about what this change makes.
+    pub fn note(&mut self, note: impl Into<String>) {
+        self.notes.push(note.into());
+    }
+
     pub fn finish(self) -> Change {
-        Change { edits: self.edits }
+        Change {
+            edits: self.edits,
+            notes: self.notes,
+        }
     }
 }
 

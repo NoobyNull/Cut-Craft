@@ -49,7 +49,7 @@ impl Command for VectorValidator {
         Meta {
             label: "Vector Validator",
             group: "Edit Objects",
-            icon: "drawing/create_vectors/vector_validator.svg",
+            icon: "drawing/create_vectors/vector_validator.png",
             shortcut: "",
         }
     }

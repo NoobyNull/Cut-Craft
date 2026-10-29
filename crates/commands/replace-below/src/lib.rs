@@ -50,7 +50,7 @@ impl Command for ReplaceBelow {
         Meta {
             label: "Replace Below",
             group: "Modeling",
-            icon: "modeling/replace_below.svg",
+            icon: "modeling/replace_below.png",
             shortcut: "",
         }
     }
@@ -61,16 +61,19 @@ impl Command for ReplaceBelow {
         };
         let drop = if p.lower { p.below } else { 0.0 };
         for h in &mut part.heights {
-            *h = match *h {
-                Some(z) if z < p.below => match p.replace_with {
-                    ReplaceWith::Transparent => None,
-                    ReplaceWith::Plane => Some(p.below - drop),
-                },
-                Some(z) => Some(z - drop),
-                None => None,
+            let z = *h;
+            *h = if z.is_nan() {
+                z
+            } else if z < p.below {
+                match p.replace_with {
+                    ReplaceWith::Transparent => f64::NAN,
+                    ReplaceWith::Plane => p.below - drop,
+                }
+            } else {
+                z - drop
             };
         }
-        if part.heights.iter().all(Option::is_none) {
+        if part.heights.iter().all(|h| h.is_nan()) {
             return Err(CommandError::Failed(
                 "that would remove the whole component".into(),
             ));

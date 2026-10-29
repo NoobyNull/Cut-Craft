@@ -199,6 +199,20 @@ pub fn load(name: &str, bold: bool, italic: bool, text: &str) -> Result<Font, St
     .ok_or_else(|| format!("could not read the font {name}"))?
 }
 
+/// The first of `families` installed, as its name, its file's bytes and the face's index in
+/// it: for the app's own text.
+pub fn system_face(families: &[&str]) -> Option<(String, Vec<u8>, u32)> {
+    let db = system();
+    families.iter().find_map(|&name| {
+        let query = fontdb::Query {
+            families: &[fontdb::Family::Name(name)],
+            ..fontdb::Query::default()
+        };
+        let id = db.query(&query)?;
+        db.with_face_data(id, |data, index| (name.to_owned(), data.to_vec(), index))
+    })
+}
+
 fn system() -> &'static fontdb::Database {
     static DB: OnceLock<fontdb::Database> = OnceLock::new();
     DB.get_or_init(|| {
@@ -321,6 +335,11 @@ impl ttf_parser::OutlineBuilder for Outline {
 
 #[cfg(any(test, feature = "testing"))]
 pub(crate) mod tests {
+    #[test]
+    fn an_unknown_family_is_not_found() {
+        assert!(super::system_face(&["No Such Font 1234"]).is_none());
+    }
+
     #[allow(
         clippy::wildcard_imports,
         reason = "test builds use more of the module"

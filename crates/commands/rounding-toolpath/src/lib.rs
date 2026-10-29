@@ -100,7 +100,7 @@ impl Command for RoundingToolpath {
         Meta {
             label: "Rounding Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/rounding_toolpath.svg",
+            icon: "toolpaths/rounding_toolpath.png",
             shortcut: "",
         }
     }

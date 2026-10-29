@@ -105,7 +105,7 @@ impl Command for MergedToolpath {
         Meta {
             label: "Merged Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/merge_toolpaths.svg",
+            icon: "toolpaths/merge_toolpaths.png",
             shortcut: "",
         }
     }

@@ -65,7 +65,7 @@ impl Command for CreateFillets {
         Meta {
             label: "Create Fillets",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/create_fillets.svg",
+            icon: "drawing/create_vectors/create_fillets.png",
             shortcut: "",
         }
     }

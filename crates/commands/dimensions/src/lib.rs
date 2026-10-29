@@ -72,7 +72,7 @@ impl Command for Dimensions {
         Meta {
             label: "Dimensions",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/dimensions.svg",
+            icon: "drawing/create_vectors/dimensions.png",
             shortcut: "",
         }
     }

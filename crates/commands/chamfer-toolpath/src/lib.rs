@@ -152,7 +152,7 @@ impl Command for ChamferToolpath {
         Meta {
             label: "Chamfer Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/chamfer_toolpath.svg",
+            icon: "toolpaths/chamfer_toolpath.png",
             shortcut: "",
         }
     }

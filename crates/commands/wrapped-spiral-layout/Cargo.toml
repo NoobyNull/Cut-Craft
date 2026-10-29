@@ -1,0 +1,17 @@
+[package]
+name = "cmd-wrapped-spiral-layout"
+description = "Wrapped Spiral Layout"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cmd-wrapped-fluting-layout = { path = "../wrapped-fluting-layout" }
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

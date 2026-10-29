@@ -1092,8 +1092,8 @@
   "source": "png/35093"
  },
  {
-  "path": "view/tile_windows.svg",
-  "label": "Tile windows",
+  "path": "view/split_over_and_under.svg",
+  "label": "Split over and under",
   "guess": false,
   "slot": "ico/57651",
   "source": "ico/57651"
@@ -1118,6 +1118,27 @@
   "guess": false,
   "slot": "png/34563",
   "source": "png/34563"
+ },
+ {
+  "path": "view/split_side_by_side.svg",
+  "label": "Split side by side",
+  "guess": false,
+  "slot": "ico/57652",
+  "source": "ico/57652"
+ },
+ {
+  "path": "view/layers.svg",
+  "label": "Layers",
+  "guess": false,
+  "slot": "ico/33843",
+  "source": "ico/33843"
+ },
+ {
+  "path": "view/component_levels.svg",
+  "label": "Component levels",
+  "guess": false,
+  "slot": "ico/33847",
+  "source": "ico/33847"
  },
  {
   "path": "snapping/geometry_snapping_on.svg",
@@ -1384,5 +1405,187 @@
   "guess": false,
   "slot": "ico/35038",
   "source": "ico/35038"
+ },
+ {
+  "path": "import/initial_orientation.bmp",
+  "label": "Initial orientation",
+  "guess": false,
+  "slot": "bmp/4018",
+  "source": "bmp/4018"
+ },
+ {
+  "path": "import/model_size_xyz.bmp",
+  "label": "Model size XYZ",
+  "guess": false,
+  "slot": "bmp/4023",
+  "source": "bmp/4023"
+ },
+ {
+  "path": "import/position_relative_to_modeling_plane.bmp",
+  "label": "Position relative to modeling plane",
+  "guess": false,
+  "slot": "bmp/34746",
+  "source": "bmp/34746"
+ },
+ {
+  "path": "file/youtube_link.svg",
+  "label": "YouTube link",
+  "guess": false,
+  "slot": "slot/35069_14",
+  "source": "slot/35069_14"
+ },
+ {
+  "path": "file/facebook_link.svg",
+  "label": "Facebook link",
+  "guess": false,
+  "slot": "slot/35069_15",
+  "source": "slot/35069_15"
+ },
+ {
+  "path": "file/twitter_link.svg",
+  "label": "Twitter link",
+  "guess": false,
+  "slot": "slot/35069_16",
+  "source": "slot/35069_16"
+ },
+ {
+  "path": "file/instagram_link.svg",
+  "label": "Instagram link",
+  "guess": false,
+  "slot": "slot/35069_23",
+  "source": "slot/35069_23"
+ },
+ {
+  "path": "file/pinterest_link.svg",
+  "label": "Pinterest link",
+  "guess": false,
+  "slot": "slot/35069_25",
+  "source": "slot/35069_25"
+ },
+ {
+  "path": "modeling/create_component_from_bitmap.svg",
+  "label": "Create Component from Bitmap",
+  "guess": true,
+  "slot": "png/34199",
+  "source": "png/34199"
+ },
+ {
+  "path": "tool_database/end_mill.bmp",
+  "label": "End mill",
+  "guess": false,
+  "slot": "bmp/34614",
+  "source": "bmp/34614"
+ },
+ {
+  "path": "tool_database/ball_nose.bmp",
+  "label": "Ball nose",
+  "guess": false,
+  "slot": "bmp/34615",
+  "source": "bmp/34615"
+ },
+ {
+  "path": "tool_database/v_bit.bmp",
+  "label": "V-bit",
+  "guess": false,
+  "slot": "bmp/34612",
+  "source": "bmp/34612"
+ },
+ {
+  "path": "tool_database/radiused_end_mill.bmp",
+  "label": "Radiused end mill",
+  "guess": false,
+  "slot": "bmp/34643",
+  "source": "bmp/34643"
+ },
+ {
+  "path": "drawing_forms/corner_square.bmp",
+  "label": "Corner square",
+  "guess": false,
+  "slot": "bmp/34704",
+  "source": "bmp/34704"
+ },
+ {
+  "path": "drawing_forms/corner_rounded.bmp",
+  "label": "Corner rounded",
+  "guess": false,
+  "slot": "bmp/34705",
+  "source": "bmp/34705"
+ },
+ {
+  "path": "drawing_forms/corner_notched.bmp",
+  "label": "Corner notched",
+  "guess": false,
+  "slot": "bmp/34703",
+  "source": "bmp/34703"
+ },
+ {
+  "path": "drawing_forms/width.bmp",
+  "label": "Width",
+  "guess": false,
+  "slot": "bmp/34885",
+  "source": "bmp/34885"
+ },
+ {
+  "path": "drawing_forms/height.bmp",
+  "label": "Height",
+  "guess": false,
+  "slot": "bmp/34886",
+  "source": "bmp/34886"
+ },
+ {
+  "path": "drawing_forms/circle_center.bmp",
+  "label": "Circle center",
+  "guess": false,
+  "slot": "bmp/34533",
+  "source": "bmp/34533"
+ },
+ {
+  "path": "drawing_forms/circle_radius.bmp",
+  "label": "Circle radius",
+  "guess": false,
+  "slot": "bmp/34535",
+  "source": "bmp/34535"
+ },
+ {
+  "path": "drawing_forms/polygon_center.bmp",
+  "label": "Polygon center",
+  "guess": false,
+  "slot": "bmp/34894",
+  "source": "bmp/34894"
+ },
+ {
+  "path": "drawing_forms/polygon_radius.bmp",
+  "label": "Polygon radius",
+  "guess": false,
+  "slot": "bmp/34889",
+  "source": "bmp/34889"
+ },
+ {
+  "path": "drawing_forms/star_center.bmp",
+  "label": "Star center",
+  "guess": false,
+  "slot": "bmp/34893",
+  "source": "bmp/34893"
+ },
+ {
+  "path": "drawing_forms/star_outer_radius.bmp",
+  "label": "Star outer radius",
+  "guess": false,
+  "slot": "bmp/34890",
+  "source": "bmp/34890"
+ },
+ {
+  "path": "drawing_forms/star_inner_radius.bmp",
+  "label": "Star inner radius",
+  "guess": false,
+  "slot": "bmp/34891",
+  "source": "bmp/34891"
+ },
+ {
+  "path": "import/chess_knight.png",
+  "label": "Chess knight (Initial Orientation)",
+  "guess": false,
+  "slot": "icons8/16450",
+  "source": "icons8/16450"
  }
 ]

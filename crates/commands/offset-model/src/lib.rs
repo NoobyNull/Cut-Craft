@@ -36,7 +36,7 @@ impl Command for OffsetModel {
         Meta {
             label: "Offset Model",
             group: "Modeling",
-            icon: "modeling/offset_model.svg",
+            icon: "modeling/offset_model.png",
             shortcut: "",
         }
     }

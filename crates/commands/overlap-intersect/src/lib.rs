@@ -14,7 +14,7 @@ impl Command for OverlapIntersect {
         Meta {
             label: "Overlap",
             group: "Edit Objects",
-            icon: "drawing/weld_and_offset/overlap_intersect.svg",
+            icon: "drawing/weld_and_offset/overlap_intersect.png",
             shortcut: "",
         }
     }

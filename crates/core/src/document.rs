@@ -46,6 +46,95 @@ impl Layer {
     }
 }
 
+/// One of the job's material sheets (the Sheets tab), with its own size and setup. The
+/// active sheet's setup is [`Document::job`]; its copy here is brought up to date when
+/// another sheet is activated, so read sheets through [`Document::sheet_job`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Sheet {
+    pub name: String,
+    pub job: Job,
+    #[serde(default = "visible")]
+    pub visible: bool,
+    /// What is on the sheet while another is active; the active sheet's objects are the
+    /// document's own.
+    #[serde(default, skip_serializing_if = "SheetObjects::is_empty")]
+    pub objects: SheetObjects,
+}
+
+/// A sheet's vectors (each with its layer and group), components, pictures and toolpaths,
+/// kept by their ids.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SheetObjects {
+    #[serde(default)]
+    pub vectors: BTreeMap<EntityId, StoredVector>,
+    #[serde(default)]
+    pub components: BTreeMap<EntityId, Component>,
+    #[serde(default)]
+    pub bitmaps: BTreeMap<EntityId, Bitmap>,
+    #[serde(default)]
+    pub toolpaths: BTreeMap<EntityId, Toolpath>,
+    /// Double-sided jobs: the bottom side was being worked on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bottom: bool,
+    /// Double-sided jobs: what is on the side not being worked on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_side: Option<Box<SheetObjects>>,
+}
+
+/// A vector kept on a sheet that is not active.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StoredVector {
+    pub path: Path,
+    pub layer: Option<LayerId>,
+    #[serde(default)]
+    pub group: Option<u64>,
+}
+
+impl SheetObjects {
+    pub fn is_empty(&self) -> bool {
+        self.vectors.is_empty()
+            && self.components.is_empty()
+            && self.bitmaps.is_empty()
+            && self.toolpaths.is_empty()
+            && !self.bottom
+            && self.other_side.is_none()
+    }
+
+    /// The highest id kept here.
+    fn last_id(&self) -> Option<EntityId> {
+        [
+            self.vectors.keys().next_back(),
+            self.components.keys().next_back(),
+            self.bitmaps.keys().next_back(),
+            self.toolpaths.keys().next_back(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .chain(self.other_side.as_ref().and_then(|o| o.last_id()))
+        .max()
+    }
+}
+
+impl Sheet {
+    pub fn new(name: &str, job: Job) -> Self {
+        Self {
+            name: name.to_owned(),
+            job,
+            visible: true,
+            objects: SheetObjects::default(),
+        }
+    }
+}
+
+fn visible() -> bool {
+    true
+}
+
+fn one_sheet() -> Vec<Sheet> {
+    vec![Sheet::new("Sheet 1", Job::default())]
+}
+
 fn default_layers() -> Vec<Layer> {
     vec![Layer::new(LayerId(1), "Layer 1")]
 }
@@ -83,6 +172,46 @@ pub enum ZZero {
 }
 
 /// A rotary job: a cylinder turned by a rotary axis, worked on as its surface unrolled flat.
+/// A double-sided job's setup (Aspire's help: Job Setup - Double Sided).
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+pub struct DoubleSided {
+    /// How the material is turned over to reach the other side
+    #[schemars(title = "Flip Direction Between Sides", extend("x-widget" = "row"))]
+    pub flip: Flip,
+    /// Z zero is on the same physical face whichever side is up
+    #[schemars(title = "Zero off same side")]
+    #[serde(default)]
+    pub zero_same_side: bool,
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Flip {
+    /// Turned over left to right
+    #[default]
+    Horizontal,
+    /// Turned over top to bottom
+    Vertical,
+}
+
+impl Flip {
+    /// Where a point of one side lies seen from the other, on material covering `area`.
+    pub fn mirror(self, area: Rect) -> glam::DAffine2 {
+        let c = area.center();
+        let scale = match self {
+            Self::Horizontal => Point::new(-1.0, 1.0),
+            Self::Vertical => Point::new(1.0, -1.0),
+        };
+        glam::DAffine2::from_translation(c)
+            * glam::DAffine2::from_scale(scale)
+            * glam::DAffine2::from_translation(-c)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Rotary {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -183,6 +312,18 @@ pub struct ModelPosition {
     pub gap: f64,
 }
 
+/// Material Setup's Home / Start Position: where the tool starts from and goes back to at the
+/// end, X and Y in job coordinates and Z as a gap above the material.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Home {
+    #[schemars(title = "X", extend("x-unit" = "mm"))]
+    pub x: f64,
+    #[schemars(title = "Y", extend("x-unit" = "mm"))]
+    pub y: f64,
+    #[schemars(title = "Z Gap above Material", extend("x-unit" = "mm"), range(min = 0))]
+    pub z: f64,
+}
+
 /// The material block, in millimetres. Job coordinates are the machine's: the datum is at
 /// `offset` (0, 0 unless an offset is used), so the material lies where [`Job::area`] says.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -207,11 +348,21 @@ pub struct Job {
     #[serde(default = "default_colour")]
     pub colour: [u8; 3],
     /// Set for a rotary job (added with rotary jobs; flat jobs leave it out).
+    /// Double-sided jobs: how the material is turned over between sides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub double_sided: Option<DoubleSided>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotary: Option<Rotary>,
     /// Where the 3D model sits in the material (Material Setup; added with it).
     #[serde(default)]
     pub model_position: ModelPosition,
+    /// Plunge (Z2): the gap above the material that plunges go down to at the rapid rate
+    /// before slowing to the plunge rate; unset, it is the clearance (no rapid plunges).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plunge: Option<f64>,
+    /// Home / Start Position; unset, X0 Y0 at the clearance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<Home>,
 }
 
 fn default_clearance() -> f64 {
@@ -238,6 +389,19 @@ impl Job {
             rotary: Some(Rotary { diameter, along }),
             ..Self::default()
         }
+    }
+
+    /// Plunge (Z2) as a gap above the material.
+    pub fn plunge_gap(&self) -> f64 {
+        self.plunge.unwrap_or(self.clearance)
+    }
+
+    pub fn home(&self) -> Home {
+        self.home.unwrap_or(Home {
+            x: 0.0,
+            y: 0.0,
+            z: self.clearance,
+        })
     }
 
     /// The material in job coordinates.
@@ -286,7 +450,10 @@ impl Default for Job {
             // ponytail: one wood colour until a Materials dialog offers textures
             colour: [214, 160, 102],
             rotary: None,
+            double_sided: None,
             model_position: ModelPosition::default(),
+            plunge: None,
+            home: None,
         }
     }
 }
@@ -336,6 +503,58 @@ pub struct Document {
     /// the one level every job has).
     #[serde(default = "crate::component::default_levels")]
     pub levels: BTreeMap<u64, Level>,
+    /// The Sheets tab's sheets, first first (added with sheets; older files get one).
+    #[serde(default = "one_sheet")]
+    pub sheets: Vec<Sheet>,
+    /// Which of `sheets` is being worked on; its setup is `job`.
+    #[serde(default)]
+    pub active_sheet: usize,
+    /// Edit ▸ Document Variables: named values sums in number fields use as `{name}`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub variables: BTreeMap<String, f64>,
+    /// Areas a tool must not pass over (clamps), closed paths of their own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keep_out: Vec<Path>,
+    /// Double-sided jobs: the bottom side is being worked on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bottom_side: bool,
+    /// Double-sided jobs: what is on the side not being worked on.
+    #[serde(default, skip_serializing_if = "SheetObjects::is_empty")]
+    pub other_side: SheetObjects,
+    /// Toolpath tiling: toolpaths saved in tiles for a machine smaller than the job.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiling: Option<crate::tiling::Tiling>,
+    /// Guide lines dragged out of the 2D view's rulers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guides: Vec<Guide>,
+}
+
+/// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
+/// y = `at`. A locked guide cannot be dragged.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Guide {
+    pub vertical: bool,
+    pub at: f64,
+    #[serde(default)]
+    pub locked: bool,
+}
+
+impl Guide {
+    pub fn vertical(x: f64) -> Self {
+        Self {
+            vertical: true,
+            at: x,
+            locked: false,
+        }
+    }
+
+    pub fn horizontal(y: f64) -> Self {
+        Self {
+            vertical: false,
+            at: y,
+            locked: false,
+        }
+    }
 }
 
 impl Default for Document {
@@ -356,20 +575,78 @@ impl Default for Document {
             notes: String::new(),
             texts: BTreeMap::new(),
             levels: crate::component::default_levels(),
+            sheets: one_sheet(),
+            active_sheet: 0,
+            variables: BTreeMap::new(),
+            keep_out: vec![],
+            guides: vec![],
+            tiling: None,
+            bottom_side: false,
+            other_side: SheetObjects::default(),
         }
     }
 }
 
 impl Document {
+    /// Replaces the sheet list and active sheet, `before` being what they are now.
+    pub(crate) fn set_sheets(
+        &mut self,
+        before: &(Vec<Sheet>, usize),
+        after: &(Vec<Sheet>, usize),
+    ) -> Result<(), crate::change::ApplyError> {
+        if (&self.sheets, self.active_sheet) != (&before.0, before.1) {
+            return Err(crate::change::ApplyError::JobConflict);
+        }
+        (self.sheets, self.active_sheet) = after.clone();
+        Ok(())
+    }
+
+    /// The components on level `level`, a component on a level that is gone counting as on
+    /// the first.
+    pub fn level_components(&self, level: u64) -> Vec<EntityId> {
+        let first = self.levels.keys().next().copied().unwrap_or(0);
+        self.components
+            .iter()
+            .filter(|(_, k)| {
+                let on = if self.levels.contains_key(&k.level) {
+                    k.level
+                } else {
+                    first
+                };
+                on == level
+            })
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
+    /// Sheet `index`'s setup: the job itself for the active sheet.
+    pub fn sheet_job(&self, index: usize) -> Option<Job> {
+        if index == self.active_sheet {
+            Some(self.job)
+        } else {
+            self.sheets.get(index).map(|s| s.job)
+        }
+    }
+
     /// First id not used by any entity.
     pub fn next_id(&self) -> EntityId {
+        // ids are unique over every sheet, so objects keep theirs when sheets are switched
+        let stored = self
+            .sheets
+            .iter()
+            .map(|s| &s.objects)
+            .chain([&self.other_side])
+            .filter_map(SheetObjects::last_id)
+            .max();
         let last = self
             .vectors
             .keys()
             .next_back()
-            .max(self.toolpaths.keys().next_back())
-            .max(self.components.keys().next_back())
-            .max(self.bitmaps.keys().next_back());
+            .copied()
+            .max(self.toolpaths.keys().next_back().copied())
+            .max(self.components.keys().next_back().copied())
+            .max(self.bitmaps.keys().next_back().copied())
+            .max(stored);
         EntityId(last.map_or(1, |id| id.0 + 1))
     }
 
@@ -408,7 +685,18 @@ impl Document {
 
     /// A group number no vector uses yet.
     pub fn next_group(&self) -> u64 {
-        self.vector_groups.values().max().map_or(1, |g| g + 1)
+        let stored = self
+            .sheets
+            .iter()
+            .flat_map(|s| s.objects.vectors.values())
+            .chain(self.other_side.vectors.values())
+            .filter_map(|v| v.group);
+        self.vector_groups
+            .values()
+            .copied()
+            .chain(stored)
+            .max()
+            .map_or(1, |g| g + 1)
     }
 
     /// The picture a picture tool works on: the last one picked, else the newest.

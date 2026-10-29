@@ -1,16 +1,31 @@
 //! 3D Finishing Toolpath: a ball nose rasters over the model, as low as it can go at each
-//! point without cutting into it. The model's top sits at the material surface. With earlier
-//! tools named (rest machining) it cuts only what they left.
+//! point without cutting into it. The model's top sits at the material surface. With several
+//! tools it makes a toolpath for each (rest machining): each later one cuts only what the
+//! tools before it left.
 
-use cut_craft_core::component::placed_model;
+use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_model};
 use cut_craft_core::document::Document;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::simulation::rest_areas;
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, follow, made_by, zigzag_within};
+use cut_craft_core::toolpath::{
+    Drop, Tool, ToolDatabase, ToolShape, Toolpath, cut_points, follow_linked, made_by, raster_lines,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub struct FinishingToolpath3d;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Strategy {
+    /// Straight lines across, at the raster angle
+    #[default]
+    Raster,
+    /// Rings stepping in from the machining boundary
+    Offset,
+}
 
 /// How far a straight move may pass under where the tool should be before it is split.
 const GOUGE: f64 = 0.002;
@@ -18,34 +33,105 @@ const GOUGE: f64 = 0.002;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
-    /// A ball nose follows curves best; its stepover spaces the raster lines
-    pub tool: Tool,
-    /// Rest machining: the tools that finished before this one, in order; only what they
-    /// could not reach is cut
-    #[schemars(title = "Rest Machining After")]
-    pub after: Vec<Tool>,
+    /// In the order they run, a toolpath each: the first finishes all it can, each later one
+    /// only what the tools before it left (rest machining). A ball nose follows curves best;
+    /// its stepover spaces the raster lines
+    #[serde(default)]
+    pub tools: Vec<Tool>,
     /// Rest machining: leave alone unmachined areas smaller across than this
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub minimum_detail: f64,
     /// Rest machining: grow every unmachined area by this before cutting it
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub boundary_offset: f64,
+    /// Where the tool's tip may go
+    #[serde(default)]
+    #[schemars(title = "Machining Limit Boundary")]
+    pub machining_boundary: MachiningBoundary,
+    /// Grows the machining boundary, so the tool can go on past a raised edge
+    /// The level whose components make the boundary
+    #[serde(default)]
+    #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
+    pub boundary_level: String,
+    #[serde(default)]
+    #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
+    pub machining_boundary_offset: f64,
+    #[serde(default)]
+    pub strategy: Strategy,
+    /// 0° along X, 90° along Y
+    #[serde(default)]
+    #[schemars(
+        extend("x-unit" = "°", "x-show-when" = {"strategy": "raster"}),
+        range(min = 0, max = 90)
+    )]
+    pub raster_angle: f64,
+    /// Lift off the surface by this between offset rings, which can leave fewer marks where
+    /// the tool steps over
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm", "x-show-when" = {"strategy": "offset"}), range(min = 0))]
+    pub stepover_retract: f64,
+    /// One toolpath of a set (and every toolpath saved before the tool list): its tool, which
+    /// finishes after `after`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub tool: Option<Tool>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub after: Vec<Tool>,
 }
 
 impl Default for Params {
     fn default() -> Self {
         Self {
             name: "3D Finishing".into(),
-            tool: ToolDatabase::starter()
-                .tools
-                .into_iter()
-                .find(|t| t.shape == ToolShape::BallNose)
-                .expect("the starter tools include a ball nose"),
-            after: vec![],
+            tools: vec![
+                ToolDatabase::starter()
+                    .tools
+                    .into_iter()
+                    .find(|t| t.shape == ToolShape::BallNose)
+                    .expect("the starter tools include a ball nose"),
+            ],
             // ponytail: Aspire's defaults are not known; a millimetre each
             minimum_detail: 1.0,
             boundary_offset: 1.0,
+            machining_boundary: MachiningBoundary::Material,
+            boundary_level: String::new(),
+            machining_boundary_offset: 0.0,
+            strategy: Strategy::Raster,
+            raster_angle: 0.0,
+            stepover_retract: 0.0,
+            tool: None,
+            after: vec![],
         }
+    }
+}
+
+impl Params {
+    /// A toolpath's own params for each tool: that tool after the ones before it, so each
+    /// recalculates on its own. Several are named `[1]`, `[2]`... in running order.
+    fn each_tool(&self) -> Vec<(Tool, Params)> {
+        if let Some(tool) = &self.tool {
+            return vec![(tool.clone(), self.clone())];
+        }
+        let several = self.tools.len() > 1;
+        self.tools
+            .iter()
+            .enumerate()
+            .map(|(i, tool)| {
+                let one = Params {
+                    name: if several {
+                        format!("{} [{}]", self.name, i + 1)
+                    } else {
+                        self.name.clone()
+                    },
+                    tools: vec![],
+                    tool: Some(tool.clone()),
+                    after: self.tools[..i].to_vec(),
+                    ..self.clone()
+                };
+                (tool.clone(), one)
+            })
+            .collect()
     }
 }
 
@@ -57,85 +143,141 @@ impl Command for FinishingToolpath3d {
         Meta {
             label: "3D Finishing Toolpath",
             group: "3D Toolpaths",
-            icon: "toolpaths/3d_finishing_toolpath.svg",
+            icon: "toolpaths/3d_finishing_toolpath.png",
             shortcut: "",
         }
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let tool = &p.tool;
-        ensure_positive("tool diameter", tool.diameter)?;
-        if !(tool.stepover > 0.0 && tool.stepover <= 1.0) {
+        let each = p.each_tool();
+        if each.is_empty() {
             return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
+                "choose at least one tool".into(),
             ));
         }
-        let surface = placed_model(doc, tool)?;
-        // where every earlier tool left material, each worked out on its own grid
-        let mut rest = vec![];
-        for earlier in &p.after {
-            ensure_positive("earlier tool diameter", earlier.diameter)?;
-            let model = placed_model(doc, earlier)?;
-            let left = model.left_by(earlier);
-            rest.push(rest_areas(
-                &model,
-                &left,
-                p.minimum_detail,
-                p.boundary_offset,
-            ));
-        }
-        let inside = |at| rest.iter().all(|area| area(at));
-        // at each point as low as the tool goes without touching the model
-        let runs = zigzag_within(
-            &surface,
-            tool,
-            tool.stepover * tool.diameter,
-            GOUGE,
-            f64::NEG_INFINITY,
-            &inside,
-        );
-        let moves = runs
-            .iter()
-            .flat_map(|run| follow(run, doc.job.clearance))
-            .collect();
         let mut c = Change::builder(doc);
-        c.add_toolpath(made_by::<Self>(
-            p,
-            p.name.clone(),
-            tool.clone(),
-            vec![],
-            moves,
-        ));
+        // ponytail: each toolpath works out the rest areas of every tool before it again
+        for (tool, own) in &each {
+            c.add_toolpath(finish(doc, tool, own)?);
+        }
         Ok(c.finish())
     }
+}
+
+/// The toolpath for `tool`, cutting only what `p.after` left.
+fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandError> {
+    ensure_positive("tool diameter", tool.diameter)?;
+    if !(tool.stepover > 0.0 && tool.stepover <= 1.0) {
+        return Err(CommandError::InvalidParams(
+            "stepover must be more than 0 and at most 1".into(),
+        ));
+    }
+    let surface = placed_model(doc, tool)?;
+    // where every earlier tool left material, each worked out on its own grid
+    let mut rest = vec![];
+    for earlier in &p.after {
+        ensure_positive("earlier tool diameter", earlier.diameter)?;
+        let model = placed_model(doc, earlier)?;
+        let left = model.left_by(earlier);
+        rest.push(rest_areas(
+            &model,
+            &left,
+            p.minimum_detail,
+            p.boundary_offset,
+        ));
+    }
+    let material = doc.job.area();
+    let inside = |at: Point| material.contains(at) && rest.iter().all(|area| area(at));
+    let regions = machining_boundary(
+        doc,
+        p.machining_boundary,
+        p.machining_boundary_offset,
+        &p.boundary_level,
+    )?;
+    let step = tool.stepover * tool.diameter;
+    let lines: Vec<Vec<Point>> = match p.strategy {
+        Strategy::Raster => raster_lines(&regions, step, p.raster_angle),
+        Strategy::Offset => {
+            let mut lines = vec![];
+            let mut rings = regions;
+            while !rings.is_empty() {
+                lines.extend(rings.iter().map(|r| {
+                    let mut points = cut_points(r);
+                    points.push(points[0]);
+                    points
+                }));
+                rings = polygon::offset_regions(&rings, -step, Corners::Round);
+            }
+            lines
+        }
+    };
+    // at each point as low as the tool goes without touching the model
+    let peaks = surface.peaks();
+    let drop = Drop {
+        grid: &surface,
+        tool,
+        tolerance: GOUGE,
+        floor: f64::NEG_INFINITY,
+        ceiling: f64::INFINITY,
+        over_ceiling: false,
+        peaks: &peaks,
+    };
+    let runs: Vec<_> = lines.iter().flat_map(|l| drop.along(l, &inside)).collect();
+    // stay down from one line or ring to the next one beside it
+    let lift = match p.strategy {
+        Strategy::Offset => p.stepover_retract.max(0.0),
+        Strategy::Raster => 0.0,
+    };
+    let clear = |a, b| surface.overcut_on(tool, a, b, &peaks) <= GOUGE;
+    let moves = follow_linked(&runs, doc.job.clearance, 2.0 * step, lift, &clear);
+    Ok(made_by::<FinishingToolpath3d>(
+        p,
+        p.name.clone(),
+        tool.clone(),
+        vec![],
+        moves,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use cut_craft_core::component::model;
+    use cut_craft_core::document::EntityId;
     use cut_craft_core::geometry::Point;
     use cut_craft_core::simulation::Material;
     use cut_craft_core::testing::domed;
-    use cut_craft_core::toolpath::Toolpath;
+    use cut_craft_core::toolpath::MoveKind;
 
     cut_craft_core::contract_tests!(FinishingToolpath3d, domed);
 
     fn finish(doc: &Document, params: &Params) -> Toolpath {
+        finished(doc, params)
+            .0
+            .toolpaths
+            .into_values()
+            .next()
+            .unwrap()
+    }
+
+    /// The document with the toolpaths `params` make, and their ids in order.
+    fn finished(doc: &Document, params: &Params) -> (Document, Vec<EntityId>) {
         let mut doc = doc.clone();
         let change = FinishingToolpath3d::run(&doc, params).unwrap();
         doc.apply(&change).unwrap();
-        doc.toolpaths.into_values().next().unwrap()
+        let ids = doc.toolpaths.keys().copied().collect();
+        (doc, ids)
+    }
+
+    fn ball(name: &str) -> Tool {
+        ToolDatabase::starter().get(name).unwrap().clone()
     }
 
     #[test]
     fn it_follows_the_model_closely_without_cutting_into_it() {
         let doc = domed();
         let params = Params {
-            tool: ToolDatabase::starter()
-                .get("6 mm Ball Nose")
-                .unwrap()
-                .clone(),
+            tools: vec![ball("6 mm Ball Nose")],
             ..Params::default()
         };
         let toolpath = finish(&doc, &params);
@@ -180,10 +322,7 @@ mod tests {
         let change = c.finish();
         doc.apply(&change).unwrap();
         let params = Params {
-            tool: ToolDatabase::starter()
-                .get("6 mm Ball Nose")
-                .unwrap()
-                .clone(),
+            tools: vec![ball("6 mm Ball Nose")],
             ..Params::default()
         };
         let toolpath = finish(&doc, &params);
@@ -201,15 +340,144 @@ mod tests {
     }
 
     #[test]
-    fn rest_machining_cuts_only_what_the_earlier_tools_left() {
-        let starter = ToolDatabase::starter();
-        let ball = |name: &str| starter.get(name).unwrap().clone();
+    fn a_tapered_ball_nose_keeps_its_taper_off_a_tall_wall() {
+        use cut_craft_core::component::{Combine, Component};
+        use cut_craft_core::geometry::Rect;
+        let mut doc = domed();
+        doc.components.clear();
+        // a block 15 mm tall: a 1 mm ball fits beside it, its 8° taper leans into it
+        let area = Rect::new(Point::new(15.0, 15.0), Point::new(25.0, 25.0));
+        let block = Component::from_fn("block", Combine::Add, area, 0.2, |_| Some(15.0));
+        let mut c = cut_craft_core::Change::builder(&doc);
+        c.add_component(block);
+        doc.apply(&c.finish()).unwrap();
+        doc.job.thickness = 20.0;
+        let tool = Tool {
+            name: "tapered".into(),
+            shape: ToolShape::BallNose,
+            diameter: 1.0,
+            taper: 8.0,
+            shank_diameter: 6.0,
+            stepover: 0.5,
+            ..Tool::default()
+        };
         let params = Params {
-            tool: ball("3 mm Ball Nose"),
-            after: vec![ball("6 mm Ball Nose")],
+            tools: vec![tool.clone()],
             ..Params::default()
         };
-        let toolpath = finish(&domed(), &params);
+        let toolpath = finish(&doc, &params);
+        let cells = 400;
+        let mut cut = Material::new(&doc.job, cells);
+        cut.cut(&toolpath);
+        let shape = model(&doc, cells);
+        let gouges = cut
+            .heights
+            .iter()
+            .zip(&shape.heights)
+            .filter(|&(&z, &h)| z < h - 15.0 - 0.02)
+            .count();
+        assert_eq!(
+            gouges, 0,
+            "cells the taper cut more than 0.02 mm into the model"
+        );
+        // at the foot of the wall the taper holds the tip up: material is left there
+        let foot = Point::new(25.6, 20.0);
+        assert!(
+            cut.at(foot).unwrap() > -15.0 + 1.0,
+            "{}",
+            cut.at(foot).unwrap()
+        );
+    }
+
+    #[test]
+    fn several_tools_make_a_toolpath_each_in_the_order_they_run() {
+        let params = Params {
+            tools: vec![ball("6 mm Ball Nose"), ball("3 mm Ball Nose")],
+            ..Params::default()
+        };
+        let (doc, ids) = finished(&domed(), &params);
+        let made: Vec<&Toolpath> = ids.iter().map(|id| &doc.toolpaths[id]).collect();
+        let names: Vec<&str> = made.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, ["3D Finishing [1]", "3D Finishing [2]"]);
+        assert_eq!(made[0].tool.name, "6 mm Ball Nose");
+        assert_eq!(made[1].tool.name, "3 mm Ball Nose");
+        // the first finishes everything, as it would on its own
+        let alone = finish(
+            &domed(),
+            &Params {
+                tools: vec![ball("6 mm Ball Nose")],
+                ..Params::default()
+            },
+        );
+        assert_eq!(made[0].moves, alone.moves);
+        assert_eq!(alone.name, "3D Finishing", "one tool keeps the plain name");
+    }
+
+    #[test]
+    fn each_toolpath_of_a_set_recalculates_on_its_own() {
+        let params = Params {
+            tools: vec![ball("6 mm Ball Nose"), ball("3 mm Ball Nose")],
+            ..Params::default()
+        };
+        let (doc, ids) = finished(&domed(), &params);
+        let mut registry = cut_craft_core::Registry::default();
+        registry.add::<FinishingToolpath3d>();
+        for id in ids {
+            let change = registry.recalculate(&doc, id).unwrap();
+            assert!(
+                change.is_empty(),
+                "{} recalculates the same",
+                doc.toolpaths[&id].name
+            );
+        }
+    }
+
+    #[test]
+    fn toolpaths_saved_with_one_tool_still_load_and_recalculate() {
+        // a rest machining toolpath saved before the tool list
+        let saved = serde_json::json!({
+            "name": "Rest",
+            "tool": ball("3 mm Ball Nose"),
+            "after": [ball("6 mm Ball Nose")],
+            "minimum_detail": 1.0,
+            "boundary_offset": 1.0,
+        });
+        let old: Params = serde_json::from_value(saved).unwrap();
+        let (doc, ids) = finished(&domed(), &old);
+        assert_eq!(ids.len(), 1);
+        let set = Params {
+            tools: vec![ball("6 mm Ball Nose"), ball("3 mm Ball Nose")],
+            ..Params::default()
+        };
+        let (set, set_ids) = finished(&domed(), &set);
+        assert_eq!(doc.toolpaths[&ids[0]].name, "Rest");
+        assert_eq!(
+            doc.toolpaths[&ids[0]].moves, set.toolpaths[&set_ids[1]].moves,
+            "the same as the second of a set"
+        );
+    }
+
+    #[test]
+    fn it_needs_a_tool() {
+        let none = Params {
+            tools: vec![],
+            ..Params::default()
+        };
+        let why = FinishingToolpath3d::run(&domed(), &none)
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        assert!(why.contains("tool"), "{why}");
+    }
+
+    #[test]
+    fn rest_machining_cuts_only_what_the_earlier_tools_left() {
+        let params = Params {
+            tools: vec![ball("6 mm Ball Nose"), ball("3 mm Ball Nose")],
+            ..Params::default()
+        };
+        let (doc, ids) = finished(&domed(), &params);
+        let toolpath = &doc.toolpaths[&ids[1]];
         // a 6 mm ball rounds the inside corner where the 8 mm dome meets the flat: a ring
         // from about 7.7 to 10.6 mm out, grown by the boundary offset
         let cuts: Vec<f64> = toolpath
@@ -249,5 +517,148 @@ mod tests {
             .map(|e| e.to_string())
             .unwrap_or_default();
         assert!(why.contains("3D model"), "{why}");
+    }
+
+    fn cut_by(params: &Params) -> Material {
+        let doc = domed();
+        let mut cut = Material::new(&doc.job, 134);
+        cut.cut(&finish(&doc, params));
+        cut
+    }
+
+    #[test]
+    fn the_model_boundary_keeps_the_tip_on_the_model() {
+        let cut = cut_by(&Params {
+            machining_boundary: MachiningBoundary::Model,
+            ..Params::default()
+        });
+        // the dome is 8 mm across its foot round (20, 20): the corner is left alone
+        assert_eq!(cut.at(Point::new(3.0, 3.0)), Some(0.0));
+        let grown = cut_by(&Params {
+            machining_boundary: MachiningBoundary::Model,
+            machining_boundary_offset: 4.0,
+            ..Params::default()
+        });
+        let foot = Point::new(20.0 + 10.0, 20.0);
+        assert_eq!(cut.at(foot), Some(0.0), "outside the model");
+        assert!(
+            grown.at(foot).unwrap() < 0.0,
+            "the offset reaches past the foot"
+        );
+    }
+
+    #[test]
+    fn offset_rings_and_angled_rasters_follow_the_model_too() {
+        for params in [
+            Params {
+                strategy: Strategy::Offset,
+                ..Params::default()
+            },
+            Params {
+                raster_angle: 45.0,
+                ..Params::default()
+            },
+        ] {
+            let doc = domed();
+            let toolpath = finish(&doc, &params);
+            let cells = 134;
+            let mut cut = Material::new(&doc.job, cells);
+            cut.cut(&toolpath);
+            let shape = model(&doc, cells);
+            let top = shape
+                .heights
+                .iter()
+                .copied()
+                .fold(f64::NEG_INFINITY, f64::max);
+            let gouges = cut
+                .heights
+                .iter()
+                .zip(&shape.heights)
+                .filter(|&(&z, &h)| z < h - top - 0.01)
+                .count();
+            assert_eq!(gouges, 0, "{:?}", params.strategy);
+            let flat = cut.at(Point::new(3.0, 3.0)).unwrap();
+            assert!(flat < -7.9, "{:?}: {flat}", params.strategy);
+        }
+    }
+
+    #[test]
+    fn a_level_boundary_goes_round_that_levels_components() {
+        let by_level = cut_by(&Params {
+            machining_boundary: MachiningBoundary::SelectedLevel,
+            boundary_level: "Level 1".into(),
+            ..Params::default()
+        });
+        let by_model = cut_by(&Params {
+            machining_boundary: MachiningBoundary::Model,
+            ..Params::default()
+        });
+        assert_eq!(
+            by_level.heights, by_model.heights,
+            "the dome is on the first level"
+        );
+        let mut doc = domed();
+        let mut empty = doc.levels.values().next().unwrap().clone();
+        empty.name = "Empty".into();
+        doc.levels.insert(99, empty);
+        for (name, why) in [("Empty", "empty"), ("Nowhere", "no level")] {
+            let p = Params {
+                machining_boundary: MachiningBoundary::SelectedLevel,
+                boundary_level: name.into(),
+                ..Params::default()
+            };
+            let err = FinishingToolpath3d::run(&doc, &p)
+                .err()
+                .unwrap()
+                .to_string();
+            assert!(err.contains(why), "{err}");
+        }
+    }
+
+    #[test]
+    fn neighbouring_lines_are_linked_without_lifting_to_the_safe_height() {
+        let doc = domed();
+        let raster = finish(&doc, &Params::default());
+        let rapids = raster
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Rapid)
+            .count();
+        // the dome's flat surround links every line: one rapid in and one out
+        assert!(rapids <= 4, "{rapids}");
+        let lifted = finish(
+            &doc,
+            &Params {
+                strategy: Strategy::Offset,
+                stepover_retract: 0.5,
+                ..Params::default()
+            },
+        );
+        let shape = model(&doc, 134);
+        let top = shape
+            .heights
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
+        let mut cut = Material::new(&doc.job, 134);
+        cut.cut(&lifted);
+        let gouges = cut
+            .heights
+            .iter()
+            .zip(&shape.heights)
+            .filter(|&(&z, &h)| z < h - top - 0.01)
+            .count();
+        assert_eq!(gouges, 0);
+        // straight up by the retract somewhere between rings
+        let ups = lifted
+            .moves
+            .windows(2)
+            .filter(|w| {
+                w[1].kind == MoveKind::Cut
+                    && w[0].to.truncate() == w[1].to.truncate()
+                    && (w[1].to.z - w[0].to.z - 0.5).abs() < 1e-9
+            })
+            .count();
+        assert!(ups > 0);
     }
 }

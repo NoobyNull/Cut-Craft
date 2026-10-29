@@ -192,7 +192,9 @@ impl Command for Segment3dModel {
             );
             fmt_import_stl::top_down(&mut k, &placed);
             for z in &mut k.heights {
-                *z = z.filter(|z| *z >= 0.0);
+                if *z < 0.0 {
+                    *z = f64::NAN;
+                }
             }
             c.add_component(k);
             left += h.x - l.x + p.gap;

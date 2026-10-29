@@ -2,7 +2,7 @@
 //! tests run them without dialogs.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::file::{load_job, save_job};
+use cut_craft_core::file::{load_job, save_job, write_atomic};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_core::{Change, History, Registry};
 use cut_craft_post::Post;
@@ -36,8 +36,17 @@ impl Session {
         format!("{name}{star} - {app}")
     }
 
+    /// A job with no file, whose content is nowhere else yet (recovered after a crash): it
+    /// counts as unsaved until it is saved.
+    pub fn unsaved() -> Self {
+        Self {
+            path: None,
+            saved: u64::MAX,
+        }
+    }
+
     pub fn save(&mut self, doc: &Document, history: &History, path: &Path) -> Result<(), String> {
-        std::fs::write(path, save_job(doc))
+        write_atomic(path, &save_job(doc))
             .map_err(|e| format!("could not save {}: {e}", path.display()))?;
         self.path = Some(path.to_owned());
         self.saved = history.revision();
@@ -72,44 +81,36 @@ pub fn export(registry: &Registry, id: &str, doc: &Document, path: &Path) -> Res
         .exporter(id)
         .ok_or_else(|| format!("no exporter called {id}"))?;
     let bytes = (exporter.export)(doc).map_err(|e| e.to_string())?;
-    std::fs::write(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
+    write_atomic(path, &bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// A `.pp` post-processor, checked as it is read.
-pub fn load_post(path: &Path) -> Result<Post, String> {
-    let text = String::from_utf8(read(path)?)
-        .map_err(|_| format!("{} is not a text file", path.display()))?;
-    Post::parse(&text).map_err(|e| format!("{}: {e}", path.display()))
-}
-
-/// Writes the toolpaths as the post's output.
-/// Writes the toolpaths through `post` to `path`; `job` is the saved job they come from.
+/// Writes the toolpaths through `post` to `path`, tools numbered by their tool changer
+/// `slots` (empty: in the order used); `job` is the saved job they come from.
 pub fn save_through(
     post: &Post,
+    slots: &[Option<String>],
     doc: &Document,
     path: &Path,
     job: Option<&Path>,
 ) -> Result<(), String> {
     let made = chrono::Local::now().naive_local();
-    let text = post.render(doc, &cut_craft_post::File { path, job, made })?;
-    std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))
+    let file = cut_craft_post::File {
+        path,
+        job,
+        made,
+        slots,
+    };
+    let text = post.render(doc, &file)?;
+    write_atomic(path, text.as_bytes())
+        .map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 pub use cut_craft_core::file::config_dir;
 
-/// Opens `dir` in the platform's file manager.
-pub fn show_folder(dir: &Path) -> std::io::Result<()> {
-    let opener = if cfg!(windows) {
-        "explorer"
-    } else if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    std::process::Command::new(opener)
-        .arg(dir)
-        .spawn()
-        .map(drop)
+/// Opens `path` (a folder, or a file such as a PDF to print) with the platform's own
+/// program for it.
+pub fn show_folder(path: &Path) -> std::io::Result<()> {
+    cut_craft_bug_report::open_with_platform(path.as_os_str())
 }
 
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
@@ -150,12 +151,34 @@ pub fn recent_files_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join("recent.json"))
 }
 
+/// Where the Clipart tab's library folders are kept.
+pub fn clipart_folders_path() -> Option<PathBuf> {
+    config_dir().map(|dir| dir.join("clipart.json"))
+}
+
 /// The tool database at `path`; the starter tools when there is none yet.
 pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
     if !path.exists() {
         return Ok(ToolDatabase::starter());
     }
     ToolDatabase::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Tool database files Tool Database ▸ Import Tools reads.
+pub const TOOL_FILE_EXTENSIONS: [&str; 3] = ["vtdb", "tools", "json"];
+
+/// The tools in a Vectric `.vtdb`, a Fusion 360 `.tools` or a Cut Craft `.json` database.
+pub fn read_tool_file(path: &Path) -> Result<ToolDatabase, String> {
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "vtdb" => cut_craft_vtdb::read(path),
+        "tools" => cut_craft_tool_database::fusion::read(&read(path)?)
+            .map_err(|e| format!("{}: {e}", path.display())),
+        _ => ToolDatabase::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display())),
+    }
 }
 
 pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
@@ -165,7 +188,6 @@ pub fn save_tools(db: &ToolDatabase, path: &Path) -> Result<(), String> {
 /// How many jobs the start page lists.
 pub const RECENT_COUNT: usize = 4;
 
-/// Puts `path` first in `recent`, once, keeping the latest [`RECENT_COUNT`].
 /// Toolpath templates: the toolpaths' settings, without their moves or vectors.
 pub const TOOLPATH_TEMPLATE_EXTENSION: &str = "cctpt";
 
@@ -198,10 +220,12 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
     Ok(c.finish())
 }
 
-pub fn remember(recent: &mut Vec<PathBuf>, path: &Path) {
+/// Puts `path` first in `recent`, once, keeping the latest `keep` (Options; [`RECENT_COUNT`]
+/// by default).
+pub fn remember(recent: &mut Vec<PathBuf>, path: &Path, keep: usize) {
     recent.retain(|p| p != path);
     recent.insert(0, path.to_path_buf());
-    recent.truncate(RECENT_COUNT);
+    recent.truncate(keep);
 }
 
 /// The recent files list; a missing or unreadable one is empty, as there is nothing to lose.
@@ -221,11 +245,7 @@ pub fn save_recent(recent: &[PathBuf], path: &Path) -> Result<(), String> {
 
 /// Writes `bytes` to `path`, making its folder first.
 fn write_creating(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let written = match path.parent() {
-        Some(dir) => std::fs::create_dir_all(dir).and_then(|()| std::fs::write(path, bytes)),
-        None => std::fs::write(path, bytes),
-    };
-    written.map_err(|e| format!("could not write {}: {e}", path.display()))
+    write_atomic(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 fn read(path: &Path) -> Result<Vec<u8>, String> {
@@ -424,7 +444,7 @@ mod tests {
     fn recent_files_put_the_latest_first_once_and_keep_four() {
         let mut recent = vec![];
         for name in ["a", "b", "c", "a", "d", "e"] {
-            remember(&mut recent, Path::new(name));
+            remember(&mut recent, Path::new(name), RECENT_COUNT);
         }
         assert_eq!(recent, ["e", "d", "a", "c"].map(PathBuf::from));
     }
@@ -478,28 +498,8 @@ mod tests {
     }
 
     #[test]
-    fn installing_a_post_reads_it() {
-        let path = temp("good.pp");
-        fs::write(&path, POST).unwrap();
-        assert_eq!(load_post(&path).unwrap().name, "Test post");
-    }
-
-    #[test]
-    fn a_broken_post_names_the_file_and_the_problem() {
-        let path = temp("broken.pp");
-        fs::write(&path, POST.replace("begin FEED_MOVE", "begin NOPE")).unwrap();
-        let err = load_post(&path).unwrap_err();
-        assert!(
-            err.contains("broken.pp") && err.contains("no FEED_MOVE block"),
-            "{err}"
-        );
-    }
-
-    #[test]
     fn toolpaths_save_through_the_post() {
-        let post_path = temp("save.pp");
-        fs::write(&post_path, POST).unwrap();
-        let post = load_post(&post_path).unwrap();
+        let post = Post::parse(POST).unwrap();
         let mut doc = sample_document();
         let registry = crate::commands::registry();
         let made = registry.get("drilling_toolpath").unwrap();
@@ -507,7 +507,7 @@ mod tests {
         let change = made.run_json(&doc, &params).unwrap();
         doc.apply(&change).unwrap();
         let out = temp("out.tap");
-        save_through(&post, &doc, &out, None).unwrap();
+        save_through(&post, &[], &doc, &out, None).unwrap();
         assert!(
             fs::read_to_string(&out)
                 .unwrap()

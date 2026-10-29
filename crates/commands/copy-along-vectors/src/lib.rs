@@ -67,7 +67,7 @@ impl Command for CopyAlongVectors {
         Meta {
             label: "Copy Along Vectors",
             group: "Offset and Layout",
-            icon: "drawing/create_vectors/copy_along_vectors.svg",
+            icon: "drawing/create_vectors/copy_along_vectors.png",
             shortcut: "",
         }
     }

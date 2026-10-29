@@ -50,7 +50,7 @@ impl Command for TwoRailSweep {
         Meta {
             label: "Two Rail Sweep",
             group: "Modeling",
-            icon: "modeling/two_rail_sweep.svg",
+            icon: "modeling/two_rail_sweep.png",
             shortcut: "",
         }
     }
@@ -139,15 +139,15 @@ impl Command for TwoRailSweep {
                 }
                 let z = lookup(&shape, part) * scale;
                 let h = &mut made.heights[row * made.columns + col];
-                if h.is_none_or(|old| z > old) {
-                    *h = Some(z);
+                if h.is_nan() || z > *h {
+                    *h = z;
                 }
             }
         }
         if p.scale_to_exact_height
             && let Some((_, top)) = made.height_range().filter(|r| r.1 > 0.0)
         {
-            for h in made.heights.iter_mut().flatten() {
+            for h in made.heights.iter_mut().filter(|h| !h.is_nan()) {
                 *h *= p.height / top;
             }
         }

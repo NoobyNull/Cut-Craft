@@ -35,7 +35,7 @@ impl Command for Rotate {
         Meta {
             label: "Rotate",
             group: "Transform Objects",
-            icon: "drawing/edit_objects/rotate.svg",
+            icon: "drawing/edit_objects/rotate.png",
             shortcut: "R",
         }
     }

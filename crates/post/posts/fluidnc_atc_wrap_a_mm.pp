@@ -34,6 +34,7 @@ begin HEADER
 "( [TOOLS_USED])"
 "G94 G21 G17 G90"
 "G0 [ZH]"
+"G0 [XH] [YH]"
 "M6 [T]"
 "(Toolpath: [TOOLPATH_NAME], tool: [TOOLNAME])"
 "[S] M3"

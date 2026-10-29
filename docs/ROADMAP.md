@@ -133,20 +133,19 @@ All work on the existing `Component` height grid; each is a command crate with t
 | Sheets | Several sheets per job, sheet tabs, V-carve inlay's plug sheet, nesting onto sheets. | L |
 | Nesting | Fit parts onto sheets (true-shape, rotation steps, gaps, borders, priority). | L |
 | Auto-Wrapping View, Shadow Shading, Tile / Cascade | Rotary 3D shown wrapped round the cylinder; shadows; 2D and 3D side by side. | M, M, S |
-| 3D view: ViewCube, perspective, depth-tested overlays | A GPU paint callback (wgpu) instead of the CPU mesh. | L |
+| 3D view: smooth ViewCube turns, toolpath lines in 3D, overlays on the wrapped rotary view | ViewCube, perspective, tilt and hidden overlays are done (rays through the height grid, no GPU callback). | M |
 
 ### Phase G — Gaps inside built strategies
 
 | Item | Size |
 |---|---|
-| Project toolpath onto 3D model (fluting, texture, photo V-carve, laser, profile...) | M |
+| Project toolpath onto 3D model for the laser strategies (done for profile, pocket, fluting, texture, photo V-carve, V-carve) | S |
 | Clearance tools for V-carve inlay, inlay pocket and moulding | M |
 | Laser Fill Regionally; laser passes lowering the focus | S |
 | Merge By Part | M |
-| 3D Finishing's several-tools form (one toolpath per tool in one go) | M |
-| Thread-mill and laser tool types in the tool database | M |
-| Feeds and speeds per machine and material; rate units per tool | M |
-| Arc output in posts (fit arcs to straight moves) | M |
+| Laser tool type in the tool database (thread mills are done) | S |
+| Cutting data per machine (per material and rate units are done); feeds on toolpath forms in the tool's units | S |
+| Toolpath options still missing: tabs dragged along a vector; the V-bit sharp internal corner; reversing open paths to shorten links | S |
 
 ### Out of scope unless decided otherwise
 

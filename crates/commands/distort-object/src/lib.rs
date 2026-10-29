@@ -357,7 +357,7 @@ impl Command for DistortObject {
         Meta {
             label: "Distort Object",
             group: "Transform Objects",
-            icon: "drawing/create_vectors/distort_object.svg",
+            icon: "drawing/create_vectors/distort_object.png",
             shortcut: "",
         }
     }

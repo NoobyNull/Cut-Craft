@@ -98,7 +98,7 @@ pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
 
 /// A node handle's edge, as a share of the theme's interactive row height.
 // ponytail: fixed share until a preferences dialog sizes handles
-const NODE_HANDLE_SHARE: f32 = 0.35;
+pub const NODE_HANDLE_SHARE: f32 = 0.35;
 
 /// What the pointer did on the canvas this frame.
 #[derive(Clone, Copy, Debug)]
@@ -214,6 +214,26 @@ impl Canvas {
 
     /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the
     /// selection colour) and `overlay`.
+    /// Whether `at` is on a ruler: `Some(true)` the left one (it gives vertical guides),
+    /// `Some(false)` the top one; the corner where they meet is neither.
+    pub fn ruler_at(&self, ui: &egui::Ui, at: Pos2) -> Option<bool> {
+        let thick = ui.spacing().interact_size.y;
+        let (x, y) = (at.x - self.area.min.x, at.y - self.area.min.y);
+        if !self.area.contains(at) || (x < thick && y < thick) {
+            return None;
+        }
+        (x < thick || y < thick).then_some(x < thick)
+    }
+
+    /// Whether a drag with the main button started or stopped this frame.
+    pub fn drag_started(&self) -> bool {
+        self.response.drag_started_by(PointerButton::Primary)
+    }
+
+    pub fn drag_stopped(&self) -> bool {
+        self.response.drag_stopped_by(PointerButton::Primary)
+    }
+
     /// Rulers along the top and left, in the job's units, as Aspire's 2D view has.
     #[expect(
         clippy::cast_possible_truncation,
@@ -316,9 +336,9 @@ impl Canvas {
                 .shaped_heights()
                 .into_iter()
                 .fold(0xcbf2_9ce4_8422_2325_u64, |h, z| {
-                    (h ^ z.map_or(0, f64::to_bits)).wrapping_mul(0x0100_0000_01b3)
+                    (h ^ z.to_bits()).wrapping_mul(0x0100_0000_01b3)
                 });
-            let key = egui::Id::new(("component", id.0, hash));
+            let key = egui::Id::unique(("component", id.0, hash));
             let ctx = ui.ctx();
             let texture = ctx
                 .data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
@@ -328,10 +348,7 @@ impl Canvas {
                         .into_iter()
                         .map(|g| g.map_or(egui::Color32::TRANSPARENT, egui::Color32::from_gray))
                         .collect();
-                    let image = egui::ColorImage {
-                        size: [component.columns, component.rows],
-                        pixels,
-                    };
+                    let image = egui::ColorImage::new([component.columns, component.rows], pixels);
                     let texture = ctx.load_texture(
                         format!("component {}", id.0),
                         image,
@@ -405,6 +422,9 @@ impl Canvas {
         {
             let colour = if highlighted == Some(*id) {
                 selected.color
+            } else if display.solid_previews {
+                let [r, g, b] = display.solid_colour;
+                egui::Color32::from_rgb(r, g, b)
             } else {
                 visuals.warn_fg_color
             };
@@ -437,6 +457,10 @@ impl Canvas {
                         MoveKind::Cut => {
                             painter.line_segment([start, to], cut);
                         }
+                        // a ramp: down at the plunge rate while moving along
+                        MoveKind::Plunge if !vertical => {
+                            painter.line_segment([start, to], cut);
+                        }
                         MoveKind::Plunge if display.plunges => {
                             painter.circle_filled(to, marker, travel.color);
                         }
@@ -451,6 +475,65 @@ impl Canvas {
                 }
                 from = Some(m.to);
             }
+        }
+    }
+
+    /// Guide lines (dashed, while shown) and keep-out zones (in the warning colour, heavier
+    /// than vectors).
+    fn paint_guides_and_zones(
+        &self,
+        painter: &egui::Painter,
+        ui: &egui::Ui,
+        doc: &Document,
+        display: &crate::display::Display,
+        (dash, gap): (f32, f32),
+    ) {
+        let (t, visuals) = (self.transform, ui.visuals());
+        let datum = visuals.widgets.noninteractive.fg_stroke;
+        let tolerance = f64::from(0.5 / (ui.ctx().pixels_per_point() * t.scale));
+        let screen = |path: &Path| -> Vec<Pos2> {
+            path.flatten(tolerance)
+                .into_iter()
+                .map(|p| t.to_screen(p))
+                .collect()
+        };
+        if display.guides {
+            let guide = Stroke::new(datum.width, visuals.selection.bg_fill);
+            for g in &doc.guides {
+                let at = t.to_screen(Point::new(g.at, g.at));
+                let line = if g.vertical {
+                    [pos2(at.x, self.area.top()), pos2(at.x, self.area.bottom())]
+                } else {
+                    [pos2(self.area.left(), at.y), pos2(self.area.right(), at.y)]
+                };
+                painter.extend(Shape::dashed_line(&line, guide, dash, gap));
+            }
+        }
+        // toolpath tiles: their edges, and their overlap faintly
+        if let Some(tiling) = doc.tiling {
+            let edge = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
+            let overlap = Stroke::new(datum.width, visuals.error_fg_color);
+            for tile in tiling.tiles(doc.job.area()) {
+                let reach = tiling.reach(tile);
+                for (r, stroke) in [(reach, overlap), (tile, edge)] {
+                    let screen_rect =
+                        egui::Rect::from_two_pos(t.to_screen(r.min), t.to_screen(r.max));
+                    painter.rect_stroke(screen_rect, 0, stroke, egui::StrokeKind::Middle);
+                }
+            }
+        }
+        // a double-sided job's other side, faint and turned over as the material is
+        if let Some(sides) = doc.job.double_sided {
+            let turn = sides.flip.mirror(doc.job.area());
+            let faint = Stroke::new(datum.width, visuals.weak_text_color());
+            for v in doc.other_side.vectors.values() {
+                painter.add(Shape::line(screen(&v.path.transformed(&turn)), faint));
+            }
+        }
+        // keep-out zones in the warning colour, heavier than vectors
+        let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
+        for path in &doc.keep_out {
+            painter.add(Shape::line(screen(path), zone));
         }
     }
 
@@ -473,7 +556,7 @@ impl Canvas {
         let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
         painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
         for (id, bitmap) in &doc.bitmaps {
-            let key = egui::Id::new(("bitmap", id.0, bitmap.columns, bitmap.rows));
+            let key = egui::Id::unique(("bitmap", id.0, bitmap.columns, bitmap.rows));
             let ctx = ui.ctx();
             // uploaded once; kept while the bitmap is the same size
             let texture = ctx
@@ -522,6 +605,7 @@ impl Canvas {
             }
         }
 
+        self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
         self.paint_toolpaths(&painter, ui, doc, highlighted, display);
 
@@ -537,7 +621,7 @@ impl Canvas {
                 for q in at {
                     let r = Rect::from_center_size(t.to_screen(*q), egui::vec2(half, half) * 2.0);
                     painter.rect_filled(r, 0.0, ui.visuals().extreme_bg_color);
-                    painter.rect_stroke(r, 0.0, selected);
+                    painter.rect_stroke(r, 0, selected, egui::StrokeKind::Middle);
                 }
                 for path in moving {
                     painter.add(Shape::line(screen(path), selected));
@@ -559,7 +643,7 @@ impl Canvas {
                     ];
                     painter.extend(Shape::dashed_line(&corners, selected, dash, gap));
                 } else {
-                    painter.rect_stroke(r, 0.0, selected);
+                    painter.rect_stroke(r, 0, selected, egui::StrokeKind::Middle);
                 }
             }
         }

@@ -41,6 +41,7 @@ fn group(name: &'static str, tools: &'static [&'static str]) -> ToolGroup {
 /// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see
 /// `re/SPEC.md`); which tool sits in which group is inferred from the help topics. Ids match
 /// the icon file names, so unimplemented tools still show their icon.
+#[expect(clippy::too_many_lines, reason = "the drawing tab's tool list")]
 fn drawing_groups() -> Vec<ToolGroup> {
     vec![
         group(
@@ -50,7 +51,11 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "open",
                 "save",
                 "import_vectors_bitmap",
+                "import_vectors",
+                "export_vectors",
+                "paste_in_place",
                 "import_component_3d_model",
+                "open_folder",
                 "job_setup",
             ],
         ),
@@ -77,10 +82,13 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "draw_curve",
                 "draw_freehand",
                 "draw_text",
+                "edit_text",
+                "convert_text_to_curves",
                 "text_on_a_curve",
                 "auto_layout_text",
                 "dimensions",
                 "create_fillets",
+                "vector_boundary",
                 "vector_texture",
                 "trace_bitmap",
             ],
@@ -93,6 +101,9 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "transform",
                 "group",
                 "join_vectors",
+                "join_straight_line",
+                "join_smooth_curve",
+                "join_move_end_points",
                 "weld_vectors",
                 "subtract_vectors",
                 "overlap_intersect",
@@ -101,6 +112,28 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "fit_curves_to_vectors",
                 "vector_validator",
                 "measure_inspect",
+                "edit_picture",
+                "crop_bitmap",
+            ],
+        ),
+        // Aspire's Align Objects section (help: Alignment Tools): the common alignments
+        group(
+            "Align Objects",
+            &[
+                "center_in_material",
+                "center_horizontally_in_material",
+                "center_vertically_in_material",
+                "center",
+                "align_left",
+                "align_right",
+                "align_top",
+                "align_bottom",
+                "center_horizontally",
+                "center_vertically",
+                "left_to_right",
+                "right_to_left",
+                "top_to_bottom",
+                "bottom_to_top",
             ],
         ),
         group(
@@ -109,7 +142,12 @@ fn drawing_groups() -> Vec<ToolGroup> {
         ),
         group(
             "Offset and Layout",
-            &["offset_vectors", "nest_parts", "copy_along_vectors"],
+            &[
+                "offset_vectors",
+                "nest_parts",
+                "copy_along_vectors",
+                "plate_production",
+            ],
         ),
         group("Array Objects", &["array_copy", "circular_copy"]),
     ]
@@ -121,7 +159,10 @@ fn modeling_groups() -> Vec<ToolGroup> {
         group(
             "Shape Creation",
             &[
-                "create_shape",
+                "create_shape_round",
+                "create_shape_angled",
+                "create_shape_smooth",
+                "create_shape_flat",
                 "extrude_and_weave",
                 "two_rail_sweep",
                 "vector_unwrapper",
@@ -145,6 +186,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "replace_below",
                 "split",
                 "bake_components",
+                "component_levels",
             ],
         ),
     ]
@@ -194,7 +236,13 @@ fn toolpath_groups() -> Vec<ToolGroup> {
         ),
         group(
             "Output",
-            &["save_toolpaths", "toolpath_summary", "tool_database"],
+            &[
+                "save_toolpaths",
+                "toolpath_summary",
+                "tool_database",
+                "keep_out_zones",
+                "toolpath_tiling",
+            ],
         ),
     ]
 }
@@ -242,9 +290,9 @@ pub fn node_menu(at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
         MenuItem::run::<cmd_insert_point::InsertPoint>("Insert Point", at),
         MenuItem::run::<cmd_delete_point::DeletePoint>("Delete Point", at),
         MenuItem::separator(),
-        MenuItem::run::<cmd_span_to_line::SpanToLine>("Convert Span to Line", at),
-        MenuItem::run::<cmd_span_to_bezier::SpanToBezier>("Convert Span to Bezier", at),
-        MenuItem::run::<cmd_span_to_arc::SpanToArc>("Convert Span to Arc", at),
+        MenuItem::run::<cmd_convert_span::SpanToLine>("Convert Span to Line", at),
+        MenuItem::run::<cmd_convert_span::SpanToBezier>("Convert Span to Bezier", at),
+        MenuItem::run::<cmd_convert_span::SpanToArc>("Convert Span to Arc", at),
         MenuItem::separator(),
         MenuItem::run::<cmd_cut_vector::CutVector>("Cut Vector", at),
         MenuItem::run::<cmd_make_start_point::MakeStartPoint>("Make Start Point", at),
@@ -288,6 +336,8 @@ impl MenuSystem {
             edit("Delete"),
             MenuItem::separator(),
             MenuItem::submenu("Move to Layer", layers.collect()),
+            MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
+                .enabled(doc.job.double_sided.is_some()),
             MenuItem::separator(),
             MenuItem::with_action("Weld", "weld_vectors"),
             MenuItem::with_action("Subtract", "subtract_vectors"),
@@ -473,6 +523,10 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
         show,
         hide,
         MenuItem::form::<cmd_toolpath_properties::ToolpathProperties>("Rename", &properties),
+        MenuItem::run::<cmd_duplicate_toolpath::DuplicateToolpath>(
+            "Duplicate",
+            &cmd_duplicate_toolpath::Params { toolpath: id },
+        ),
         MenuItem::separator(),
         MenuItem::submenu(
             "Recalculate",
@@ -498,6 +552,28 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
 
 /// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
 /// and (rotary jobs) wrapping.
+/// A level's Combine Mode submenu, in Aspire's order.
+const COMBINE_MODES: [(&str, Combine); 5] = [
+    ("Add", Combine::Add),
+    ("Subtract", Combine::Subtract),
+    ("Merge", Combine::Merge),
+    ("Low", Combine::Low),
+    ("Multiply", Combine::Multiply),
+];
+
+/// A level's Mirror Mode submenu, in Aspire's order.
+const MIRROR_MODES: [(&str, Mirror); 9] = [
+    ("Off", Mirror::Off),
+    ("Left to Right", Mirror::LeftToRight),
+    ("Right to Left", Mirror::RightToLeft),
+    ("Top to Bottom", Mirror::TopToBottom),
+    ("Bottom to Top", Mirror::BottomToTop),
+    ("Top Left Quadrant", Mirror::TopLeft),
+    ("Top Right Quadrant", Mirror::TopRight),
+    ("Bottom Left Quadrant", Mirror::BottomLeft),
+    ("Bottom Right Quadrant", Mirror::BottomRight),
+];
+
 pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
     use cmd_level_clipping::{Action, LevelClipping};
     use cmd_level_properties::{LevelProperties, Params};
@@ -540,16 +616,17 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
     vec![
         MenuItem::submenu(
             "Combine Mode",
-            vec![
-                mode("Add", Combine::Add),
-                mode("Subtract", Combine::Subtract),
-                mode("Merge", Combine::Merge),
-                mode("Low", Combine::Low),
-                mode("Multiply", Combine::Multiply),
-            ],
+            COMBINE_MODES
+                .iter()
+                .map(|&(name, c)| mode(name, c))
+                .collect(),
         ),
         show,
         hide,
+        MenuItem::with_action(
+            "Select Components",
+            &format!("{}{id}", crate::app::SELECT_LEVEL),
+        ),
         MenuItem::submenu(
             "Clipping",
             vec![
@@ -560,17 +637,10 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
         ),
         MenuItem::submenu(
             "Mirror Mode",
-            vec![
-                mirror("Off", Mirror::Off),
-                mirror("Left to Right", Mirror::LeftToRight),
-                mirror("Right to Left", Mirror::RightToLeft),
-                mirror("Top to Bottom", Mirror::TopToBottom),
-                mirror("Bottom to Top", Mirror::BottomToTop),
-                mirror("Top Left Quadrant", Mirror::TopLeft),
-                mirror("Top Right Quadrant", Mirror::TopRight),
-                mirror("Bottom Left Quadrant", Mirror::BottomLeft),
-                mirror("Bottom Right Quadrant", Mirror::BottomRight),
-            ],
+            MIRROR_MODES
+                .iter()
+                .map(|&(name, m)| mirror(name, m))
+                .collect(),
         ),
         set(
             "Wrapping",
@@ -596,6 +666,11 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
         )
         .enabled(doc.levels.len() > 1),
         MenuItem::form::<LevelProperties>("Rename Level", &properties),
+        MenuItem::with_action(
+            "Export as 3D Clipart",
+            &format!("{}{id}", crate::app::EXPORT_LEVEL),
+        )
+        .enabled(!doc.level_components(id).is_empty()),
         MenuItem::separator(),
         MenuItem::form::<LevelProperties>("Properties", &properties),
     ]
@@ -705,6 +780,53 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
 }
 
 /// Aspire's layer menu (MENU 967) for `layer`.
+/// A menu's categories: the runs of items between separators, each drawn in a border.
+pub fn categories(items: &[MenuItem]) -> Vec<&[MenuItem]> {
+    items
+        .split(MenuItem::is_separator)
+        .filter(|run| !run.is_empty())
+        .collect()
+}
+
+/// The right-click menu of sheet `sheet` in the Sheets tab (MENU 5030).
+pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
+    use cmd_sheet_properties::SheetProperties;
+    let Some(s) = doc.sheets.get(sheet) else {
+        return vec![];
+    };
+    let props = cmd_sheet_properties::Params {
+        sheet,
+        name: s.name.clone(),
+        visible: s.visible,
+    };
+    let shown = |name: &str, visible: bool| {
+        let params = cmd_sheet_properties::Params {
+            visible,
+            ..props.clone()
+        };
+        MenuItem::run::<SheetProperties>(name, &params).enabled(s.visible != visible)
+    };
+    vec![
+        MenuItem::run::<cmd_activate_sheet::ActivateSheet>(
+            "Activate",
+            &cmd_activate_sheet::Params { sheet },
+        )
+        .enabled(sheet != doc.active_sheet),
+        shown("Show", true),
+        shown("Hide", false),
+        MenuItem::separator(),
+        MenuItem::with_action("Insert New Sheet", "add_sheet"),
+        // ponytail: a sheet is edited while active, in Job Setup; Aspire's Sheet Editor is that form
+        MenuItem::with_action("Edit Sheet...", "job_setup").enabled(sheet == doc.active_sheet),
+        MenuItem::form::<SheetProperties>("Rename", &props),
+        MenuItem::run::<cmd_delete_sheet::DeleteSheet>(
+            "Delete",
+            &cmd_delete_sheet::Params { sheet },
+        )
+        .enabled(doc.sheets.len() > 1),
+    ]
+}
+
 pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
     use cmd_delete_items::Which;
     use cmd_layer_properties::LayerProperties;
@@ -845,7 +967,10 @@ impl MenuSystem {
                         k("Cut", "Ctrl+X"),
                         k("Copy", "Ctrl+C"),
                         k("Paste", "Ctrl+V"),
+                        i("Paste in Place"),
                         k("Delete", "Del"),
+                        sep(),
+                        k("Find Tool...", "Ctrl+K"),
                         sep(),
                         sub(
                             "Selection",
@@ -923,6 +1048,22 @@ impl MenuSystem {
                         i("Export as Grayscale Bitmap"),
                         i("Export as 3D Clipart"),
                         sep(),
+                        // Job Setup's Resolution (Aspire's level of detail), here too
+                        sub(
+                            "Model Resolution",
+                            vec![
+                                MenuItem::with_action(
+                                    "Standard (fastest)",
+                                    "model_resolution_standard",
+                                ),
+                                MenuItem::with_action("High (3x slower)", "model_resolution_high"),
+                                MenuItem::with_action(
+                                    "Highest (7x slower)",
+                                    "model_resolution_highest",
+                                ),
+                            ],
+                        ),
+                        sep(),
                         a("Sculpt Visible Model", "sculpt"),
                         i("Smooth Selected Components"),
                         i("Reset Inside Selected Vectors"),
@@ -965,12 +1106,15 @@ impl MenuSystem {
                     vec![
                         i("Show Toolpaths Tab"),
                         i("Recalculate All Toolpaths"),
+                        MenuItem::with_action("Keep-Out Zones...", "keep_out_zones"),
+                        MenuItem::with_action("Toolpath Tiling...", "toolpath_tiling"),
                         sub(
                             "Toolpath Drawing",
                             vec![
                                 i("Draw 2D Previews"),
                                 i("Make 2D Previews Solid"),
                                 i("Auto Open 3D View"),
+                                i("Animate Preview"),
                                 i("Draw Rapid Moves"),
                                 i("Draw Plunge Moves"),
                                 i("Draw Retract Moves"),
@@ -1039,14 +1183,24 @@ impl MenuSystem {
                         k("Tile Windows Horizontal", "PgDn"),
                         k("Tile Windows Vertical", "PgUp"),
                         i("Cascade Windows"),
+                        sep(),
+                        sub(
+                            "Window Layout",
+                            vec![
+                                MenuItem::with_action("Classic (Aspire's pages)", "layout_classic"),
+                                MenuItem::with_action("Rail and Inspector", "layout_rail"),
+                                MenuItem::with_action("Ribbon", "layout_ribbon"),
+                            ],
+                        ),
                     ],
                 ),
                 menu(
                     "Gadgets",
-                    vec![MenuItem {
-                        is_enabled: false,
-                        ..i("No Gadgets Installed")
-                    }],
+                    vec![
+                        MenuItem::with_action("Wrapped Fluting Layout", "wrapped_fluting_layout"),
+                        MenuItem::with_action("Wrapped Spiral Layout", "wrapped_spiral_layout"),
+                        MenuItem::with_action("Celtic Weave Creator", "celtic_weave"),
+                    ],
                 ),
                 menu(
                     "Help",
@@ -1104,6 +1258,25 @@ impl MenuSystem {
 
 #[cfg(test)]
 mod tests {
+    use super::MenuItem;
+
+    #[test]
+    fn separators_split_a_menu_into_categories() {
+        let items = [
+            MenuItem::separator(),
+            MenuItem::with_action("Undo", "undo"),
+            MenuItem::with_action("Redo", "redo"),
+            MenuItem::separator(),
+            MenuItem::separator(),
+            MenuItem::with_action("Delete", "delete"),
+        ];
+        let names: Vec<Vec<&str>> = super::categories(&items)
+            .iter()
+            .map(|c| c.iter().map(|i| i.name.as_str()).collect())
+            .collect();
+        assert_eq!(names, [vec!["Undo", "Redo"], vec!["Delete"]]);
+    }
+
     #[test]
     fn title_case_capitalizes_each_word() {
         assert_eq!(super::title_case("join_vectors"), "Join Vectors");

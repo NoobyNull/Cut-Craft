@@ -1,0 +1,15 @@
+[package]
+name = "cut-craft-bug-report"
+description = "Right-click > Report a Bug Here: a GitHub issue with where in the code it was, the state and a screenshot"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+base64.workspace = true
+chrono.workspace = true
+eframe.workspace = true
+image.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

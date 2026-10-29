@@ -65,7 +65,7 @@ impl Command for TextureArea {
         Meta {
             label: "Create Texture Area",
             group: "Modeling",
-            icon: "modeling/create_texture_area.svg",
+            icon: "modeling/create_texture_area.png",
             shortcut: "",
         }
     }
@@ -159,7 +159,7 @@ fn shaped_extent(k: &Component) -> Option<Rect> {
     k.heights
         .iter()
         .enumerate()
-        .filter(|(_, h)| h.is_some())
+        .filter(|(_, h)| !h.is_nan())
         .map(|(i, _)| {
             let c = k.centre_of(i);
             Rect::new(c - half, c + half)

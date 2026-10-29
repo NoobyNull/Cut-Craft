@@ -39,8 +39,25 @@ impl Combine {
     }
 }
 
+/// Whether two height grids match cell by cell, a hole (NaN) matching a hole.
+#[expect(
+    clippy::float_cmp,
+    reason = "the same height exactly, as a Vec<Option<f64>> compared"
+)]
+pub fn same_heights(a: &[f64], b: &[f64]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| x == y || (x.is_nan() && y.is_nan()))
+}
+
+/// A cell's height, or `fallback` where it has no shape.
+pub fn height_or(h: f64, fallback: f64) -> f64 {
+    if h.is_nan() { fallback } else { h }
+}
+
 /// Heights over a grid of square cells in the job.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Component {
     pub name: String,
     pub combine: Combine,
@@ -49,9 +66,10 @@ pub struct Component {
     pub cell: f64,
     pub columns: usize,
     pub rows: usize,
-    /// Row by row from the bottom; `None` where the component has no shape.
-    // ponytail: plain JSON numbers; a packed encoding if job files grow too big
-    pub heights: Vec<Option<f64>>,
+    /// Row by row from the bottom; NaN where the component has no shape (half the memory of
+    /// an `Option<f64>`, and what [`Material`] uses too).
+    #[serde(with = "crate::packed::heights")]
+    pub heights: Vec<f64>,
     /// Hidden components are left out of the model (added after the first job format).
     #[serde(default = "shown")]
     pub visible: bool,
@@ -60,14 +78,39 @@ pub struct Component {
     pub shaping: Shaping,
     /// The heights before it was first sculpted, which the Undo Brush brings back; cleared
     /// when the grid changes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unsculpted: Option<Vec<Option<f64>>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::packed::heights::option"
+    )]
+    pub unsculpted: Option<Vec<f64>>,
     /// The level it is on (added with levels; older files put everything on the first).
     #[serde(default)]
     pub level: u64,
     /// The component group it is in, if any (added with groups).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Group>,
+}
+
+impl PartialEq for Component {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.combine == other.combine
+            && self.origin == other.origin
+            && self.cell == other.cell
+            && self.columns == other.columns
+            && self.rows == other.rows
+            && same_heights(&self.heights, &other.heights)
+            && self.visible == other.visible
+            && self.shaping == other.shaping
+            && match (&self.unsculpted, &other.unsculpted) {
+                (None, None) => true,
+                (Some(a), Some(b)) => same_heights(a, b),
+                _ => false,
+            }
+            && self.level == other.level
+            && self.group == other.group
+    }
 }
 
 /// A component group: its members combine with each other first, then the result combines
@@ -300,6 +343,7 @@ impl Component {
             .flat_map(|row| (0..columns).map(move |column| (column, row)))
             .map(|(column, row)| {
                 height(area.min + Point::new(column as f64 + 0.5, row as f64 + 0.5) * cell)
+                    .unwrap_or(f64::NAN)
             })
             .collect();
         Self {
@@ -357,7 +401,7 @@ impl Component {
             cell: material.cell,
             columns: material.columns,
             rows: material.rows,
-            heights: material.heights.iter().map(|&h| Some(h)).collect(),
+            heights: material.heights.clone(),
             visible: true,
             shaping: Shaping::default(),
             unsculpted: None,
@@ -375,7 +419,10 @@ impl Component {
 
     /// Cell `index`'s height with the shaping applied; `None` where there is no shape.
     pub fn shaped(&self, index: usize) -> Option<f64> {
-        let z = self.heights[index]?;
+        let z = self.heights[index];
+        if z.is_nan() {
+            return None;
+        }
         Some(if self.shaping.is_identity() {
             z
         } else {
@@ -383,9 +430,12 @@ impl Component {
         })
     }
 
-    /// Every cell's height with the shaping applied, row by row from the bottom.
-    pub fn shaped_heights(&self) -> Vec<Option<f64>> {
-        (0..self.heights.len()).map(|i| self.shaped(i)).collect()
+    /// Every cell's height with the shaping applied, row by row from the bottom; NaN where
+    /// there is no shape.
+    pub fn shaped_heights(&self) -> Vec<f64> {
+        (0..self.heights.len())
+            .map(|i| self.shaped(i).unwrap_or(f64::NAN))
+            .collect()
     }
 
     /// The same shape with its shaping made permanent (Component Properties' Bake).
@@ -402,7 +452,7 @@ impl Component {
     pub fn height_range(&self) -> Option<(f64, f64)> {
         self.shaped_heights()
             .into_iter()
-            .flatten()
+            .filter(|h| !h.is_nan())
             .fold(None, |range, h| {
                 Some(range.map_or((h, h), |(lo, hi): (f64, f64)| (lo.min(h), hi.max(h))))
             })
@@ -422,7 +472,9 @@ impl Component {
         (0..self.rows)
             .rev()
             .flat_map(|row| &heights[row * self.columns..(row + 1) * self.columns])
-            .map(|h| h.map(|z| ((z - lo) / span * 255.0).round().clamp(0.0, 255.0) as u8))
+            .map(|&z| {
+                (!z.is_nan()).then(|| ((z - lo) / span * 255.0).round().clamp(0.0, 255.0) as u8)
+            })
             .collect()
     }
 
@@ -474,7 +526,7 @@ impl Component {
                 && (row as usize) < self.rows;
             inside
                 .then(|| self.heights[row as usize * self.columns + column as usize])
-                .flatten()
+                .filter(|h| !h.is_nan())
         };
         let local = (p - self.origin) / self.cell;
         if local.x < 0.0 || local.y < 0.0 {
@@ -616,6 +668,90 @@ fn combined(on: &[&Component], p: Point) -> Option<f64> {
 /// components combined (bottom of the tree first), clipped, mirrored and wrapped as the level
 /// says, then the levels combined from the first up.
 pub fn model(doc: &Document, cells_across: usize) -> Material {
+    model_over(doc, cells_across, 0.0)
+}
+
+/// The model alone, as the 3D view shows it before any preview: cells no shown component
+/// covers are NaN (nothing there), not the zero plane.
+pub fn model_shape(doc: &Document, cells_across: usize) -> Material {
+    model_over(doc, cells_across, f64::NAN)
+}
+
+/// Where a 3D toolpath works: the tool's tip stays inside.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MachiningBoundary {
+    /// Round all the visible components
+    #[schemars(title = "Model Boundary")]
+    Model,
+    /// The whole block of material
+    #[default]
+    #[schemars(title = "Material Boundary")]
+    Material,
+    /// Inside the selected closed vectors
+    #[schemars(title = "Selected Vector(s)")]
+    SelectedVectors,
+    /// Round the visible components on the level named
+    SelectedLevel,
+}
+
+/// The regions (outlines and holes) `limit` gives, grown by `offset`; `level` names the
+/// level for [`MachiningBoundary::SelectedLevel`].
+pub fn machining_boundary(
+    doc: &Document,
+    limit: MachiningBoundary,
+    offset: f64,
+    level: &str,
+) -> Result<Vec<crate::geometry::Path>, CommandError> {
+    use crate::geometry::Path;
+    use crate::polygon::{self, Corners};
+    let paths = match limit {
+        MachiningBoundary::Model => {
+            let parts: Vec<&Component> = doc.components.values().filter(|c| c.visible).collect();
+            silhouette(&parts)
+        }
+        MachiningBoundary::Material => {
+            let a = doc.job.area();
+            let corners = [
+                a.min,
+                Point::new(a.max.x, a.min.y),
+                a.max,
+                Point::new(a.min.x, a.max.y),
+            ];
+            vec![Path::polyline(&corners, true)]
+        }
+        MachiningBoundary::SelectedVectors => doc.selected_paths(|p| p.closed).1,
+        MachiningBoundary::SelectedLevel => {
+            let Some((&id, _)) = doc.levels.iter().find(|(_, l)| l.name == level) else {
+                return Err(CommandError::Failed(format!(
+                    "there is no level called {level:?}"
+                )));
+            };
+            let parts: Vec<&Component> = doc
+                .components
+                .values()
+                .filter(|c| c.visible && c.level == id)
+                .collect();
+            silhouette(&parts)
+        }
+    };
+    let mut regions = polygon::regions(&paths);
+    if offset != 0.0 {
+        regions = polygon::offset_regions(&regions, offset, Corners::Round);
+    }
+    if regions.is_empty() {
+        return Err(CommandError::Failed(match limit {
+            MachiningBoundary::SelectedVectors => {
+                "select the closed vectors to machine inside".into()
+            }
+            _ => "the machining boundary is empty".into(),
+        }));
+    }
+    Ok(regions)
+}
+
+/// [`model`], with `empty` in the cells nothing covers.
+fn model_over(doc: &Document, cells_across: usize, empty: f64) -> Material {
     use crate::document::Along;
     let mut surface = Material::new(&doc.job, cells_across);
     let job = doc.job.area();
@@ -662,7 +798,7 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
     for row in 0..surface.rows {
         for column in 0..surface.columns {
             let centre = surface.centre(column, row);
-            let mut total = 0.0;
+            let (mut total, mut covered) = (0.0, false);
             for (level, rings, on) in &levels {
                 if !rings.is_empty() && !crate::geometry::inside(rings, centre) {
                     continue;
@@ -679,9 +815,10 @@ pub fn model(doc: &Document, cells_across: usize) -> Material {
                     .reduce(f64::max);
                 if let Some(h) = height {
                     total = level.combine.apply(total, h + level.base_height);
+                    covered = true;
                 }
             }
-            surface.heights[row * surface.columns + column] = total;
+            surface.heights[row * surface.columns + column] = if covered { total } else { empty };
         }
     }
     surface

@@ -40,7 +40,7 @@ impl Command for DrawArc {
         Meta {
             label: "Draw Arc",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_arc.svg",
+            icon: "drawing/create_vectors/draw_arc.png",
             shortcut: "",
         }
     }

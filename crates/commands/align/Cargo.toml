@@ -1,0 +1,14 @@
+[package]
+name = "cmd-align"
+description = "Align Objects: Align Left / Right / Top / Bottom, Center, Center Horizontally / Vertically, and the three Center In Material commands"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

@@ -17,7 +17,7 @@ pub struct Meta {
     pub label: &'static str,
     /// Drawing-tab group or menu it belongs to.
     pub group: &'static str,
-    /// Icon path relative to the icon directory, e.g. `drawing/create_vectors/draw_circle.svg`.
+    /// Icon path relative to the icon directory, e.g. `drawing/create_vectors/draw_circle.png`.
     pub icon: &'static str,
     pub shortcut: &'static str,
 }
@@ -297,6 +297,17 @@ impl Registry {
     /// Re-runs the strategy that made toolpath `id`, with its saved params, on the vectors it was
     /// made from (whatever is selected now). Unchanged results make an empty change.
     pub fn recalculate(&self, doc: &Document, id: EntityId) -> Result<Change, CommandError> {
+        self.edit(doc, id, None)
+    }
+
+    /// Edit Toolpath: toolpath `id` made again from its vectors with `params` (its own when
+    /// `None`), in its place.
+    pub fn edit(
+        &self,
+        doc: &Document,
+        id: EntityId,
+        params: Option<&serde_json::Value>,
+    ) -> Result<Change, CommandError> {
         let toolpath = doc
             .toolpaths
             .get(&id)
@@ -322,7 +333,7 @@ impl Registry {
             )));
         }
         let fresh = strategy
-            .run_json(&sources, &toolpath.params)?
+            .run_json(&sources, params.unwrap_or(&toolpath.params))?
             .edits
             .into_iter()
             .find_map(|e| match e {
@@ -332,6 +343,8 @@ impl Registry {
             .ok_or_else(|| {
                 CommandError::Failed(format!("`{}` did not make a toolpath", toolpath.strategy))
             })?;
+        let mut fresh = fresh;
+        crate::rest::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
         let mut c = Change::builder(doc);
         if &fresh != toolpath {
             c.replace_toolpath(id, fresh);

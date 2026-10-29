@@ -43,7 +43,7 @@ impl Command for CloseExtendVector {
         Meta {
             label: "Close / Extend Vector",
             group: "Edit Objects",
-            icon: "drawing/create_vectors/close_extend_vector.svg",
+            icon: "drawing/create_vectors/close_extend_vector.png",
             shortcut: "",
         }
     }

@@ -1,0 +1,18 @@
+[package]
+name = "cmd-plate-production"
+description = "Plate Production"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cmd-draw-text = { path = "../draw-text" }
+serde_json.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

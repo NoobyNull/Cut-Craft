@@ -1,0 +1,63 @@
+#!/bin/bash
+# Builds Cut Craft for macOS, Apple Silicon and Intel in one app, and packs it in a DMG.
+#   scripts/macos-dmg            (on a Mac; .github/workflows/builds.yml runs it on GitHub)
+# Needs rustup's aarch64-apple-darwin and x86_64-apple-darwin targets, librsvg
+# (rsvg-convert, for the app icon) and the system's lipo, iconutil and hdiutil.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+for target in aarch64-apple-darwin x86_64-apple-darwin; do
+    cargo build --release -p cut-craft --target "$target"
+done
+
+rm -rf dist
+app="dist/Cut Craft.app"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+lipo -create -output "$app/Contents/MacOS/cut-craft" \
+    target/aarch64-apple-darwin/release/cut-craft target/x86_64-apple-darwin/release/cut-craft
+# the app's icon, from the logo, at each size macOS asks for
+iconset=dist/AppIcon.iconset
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+    rsvg-convert -w "$size" -h "$size" assets/cut-craft.svg -o "$iconset/icon_${size}x${size}.png"
+    rsvg-convert -w $((size * 2)) -h $((size * 2)) assets/cut-craft.svg \
+        -o "$iconset/icon_${size}x${size}@2x.png"
+done
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
+
+cat > "$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Cut Craft</string>
+    <key>CFBundleDisplayName</key><string>Cut Craft</string>
+    <key>CFBundleIdentifier</key><string>family.yax.cut-craft</string>
+    <key>CFBundleExecutable</key><string>cut-craft</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>${version}</string>
+    <key>CFBundleVersion</key><string>${version}</string>
+    <key>LSMinimumSystemVersion</key><string>11.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>Cut Craft job</string>
+            <key>CFBundleTypeExtensions</key><array><string>ccjob</string></array>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+        </dict>
+    </array>
+</dict>
+</plist>
+PLIST
+
+# the disk image: the app beside a link to Applications, to drag it onto
+stage=dist/stage
+mkdir -p "$stage"
+cp -R "$app" "$stage/"
+ln -s /Applications "$stage/Applications"
+dmg="dist/CutCraft-${version}-macos.dmg"
+hdiutil create -volname "Cut Craft" -srcfolder "$stage" -ov -format UDZO "$dmg"
+echo "$dmg"

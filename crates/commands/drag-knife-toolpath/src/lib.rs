@@ -178,7 +178,7 @@ impl Command for DragKnifeToolpath {
         Meta {
             label: "Drag Knife Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/drag_knife_toolpath.svg",
+            icon: "toolpaths/drag_knife_toolpath.png",
             shortcut: "",
         }
     }

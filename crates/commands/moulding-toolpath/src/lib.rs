@@ -114,7 +114,7 @@ impl Command for MouldingToolpath {
         Meta {
             label: "Moulding Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/moulding_toolpath.svg",
+            icon: "toolpaths/moulding_toolpath.png",
             shortcut: "",
         }
     }

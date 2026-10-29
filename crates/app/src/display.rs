@@ -25,6 +25,12 @@ pub struct Display {
     pub shaded_background: bool,
     /// Rotary jobs: the 3D view shows the model and preview wrapped round the axis.
     pub auto_wrapping: bool,
+    /// Guide lines drawn in the 2D view.
+    pub guides: bool,
+    /// Previews play the tool cutting (Aspire's Animate preview) rather than appearing cut.
+    pub animate_preview: bool,
+    /// What solid 2D previews are drawn in ([r, g, b]).
+    pub solid_colour: [u8; 3],
 }
 
 impl Default for Display {
@@ -46,6 +52,13 @@ impl Default for Display {
             colour_shaded: true,
             shaded_background: true,
             auto_wrapping: true,
+            guides: true,
+            animate_preview: true,
+            // the theme's warning colour, as the line previews are
+            solid_colour: {
+                let c = eframe::egui::Visuals::light().warn_fg_color;
+                [c.r(), c.g(), c.b()]
+            },
         }
     }
 }
@@ -73,6 +86,8 @@ impl Display {
             "draw_retract_moves" => &mut self.retracts,
             "draw_join_moves" => &mut self.joins,
             "draw_origin" => &mut self.origin,
+            "guides_visible" => &mut self.guides,
+            "animate_preview" => &mut self.animate_preview,
             "draw_modeling_plane" => &mut self.modeling_plane,
             "draw_material_block" => &mut self.material_block,
             "draw_vectors_in_3d_view" => &mut self.vectors_3d,

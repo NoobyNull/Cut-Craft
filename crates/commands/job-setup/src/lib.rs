@@ -1,7 +1,9 @@
 //! Job Setup: the material block, where the machine's zero is on it, how finely the model is
 //! worked out and how the material looks, laid out in sections as Aspire's form is.
 
-use cut_craft_core::document::{Along, Datum, Document, Job, Resolution, Rotary, Units, ZZero};
+use cut_craft_core::document::{
+    Along, Datum, Document, DoubleSided, Home, Job, Resolution, Rotary, Units, ZZero,
+};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -16,7 +18,7 @@ pub enum JobType {
     #[default]
     #[schemars(title = "Single Sided")]
     SingleSided,
-    /// Not supported yet
+    /// Both faces machined, the material turned over between them
     #[schemars(title = "Double Sided")]
     DoubleSided,
     /// A cylinder turned by a rotary axis
@@ -80,25 +82,25 @@ pub struct Params {
     #[schemars(
         title = "Job Type",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/{}_job.svg")
+        extend("x-icon" = "job_setup/{}_job.png")
     )]
     pub job_type: JobType,
     #[schemars(
         title = "Job Size",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/material_size_xyz.svg")
+        extend("x-icon" = "job_setup/material_size_xyz.png")
     )]
     pub size: Size,
     #[schemars(
         title = "Z Zero Position",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/z_zero_{}.svg")
+        extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
     #[schemars(
         title = "XY Datum Position",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/xy_datum_{position}.svg")
+        extend("x-icon" = "job_setup/xy_datum_{position}.png")
     )]
     pub datum: DatumPosition,
     /// Rotary jobs: the direction the cylinder's axis runs
@@ -107,6 +109,13 @@ pub struct Params {
         extend("x-section" = true, "x-show-when" = {"job_type": "rotary"})
     )]
     pub orientation: Along,
+    /// Double-sided jobs: how the material is turned over between sides
+    #[schemars(
+        title = "Flip Direction Between Sides",
+        extend("x-section" = true, "x-show-when" = {"job_type": "double_sided"})
+    )]
+    #[serde(default)]
+    pub sides: DoubleSided,
     /// How finely 3D shapes are worked out over the job; Standard suits most parts
     #[schemars(
         title = "Modeling Resolution",
@@ -121,15 +130,26 @@ pub struct Params {
         extend("x-kind" = "colour")
     )]
     pub colour: [u8; 3],
-    /// Safe height above the material for rapid moves
     #[schemars(
-        title = "Clearance (Z1)",
+        title = "Rapid Z Gaps above Material",
         extend("x-section" = true),
-        extend("x-icon" = "job_setup/clearance_z1.svg"),
-        extend("x-unit" = "mm"),
-        range(min = 0)
+        extend("x-icon" = "job_setup/clearance_z1.png")
     )]
+    pub gaps: RapidGaps,
+    /// Where the tool starts from and goes back to at the end
+    #[schemars(title = "Home / Start Position", extend("x-section" = true))]
+    pub home: Home,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RapidGaps {
+    /// Safe height above the material for rapid moves
+    #[schemars(title = "Clearance (Z1)", extend("x-unit" = "mm"), range(min = 0))]
     pub clearance: f64,
+    /// Plunges go down to this gap above the material at the rapid rate, then at the plunge
+    /// rate; the same as the clearance means no rapid plunges
+    #[schemars(title = "Plunge (Z2)", extend("x-unit" = "mm"), range(min = 0))]
+    pub plunge: f64,
 }
 
 impl From<&Job> for Params {
@@ -140,10 +160,10 @@ impl From<&Job> for Params {
             along: Along::X,
         });
         Self {
-            job_type: if job.rotary.is_some() {
-                JobType::Rotary
-            } else {
-                JobType::SingleSided
+            job_type: match (job.rotary, job.double_sided) {
+                (Some(_), _) => JobType::Rotary,
+                (None, Some(_)) => JobType::DoubleSided,
+                (None, None) => JobType::SingleSided,
             },
             size: Size {
                 width: job.width,
@@ -166,9 +186,14 @@ impl From<&Job> for Params {
                 y: job.offset.y,
             },
             orientation: rotary.along,
+            sides: job.double_sided.unwrap_or_default(),
             resolution: job.resolution,
             colour: job.colour,
-            clearance: job.clearance,
+            gaps: RapidGaps {
+                clearance: job.clearance,
+                plunge: job.plunge_gap(),
+            },
+            home: job.home(),
         }
     }
 }
@@ -187,7 +212,7 @@ impl Command for JobSetup {
         Meta {
             label: "Job Setup",
             group: "File Operations",
-            icon: "file/job_setup.svg",
+            icon: "file/job_setup.png",
             shortcut: "",
         }
     }
@@ -197,19 +222,19 @@ impl Command for JobSetup {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        ensure_positive("clearance", p.clearance)?;
+        ensure_positive("clearance", p.gaps.clearance)?;
+        if !(0.0..=p.gaps.clearance).contains(&p.gaps.plunge) {
+            return Err(CommandError::InvalidParams(
+                "Plunge (Z2) must be between 0 and the clearance (Z1)".into(),
+            ));
+        }
         let shape = match p.job_type {
-            JobType::DoubleSided => {
-                return Err(CommandError::InvalidParams(
-                    "double-sided jobs are not supported yet".into(),
-                ));
-            }
             JobType::Rotary => {
                 ensure_positive("length", p.size.length)?;
                 ensure_positive("diameter", p.size.diameter)?;
                 Job::rotary(p.size.length, p.size.diameter, p.orientation)
             }
-            JobType::SingleSided => {
+            JobType::SingleSided | JobType::DoubleSided => {
                 ensure_positive("width", p.size.width)?;
                 ensure_positive("height", p.size.height)?;
                 ensure_positive("thickness", p.size.thickness)?;
@@ -217,13 +242,16 @@ impl Command for JobSetup {
                     width: p.size.width,
                     height: p.size.height,
                     thickness: p.size.thickness,
+                    double_sided: (p.job_type == JobType::DoubleSided).then_some(p.sides),
                     ..Job::default()
                 }
             }
         };
         let job = Job {
             units: p.size.units,
-            clearance: p.clearance,
+            clearance: p.gaps.clearance,
+            plunge: Some(p.gaps.plunge),
+            home: Some(p.home),
             z_zero: p.z_zero,
             datum: p.datum.position,
             offset: if p.datum.use_offset {
@@ -396,9 +424,19 @@ mod tests {
     }
 
     #[test]
-    fn double_sided_jobs_are_not_supported_yet() {
-        let why = after_err::<JobSetup>(&with(|p| p.job_type = JobType::DoubleSided));
-        assert!(why.contains("not supported yet"), "{why}");
+    fn a_double_sided_job_keeps_its_flip_direction() {
+        use cut_craft_core::document::Flip;
+        let doc = after::<JobSetup>(&with(|p| {
+            p.job_type = JobType::DoubleSided;
+            p.sides.flip = Flip::Vertical;
+        }));
+        assert_eq!(doc.job.double_sided.unwrap().flip, Flip::Vertical);
+        assert_eq!(
+            JobSetup::initial_params(&doc).job_type,
+            JobType::DoubleSided
+        );
+        let single = after::<JobSetup>(&with(|p| p.job_type = JobType::SingleSided));
+        assert!(single.job.double_sided.is_none());
     }
 
     #[test]
@@ -435,6 +473,41 @@ mod tests {
             ),
             (JobType::Rotary, 50.0, 300.0)
         );
+    }
+
+    #[test]
+    fn sets_the_plunge_gap_and_the_home_position() {
+        let home = Home {
+            x: 10.0,
+            y: 20.0,
+            z: 30.0,
+        };
+        let doc = after::<JobSetup>(&with(|p| {
+            p.gaps.clearance = 15.0;
+            p.gaps.plunge = 2.0;
+            p.home = home;
+        }));
+        assert_eq!(
+            (doc.job.clearance, doc.job.plunge_gap(), doc.job.home()),
+            (15.0, 2.0, home)
+        );
+        let reopened = Params::from(&doc.job);
+        assert_eq!((reopened.gaps.plunge, reopened.home), (2.0, home));
+    }
+
+    #[test]
+    fn a_new_job_plunges_from_the_clearance_and_starts_above_x0_y0() {
+        let p = Params::default();
+        assert!((p.gaps.plunge - p.gaps.clearance).abs() < 1e-12);
+        assert_eq!((p.home.x, p.home.y, p.home.z), (0.0, 0.0, p.gaps.clearance));
+    }
+
+    #[test]
+    fn the_plunge_gap_must_be_under_the_clearance() {
+        let why = after_err::<JobSetup>(&with(|p| p.gaps.plunge = p.gaps.clearance + 1.0));
+        assert!(why.contains("Plunge (Z2)"), "{why}");
+        let why = after_err::<JobSetup>(&with(|p| p.gaps.plunge = -1.0));
+        assert!(why.contains("Plunge (Z2)"), "{why}");
     }
 
     #[test]

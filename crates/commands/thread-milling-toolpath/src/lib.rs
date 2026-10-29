@@ -1,10 +1,12 @@
 //! Thread Milling Toolpath: a single-point thread mill spirals round the centre of each
-//! selected vector, cutting an internal thread (a nut) or an external one (a bolt).
+//! selected vector, cutting an internal thread (a nut) or an external one (a bolt). The
+//! thread mill's tooth comes from the tool; jobs saved before thread mills were tools give
+//! its offset on the form.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
-use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
+use cut_craft_core::toolpath::{Move, MoveKind, Tool, ToolDatabase, ToolShape, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -60,7 +62,8 @@ pub struct Params {
     pub thread_type: ThreadType,
     pub thread_direction: Hand,
     pub cut_direction: CutDirection,
-    /// From the bottom of the thread mill up to the tip of its tooth
+    /// From the bottom of the thread mill up to the tip of its tooth, for a tool that is not
+    /// a thread mill (a thread mill gives its own)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub tooth_offset: f64,
     /// A single-point thread mill; its diameter is tip to tip
@@ -80,11 +83,11 @@ impl Default for Params {
             thread_direction: Hand::RightHanded,
             cut_direction: CutDirection::Down,
             tooth_offset: 2.0,
-            tool: Tool {
-                name: "Thread Mill (10 mm)".into(),
-                diameter: 10.0,
-                ..Tool::default()
-            },
+            tool: ToolDatabase::starter()
+                .tools
+                .into_iter()
+                .find(|t| t.shape == ToolShape::ThreadMill)
+                .expect("the starter tools include a thread mill"),
         }
     }
 }
@@ -93,9 +96,18 @@ impl Default for Params {
 const TURN_STEPS: u32 = 72;
 
 impl Params {
+    /// From the bottom of the tool to the tip of its tooth: the thread mill's own, else the
+    /// form's.
+    fn tooth_offset(&self) -> f64 {
+        match self.tool.shape {
+            ToolShape::ThreadMill => self.tool.tooth_offset,
+            _ => self.tooth_offset,
+        }
+    }
+
     /// How far the threads go down: from the start to the tooth at the deepest.
     pub fn thread_length(&self) -> f64 {
-        self.max_depth - self.tooth_offset
+        self.max_depth - self.tooth_offset()
     }
 
     /// Radius of the circle the tool's centre runs round.
@@ -113,7 +125,7 @@ impl Params {
 
     fn helix(&self, centre: Point, safe: f64) -> Vec<Move> {
         let radius = self.centre_radius();
-        let top = -(self.start_depth + self.tooth_offset);
+        let top = -(self.start_depth + self.tooth_offset());
         let bottom = -(self.start_depth + self.max_depth);
         let turns = (top - bottom) / self.pitch;
         // a right-handed thread climbs anticlockwise
@@ -186,7 +198,7 @@ impl Command for ThreadMillingToolpath {
         Meta {
             label: "Thread Milling Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/thread_milling_toolpath.svg",
+            icon: "toolpaths/circular_pocket.png",
             shortcut: "",
         }
     }
@@ -195,7 +207,13 @@ impl Command for ThreadMillingToolpath {
         ensure_positive("pitch", p.pitch)?;
         ensure_positive("diameter", p.diameter)?;
         ensure_positive("tool diameter", p.tool.diameter)?;
-        ensure_positive("tooth offset", p.tooth_offset)?;
+        ensure_positive("tooth offset", p.tooth_offset())?;
+        // Aspire's rule for a single-point tool's offset
+        if p.tool.shape == ToolShape::ThreadMill && p.tool.tooth_offset < p.tool.tooth_size / 2.0 {
+            return Err(CommandError::InvalidParams(
+                "the thread mill's tooth offset must be at least half the tooth size".into(),
+            ));
+        }
         if p.thread_length() < p.pitch {
             return Err(CommandError::InvalidParams(
                 "the max depth must reach at least a pitch below the tooth offset".into(),
@@ -313,6 +331,50 @@ mod tests {
             plunge.to.truncate().distance(c) > 15.0,
             "comes down clear of the post"
         );
+    }
+
+    #[test]
+    fn a_thread_mill_brings_its_own_tooth_offset_and_older_tools_use_the_forms() {
+        let mill = Params {
+            tooth_offset: 5.0,
+            tool: Tool {
+                tooth_offset: 3.0,
+                ..Params::default().tool
+            },
+            ..Params::default()
+        };
+        assert_eq!(mill.tool.shape, ToolShape::ThreadMill, "the starter's");
+        let h = helix(&thread(&mill));
+        assert!(
+            (h[0].z + 3.0).abs() < 1e-9,
+            "the tool's offset, not the form's"
+        );
+        assert!((mill.thread_length() - 9.0).abs() < 1e-9);
+        // a job saved before thread mills were tools: an end mill and the form's offset
+        let old = Params {
+            tool: Tool {
+                diameter: 10.0,
+                ..Tool::default()
+            },
+            ..mill
+        };
+        let h = helix(&thread(&old));
+        assert!((h[0].z + 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_tooth_offset_under_half_the_tooth_size_is_refused() {
+        let p = Params {
+            tool: Tool {
+                tooth_size: 2.0,
+                tooth_offset: 0.9,
+                ..Params::default().tool
+            },
+            ..Params::default()
+        };
+        let why = made_toolpath::<ThreadMillingToolpath>(vec![Path::circle(Point::ZERO, 10.0)], &p)
+            .unwrap_err();
+        assert!(why.contains("half the tooth size"), "{why}");
     }
 
     #[test]

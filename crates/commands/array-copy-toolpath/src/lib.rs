@@ -71,7 +71,7 @@ impl Command for ArrayCopyToolpath {
         Meta {
             label: "Array Copy Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/array_copy_toolpath.svg",
+            icon: "toolpaths/array_copy_toolpath.png",
             shortcut: "",
         }
     }

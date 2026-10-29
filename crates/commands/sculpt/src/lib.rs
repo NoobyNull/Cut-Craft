@@ -2,7 +2,7 @@
 //! smooths, smudges, adds or removes height, or brings back the shape it had before
 //! sculpting. Each drag is one stroke and one undoable change.
 
-use cut_craft_core::component::{Component, chosen_or_baked};
+use cut_craft_core::component::{Component, chosen_or_baked, height_or};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
 use cut_craft_core::params::Xy;
@@ -136,7 +136,7 @@ impl Command for Sculpt {
         Meta {
             label: "Sculpting",
             group: "Modeling",
-            icon: "modeling/sculpting.svg",
+            icon: "modeling/sculpting.png",
             shortcut: "",
         }
     }
@@ -190,7 +190,7 @@ fn sculpted(k: &Component, p: &Params) -> Component {
         let at = |column: isize, row: isize| -> Option<f64> {
             (column >= 0 && row >= 0 && column < columns && row < rows)
                 .then(|| snapshot[(row * columns + column) as usize])
-                .flatten()
+                .filter(|h| !h.is_nan())
         };
         let local = (centre - k.origin) / k.cell - 0.5;
         let (middle_column, middle_row) = (local.x.round() as isize, local.y.round() as isize);
@@ -205,14 +205,14 @@ fn sculpted(k: &Component, p: &Params) -> Component {
                     continue;
                 }
                 let here = snapshot[index];
-                if here.is_none() && p.preserve_transparency {
+                if here.is_nan() && p.preserve_transparency {
                     continue;
                 }
                 if p.tool == Tool::UndoBrush && p.erase {
-                    out.heights[index] = None;
+                    out.heights[index] = f64::NAN;
                     continue;
                 }
-                let z = here.unwrap_or(0.0);
+                let z = height_or(here, 0.0);
                 let target = match p.tool {
                     Tool::Smooth => {
                         let around: Vec<f64> = (-1..=1)
@@ -226,7 +226,7 @@ fn sculpted(k: &Component, p: &Params) -> Component {
                     }
                     Tool::Deposit => z + rate,
                     Tool::Remove => z - rate,
-                    Tool::UndoBrush => original[index].unwrap_or(0.0),
+                    Tool::UndoBrush => height_or(original[index], 0.0),
                 };
                 let mut new = z + (target - z) * w;
                 match p.mode {
@@ -234,7 +234,7 @@ fn sculpted(k: &Component, p: &Params) -> Component {
                     Mode::Raise => new = new.max(z),
                     Mode::Lower => new = new.min(z),
                 }
-                out.heights[index] = Some(new);
+                out.heights[index] = new;
             }
         }
         previous = centre;

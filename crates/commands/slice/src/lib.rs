@@ -55,7 +55,7 @@ impl Command for Slice {
         Meta {
             label: "Slice Model",
             group: "Modeling",
-            icon: "modeling/slice_model.svg",
+            icon: "modeling/slice_model.png",
             shortcut: "",
         }
     }
@@ -103,7 +103,8 @@ impl Command for Slice {
             let mut slice =
                 Component::from_material(&format!("Slice {}", k + 1), Combine::Add, &model);
             for h in &mut slice.heights {
-                *h = h.filter(|&z| z > lo).map(|z| z.min(hi) - lo);
+                // NaN (no shape) is not above `lo` and stays NaN
+                *h = if *h > lo { h.min(hi) - lo } else { f64::NAN };
             }
             if p.create_boundary_vectors {
                 for path in silhouette(&[&slice]) {

@@ -8,13 +8,12 @@ pub fn parse(text: &str) -> Option<KeyboardShortcut> {
     let (key, held) = parts.split_last()?;
     let mut modifiers = Modifiers::NONE;
     for m in held {
-        modifiers = modifiers
-            | match *m {
-                "Ctrl" => Modifiers::COMMAND,
-                "Alt" => Modifiers::ALT,
-                "Shift" => Modifiers::SHIFT,
-                _ => return None,
-            };
+        modifiers |= match *m {
+            "Ctrl" => Modifiers::COMMAND,
+            "Alt" => Modifiers::ALT,
+            "Shift" => Modifiers::SHIFT,
+            _ => return None,
+        };
     }
     let name = match *key {
         "Del" => "Delete",

@@ -37,7 +37,7 @@ impl Command for DrawEllipse {
         Meta {
             label: "Draw Ellipse",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_ellipse.svg",
+            icon: "drawing/create_vectors/draw_ellipse.png",
             shortcut: "",
         }
     }

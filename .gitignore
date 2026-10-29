@@ -1,5 +1,8 @@
 target/
 re/extracted/
-assets/icons/
+re/re/
+__pycache__/
 /config/
 /output/
+dist/
+packaging/linux/stage/

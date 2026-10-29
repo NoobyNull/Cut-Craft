@@ -209,3 +209,24 @@ fn the_chosen_component_is_the_last_picked_else_the_newest() {
         "a gone one is passed over"
     );
 }
+
+#[test]
+fn the_model_alone_leaves_uncovered_cells_empty() {
+    use cut_craft_core::component::{model, model_shape};
+    use cut_craft_core::testing::domed;
+    let doc = domed();
+    let (shape, whole) = (model_shape(&doc, 50), model(&doc, 50));
+    let empty = shape.heights.iter().filter(|h| h.is_nan()).count();
+    assert!(
+        empty > 0 && empty < shape.heights.len(),
+        "{empty} of {}",
+        shape.heights.len()
+    );
+    for (s, w) in shape.heights.iter().zip(&whole.heights) {
+        if s.is_nan() {
+            assert_eq!(*w, 0.0, "the zero plane where nothing is");
+        } else {
+            assert_eq!(s, w, "the model where it is");
+        }
+    }
+}

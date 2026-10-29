@@ -54,7 +54,7 @@ impl Command for ArrayCopy {
         Meta {
             label: "Array Copy",
             group: "Array Objects",
-            icon: "drawing/create_vectors/array_copy.svg",
+            icon: "drawing/create_vectors/array_copy.png",
             shortcut: "",
         }
     }

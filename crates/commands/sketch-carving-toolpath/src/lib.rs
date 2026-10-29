@@ -227,7 +227,7 @@ impl Command for SketchCarvingToolpath {
         Meta {
             label: "Sketch Carving Toolpath",
             group: "Toolpath Operations",
-            icon: "toolpaths/sketch_carving.svg",
+            icon: "toolpaths/sketch_carving.png",
             shortcut: "",
         }
     }
@@ -318,6 +318,7 @@ mod tests {
             rows: 40,
             grey,
             rect: Rect::new(Point::ZERO, Point::new(40.0, 40.0)),
+            depth: Vec::new(),
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

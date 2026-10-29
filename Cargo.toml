@@ -1,22 +1,22 @@
 [workspace]
 resolver = "3"
-members = ["crates/app", "crates/core", "crates/post", "crates/vtdb", "crates/calib", "crates/commands/*", "crates/formats/*"]
+members = ["crates/app", "crates/core", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/machines", "crates/calib", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.3.0"
 edition = "2024"
 
 [workspace.dependencies]
 cut-craft-core = { path = "crates/core" }
+base64 = "0.21"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-eframe = { version = "0.27", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11"] }
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
 dxf = "0.6"
-egui_extras = { version = "0.27", default-features = false, features = ["file", "svg"] }
-env_logger = "0.10"
+flate2 = "1"
+egui_extras = { version = "0.37", default-features = false, features = ["file", "svg", "image"] }
 glam = { version = "0.30", features = ["serde"] }
 i_overlay = "9.1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff"] }
-log = "0.4"
 rfd = "0.17"
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
@@ -34,9 +34,11 @@ must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
-# geometry-heavy code (toolpaths, simulation) is far too slow unoptimised, in tests and runs
+# geometry-heavy code (toolpaths, simulation) is far too slow unoptimised, in tests and runs;
+# line tables keep panics and backtraces readable at a fraction of full debug info's size
 [profile.dev]
 opt-level = 1
+debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3

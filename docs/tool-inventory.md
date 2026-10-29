@@ -48,7 +48,7 @@ Position and the start page's Create a new file are Job Setup.
 | Move, Rotate, Mirror, Set Size | one transform-selection block |
 | Weld, Subtract, Overlap, Offset | polygon union / difference / intersection / offset |
 | Profile, Pocket, V-Carve | polygon offsets (V-Carve: regions with holes) + contour moves + pass depths |
-| 3D Roughing, 3D Finishing | placed model + zigzag (each move checked with the simulation) + follow |
+| 3D Roughing, 3D Finishing | placed model + machining boundary + raster or offset lines dropped along (each move checked with the simulation) + follow |
 | Recalculate All Toolpaths | Recalculate, for each toolpath |
 | Preview All Toolpaths | Preview Toolpath, for each toolpath, on fresh material |
 | Delete Layer | removing its vectors (as Delete does) + removing the layer |
@@ -96,9 +96,8 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
 - **2D view (318, plus ours):** Undo, Redo, Cut / Copy / Paste (greyed), Delete, Move to
   Layer ▸ each layer, Weld, Subtract, Overlap, Join, Align ▸. Object Properties is greyed.
 
-Not built from Aspire's menus yet: toolpath Edit, Duplicate, groups, Activate Sheet, Show All
-With This Tool; component 2D preview order, Export as 3D Clipart, Re-Import, Copy,
-Move to Front / Back; the no-item menus (layers 982, components 614).
+Not built from Aspire's menus yet: toolpath Show All With This Tool; component 2D preview
+order, Re-Import, Copy, Move to Front / Back; the no-item menus (layers 982, components 614).
 
 ## Status, top down
 
@@ -136,17 +135,89 @@ say "not implemented yet".
 - 3D view: left- or right-drag rotates, middle-drag / Ctrl+right-drag / left+right pans, the
   wheel zooms about the cursor, F (or a double-click off the model) fits; Top, Front, Right, Iso, Fit buttons.
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
-- Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools.
+- Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
+  Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
+  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Clipart
+  (a library of folders; double-click a thumbnail to import it).
+- Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
+  geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
+  snap point across or up and down (Aspire's guide lines and woken nodes are not done).
+- Menus and drop-downs draw each category in a border.
+- Number fields take sums (Calculation Edit Boxes): + - * / ^, brackets, W H T, P, I, M, '.
+- Sheets keep their own vectors, components, pictures and toolpaths; activating one swaps them.
+- Edit ▸ Options (3D view, toolpath and general settings, in options.json) and Edit ▸
+  Document Variables (used in sums as {name}). Options also has the 3D view's background
+  (solid, gradient or picture, with its colours) and anti-aliasing (4x, from the next start);
+  the 2D, 3D and V-carve toolpath tolerances (saved toolpaths drop cutting points within them,
+  Douglas–Peucker); the 2D solid preview colour; the file dialogs' folder (the desktop's or the
+  job's); and Confirmation Choices: crossing vectors for pocket and V-carve toolpaths and for
+  radiused and sharp offsets (ask, open the Vector Validator, or don't check), and whether the
+  checks before cutting ask before saving.
+- Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
+  (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
+- Double-sided jobs (Job Setup's Double Sided, Flip Direction Between Sides): each side keeps
+  its own objects; Edit ▸ Swap Sides or the top bar's side button turns over; the other side
+  is drawn faint and mirrored; the 2D right-click Copy to Other Side mirrors copies across.
+- Plate Production (Offset and Layout): a template's !!variables!! filled from a data file's
+  columns or a counter, plates laid out inside margins, a layer per sheet of material when
+  they need more. Not done: copying the template's toolpaths onto each plate.
+- Toolpath Tiling (Toolpaths menu): individual tiles or feed-through in X or Y, tile size,
+  overlap, smallest tile first; tiles drawn in the 2D view; Save Toolpaths writes one file
+  per tile (`name_tileN`), cuts clipped to the tile and its overlap and moved to the job's
+  corner. Not done: the 3D view's active tile and drawing tiles in their original place.
+- Gadgets ▸ Wrapped Fluting Layout and Wrapped Spiral Layout (rotary jobs): flutes or
+  rope-twist strands, with coves, laid out as vectors for Profile / Fluting toolpaths.
+- Gadgets ▸ Celtic Weave Creator: a knot grid's loops as smooth closed vectors (crossings
+  cut vertically or horizontally from a list; Aspire picks them on a preview image) and a
+  half-round cross-section, for Extrude and Weave.
+- Animated toolpath preview (Toolpaths ▸ Toolpath Drawing ▸ Animate Preview, on by default):
+  Run / Pause, Single Step, Run to Retract, Stop (keeps what is cut), a slider to scrub
+  along the path and a speed slider over the 3D view; the tool drawn as an upright
+  cylinder. Not done: the tool's real shape, Preview All Sides.
+- Rest machining for every toolpath (a Rest Machining section in each toolpath form; 3D
+  Finishing keeps its own): what the toolpath would leave is simulated, each earlier tool's
+  best try at it shows what that tool left, and only the cuts over areas every earlier tool
+  left are kept (minimum detail, overlap). Kept with the toolpath, so recalculating does it
+  again. The rest grid is a quarter of the tool across [inf].
+- Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
+  invert, a rectangular or oval border fading to white) and Crop Bitmap.
+- Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools; taper angle, shank
+  diameter and flute length (tapered ball noses and flat bottoms are cut with their whole
+  taper, read from .vtdb and Fusion .tools files).
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
-  (as a ball nose), drill (as an end mill); one tool per material it has cutting data for.
+  (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.
   Form tools and diamond drags are skipped.
+- Checks before cutting (Cut Craft's own; Aspire has none): a toolpath deeper than its tool's
+  flute length (or with none set), a 3D finish whose taper cannot reach part of the model, and
+  an STL's undercuts; shown when made, and Save Toolpaths asks before writing them.
 - Every toolpath strategy in `re/SPEC.md` (backlog item 19): Profile, Pocket, Drilling,
   V-Carve (with Start Depth), V-Carve Inlay, Inlay (pocket / plug), Quick Engrave (Ctrl+Q),
   Chamfer, Fluting, Prism, Thread Milling, Keyhole, Drag Knife, Moulding, Texture, Photo V-Carve,
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- Toolpath options: Profile ramps (smooth, zig zag, spiral; by distance or angle), leads
+  (straight or circular, lead out, overcut) and tabs (2D or 3D, by number or distance); Pocket
+  Offset or Raster (angle, profile pass first / last / none) with ramped plunges; 3D Roughing
+  Z Level (level by level or depth first) or 3D Raster, and 3D Finishing Raster (any angle) or
+  Offset, both inside a machining boundary (model, material, selected vectors or a level,
+  plus offset). Tabs are sized from the tool (pass depth thick, twice that long) and spaced about every
+  150 mm by default; they can start at the start point, keep off corners, or be placed by
+  clicking the vectors; climb or conventional and an allowance on Profile and Pocket; Z Level
+  profile pass, reverse step and (3D Raster) avoid machined areas; neighbouring 3D lines are
+  joined without lifting, offset finishing rings lifted by a stepover retract.
+- Profile: nested shapes cut on the right side, inner before outer; cut order (selection
+  order, left to right, bottom to top, grid, shortest path; the shortest of those ticked wins);
+  start points (keep, optimise, nearest a point of the bounding box); sharp external corners.
+- Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
+- 3D Finishing takes a list of tools and makes a toolpath for each (rest machining).
+- Posts: G2/G3 arcs (and helices) fitted to curves when the post has arc blocks, Cut Craft's
+  own FluidNC posts included; Plunge (Z2) and the Home / Start Position in Job Setup.
+- Tool Database: cutting data per material (imported from `.vtdb` and Fusion presets), an
+  active material, rate units per tool, thread mills as a tool type.
+- 3D view: ViewCube (faces, edges, corners), perspective, tilting underneath, overlays hidden
+  behind the model.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
@@ -235,8 +306,9 @@ say "not implemented yet".
   Béziers onto layers of the job's names; text objects, the model and toolpaths are not
   read). Layout from samples saved by Aspire 12 under Wine (`re/SPEC.md`, Job files).
 - File ▸ Import ▸ Import Component / 3D Model (and the Design tab button): binary and ASCII
-  STL through Aspire's Orientate 3D Model form (dialogs 524 and 4104): initial
-  orientation (which face is up), rotation about Z, file units, model size with locked
+  STL through Aspire's Orientate 3D Model form (dialogs 524 and 4104), in its sections and
+  pictures on one page (Aspire's has two): initial orientation (a radio per face round the
+  model's picture), rotation about Z (-180 … +180 in quarter turns), file units, model size with locked
   ratio, centre or position, depth below top, discard below the zero plane. No OBJ; no
   undercut highlighting, perspective or segmenting.
   In a rotary job (help: Orientate 3D Model Rotary) the Imported model type picks Full 3D
@@ -251,7 +323,7 @@ say "not implemented yet".
 - Model ▸ Export as 3D Clipart: the selected components (baked into one, shaping and all)
   saved as Cut Craft's own `.ccclip` (JSON); Import Component / 3D Model reads them back,
   centred on the job, on the first level. Aspire's `.3dclip` is encrypted (`re/SPEC.md`),
-  so it is neither read nor written; the Clipart tab is not built.
+  so it is neither read nor written; the Clipart tab lists folders of your own files instead.
 - Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by one
   plane square to X, Y or Z at a percentage of its size; the segment beyond the plane and
   the one before it (turned over, if asked, so its far side is machined) are laid out side
@@ -347,23 +419,20 @@ say "not implemented yet".
 
 **Not built yet.**
 - File: Import Toolpaths.
-- Edit: Swap Sides, Document Variables, Options.
+- Edit: Options' window layout, software renderer, shading, sheet and toolpath-list
+  settings, fonts, help and the folder kept for each kind of file;
+  document variables linked to fields (a sum is worked out once, when entered).
 - Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
   Post-Processor Management, Update Post Database.
 - Toolpaths: Materials.
 - View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
-- Gadgets; Help Contents.
-- Drawing tab:
-  - Transform, Trim Objects.
-  - Auto Layout Text.
-- 3D view: ViewCube, perspective, tilting past side-on; overlays are drawn over the surface,
-  not hidden behind it.
-- Feeds and speeds: cutting data per machine and per material, rate units chosen per tool
-  (mm/sec … feet/min), Lua-scripted posts, arc output (toolpaths are straight moves).
-- Job Setup: double-sided jobs.
-- 3D Finishing's several-tools form: one toolpath per tool made in one go (today each
-  rest-machining toolpath is made on its own, naming the tools that ran before it).
+- Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.
+- Drawing tab: Transform, Trim Objects.
+- Feeds and speeds: cutting data per machine (it is per material now), Lua-scripted posts;
+  toolpath forms still show feeds in mm/min or in/min, not the tool's own units.
+- Double-sided jobs: Zero off same side is kept but not yet used by the posts; the 3D
+  view shows one side.
 
 **Known problems and stand-ins.**
 - Split Component takes closed vectors only (Aspire also extends open ones to the edges).
@@ -378,12 +447,11 @@ say "not implemented yet".
   spacing commands do not yet use it).
 - Groups hold vectors only and do not nest.
 - Display settings (Toolpath Drawing, quality, View toggles) last only for the session.
-- Thread mills and lasers are not tool types in the database: their tooth offset and power
-  are on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
+- Lasers are not a tool type in the database: their power is on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code
   reference to the fluting strings was found in Aspire.exe), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule.
-- Not done inside strategies: Project onto 3D Model, Fill Regionally, Merge By Part, the
+- Not done inside strategies: Fill Regionally, Merge By Part, the
   extra clearance tools, laser passes lowering the focus.
 - The strategies and menu items added on 2026-10-24 have tests but have not been tried by
   hand in the running app.

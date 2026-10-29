@@ -147,6 +147,44 @@ fn a_v_bit_groove_is_as_wide_as_it_is_deep_at_90_degrees() {
 }
 
 #[test]
+fn a_tapered_tool_is_held_off_a_peak_by_its_taper() {
+    let mut m = material(); // half-millimetre cells
+    let peak = Point::new(50.25, 50.25);
+    let i = 100 * m.columns + 100;
+    m.heights[i] = 5.0;
+    let tapered = Tool {
+        shape: ToolShape::BallNose,
+        diameter: 1.0,
+        taper: 30.0,
+        shank_diameter: 8.0,
+        ..Tool::default()
+    };
+    // 3 mm away the ball is clear of the peak, but the taper is not
+    let beside = peak + Point::new(3.0, 0.0);
+    let held = m.drop_tool(&tapered, beside);
+    assert!(
+        (held - (5.0 - tapered.profile(3.0).unwrap())).abs() < 1e-12,
+        "{held}"
+    );
+    assert!(held > 0.0);
+    // as far as the whole tool reaches, the cut shows the taper too
+    let mut cut = material();
+    cut.cut(&with_tool(
+        tapered.clone(),
+        &[
+            (50.25, 50.25, 5.0),
+            (50.25, 50.25, -8.0),
+            (50.25, 50.25, 5.0),
+        ],
+    ));
+    let edge = depth_at(&cut, 52.75, 50.25);
+    assert!(
+        (edge - (-8.0 + tapered.profile(2.5).unwrap())).abs() < 1e-9,
+        "{edge}"
+    );
+}
+
+#[test]
 fn a_dropped_tool_rests_on_the_highest_thing_under_it() {
     let mut m = material(); // half-millimetre cells
     let peak = Point::new(50.25, 50.25); // a cell centre

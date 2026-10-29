@@ -11,9 +11,10 @@ pub struct DrawPolygon;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    #[schemars(title = "Center Point", extend("x-icon" = "drawing_forms/polygon_center.png"))]
     pub center: Xy,
     /// Centre to vertex
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/polygon_radius.png"), range(min = 0))]
     pub radius: f64,
     #[schemars(range(min = 3, max = 100))]
     pub sides: u32,
@@ -41,7 +42,7 @@ impl Command for DrawPolygon {
         Meta {
             label: "Draw Polygon",
             group: "Create Vectors",
-            icon: "drawing/create_vectors/draw_polygon.svg",
+            icon: "drawing/create_vectors/draw_polygon.png",
             shortcut: "",
         }
     }
