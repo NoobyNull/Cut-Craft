@@ -3343,3 +3343,34 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
     assert_eq!(form.params["size"]["width"], 300.0);
     assert_eq!(form.params["size"]["thickness"], 12.0);
 }
+
+#[test]
+fn a_moving_3d_view_keeps_full_detail_unless_simplifying_is_on() {
+    use cut_craft_core::component::{Combine, Component};
+    let moving = |simplify: bool| {
+        let mut h = Harness::new();
+        h.app.options.view_3d.simplify_while_moving = simplify;
+        let o = h.app.doc.job.area().min;
+        let rect = cut_craft_core::geometry::Rect::new(
+            o + Point::new(150.0, 100.0),
+            o + Point::new(450.0, 250.0),
+        );
+        let cell = h.app.doc.job.model_cell();
+        let mut c = Change::builder(&h.app.doc);
+        c.add_component(Component::from_fn(
+            "relief",
+            Combine::Add,
+            rect,
+            cell,
+            |p| Some((p.x * 0.5).sin() + 2.0),
+        ));
+        h.app.record(Ok(c.finish()), "added");
+        h.app.view = View::ThreeD;
+        // turned just now
+        h.app.moved_3d = h.time;
+        h.frame(vec![]);
+        h.app.fine_3d.is_some()
+    };
+    assert!(moving(false), "full detail while it turns, by default");
+    assert!(!moving(true), "coarser while it turns, when asked");
+}
