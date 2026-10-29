@@ -1,12 +1,15 @@
 //! Right-click ▸ Report a Bug Here…: a GitHub issue saying what was wrong, in the reporter's
 //! words, with where it was (the named parts of the window under the pointer and the source
-//! line that draws each), the app's state, a screenshot of the window and any pictures added.
+//! line that draws each, and the exact widget clicked), the app's state, the log, a screenshot
+//! of the window and any pictures added. After a crash the next start offers its crash log.
 //!
 //! Code marks what it draws with [`mark`]; the app calls [`Reporter::frame`] once a frame,
 //! after drawing. Issues are made through the GitHub CLI (`gh`, already signed in); a report
 //! that cannot be sent is kept on disk instead.
 
 mod github;
+pub mod logs;
+mod spot;
 
 use eframe::egui;
 use std::panic::Location;
@@ -14,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 
 pub use github::{Report, compose, issue_url, open_with_platform, png, submit};
+pub use spot::widget_at;
 
 /// The report form's share of the screen.
 const FORM_SHARE: f32 = 0.5;
@@ -21,6 +25,10 @@ const FORM_SHARE: f32 = 0.5;
 const THUMBNAIL_SHARE: f32 = 0.5;
 /// Lines of the description box.
 const TEXT_ROWS: usize = 6;
+/// Lines of the log shown in the form before it scrolls.
+const LOG_ROWS: f32 = 8.0;
+/// The most of a crash's panic message a report's title takes.
+const CRASH_TITLE_CHARS: usize = 100;
 
 /// A named part of the window and the source line that drew it.
 #[derive(Clone, Debug, PartialEq)]
@@ -200,7 +208,11 @@ struct Draft {
     text: String,
     at: egui::Pos2,
     regions: Vec<Region>,
+    /// The widget clicked, from the accessibility tree.
+    widget: Option<String>,
     state: String,
+    log: String,
+    send_log: bool,
     screenshot: Option<Arc<egui::ColorImage>>,
     send_screenshot: bool,
     pictures: Vec<PathBuf>,
@@ -219,7 +231,13 @@ impl Draft {
                 .iter()
                 .map(|r| (r.name.clone(), format!("{}:{}", r.at.file(), r.at.line())))
                 .collect(),
+            widget: self.widget.clone(),
             state: self.state.clone(),
+            log: if self.send_log {
+                self.log.clone()
+            } else {
+                String::new()
+            },
             screenshot: self
                 .send_screenshot
                 .then(|| self.screenshot.as_deref().and_then(|i| github::png(i).ok()))
@@ -247,6 +265,12 @@ pub struct Reporter {
     shot: Shot,
     draft: Option<Draft>,
     sending: Option<mpsc::Receiver<Result<String, String>>>,
+    /// The widget under the last right-click.
+    spotted: Option<String>,
+    /// Whether the plugin that finds it is in.
+    spotting: bool,
+    /// A crash log the last run left, to offer as a report.
+    crash: Option<String>,
 }
 
 /// What the app gives a report: its state, and a picker for pictures to add.
@@ -267,7 +291,15 @@ impl Reporter {
             shot: Shot::default(),
             draft: None,
             sending: None,
+            spotted: None,
+            spotting: false,
+            crash: None,
         }
+    }
+
+    /// Offers `crash` (what the last run's panic left) as a report, from the next frame.
+    pub fn report_crash(&mut self, crash: String) {
+        self.crash = Some(crash);
     }
 
     /// Whether the report form is open.
@@ -278,6 +310,16 @@ impl Reporter {
     /// Once a frame, after everything is drawn: notices right-clicks, shows the menu and the
     /// form, and sends. A message for the status bar when a report was sent or failed.
     pub fn frame(&mut self, ctx: &egui::Context, host: &Host) -> Option<String> {
+        if !self.spotting {
+            ctx.add_plugin(spot::Spotter);
+            self.spotting = true;
+        }
+        if let Some(found) = ctx.data_mut(|d| d.remove_temp::<Option<String>>(spot::id())) {
+            self.spotted = found;
+        }
+        if let Some(crash) = self.crash.take() {
+            self.open_crash(crash, host);
+        }
         let (regions, claimed, asked) =
             with_frame(ctx, |f| (f.regions.clone(), f.claimed, f.asked));
         let clicked = ctx.input(|i| {
@@ -288,6 +330,7 @@ impl Reporter {
         });
         if let Some(at) = clicked {
             self.clicked = Some((at, regions_at(&regions, at)));
+            self.spotted = None;
             self.menu = !claimed;
             // the window as it is now, before any menu is drawn over it
             take_screenshot(ctx, &self.shot);
@@ -308,14 +351,48 @@ impl Reporter {
     fn open(&mut self, host: &Host) {
         let (at, regions) = self.clicked.clone().unwrap_or_default();
         self.menu = false;
+        let log = logs::recent();
         self.draft = Some(Draft {
             title: String::new(),
             text: String::new(),
             at,
             regions,
+            widget: self.spotted.clone(),
             state: (host.state)(),
+            send_log: !log.is_empty(),
+            log,
             screenshot: self.screenshot.clone(),
             send_screenshot: self.screenshot.is_some(),
+            pictures: vec![],
+            error: None,
+        });
+    }
+
+    /// The form for a crash: titled with its panic, the crash log to send.
+    fn open_crash(&mut self, crash: String, host: &Host) {
+        let panic = crash
+            .split_once("crashed: ")
+            .map_or(crash.as_str(), |(_, rest)| rest);
+        let panic = panic.split("\n\n").next().unwrap_or_default();
+        let title: String = panic
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .take(CRASH_TITLE_CHARS)
+            .collect();
+        self.draft = Some(Draft {
+            title: format!("Crash: {title}"),
+            text: "Cut Craft closed with an error the last time it ran.\n\nWhat were you doing?\n"
+                .into(),
+            at: egui::Pos2::ZERO,
+            regions: vec![],
+            widget: None,
+            state: (host.state)(),
+            log: crash,
+            send_log: true,
+            screenshot: None,
+            send_screenshot: false,
             pictures: vec![],
             error: None,
         });
@@ -368,6 +445,9 @@ impl Reporter {
                     .desired_width(f32::INFINITY),
             );
             ui.collapsing("Where (sent with the report)", |ui| {
+                if let Some(widget) = &draft.widget {
+                    ui.label(format!("Clicked: {widget}"));
+                }
                 if draft.regions.is_empty() {
                     ui.weak("No named part of the window here");
                 }
@@ -376,6 +456,7 @@ impl Reporter {
                 }
                 ui.weak(&draft.state);
             });
+            log_section(ui, draft);
             if let Some(image) = &draft.screenshot {
                 ui.checkbox(
                     &mut draft.send_screenshot,
@@ -486,6 +567,22 @@ impl Reporter {
                 Some(format!("Bug report not sent: {e}"))
             }
         }
+    }
+}
+
+/// The report form's log: whether to send it, and what it says.
+fn log_section(ui: &mut egui::Ui, draft: &mut Draft) {
+    if draft.log.is_empty() {
+        return;
+    }
+    ui.checkbox(&mut draft.send_log, "Send the log");
+    if draft.send_log {
+        ui.collapsing("Log", |ui| {
+            egui::ScrollArea::vertical()
+                .max_height(ui.text_style_height(&egui::TextStyle::Monospace) * LOG_ROWS)
+                .stick_to_bottom(true)
+                .show(ui, |ui| ui.monospace(&draft.log));
+        });
     }
 }
 

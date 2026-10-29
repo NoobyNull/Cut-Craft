@@ -194,8 +194,9 @@ const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-const THIRD_PARTY: [(&str, &str); 19] = [
+const THIRD_PARTY: [(&str, &str); 20] = [
     ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
+    ("log", "MIT or Apache-2.0"),
     ("egui_commonmark", "MIT or Apache-2.0"),
     ("pulldown-cmark", "MIT"),
     ("glam", "MIT or Apache-2.0"),
@@ -1120,9 +1121,11 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             readable(&cc.egui_ctx);
             if let Some(rs) = &cc.wgpu_render_state {
                 let info = rs.adapter.get_info();
-                eprintln!(
+                log::info!(
                     "GPU: {} ({:?}, driver: {})",
-                    info.name, info.backend, info.driver
+                    info.name,
+                    info.backend,
+                    info.driver
                 );
             }
             let mut app = CutCraftApp::new();
@@ -1140,6 +1143,12 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.clipart = crate::clipart::Clipart::load();
             app.recovery_path = files::config_dir().map(|d| d.join("recovery.ccjob"));
             app.open_recovery();
+            // a crash last time: offer its crash log as a report
+            if let Some(crash) =
+                files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))
+            {
+                app.reporter.report_crash(crash);
+            }
             Ok(Box::new(app))
         }),
     )

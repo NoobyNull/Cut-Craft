@@ -18,6 +18,8 @@ mod view2d;
 mod view3d;
 
 fn main() {
+    // the log and, on a panic, the crash log the next start offers to report
+    cut_craft_bug_report::logs::install(files::config_dir().as_deref());
     // cut-craft --screenshots DIR: the README's pictures (see app/screenshots.rs)
     let mut args = std::env::args().skip(1);
     let shots = match args.next().as_deref() {
