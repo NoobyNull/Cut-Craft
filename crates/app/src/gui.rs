@@ -553,6 +553,61 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
 /// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
 /// and (rotary jobs) wrapping.
 /// A level's Combine Mode submenu, in Aspire's order.
+/// A favourites action: then the page (`design` or `toolpaths`), what to do (`add`,
+/// `remove`, `earlier`, `later`) and the tool's id.
+pub const FAVOURITE: &str = "favourite:";
+/// Showing a page's favourites or all its tools: then the page and `true` or `false`.
+pub const FAVOURITES_ONLY: &str = "favourites_only:";
+
+/// A page as favourites actions name it.
+pub fn page_key(page: crate::pages::Page) -> &'static str {
+    match page {
+        crate::pages::Page::Design => "design",
+        crate::pages::Page::Toolpaths => "toolpaths",
+    }
+}
+
+/// The page a favourites action names.
+pub fn page_of(key: &str) -> Option<crate::pages::Page> {
+    match key {
+        "design" => Some(crate::pages::Page::Design),
+        "toolpaths" => Some(crate::pages::Page::Toolpaths),
+        _ => None,
+    }
+}
+
+/// A tool button's menu: add it to its page's favourites or take it off; shown among the
+/// favourites, move it along them too.
+pub fn tool_menu(
+    page: crate::pages::Page,
+    id: &str,
+    favourite: bool,
+    among: bool,
+) -> Vec<MenuItem> {
+    let action = |what: &str| format!("{FAVOURITE}{}:{what}:{id}", page_key(page));
+    let mut menu = vec![if favourite {
+        MenuItem::with_action("Remove from Favourites", &action("remove"))
+    } else {
+        MenuItem::with_action("Add to Favourites", &action("add"))
+    }];
+    if among {
+        menu.push(MenuItem::with_action("Move Earlier", &action("earlier")));
+        menu.push(MenuItem::with_action("Move Later", &action("later")));
+    }
+    menu
+}
+
+/// A tool page's tab menu: its favourites or all its tools, the one shown ticked.
+pub fn favourites_menu(page: crate::pages::Page, only: bool) -> Vec<MenuItem> {
+    [("Show Favourites", true), ("Show All Tools", false)]
+        .into_iter()
+        .map(|(name, on)| MenuItem {
+            is_checked: on == only,
+            ..MenuItem::with_action(name, &format!("{FAVOURITES_ONLY}{}:{on}", page_key(page)))
+        })
+        .collect()
+}
+
 /// The action that imports a model again from its file, followed by the component's id.
 pub const REIMPORT_MODEL: &str = "reimport_model:";
 

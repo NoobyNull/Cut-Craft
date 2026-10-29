@@ -105,6 +105,7 @@ impl CutCraftApp {
                 .model_source(id)
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
             id if id.starts_with(SELECT_LEVEL) => true,
+            id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(EXPORT_LEVEL) => {
@@ -354,6 +355,9 @@ impl CutCraftApp {
             }
             id if self.registry.exporter(id).is_some() => self.export(id),
             id if id.starts_with(gui::REIMPORT_MODEL) => self.reimport_model(id),
+            id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
+                self.favourites_action(id);
+            }
             _ => self.start_command(id),
         }
     }
@@ -1946,7 +1950,7 @@ impl CutCraftApp {
             match DESIGN_TABS[self.design_tab] {
                 "Design" => {
                     let groups = self.design_groups("Design");
-                    self.tool_groups(ui, &groups, Page::Design);
+                    self.tools_or_favourites(ui, &groups, Page::Design);
                 }
                 "Sheets" => self.sheets_panel(ui),
                 "Clipart" => self.clipart_panel(ui),
@@ -2100,13 +2104,59 @@ impl CutCraftApp {
     /// Aspire's design tabs, down the left edge.
     pub(super) fn design_tabs(&mut self, ui: &mut egui::Ui) {
         let shown = self.pages.shown(Page::Design) != Shown::Hidden;
-        let (hovered, clicked) = side_tabs(ui, &DESIGN_TABS, shown.then_some(self.design_tab));
+        let only = self.options.favourites.of(Page::Design).1;
+        let labels = DESIGN_TABS.map(|t| {
+            if t == "Design" && only {
+                "Design ★"
+            } else {
+                t
+            }
+        });
+        let tabs = side_tabs(ui, &labels, shown.then_some(self.design_tab));
+        let (hovered, clicked) = (
+            tabs.iter().position(egui::Response::hovered),
+            tabs.iter().position(egui::Response::clicked),
+        );
+        let design = DESIGN_TABS.iter().position(|&t| t == "Design");
+        if let Some(action) =
+            design.and_then(|i| self.popup(&tabs[i], || gui::favourites_menu(Page::Design, only)))
+        {
+            self.invoke(ui.ctx(), &action);
+        }
         // an auto-hidden page comes out on hover; a docked one changes tab on click
         let unpinned = !self.pages.pinned(Page::Design);
         if let Some(tab) = clicked.or(hovered.filter(|_| unpinned)) {
             self.set_design_tab(tab);
             self.pages.open(Page::Design);
         }
+    }
+
+    /// A favourites action from a tool's or a tab's menu, kept in the options at once.
+    pub(super) fn favourites_action(&mut self, action: &str) {
+        if let Some(rest) = action.strip_prefix(gui::FAVOURITES_ONLY)
+            && let Some((page, on)) = rest.split_once(':')
+            && let Some(page) = gui::page_of(page)
+        {
+            *self.options.favourites.of_mut(page).1 = on == "true";
+        } else if let Some(rest) = action.strip_prefix(gui::FAVOURITE)
+            && let [page, what, id] = rest.splitn(3, ':').collect::<Vec<_>>()[..]
+            && let Some(page) = gui::page_of(page)
+        {
+            let list = self.options.favourites.of_mut(page).0;
+            let at = list.iter().position(|f| f == id);
+            match (what, at) {
+                ("add", None) => list.push(id.to_owned()),
+                ("remove", Some(i)) => {
+                    list.remove(i);
+                }
+                ("earlier", Some(i)) if i > 0 => list.swap(i, i - 1),
+                ("later", Some(i)) if i + 1 < list.len() => list.swap(i, i + 1),
+                _ => return,
+            }
+        } else {
+            return;
+        }
+        self.save_options();
     }
 
     /// Going to another design tab closes a form open on the Design page, as Aspire's does.
@@ -2120,7 +2170,16 @@ impl CutCraftApp {
     /// The Toolpaths tab, down the right edge.
     pub(super) fn toolpath_tabs(&mut self, ui: &mut egui::Ui) {
         let shown = self.pages.shown(Page::Toolpaths) != Shown::Hidden;
-        let (hovered, clicked) = side_tabs(ui, &["Toolpaths"], shown.then_some(0));
+        let only = self.options.favourites.of(Page::Toolpaths).1;
+        let label = if only { "Toolpaths ★" } else { "Toolpaths" };
+        let tabs = side_tabs(ui, &[label], shown.then_some(0));
+        let (hovered, clicked) = (
+            tabs.iter().position(egui::Response::hovered),
+            tabs.iter().position(egui::Response::clicked),
+        );
+        if let Some(action) = self.popup(&tabs[0], || gui::favourites_menu(Page::Toolpaths, only)) {
+            self.invoke(ui.ctx(), &action);
+        }
         let unpinned = !self.pages.pinned(Page::Toolpaths);
         if clicked.or(hovered.filter(|_| unpinned)).is_some() {
             self.pages.open(Page::Toolpaths);

@@ -97,15 +97,63 @@ impl CutCraftApp {
         }
     }
 
+    /// A tool page's tools: all its groups, or only its favourites when it shows those.
+    pub(super) fn tools_or_favourites(
+        &mut self,
+        ui: &mut egui::Ui,
+        groups: &[gui::ToolGroup],
+        page: Page,
+    ) {
+        let (favourites, only) = self.options.favourites.of(page);
+        if !only {
+            self.tool_groups(ui, groups, page);
+            return;
+        }
+        // in the order picked; a tool no longer on the page is left out
+        let tools: Vec<&'static str> = favourites
+            .iter()
+            .filter_map(|f| {
+                groups
+                    .iter()
+                    .flat_map(|g| g.tools.iter().copied())
+                    .find(|id| id == f)
+            })
+            .collect();
+        if tools.is_empty() {
+            ui.weak("No favourites yet: right-click a tool ▸ Add to Favourites");
+            if ui.button("Show All Tools").clicked() {
+                let action = format!("{}{}:false", gui::FAVOURITES_ONLY, gui::page_key(page));
+                self.invoke(ui.ctx(), &action);
+            }
+            return;
+        }
+        self.tool_sections(ui, &[("Favourites", tools)], page, true);
+    }
+
     /// Icon buttons for groups of command ids: implemented ones run, the rest are greyed out.
     pub(super) fn tool_groups(&mut self, ui: &mut egui::Ui, groups: &[gui::ToolGroup], page: Page) {
+        let sections: Vec<(&str, Vec<&'static str>)> =
+            groups.iter().map(|g| (g.name, g.tools.to_vec())).collect();
+        self.tool_sections(ui, &sections, page, false);
+    }
+
+    /// Headed sections of tool buttons; a right-click on one adds it to `page`'s favourites
+    /// or takes it off (`among` them, it moves along them too).
+    fn tool_sections(
+        &mut self,
+        ui: &mut egui::Ui,
+        sections: &[(&str, Vec<&'static str>)],
+        page: Page,
+        among: bool,
+    ) {
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
         let mut clicked = None;
+        let mut chosen = None;
         // plain sections, as Aspire's tool pages have: a heading over its tools
-        for group in groups {
-            ui.strong(group.name);
+        for (name, tools) in sections {
+            ui.strong(*name);
             ui.horizontal_wrapped(|ui| {
-                for &id in group.tools {
+                for &id in tools {
                     let cmd = self.registry.get(id);
                     let label =
                         cmd.map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned());
@@ -120,12 +168,21 @@ impl CutCraftApp {
                     if response.clicked() {
                         clicked = Some(id);
                     }
+                    let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
+                    if let Some(action) =
+                        self.popup(&response, || gui::tool_menu(page, id, favourite, among))
+                    {
+                        chosen = Some(action);
+                    }
                 }
             });
             ui.add_space(ui.spacing().item_spacing.y);
         }
         if let Some(id) = clicked {
             self.pick(ui.ctx(), page, id);
+        }
+        if let Some(action) = chosen {
+            self.invoke(ui.ctx(), &action);
         }
     }
 
@@ -1099,7 +1156,7 @@ impl CutCraftApp {
             .default_size(ui.available_height() / 2.0)
             .show(ui, |ui| self.toolpath_list(ui));
         egui::ScrollArea::vertical().show(ui, |ui| {
-            self.tool_groups(ui, &groups, Page::Toolpaths);
+            self.tools_or_favourites(ui, &groups, Page::Toolpaths);
         });
     }
 
