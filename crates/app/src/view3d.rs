@@ -25,11 +25,14 @@ const EDGE_ON: f64 = 1e-6;
 
 /// Where the view looks from: `yaw` turns the job about the vertical, `pitch` tilts it from
 /// straight down (0) through side on (a right angle) to straight up from below (half a
-/// turn), radians.
+/// turn), and `roll` turns the picture about the line of sight (0 keeps the job's up up),
+/// radians. Together they can face any way (Z-X-Z angles), so free rotation needs nothing
+/// more.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Orbit {
     pub yaw: f64,
     pub pitch: f64,
+    pub roll: f64,
 }
 
 impl Default for Orbit {
@@ -38,8 +41,20 @@ impl Default for Orbit {
         Self {
             yaw: -20f64.to_radians(),
             pitch: 50f64.to_radians(),
+            roll: 0.0,
         }
     }
+}
+
+/// How dragging (and a SpaceMouse) turns the 3D view.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Rotation {
+    /// About the job's vertical and tilting between straight down and straight up: the job's
+    /// up stays up, as on a machine bed.
+    #[default]
+    Turntable,
+    /// Any way, without stops: the job can roll and go upside down.
+    Free,
 }
 
 impl Orbit {
@@ -47,27 +62,83 @@ impl Orbit {
     pub const TOP: Self = Self {
         yaw: 0.0,
         pitch: 0.0,
+        roll: 0.0,
     };
     /// Side on, from the front (-y) edge.
     pub const FRONT: Self = Self {
         yaw: 0.0,
         pitch: std::f64::consts::FRAC_PI_2,
+        roll: 0.0,
     };
     /// Side on, from the right (+x) edge.
     pub const RIGHT: Self = Self {
         yaw: -std::f64::consts::FRAC_PI_2,
         pitch: std::f64::consts::FRAC_PI_2,
+        roll: 0.0,
     };
 
-    /// Turned by a drag of `by` across a view `size`: across the whole view is half a turn,
-    /// sideways turning and up/down tilting (between straight down and straight up, so past
-    /// side on to underneath; the job's up stays up on screen).
+    /// Turned by a drag of `by` across a view `size` as `rotation` says: across the whole
+    /// view is half a turn, sideways turning and up/down tilting (a turntable between
+    /// straight down and straight up, so past side on to underneath, the job's up staying
+    /// up), or freely about the screen's own axes, without stops.
     #[must_use]
-    pub fn dragged(self, by: Vec2, size: Vec2) -> Self {
+    pub fn dragged_by(self, by: Vec2, size: Vec2, rotation: Rotation) -> Self {
         let turn = |d: f32, across: f32| f64::from(d / across.max(1.0)) * std::f64::consts::PI;
+        // a drag down tilts the job's top towards the viewer
+        self.turned_by(
+            DVec3::new(-turn(by.y, size.y), turn(by.x, size.x), 0.0),
+            rotation,
+        )
+    }
+
+    /// Turned about the screen's axes as [`Orbit::turned`] says, freely, or as a turntable
+    /// takes it: the turn about the screen's y spins the job about its vertical, the one
+    /// about x tilts it (between straight down and straight up), and roll is left out.
+    #[must_use]
+    pub fn turned_by(self, by: DVec3, rotation: Rotation) -> Self {
+        match rotation {
+            Rotation::Free => self.turned(by),
+            Rotation::Turntable => Self {
+                yaw: self.yaw + by.y,
+                pitch: (self.pitch - by.x).clamp(0.0, std::f64::consts::PI),
+                roll: 0.0,
+            },
+        }
+    }
+
+    /// Turned about the screen's axes (x right, y up, z towards the viewer) by these angles,
+    /// radians: the job's front moves right for a positive turn about y, down for one about
+    /// x, and the picture turns anticlockwise for one about z.
+    #[must_use]
+    pub fn turned(self, by: DVec3) -> Self {
+        let screen = cut_craft_core::glam::DQuat::from_rotation_x(by.x)
+            * cut_craft_core::glam::DQuat::from_rotation_y(by.y)
+            * cut_craft_core::glam::DQuat::from_rotation_z(by.z);
+        Self::from_matrix(cut_craft_core::glam::DMat3::from_quat(screen) * self.matrix())
+    }
+
+    /// Job directions to the screen's (x right, y up, z towards the viewer).
+    fn matrix(self) -> cut_craft_core::glam::DMat3 {
+        let column = |v: DVec3| {
+            let (p, depth) = self.project(v);
+            DVec3::new(p.x, p.y, depth)
+        };
+        cut_craft_core::glam::DMat3::from_cols(column(DVec3::X), column(DVec3::Y), column(DVec3::Z))
+    }
+
+    /// The view whose [`Orbit::matrix`] is `m`.
+    fn from_matrix(m: cut_craft_core::glam::DMat3) -> Self {
+        // the job direction towards the viewer gives yaw and pitch, as `facing` does
+        let towards = m.transpose() * DVec3::Z;
+        let level = Self {
+            roll: 0.0,
+            ..Self::facing(towards)
+        };
+        // and what is on the screen's right then, how far the picture is turned
+        let right = level.project(m.transpose() * DVec3::X).0;
         Self {
-            yaw: self.yaw + turn(by.x, size.x),
-            pitch: (self.pitch + turn(by.y, size.y)).clamp(0.0, std::f64::consts::PI),
+            roll: (-right.y).atan2(right.x),
+            ..level
         }
     }
 
@@ -84,6 +155,7 @@ impl Orbit {
         Self {
             yaw,
             pitch: d.z.clamp(-1.0, 1.0).acos(),
+            roll: 0.0,
         }
     }
 
@@ -95,6 +167,12 @@ impl Orbit {
     /// The job direction that is `v` on screen (x right, y up, z towards the viewer): the
     /// inverse of [`Orbit::project`].
     pub fn to_world(self, v: DVec3) -> DVec3 {
+        let (sin_roll, cos_roll) = self.roll.sin_cos();
+        let v = DVec3::new(
+            v.x * cos_roll + v.y * sin_roll,
+            v.y * cos_roll - v.x * sin_roll,
+            v.z,
+        );
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
         let (y, z) = (
             v.y * cos_pitch - v.z * sin_pitch,
@@ -109,8 +187,10 @@ impl Orbit {
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
         let (x, y) = (p.x * cos_yaw - p.y * sin_yaw, p.x * sin_yaw + p.y * cos_yaw);
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
+        let (sx, sy) = (x, y * cos_pitch + p.z * sin_pitch);
+        let (sin_roll, cos_roll) = self.roll.sin_cos();
         (
-            DVec2::new(x, y * cos_pitch + p.z * sin_pitch),
+            DVec2::new(sx * cos_roll - sy * sin_roll, sx * sin_roll + sy * cos_roll),
             p.z * cos_pitch - y * sin_pitch,
         )
     }
@@ -1133,6 +1213,7 @@ mod tests {
         let orbit = Orbit {
             yaw: 0.7,
             pitch: 0.4,
+            roll: 0.0,
         };
         let p = DVec3::new(3.0, -2.0, 5.0);
         let (screen, depth) = orbit.project(p);
@@ -1314,6 +1395,7 @@ mod tests {
         let top = Orbit {
             yaw: 0.0,
             pitch: 0.0,
+            roll: 0.0,
         };
         let (p, depth) = top.project(DVec3::new(30.0, 40.0, -2.0));
         assert!(p.abs_diff_eq(DVec2::new(30.0, 40.0), 1e-12));
@@ -1325,6 +1407,7 @@ mod tests {
         let tilted = Orbit {
             yaw: 0.0,
             pitch: 60f64.to_radians(),
+            roll: 0.0,
         };
         let (front, front_depth) = tilted.project(DVec3::ZERO);
         let (back, back_depth) = tilted.project(DVec3::new(0.0, 100.0, 0.0));
@@ -1338,6 +1421,7 @@ mod tests {
         let orbit = Orbit {
             yaw: 0.0,
             pitch: 60f64.to_radians(),
+            roll: 0.0,
         };
         let mesh = mesh(&slotted(), orbit, Framing::default(), &plain(), area);
         assert_ne!(mesh.indices.len(), 0);
@@ -1419,17 +1503,71 @@ mod tests {
         assert!(nearest(Orbit::RIGHT, DVec3::X, DVec3::NEG_X));
     }
 
+    /// Whether `a` and `b` put job points in the same places on screen.
+    fn same_view(a: Orbit, b: Orbit) -> bool {
+        [DVec3::X, DVec3::Y, DVec3::Z, DVec3::new(1.0, 2.0, 3.0)]
+            .into_iter()
+            .all(|p| {
+                let (pa, da) = a.project(p);
+                let (pb, db) = b.project(p);
+                (pa - pb).length() < 1e-9 && (da - db).abs() < 1e-9
+            })
+    }
+
+    #[test]
+    fn any_way_of_facing_survives_its_matrix() {
+        for (yaw, pitch, roll) in [
+            (0.3, 1.1, 0.0),
+            (-2.0, 2.5, 0.7),
+            (1.0, 0.0, 0.4),
+            (0.0, 3.0, -2.9),
+        ] {
+            let o = Orbit { yaw, pitch, roll };
+            let back = Orbit::from_matrix(o.matrix());
+            assert!(same_view(o, back), "{o:?} came back as {back:?}");
+            // and to_world undoes project
+            let p = DVec3::new(0.4, -1.3, 2.2);
+            let (on, depth) = o.project(p);
+            assert!((o.to_world(DVec3::new(on.x, on.y, depth)) - p).length() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn free_rotation_turns_as_the_turntable_does_side_on_and_goes_past_the_top() {
+        let size = Vec2::new(400.0, 300.0);
+        for by in [Vec2::new(30.0, 0.0), Vec2::new(0.0, 20.0)] {
+            let turntable = Orbit::FRONT.dragged_by(by, size, Rotation::Turntable);
+            let free = Orbit::FRONT.dragged_by(by, size, Rotation::Free);
+            assert!(
+                same_view(turntable, free),
+                "{by:?}: {turntable:?} against {free:?}"
+            );
+        }
+        // up past straight down: the turntable stops, free rotation carries on over
+        let over = Vec2::new(0.0, -60.0);
+        let stopped = Orbit::TOP.dragged_by(over, size, Rotation::Turntable);
+        let carried = Orbit::TOP.dragged_by(over, size, Rotation::Free);
+        assert!(
+            same_view(stopped, Orbit::TOP),
+            "the turntable stops at the top"
+        );
+        assert!(!same_view(carried, Orbit::TOP), "free rotation does not");
+        assert!(carried.towards_viewer().z > 0.0 && carried.towards_viewer().z < 1.0);
+    }
+
     #[test]
     fn dragging_turns_and_tilts_from_straight_down_past_side_on_to_straight_up() {
         let size = Vec2::new(400.0, 300.0);
-        let o = Orbit::TOP.dragged(Vec2::new(200.0, -300.0), size);
+        let o = Orbit::TOP.dragged_by(Vec2::new(200.0, -300.0), size, Rotation::Turntable);
         assert!((o.yaw - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
         assert_eq!(o.pitch, 0.0, "cannot tilt past straight down");
-        let under = Orbit::FRONT.dragged(Vec2::new(0.0, 50.0), size);
+        let under = Orbit::FRONT.dragged_by(Vec2::new(0.0, 50.0), size, Rotation::Turntable);
         assert!(under.pitch > std::f64::consts::FRAC_PI_2, "past side on");
         assert!(under.towards_viewer().z < 0.0, "from underneath");
         assert_eq!(
-            Orbit::TOP.dragged(Vec2::new(0.0, 900.0), size).pitch,
+            Orbit::TOP
+                .dragged_by(Vec2::new(0.0, 900.0), size, Rotation::Turntable)
+                .pitch,
             std::f64::consts::PI
         );
     }

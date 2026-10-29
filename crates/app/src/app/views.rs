@@ -21,6 +21,7 @@ impl CutCraftApp {
         self.follow_form(ctx);
         self.autosave(ctx);
         self.report_bugs(ctx);
+        self.space_mouse_input(ctx);
         if let Some(mut shots) = self.shots.take() {
             shots.step(self, ctx);
             self.shots = Some(shots);

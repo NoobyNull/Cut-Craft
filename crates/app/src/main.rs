@@ -14,6 +14,7 @@ mod icons;
 mod options;
 mod pages;
 mod shortcut;
+mod spacemouse;
 mod view2d;
 mod view3d;
 
