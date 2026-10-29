@@ -2,7 +2,7 @@
 //! face is up, a turn about Z, the model's size and units, centring, how high above the bed
 //! it sits, and whether anything below the zero plane is kept.
 
-use cut_craft_core::component::{Combine, Component};
+use cut_craft_core::component::{Combine, Component, Source};
 use cut_craft_core::document::{Along, Document, Rotary};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DMat3, DVec3};
@@ -211,13 +211,20 @@ impl Command for Orientate3dModel {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let tris = oriented(p)?;
+        let (tris, md5) = oriented(p)?;
+        // what imports it again, from the same file
+        let source = Some(Source {
+            path: p.file.clone().into(),
+            relative: None,
+            md5,
+            settings: serde_json::to_value(p).expect("params serialize"),
+        });
         if let Some(rotary) = doc.job.rotary
             && p.model_type == ModelType::Full
         {
             let k = wrapped(doc, rotary, &tris, p)?;
             let mut c = Change::builder(doc);
-            c.add_component(k);
+            c.add_component(Component { source, ..k });
             return Ok(c.finish());
         }
         let (tris, rect) = placed(doc, p, tris)?;
@@ -241,6 +248,7 @@ impl Command for Orientate3dModel {
                 "nothing of the model is above the zero plane".into(),
             ));
         }
+        k.source = source;
         let mut c = Change::builder(doc);
         c.add_component(k);
         let hidden = fmt_import_stl::undercut(&tris);
@@ -256,8 +264,8 @@ impl Command for Orientate3dModel {
     }
 }
 
-/// The file's triangles turned to the face chosen and in millimetres.
-fn oriented(p: &Params) -> Result<Vec<[DVec3; 3]>, CommandError> {
+/// The file's triangles turned to the face chosen and in millimetres, and the file's MD5.
+fn oriented(p: &Params) -> Result<(Vec<[DVec3; 3]>, String), CommandError> {
     if p.file.is_empty() {
         return Err(CommandError::InvalidParams("choose an STL file".into()));
     }
@@ -270,10 +278,11 @@ fn oriented(p: &Params) -> Result<Vec<[DVec3; 3]>, CommandError> {
         FileUnits::Mm => 1.0,
         FileUnits::Inches => 25.4,
     };
-    Ok(triangles
+    let turned = triangles
         .iter()
         .map(|t| t.map(|v| turn * v * unit))
-        .collect())
+        .collect();
+    Ok((turned, Source::md5(&bytes)))
 }
 
 /// `tris` sized and placed in a flat job (heights up from the bed), and the footprint
@@ -338,7 +347,7 @@ pub fn preview(doc: &Document, params: &Params) -> Result<Option<Vec<Seen>>, Com
     if doc.job.rotary.is_some() && params.model_type == ModelType::Full {
         return Ok(None);
     }
-    let (tris, rect) = placed(doc, params, oriented(params)?)?;
+    let (tris, rect) = placed(doc, params, oriented(params)?.0)?;
     let mut top = Component::from_fn("", Combine::Add, rect, doc.job.model_cell(), |_| None);
     fmt_import_stl::top_down(&mut top, &tris);
     let lowest = tris

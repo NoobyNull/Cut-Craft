@@ -553,6 +553,9 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
 /// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
 /// and (rotary jobs) wrapping.
 /// A level's Combine Mode submenu, in Aspire's order.
+/// The action that imports a model again from its file, followed by the component's id.
+pub const REIMPORT_MODEL: &str = "reimport_model:";
+
 const COMBINE_MODES: [(&str, Combine); 5] = [
     ("Add", Combine::Add),
     ("Subtract", Combine::Subtract),
@@ -738,7 +741,7 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
         MenuItem::run::<ComponentProperties>(name, &params).checked(component.combine == combine)
     };
     let [show, hide] = show_hide(Items::Components, id.0);
-    vec![
+    let mut menu = vec![
         MenuItem::submenu(
             "Combine Mode",
             vec![
@@ -776,7 +779,19 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
         hide,
         MenuItem::separator(),
         MenuItem::form::<ComponentProperties>("Properties", &properties),
-    ]
+    ];
+    // an imported model: again from its file, to orientate or size it afresh
+    if component.source.is_some() {
+        let again = format!("{REIMPORT_MODEL}{}", id.0);
+        menu.splice(
+            0..0,
+            [
+                MenuItem::with_action("Re-import Model…", &again),
+                MenuItem::separator(),
+            ],
+        );
+    }
+    menu
 }
 
 /// Aspire's layer menu (MENU 967) for `layer`.

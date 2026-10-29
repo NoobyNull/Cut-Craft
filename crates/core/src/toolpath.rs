@@ -574,13 +574,30 @@ pub struct Toolpath {
     /// a router or mill (added with lasers).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub power: Vec<f64>,
+    /// What it was made from has changed since (its vectors, or the model it cuts):
+    /// recalculating makes it fresh again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stale: bool,
 }
+
+/// The strategies that always cut the 3D model; others do when projected onto it.
+const MODEL_STRATEGIES: [&str; 3] = [
+    "3d_roughing_toolpath",
+    "3d_finishing_toolpath",
+    "sketch_carving_toolpath",
+];
 
 fn shown() -> bool {
     true
 }
 
 impl Toolpath {
+    /// Whether the 3D model is what it cuts, so changing the model changes it.
+    pub fn reads_model(&self) -> bool {
+        MODEL_STRATEGIES.contains(&self.strategy.as_str())
+            || self.params["project_onto_model"].as_bool() == Some(true)
+    }
+
     /// Estimated machining time in minutes: each move's length at its rate (rapids at
     /// `rapid_rate`, mm/min), from the first move on.
     // ponytail: no acceleration; Toolpath Summary's scale factor stands in for it, as Aspire's does
@@ -625,6 +642,7 @@ fn machining_time_is_each_move_at_its_rate() {
         ],
         visible: true,
         power: vec![],
+        stale: false,
     };
     // 10 mm plunge at 100, 500 mm cut at 1000, 10 mm rapid at 5000
     assert!((tp.machining_minutes(5000.0) - (0.1 + 0.5 + 0.002)).abs() < 1e-12);
@@ -719,6 +737,7 @@ pub fn made_by<C: Command>(
         moves,
         visible: true,
         power: vec![],
+        stale: false,
     }
 }
 

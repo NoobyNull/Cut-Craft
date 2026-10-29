@@ -9,6 +9,7 @@ cut-craft-core.workspace = true
 fmt-import-stl = { path = "../../formats/import-stl" }
 schemars.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

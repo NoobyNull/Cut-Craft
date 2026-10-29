@@ -1,9 +1,9 @@
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::{DAffine2, DVec3};
-use cut_craft_core::testing::{document_with, square};
+use cut_craft_core::testing::{document_with, square, two_components, with_toolpath};
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams, Registry};
+use cut_craft_core::{Change, Command, CommandError, History, Meta, NoParams, Registry};
 
 /// Test strategy: one plunge at the centre of each selected vector.
 struct Centres;
@@ -137,4 +137,64 @@ fn a_toolpath_made_from_no_vectors_recalculates() {
         .unwrap();
     let id = *doc.toolpaths.keys().next().unwrap();
     assert!(registry().recalculate(&doc, id).is_ok());
+}
+
+#[test]
+fn a_toolpath_is_stale_once_its_own_vectors_change_until_recalculated() {
+    let (mut doc, tp) = job();
+    let mut history = History::default();
+    let moved = |doc: &Document, id: EntityId| {
+        let mut c = Change::builder(doc);
+        c.replace(
+            id,
+            doc.vectors[&id].transformed(&DAffine2::from_translation(Point::new(0.0, 9.0))),
+        );
+        c.finish()
+    };
+    let change = moved(&doc, EntityId(2));
+    history.apply(&mut doc, change).unwrap();
+    assert!(!doc.toolpaths[&tp].stale, "not made from the other square");
+    let change = moved(&doc, EntityId(1));
+    history.apply(&mut doc, change).unwrap();
+    assert!(doc.toolpaths[&tp].stale);
+    let change = registry().recalculate(&doc, tp).unwrap();
+    history.apply(&mut doc, change).unwrap();
+    assert!(!doc.toolpaths[&tp].stale, "fresh once recalculated");
+    history.undo(&mut doc);
+    assert!(
+        doc.toolpaths[&tp].stale,
+        "and stale again when that is undone"
+    );
+    history.undo(&mut doc);
+    assert!(
+        !doc.toolpaths[&tp].stale,
+        "undoing the move undoes the mark"
+    );
+}
+
+#[test]
+fn changing_the_model_makes_only_the_toolpaths_that_cut_it_stale() {
+    let mut doc = with_toolpath();
+    let flat = EntityId(1);
+    let mut finishing = doc.toolpaths[&flat].clone();
+    finishing.strategy = "3d_finishing_toolpath".into();
+    let mut projected = doc.toolpaths[&flat].clone();
+    projected.params = serde_json::json!({ "project_onto_model": true });
+    let mut c = Change::builder(&doc);
+    let finishing = c.add_toolpath(finishing);
+    let projected = c.add_toolpath(projected);
+    let change = c.finish();
+    doc.apply(&change).unwrap();
+    let component = two_components().components.values().next().unwrap().clone();
+    let mut history = History::default();
+    let mut c = Change::builder(&doc);
+    c.add_component(component);
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert!(doc.toolpaths[&finishing].stale);
+    assert!(doc.toolpaths[&projected].stale);
+    assert!(
+        !doc.toolpaths[&flat].stale,
+        "a flat toolpath does not cut the model"
+    );
 }

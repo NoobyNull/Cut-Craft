@@ -230,3 +230,28 @@ fn the_model_alone_leaves_uncovered_cells_empty() {
         }
     }
 }
+
+#[test]
+fn a_model_s_file_is_found_where_it_was_or_where_its_job_moved_with_it() {
+    use cut_craft_core::component::Source;
+    use std::path::Path;
+    let dir = std::env::temp_dir().join(format!("cut-craft-source-{}", std::process::id()));
+    let (old, new) = (dir.join("old"), dir.join("new"));
+    for job in [&old, &new] {
+        std::fs::create_dir_all(job.join("models")).unwrap();
+    }
+    let file = old.join("models/a.stl");
+    std::fs::write(&file, b"solid a").unwrap();
+    let mut source = Source::new(&file, b"solid a", serde_json::Value::Null);
+    source.relate_to(&old);
+    assert_eq!(source.relative.as_deref(), Some(Path::new("models/a.stl")));
+    assert_eq!(source.verified(Some(&old)).unwrap(), file);
+    // the job's folder and its models moved together
+    let moved = new.join("models/a.stl");
+    std::fs::rename(&file, &moved).unwrap();
+    assert_eq!(source.verified(Some(&new)).unwrap(), moved);
+    assert!(source.verified(Some(&old)).is_err(), "not where it was");
+    std::fs::write(&moved, b"solid b").unwrap();
+    assert!(source.verified(Some(&new)).unwrap_err().contains("changed"));
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -3086,7 +3086,7 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     );
     // on the bed, and Model Size has the height
     let (lo, _) = h.app.doc.components[&k].height_range().unwrap();
-    assert!(lo >= 0.0 && lo < 1.0, "from the bed up: {lo}");
+    assert!((0.0..1.0).contains(&lo), "from the bed up: {lo}");
     let size = &h.app.form.as_ref().unwrap().params["size"];
     assert!((size["z"].as_f64().unwrap() - 5.0).abs() < 1e-6, "{size}");
     // the ratio locked, a height typed sizes all three
@@ -3102,4 +3102,52 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     }
     assert!(h.text_at("Height above bed").is_some());
     let _ = std::fs::remove_file(file);
+}
+
+#[test]
+#[expect(clippy::cast_precision_loss)]
+fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("again");
+    h.app.import_file(&file);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["orientation"]["rotation"] = Value::from(90.0);
+    form.params["size"]["x"] = Value::from(50.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    h.app.form = None;
+    let (&id, k) = h.app.doc.components.iter().next().unwrap();
+    let width = |k: &cut_craft_core::component::Component| k.cell * k.columns as f64;
+    assert!((width(k) - 50.0).abs() <= k.cell, "{}", width(k));
+    let source = k.source.clone().expect("the import remembers its file");
+    assert_eq!(source.path, file);
+    let again = format!("{}{}", gui::REIMPORT_MODEL, id.0);
+    let menu = gui::component_menu(&h.app.doc, id, k);
+    assert_eq!(menu[0].action, again, "first on the model's menu");
+    assert!(h.app.available(&again));
+    // the form again with the settings it had, its Apply replacing the model
+    h.app.invoke(&h.ctx, &again);
+    let form = h.app.form.as_ref().expect("Orientate 3D Model again");
+    assert_eq!(form.params["orientation"]["rotation"], 90.0);
+    assert_eq!(form.params["size"]["x"], 50.0, "at the size it was made");
+    assert_eq!(form.drawn, Some(id));
+    // most often to scale it again
+    let form = h.app.form.as_mut().unwrap();
+    form.params["orientation"]["rotation"] = Value::from(0.0);
+    form.params["size"]["x"] = Value::from(25.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "replaced, not added");
+    let k = h.app.doc.components.values().next().unwrap();
+    assert!((width(k) - 25.0).abs() <= k.cell, "{}", width(k));
+    h.app.form = None;
+    // changed, it is refused
+    let mut changed = std::fs::read(&file).unwrap();
+    changed.extend(b"\n");
+    std::fs::write(&file, changed).unwrap();
+    h.app.invoke(&h.ctx, &again);
+    assert!(h.app.form.is_none(), "not from a changed file");
+    // gone, it is not offered
+    std::fs::remove_file(&file).unwrap();
+    assert!(!h.app.available(&again));
 }

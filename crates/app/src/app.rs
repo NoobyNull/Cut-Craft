@@ -185,10 +185,11 @@ const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-const THIRD_PARTY: [(&str, &str); 16] = [
+const THIRD_PARTY: [(&str, &str); 17] = [
     ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
     ("glam", "MIT or Apache-2.0"),
     ("i_overlay", "MIT or Apache-2.0"),
+    ("md-5", "MIT or Apache-2.0"),
     ("image", "MIT or Apache-2.0"),
     ("usvg", "MPL-2.0"),
     ("dxf", "MIT"),
