@@ -919,7 +919,7 @@ mod tests {
         assert!(matches!(
             &field(orientation, "face").kind,
             Kind::Choice(faces, Widget::Faces { picture: Some(p) })
-                if faces.len() == 6 && p == "import/chess_knight.png"
+                if faces.len() == 6 && p == "import/initial_orientation.png"
         ));
         assert!(matches!(
             &field(orientation, "rotation").kind,

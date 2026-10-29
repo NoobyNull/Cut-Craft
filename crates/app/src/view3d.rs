@@ -717,6 +717,59 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
     mesh
 }
 
+/// Triangles in the material's coordinates (as [`screen_of`] takes them), lit as the
+/// surface is and drawn far to near with their backs left out; the `true` ones in `mark`.
+// ponytail: sorted every frame; cache by view as fine_mesh does if big models drag
+#[expect(clippy::cast_possible_truncation, reason = "brightness fits f32")]
+pub fn triangles(
+    tris: &[cmd_orientate_3d_model::Seen],
+    screen: impl Fn(DVec3) -> Pos2,
+    orbit: Orbit,
+    look: &Look,
+    mark: Color32,
+) -> Mesh {
+    let towards = orbit.towards_viewer();
+    let mut seen: Vec<(f64, &[DVec3; 3], Color32, DVec3)> = tris
+        .iter()
+        .filter_map(|(t, marked)| {
+            let normal = (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero();
+            let depth = t.iter().map(|&c| orbit.project(c).1).sum::<f64>();
+            let colour = if *marked { mark } else { look.colour };
+            (normal.dot(towards) > 0.0).then_some((depth, t, colour, normal))
+        })
+        .collect();
+    seen.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut mesh = Mesh::default();
+    for (_, t, colour, normal) in seen {
+        let base = Rgba::from(colour);
+        let b = lit(normal, look.light) as f32;
+        let shade = Color32::from(Rgba::from_rgb(base.r() * b, base.g() * b, base.b() * b));
+        let first = u32::try_from(mesh.vertices.len()).expect("mesh fits u32 indices");
+        for &corner in t {
+            mesh.colored_vertex(screen(corner), shade);
+        }
+        mesh.add_triangle(first, first + 1, first + 2);
+    }
+    mesh
+}
+
+/// The twelve edges of the box from `lo` to `hi`.
+pub fn box_edges(lo: DVec3, hi: DVec3) -> Vec<[DVec3; 2]> {
+    let corner = |i: usize| {
+        DVec3::new(
+            if i & 1 == 1 { hi.x } else { lo.x },
+            if i & 2 == 2 { hi.y } else { lo.y },
+            if i & 4 == 4 { hi.z } else { lo.z },
+        )
+    };
+    // corners one bit apart share an edge
+    (0..8)
+        .flat_map(|i| [1, 2, 4].map(move |bit| (i, i | bit)))
+        .filter(|(i, j)| i != j)
+        .map(|(i, j)| [corner(i), corner(j)])
+        .collect()
+}
+
 /// The cell of the drawn surface under `at` nearest the viewer, as (column, row); `None`
 /// when the click is off it. Cells count as under the cursor within the larger of one
 /// cell's size on screen and [`PICK_REACH`] pixels.

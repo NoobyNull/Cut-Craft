@@ -678,11 +678,28 @@ impl CutCraftApp {
             ));
         }
         // before a preview, the model alone: nothing where no component is
-        (!self.doc.components.is_empty()).then(|| {
-            Cow::Owned(cut_craft_core::component::model_shape(
-                &self.doc, MESH_CELLS,
-            ))
-        })
+        (!self.doc.components.is_empty()).then(|| Cow::Owned(self.model_shape(MESH_CELLS)))
+    }
+
+    /// The model's shape, `cells` across; while Orientate 3D Model shows its model whole,
+    /// without the component the form made of it.
+    pub(super) fn model_shape(&mut self, cells: usize) -> Material {
+        let drawn = self
+            .form
+            .as_ref()
+            .filter(|f| f.model.is_some())
+            .and_then(|f| f.drawn);
+        // hidden for the moment, not as an edit: nothing to undo
+        let show = |doc: &mut cut_craft_core::document::Document, visible: bool| {
+            let k = drawn.and_then(|id| doc.components.get_mut(&id))?;
+            Some(std::mem::replace(&mut k.visible, visible))
+        };
+        let was = show(&mut self.doc, false);
+        let shape = cut_craft_core::component::model_shape(&self.doc, cells);
+        if let Some(was) = was {
+            show(&mut self.doc, was);
+        }
+        shape
     }
 
     /// The preview or model as a block, with Aspire's 3D mouse controls: left- or right-drag
@@ -831,6 +848,7 @@ impl CutCraftApp {
             framing,
             fit,
             look,
+            importing: self.form.as_ref().is_some_and(|f| f.model.is_some()),
         };
         if let Some((kept, mesh)) = &self.fine_3d
             && *kept == key
@@ -848,7 +866,7 @@ impl CutCraftApp {
             )]
             let own = (job.width.max(job.height) / job.model_cell()).ceil() as usize;
             let cells = own.clamp(MESH_CELLS, FINE_MESH_CELLS);
-            cut_craft_core::component::model_shape(&self.doc, cells)
+            self.model_shape(cells)
         };
         let mesh = view3d::mesh(&surface, orbit, framing, &look, fit);
         self.fine_3d = Some((key, mesh.clone()));
@@ -947,6 +965,25 @@ impl CutCraftApp {
         let local = |p: cut_craft_core::geometry::Point, z: f64| {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
         };
+        // an imported model whole, what a cutter cannot reach marked, inside the material's
+        // outline to judge its size by
+        if let Some(model) = self.form.as_ref().and_then(|f| f.model.as_ref()) {
+            let origin = local(cut_craft_core::geometry::Point::new(0.0, 0.0), 0.0);
+            let mark = ui.visuals().error_fg_color;
+            painter.add(view3d::triangles(
+                model,
+                |p| screen(p + origin),
+                orbit,
+                &look,
+                mark,
+            ));
+            let area = job.area();
+            let (lo, hi) = (local(area.min, 0.0), local(area.max, job.thickness));
+            let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
+            for [a, b] in view3d::box_edges(lo, hi) {
+                painter.line_segment([screen(a), screen(b)], stroke);
+            }
+        }
         // a playing preview's tool, an upright cylinder at the tip
         // ponytail: drawn whole, over the surface it is cutting into
         if let Some((tip, diameter)) = tool_at {

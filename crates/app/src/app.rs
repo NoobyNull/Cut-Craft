@@ -46,6 +46,8 @@ struct FineKey {
     framing: view3d::Framing,
     fit: egui::Rect,
     look: view3d::Look,
+    /// Whether the imported model is shown whole, in place of its component.
+    importing: bool,
 }
 
 /// What a select-mode drag holds: the whole selection, or one vector or model picked
@@ -418,9 +420,13 @@ struct OpenForm {
     drawn: Option<EntityId>,
     /// Settings changed since the shape it made last followed them.
     dirty: bool,
-    /// Orientate 3D Model's Model Size as the form filled it in from the model, while the
-    /// user has not typed one: it follows the orientation then.
-    auto_size: Option<(f64, f64)>,
+    /// Orientate 3D Model's Model Size (X, Y, Z) as last shown, and the sizes the user typed
+    /// (with the ratio locked, only the latest): the rest follow the model as it turns.
+    shown_size: Option<[f64; 3]>,
+    typed_size: [Option<f64>; 3],
+    /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above
+    /// cannot reach it: the 3D view shows it whole while the form is open.
+    model: Option<Vec<cmd_orientate_3d_model::Seen>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
 }

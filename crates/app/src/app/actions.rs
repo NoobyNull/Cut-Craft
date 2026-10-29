@@ -757,7 +757,9 @@ impl CutCraftApp {
                 editing: None,
                 drawn: None,
                 dirty: false,
-                auto_size: None,
+                shown_size: None,
+                typed_size: [None; 3],
+                model: None,
                 applied: None,
             });
             // a form shows in its page, so bring an auto-hidden page out
@@ -1334,37 +1336,79 @@ impl CutCraftApp {
     }
 
     /// Applies the open form, Orientate 3D Model's Model Size following the model's own
-    /// while the user has not typed one.
+    /// but for the sizes the user typed.
     #[expect(
         clippy::cast_precision_loss,
         reason = "a model grid's columns and rows"
     )]
+    #[expect(clippy::float_cmp, reason = "a size is edited when not the very value shown")]
     pub(super) fn apply_live(&mut self) {
-        let Some(form) = &self.form else { return };
+        const SIZES: [&str; 3] = ["x", "y", "z"];
+        let Some(form) = &mut self.form else { return };
         let (id, mut params) = (form.id, form.params.clone());
-        let size = |p: &Value| (p["size"]["x"].as_f64(), p["size"]["y"].as_f64());
-        let auto = params.get("size").is_some()
-            && (size(&params) == (Some(0.0), Some(0.0))
-                || form.auto_size.map(|(x, y)| (Some(x), Some(y))) == Some(size(&params)));
-        if auto {
-            params["size"]["x"] = Value::from(0.0);
-            params["size"]["y"] = Value::from(0.0);
+        let sized = params.get("size").is_some();
+        if sized {
+            let lock = params["size"]["lock_ratio"].as_bool().unwrap_or(false);
+            for (i, key) in SIZES.iter().enumerate() {
+                let value = params["size"][key].as_f64().unwrap_or(0.0);
+                let edited = form
+                    .shown_size
+                    .map_or(value != 0.0, |shown| value != shown[i]);
+                if edited {
+                    // locked, the size just typed sets the others
+                    if lock {
+                        form.typed_size = [None; 3];
+                    }
+                    form.typed_size[i] = (value > 0.0).then_some(value);
+                }
+            }
+            if lock {
+                let first = form.typed_size.iter().position(Option::is_some);
+                form.typed_size =
+                    std::array::from_fn(|i| form.typed_size[i].filter(|_| Some(i) == first));
+            }
+            for (key, typed) in SIZES.iter().zip(form.typed_size) {
+                params["size"][key] = Value::from(typed.unwrap_or(0.0));
+            }
         }
         let result = self.apply_form(id, &params);
-        let made = self
-            .form
+        let model = serde_json::from_value(params)
+            .ok()
+            .filter(|_| id == "orientate_3d_model")
+            .and_then(|p| {
+                cmd_orientate_3d_model::preview(&self.doc, &p)
+                    .ok()
+                    .flatten()
+            });
+        // the model's size: its triangles' box, or (wrapped) its component's
+        let made = model
             .as_ref()
-            .and_then(|f| f.drawn)
-            .and_then(|k| self.doc.components.get(&k))
-            .map(|k| (k.cell * k.columns as f64, k.cell * k.rows as f64));
+            .and_then(|tris| {
+                let corners = tris.iter().flat_map(|(t, _)| t);
+                let lo = corners
+                    .clone()
+                    .copied()
+                    .reduce(cut_craft_core::glam::DVec3::min)?;
+                let hi = corners.copied().reduce(cut_craft_core::glam::DVec3::max)?;
+                Some((hi - lo).to_array())
+            })
+            .or_else(|| {
+                let k = self.doc.components.get(&self.form.as_ref()?.drawn?)?;
+                let (lo, hi) = k.height_range().unwrap_or_default();
+                Some([k.cell * k.columns as f64, k.cell * k.rows as f64, hi - lo])
+            });
         if let Some(form) = &mut self.form {
             form.error = result.err();
-            if let (true, Some((x, y))) = (auto, made) {
+            form.model = model;
+            if let (true, Some(made)) = (sized, made) {
                 // to the hundredth of a millimetre shown, not the cell's float noise
-                let (x, y) = ((x * 100.0).round() / 100.0, (y * 100.0).round() / 100.0);
-                form.params["size"]["x"] = Value::from(x);
-                form.params["size"]["y"] = Value::from(y);
-                form.auto_size = Some((x, y));
+                let shown = std::array::from_fn(|i| {
+                    form.typed_size[i].unwrap_or((made[i] * 100.0).round() / 100.0)
+                });
+                for (key, value) in SIZES.iter().zip(shown) {
+                    form.params["size"][key] = Value::from(value);
+                }
+                form.shown_size = Some(shown);
             }
         }
     }
