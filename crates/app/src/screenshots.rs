@@ -21,7 +21,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 10] = [
+const SCENES: [Scene; 11] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -32,6 +32,7 @@ const SCENES: [Scene; 10] = [
     ("import-3d-model", import),
     ("rail-layout", rail),
     ("ribbon-layout", ribbon),
+    ("rotary-import", rotary_import),
 ];
 
 /// Where the run is.
@@ -251,6 +252,17 @@ fn ribbon(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.ribbon_tab = 2;
     app.inspector_tab = 4;
     app.invoke(ctx, "pocket_toolpath");
+}
+
+/// A full 3D model imported into a rotary job: shown turned round the axis in the stock.
+fn rotary_import(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.options.general.layout = crate::options::WindowLayout::Classic;
+    app.form = None;
+    app.doc.components.clear();
+    app.doc.job =
+        cut_craft_core::document::Job::rotary(200.0, 90.0, cut_craft_core::document::Along::X);
+    import(app, ctx);
+    app.framing = crate::view3d::Framing::default();
 }
 
 /// Orientate 3D Model with a model in the scene: a stepped pyramid, made here.

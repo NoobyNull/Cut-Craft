@@ -918,6 +918,52 @@ impl CutCraftApp {
     }
 
     /// The 3D view's picture: background, block and the overlays the View menu turns on.
+    /// A full 3D model being imported into a rotary job, turned round the axis inside a
+    /// wireframe of the stock, over the wrapped view.
+    fn paint_turned(
+        &self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        surface: &cut_craft_core::simulation::Material,
+        wrap: view3d::Wrap,
+        fit: egui::Rect,
+        look: &view3d::Look,
+    ) {
+        use cut_craft_core::glam::DVec3;
+        let Some(model) = self.form.as_ref().and_then(|f| f.model.as_ref()) else {
+            return;
+        };
+        let (orbit, framing) = (self.orbit, self.framing);
+        let screen = view3d::screen_of(surface, orbit, framing, fit, Some(wrap));
+        // from the job's millimetres (the axis at y = z = 0 for an X axis) to the wrapped
+        // view's: along from the material's start; across and up as they are, the model at
+        // its true size inside the stock
+        let start = if wrap.along_x {
+            surface.origin.x
+        } else {
+            surface.origin.y
+        };
+        let to_view = |p: DVec3| {
+            if wrap.along_x {
+                DVec3::new(p.x - start, p.y, p.z)
+            } else {
+                DVec3::new(p.x, p.y - start, p.z)
+            }
+        };
+        let shown: Vec<cmd_orientate_3d_model::Seen> = model
+            .iter()
+            .map(|(t, hidden)| (t.map(to_view), *hidden))
+            .collect();
+        let mark = ui.visuals().error_fg_color;
+        painter.add(view3d::triangles(&shown, &screen, orbit, look, mark));
+        let job = self.shown_job().area().size();
+        let length = if wrap.along_x { job.x } else { job.y };
+        let stroke = egui::Stroke::new(ui.visuals().widgets.noninteractive.fg_stroke.width, mark);
+        for [a, b] in view3d::cylinder_edges(wrap.along_x, wrap.radius, 0.0, length) {
+            painter.line_segment([screen(a), screen(b)], stroke);
+        }
+    }
+
     pub(super) fn paint_3d(&mut self, ui: &egui::Ui, area: egui::Rect) {
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         let shown = self.display;
@@ -954,10 +1000,21 @@ impl CutCraftApp {
         let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
             return;
         };
-        let wrap = wrap_for(&job, shown.auto_wrapping, previewing, &surface);
+        // a full 3D model being imported into a rotary job is shown turned round the axis,
+        // so the job is drawn wrapped while it is
+        let turned = job.rotary.is_some()
+            && self.form.as_ref().is_some_and(|f| {
+                f.id == "orientate_3d_model"
+                    && f.model.is_some()
+                    && f.params["model_type"] == "full"
+            });
+        let wrap = wrap_for(&job, shown.auto_wrapping || turned, previewing, &surface);
         let look = view3d::Look { wrap, ..look };
         painter.add(self.surface_mesh(ui, &surface, (orbit, framing), look, fit));
-        if wrap.is_some() {
+        if let Some(wrap) = wrap {
+            if turned {
+                self.paint_turned(ui, &painter, &surface, wrap, fit, &look);
+            }
             // ponytail: the overlays are drawn flat, so they are left off the wrapped view
             return;
         }

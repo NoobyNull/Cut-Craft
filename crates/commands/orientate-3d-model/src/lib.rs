@@ -339,13 +339,22 @@ pub type Seen = ([DVec3; 3], bool);
 
 /// The model as a flat job places it, as triangles in job millimetres, each with whether
 /// a cutter from above cannot reach it (the model is over it: an overhang's underside, or
-/// what is tucked under one): what the 3D view shows while the form is open. `None` for a
-/// full 3D model in a rotary job, which is wrapped instead.
+/// what is tucked under one): what the 3D view shows while the form is open. A full 3D
+/// model in a rotary job is shown turned round the job's axis instead (x along it, y and z
+/// across from it), with nothing marked: it is cut all the way round.
 pub fn preview(doc: &Document, params: &Params) -> Result<Option<Vec<Seen>>, CommandError> {
     // ponytail: a tenth of a millimetre clear of the base counts, as fmt_import_stl::undercut
     const ABOVE: f64 = 0.1;
-    if doc.job.rotary.is_some() && params.model_type == ModelType::Full {
-        return Ok(None);
+    if let Some(rotary) = doc.job.rotary
+        && params.model_type == ModelType::Full
+    {
+        let tris = oriented(params)?.0;
+        let turning = Turning::of(doc, rotary, &tris, params)?;
+        return Ok(Some(
+            tris.iter()
+                .map(|t| (t.map(|v| turning.placed(v)), false))
+                .collect(),
+        ));
     }
     let (tris, rect) = placed(doc, params, oriented(params)?.0)?;
     let mut top = Component::from_fn("", Combine::Add, rect, doc.job.model_cell(), |_| None);
@@ -381,10 +390,134 @@ fn face_up(face: Face) -> DMat3 {
     }
 }
 
-/// A full 3D model wrapped round a rotary job's axis: its axis along the job's, through the
-/// middle of its box across, and each cell of the unrolled job holding how far out from the
-/// axis the model reaches at that point along and that angle round. Angle 0 is straight up,
-/// turning toward +Y for an X axis or +X for a Y axis [inf].
+/// How a full 3D model sits in a rotary job: its axis along the job's, through the middle
+/// of its box across, scaled to the material (or to Model Size's X as its length), from
+/// where it starts along the job.
+struct Turning {
+    x_axis: bool,
+    /// The model's middle across (its y, z for an X axis; x, z for a Y axis), and where it
+    /// starts along, before scaling.
+    middle: Point,
+    start: f64,
+    scale: f64,
+    /// Where the scaled model starts along the job, in job mm.
+    first: f64,
+    unrolled: Unrolled,
+}
+
+impl Turning {
+    fn of(
+        doc: &Document,
+        rotary: Rotary,
+        tris: &[[DVec3; 3]],
+        params: &Params,
+    ) -> Result<Self, CommandError> {
+        let (lo, hi) =
+            bounds(tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
+        let x_axis = rotary.along == Along::X;
+        let probe = Self {
+            x_axis,
+            middle: Point::ZERO,
+            start: 0.0,
+            scale: 1.0,
+            first: 0.0,
+            unrolled: Unrolled {
+                along_from: 0.0,
+                round_from: 0.0,
+                round: 0.0,
+                x_axis,
+            },
+        };
+        let middle = probe.across((lo + hi) / 2.0);
+        let length = probe.along(hi) - probe.along(lo);
+        let reach = tris
+            .iter()
+            .flatten()
+            .map(|&v| (probe.across(v) - middle).length())
+            .fold(0.0, f64::max);
+        if length <= 0.0 || reach <= 0.0 {
+            return Err(CommandError::Failed(
+                "the model has no length or width".into(),
+            ));
+        }
+        let job = doc.job.area();
+        let unrolled = if x_axis {
+            Unrolled {
+                along_from: job.min.x,
+                round_from: job.min.y,
+                round: job.size().y,
+                x_axis,
+            }
+        } else {
+            Unrolled {
+                along_from: job.min.y,
+                round_from: job.min.x,
+                round: job.size().x,
+                x_axis,
+            }
+        };
+        let job_length = if x_axis { job.size().x } else { job.size().y };
+        let scale = if params.fit_material {
+            (rotary.diameter / 2.0 / reach).min(job_length / length)
+        } else if params.size.x > 0.0 {
+            params.size.x / length
+        } else {
+            1.0
+        };
+        let first = if params.placing.center {
+            unrolled.along_from + (job_length - length * scale) / 2.0
+        } else if x_axis {
+            params.placing.position.x
+        } else {
+            params.placing.position.y
+        };
+        Ok(Self {
+            middle,
+            start: probe.along(lo),
+            scale,
+            first,
+            unrolled,
+            ..probe
+        })
+    }
+
+    fn along(&self, v: DVec3) -> f64 {
+        if self.x_axis { v.x } else { v.y }
+    }
+
+    fn across(&self, v: DVec3) -> Point {
+        if self.x_axis {
+            Point::new(v.y, v.z)
+        } else {
+            Point::new(v.x, v.z)
+        }
+    }
+
+    /// A vertex as (along, angle round from straight up, out from the axis), in job mm.
+    fn cylindrical(&self, v: DVec3) -> (f64, f64, f64) {
+        let off = self.across(v) - self.middle;
+        (
+            self.first + (self.along(v) - self.start) * self.scale,
+            off.x.atan2(off.y),
+            off.length() * self.scale,
+        )
+    }
+
+    /// A vertex where the turned model has it: along the job, across and up from the axis.
+    fn placed(&self, v: DVec3) -> DVec3 {
+        let off = (self.across(v) - self.middle) * self.scale;
+        let along = self.first + (self.along(v) - self.start) * self.scale;
+        if self.x_axis {
+            DVec3::new(along, off.x, off.y)
+        } else {
+            DVec3::new(off.x, along, off.y)
+        }
+    }
+}
+
+/// A full 3D model wrapped round a rotary job's axis: each cell of the unrolled job holding
+/// how far out from the axis the model reaches at that point along and that angle round.
+/// Angle 0 is straight up, turning toward +Y for an X axis or +X for a Y axis [inf].
 fn wrapped(
     doc: &Document,
     rotary: Rotary,
@@ -392,75 +525,16 @@ fn wrapped(
     params: &Params,
 ) -> Result<Component, CommandError> {
     use std::f64::consts::{PI, TAU};
-    let (lo, hi) = bounds(tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
-    let x_axis = rotary.along == Along::X;
-    let along = |v: DVec3| if x_axis { v.x } else { v.y };
-    let across = |v: DVec3| {
-        if x_axis {
-            Point::new(v.y, v.z)
-        } else {
-            Point::new(v.x, v.z)
-        }
-    };
-    let middle = across((lo + hi) / 2.0);
-    let length = along(hi) - along(lo);
-    let reach = tris
-        .iter()
-        .flatten()
-        .map(|&v| (across(v) - middle).length())
-        .fold(0.0, f64::max);
-    if length <= 0.0 || reach <= 0.0 {
-        return Err(CommandError::Failed(
-            "the model has no length or width".into(),
-        ));
-    }
-    let job = doc.job.area();
-    let unrolled = if x_axis {
-        Unrolled {
-            along_from: job.min.x,
-            round_from: job.min.y,
-            round: job.size().y,
-            x_axis,
-        }
-    } else {
-        Unrolled {
-            along_from: job.min.y,
-            round_from: job.min.x,
-            round: job.size().x,
-            x_axis,
-        }
-    };
-    let job_length = if x_axis { job.size().x } else { job.size().y };
-    let scale = if params.fit_material {
-        (rotary.diameter / 2.0 / reach).min(job_length / length)
-    } else if params.size.x > 0.0 {
-        params.size.x / length
-    } else {
-        1.0
-    };
-    let first = if params.placing.center {
-        unrolled.along_from + (job_length - length * scale) / 2.0
-    } else if x_axis {
-        params.placing.position.x
-    } else {
-        params.placing.position.y
-    };
+    let turning = Turning::of(doc, rotary, tris, params)?;
+    let unrolled = &turning.unrolled;
     let mut made = Component::from_fn(
         "Imported model",
         Combine::Add,
-        job,
+        doc.job.area(),
         doc.job.model_cell(),
         |_| None,
     );
-    // a vertex as (along, round, out from the axis), in job mm
-    let cylindrical = |vertex: DVec3| {
-        let off = across(vertex) - middle;
-        (
-            first + (along(vertex) - along(lo)) * scale,
-            off.x.atan2(off.y),
-            off.length() * scale,
-        )
-    };
+    let cylindrical = |v: DVec3| turning.cylindrical(v);
     for tri in tris {
         let mut corners = tri.map(cylindrical);
         // one side of the seam: the angles taken within half a turn of the first
@@ -907,6 +981,44 @@ mod rotary {
         .iter()
         .flat_map(|&[a, b, c, d]| [[at(a), at(b), at(c)], [at(a), at(c), at(d)]])
         .collect()
+    }
+
+    #[test]
+    fn a_full_model_previews_turned_round_the_axis_as_it_is_wrapped() {
+        let p = Params {
+            model_type: ModelType::Full,
+            ..Params::default()
+        };
+        let faces = cylinder(10.0, 50.0);
+        let (doc, k) = import("turned", &faces, &p);
+        let p = Params {
+            file: stl("turned", &faces),
+            ..p
+        };
+        let tris = preview(&rotary_job(), &p).unwrap().expect("shown turned");
+        assert!(
+            tris.iter().all(|(_, hidden)| !hidden),
+            "cut all the way round"
+        );
+        let corners = || tris.iter().flat_map(|(t, _)| t.iter().copied());
+        // fitted to the 30 mm stock: out 15 from the axis, as the wrapped model reaches
+        let out = corners().map(|v| v.y.hypot(v.z)).fold(0.0, f64::max);
+        assert!((out - 15.0).abs() < 0.1, "{out}");
+        let (_, highest) = k.height_range().unwrap();
+        assert!((highest - out).abs() < 0.5, "{highest} against {out}");
+        // 75 long (1.5 times), centred along the 100 mm job
+        let job = doc.job.area();
+        let along = |f: fn(f64, f64) -> f64, from| corners().map(|v| v.x).fold(from, f);
+        let (first, last) = (
+            along(f64::min, f64::INFINITY),
+            along(f64::max, f64::NEG_INFINITY),
+        );
+        // the file is in f32
+        assert!((last - first - 75.0).abs() < 1e-4, "{first}..{last}");
+        assert!(
+            ((first - job.min.x) - (job.max.x - last)).abs() < 1e-6,
+            "centred"
+        );
     }
 
     #[test]
