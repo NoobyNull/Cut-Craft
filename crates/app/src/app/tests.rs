@@ -2980,3 +2980,26 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
         "from low on the right the block hides it"
     );
 }
+
+#[test]
+fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
+    let mut h = Harness::at_start();
+    h.app.invoke(&h.ctx, "new");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().expect("the Job Setup form");
+    form.params["size"]["width"] = 300.0.into();
+    form.params["size"]["thickness"] = 12.0.into();
+    let button = h
+        .text_at("Set as Default")
+        .expect("a Set as Default button");
+    h.click(button, Modifiers::NONE);
+    h.frame(vec![]);
+    let saved = h.app.options.default_job.expect("kept in the options");
+    assert!((saved.width - 300.0).abs() < 1e-9);
+    h.app.job_setup_cancel();
+    h.app.invoke(&h.ctx, "new");
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().expect("Job Setup again");
+    assert_eq!(form.params["size"]["width"], 300.0);
+    assert_eq!(form.params["size"]["thickness"], 12.0);
+}

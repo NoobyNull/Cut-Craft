@@ -896,6 +896,9 @@ impl CutCraftApp {
     /// Back to nothing: no job, no form, no preview.
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
+        if let Some(job) = self.options.default_job {
+            self.doc.job = job;
+        }
         (self.camera, self.view_tool) = (None, None);
         (
             self.selected_toolpath,
@@ -904,6 +907,34 @@ impl CutCraftApp {
             self.fine_3d,
         ) = (None, None, None, None);
         self.clear_recovery();
+    }
+
+    /// Set as Default in Job Setup: new jobs start with the job its settings make.
+    pub(super) fn job_setup_default(&mut self) {
+        let Some(form) = &mut self.form else { return };
+        // made on an empty document, so only the job's own settings count
+        let made = self
+            .registry
+            .get(form.id)
+            .expect("only registered commands have forms")
+            .run_json(&Document::default(), &form.params)
+            .map_err(|e| e.to_string())
+            .and_then(|change| {
+                change
+                    .job()
+                    .copied()
+                    .ok_or_else(|| "no job made".to_owned())
+            });
+        match made {
+            Ok(job) => {
+                form.error = None;
+                self.options.default_job = Some(job);
+                self.save_options();
+                self.status
+                    .set_message("New jobs will start with these settings");
+            }
+            Err(e) => form.error = Some(e),
+        }
     }
 
     /// OK in Job Setup for a new job: the job is made, with nothing to undo yet.
@@ -1920,13 +1951,24 @@ impl CutCraftApp {
         } else {
             ("Apply", "Close")
         };
-        let (mut apply, mut close) = (false, false);
+        let job_setup = open.id == "job_setup";
+        let (mut apply, mut close, mut default) = (false, false, false);
         ui.horizontal(|ui| {
             apply = ui.button(apply_label).clicked();
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui.button(close_label).clicked();
+                if job_setup {
+                    default = ui
+                        .button("Set as Default")
+                        .on_hover_text("Start every new job with these settings")
+                        .clicked();
+                }
             });
         });
+        if default {
+            self.job_setup_default();
+            return;
+        }
         match (new_job, apply, close) {
             (true, true, _) => self.job_setup_ok(),
             (true, _, true) => self.job_setup_cancel(),

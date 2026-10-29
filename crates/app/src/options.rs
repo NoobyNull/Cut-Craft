@@ -275,6 +275,11 @@ pub struct Options {
     #[serde(default)]
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
+    /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
+    /// own starting job until then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub default_job: Option<cut_craft_core::document::Job>,
 }
 
 impl Default for Options {
@@ -313,6 +318,7 @@ impl Default for Options {
                 layout: WindowLayout::default(),
             },
             confirmations: Confirmations::default(),
+            default_job: None,
         }
     }
 }
