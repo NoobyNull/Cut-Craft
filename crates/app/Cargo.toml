@@ -19,6 +19,8 @@ egui_extras.workspace = true
 # egui_extras decodes pictures with image; this turns on its readers (dialog pictures, clipart)
 image.workspace = true
 rfd.workspace = true
+# Cut Craft's window handed to rfd, so its dialogs open as the window's own
+raw-window-handle = "0.6"
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

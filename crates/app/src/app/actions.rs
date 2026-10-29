@@ -9,8 +9,9 @@ use super::{
     SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SUMMARY_DEFAULTS, Screen,
     Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, Tool, ToolDatabase,
     VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
-    file_dialog, file_name, files, form, gui, job_dialog, menu_items, on_the_desktop, rest_section,
-    shortcut, side_tabs, summary_table, template_dialog, toolpath_template_dialog, view3d,
+    file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
+    on_the_desktop, rest_section, shortcut, side_tabs, summary_table, template_dialog,
+    toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -1129,8 +1130,7 @@ impl CutCraftApp {
         if !self.session.is_dirty(&self.history) {
             return true;
         }
-        on_the_desktop();
-        let answer = rfd::MessageDialog::new()
+        let answer = message_dialog()
             .set_title(APP_NAME)
             .set_description(format!(
                 "Save changes to {}?",
@@ -1249,9 +1249,8 @@ impl CutCraftApp {
     /// Asks what to do about crossing vectors: `None` to go on, `Some(true)` for the Vector
     /// Validator, `Some(false)` to stop.
     fn crossing_choice() -> Option<bool> {
-        on_the_desktop();
         let (go_on, validator) = ("Continue", "Vector Validator");
-        let answer = rfd::MessageDialog::new()
+        let answer = message_dialog()
             .set_title(APP_NAME)
             .set_level(rfd::MessageLevel::Warning)
             .set_description(
@@ -1274,8 +1273,7 @@ impl CutCraftApp {
     }
 
     fn save_anyway(problems: &[String]) -> bool {
-        on_the_desktop();
-        let answer = rfd::MessageDialog::new()
+        let answer = message_dialog()
             .set_title(APP_NAME)
             .set_level(rfd::MessageLevel::Warning)
             .set_description(format!(

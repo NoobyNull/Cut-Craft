@@ -748,6 +748,10 @@ fn job_dialog() -> rfd::FileDialog {
 fn file_dialog() -> rfd::FileDialog {
     on_the_desktop();
     let dialog = rfd::FileDialog::new();
+    let dialog = match dialog_parent() {
+        Some(parent) => dialog.set_parent(&*parent),
+        None => dialog,
+    };
     match DIALOG_FOLDER.lock().ok().and_then(|f| f.clone()) {
         Some(folder) => dialog.set_directory(folder),
         None => dialog,
@@ -757,6 +761,36 @@ fn file_dialog() -> rfd::FileDialog {
 /// Where file dialogs open (Options ▸ File dialog default), kept up to date each frame; the
 /// dialogs are opened from places that do not have the app to hand.
 static DIALOG_FOLDER: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
+
+/// A message box from the system, as the window's own like the file dialogs.
+fn message_dialog() -> rfd::MessageDialog {
+    on_the_desktop();
+    let dialog = rfd::MessageDialog::new();
+    match dialog_parent() {
+        Some(parent) => dialog.set_parent(&*parent),
+        None => dialog,
+    }
+}
+
+/// Cut Craft's window, kept up to date each frame: the system's dialogs open as its own,
+/// kept above it and brought forward with it, rather than as windows of their own.
+static DIALOG_PARENT: std::sync::Mutex<Option<std::sync::Arc<dyn Window>>> =
+    std::sync::Mutex::new(None);
+
+/// A window a dialog can belong to (eframe's is winit's).
+trait Window:
+    raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle + Send + Sync
+{
+}
+
+impl<W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle + Send + Sync>
+    Window for W
+{
+}
+
+fn dialog_parent() -> Option<std::sync::Arc<dyn Window>> {
+    DIALOG_PARENT.lock().ok()?.clone()
+}
 
 /// Every window or program the app puts on the desktop passes here; in tests it fails.
 fn on_the_desktop() {
@@ -1022,7 +1056,10 @@ fn file_name(path: &std::path::Path) -> String {
 }
 
 impl eframe::App for CutCraftApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        if let (Some(window), Ok(mut parent)) = (frame.winit_window(), DIALOG_PARENT.lock()) {
+            *parent = Some(window.clone());
+        }
         let job_folder = (self.options.general.file_dialog_default
             == crate::options::FileDialogDefault::Job)
             .then(|| self.session.path.as_deref()?.parent().map(Into::into))

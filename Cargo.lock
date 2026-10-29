@@ -1956,6 +1956,7 @@ dependencies = [
  "fmt-import-stl",
  "fmt-import-svg",
  "image",
+ "raw-window-handle",
  "rfd",
  "schemars",
  "serde",
