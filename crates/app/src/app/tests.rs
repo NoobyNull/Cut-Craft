@@ -3343,3 +3343,22 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
     assert_eq!(form.params["size"]["width"], 300.0);
     assert_eq!(form.params["size"]["thickness"], 12.0);
 }
+
+#[test]
+fn ctrl_shift_v_pastes_in_place() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.frame(vec![Event::Copy]);
+    let copied = h.app.clipboard.clone();
+    let press = |pressed| Event::Key {
+        key: Key::V,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: Modifiers::COMMAND | Modifiers::SHIFT,
+    };
+    h.frame(vec![press(true), press(false)]);
+    assert_eq!(h.app.doc.vectors.len(), 2, "a second copy");
+    let pasted = h.app.doc.vectors.values().last().unwrap();
+    assert_eq!(pasted, &copied[0], "where the first one is");
+}
