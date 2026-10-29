@@ -870,9 +870,7 @@ impl CutCraftApp {
                 id: cmd.id(),
                 label: meta.label,
                 icon: meta.icon,
-                // the tool's own settings come from the Tool Database, shown read-only above
-                // the form, not edited in it
-                fields: fields.into_iter().filter(|f| f.key != "tool").collect(),
+                fields,
                 params,
                 error: None,
                 new_job: false,
@@ -2308,11 +2306,6 @@ impl CutCraftApp {
             }
             ui.strong(open.label);
         });
-        let (mut chosen, mut edit_tool) = (None, false);
-        if open.params.get("tool").is_some_and(Value::is_object) {
-            let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
-            (chosen, edit_tool) = tool_picker(ui, &open.params["tool"], &self.tools, &slots, units);
-        }
         // a list of tools in running order (rest machining), picked from the database
         let mut earlier = None;
         if open.params.get("tools").is_some_and(Value::is_array) {
@@ -2336,12 +2329,20 @@ impl CutCraftApp {
             })
         };
         let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
+        // the tool block, where the form has its tool: what was picked, and Edit…
+        let asked = std::cell::RefCell::new((None, false));
+        let tools = &self.tools;
+        let tool = |ui: &mut egui::Ui, tool: &Value, top: &Value| {
+            *asked.borrow_mut() = tool_picker(ui, tool, top, tools, &slots, units);
+        };
         let look = form::Look {
             units,
             picture: &picture,
             material: form::material(&self.doc, units),
+            tool: Some(&tool),
         };
         open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
+        let (chosen, edit_tool) = asked.into_inner();
         // every toolpath that cuts with a tool can rest machine (3D Finishing has its own, as
         // `after`); Material Setup, Materials and the toolpath list's tools have no tool
         let cuts = open.params.get("tool").is_some_and(Value::is_object);

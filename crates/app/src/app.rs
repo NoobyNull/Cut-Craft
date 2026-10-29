@@ -704,6 +704,9 @@ fn summary_table(
             section: false,
             icon: None,
             when: None,
+            enabled: None,
+            group: None,
+            tab: None,
         },
         crate::form::Field {
             key: "scale_factor".into(),
@@ -721,6 +724,9 @@ fn summary_table(
             section: false,
             icon: None,
             when: None,
+            enabled: None,
+            group: None,
+            tab: None,
         },
     ];
     let mut values = serde_json::json!({ "rapid_rate": *rapid, "scale_factor": *scale });
@@ -729,6 +735,7 @@ fn summary_table(
         units,
         picture: &picture,
         material: cut_craft_core::calc::Values::default(),
+        tool: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
         *rapid = values["rapid_rate"].as_f64().unwrap_or(*rapid);
@@ -930,6 +937,7 @@ fn paint_focus_ring(ctx: &egui::Context) {
 fn tool_picker(
     ui: &mut egui::Ui,
     tool: &Value,
+    top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
     units: Units,
@@ -974,7 +982,14 @@ fn tool_picker(
         })
         .inner;
     match serde_json::from_value::<Tool>(tool.clone()) {
-        Ok(tool) => tool_summary(ui, &tool, units, tools.get(&tool.name).is_some()),
+        Ok(tool) => {
+            // Aspire's Passes: how many the cut depth takes at the tool's pass depth
+            let passes = top["depth"]
+                .as_f64()
+                .filter(|_| tool.pass_depth > 0.0)
+                .map(|depth| (depth / tool.pass_depth).ceil().max(1.0));
+            tool_summary(ui, &tool, units, passes, tools.get(&tool.name).is_some());
+        }
         Err(_) => {
             ui.weak("Pick a tool from the Tool Database");
         }
@@ -984,7 +999,13 @@ fn tool_picker(
 
 /// A toolpath form's tool as the Tool Database has it, read-only: what its shape uses, then
 /// its cutting data for the active material, lengths in `units`.
-fn tool_summary(ui: &mut egui::Ui, tool: &Tool, units: Units, in_database: bool) {
+fn tool_summary(
+    ui: &mut egui::Ui,
+    tool: &Tool,
+    units: Units,
+    passes: Option<f64>,
+    in_database: bool,
+) {
     use cut_craft_core::toolpath::ToolShape;
     let shown = |value: f64, unit: &str| match form::shown_in(unit, units) {
         Some((per, to)) => format!("{} {to}", trimmed(value / per)),
@@ -1013,7 +1034,10 @@ fn tool_summary(ui: &mut egui::Ui, tool: &Tool, units: Units, in_database: bool)
             format!("{} rpm", trimmed(tool.spindle_speed)),
         ),
     ]);
-    ui.group(|ui| {
+    if let Some(passes) = passes {
+        rows.push(("Passes", trimmed(passes)));
+    }
+    ui.vertical(|ui| {
         egui::Grid::new("tool_summary")
             .num_columns(2)
             .show(ui, |ui| {

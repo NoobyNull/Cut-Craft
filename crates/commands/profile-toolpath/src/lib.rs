@@ -80,66 +80,96 @@ pub enum StartAt {
 // ponytail: Aspire's limit is not known
 pub const MITRE_REACH: f64 = 4.0;
 
+// Laid out as Aspire's 2D Profile form: cutting depths, the tool, how the vectors are
+// machined, tabs, then a tab each for ramps, leads, order, start points and corners.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    pub name: String,
     /// Below the material surface
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(
+        title = "Cut Depth",
+        extend("x-unit" = "mm", "x-group" = "Cutting Depths"),
+        range(min = 0)
+    )]
     pub depth: f64,
-    pub side: Side,
     pub tool: Tool,
+    #[schemars(title = "Machine", extend("x-group" = "Machine Vectors…"))]
+    pub side: Side,
     /// Which way round closed shapes are cut
     #[serde(default)]
+    #[schemars(extend("x-group" = "Machine Vectors…", "x-widget" = "row"))]
     pub direction: Direction,
     /// Positive leaves the part bigger (or the hole smaller), negative cuts into it
     #[serde(default)]
-    #[schemars(title = "Allowance Offset", extend("x-unit" = "mm"))]
-    pub allowance: f64,
-    /// How the tool goes down into each pass (ramps run at the plunge rate)
-    #[serde(default)]
-    pub ramp: Ramp,
-    #[serde(default)]
     #[schemars(
-        title = "Ramps",
-        extend("x-section" = true, "x-show-when" = {"ramp": ["smooth", "zig_zag"]})
+        title = "Allowance Offset",
+        extend("x-unit" = "mm", "x-group" = "Machine Vectors…")
     )]
-    pub ramping: Ramping,
-    /// How the tool comes onto each path, from the waste side; a ramp then runs along the
-    /// lead in, and there is no spiral
-    #[serde(default)]
-    pub lead: Lead,
-    #[serde(default)]
-    #[schemars(extend("x-section" = true, "x-hide-when" = {"lead": "none"}))]
-    pub leads: Leads,
+    pub allowance: f64,
     /// Bridges left to hold the part in place
     #[serde(default)]
+    #[schemars(title = "Add tabs to toolpath", extend("x-group" = "Tabs"))]
     pub tabs: Tabs,
     #[serde(default)]
-    #[schemars(title = "Tab Size", extend("x-section" = true, "x-hide-when" = {"tabs": "none"}))]
+    #[schemars(
+        title = "Tab Size",
+        extend(
+            "x-section" = true,
+            "x-group" = "Tabs",
+            "x-enable-when" = {"tabs": ["flat", "triangular"]}
+        )
+    )]
     pub tab: TabSettings,
     /// Tabs placed by clicking in the 2D view, on the vectors
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub tab_points: Vec<Point>,
+    /// How the tool goes down into each pass (ramps run at the plunge rate)
     #[serde(default)]
-    #[schemars(extend("x-section" = true))]
+    #[schemars(title = "Add ramps to toolpath", extend("x-tab" = "Ramp"))]
+    pub ramp: Ramp,
+    #[serde(default)]
+    #[schemars(
+        title = "Specify Ramp",
+        extend(
+            "x-section" = true,
+            "x-tab" = "Ramp",
+            "x-enable-when" = {"ramp": ["smooth", "zig_zag"]}
+        )
+    )]
+    pub ramping: Ramping,
+    /// How the tool comes onto each path, from the waste side; a ramp then runs along the
+    /// lead in, and there is no spiral
+    #[serde(default)]
+    #[schemars(title = "Lead in / out", extend("x-tab" = "Leads"))]
+    pub lead: Lead,
+    #[serde(default)]
+    #[schemars(extend(
+        "x-section" = true,
+        "x-tab" = "Leads",
+        "x-enable-when" = {"lead": ["straight", "circular"]}
+    ))]
+    pub leads: Leads,
+    #[serde(default)]
+    #[schemars(title = "Order ways to try", extend("x-section" = true, "x-tab" = "Order"))]
     pub order: Order,
     #[serde(default)]
+    #[schemars(extend("x-tab" = "Start At"))]
     pub start_at: StartAt,
     /// The point of each vector's bounding box its cut starts nearest
     #[serde(default = "top_left")]
-    #[schemars(extend("x-show-when" = {"start_at": "bounding_box"}))]
+    #[schemars(extend("x-tab" = "Start At", "x-enable-when" = {"start_at": "bounding_box"}))]
     pub start_near: Anchor,
     /// At outside corners the tool follows the vector's angle out to a point instead of
     /// rolling round the corner
     #[serde(default)]
-    #[schemars(title = "Sharp External Corners")]
+    #[schemars(title = "Sharp External Corners", extend("x-tab" = "Corners"))]
     pub sharp_corners: bool,
     /// Drop the finished toolpath onto the 3D model: its depth below the material surface
     /// becomes depth below the model's surface, going no lower than the bottom of the material
     #[serde(default)]
     #[schemars(title = "Project toolpath onto 3D Model")]
     pub project_onto_model: bool,
+    pub name: String,
 }
 
 fn top_left() -> Anchor {

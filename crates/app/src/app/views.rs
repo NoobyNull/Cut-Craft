@@ -1251,6 +1251,7 @@ impl CutCraftApp {
                     units: self.doc.job.units,
                     picture: &|_| None,
                     material: crate::form::material(&self.doc, self.doc.job.units),
+                    tool: None,
                 };
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     let one = std::slice::from_ref(category);
@@ -1289,6 +1290,7 @@ impl CutCraftApp {
                 units,
                 picture: &picture,
                 material: crate::form::material(&self.doc, units),
+                tool: None,
             };
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(options) = serde_json::from_value(values)

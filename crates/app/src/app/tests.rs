@@ -1116,15 +1116,14 @@ fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
 fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "pocket_toolpath");
-    let form = h.app.form.as_ref().unwrap();
-    assert!(
-        form.fields.iter().all(|f| f.key != "tool"),
-        "the tool's settings are not edited in the form"
-    );
     h.app.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Edit…").is_some());
+    assert!(
+        h.text_at("Number of Flutes").is_none(),
+        "the tool's settings are not edited in the form"
+    );
     assert_eq!(h.app.form.as_ref().unwrap().params["tool"]["diameter"], 3.0);
     h.app.edit_form_tool(&h.ctx);
     let manager = h

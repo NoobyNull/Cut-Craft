@@ -31,6 +31,15 @@ pub struct Field {
     pub icon: Option<String>,
     /// Only shown while another choice says so.
     pub when: Option<When>,
+    /// Greyed out unless another choice says so (`x-enable-when`, written as `x-show-when`),
+    /// as Aspire greys a section's settings until it is ticked.
+    pub enabled: Option<When>,
+    /// `x-group`: neighbouring fields with the same group share a framed block under it as a
+    /// heading (Aspire's Cutting Depths, Machine Vectors…).
+    pub group: Option<String>,
+    /// `x-tab`: neighbouring fields with a tab show as a strip of tabs, a tab's fields under
+    /// it (Aspire's Ramp, Leads, Order, Start At, Corners).
+    pub tab: Option<String>,
 }
 
 /// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
@@ -50,6 +59,10 @@ impl When {
             (None, Some(rule)) => (rule, false),
             (None, None) => return None,
         };
+        Self::from_rule(rule, show)
+    }
+
+    fn from_rule(rule: &Value, show: bool) -> Option<Self> {
         let (key, values) = rule.as_object()?.iter().next()?;
         let values = match values {
             Value::Array(list) => list
@@ -74,6 +87,9 @@ impl When {
     }
 }
 
+/// Draws a form's tool given it and the form's top-level parameters (see [`Look::tool`]).
+pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &Value, &Value) + 'a;
+
 /// How a form looks: the units lengths are shown in, and the pictures sections show.
 pub struct Look<'a> {
     pub units: Units,
@@ -81,6 +97,9 @@ pub struct Look<'a> {
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
     /// The material's size in the units shown, for sums typed into number fields (W, H, T).
     pub material: cut_craft_core::calc::Values,
+    /// Draws a `tool` field in its place (the Tool Database's tool, which the form does not
+    /// edit), given the tool and the form's top-level parameters; `None` leaves it out.
+    pub tool: Option<&'a DrawTool<'a>>,
 }
 
 /// The job's material, in `units`, and its document variables, for [`Look::material`].
@@ -170,45 +189,139 @@ fn show_within(
         .filter(|f| f.when.as_ref().is_none_or(|w| w.shown(top)))
         .collect();
     let mut changed = false;
-    // runs of ordinary fields share a grid; each section is a framed block of its own
+    // neighbours in one tab strip, or one group, make a block; the rest stand as they are
     let mut rest = shown.as_slice();
+    while let Some(first) = rest.first() {
+        let together = |f: &&&Field| match (&first.tab, &f.tab) {
+            (Some(_), Some(_)) => true,
+            (None, None) => first.group.is_some() && f.group == first.group,
+            _ => false,
+        };
+        let n = rest.iter().take_while(together).count().max(1);
+        let (block, after) = rest.split_at(n);
+        changed |= if first.tab.is_some() {
+            tabs(ui, block, params, look, top)
+        } else if let Some(group) = &first.group {
+            ui.group(|ui| {
+                ui.set_width(ui.available_width());
+                ui.strong(group);
+                plain(ui, block, params, look, top)
+            })
+            .inner
+        } else {
+            plain(ui, block, params, look, top)
+        };
+        rest = after;
+    }
+    changed
+}
+
+/// A strip of tabs over `fields`, the picked tab's fields under it; the pick is kept with
+/// the form's other state in egui's memory.
+fn tabs(
+    ui: &mut egui::Ui,
+    fields: &[&Field],
+    params: &mut Value,
+    look: &Look,
+    top: &Value,
+) -> bool {
+    let mut names: Vec<&str> = vec![];
+    for f in fields {
+        let name = f.tab.as_deref().unwrap_or_default();
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    let id = ui.scope_id().with(("form_tabs", &fields[0].key));
+    let mut picked: usize = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+    ui.horizontal_wrapped(|ui| {
+        for (i, name) in names.iter().enumerate() {
+            ui.selectable_value(&mut picked, i, *name);
+        }
+    });
+    ui.data_mut(|d| d.insert_temp(id, picked));
+    let name = names.get(picked).copied().unwrap_or_default();
+    let shown: Vec<&Field> = fields
+        .iter()
+        .copied()
+        .filter(|f| f.tab.as_deref() == Some(name))
+        .collect();
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        plain(ui, &shown, params, look, top)
+    })
+    .inner
+}
+
+/// Fields as they stand: runs of ordinary fields share a grid; each section is a framed
+/// block of its own, and the tool draws itself.
+fn plain(
+    ui: &mut egui::Ui,
+    fields: &[&Field],
+    params: &mut Value,
+    look: &Look,
+    top: &Value,
+) -> bool {
+    let mut changed = false;
+    let own_block = |f: &&Field| f.section || f.key == "tool";
+    let mut rest = fields;
     while !rest.is_empty() {
-        let run = rest.iter().position(|f| f.section).unwrap_or(rest.len());
+        let run = rest.iter().position(own_block).unwrap_or(rest.len());
         let (plain, after) = rest.split_at(run);
         if !plain.is_empty() {
-            changed |= grid(ui, plain, params, look);
+            changed |= grid(ui, plain, params, look, top);
         }
         let Some((section, after)) = after.split_first() else {
             break;
         };
+        rest = after;
+        if section.key == "tool" && !section.section {
+            if let Some(tool) = look.tool {
+                ui.group(|ui| {
+                    ui.set_width(ui.available_width());
+                    hover(ui.strong(&section.label), section.help.as_ref());
+                    tool(ui, &params[&section.key], top);
+                });
+            }
+            continue;
+        }
+        let enabled = section.enabled.as_ref().is_none_or(|w| w.shown(top));
         changed |= ui
-            .group(|ui| {
-                ui.set_width(ui.available_width());
-                hover(ui.strong(&section.label), section.help.as_ref());
-                let value = &mut params[&section.key];
-                let picture = section
-                    .icon
-                    .as_ref()
-                    .and_then(|template| (look.picture)(&icon_path(template, value)));
-                ui.horizontal(|ui| {
-                    if let Some(picture) = picture {
-                        ui.add(picture);
-                    }
-                    ui.vertical(|ui| match &section.kind {
-                        Kind::Group(inner) => show_within(ui, inner, value, look, top),
-                        kind => edit(ui, kind, value, look),
+            .add_enabled_ui(enabled, |ui| {
+                ui.group(|ui| {
+                    ui.set_width(ui.available_width());
+                    hover(ui.strong(&section.label), section.help.as_ref());
+                    let value = &mut params[&section.key];
+                    let picture = section
+                        .icon
+                        .as_ref()
+                        .and_then(|template| (look.picture)(&icon_path(template, value)));
+                    ui.horizontal(|ui| {
+                        if let Some(picture) = picture {
+                            ui.add(picture);
+                        }
+                        ui.vertical(|ui| match &section.kind {
+                            Kind::Group(inner) => show_within(ui, inner, value, look, top),
+                            kind => edit(ui, kind, value, look),
+                        })
+                        .inner
                     })
                     .inner
                 })
                 .inner
             })
             .inner;
-        rest = after;
     }
     changed
 }
 
-fn grid(ui: &mut egui::Ui, fields: &[&Field], params: &mut Value, look: &Look) -> bool {
+fn grid(
+    ui: &mut egui::Ui,
+    fields: &[&Field],
+    params: &mut Value,
+    look: &Look,
+    top: &Value,
+) -> bool {
     let mut changed = false;
     egui::Grid::new(ui.next_auto_id())
         .num_columns(2)
@@ -221,14 +334,19 @@ fn grid(ui: &mut egui::Ui, fields: &[&Field], params: &mut Value, look: &Look) -
                     .as_ref()
                     .filter(|_| own)
                     .and_then(|template| (look.picture)(&icon_path(template, &params[&f.key])));
-                ui.horizontal(|ui| {
-                    if let Some(picture) = picture {
-                        let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
-                        ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
-                    }
-                    hover(ui.label(&f.label), f.help.as_ref());
+                let enabled = f.enabled.as_ref().is_none_or(|w| w.shown(top));
+                ui.add_enabled_ui(enabled, |ui| {
+                    ui.horizontal(|ui| {
+                        if let Some(picture) = picture {
+                            let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
+                            ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
+                        }
+                        hover(ui.label(&f.label), f.help.as_ref());
+                    });
                 });
-                changed |= edit(ui, &f.kind, &mut params[&f.key], look);
+                changed |= ui
+                    .add_enabled_ui(enabled, |ui| edit(ui, &f.kind, &mut params[&f.key], look))
+                    .inner;
                 ui.end_row();
             }
         });
@@ -675,6 +793,11 @@ fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
                 .or_else(|| resolve(root, s)["x-icon"].as_str())
                 .map(String::from),
             when: When::from_schema(s),
+            enabled: s
+                .get("x-enable-when")
+                .and_then(|rule| When::from_rule(rule, true)),
+            group: s["x-group"].as_str().map(String::from),
+            tab: s["x-tab"].as_str().map(String::from),
         })
         .collect()
 }
