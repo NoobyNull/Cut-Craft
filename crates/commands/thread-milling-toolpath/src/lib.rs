@@ -46,25 +46,34 @@ pub struct Params {
     pub name: String,
     /// Below the material surface where the thread starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub start_depth: f64,
     /// Deepest the bottom of the tool goes below the start depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub max_depth: f64,
     /// Between the ridges of the thread
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Thread"))]
     pub pitch: f64,
     /// The thread's major (largest) diameter
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Thread"))]
     pub diameter: f64,
     /// Cuts the thread this much deeper so it turns freely
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Thread"))]
     pub fit_tolerance: f64,
+    #[schemars(extend("x-group" = "Thread"))]
     pub thread_type: ThreadType,
+    #[schemars(extend("x-group" = "Thread"))]
     pub thread_direction: Hand,
+    #[schemars(extend("x-group" = "Thread"))]
     pub cut_direction: CutDirection,
     /// From the bottom of the thread mill up to the tip of its tooth, for a tool that is not
     /// a thread mill (a thread mill gives its own)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Thread"))]
     pub tooth_offset: f64,
     /// A single-point thread mill; its diameter is tip to tip
     pub tool: Tool,

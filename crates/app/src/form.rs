@@ -80,15 +80,18 @@ impl When {
 
     /// Whether the field shows, given the form's top-level `params`.
     pub fn shown(&self, params: &Value) -> bool {
-        let is = params[&self.key]
-            .as_str()
-            .is_some_and(|v| self.values.iter().any(|w| w == v));
+        // a tick box reads as "true" or "false"
+        let value = match &params[&self.key] {
+            Value::Bool(ticked) => Some(ticked.to_string()),
+            value => value.as_str().map(String::from),
+        };
+        let is = value.is_some_and(|v| self.values.contains(&v));
         is == self.show
     }
 }
 
-/// Draws a form's tool given it and the form's top-level parameters (see [`Look::tool`]).
-pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &Value, &Value) + 'a;
+/// Draws a form's tool block given the parameters holding the tool (see [`Look::tool`]).
+pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &mut Value) + 'a;
 
 /// How a form looks: the units lengths are shown in, and the pictures sections show.
 pub struct Look<'a> {
@@ -98,7 +101,7 @@ pub struct Look<'a> {
     /// The material's size in the units shown, for sums typed into number fields (W, H, T).
     pub material: cut_craft_core::calc::Values,
     /// Draws a `tool` field in its place (the Tool Database's tool, which the form does not
-    /// edit), given the tool and the form's top-level parameters; `None` leaves it out.
+    /// edit), given the parameters holding it; `None` leaves it out.
     pub tool: Option<&'a DrawTool<'a>>,
 }
 
@@ -277,11 +280,7 @@ fn plain(
         rest = after;
         if section.key == "tool" && !section.section {
             if let Some(tool) = look.tool {
-                ui.group(|ui| {
-                    ui.set_width(ui.available_width());
-                    hover(ui.strong(&section.label), section.help.as_ref());
-                    tool(ui, &params[&section.key], top);
-                });
+                tool(ui, params);
             }
             continue;
         }
@@ -765,6 +764,43 @@ fn round(n: f64) -> i64 {
     n.round() as i64
 }
 
+/// The heading of the group a toolpath's depths go in; [`arrange`] puts it first.
+pub const CUTTING_DEPTHS: &str = "Cutting Depths";
+
+/// A toolpath form's fields in Aspire's order: the cutting depths, the tool, then the rest
+/// as declared with each group's (and the tab strip's) fields gathered where the first of
+/// them is, and Project onto 3D Model and the name last.
+pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
+    let rank = |f: &Field| match f.key.as_str() {
+        _ if f.group.as_deref() == Some(CUTTING_DEPTHS) => 0,
+        "tool" => 1,
+        "project_onto_model" => 3,
+        "name" => 4,
+        _ => 2,
+    };
+    // where each field's company first appears: its group's or the tab strip's first field,
+    // else its own place
+    let mut firsts: Vec<((Option<String>, bool), usize)> = vec![];
+    let mut keyed: Vec<(u8, usize, usize, Field)> = fields
+        .into_iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let company = (f.group.clone(), f.tab.is_some());
+            let at = if company == (None, false) {
+                i
+            } else if let Some(&(_, first)) = firsts.iter().find(|(c, _)| *c == company) {
+                first
+            } else {
+                firsts.push((company, i));
+                i
+            };
+            (rank(&f), at, i, f)
+        })
+        .collect();
+    keyed.sort_by_key(|&(rank, at, i, _)| (rank, at, i));
+    keyed.into_iter().map(|(.., f)| f).collect()
+}
+
 /// The fields of a params schema, in declaration order.
 pub fn fields(schema: &Value) -> Vec<Field> {
     object_fields(schema, schema)
@@ -903,6 +939,65 @@ mod tests {
 
     fn field<'a>(fields: &'a [Field], key: &str) -> &'a Field {
         fields.iter().find(|f| f.key == key).unwrap()
+    }
+
+    #[test]
+    fn toolpath_fields_are_arranged_as_aspires_forms() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "side": { "type": "string", "x-group": "Chamfer" },
+                "seed": { "type": "number" },
+                "start_depth": { "type": "number", "x-group": "Cutting Depths" },
+                "width": { "type": "number", "x-group": "Chamfer" },
+                "ramp": { "type": "boolean", "x-tab": "Ramp" },
+                "project_onto_model": { "type": "boolean" },
+                "order": { "type": "boolean", "x-tab": "Order" },
+                "tool": { "type": "object", "properties": {} }
+            }
+        });
+        assert_eq!(
+            keys(&arrange(fields(&schema))),
+            [
+                "start_depth",
+                "tool",
+                "side",
+                "width",
+                "seed",
+                "ramp",
+                "order",
+                "project_onto_model",
+                "name"
+            ]
+        );
+    }
+
+    #[test]
+    fn every_toolpath_form_opens_with_its_depths_and_tool_and_ends_with_its_name() {
+        let chamfer = fields(&schema("chamfer_toolpath"));
+        let width = field(&chamfer, "width");
+        assert_eq!(width.group.as_deref(), Some("Chamfer"));
+        assert!(
+            matches!(&width.kind, Kind::Number { unit: Some(u), .. } if u == "mm"),
+            "a group mark keeps the field's other marks"
+        );
+        for command in registry().iter() {
+            let f = fields(&command.schema());
+            if f.iter().all(|f| f.key != "tool") {
+                continue;
+            }
+            let f = arrange(f);
+            let k = keys(&f);
+            let depths = f
+                .iter()
+                .take_while(|f| f.group.as_deref() == Some(CUTTING_DEPTHS))
+                .count();
+            assert_eq!(k.get(depths), Some(&"tool"), "{}: {k:?}", command.id());
+            if k.contains(&"name") {
+                assert_eq!(k.last(), Some(&"name"), "{}", command.id());
+            }
+        }
     }
 
     #[test]

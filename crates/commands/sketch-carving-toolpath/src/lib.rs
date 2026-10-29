@@ -35,19 +35,25 @@ pub enum Boundary {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
+    #[schemars(extend("x-group" = "Sketch"))]
     pub source: Source,
     /// Below the material surface where carving starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub start_depth: f64,
     /// Below the start depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub cut_depth: f64,
+    #[schemars(extend("x-group" = "Boundary"))]
     pub boundary: Boundary,
     /// Moves the boundary out by this much
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Boundary"))]
     pub boundary_offset: f64,
     /// Heavier lines but less detail as it goes up
     #[schemars(range(min = 0, max = 100))]
+    #[schemars(extend("x-group" = "Sketch"))]
     pub line_thickness: f64,
     /// Its stepover spaces the passes over the lines
     pub tool: Tool,

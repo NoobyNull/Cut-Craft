@@ -37,19 +37,26 @@ pub struct Params {
     pub name: String,
     /// Below the material surface where the flute begins (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub start_depth: f64,
     /// Below the start depth at the deepest point
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub flute_depth: f64,
+    #[schemars(extend("x-group" = "Flute Type"))]
     pub flute_type: FluteType,
+    #[schemars(extend("x-group" = "Ramp"))]
     pub ramp_type: RampType,
     /// Size the ramps as a percentage of the longest they can be, instead of a length
+    #[schemars(extend("x-group" = "Ramp"))]
     pub use_ramp_percent: bool,
     /// Length of each ramp along the vector (capped at the longest it can be)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Ramp"))]
     pub ramp_length: f64,
     /// Percentage of the longest ramp: the whole vector at the start only, half of it at both ends
     #[schemars(range(min = 0, max = 100))]
+    #[schemars(extend("x-group" = "Ramp"))]
     pub ramp_percent: f64,
     pub tool: Tool,
     /// After calculating, drop the toolpath onto the 3D model: its depths are then below the

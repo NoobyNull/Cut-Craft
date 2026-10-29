@@ -38,14 +38,19 @@ pub struct Params {
     pub name: String,
     /// Below the material surface (or below the nose cone)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     pub depth: f64,
+    #[schemars(extend("x-group" = "Engrave"))]
     pub strategy: Strategy,
+    #[schemars(extend("x-group" = "Engrave"))]
     pub fill_pattern: FillPattern,
     /// Between fill lines (set here, not from the tool)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Engrave"))]
     pub stepover: f64,
     /// Times the whole pattern is run
     #[schemars(range(min = 1))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub passes: u32,
     pub tool: Tool,
 }

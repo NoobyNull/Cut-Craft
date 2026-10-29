@@ -17,9 +17,11 @@ pub struct MouldingToolpath;
 pub struct Params {
     pub name: String,
     /// Mitred corners where the rails have sharp corners, instead of rolling round them
+    #[schemars(extend("x-group" = "Moulding"))]
     pub create_sharp_corners: bool,
     /// Carries the passes this far past both ends of the profile
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Moulding"))]
     pub boundary_offset: f64,
     /// Usually a ball nose; its stepover spaces the passes
     pub tool: Tool,

@@ -29,21 +29,27 @@ pub enum InlayType {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
+    #[schemars(extend("x-group" = "Inlay Type"))]
     pub inlay_type: InlayType,
     /// Below the material surface where cutting starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub start_depth: f64,
     /// Below the start depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub cut_depth: f64,
     /// Stepped insert: how far down from the start depth the step is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Steps"))]
     pub step_depth: f64,
     /// Stepped insert: how far out from the shape the shelf reaches
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Steps"))]
     pub step_width: f64,
     /// Makes an insert this much smaller, or a cavity this much bigger, so they fit
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Steps"))]
     pub allowance: f64,
     /// The same tool for both halves
     pub tool: Tool,

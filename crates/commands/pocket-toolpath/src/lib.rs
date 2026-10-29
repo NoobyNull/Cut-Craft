@@ -42,16 +42,20 @@ pub struct Params {
     pub name: String,
     /// Below the material surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     pub depth: f64,
     pub tool: Tool,
     #[serde(default)]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
     pub strategy: Strategy,
     /// Which way round the rings and the profile pass run
     #[serde(default)]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
     pub direction: Direction,
     /// Left on the walls; negative cuts past the vectors
     #[serde(default)]
     #[schemars(title = "Pocket Allowance", extend("x-unit" = "mm"))]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
     pub allowance: f64,
     /// 0° along X, 90° along Y
     #[serde(default)]
@@ -59,15 +63,22 @@ pub struct Params {
         extend("x-unit" = "°", "x-show-when" = {"strategy": "raster"}),
         range(min = 0, max = 90)
     )]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
     pub raster_angle: f64,
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": "raster"}))]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
     pub profile_pass: ProfilePass,
     /// Zig zag down over the ramp distance instead of plunging straight down
     #[serde(default)]
+    #[schemars(extend("x-group" = "Ramp Plunge Moves"))]
     pub ramp_plunge_moves: bool,
     #[serde(default = "ramp_distance")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend(
+        "x-group" = "Ramp Plunge Moves",
+        "x-enable-when" = {"ramp_plunge_moves": "true"}
+    ))]
     pub ramp_distance: f64,
     /// Drop the finished toolpath onto the 3D model: its depth below the material surface
     /// becomes depth below the model's surface, going no lower than the bottom of the material

@@ -29,16 +29,21 @@ pub struct Params {
     pub name: String,
     /// Deepest the pocket goes (narrow parts stop short of it)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub pocket_depth: f64,
     /// Between the top of the plug and the bottom of the pocket once fitted
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Inlay"))]
     pub glue_gap: f64,
     /// Between the plug's material and the pocket's surface once fitted
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Inlay"))]
     pub surface_clearance: f64,
+    #[schemars(extend("x-group" = "Boundary"))]
     pub plug_boundary: PlugBoundary,
     /// Extra material cut away round the plug
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Boundary"))]
     pub boundary_offset: f64,
     /// A V-bit, the same for both halves
     pub tool: Tool,

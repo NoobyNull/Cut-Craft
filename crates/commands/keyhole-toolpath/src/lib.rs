@@ -25,19 +25,25 @@ pub enum Direction {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
+    #[schemars(extend("x-group" = "Keyhole"))]
     pub direction: Direction,
     /// Deep enough that the cutter's wide part is below the surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub slot_depth: f64,
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Keyhole"))]
     pub slot_length: f64,
     /// Draw how the slots will look on the surface
+    #[schemars(extend("x-group" = "Keyhole"))]
     pub create_preview_vectors: bool,
     /// Of the hole the cutter makes going in, for the preview
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Keyhole"))]
     pub entry_hole_diameter: f64,
     /// Of the slot on the surface, for the preview
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Keyhole"))]
     pub slot_diameter: f64,
     /// An end mill with the keyhole cutter's feed rates
     pub tool: Tool,

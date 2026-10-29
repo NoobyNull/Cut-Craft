@@ -20,10 +20,12 @@ pub struct Params {
     /// Below the material surface where carving starts (the floor of an earlier pocket)
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub start_depth: f64,
     /// Deepest the bit goes below the start depth; wider parts are cut flat there (0: as
     /// deep as it can)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub flat_depth: f64,
     /// A V-bit; its stepover sets how close together the carving passes are
     pub tool: Tool,

@@ -859,6 +859,12 @@ impl CutCraftApp {
             form::fields(&cmd.schema()),
             cmd.initial_params(&self.doc),
         );
+        // a toolpath's form in Aspire's order
+        let fields = if fields.iter().any(|f| f.key == "tool") {
+            form::arrange(fields)
+        } else {
+            fields
+        };
         meta.label.clone_into(&mut self.status.current_tool);
         self.view_tool = None;
         if fields.is_empty() {
@@ -2332,8 +2338,18 @@ impl CutCraftApp {
         // the tool block, where the form has its tool: what was picked, and Edit…
         let asked = std::cell::RefCell::new((None, false));
         let tools = &self.tools;
-        let tool = |ui: &mut egui::Ui, tool: &Value, top: &Value| {
-            *asked.borrow_mut() = tool_picker(ui, tool, top, tools, &slots, units);
+        let tool = |ui: &mut egui::Ui, params: &mut Value| {
+            ui.group(|ui| {
+                ui.set_width(ui.available_width());
+                ui.strong("Tool");
+                *asked.borrow_mut() =
+                    tool_picker(ui, &params["tool"], params, tools, &slots, units);
+            });
+            // every toolpath that cuts with a tool can rest machine after the tools that cut
+            // before it (3D Finishing has its own, as `after`)
+            if params.get("after").is_none() {
+                rest_section(ui, params, &tools.tools);
+            }
         };
         let look = form::Look {
             units,
@@ -2343,12 +2359,6 @@ impl CutCraftApp {
         };
         open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
         let (chosen, edit_tool) = asked.into_inner();
-        // every toolpath that cuts with a tool can rest machine (3D Finishing has its own, as
-        // `after`); Material Setup, Materials and the toolpath list's tools have no tool
-        let cuts = open.params.get("tool").is_some_and(Value::is_object);
-        if cuts && open.params.get("after").is_none() {
-            rest_section(ui, &mut open.params, &self.tools.tools);
-        }
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }

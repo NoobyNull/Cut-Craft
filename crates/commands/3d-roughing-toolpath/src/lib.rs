@@ -59,48 +59,63 @@ pub struct Params {
     pub name: String,
     /// Left on the model for the finishing toolpath to take off
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Machining Allowance"))]
     pub allowance: f64,
     /// Its pass depth spaces the levels, its stepover the lines
     pub tool: Tool,
     /// Where the tool's tip may go
     #[serde(default)]
     #[schemars(title = "Machining Limit Boundary")]
+    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary: MachiningBoundary,
     /// Grows the machining boundary, so the tool can go on past a raised edge
     /// The level whose components make the boundary
     #[serde(default)]
     #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
+    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub boundary_level: String,
     #[serde(default)]
     #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
+    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary_offset: f64,
     #[serde(default)]
     #[schemars(title = "Roughing Strategy")]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": "z_level"}))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub order: Order,
     /// A pass round the edge of each level, before or after its raster lines
     #[serde(default)]
     #[schemars(title = "Profile", extend("x-show-when" = {"strategy": "z_level"}))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub profile: ProfilePass,
     /// Step from line to line the other way: top to bottom along X, left to right along Y
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": "z_level"}))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub reverse_step_direction: bool,
     /// Leave out what an earlier pass already cut down to the model
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": "raster3d"}))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub avoid_machined_areas: bool,
     /// 0° along X, 90° along Y
     #[serde(default)]
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 90))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub raster_angle: f64,
     /// Zig zag down from the level above over the ramp distance instead of plunging (Z level)
     #[serde(default)]
+    #[schemars(extend("x-group" = "Ramp Plunge Moves"))]
     pub ramp_plunge_moves: bool,
     #[serde(default = "ramp_distance")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend(
+        "x-group" = "Ramp Plunge Moves",
+        "x-enable-when" = {"ramp_plunge_moves": "true"}
+    ))]
     pub ramp_distance: f64,
 }
 

@@ -32,22 +32,30 @@ pub struct Params {
     pub name: String,
     /// Of the laser's maximum
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
+    #[schemars(extend("x-group" = "Laser"))]
     pub power: f64,
     /// Times the toolpath is run, for thicker material
     #[schemars(range(min = 1))]
+    #[schemars(extend("x-group" = "Laser"))]
     pub passes: u32,
+    #[schemars(extend("x-group" = "Fill"))]
     pub strategy: Strategy,
     /// Extra offset for cutting outside or inside, to ease or tighten a fit
     #[schemars(extend("x-unit" = "mm"))]
+    #[schemars(extend("x-group" = "Fill"))]
     pub allowance: f64,
     /// Between hatch lines
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Fill"))]
     pub stepover: f64,
     #[schemars(extend("x-unit" = "°"))]
+    #[schemars(extend("x-group" = "Fill"))]
     pub hatch_angle: f64,
     /// A second set of hatch lines at right angles
+    #[schemars(extend("x-group" = "Fill"))]
     pub cross_hatch: bool,
     /// Round the shapes as well, so a hatch has crisp edges
+    #[schemars(extend("x-group" = "Fill"))]
     pub outline: bool,
     /// The laser: its diameter is the kerf, its feed rate the move speed
     pub tool: Tool,

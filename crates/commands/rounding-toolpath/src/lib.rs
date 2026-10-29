@@ -36,13 +36,17 @@ pub enum Method {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
+    #[schemars(extend("x-group" = "Blank"))]
     pub blank: Blank,
     /// Side of a square blank or diameter of a round one
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Blank"))]
     pub blank_size: f64,
+    #[schemars(extend("x-group" = "Rounding"))]
     pub method: Method,
     /// Left on the finished cylinder
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Rounding"))]
     pub allowance: f64,
     /// Its stepover, pass depth and feed rates are used
     pub tool: Tool,

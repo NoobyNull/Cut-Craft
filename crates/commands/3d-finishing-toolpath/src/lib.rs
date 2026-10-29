@@ -40,23 +40,29 @@ pub struct Params {
     pub tools: Vec<Tool>,
     /// Rest machining: leave alone unmachined areas smaller across than this
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub minimum_detail: f64,
     /// Rest machining: grow every unmachined area by this before cutting it
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub boundary_offset: f64,
     /// Where the tool's tip may go
     #[serde(default)]
     #[schemars(title = "Machining Limit Boundary")]
+    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary: MachiningBoundary,
     /// Grows the machining boundary, so the tool can go on past a raised edge
     /// The level whose components make the boundary
     #[serde(default)]
     #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
+    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub boundary_level: String,
     #[serde(default)]
     #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
+    #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary_offset: f64,
     #[serde(default)]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,
     /// 0° along X, 90° along Y
     #[serde(default)]
@@ -64,11 +70,13 @@ pub struct Params {
         extend("x-unit" = "°", "x-show-when" = {"strategy": "raster"}),
         range(min = 0, max = 90)
     )]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub raster_angle: f64,
     /// Lift off the surface by this between offset rings, which can leave fewer marks where
     /// the tool steps over
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm", "x-show-when" = {"strategy": "offset"}), range(min = 0))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub stepover_retract: f64,
     /// One toolpath of a set (and every toolpath saved before the tool list): its tool, which
     /// finishes after `after`

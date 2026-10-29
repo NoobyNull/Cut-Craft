@@ -19,37 +19,49 @@ pub struct TextureToolpath;
 pub struct Params {
     pub name: String,
     /// Cut along the selected vectors instead of a random pattern inside them
+    #[schemars(extend("x-group" = "Texture"))]
     pub use_selected_vectors_as_pattern: bool,
     /// For a pattern: dip in and out along each vector instead of cutting it at one depth
+    #[schemars(extend("x-group" = "Texture"))]
     pub ramp_at_start_and_end: bool,
     /// Deepest any scallop goes
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub max_cut_depth: f64,
     /// Shallowest a scallop goes, as a percentage of the deepest
     #[schemars(range(min = 0, max = 100))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub min_depth_percent: f64,
     /// Longest any scallop is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Texture"))]
     pub max_cut_length: f64,
     /// Shortest a scallop is, as a percentage of the longest
     #[schemars(range(min = 0, max = 100))]
+    #[schemars(extend("x-group" = "Texture"))]
     pub min_length_percent: f64,
     /// How far a scallop may run back over the one before, as a percentage of the longest
     #[schemars(range(min = 0, max = 100))]
+    #[schemars(extend("x-group" = "Texture"))]
     pub max_overlap_percent: f64,
     /// How much the overlap varies, as a percentage of the most it may be
     #[schemars(range(min = 0, max = 100))]
+    #[schemars(extend("x-group" = "Texture"))]
     pub overlap_variation_percent: f64,
     /// Between rows of scallops
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Texture"))]
     pub stepover: f64,
     /// Direction of the rows, anticlockwise from the X axis
     #[schemars(extend("x-unit" = "°"))]
+    #[schemars(extend("x-group" = "Texture"))]
     pub angle: f64,
     /// Keeps the texture this far in from the boundary (up to the tool radius in a recess)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Boundary"))]
     pub boundary_offset: f64,
     /// Another number gives another random pattern
+    #[schemars(extend("x-group" = "Texture"))]
     pub seed: u32,
     pub tool: Tool,
     /// After calculating, drop the toolpath onto the 3D model: its depths are then below the

@@ -32,19 +32,25 @@ pub struct Params {
     pub name: String,
     /// Below the material surface where the carving is (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub start_depth: f64,
     /// Where the picture is black
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub max_carving_depth: f64,
     /// Lift above the start depth to move between lines
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub stepover_retract: f64,
+    #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,
     /// Between lines, as a percentage of the groove width at the max depth (100: grooves meet)
     #[schemars(range(min = 1, max = 1000))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub line_spacing_percent: f64,
     /// Of the lines, from horizontal
     #[schemars(extend("x-unit" = "°"))]
+    #[schemars(extend("x-group" = "Strategy"))]
     pub line_angle: f64,
     /// A V-bit
     pub tool: Tool,

@@ -17,18 +17,23 @@ pub struct Params {
     pub name: String,
     /// From the knife's pivot to its tip (from the maker)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Knife"))]
     pub blade_offset: f64,
     /// Corners turning less than this are cut straight through, without a swivel
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 180))]
+    #[schemars(extend("x-group" = "Knife"))]
     pub tolerance_angle: f64,
     /// Final depth of the cut
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub cut_depth: f64,
     /// The blade lifts to this depth to swivel; less than the cut depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub swivel_depth: f64,
     /// Equal passes down to the cut depth
     #[schemars(range(min = 1))]
+    #[schemars(extend("x-group" = "Cutting Depths"))]
     pub passes: u32,
     /// Feed and plunge rates (switch the spindle off)
     pub tool: Tool,

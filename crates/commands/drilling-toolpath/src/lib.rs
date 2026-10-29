@@ -14,6 +14,7 @@ pub struct Params {
     pub name: String,
     /// Below the material surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     pub depth: f64,
     /// Each peck goes one pass depth deeper, retracting in between to clear chips
     pub tool: Tool,
