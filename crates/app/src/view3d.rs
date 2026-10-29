@@ -753,6 +753,33 @@ pub fn triangles(
     mesh
 }
 
+/// The lines along a rotary stock's wireframe, and the sides of each end's ring.
+const CYLINDER_SIDES: usize = 24;
+
+/// A wireframe of the cylinder of `radius` round the axis (y = z = 0 along x, else x = z = 0
+/// along y) from `from` to `to` along it: a ring at each end and lines along between.
+#[expect(clippy::cast_precision_loss, reason = "a handful of sides")]
+pub fn cylinder_edges(along_x: bool, radius: f64, from: f64, to: f64) -> Vec<[DVec3; 2]> {
+    let at = |side: usize, along: f64| {
+        let angle = std::f64::consts::TAU * side as f64 / CYLINDER_SIDES as f64;
+        let (across, up) = (radius * angle.sin(), radius * angle.cos());
+        if along_x {
+            DVec3::new(along, across, up)
+        } else {
+            DVec3::new(across, along, up)
+        }
+    };
+    (0..CYLINDER_SIDES)
+        .flat_map(|i| {
+            [
+                [at(i, from), at(i + 1, from)],
+                [at(i, to), at(i + 1, to)],
+                [at(i, from), at(i, to)],
+            ]
+        })
+        .collect()
+}
+
 /// The twelve edges of the box from `lo` to `hi`.
 pub fn box_edges(lo: DVec3, hi: DVec3) -> Vec<[DVec3; 2]> {
     let corner = |i: usize| {

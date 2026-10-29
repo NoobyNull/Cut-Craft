@@ -1162,7 +1162,9 @@ fn wrap_for(
         } else {
             let heights = surface.heights.iter().copied();
             let lowest = heights.clone().fold(f64::INFINITY, f64::min);
-            -job.model_shift(lowest, heights.fold(f64::NEG_INFINITY, f64::max))
+            let shift = -job.model_shift(lowest, heights.fold(f64::NEG_INFINITY, f64::max));
+            // nothing modelled yet (every cell a hole): the surface is the stock's
+            if shift.is_finite() { shift } else { 0.0 }
         },
     })
 }
