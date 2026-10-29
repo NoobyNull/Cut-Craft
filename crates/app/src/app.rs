@@ -362,6 +362,19 @@ const LINKS: [(&str, &str, &str); 7] = [
 /// pictures beside its choices.
 // ponytail: fixed until panel widths are saved with the window layout
 const DESIGN_PANEL_WIDTHS: f32 = 7.0;
+/// The most of the window's width one resizable side panel may take.
+// ponytail: fixed share until panel widths are saved with the window layout
+const SIDE_PANEL_SHARE: f32 = 1.0 / 3.0;
+
+/// A resizable page beside the views: it starts [`DESIGN_PANEL_WIDTHS`] wide and never takes
+/// more than [`SIDE_PANEL_SHARE`] of the window. Forms and frames inside size themselves to the
+/// room they are given, so an unbounded panel could widen a little every frame while the window
+/// redraws continuously, until the views were gone.
+fn side_panel(panel: egui::Panel, ctx: &egui::Context) -> egui::Panel {
+    let width = DESIGN_PANEL_WIDTHS * ctx.global_style().spacing.interact_size.x;
+    let most = width.max(SIDE_PANEL_SHARE * ctx.content_rect().width());
+    panel.default_size(width).max_size(most)
+}
 /// Size of a form section's picture, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const SECTION_PICTURE_ROWS: f32 = 3.0;

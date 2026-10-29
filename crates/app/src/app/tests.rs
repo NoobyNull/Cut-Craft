@@ -3535,3 +3535,31 @@ fn cancel_takes_back_what_a_tool_did_and_closes_it() {
     assert!(h.app.history.can_redo(), "and it can be redone");
     let _ = std::fs::remove_file(file);
 }
+
+#[test]
+fn a_side_panel_never_takes_more_than_its_share_of_the_window() {
+    // content that asks for a little more than the room it is given, every frame, as a
+    // frame sized to `available_width` inside a resizable panel can
+    let ctx = egui::Context::default();
+    let window = Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0));
+    let mut width = 0.0;
+    for frame in 0..300 {
+        let input = RawInput {
+            screen_rect: Some(window),
+            time: Some(f64::from(frame) * 0.1),
+            ..Default::default()
+        };
+        headless(ctx.run_ui(input, |ui| {
+            width = side_panel(egui::Panel::left("creeping"), ui.ctx())
+                .show(ui, |ui| ui.set_min_width(ui.available_width() + 10.0))
+                .response
+                .rect
+                .width();
+        }));
+    }
+    assert!(
+        width <= SIDE_PANEL_SHARE * window.width() + 1.0,
+        "{width} of {}",
+        window.width()
+    );
+}

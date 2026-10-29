@@ -2,12 +2,12 @@
 //! snapping, node editing, transform handles, autosave and the Options windows.
 
 use super::{
-    APP_NAME, Align, Canvas, Change, CutCraftApp, DAffine2, DESIGN_PANEL_WIDTHS, DESIGN_TABS,
-    DROP_SHADE, Drag, EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout,
-    OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, STROKE_TOOLS, Screen, Split,
-    TOOL_ICON_ROWS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, ViewTransform,
-    bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles, inspected, measured,
-    paint_focus_ring, view2d,
+    APP_NAME, Align, Canvas, Change, CutCraftApp, DAffine2, DESIGN_TABS, DROP_SHADE, Drag,
+    EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout, OLD_JOB_EXTENSION, Overlay, Path,
+    Point, RESOLUTIONS, Rect, STROKE_TOOLS, Screen, Split, TOOL_ICON_ROWS, VIEW_BUTTONS,
+    VIEW_ZOOM_QUARTERS, Value, View, ViewTool, ViewTransform, bordered, dialog_size, egui,
+    file_dialog, file_name, files, gui, handles, inspected, measured, paint_focus_ring, side_panel,
+    view2d,
 };
 use crate::options::WindowLayout;
 
@@ -224,13 +224,10 @@ impl CutCraftApp {
                 return;
             }
             Screen::NewJob => {
-                let width = DESIGN_PANEL_WIDTHS * ctx.global_style().spacing.interact_size.x;
-                egui::Panel::left("design_panel")
-                    .default_size(width)
-                    .show(ui, |ui| {
-                        egui::Panel::bottom("form_buttons").show(ui, |ui| self.form_buttons(ui));
-                        egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
-                    });
+                side_panel(egui::Panel::left("design_panel"), ctx).show(ui, |ui| {
+                    egui::Panel::bottom("form_buttons").show(ui, |ui| self.form_buttons(ui));
+                    egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+                });
             }
             Screen::Job => match self.options.general.layout {
                 WindowLayout::Classic => self.job_pages(ui),

@@ -10,7 +10,7 @@ use super::{
     Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, Tool, ToolDatabase,
     VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
     file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
-    on_the_desktop, rest_section, shortcut, side_tabs, summary_table, template_dialog,
+    on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table, template_dialog,
     toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
@@ -2024,7 +2024,6 @@ impl CutCraftApp {
         let ctx = &ui.ctx().clone();
         let style = ctx.global_style();
         let (row, margin) = (style.spacing.interact_size.y, style.spacing.item_spacing.y);
-        let width = DESIGN_PANEL_WIDTHS * style.spacing.interact_size.x;
         let strip = || egui::Frame::side_top_panel(&style).inner_margin(margin);
         let left_tabs = egui::Panel::left("design_tabs")
             .resizable(false)
@@ -2041,13 +2040,10 @@ impl CutCraftApp {
             .response
             .rect;
         if self.pages.shown(Page::Design) == Shown::Docked {
-            egui::Panel::left("design_panel")
-                .default_size(width)
-                .show(ui, |ui| self.design_page(ui));
+            side_panel(egui::Panel::left("design_panel"), ctx).show(ui, |ui| self.design_page(ui));
         }
         if self.pages.shown(Page::Toolpaths) == Shown::Docked {
-            egui::Panel::right("toolpaths_panel")
-                .default_size(width)
+            side_panel(egui::Panel::right("toolpaths_panel"), ctx)
                 .show(ui, |ui| self.toolpaths_page(ui));
         }
         let room = ui.available_rect_before_wrap();

@@ -2,8 +2,8 @@
 //! can use (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`).
 
 use super::{
-    Align, CutCraftApp, DESIGN_PANEL_WIDTHS, INSPECTOR_TABS, Layout, Page, RIBBON_TABS,
-    TOOL_ICON_ROWS, egui, gui,
+    Align, CutCraftApp, INSPECTOR_TABS, Layout, Page, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui,
+    side_panel,
 };
 use crate::options::WindowLayout;
 
@@ -192,7 +192,6 @@ impl CutCraftApp {
         let spacing = &style.spacing;
         let margin = spacing.item_spacing.y;
         let edge = TOOL_ICON_ROWS * spacing.interact_size.y;
-        let width = DESIGN_PANEL_WIDTHS * spacing.interact_size.x;
         let groups = self.all_groups();
         egui::Panel::left("rail")
             .resizable(false)
@@ -227,29 +226,25 @@ impl CutCraftApp {
                     });
             });
         if let Some(group) = self.rail_group.and_then(|i| groups.get(i).copied()) {
-            egui::Panel::left("rail_flyout")
-                .default_size(width)
-                .show(ui, |ui| {
-                    cut_craft_bug_report::mark(ui, "Rail flyout");
-                    ui.horizontal(|ui| {
-                        ui.strong(group.name);
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.toggle_value(&mut self.rail_pinned, "📌")
-                                .on_hover_text("Keep this list open after picking a tool");
-                        });
+            side_panel(egui::Panel::left("rail_flyout"), ui.ctx()).show(ui, |ui| {
+                cut_craft_bug_report::mark(ui, "Rail flyout");
+                ui.horizontal(|ui| {
+                    ui.strong(group.name);
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.toggle_value(&mut self.rail_pinned, "📌")
+                            .on_hover_text("Keep this list open after picking a tool");
                     });
-                    ui.separator();
-                    let picked = egui::ScrollArea::vertical()
-                        .show(ui, |ui| self.tool_rows(ui, group))
-                        .inner;
-                    if picked && !self.rail_pinned {
-                        self.rail_group = None;
-                    }
                 });
+                ui.separator();
+                let picked = egui::ScrollArea::vertical()
+                    .show(ui, |ui| self.tool_rows(ui, group))
+                    .inner;
+                if picked && !self.rail_pinned {
+                    self.rail_group = None;
+                }
+            });
         }
-        egui::Panel::right("inspector")
-            .default_size(width)
-            .show(ui, |ui| self.inspector(ui));
+        side_panel(egui::Panel::right("inspector"), ui.ctx()).show(ui, |ui| self.inspector(ui));
     }
 
     /// The ribbon tab's groups, and the page their tools count as picked from.
@@ -267,7 +262,6 @@ impl CutCraftApp {
     pub(super) fn ribbon_layout(&mut self, ui: &mut egui::Ui) {
         let spacing = ui.spacing().clone();
         let edge = TOOL_ICON_ROWS * spacing.interact_size.y;
-        let width = DESIGN_PANEL_WIDTHS * spacing.interact_size.x;
         egui::Panel::top("ribbon").show(ui, |ui| {
             cut_craft_bug_report::mark(ui, "Ribbon");
             ui.horizontal(|ui| {
@@ -304,13 +298,9 @@ impl CutCraftApp {
                 });
             });
         });
-        egui::Panel::left("browser")
-            .default_size(width)
-            .show(ui, |ui| self.browser(ui));
+        side_panel(egui::Panel::left("browser"), ui.ctx()).show(ui, |ui| self.browser(ui));
         if self.form.is_some() {
-            egui::Panel::right("inspector")
-                .default_size(width)
-                .show(ui, |ui| self.inspector(ui));
+            side_panel(egui::Panel::right("inspector"), ui.ctx()).show(ui, |ui| self.inspector(ui));
         }
     }
 }
