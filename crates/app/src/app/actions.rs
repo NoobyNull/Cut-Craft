@@ -1541,6 +1541,12 @@ impl CutCraftApp {
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
+        // a form that edits what it made (Draw Text) goes on editing it, not adding another
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == id)
+            && let Some(made) = cmd.initial_params(&self.doc).get("replaces").cloned()
+        {
+            form.params["replaces"] = made;
+        }
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
         // the spiral gadget says how many times round each strand goes, as Aspire's does

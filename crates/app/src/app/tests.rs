@@ -3151,3 +3151,24 @@ fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged(
     std::fs::remove_file(&file).unwrap();
     assert!(!h.app.available(&again));
 }
+
+#[test]
+fn editing_placed_text_replaces_it() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_text");
+    h.app.form.as_mut().unwrap().params["font"] = "Test Boxes".into();
+    let at = Point::new(20.0, 20.0);
+    let click = Drag {
+        start: at,
+        end: at,
+        from_center: false,
+        constrain: false,
+    };
+    h.app.draw("draw_text", click);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["text"] = "HI".into();
+    let params = form.params.clone();
+    h.app.apply_form("draw_text", &params).unwrap();
+    assert_eq!(h.app.doc.texts.len(), 1, "the placeholder was replaced");
+    assert_eq!(h.app.doc.texts.values().next().unwrap()["text"], "HI");
+}
