@@ -1717,6 +1717,9 @@ impl CutCraftApp {
                     );
                 });
             }
+            if !self.options.appearance.system_title_bar {
+                super::title_bar::controls(ui, &self.title);
+            }
         });
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), &id);

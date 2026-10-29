@@ -244,6 +244,10 @@ pub struct Appearance {
     /// Light, dark, or the desktop's own
     #[serde(default)]
     pub theme: Theme,
+    /// The desktop's own title bar above the menus, rather than Cut Craft's in the menu bar
+    #[serde(default)]
+    #[schemars(title = "Use the desktop's title bar")]
+    pub system_title_bar: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
