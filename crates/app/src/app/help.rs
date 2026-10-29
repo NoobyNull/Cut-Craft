@@ -86,13 +86,6 @@ impl CutCraftApp {
         }
     }
 
-    /// A tool's name as its button shows it.
-    fn tool_label(&self, id: &str) -> String {
-        self.registry
-            .get(id)
-            .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())
-    }
-
     /// A command's help, from its params' doc comments: what it does, then each setting.
     pub(super) fn tool_help(&self, id: &str) -> (Option<String>, Vec<(String, String)>) {
         let Some(cmd) = self.registry.get(id) else {
