@@ -128,6 +128,7 @@ impl MachineManager {
                 return;
             };
             details(ui, machine, library);
+            limits(ui, machine);
             tool_changer(ui, machine);
             if names_clash {
                 ui.colored_label(
@@ -203,7 +204,7 @@ impl MachineManager {
     }
 }
 
-/// Name, maker, model, controller, bed size and 4th axis, in a framed block.
+/// Name, maker, model, controller, bed size, Z travel and 4th axis, in a framed block.
 fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
@@ -228,18 +229,10 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
                 for (label, value) in [
                     ("Width", &mut machine.width),
                     ("Height", &mut machine.height),
+                    ("Z travel", &mut machine.depth),
                 ] {
                     ui.label(label);
-                    let mut shown = *value / per;
-                    let speed = (shown.abs() / 100.0).max(f64::EPSILON);
-                    let drag = egui::DragValue::new(&mut shown)
-                        .speed(speed)
-                        .range(0.0..=f64::MAX)
-                        .max_decimals(3)
-                        .suffix(unit);
-                    if ui.add(drag).changed() {
-                        *value = shown * per;
-                    }
+                    measure(ui, value, per, unit);
                     ui.end_row();
                 }
                 ui.label("Units");
@@ -260,6 +253,70 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
                     let names: Vec<String> =
                         library.entries().into_iter().map(|e| e.name).collect();
                     machine.add_rotary_posts(&names);
+                }
+                ui.end_row();
+            });
+    });
+}
+
+/// A length (or a rate of one) kept in mm and shown `per` to the unit: 0 reads as not given.
+fn measure(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) {
+    let mut shown = *value / per;
+    let speed = (shown.abs() / 100.0).max(f64::EPSILON);
+    let drag = egui::DragValue::new(&mut shown)
+        .speed(speed)
+        .range(0.0..=f64::MAX)
+        .max_decimals(3)
+        .suffix(unit);
+    if ui.add(drag).changed() {
+        *value = shown * per;
+    }
+}
+
+/// How fast the machine may move and turn: what the time estimates and the checks before
+/// cutting go by. 0 is not given.
+fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
+    let (per, length) = if machine.inches {
+        (INCH, "in")
+    } else {
+        (1.0, "mm")
+    };
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("Limits").on_hover_text(
+            "From the controller's settings (GRBL $110-$112 and $120-$122); 0 is not given",
+        );
+        egui::Grid::new("machine_limits")
+            .num_columns(4)
+            .show(ui, |ui| {
+                ui.label("");
+                for axis in ["X", "Y", "Z"] {
+                    ui.label(axis);
+                }
+                ui.end_row();
+                let rows = [
+                    ("Max rate", &mut machine.max_rate, format!(" {length}/min")),
+                    (
+                        "Acceleration",
+                        &mut machine.acceleration,
+                        format!(" {length}/s²"),
+                    ),
+                ];
+                for (label, values, unit) in rows {
+                    ui.label(label);
+                    for value in values.iter_mut() {
+                        measure(ui, value, per, &unit);
+                    }
+                    ui.end_row();
+                }
+                ui.label("Spindle");
+                for value in &mut machine.spindle {
+                    ui.add(
+                        egui::DragValue::new(value)
+                            .speed(100.0)
+                            .range(0.0..=f64::MAX)
+                            .suffix(" rpm"),
+                    );
                 }
                 ui.end_row();
             });
@@ -749,7 +806,7 @@ mod tests {
             .memory(|m| m.area_rect(machine_window()))
             .expect("drawn");
         assert!(
-            window.height() < 600.0,
+            window.height() < ctx.content_rect().height() - 2.0 * window.top(),
             "fits its contents, not the screen: {window:?}"
         );
     }

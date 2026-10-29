@@ -14,6 +14,15 @@ pub struct Machine {
     /// Bed size, mm (0 when not given).
     pub width: f64,
     pub height: f64,
+    /// Z travel, mm (0 when not given).
+    pub depth: f64,
+    /// The fastest each axis moves, X, Y, Z, mm/min (0 when not given): rapids run at it and
+    /// no feed may pass it: the controller's max rate (velocity in Mach3).
+    pub max_rate: [f64; 3],
+    /// Each axis's acceleration, X, Y, Z, mm/s² (0 when not given).
+    pub acceleration: [f64; 3],
+    /// The spindle's slowest and fastest speed, rpm (0 when not given).
+    pub spindle: [f64; 2],
     /// Show the bed size in inches.
     pub inches: bool,
     /// The associated posts by name (`POST_NAME`), in the order shown.
@@ -238,6 +247,10 @@ mod tests {
         let mut m = Machines::default();
         m.add();
         m.machines[0].width = 1220.0;
+        m.machines[0].depth = 80.0;
+        m.machines[0].max_rate = [5000.0, 5000.0, 1500.0];
+        m.machines[0].acceleration = [500.0, 500.0, 200.0];
+        m.machines[0].spindle = [8000.0, 24000.0];
         m.save(&path).unwrap();
         assert_eq!(Machines::load(&path), m);
         let _ = std::fs::remove_file(&path);
