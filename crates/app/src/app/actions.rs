@@ -391,6 +391,7 @@ impl CutCraftApp {
             .map(EntityId)
             .ok();
         self.start_command("orientate_3d_model");
+        self.view = View::ThreeD;
         if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
             form.params = source.settings;
             form.params["file"] = Value::from(path.display().to_string());

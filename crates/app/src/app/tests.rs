@@ -3343,3 +3343,23 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
     assert_eq!(form.params["size"]["width"], 300.0);
     assert_eq!(form.params["size"]["thickness"], 12.0);
 }
+
+#[test]
+fn importing_a_model_shows_the_3d_view() {
+    let mut h = Harness::new();
+    h.app.view = View::TwoD;
+    let file = pyramid_stl("to-3d");
+    h.app.import_file(&file);
+    assert!(h.app.view == View::ThreeD, "placed in 3D, shown there");
+    // and again from its file
+    let form = h.app.form.as_mut().unwrap();
+    form.dirty = true;
+    h.frame(vec![]);
+    h.app.form = None;
+    h.app.view = View::TwoD;
+    let id = *h.app.doc.components.keys().next().unwrap();
+    h.app
+        .invoke(&h.ctx, &format!("{}{}", gui::REIMPORT_MODEL, id.0));
+    assert!(h.app.view == View::ThreeD, "a re-import too");
+    let _ = std::fs::remove_file(file);
+}

@@ -243,6 +243,8 @@ impl CutCraftApp {
             .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
         if stl {
             self.start_command("orientate_3d_model");
+            // the model is placed in 3D, so it is shown there
+            self.view = View::ThreeD;
             if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
                 form.params["file"] = Value::from(path.display().to_string());
             }
