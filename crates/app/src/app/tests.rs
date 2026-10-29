@@ -2930,10 +2930,13 @@ fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged(
     h.app.import_file(&file);
     let form = h.app.form.as_mut().unwrap();
     form.params["orientation"]["rotation"] = Value::from(90.0);
+    form.params["size"]["x"] = Value::from(50.0);
     form.dirty = true;
     h.frame(vec![]);
     h.app.form = None;
     let (&id, k) = h.app.doc.components.iter().next().unwrap();
+    let width = |k: &cut_craft_core::component::Component| k.cell * k.columns as f64;
+    assert!((width(k) - 50.0).abs() <= k.cell, "{}", width(k));
     let source = k.source.clone().expect("the import remembers its file");
     assert_eq!(source.path, file);
     let again = format!("{}{}", gui::REIMPORT_MODEL, id.0);
@@ -2944,12 +2947,17 @@ fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged(
     h.app.invoke(&h.ctx, &again);
     let form = h.app.form.as_ref().expect("Orientate 3D Model again");
     assert_eq!(form.params["orientation"]["rotation"], 90.0);
+    assert_eq!(form.params["size"]["x"], 50.0, "at the size it was made");
     assert_eq!(form.drawn, Some(id));
+    // most often to scale it again
     let form = h.app.form.as_mut().unwrap();
     form.params["orientation"]["rotation"] = Value::from(0.0);
+    form.params["size"]["x"] = Value::from(25.0);
     form.dirty = true;
     h.frame(vec![]);
     assert_eq!(h.app.doc.components.len(), 1, "replaced, not added");
+    let k = h.app.doc.components.values().next().unwrap();
+    assert!((width(k) - 25.0).abs() <= k.cell, "{}", width(k));
     h.app.form = None;
     // changed, it is refused
     let mut changed = std::fs::read(&file).unwrap();
