@@ -520,6 +520,49 @@ impl Change {
             .collect()
     }
 
+    /// `self` with the toolpaths it leaves out of date marked stale: those made from a vector
+    /// it changes or removes, and, when it changes the model, those that cut the model. The
+    /// marks are edits of the change, so undoing it undoes them.
+    #[must_use]
+    pub fn marking_stale(mut self, doc: &Document) -> Self {
+        let mut model = false;
+        let mut vectors = std::collections::BTreeSet::new();
+        let mut made = std::collections::BTreeSet::new();
+        for edit in &self.edits {
+            match edit {
+                Edit::Replace { id, .. } | Edit::Remove { id, .. } => {
+                    vectors.insert(*id);
+                }
+                Edit::AddComponent { .. }
+                | Edit::RemoveComponent { .. }
+                | Edit::ReplaceComponent { .. }
+                | Edit::SetLevel { .. } => model = true,
+                Edit::AddToolpath { id, .. }
+                | Edit::RemoveToolpath { id, .. }
+                | Edit::ReplaceToolpath { id, .. } => {
+                    made.insert(*id);
+                }
+                _ => {}
+            }
+        }
+        for (&id, toolpath) in &doc.toolpaths {
+            let outdated = (model && toolpath.reads_model())
+                || toolpath.vectors.iter().any(|v| vectors.contains(v));
+            if outdated && !toolpath.stale && !made.contains(&id) {
+                let after = Toolpath {
+                    stale: true,
+                    ..toolpath.clone()
+                };
+                self.edits.push(Edit::ReplaceToolpath {
+                    id,
+                    before: Box::new(toolpath.clone()),
+                    after: Box::new(after),
+                });
+            }
+        }
+        self
+    }
+
     /// The job this change sets, if it sets one: lets a view show a job before it is applied.
     pub fn job(&self) -> Option<&Job> {
         self.edits.iter().rev().find_map(|e| match e {
@@ -1467,6 +1510,7 @@ impl History {
         if change.is_empty() {
             return Ok(());
         }
+        let change = change.marking_stale(doc);
         doc.apply(&change)?;
         self.undo.push(change);
         self.redo.clear();

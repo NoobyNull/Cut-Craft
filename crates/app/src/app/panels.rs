@@ -1123,9 +1123,18 @@ impl CutCraftApp {
         egui::ScrollArea::vertical().show(ui, |ui| {
             for (&id, toolpath) in &self.doc.toolpaths {
                 let selected = self.selected_toolpath == Some(id);
-                let label = ui
-                    .selectable_label(selected, &toolpath.name)
-                    .on_hover_text(&toolpath.tool.name);
+                let label = if toolpath.stale {
+                    let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
+                        .color(ui.visuals().warn_fg_color);
+                    ui.selectable_label(selected, name).on_hover_text(format!(
+                        "{}\nOut of date: what it was made from has changed since. \
+                         Recalculate it.",
+                        toolpath.tool.name
+                    ))
+                } else {
+                    ui.selectable_label(selected, &toolpath.name)
+                        .on_hover_text(&toolpath.tool.name)
+                };
                 if label.clicked() {
                     self.selected_toolpath = if selected { None } else { Some(id) };
                 }

@@ -1109,6 +1109,7 @@ begin FOOTER
                 ..Tool::default()
             },
             power: vec![],
+            stale: false,
             vectors: vec![],
             moves: vec![
                 mv(MoveKind::Rapid, 0.0, 0.0, 5.0),

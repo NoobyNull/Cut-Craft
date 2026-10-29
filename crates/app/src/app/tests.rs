@@ -2905,7 +2905,7 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     );
     // on the bed, and Model Size has the height
     let (lo, _) = h.app.doc.components[&k].height_range().unwrap();
-    assert!(lo >= 0.0 && lo < 1.0, "from the bed up: {lo}");
+    assert!((0.0..1.0).contains(&lo), "from the bed up: {lo}");
     let size = &h.app.form.as_ref().unwrap().params["size"];
     assert!((size["z"].as_f64().unwrap() - 5.0).abs() < 1e-6, "{size}");
     // the ratio locked, a height typed sizes all three
@@ -2924,6 +2924,7 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
 }
 
 #[test]
+#[expect(clippy::cast_precision_loss)]
 fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged() {
     let mut h = Harness::new();
     let file = pyramid_stl("again");

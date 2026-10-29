@@ -392,6 +392,7 @@ mod tests {
             }],
             visible: true,
             power: vec![],
+            stale: false,
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

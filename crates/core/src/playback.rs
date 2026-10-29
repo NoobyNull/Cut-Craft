@@ -176,6 +176,7 @@ mod tests {
             ],
             visible: true,
             power: vec![],
+            stale: false,
         };
         (Material::new(&job, 100), toolpath)
     }
