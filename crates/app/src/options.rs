@@ -322,6 +322,41 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub default_job: Option<cut_craft_core::document::Job>,
+    /// The favourite tools of the Design and Toolpaths tabs, and whether each shows only
+    /// them (right-click the tab).
+    #[serde(default)]
+    #[schemars(skip)]
+    pub favourites: Favourites,
+}
+
+/// Each tool page's favourite tools, in the order shown, and whether it shows only those.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Favourites {
+    #[serde(default)]
+    pub design: Vec<String>,
+    #[serde(default)]
+    pub toolpaths: Vec<String>,
+    #[serde(default)]
+    pub design_only: bool,
+    #[serde(default)]
+    pub toolpaths_only: bool,
+}
+
+impl Favourites {
+    /// `page`'s favourites and whether it shows only them.
+    pub fn of(&self, page: crate::pages::Page) -> (&[String], bool) {
+        match page {
+            crate::pages::Page::Design => (&self.design, self.design_only),
+            crate::pages::Page::Toolpaths => (&self.toolpaths, self.toolpaths_only),
+        }
+    }
+
+    pub fn of_mut(&mut self, page: crate::pages::Page) -> (&mut Vec<String>, &mut bool) {
+        match page {
+            crate::pages::Page::Design => (&mut self.design, &mut self.design_only),
+            crate::pages::Page::Toolpaths => (&mut self.toolpaths, &mut self.toolpaths_only),
+        }
+    }
 }
 
 impl Default for Options {
@@ -361,6 +396,7 @@ impl Default for Options {
             appearance: Appearance::default(),
             advanced: Advanced::default(),
             default_job: None,
+            favourites: Favourites::default(),
         }
     }
 }

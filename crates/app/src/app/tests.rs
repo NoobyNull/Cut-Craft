@@ -3362,3 +3362,55 @@ fn a_crash_last_time_opens_its_report_with_the_crash_log() {
     );
     assert!(h.text_at("Send the log").is_some());
 }
+
+#[test]
+fn the_design_tab_shows_its_favourites_or_all_its_tools() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.pages.open(Page::Design);
+    h.frame(vec![]);
+    let first_group = h.app.toolbar.groups[0].name;
+    assert!(
+        h.text_at(first_group).is_some(),
+        "all the tools to start with"
+    );
+    // the tab's menu: all tools ticked
+    let menu = gui::favourites_menu(Page::Design, false);
+    assert_eq!(menu[0].name, "Show Favourites");
+    assert!(menu[1].is_checked);
+    // right-clicked tools added, then one moved earlier
+    let tool = |id: &str, what: &str| format!("{}design:{what}:{id}", gui::FAVOURITE);
+    assert_eq!(
+        gui::tool_menu(Page::Design, "draw_circle", false, false)[0].action,
+        tool("draw_circle", "add")
+    );
+    h.app.invoke(&h.ctx, &tool("draw_circle", "add"));
+    h.app.invoke(&h.ctx, &tool("draw_rectangle", "add"));
+    h.app.invoke(&h.ctx, &tool("draw_rectangle", "earlier"));
+    assert_eq!(
+        h.app.options.favourites.design,
+        ["draw_rectangle", "draw_circle"]
+    );
+    assert!(
+        h.app.options.favourites.toolpaths.is_empty(),
+        "each tab its own"
+    );
+    h.app
+        .invoke(&h.ctx, &format!("{}design:true", gui::FAVOURITES_ONLY));
+    h.frame(vec![]);
+    assert!(
+        !h.texts_at("Design ★").is_empty(),
+        "the tab says it is filtered"
+    );
+    assert!(h.text_at("Favourites").is_some());
+    assert!(h.text_at(first_group).is_none(), "only the favourites");
+    // taken off them all, the way back is offered
+    h.app.invoke(&h.ctx, &tool("draw_circle", "remove"));
+    h.app.invoke(&h.ctx, &tool("draw_rectangle", "remove"));
+    h.frame(vec![]);
+    let back = h.text_at("Show All Tools").expect("a way back");
+    h.click(back, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(!h.app.options.favourites.design_only);
+    assert!(h.text_at(first_group).is_some());
+}

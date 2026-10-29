@@ -1005,14 +1005,10 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
 
 /// Tabs down a side of the window, text reading downwards as Aspire's side tabs do; the tab
 /// hovered and the tab clicked this frame.
-fn side_tabs(
-    ui: &mut egui::Ui,
-    labels: &[&str],
-    current: Option<usize>,
-) -> (Option<usize>, Option<usize>) {
+fn side_tabs(ui: &mut egui::Ui, labels: &[&str], current: Option<usize>) -> Vec<egui::Response> {
     let font = egui::TextStyle::Button.resolve(ui.style());
     let pad = ui.spacing().button_padding;
-    let (mut hovered, mut clicked) = (None, None);
+    let mut tabs = vec![];
     for (i, label) in labels.iter().enumerate() {
         let galley = ui.painter().layout_no_wrap(
             (*label).to_owned(),
@@ -1038,14 +1034,9 @@ fn side_tabs(
             .with_angle(std::f32::consts::FRAC_PI_2);
         shape.override_text_color = Some(look.text_color());
         ui.painter().add(shape);
-        if response.hovered() {
-            hovered = Some(i);
-        }
-        if response.clicked() {
-            clicked = Some(i);
-        }
+        tabs.push(response);
     }
-    (hovered, clicked)
+    tabs
 }
 
 /// A path as the menus and start page list it: just the file name.
