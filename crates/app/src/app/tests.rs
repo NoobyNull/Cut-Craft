@@ -3486,3 +3486,23 @@ fn a_moving_3d_view_keeps_full_detail_unless_simplifying_is_on() {
     assert!(moving(false), "full detail while it turns, by default");
     assert!(!moving(true), "coarser while it turns, when asked");
 }
+
+#[test]
+fn importing_a_model_shows_the_3d_view() {
+    let mut h = Harness::new();
+    h.app.view = View::TwoD;
+    let file = pyramid_stl("to-3d");
+    h.app.import_file(&file);
+    assert!(h.app.view == View::ThreeD, "placed in 3D, shown there");
+    // and again from its file
+    let form = h.app.form.as_mut().unwrap();
+    form.dirty = true;
+    h.frame(vec![]);
+    h.app.form = None;
+    h.app.view = View::TwoD;
+    let id = *h.app.doc.components.keys().next().unwrap();
+    h.app
+        .invoke(&h.ctx, &format!("{}{}", gui::REIMPORT_MODEL, id.0));
+    assert!(h.app.view == View::ThreeD, "a re-import too");
+    let _ = std::fs::remove_file(file);
+}
