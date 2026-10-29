@@ -881,7 +881,8 @@ impl CutCraftApp {
         fit: egui::Rect,
     ) -> egui::Mesh {
         let since = ui.input(|i| i.time) - self.moved_3d;
-        if self.playback.is_none() && since >= SETTLE_SECONDS {
+        let simplify = self.options.view_3d.simplify_while_moving;
+        if self.playback.is_none() && (!simplify || since >= SETTLE_SECONDS) {
             return self.fine_mesh(orbit, framing, look, fit);
         }
         ui.ctx()

@@ -40,6 +40,11 @@ pub struct View3d {
     #[serde(default)]
     #[schemars(title = "Anti-aliasing mode")]
     pub anti_aliasing: AntiAliasing,
+    /// Draw the model coarser while the view turns or zooms, and at full detail once it is
+    /// still: smoother on a slow computer, blockier while moving (not one of Aspire's)
+    #[serde(default)]
+    #[schemars(title = "Simplify the model while the view moves")]
+    pub simplify_while_moving: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -375,6 +380,7 @@ impl Default for Options {
                 gradient_background_color: background_bottom(),
                 image_file_path: String::new(),
                 anti_aliasing: AntiAliasing::default(),
+                simplify_while_moving: false,
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,
