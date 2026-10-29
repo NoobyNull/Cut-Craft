@@ -882,6 +882,7 @@ impl CutCraftApp {
                 typed_size: [None; 3],
                 model: None,
                 applied: None,
+                undo_from: self.history.undo_depth(),
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -2227,11 +2228,27 @@ impl CutCraftApp {
             ("Apply", "Close")
         };
         let job_setup = open.id == "job_setup";
-        let (mut apply, mut close, mut default) = (false, false, false);
+        // what the form has done that Cancel would take back
+        let done = self.history.undo_depth() > open.undo_from;
+        let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
         ui.horizontal(|ui| {
             apply = ui.button(apply_label).clicked();
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                close = ui.button(close_label).clicked();
+                close = ui
+                    .button(close_label)
+                    .on_hover_text(if new_job {
+                        "Leave the job as it was"
+                    } else {
+                        "Close, keeping what was applied"
+                    })
+                    .clicked();
+                if !new_job {
+                    cancel = ui
+                        .add_enabled(done, egui::Button::new("Cancel"))
+                        .on_hover_text("Undo what this tool did since it opened, and close it")
+                        .on_disabled_hover_text("Nothing applied to take back")
+                        .clicked();
+                }
                 if job_setup {
                     default = ui
                         .button("Set as Default")
@@ -2242,6 +2259,10 @@ impl CutCraftApp {
         });
         if default {
             self.job_setup_default();
+            return;
+        }
+        if cancel {
+            self.cancel_form();
             return;
         }
         match (new_job, apply, close) {
@@ -2261,6 +2282,16 @@ impl CutCraftApp {
             }
             _ => {}
         }
+    }
+
+    /// Cancel on a tool's form: everything done since the form opened is undone (and can be
+    /// redone), and the form closes.
+    pub(super) fn cancel_form(&mut self) {
+        let Some(form) = self.form.take() else { return };
+        while self.history.undo_depth() > form.undo_from && self.history.undo(&mut self.doc) {}
+        self.pages.done_with(form.page);
+        self.status
+            .set_message(&format!("{} cancelled", form.label));
     }
 
     pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {

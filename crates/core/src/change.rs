@@ -1540,6 +1540,12 @@ impl History {
         !self.undo.is_empty()
     }
 
+    /// How many changes can be undone: where to undo back to, to take back what was done
+    /// since.
+    pub fn undo_depth(&self) -> usize {
+        self.undo.len()
+    }
+
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
