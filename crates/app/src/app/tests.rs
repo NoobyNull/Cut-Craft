@@ -3343,3 +3343,22 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
     assert_eq!(form.params["size"]["width"], 300.0);
     assert_eq!(form.params["size"]["thickness"], 12.0);
 }
+
+#[test]
+fn a_crash_last_time_opens_its_report_with_the_crash_log() {
+    let mut h = Harness::new();
+    h.app.reporter.report_crash(
+        "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\n\
+         index out of bounds\n\nBacktrace:\n..."
+            .into(),
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.reporter.is_open(), "Report a Bug opens by itself");
+    assert!(
+        h.text_at("Crash: panicked at crates/app/src/view3d.rs:9:9: index out of bounds")
+            .is_some(),
+        "titled with the panic"
+    );
+    assert!(h.text_at("Send the log").is_some());
+}

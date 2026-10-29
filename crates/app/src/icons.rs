@@ -124,7 +124,7 @@ impl Icons {
                     Ok(bytes) if bitmap => with_alpha(&bytes).unwrap_or(bytes).into(),
                     Ok(bytes) => bytes.into(),
                     Err(e) => {
-                        eprintln!("icon {}: {e}", path.display());
+                        log::warn!("icon {}: {e}", path.display());
                         continue;
                     }
                 },

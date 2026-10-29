@@ -1956,6 +1956,7 @@ dependencies = [
  "fmt-import-stl",
  "fmt-import-svg",
  "image",
+ "log",
  "rfd",
  "schemars",
  "serde",
@@ -1971,6 +1972,7 @@ dependencies = [
  "chrono",
  "eframe",
  "image",
+ "log",
  "serde_json",
 ]
 

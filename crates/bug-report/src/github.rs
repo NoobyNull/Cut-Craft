@@ -12,6 +12,8 @@ use std::process::{Command, Stdio};
 const PICTURE_BRANCH: &str = "bug-reports";
 /// The label issues get, when the repository has it.
 const LABEL: &str = "bug";
+/// The log lines a new-issue address carries: addresses are short, and the rest is kept.
+const URL_LOG_LINES: usize = 30;
 
 /// Runs `gh` with these arguments and this standard input; its trimmed output, or why it
 /// failed.
@@ -26,7 +28,11 @@ pub struct Report {
     pub at: (f32, f32),
     /// The named parts of the window there, outermost first, each with its source line.
     pub regions: Vec<(String, String)>,
+    /// The widget clicked: its kind and label, then the labelled parts it is in.
+    pub widget: Option<String>,
     pub state: String,
+    /// The log, or a crash log; empty when not sent.
+    pub log: String,
     /// The window, as a PNG.
     pub screenshot: Option<Vec<u8>>,
     pub pictures: Vec<PathBuf>,
@@ -55,10 +61,15 @@ pub fn png(image: &egui::ColorImage) -> Result<Vec<u8>, String> {
 /// GitHub's new-issue page for `repo` with the report filled in, for when `gh` is not there
 /// to send it; the pictures cannot go this way.
 pub fn issue_url(repo: &str, report: &Report) -> String {
+    let lines: Vec<&str> = report.log.lines().collect();
+    let short = Report {
+        log: lines[lines.len().saturating_sub(URL_LOG_LINES)..].join("\n"),
+        ..report.clone()
+    };
     format!(
         "https://github.com/{repo}/issues/new?labels={LABEL}&title={}&body={}",
         percent(&report.title),
-        percent(&compose(report, &[]))
+        percent(&compose(&short, &[]))
     )
 }
 
@@ -121,9 +132,17 @@ pub fn compose(report: &Report, pictures: &[(String, String)]) -> String {
     for (name, at) in &report.regions {
         let _ = writeln!(body, "- {name} — `{at}`");
     }
+    if let Some(widget) = &report.widget {
+        let _ = write!(body, "\nClicked: {widget}\n");
+    }
     body.push_str("\n### State\n\n```\n");
     body.push_str(report.state.trim());
     body.push_str("\n```\n");
+    if !report.log.trim().is_empty() {
+        body.push_str("\n### Log\n\n<details><summary>Log</summary>\n\n```\n");
+        body.push_str(report.log.trim());
+        body.push_str("\n```\n\n</details>\n");
+    }
     if !pictures.is_empty() {
         body.push_str("\n### Pictures\n\n");
         for (name, url) in pictures {
@@ -302,10 +321,28 @@ mod tests {
                 "Tool Database".into(),
                 "crates/tool-database/src/manager.rs:120".into(),
             )],
+            widget: Some("Button \"Apply\" in Window \"Tool Database\"".into()),
             state: "Screen: Job".into(),
+            log: "12:00:00.000 WARN  wgpu: device lost".into(),
             screenshot: Some(vec![1, 2, 3]),
             pictures: vec![],
         }
+    }
+
+    #[test]
+    fn the_issue_names_the_widget_clicked_and_carries_the_log() {
+        let body = compose(&report(), &[]);
+        assert!(body.contains("Clicked: Button \"Apply\" in Window \"Tool Database\""));
+        assert!(body.contains("<summary>Log</summary>"));
+        assert!(body.contains("wgpu: device lost"));
+        let quiet = Report {
+            log: String::new(),
+            ..report()
+        };
+        assert!(
+            !compose(&quiet, &[]).contains("### Log"),
+            "no log, no section"
+        );
     }
 
     #[test]
