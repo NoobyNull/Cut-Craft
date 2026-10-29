@@ -2,6 +2,7 @@
 //! document, its undo history and the command registry.
 
 mod actions;
+mod help;
 mod layouts;
 mod panels;
 #[path = "screenshots.rs"]
@@ -177,6 +178,9 @@ enum Info {
     Licenses,
     /// Toolpath Summary: estimated machining times.
     Summary,
+    /// Help Contents (also a page's ?, and F1) on a page: `contents`, a tool page
+    /// (`design`, `toolpaths`) or a tool's id.
+    Help(&'static str),
 }
 
 /// Toolpath Summary's rapid rate (mm/min) and scale factor until the user changes them.
@@ -185,8 +189,10 @@ const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-const THIRD_PARTY: [(&str, &str); 17] = [
+const THIRD_PARTY: [(&str, &str); 19] = [
     ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
+    ("egui_commonmark", "MIT or Apache-2.0"),
+    ("pulldown-cmark", "MIT"),
     ("glam", "MIT or Apache-2.0"),
     ("i_overlay", "MIT or Apache-2.0"),
     ("md-5", "MIT or Apache-2.0"),
@@ -498,6 +504,8 @@ struct CutCraftApp {
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// An open Help window.
     info: Option<Info>,
+    /// Help Contents' rendered pages and the `help:` links it watches.
+    help_cache: egui_commonmark::CommonMarkCache,
     /// Toolpath Summary's rapid rate (mm/min) and scale factor.
     summary: (f64, f64),
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.

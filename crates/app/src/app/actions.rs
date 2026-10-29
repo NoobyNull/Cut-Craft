@@ -59,6 +59,7 @@ impl CutCraftApp {
             ),
             clipboard: vec![],
             info: None,
+            help_cache: egui_commonmark::CommonMarkCache::default(),
             summary: SUMMARY_DEFAULTS,
             stroke: Vec::new(),
             snap: cut_craft_core::snap::SnapOptions::default(),
@@ -292,6 +293,7 @@ impl CutCraftApp {
             | "third_party_licenses"
             | "toolpath_summary"
             | "about_cut_craft"
+            | "help_contents"
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
             // the Select tool: put away whatever tool is in hand
@@ -1651,6 +1653,10 @@ impl CutCraftApp {
         }
         self.nudge(ctx);
         ctx.input(|i| {
+            if i.key_pressed(Key::F1) {
+                let topic = self.form.as_ref().map_or("contents", |f| f.id);
+                self.info = Some(Info::Help(topic));
+            }
             if i.key_pressed(Key::F2) {
                 self.view = View::TwoD;
             }
@@ -1871,7 +1877,7 @@ impl CutCraftApp {
     /// A page's title with its push-pin and Aspire's Switch Layout button.
     pub(super) fn page_header(&mut self, ui: &mut egui::Ui, page: Page, title: &str) {
         let row = ui.spacing().interact_size.y;
-        let (mut pin, mut switch) = (false, false);
+        let (mut pin, mut switch, mut help) = (false, false, false);
         ui.horizontal(|ui| {
             ui.strong(title);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -1888,6 +1894,7 @@ impl CutCraftApp {
                     .add(self.icon_button("view/interface_layout.png", "", "Switch Layout", row))
                     .on_hover_text("Switch Layout (F11 designing, F12 machining)")
                     .clicked();
+                help = ui.button("?").on_hover_text("Help (F1)").clicked();
             });
         });
         ui.separator();
@@ -1897,6 +1904,12 @@ impl CutCraftApp {
         }
         if switch {
             self.pages.switch_layout();
+        }
+        if help {
+            self.info = Some(Info::Help(match page {
+                Page::Design => "design",
+                Page::Toolpaths => "toolpaths",
+            }));
         }
     }
 
@@ -2329,12 +2342,17 @@ impl CutCraftApp {
     /// The Help windows: About, Keyboard Shortcuts, Third Party Licenses.
     pub(super) fn info_window(&mut self, ctx: &egui::Context) {
         let Some(info) = self.info else { return };
+        if let Info::Help(topic) = info {
+            self.help_window(ctx, topic);
+            return;
+        }
         let mut open = true;
         let title = match info {
-            Info::About => "About Cut Craft",
-            Info::Shortcuts => "Keyboard Shortcuts",
-            Info::Licenses => "Third Party Licenses",
-            Info::Summary => "Toolpath Summary",
+            Info::About => "About Cut Craft".to_owned(),
+            Info::Shortcuts => "Keyboard Shortcuts".to_owned(),
+            Info::Licenses => "Third Party Licenses".to_owned(),
+            Info::Summary => "Toolpath Summary".to_owned(),
+            Info::Help(_) => unreachable!("returned above"),
         };
         let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
             let mut rows: Vec<(String, String)> = self
@@ -2367,8 +2385,9 @@ impl CutCraftApp {
             .collect();
         let summary = &mut self.summary;
         let units = self.doc.job.units;
-        let (id, size) = (egui::Id::unique(("info", title)), dialog_size(ctx));
-        cut_craft_bug_report::dialog(ctx, id, title, size, &mut open, |ui| match info {
+        let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
+        cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
+            Info::Help(_) => unreachable!("returned above"),
             Info::Summary => summary_table(ui, &times, summary, units),
             Info::About => {
                 ui.heading("Cut Craft");
