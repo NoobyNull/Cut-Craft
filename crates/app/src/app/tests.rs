@@ -2980,3 +2980,22 @@ fn a_vector_behind_the_model_is_not_drawn_over_it() {
         "from low on the right the block hides it"
     );
 }
+
+#[test]
+fn importing_a_model_while_setting_up_a_new_job_keeps_the_job_s_pages() {
+    // issue #17: New, Import Component / 3D Model, then Close left the new-job screen bare
+    let mut h = Harness::at_start();
+    h.app.invoke(&h.ctx, "new");
+    assert_eq!(h.app.screen, Screen::NewJob);
+    let file = pyramid_stl("new-job-import");
+    h.app.import_file(&file);
+    assert_eq!(h.app.screen, Screen::Job, "the job is set up as it stood");
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("orientate_3d_model"));
+    h.app.form = None;
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Design").is_some(),
+        "the Design page's tab is back once the form closes"
+    );
+    let _ = std::fs::remove_file(file);
+}
