@@ -50,6 +50,7 @@ cmd-copy-to-other-side = { path = "../commands/copy-to-other-side" }
 cmd-swap-sides = { path = "../commands/swap-sides" }
 cmd-keep-out-zones = { path = "../commands/keep-out-zones" }
 cmd-document-variables = { path = "../commands/document-variables" }
+cmd-materials = { path = "../commands/materials" }
 cmd-edit-picture = { path = "../commands/edit-picture" }
 cmd-crop-bitmap = { path = "../commands/crop-bitmap" }
 cmd-duplicate-toolpath = { path = "../commands/duplicate-toolpath" }

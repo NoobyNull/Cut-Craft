@@ -1048,6 +1048,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-materials"
+version = "0.3.0"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-merged-toolpath"
 version = "0.3.0"
 dependencies = [
@@ -1839,6 +1848,7 @@ dependencies = [
  "cmd-level-properties",
  "cmd-make-start-point",
  "cmd-material-setup",
+ "cmd-materials",
  "cmd-merged-toolpath",
  "cmd-mirror",
  "cmd-moulding-toolpath",

@@ -3013,3 +3013,53 @@ fn another_design_tab_closes_the_design_form() {
     h.app.set_design_tab(layers);
     assert!(h.app.form.is_none(), "the Layers tab shows, not the form");
 }
+
+#[test]
+fn toolpaths_materials_opens_the_material_library() {
+    let mut h = Harness::new();
+    let item = h
+        .app
+        .menus
+        .items()
+        .into_iter()
+        .find(|i| i.name == "Materials...")
+        .map(|i| i.action.clone())
+        .expect("Toolpaths ▸ Materials...");
+    h.app.invoke(&h.ctx, &item);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("materials"));
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.page),
+        Some(Page::Toolpaths),
+        "beside Material Setup"
+    );
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Rest Machining").is_none(),
+        "it cuts nothing, so nothing to rest machine"
+    );
+    let walnut = serde_json::json!({ "material": "walnut" });
+    h.app.apply("materials", &walnut).unwrap();
+    assert_ne!(
+        h.app.doc.job.colour,
+        cut_craft_core::document::Job::default().colour
+    );
+}
+
+#[test]
+fn materials_shows_its_form_in_a_job_and_waits_for_one_on_the_start_page() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    h.app.invoke(&h.ctx, "materials");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Pine").is_some(),
+        "the Toolpaths page flies out with it"
+    );
+    let start = Harness::at_start();
+    assert!(!start.app.available("materials"), "no job to colour");
+    assert!(
+        !start.app.available("wrapped_fluting_layout"),
+        "nor for a gadget"
+    );
+}

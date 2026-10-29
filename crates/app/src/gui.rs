@@ -195,7 +195,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
 /// The Toolpaths panel, laid out the same way.
 fn toolpath_groups() -> Vec<ToolGroup> {
     vec![
-        group("Material", &["material_setup"]),
+        group("Material", &["material_setup", "materials"]),
         group(
             "Toolpath Operations",
             &[
@@ -1245,10 +1245,8 @@ impl MenuSystem {
                 ),
                 menu("Edit", vec![i("Options")]),
                 same("Machine"),
-                menu(
-                    "Toolpaths",
-                    vec![i("Materials..."), sep(), i("Tool Database...")],
-                ),
+                // Materials colours a job, so it is in the job's Toolpaths menu only
+                menu("Toolpaths", vec![i("Tool Database...")]),
                 same("Gadgets"),
                 same("Help"),
             ],
