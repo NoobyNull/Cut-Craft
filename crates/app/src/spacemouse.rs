@@ -79,6 +79,10 @@ pub fn button_view(number: i32) -> Option<ButtonView> {
 
 /// What the SpaceMouse did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    not(unix),
+    allow(dead_code, reason = "no spacenavd to read it from; the tests use it")
+)]
 pub enum Input {
     /// The cap's push (x right, y up, z into the screen) and twist about those axes, each
     /// about ±350 at full deflection, held for `period` milliseconds.
@@ -93,6 +97,10 @@ pub enum Input {
     },
 }
 
+#[cfg_attr(
+    not(unix),
+    allow(dead_code, reason = "no spacenavd to read it from; the tests use it")
+)]
 impl Input {
     /// An event as spacenavd sends it: its type (0 motion, 1 press, 2 release), then a
     /// motion's x, y, z, rx, ry, rz and period, or a button's number.
