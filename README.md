@@ -117,6 +117,18 @@ size it as they change.
 
 ![Importing a 3D model](docs/screenshots/08-import-3d-model.png)
 
+The window can be laid out three ways (**Options ▸ General ▸ Window layout**, or **View ▸
+Window Layout**). Classic is Aspire's, above. Rail puts one icon per tool group down the
+left; clicking one lists that group's tools by name, and the inspector on the right holds
+the open tool's form or the sheets, layers, components, clipart and toolpath list.
+
+![The Rail layout](docs/screenshots/09-rail-layout.png)
+
+Ribbon puts Design, Model and Toolpaths tabs of tool groups across the top, the browser on
+the left and the open form on the right. **Ctrl+K** finds a tool by name in any layout.
+
+![The Ribbon layout](docs/screenshots/10-ribbon-layout.png)
+
 These pictures are made by the app itself and can be made again at any time (see
 [Screenshots](#screenshots)).
 

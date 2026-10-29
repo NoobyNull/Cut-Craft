@@ -213,6 +213,11 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "File dialog default")]
     pub file_dialog_default: FileDialogDefault,
+    /// How the window is arranged: Aspire's pages and side tabs, a rail of tool groups with
+    /// an inspector, or a ribbon of tabs over the view
+    #[serde(default)]
+    #[schemars(title = "Window layout")]
+    pub layout: WindowLayout,
 }
 
 /// Settings only some desktops need, listed only on those (not one of Aspire's).
@@ -260,6 +265,19 @@ impl Theme {
             Self::System => egui::ThemePreference::System,
         }
     }
+}
+
+/// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowLayout {
+    /// Aspire's: Design page left, Toolpaths page right, side tabs
+    #[default]
+    Classic,
+    /// A rail of tool groups on the left opening a list of tools; an inspector on the right
+    Rail,
+    /// Tabs of tool groups across the top; the browser left, the form right
+    Ribbon,
 }
 
 // ponytail: Aspire's third choice, a folder remembered for each kind of operation, is left out
@@ -328,6 +346,7 @@ impl Default for Options {
                     .expect("a small count"),
                 preload_icons: on(),
                 file_dialog_default: FileDialogDefault::default(),
+                layout: WindowLayout::default(),
             },
             confirmations: Confirmations::default(),
             appearance: Appearance::default(),
@@ -345,12 +364,14 @@ impl Options {
             .unwrap_or_default()
     }
 
-    pub fn save(&self) -> Result<(), String> {
-        let Some(path) = path() else {
-            return Ok(());
-        };
+    /// Where the options are kept, when there is a config folder.
+    pub fn path() -> Option<PathBuf> {
+        path()
+    }
+
+    pub fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
         let json = serde_json::to_vec_pretty(self).expect("options serialise");
-        cut_craft_core::file::write_atomic(&path, &json)
+        cut_craft_core::file::write_atomic(path, &json)
             .map_err(|e| format!("{}: {e}", path.display()))
     }
 
@@ -381,6 +402,22 @@ fn path() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_window_layout_is_classic_unless_the_options_say_otherwise() {
+        assert_eq!(Options::default().general.layout, WindowLayout::Classic);
+        let mut o = Options::default();
+        o.general.layout = WindowLayout::Rail;
+        let text = serde_json::to_string(&o).unwrap();
+        assert!(text.contains("\"layout\":\"rail\""));
+        let back: Options = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.general.layout, WindowLayout::Rail);
+        // options saved before the setting existed
+        let mut old: serde_json::Value = serde_json::to_value(&o).unwrap();
+        old["general"].as_object_mut().unwrap().remove("layout");
+        let old: Options = serde_json::from_value(old).unwrap();
+        assert_eq!(old.general.layout, WindowLayout::Classic);
+    }
 
     #[test]
     fn the_defaults_leave_the_display_as_it_starts() {

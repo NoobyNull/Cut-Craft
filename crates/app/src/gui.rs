@@ -970,6 +970,8 @@ impl MenuSystem {
                         i("Paste in Place"),
                         k("Delete", "Del"),
                         sep(),
+                        k("Find Tool...", "Ctrl+K"),
+                        sep(),
                         sub(
                             "Selection",
                             vec![
@@ -1181,6 +1183,15 @@ impl MenuSystem {
                         k("Tile Windows Horizontal", "PgDn"),
                         k("Tile Windows Vertical", "PgUp"),
                         i("Cascade Windows"),
+                        sep(),
+                        sub(
+                            "Window Layout",
+                            vec![
+                                MenuItem::with_action("Classic (Aspire's pages)", "layout_classic"),
+                                MenuItem::with_action("Rail and Inspector", "layout_rail"),
+                                MenuItem::with_action("Ribbon", "layout_ribbon"),
+                            ],
+                        ),
                     ],
                 ),
                 menu(

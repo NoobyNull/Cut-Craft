@@ -30,6 +30,104 @@ fn cut_copy_and_paste_vectors() {
 }
 
 #[test]
+fn the_window_layout_menu_picks_and_ticks_a_layout() {
+    use crate::options::WindowLayout;
+    let mut h = Harness::new();
+    assert_eq!(h.app.layout_checked("layout_classic"), Some(true));
+    assert_eq!(h.app.layout_checked("zoom_box"), None);
+    assert!(h.app.available("layout_rail"));
+    h.app.invoke(&h.ctx, "layout_rail");
+    assert_eq!(h.app.options.general.layout, WindowLayout::Rail);
+    assert_eq!(h.app.layout_checked("layout_rail"), Some(true));
+    assert_eq!(h.app.layout_checked("layout_classic"), Some(false));
+    h.frame(vec![]);
+    assert!(h.text_at("Design").is_none(), "no Design page or side tab");
+    assert!(h.text_at("Sheets").is_some(), "the browser's tabs");
+}
+
+#[test]
+fn find_tool_lists_the_tools_whose_names_match() {
+    let mut h = Harness::new();
+    let names = |h: &Harness, text: &str| {
+        h.app
+            .search_matches(text)
+            .into_iter()
+            .map(|(_, label)| label)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(&h, "draw circ"), vec!["Draw Circle"]);
+    assert!(names(&h, "POCKET").contains(&"Pocket Toolpath".to_owned()));
+    assert!(
+        names(&h, "paste in place").is_empty(),
+        "nothing to paste yet"
+    );
+    h.app.invoke(&h.ctx, "find_tool");
+    assert_eq!(h.app.search.as_deref(), Some(""));
+    // a new window is laid out unseen on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Find Tool").is_some());
+    h.frame(vec![Event::Key {
+        key: Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    }]);
+    assert!(h.app.search.is_none(), "Escape closes it");
+}
+
+#[test]
+fn the_rail_layout_lists_a_groups_tools_by_name() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Rail;
+    h.frame(vec![]);
+    assert!(h.text_at("Draw Circle").is_none());
+    let groups = h.app.all_groups();
+    let create = groups
+        .iter()
+        .position(|g| g.name == "Create Vectors")
+        .unwrap();
+    h.app.rail_group = Some(create);
+    h.frame(vec![]);
+    let at = h.text_at("Draw Circle").expect("the group's tools by name");
+    h.frame(vec![Event::PointerMoved(at)]);
+    h.press(at, true, Modifiers::NONE);
+    h.press(at, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
+    assert!(
+        h.app.rail_group.is_none(),
+        "an unpinned list closes on a pick"
+    );
+    assert!(
+        h.text_at("Draw Circle").is_some(),
+        "the form in the inspector"
+    );
+    assert!(h.text_at("Apply").is_some());
+}
+
+#[test]
+fn the_ribbon_layout_shows_a_tabs_groups() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Ribbon;
+    h.frame(vec![]);
+    for name in ["Design", "Model", "Toolpaths", "Create Vectors", "Sheets"] {
+        assert!(h.text_at(name).is_some(), "{name}");
+    }
+    assert!(h.text_at("Toolpath Operations").is_none());
+    h.app.ribbon_tab = 2;
+    h.frame(vec![]);
+    assert!(h.text_at("Toolpath Operations").is_some());
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Pocket Toolpath").is_some(),
+        "the form's heading in the inspector"
+    );
+}
+
+#[test]
 fn notes_starting_with_a_dot_open_with_the_job() {
     let dir = std::env::temp_dir().join(format!("cut-craft-notes-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
