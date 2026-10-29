@@ -2,6 +2,7 @@
 //! document, its undo history and the command registry.
 
 mod actions;
+mod layouts;
 mod panels;
 #[path = "screenshots.rs"]
 mod screenshots;
@@ -31,6 +32,11 @@ use std::borrow::Cow;
 
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
+/// The browser's tabs in the Rail and Ribbon layouts: the design tabs' panels and the
+/// toolpath list under one row of tabs.
+const INSPECTOR_TABS: [&str; 5] = ["Sheets", "Layers", "Components", "Clipart", "Toolpaths"];
+/// The ribbon's tabs: the drawing, modeling and toolpath groups.
+const RIBBON_TABS: [&str; 3] = ["Design", "Model", "Toolpaths"];
 /// Actions the app handles itself rather than through a command.
 /// What the 3D view's fine mesh was made for: the model as at this revision, seen so.
 #[derive(Clone, Debug, PartialEq)]
@@ -78,7 +84,8 @@ const DROP_SHADE: f32 = 0.8;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 81] = [
+const BUILT_INS: [&str; 82] = [
+    "find_tool",
     "machine_configuration",
     "add_machine",
     "post_processor_management",
@@ -449,6 +456,18 @@ struct CutCraftApp {
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,
+    /// Find Tool (Ctrl+K): the text typed, while its window is open.
+    search: Option<String>,
+    /// The browser's tab (`INSPECTOR_TABS`) in the Rail and Ribbon layouts.
+    inspector_tab: usize,
+    /// The Rail layout's open group (an index into `all_groups`), and whether its list
+    /// stays open after a tool is picked.
+    rail_group: Option<usize>,
+    rail_pinned: bool,
+    /// The Ribbon layout's tab (`RIBBON_TABS`).
+    ribbon_tab: usize,
+    /// Where the options are saved; `None` keeps them in memory (tests).
+    options_path: Option<std::path::PathBuf>,
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
@@ -1059,6 +1078,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.load_tools();
             app.load_machines();
             app.options = crate::options::Options::load();
+            app.options_path = crate::options::Options::path();
             app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
