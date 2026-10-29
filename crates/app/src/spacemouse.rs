@@ -10,12 +10,13 @@ use std::sync::mpsc;
 
 /// The cap at full deflection, as spacenavd counts it.
 const FULL: f64 = 350.0;
-/// How far the view turns in a second at full deflection, radians.
-const TURN_PER_SECOND: f64 = std::f64::consts::PI;
+/// How far the view turns in a second at full deflection, radians: one and a half turns,
+/// so a light touch already moves it (Options ▸ SpaceMouse ▸ Speed scales all three).
+const TURN_PER_SECOND: f64 = 3.0 * std::f64::consts::PI;
 /// How far the view pans in a second at full deflection, points.
-const PAN_PER_SECOND: f64 = 800.0;
+const PAN_PER_SECOND: f64 = 2400.0;
 /// How many times the view zooms in a second at full deflection.
-const ZOOM_PER_SECOND: f64 = 4.0;
+const ZOOM_PER_SECOND: f64 = 8.0;
 
 /// The view after a motion of the cap held for `seconds`, as `settings` and `rotation` say:
 /// in Object mode the model follows the cap (pushed in, it goes away), in Camera mode the
@@ -180,6 +181,22 @@ mod tests {
             })
         );
         assert_eq!(Input::parse([7, 0, 0, 0, 0, 0, 0, 0]), None);
+    }
+
+    #[test]
+    fn free_rotation_is_the_default_and_a_light_touch_turns_the_view() {
+        let options = crate::options::Options::default();
+        assert_eq!(options.view_3d.rotation, crate::options::Rotation::Free);
+        // a tenth of full deflection for a tenth of a second: about a sixteenth of a turn
+        let (turned, _) = moved(
+            start(),
+            ([0; 3], [0, 35, 0]),
+            0.1,
+            &options.space_mouse,
+            options.view_3d.rotation.view(),
+        );
+        let spun = turned.project(DVec3::NEG_Y).0.x.asin();
+        assert!(spun > 0.08, "{spun} radians");
     }
 
     fn start() -> (Orbit, Framing) {
