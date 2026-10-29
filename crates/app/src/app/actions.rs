@@ -53,6 +53,7 @@ impl CutCraftApp {
             tools_path: None,
             tool_manager: None,
             shots: None,
+            space_mouse: None,
             reporter: cut_craft_bug_report::Reporter::new(
                 super::BUG_REPO,
                 files::config_dir().map(|d| d.join("bug-reports")),

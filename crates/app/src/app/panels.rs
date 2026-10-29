@@ -702,6 +702,82 @@ impl CutCraftApp {
         shape
     }
 
+    /// The SpaceMouse's moves since the last frame, turning, panning and zooming the 3D view
+    /// while it shows (Options ▸ SpaceMouse); its Fit, Top, Right and Front buttons too.
+    pub(super) fn space_mouse_input(&mut self, ctx: &egui::Context) {
+        use crate::spacemouse::{ButtonView, Input, button_view, moved};
+        let Some(inputs) = self
+            .space_mouse
+            .as_ref()
+            .map(|rx| rx.try_iter().collect::<Vec<_>>())
+        else {
+            return;
+        };
+        if self.view != View::ThreeD && self.split.is_none() {
+            return;
+        }
+        let rotation = self.options.view_3d.rotation.view();
+        for input in inputs {
+            match input {
+                Input::Motion {
+                    translate,
+                    rotate,
+                    period,
+                } => {
+                    // spacenavd's own period, else this frame's
+                    let seconds = if period > 0 {
+                        f64::from(period) / 1000.0
+                    } else {
+                        f64::from(ctx.input(|i| i.stable_dt))
+                    };
+                    let view = (self.orbit, self.framing);
+                    let settings = &self.options.space_mouse;
+                    (self.orbit, self.framing) =
+                        moved(view, (translate, rotate), seconds, settings, rotation);
+                    self.moved_3d = ctx.input(|i| i.time);
+                }
+                Input::Button {
+                    number,
+                    pressed: true,
+                } => match button_view(number) {
+                    Some(view) => {
+                        if let ButtonView::Look(orbit) = view {
+                            self.orbit = orbit;
+                        }
+                        self.framing = self.framing.fitted();
+                    }
+                    None => self.status.set_message(&format!(
+                        "SpaceMouse button {number} does nothing in Cut Craft yet"
+                    )),
+                },
+                Input::Button { .. } => {}
+            }
+        }
+    }
+
+    /// The 3D view's row of standard views, Fit and the perspective toggle.
+    fn view_3d_buttons(&mut self, ui: &mut egui::Ui) {
+        for (label, orbit) in [
+            ("Top", view3d::Orbit::TOP),
+            ("Front", view3d::Orbit::FRONT),
+            ("Right", view3d::Orbit::RIGHT),
+            ("Iso", view3d::Orbit::default()),
+        ] {
+            if ui.small_button(label).clicked() {
+                self.orbit = orbit;
+                self.framing = self.framing.fitted();
+            }
+        }
+        if ui.small_button("Fit").clicked() {
+            self.framing = self.framing.fitted();
+        }
+        // Aspire's orthographic / perspective toggle
+        let perspective = self.framing.perspective;
+        if ui.selectable_label(perspective, "Perspective").clicked() {
+            self.framing.perspective = !perspective;
+        }
+    }
+
     /// The preview or model as a block, with Aspire's 3D mouse controls: left- or right-drag
     /// rotates, middle-drag (or Ctrl+right, or left and right together) pans, the wheel zooms
     /// about the cursor, and a double-click or F fits it again.
@@ -714,27 +790,7 @@ impl CutCraftApp {
             });
             return;
         }
-        ui.horizontal(|ui| {
-            for (label, orbit) in [
-                ("Top", view3d::Orbit::TOP),
-                ("Front", view3d::Orbit::FRONT),
-                ("Right", view3d::Orbit::RIGHT),
-                ("Iso", view3d::Orbit::default()),
-            ] {
-                if ui.small_button(label).clicked() {
-                    self.orbit = orbit;
-                    self.framing = self.framing.fitted();
-                }
-            }
-            if ui.small_button("Fit").clicked() {
-                self.framing = self.framing.fitted();
-            }
-            // Aspire's orthographic / perspective toggle
-            let perspective = self.framing.perspective;
-            if ui.selectable_label(perspective, "Perspective").clicked() {
-                self.framing.perspective = !perspective;
-            }
-        });
+        ui.horizontal(|ui| self.view_3d_buttons(ui));
         let (area, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
         // the ViewCube over the view's corner, so the view does not see its clicks
@@ -755,12 +811,15 @@ impl CutCraftApp {
                 i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::F6),
             )
         });
-        let before = (self.orbit, self.framing);
+        let (before, rotation) = (
+            (self.orbit, self.framing),
+            self.options.view_3d.rotation.view(),
+        );
         let delta = response.drag_delta();
         if response.dragged() && delta != egui::Vec2::ZERO {
             match view3d::drag_mode([left, right, middle], ctrl) {
                 Some(view3d::DragMode::Rotate) => {
-                    self.orbit = self.orbit.dragged(delta, area.size());
+                    self.orbit = self.orbit.dragged_by(delta, area.size(), rotation);
                 }
                 Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
                 None => {}
@@ -772,7 +831,7 @@ impl CutCraftApp {
         let pointed = |at: Option<egui::Pos2>| at.and_then(|at| cube.direction_at(orbit, at));
         let hovered = pointed(on_cube.hover_pos());
         if on_cube.dragged() {
-            self.orbit = self.orbit.dragged(on_cube.drag_delta(), area.size());
+            self.orbit = (self.orbit).dragged_by(on_cube.drag_delta(), area.size(), rotation);
         } else if on_cube.double_clicked() {
             self.orbit = view3d::Orbit::facing(-self.orbit.towards_viewer());
         } else if let Some(from) =

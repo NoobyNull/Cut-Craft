@@ -40,6 +40,97 @@ pub struct View3d {
     #[serde(default)]
     #[schemars(title = "Anti-aliasing mode")]
     pub anti_aliasing: AntiAliasing,
+    /// How dragging turns the view: about the job's vertical with its up kept up, or any
+    /// way without stops (not one of Aspire's)
+    #[serde(default)]
+    pub rotation: Rotation,
+}
+
+/// How dragging (and a SpaceMouse) turns the 3D view.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Rotation {
+    /// Spin about the job's vertical, tilt between straight down and straight up: the job's
+    /// up stays up, as on a machine bed
+    #[default]
+    Turntable,
+    /// Any way, without stops: the job can roll and turn upside down
+    Free,
+}
+
+impl Rotation {
+    pub fn view(self) -> crate::view3d::Rotation {
+        match self {
+            Self::Turntable => crate::view3d::Rotation::Turntable,
+            Self::Free => crate::view3d::Rotation::Free,
+        }
+    }
+}
+
+/// A 3Dconnexion SpaceMouse turning the 3D view (Linux, through spacenavd; not one of
+/// Aspire's).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the dialog's own check boxes"
+)]
+pub struct SpaceMouse {
+    /// Object: the cap moves the model as if holding it. Camera: it moves the viewpoint, so
+    /// every direction is the other way
+    #[serde(default)]
+    pub mode: SpaceMouseMode,
+    /// How fast the view follows the cap
+    #[serde(default = "one")]
+    #[schemars(range(min = 0.1, max = 5.0))]
+    pub speed: f64,
+    /// Turn each movement the other way
+    #[serde(default)]
+    #[schemars(title = "Invert left / right")]
+    pub invert_x: bool,
+    #[serde(default)]
+    #[schemars(title = "Invert up / down")]
+    pub invert_y: bool,
+    #[serde(default)]
+    #[schemars(title = "Invert zoom (push / pull)")]
+    pub invert_zoom: bool,
+    #[serde(default)]
+    #[schemars(title = "Invert tilt")]
+    pub invert_tilt: bool,
+    #[serde(default)]
+    #[schemars(title = "Invert spin")]
+    pub invert_spin: bool,
+    #[serde(default)]
+    #[schemars(title = "Invert roll (Free rotation only)")]
+    pub invert_roll: bool,
+}
+
+impl Default for SpaceMouse {
+    fn default() -> Self {
+        Self {
+            mode: SpaceMouseMode::default(),
+            speed: one(),
+            invert_x: false,
+            invert_y: false,
+            invert_zoom: false,
+            invert_tilt: false,
+            invert_spin: false,
+            invert_roll: false,
+        }
+    }
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpaceMouseMode {
+    /// The cap moves the model, as if holding it (the usual CAD way)
+    #[default]
+    Object,
+    /// The cap moves the viewpoint round the model
+    Camera,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -317,6 +408,9 @@ pub struct Options {
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub advanced: Advanced,
+    #[serde(default)]
+    #[schemars(title = "SpaceMouse", extend("x-section" = true))]
+    pub space_mouse: SpaceMouse,
     /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
     /// own starting job until then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -340,6 +434,7 @@ impl Default for Options {
                 gradient_background_color: background_bottom(),
                 image_file_path: String::new(),
                 anti_aliasing: AntiAliasing::default(),
+                rotation: Rotation::default(),
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,
@@ -360,6 +455,7 @@ impl Default for Options {
             confirmations: Confirmations::default(),
             appearance: Appearance::default(),
             advanced: Advanced::default(),
+            space_mouse: SpaceMouse::default(),
             default_job: None,
         }
     }
@@ -479,7 +575,8 @@ mod tests {
                 "General Settings",
                 "Confirmation Choices",
                 "Appearance",
-                "Advanced"
+                "Advanced",
+                "SpaceMouse"
             ]
         );
     }

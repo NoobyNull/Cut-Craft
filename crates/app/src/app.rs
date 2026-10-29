@@ -505,6 +505,8 @@ struct CutCraftApp {
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
+    /// A SpaceMouse's moves, once the app is running (not in tests or screenshots).
+    space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
     shots: Option<screenshots::Shots>,
     /// What Cut and Copy last took, pasted back in place.
@@ -1103,6 +1105,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.clipart = crate::clipart::Clipart::load();
             app.recovery_path = files::config_dir().map(|d| d.join("recovery.ccjob"));
             app.open_recovery();
+            app.space_mouse = Some(crate::spacemouse::listen(cc.egui_ctx.clone()));
             Ok(Box::new(app))
         }),
     )
