@@ -51,9 +51,9 @@ impl Default for Orbit {
 pub enum Rotation {
     /// About the job's vertical and tilting between straight down and straight up: the job's
     /// up stays up, as on a machine bed.
-    #[default]
     Turntable,
     /// Any way, without stops: the job can roll and go upside down.
+    #[default]
     Free,
 }
 

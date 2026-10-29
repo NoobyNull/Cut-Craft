@@ -57,9 +57,9 @@ pub struct View3d {
 pub enum Rotation {
     /// Spin about the job's vertical, tilt between straight down and straight up: the job's
     /// up stays up, as on a machine bed
-    #[default]
     Turntable,
     /// Any way, without stops: the job can roll and turn upside down
+    #[default]
     Free,
 }
 
@@ -86,7 +86,7 @@ pub struct SpaceMouse {
     pub mode: SpaceMouseMode,
     /// How fast the view follows the cap
     #[serde(default = "one")]
-    #[schemars(range(min = 0.1, max = 5.0))]
+    #[schemars(range(min = 0.1, max = 10.0))]
     pub speed: f64,
     /// Turn each movement the other way
     #[serde(default)]
