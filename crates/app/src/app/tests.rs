@@ -3343,3 +3343,25 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
     assert_eq!(form.params["size"]["width"], 300.0);
     assert_eq!(form.params["size"]["thickness"], 12.0);
 }
+
+#[test]
+fn every_tool_on_the_tool_pages_has_an_icon() {
+    let h = Harness::new();
+    let toolbar = &h.app.toolbar;
+    let missing: Vec<&str> = toolbar
+        .groups
+        .iter()
+        .chain(&toolbar.modeling_groups)
+        .chain(&toolbar.toolpath_groups)
+        .flat_map(|g| g.tools.iter().copied())
+        .filter(|id| h.app.registry.get(id).is_some())
+        .filter(|id| {
+            let icon = h.app.registry.get(id).map_or("", |c| c.meta().icon);
+            h.app.icons.find(icon, id).is_none()
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "drawn as text, with no icon: {missing:?}"
+    );
+}
