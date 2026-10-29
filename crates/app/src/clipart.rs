@@ -137,7 +137,9 @@ pub fn panel(
     ui.horizontal_wrapped(|ui| {
         for file in entries(folder, importable) {
             let label = name(&file);
-            ui.vertical(|ui| {
+            // sized up front, so the wrapped row knows when it is full (`vertical` doesn't)
+            let cell = egui::vec2(edge, edge + ui.spacing().interact_size.y);
+            ui.allocate_ui_with_layout(cell, egui::Layout::top_down(egui::Align::Min), |ui| {
                 ui.set_width(edge);
                 let picture = file.extension().is_some_and(|e| {
                     PICTURES.contains(&e.to_string_lossy().to_lowercase().as_str())
@@ -162,4 +164,44 @@ pub fn panel(
         }
     });
     picked
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A folder's clipart wraps onto rows in a narrow panel, not one long line (#34).
+    #[test]
+    fn thumbnails_wrap() {
+        let dir =
+            std::env::temp_dir().join(format!("cut-craft-clipart-wrap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..8 {
+            std::fs::write(dir.join(format!("{i}.stl")), "").unwrap();
+        }
+        let mut clipart = Clipart {
+            folders: vec![dir.clone()],
+            chosen: Some(0),
+            store: None,
+        };
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(300.0, 2000.0),
+            )),
+            ..Default::default()
+        };
+        let mut used = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                panel(ui, &mut clipart, &|e| e == "stl");
+                used = ui.min_rect();
+            });
+        });
+        // no renderer takes a headless frame's texture changes
+        out.textures_delta.clear();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(used.width() <= 300.0, "{used:?} is wider than the panel");
+    }
 }
