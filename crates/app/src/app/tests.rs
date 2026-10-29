@@ -2992,7 +2992,10 @@ fn importing_a_model_while_setting_up_a_new_job_keeps_the_job_s_pages() {
     let file = pyramid_stl("new-job-import");
     h.app.import_file(&file);
     assert_eq!(h.app.screen, Screen::Job, "the job is set up as it stood");
-    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("orientate_3d_model"));
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.id),
+        Some("orientate_3d_model")
+    );
     h.app.form = None;
     h.frame(vec![]);
     assert!(
@@ -3249,7 +3252,9 @@ fn the_window_title_sits_in_the_menu_bar_unless_the_desktop_s_is_chosen() {
     let mut h = Harness::new();
     let title = h.app.title.clone();
     let file = h.text_at("File").expect("the File menu");
-    let at = h.text_at(&title).expect("the title in Cut Craft's own title bar");
+    let at = h
+        .text_at(&title)
+        .expect("the title in Cut Craft's own title bar");
     assert!((at.y - file.y).abs() < 1.0, "in the menus' row");
     assert!(at.x > file.x, "after the menus");
     h.app.options.appearance.system_title_bar = true;
