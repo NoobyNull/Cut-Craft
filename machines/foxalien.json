@@ -1,0 +1,52 @@
+{
+  "machines": [
+    {
+      "name": "FoxAlien Masuter Pro",
+      "manufacturer": "FoxAlien",
+      "model": "Masuter Pro",
+      "controller": "GRBL",
+      "width": 400,
+      "height": 400,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    },
+    {
+      "name": "FoxAlien 4040-XE",
+      "manufacturer": "FoxAlien",
+      "model": "4040-XE",
+      "controller": "GRBL",
+      "width": 400,
+      "height": 400,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    },
+    {
+      "name": "FoxAlien XE-Ultra 8080",
+      "manufacturer": "FoxAlien",
+      "model": "XE-Ultra 8080",
+      "controller": "GRBL",
+      "width": 800,
+      "height": 800,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    }
+  ]
+}

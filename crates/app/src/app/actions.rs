@@ -258,6 +258,15 @@ impl CutCraftApp {
                 self.machine_window =
                     Some(cut_craft_machines::MachineManager::adding(&self.machines));
             }
+            "install_offline_package" => {
+                let dialog = file_dialog().add_filter("Machine package", &["json"]);
+                if let Some(path) = dialog.pick_file() {
+                    self.install_package(&path);
+                }
+            }
+            "search_for_machine_online" => {
+                ctx.open_url(egui::OpenUrl::new_tab(super::MACHINES_ONLINE));
+            }
             "post_processor_management" => {
                 self.post_window = Some(cut_craft_machines::PostManager::default());
             }
@@ -622,17 +631,51 @@ impl CutCraftApp {
         }
     }
 
-    /// The post toolpaths are saved through: the active machine's default, else Cut Craft's
+    /// The post toolpaths are saved through: the active machine's default when it suits the
+    /// job, else the machine's first post that does: a flat one for a flat job, and for a
+    /// rotary job (on a machine with a 4th axis) one wrapping the side that goes round, Y
+    /// for a cylinder along X and X for one along Y. Without a machine, Cut Craft's
     /// `FluidNC` post for this kind of job.
     pub(super) fn output_post(&self) -> Result<cut_craft_post::Post, String> {
-        match self
-            .machines
-            .active()
-            .and_then(cut_craft_machines::Machine::post)
-        {
-            Some(name) => self.posts.load(name),
-            None => Ok(cut_craft_post::Post::default_for(&self.doc.job)),
+        use cut_craft_core::document::Along;
+        let Some(machine) = self.machines.active().filter(|m| !m.posts.is_empty()) else {
+            return Ok(cut_craft_post::Post::default_for(&self.doc.job));
+        };
+        let wraps = self.doc.job.rotary.map(|r| match r.along {
+            Along::X => "Y",
+            Along::Y => "X",
+        });
+        if wraps.is_some() && !machine.rotary {
+            return Err(format!(
+                "{} has no 4th axis for this rotary job: tick its 4th axis (A) in Machine \
+                 Configuration",
+                machine.name
+            ));
         }
+        // the default first: one that will not load says so rather than being passed over
+        let default = machine
+            .post()
+            .map(|name| self.posts.load(name))
+            .transpose()?;
+        if let Some(post) = default.filter(|p| p.wraps() == wraps) {
+            return Ok(post);
+        }
+        machine
+            .posts
+            .iter()
+            .filter_map(|name| self.posts.load(name).ok())
+            .find(|p| p.wraps() == wraps)
+            .ok_or_else(|| match wraps {
+                Some(axis) => format!(
+                    "{} has no post wrapping {axis} onto A for this rotary job: add a Wrap \
+                     {axis} to A post in Machine Configuration",
+                    machine.name
+                ),
+                None => format!(
+                    "{} has only rotary posts: add a flat one in Machine Configuration",
+                    machine.name
+                ),
+            })
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.
@@ -661,6 +704,29 @@ impl CutCraftApp {
             .map_or(Ok(()), |path| self.machines.save(path));
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
+    }
+
+    /// Install Offline Package: the machines in a package file (`machines/` in the repository)
+    /// that are not here already by name.
+    pub(super) fn install_package(&mut self, path: &std::path::Path) {
+        let package = std::fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        let package: cut_craft_machines::Machines = match package {
+            Ok(package) => package,
+            Err(e) => {
+                return self
+                    .status
+                    .set_message(&format!("{}: not a machine package ({e})", path.display()));
+            }
+        };
+        let (added, here) = self.machines.install(package);
+        let here = if here > 0 {
+            format!(", {here} already here")
+        } else {
+            String::new()
+        };
+        self.machines_changed(&format!("Installed {added} machines{here}"));
     }
 
     /// Install Post-Processor: copied into the custom posts. A machine with no posts yet (or

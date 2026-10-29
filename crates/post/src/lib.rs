@@ -3,6 +3,9 @@
 //! writes a document's toolpaths through it.
 
 mod arcs;
+mod built_in;
+
+pub use built_in::BUILT_IN;
 
 use cut_craft_core::document::{Along, Datum, Document, Job, ZZero};
 use cut_craft_core::glam::DVec3;
@@ -179,11 +182,6 @@ const LARGEST_ARC: f64 = 1000.0;
 /// Cut Craft's own posts, used until one is installed (`crates/post/posts/`).
 const DEFAULT_FLAT: &str = include_str!("../posts/fluidnc_atc_mm.pp");
 const DEFAULT_ROTARY: &str = include_str!("../posts/fluidnc_atc_wrap_a_mm.pp");
-/// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
-pub const BUILT_IN: [(&str, &str); 2] = [
-    ("fluidnc_atc_mm.pp", DEFAULT_FLAT),
-    ("fluidnc_atc_wrap_a_mm.pp", DEFAULT_ROTARY),
-];
 
 /// The file being written, for the variables that describe it.
 pub struct File<'a> {
@@ -366,6 +364,11 @@ impl Post {
             post.wrap = Some(("X", "A".into()));
         }
         post
+    }
+
+    /// The axis it wraps onto the rotary one (`X` or `Y`); `None` for a flat post.
+    pub fn wraps(&self) -> Option<&str> {
+        self.wrap.as_ref().map(|(axis, _)| *axis)
     }
 
     pub fn parse(text: &str) -> Result<Self, String> {
@@ -1767,6 +1770,55 @@ begin FOOTER
         assert!(why.contains("3 mm") && !why.contains("6 mm"), "{why}");
         // no tool changer: numbered in the order used
         assert!(post.render(&doc, &file(&[])).unwrap().contains("M6 T2"));
+    }
+
+    #[test]
+    fn every_made_variant_writes_its_units_tool_changes_arcs_and_wrapping() {
+        use cut_craft_core::document::{Along, Job};
+        let mut names: Vec<String> = BUILT_IN
+            .iter()
+            .map(|(_, text)| Post::parse(text).unwrap().name)
+            .collect();
+        // the two hand-written FluidNC defaults have tests of their own
+        let made = BUILT_IN
+            .iter()
+            .filter(|(f, _)| !["fluidnc_atc_mm.pp", "fluidnc_atc_wrap_a_mm.pp"].contains(f));
+        for (file, text) in made {
+            // the test renderer splits on the CR LF line ending
+            let post = text.replace(r#"LINE_ENDING = "[10]""#, r#"LINE_ENDING = "[13][10]""#);
+            let along = if file.contains("wrap_y") {
+                Some(Along::X)
+            } else if file.contains("wrap_x") {
+                Some(Along::Y)
+            } else {
+                None
+            };
+            let two = vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+            let job = along.map_or_else(Job::default, |a| Job::rotary(300.0, 50.0, a));
+            let lines = render_for(&post, job, two);
+            let any = |s: &str| lines.iter().any(|l| l.contains(s));
+            let has = |s: &str| lines.iter().any(|l| l == s);
+            assert_eq!(any("G20"), file.contains("inch"), "{file}");
+            if file.starts_with("grbl") {
+                assert!(has("M0") && !any("M6"), "{file}: {lines:?}");
+            } else if file.starts_with("mach3") {
+                assert!(has("T2 M6") && !any("TT"), "{file}: {lines:?}");
+            } else {
+                assert!(has("M6 T2"), "{file}: {lines:?}");
+            }
+            assert_eq!(has("G91.1"), file.starts_with("mach3_arcs"), "{file}");
+            if along.is_some() {
+                assert!(any(" A"), "{file} turns A: {lines:?}");
+            }
+            if file.contains("g93") {
+                let feeds = lines.iter().filter(|l| l.starts_with("G1"));
+                assert!(feeds.clone().all(|l| l.contains(" F")), "{file}: {lines:?}");
+                assert!(has("G93") && has("G94"), "{file}");
+            }
+        }
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), BUILT_IN.len(), "each has its own name");
     }
 
     #[test]

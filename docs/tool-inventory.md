@@ -117,6 +117,20 @@ say "not implemented yet".
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL, Export as Grayscale Bitmap.
 - Machine: Install Post-Processor (real grbl / FluidNC posts load, rotary G93 ones included).
+  Install Offline Package adds the machines in a package (`machines/*.json`: Genmitsu,
+  FoxAlien, Sienci, Carbide 3D, Two Trees hobby routers, on Cut Craft GRBL (mm), whose tool
+  change pauses with M0), skipping names already there; Search for Machine Online opens
+  `machines/` in the repository. Cut Craft's own posts: FluidNC ATC (flat and wrapped A),
+  and for FluidNC ATC, GRBL (tool changes pause with M0) and Mach3 (`.tap`; T M6, G91.1
+  arcs), in mm and inches: Arcs, Straight, and Wrap Y / X to A with or without G93; all
+  written for Cut Craft (`scripts/make_posts.py` makes the variants from three templates).
+  Package machines list GRBL Arcs and Straight in mm and inches, Arcs in their units first.
+  A machine's 4th axis (A) tick adds the G93 Wrap Y / X to A twins of its Cut Craft posts;
+  a rotary job saves through the machine's post wrapping its side (Y for a cylinder along
+  X), and is refused on a machine without the 4th axis or without such a post. Flat jobs
+  skip rotary posts. Post-Processor Management's Inspect has Edit for custom
+  posts (Customize opens its copy in it): saved to the file, warning while it would not load
+  or after a rename.
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
@@ -427,8 +441,7 @@ say "not implemented yet".
 - Edit: Options' window layout, software renderer, shading, sheet and toolpath-list
   settings, fonts, help and the folder kept for each kind of file;
   document variables linked to fields (a sum is worked out once, when entered).
-- Machine: Machine Configuration, Add Machine, Offline Package, Search Online,
-  Post-Processor Management, Update Post Database.
+- Machine: Update Post Database.
 - View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
   window tiling and cascade.
 - Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.

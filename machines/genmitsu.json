@@ -1,0 +1,100 @@
+{
+  "machines": [
+    {
+      "name": "Genmitsu 3018-PROVer",
+      "manufacturer": "Genmitsu",
+      "model": "3018-PROVer",
+      "controller": "GRBL",
+      "width": 300,
+      "height": 180,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    },
+    {
+      "name": "Genmitsu 3018-PRO",
+      "manufacturer": "Genmitsu",
+      "model": "3018-PRO",
+      "controller": "GRBL",
+      "width": 300,
+      "height": 180,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    },
+    {
+      "name": "Genmitsu 4040-PRO",
+      "manufacturer": "Genmitsu",
+      "model": "4040-PRO",
+      "controller": "GRBL",
+      "width": 400,
+      "height": 400,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    },
+    {
+      "name": "Genmitsu 4040 Reno",
+      "manufacturer": "Genmitsu",
+      "model": "4040 Reno",
+      "controller": "GRBL",
+      "width": 400,
+      "height": 400,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    },
+    {
+      "name": "Genmitsu PROVerXL 4030",
+      "manufacturer": "Genmitsu",
+      "model": "PROVerXL 4030",
+      "controller": "GRBL",
+      "width": 400,
+      "height": 300,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    },
+    {
+      "name": "Genmitsu PROVerXL 6050 Plus",
+      "manufacturer": "Genmitsu",
+      "model": "PROVerXL 6050 Plus",
+      "controller": "GRBL",
+      "width": 600,
+      "height": 500,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    }
+  ]
+}

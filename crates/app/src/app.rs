@@ -87,10 +87,12 @@ const DROP_SHADE: f32 = 0.8;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 82] = [
+const BUILT_INS: [&str; 84] = [
     "find_tool",
     "machine_configuration",
     "add_machine",
+    "install_offline_package",
+    "search_for_machine_online",
     "post_processor_management",
     "paste_in_place",
     "edit_text",
@@ -320,6 +322,8 @@ const RECENT_FILE_ICON: &str = "file/new.png";
 const WHATS_NEW: &str = include_str!("../whats-new.md");
 /// Where Cut Craft is found online, shown on the start page: label, address and icon (the
 /// social ones are placeholders: each site's home page).
+/// Machine ▸ Search for Machine Online: the machine packages in Cut Craft's repository.
+const MACHINES_ONLINE: &str = "https://github.com/NoobyNull/Cut-Craft/tree/main/machines";
 const LINKS: [(&str, &str, &str); 7] = [
     (
         "GitHub",

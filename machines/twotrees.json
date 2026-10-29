@@ -1,0 +1,20 @@
+{
+  "machines": [
+    {
+      "name": "Two Trees TTC450",
+      "manufacturer": "Two Trees",
+      "model": "TTC450",
+      "controller": "GRBL",
+      "width": 460,
+      "height": 460,
+      "inches": false,
+      "posts": [
+        "Cut Craft GRBL Arcs (mm) (*.nc)",
+        "Cut Craft GRBL Straight (mm) (*.nc)",
+        "Cut Craft GRBL Arcs (inch) (*.nc)",
+        "Cut Craft GRBL Straight (inch) (*.nc)"
+      ],
+      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+    }
+  ]
+}
