@@ -36,6 +36,12 @@ impl CutCraftApp {
             camera: None,
             view_tool: None,
             pages: Pages::default(),
+            search: None,
+            inspector_tab: 0,
+            rail_group: None,
+            rail_pinned: false,
+            ribbon_tab: 0,
+            options_path: None,
             session: Session::default(),
             selected_toolpath: None,
             machines: cut_craft_machines::Machines::default(),
@@ -121,10 +127,11 @@ impl CutCraftApp {
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
+            id if self.layout_checked(id).is_some() => true,
             "cut" | "copy" => !self.doc.selection.is_empty(),
             "create_component_from_toolpath_preview" => self.simulation.is_some(),
             "paste" | "paste_in_place" => !self.clipboard.is_empty(),
-            "increment_and_save" => self.screen == Screen::Job,
+            "increment_and_save" | "find_tool" => self.screen == Screen::Job,
             _ => {
                 BUILT_INS.contains(&id)
                     || self.registry.get(id).is_some()
@@ -270,6 +277,8 @@ impl CutCraftApp {
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
             id if self.resolution_checked(id).is_some() => self.set_resolution(id),
+            id if self.layout_checked(id).is_some() => self.set_layout(id),
+            "find_tool" => self.search = Some(String::new()),
             "refresh_2d_view" => ctx.request_repaint(),
             "create_component_from_toolpath_preview" => self.component_from_preview(),
             "copy"
@@ -1580,6 +1589,7 @@ impl CutCraftApp {
                 self.job_setup_cancel();
             }
             self.form = None;
+            self.search = None;
             self.view_tool = None;
             self.pages.done_with(Page::Design);
             self.pages.done_with(Page::Toolpaths);
@@ -1636,6 +1646,7 @@ impl CutCraftApp {
                                 self.display
                                     .checked(id)
                                     .or_else(|| self.resolution_checked(id))
+                                    .or_else(|| self.layout_checked(id))
                             },
                             shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
                             recent: &recent,

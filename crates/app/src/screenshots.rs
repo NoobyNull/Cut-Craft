@@ -5,6 +5,7 @@
 //! saved.
 
 use super::{CutCraftApp, Split, View};
+use crate::options::WindowLayout;
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::geometry::Point;
 use eframe::egui;
@@ -20,7 +21,7 @@ pub const WINDOW: [f32; 2] = [1600.0, 1000.0];
 /// A scene: its file name and how it is set up (each builds on the one before).
 type Scene = (&'static str, fn(&mut CutCraftApp, &egui::Context));
 
-const SCENES: [Scene; 8] = [
+const SCENES: [Scene; 10] = [
     ("start-page", |_, _| {}),
     ("design-2d", design),
     ("model-3d", model),
@@ -29,6 +30,8 @@ const SCENES: [Scene; 8] = [
     ("tool-database", tool_database),
     ("machine-configuration", machine),
     ("import-3d-model", import),
+    ("rail-layout", rail),
+    ("ribbon-layout", ribbon),
 ];
 
 /// Where the run is.
@@ -224,6 +227,30 @@ fn machine(app: &mut CutCraftApp, ctx: &egui::Context) {
         m.slots[2] = Some("90° V-Bit".into());
     }
     app.invoke(ctx, "machine_configuration");
+}
+
+/// The Rail layout: the Create Vectors list open beside the rail, Draw Circle's form in the
+/// inspector.
+fn rail(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.form = None;
+    app.view = View::TwoD;
+    app.options.general.layout = WindowLayout::Rail;
+    app.rail_group = app
+        .all_groups()
+        .iter()
+        .position(|g| g.name == "Create Vectors");
+    app.rail_pinned = true;
+    app.invoke(ctx, "draw_circle");
+}
+
+/// The Ribbon layout on its Toolpaths tab: the toolpath list in the browser on the left,
+/// Pocket Toolpath's form in the inspector on the right.
+fn ribbon(app: &mut CutCraftApp, ctx: &egui::Context) {
+    app.form = None;
+    app.options.general.layout = WindowLayout::Ribbon;
+    app.ribbon_tab = 2;
+    app.inspector_tab = 4;
+    app.invoke(ctx, "pocket_toolpath");
 }
 
 /// Orientate 3D Model with a model in the scene: a stepped pyramid, made here.
