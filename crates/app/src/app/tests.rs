@@ -3436,3 +3436,22 @@ fn every_tool_on_the_tool_pages_has_an_icon() {
         "drawn as text, with no icon: {missing:?}"
     );
 }
+
+#[test]
+fn ctrl_shift_v_pastes_in_place() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.frame(vec![Event::Copy]);
+    let copied = h.app.clipboard.clone();
+    let press = |pressed| Event::Key {
+        key: Key::V,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: Modifiers::COMMAND | Modifiers::SHIFT,
+    };
+    h.frame(vec![press(true), press(false)]);
+    assert_eq!(h.app.doc.vectors.len(), 2, "a second copy");
+    let pasted = h.app.doc.vectors.values().last().unwrap();
+    assert_eq!(pasted, &copied[0], "where the first one is");
+}
