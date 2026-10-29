@@ -209,16 +209,6 @@ pub struct General {
     /// Dialog pictures are always read at startup
     #[serde(default = "on")]
     pub preload_icons: bool,
-    /// The GitHub repository (owner/name) Report a Bug Here… makes issues in, through the
-    /// GitHub CLI (gh)
-    #[serde(default = "bug_repo")]
-    #[schemars(title = "Bug reports go to")]
-    pub bug_report_repo: String,
-    /// On a Wayland desktop, open the window there directly rather than through `XWayland`;
-    /// files cannot be dragged into it then (from the next start)
-    #[serde(default)]
-    #[schemars(title = "Use Wayland directly (no file drag and drop)")]
-    pub wayland_native: bool,
     /// The folder file dialogs open in
     #[serde(default)]
     #[schemars(title = "File dialog default")]
@@ -228,6 +218,53 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Window layout")]
     pub layout: WindowLayout,
+}
+
+/// Settings only some desktops need, listed only on those (not one of Aspire's).
+// ponytail: wayland_native moved here from General; one saved there before starts off again
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Advanced {
+    /// On a Wayland desktop, open the window there directly rather than through `XWayland`;
+    /// files cannot be dragged into it then (from the next start)
+    #[serde(default)]
+    #[schemars(title = "Use Wayland directly (no file drag and drop)")]
+    pub wayland_native: bool,
+}
+
+impl Advanced {
+    /// Whether this desktop has any of these settings: a Wayland one on Linux or a BSD.
+    pub fn applies() -> bool {
+        cfg!(all(unix, not(target_os = "macos"))) && std::env::var_os("WAYLAND_DISPLAY").is_some()
+    }
+}
+
+/// How Cut Craft looks (not one of Aspire's).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Appearance {
+    /// Light, dark, or the desktop's own
+    #[serde(default)]
+    pub theme: Theme,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    /// Light, as Aspire is, whatever the desktop's theme
+    #[default]
+    Light,
+    Dark,
+    /// The desktop's own light or dark theme
+    System,
+}
+
+impl Theme {
+    pub fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+            Self::System => egui::ThemePreference::System,
+        }
+    }
 }
 
 /// The window's arrangement (`docs/superpowers/specs/2026-10-27-window-layout-setting-design.md`).
@@ -254,11 +291,6 @@ pub enum FileDialogDefault {
     Job,
 }
 
-/// Where bug reports go unless the options say otherwise: Cut Craft's own repository.
-fn bug_repo() -> String {
-    "NoobyNull/cut-craft".into()
-}
-
 /// What a setting added after options were first saved starts as.
 fn on() -> bool {
     true
@@ -275,6 +307,12 @@ pub struct Options {
     #[serde(default)]
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
+    #[serde(default)]
+    #[schemars(extend("x-section" = true))]
+    pub appearance: Appearance,
+    #[serde(default)]
+    #[schemars(extend("x-section" = true))]
+    pub advanced: Advanced,
 }
 
 impl Default for Options {
@@ -307,12 +345,12 @@ impl Default for Options {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
                     .expect("a small count"),
                 preload_icons: on(),
-                bug_report_repo: bug_repo(),
-                wayland_native: false,
                 file_dialog_default: FileDialogDefault::default(),
                 layout: WindowLayout::default(),
             },
             confirmations: Confirmations::default(),
+            appearance: Appearance::default(),
+            advanced: Advanced::default(),
         }
     }
 }
@@ -411,6 +449,11 @@ mod tests {
             "solid_2d_previews": false }, "general": { "recent_file_list_size": 4 } }"#;
         let older: Options = serde_json::from_str(older).expect("options saved before preloading");
         assert!(!older.view_3d.draw_origin && older.general.preload_icons);
+        assert_eq!(
+            older.appearance.theme,
+            Theme::Light,
+            "light, as before themes"
+        );
         let fields =
             crate::form::fields(&serde_json::to_value(schemars::schema_for!(Options)).unwrap());
         let sections: Vec<&str> = fields
@@ -424,7 +467,9 @@ mod tests {
                 "3D View Settings",
                 "Toolpath Settings",
                 "General Settings",
-                "Confirmation Choices"
+                "Confirmation Choices",
+                "Appearance",
+                "Advanced"
             ]
         );
     }

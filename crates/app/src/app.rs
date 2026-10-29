@@ -170,6 +170,8 @@ const BUILT_INS: [&str; 82] = [
     "preview_all_toolpaths",
     "reset_preview",
 ];
+/// Where every Report a Bug Here… goes: Cut Craft's own repository.
+const BUG_REPO: &str = "NoobyNull/Cut-Craft";
 /// The Help windows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Info {
@@ -543,6 +545,8 @@ struct CutCraftApp {
     /// Edit ▸ Options, kept between runs, and whether its window is open.
     options: crate::options::Options,
     options_window: bool,
+    /// The Options category shown, by its place in the list.
+    options_page: usize,
     /// Both views shown at once.
     split: Option<Split>,
     /// The Clipart tab's library.
@@ -1032,7 +1036,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
     // use Wayland directly
     let settings = crate::options::Options::load();
-    let wayland = settings.general.wayland_native;
+    let (wayland, theme) = (settings.advanced.wayland_native, settings.appearance.theme);
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {
@@ -1067,8 +1071,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         name,
         options,
         Box::new(|cc| {
-            // light, as Aspire is, whatever the desktop's theme
-            cc.egui_ctx.set_theme(egui::ThemePreference::Light);
+            cc.egui_ctx.set_theme(theme.preference());
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx);
             if let Some(rs) = &cc.wgpu_render_state {

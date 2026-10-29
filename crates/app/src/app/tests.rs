@@ -3214,3 +3214,31 @@ fn a_pages_question_mark_opens_its_help() {
     h.click(at, Modifiers::NONE);
     assert_eq!(h.app.info, Some(Info::Help("design")));
 }
+
+#[test]
+fn options_show_one_category_at_a_time() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "options");
+    // a new window measures itself on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Draw origin").is_some(),
+        "the first category's settings"
+    );
+    assert!(h.text_at("Recent file list size").is_none(), "only its own");
+    let at = *h.texts_at("Appearance").last().expect("listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Theme").is_some());
+    assert!(h.text_at("Draw origin").is_none());
+    assert_eq!(
+        h.text_at("Advanced").is_some(),
+        crate::options::Advanced::applies(),
+        "Advanced lists only on a Wayland desktop"
+    );
+    assert!(
+        h.text_at("Bug reports go to").is_none(),
+        "reports always go to Cut Craft's repository"
+    );
+}
