@@ -1113,20 +1113,38 @@ fn right_clicking_a_toolpath_selects_it_and_opens_its_menu() {
 }
 
 #[test]
-fn toolpath_forms_take_tools_from_the_database_and_save_them_back() {
+fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
     let mut h = Harness::new();
-    let path =
-        std::env::temp_dir().join(format!("cut-craft-tools-{}/tools.json", std::process::id()));
-    h.app.tools_path = Some(path.clone());
     h.app.invoke(&h.ctx, "pocket_toolpath");
+    let form = h.app.form.as_ref().unwrap();
+    assert!(
+        form.fields.iter().all(|f| f.key != "tool"),
+        "the tool's settings are not edited in the form"
+    );
     h.app.choose_tool("3 mm End Mill");
     h.frame(vec![]);
-    let params = &mut h.app.form.as_mut().unwrap().params;
-    assert_eq!(params["tool"]["diameter"], 3.0);
-    params["tool"]["name"] = "Mine".into();
-    h.app.save_form_tool();
-    assert_eq!(h.app.tools.get("Mine").map(|t| t.diameter), Some(3.0));
-    assert_eq!(files::load_tools(&path).unwrap(), h.app.tools);
+    h.frame(vec![]);
+    assert!(h.text_at("Edit…").is_some());
+    assert_eq!(h.app.form.as_ref().unwrap().params["tool"]["diameter"], 3.0);
+    h.app.edit_form_tool(&h.ctx);
+    let manager = h
+        .app
+        .tool_manager
+        .as_mut()
+        .expect("the Tool Database opens");
+    let Some(cut_craft_tool_database::Pick::Tool(i)) = manager.pick else {
+        panic!("on the form's tool")
+    };
+    assert_eq!(manager.draft.tools[i].name, "3 mm End Mill");
+    manager.draft.tools[i].pass_depth = 1.25;
+    let edited = manager.draft.clone();
+    h.app.tools = edited;
+    h.app.refresh_form_tool();
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["tool"]["pass_depth"],
+        1.25,
+        "saving the database updates the open form"
+    );
 }
 
 #[test]

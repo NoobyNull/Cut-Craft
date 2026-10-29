@@ -7,11 +7,11 @@ use super::{
     KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout, MODEL_IMPORTERS, Menus,
     Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
     SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SUMMARY_DEFAULTS, Screen,
-    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, Tool, ToolDatabase,
+    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
     VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
     file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
     on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table, template_dialog,
-    toolpath_template_dialog, view3d,
+    tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -870,7 +870,9 @@ impl CutCraftApp {
                 id: cmd.id(),
                 label: meta.label,
                 icon: meta.icon,
-                fields,
+                // the tool's own settings come from the Tool Database, shown read-only above
+                // the form, not edited in it
+                fields: fields.into_iter().filter(|f| f.key != "tool").collect(),
                 params,
                 error: None,
                 new_job: false,
@@ -2306,43 +2308,10 @@ impl CutCraftApp {
             }
             ui.strong(open.label);
         });
-        let (mut chosen, mut save_tool) = (None, false);
+        let (mut chosen, mut edit_tool) = (None, false);
         if open.params.get("tool").is_some_and(Value::is_object) {
-            let current = open.params["tool"]["name"].as_str().unwrap_or_default();
-            ui.horizontal(|ui| {
-                // the tools loaded in the machine's tool changer first, by slot
-                let loaded: Vec<(usize, &str)> = slots
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
-                    .filter(|(_, t)| self.tools.get(t).is_some())
-                    .collect();
-                egui::ComboBox::from_label("Tool database")
-                    .selected_text(current)
-                    .show_ui(ui, |ui| {
-                        for &(n, name) in &loaded {
-                            let label = format!("T{n}  {name}");
-                            if ui.selectable_label(name == current, label).clicked() {
-                                chosen = Some(name.to_owned());
-                            }
-                        }
-                        if !loaded.is_empty() {
-                            ui.separator();
-                        }
-                        for tool in &self.tools.tools {
-                            if loaded.iter().any(|&(_, t)| t == tool.name) {
-                                continue;
-                            }
-                            if ui
-                                .selectable_label(tool.name == current, &tool.name)
-                                .clicked()
-                            {
-                                chosen = Some(tool.name.clone());
-                            }
-                        }
-                    });
-                save_tool = ui.button("Save to database").clicked();
-            });
+            let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
+            (chosen, edit_tool) = tool_picker(ui, &open.params["tool"], &self.tools, &slots, units);
         }
         // a list of tools in running order (rest machining), picked from the database
         let mut earlier = None;
@@ -2390,8 +2359,8 @@ impl CutCraftApp {
         if let Some(name) = chosen {
             self.choose_tool(&name);
         }
-        if save_tool {
-            self.save_form_tool();
+        if edit_tool {
+            self.edit_form_tool(ui.ctx());
         }
         if let Some(name) = earlier {
             self.add_earlier_tool(&name);
@@ -2430,21 +2399,31 @@ impl CutCraftApp {
         }
     }
 
-    /// Stores the open form's tool in the database, replacing one of the same name.
-    pub(super) fn save_form_tool(&mut self) {
-        let tool = self
+    /// The Tool Database, opened on the open form's tool; saving it updates the form.
+    pub(super) fn edit_form_tool(&mut self, ctx: &egui::Context) {
+        let name = self
             .form
             .as_ref()
-            .and_then(|f| serde_json::from_value::<Tool>(f.params["tool"].clone()).ok());
-        match tool {
-            Some(tool) => {
-                let done = format!("Saved {} to the tool database", tool.name);
-                self.tools.put_picked(tool);
-                self.tools_changed(&done);
+            .and_then(|f| f.params["tool"]["name"].as_str().map(str::to_owned));
+        self.invoke(ctx, "tool_database");
+        if let Some(manager) = &mut self.tool_manager {
+            manager.pick = name
+                .and_then(|n| manager.draft.tools.iter().position(|t| t.name == n))
+                .map(cut_craft_tool_database::Pick::Tool);
+        }
+    }
+
+    /// The open form's tool again from the database, after the database changed.
+    pub(super) fn refresh_form_tool(&mut self) {
+        let name = self
+            .form
+            .as_ref()
+            .and_then(|f| f.params.get("tool")?["name"].as_str().map(str::to_owned));
+        if let Some(name) = name.filter(|n| self.tools.get(n).is_some()) {
+            self.choose_tool(&name);
+            if let Some(form) = &mut self.form {
+                form.dirty = true;
             }
-            None => self
-                .status
-                .set_message("the form has no valid tool to save"),
         }
     }
 

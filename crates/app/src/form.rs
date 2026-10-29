@@ -407,6 +407,8 @@ fn choose(
 
 fn radios(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
     let mut picked = None;
+    // a choice's name never breaks mid-word in a narrow column ("Convent / ional")
+    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     for o in options {
         let radio = ui.radio(o.value == current, &o.label);
         if radio.clicked() {

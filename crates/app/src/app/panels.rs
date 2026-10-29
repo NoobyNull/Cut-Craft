@@ -32,6 +32,7 @@ impl CutCraftApp {
                     self.tool_manager = None;
                 }
                 self.tools_changed("Tool database saved");
+                self.refresh_form_tool();
                 if let Some(changer) = changer
                     && let Some(machine) = self
                         .machines

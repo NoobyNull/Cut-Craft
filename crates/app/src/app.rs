@@ -19,7 +19,7 @@ use crate::icons::Icons;
 use crate::pages::{Page, Pages, Shown};
 use crate::view2d::{self, Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
-use cut_craft_core::document::{Document, EntityId, LayerId};
+use cut_craft_core::document::{Document, EntityId, LayerId, Units};
 use cut_craft_core::file::{JOB_EXTENSION, OLD_JOB_EXTENSION};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::glam::DAffine2;
@@ -922,6 +922,117 @@ fn paint_focus_ring(ctx: &egui::Context) {
         egui::Stroke::new(width, stroke.color),
         egui::StrokeKind::Outside,
     );
+}
+
+/// A toolpath form's tool: picked from the Tool Database (the machine's tool changer's first,
+/// by slot), with Edit… to change it there, and its settings shown read-only. The tool picked
+/// now, and whether Edit… was clicked.
+fn tool_picker(
+    ui: &mut egui::Ui,
+    tool: &Value,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+    units: Units,
+) -> (Option<String>, bool) {
+    let current = tool["name"].as_str().unwrap_or_default();
+    let mut chosen = None;
+    let edit = ui
+        .horizontal(|ui| {
+            let loaded: Vec<(usize, &str)> = slots
+                .iter()
+                .enumerate()
+                .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
+                .filter(|(_, t)| tools.get(t).is_some())
+                .collect();
+            egui::ComboBox::from_label("Tool database")
+                .selected_text(current)
+                .show_ui(ui, |ui| {
+                    for &(n, name) in &loaded {
+                        let label = format!("T{n}  {name}");
+                        if ui.selectable_label(name == current, label).clicked() {
+                            chosen = Some(name.to_owned());
+                        }
+                    }
+                    if !loaded.is_empty() {
+                        ui.separator();
+                    }
+                    for tool in &tools.tools {
+                        if loaded.iter().any(|&(_, t)| t == tool.name) {
+                            continue;
+                        }
+                        if ui
+                            .selectable_label(tool.name == current, &tool.name)
+                            .clicked()
+                        {
+                            chosen = Some(tool.name.clone());
+                        }
+                    }
+                });
+            ui.button("Edit…")
+                .on_hover_text("Change this tool in the Tool Database")
+                .clicked()
+        })
+        .inner;
+    match serde_json::from_value::<Tool>(tool.clone()) {
+        Ok(tool) => tool_summary(ui, &tool, units, tools.get(&tool.name).is_some()),
+        Err(_) => {
+            ui.weak("Pick a tool from the Tool Database");
+        }
+    }
+    (chosen, edit)
+}
+
+/// A toolpath form's tool as the Tool Database has it, read-only: what its shape uses, then
+/// its cutting data for the active material, lengths in `units`.
+fn tool_summary(ui: &mut egui::Ui, tool: &Tool, units: Units, in_database: bool) {
+    use cut_craft_core::toolpath::ToolShape;
+    let shown = |value: f64, unit: &str| match form::shown_in(unit, units) {
+        Some((per, to)) => format!("{} {to}", trimmed(value / per)),
+        None => format!("{} {unit}", trimmed(value)),
+    };
+    let length = |mm| shown(mm, "mm");
+    let rate = |mm_min| shown(mm_min, "mm/min");
+    let mut rows = vec![("Diameter", length(tool.diameter))];
+    match tool.shape {
+        ToolShape::VBit | ToolShape::ThreadMill => {
+            rows.push(("Angle", format!("{}°", trimmed(tool.angle))));
+        }
+        ToolShape::RadiusedEndMill => rows.push(("Tip radius", length(tool.tip_radius))),
+        ToolShape::EndMill | ToolShape::BallNose => {}
+    }
+    if tool.taper > 0.0 {
+        rows.push(("Taper angle", format!("{}°", trimmed(tool.taper))));
+    }
+    rows.extend([
+        ("Pass depth", length(tool.pass_depth)),
+        ("Stepover", format!("{}%", trimmed(tool.stepover * 100.0))),
+        ("Feed rate", rate(tool.feed_rate)),
+        ("Plunge rate", rate(tool.plunge_rate)),
+        (
+            "Spindle speed",
+            format!("{} rpm", trimmed(tool.spindle_speed)),
+        ),
+    ]);
+    ui.group(|ui| {
+        egui::Grid::new("tool_summary")
+            .num_columns(2)
+            .show(ui, |ui| {
+                for (label, value) in rows {
+                    ui.weak(label);
+                    ui.label(value);
+                    ui.end_row();
+                }
+            });
+        if !in_database {
+            ui.weak("Not in the Tool Database: pick one, or add it there");
+        }
+    });
+}
+
+/// `value` to three places at most, without trailing zeros.
+fn trimmed(value: f64) -> String {
+    let text = format!("{value:.3}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
 }
 
 /// The Rest Machining section of a toolpath form: the tools that cut before this one
