@@ -3343,3 +3343,33 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
     assert_eq!(form.params["size"]["width"], 300.0);
     assert_eq!(form.params["size"]["thickness"], 12.0);
 }
+
+#[test]
+fn cancel_takes_back_what_a_tool_did_and_closes_it() {
+    let mut h = Harness::new();
+    // a tool that has done nothing yet has nothing to cancel
+    h.app.start_command("draw_circle");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Cancel").is_some());
+    let undoable = h.app.history.undo_depth();
+    h.app.form = None;
+    // Import 3D Model puts the model in the job at once
+    let file = pyramid_stl("cancel");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.doc.components.len(),
+        1,
+        "placed while the form is open"
+    );
+    let cancel = h.text_at("Cancel").expect("a Cancel button");
+    h.click(cancel, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.form.is_none(), "closed");
+    assert!(h.app.doc.components.is_empty(), "the model taken back");
+    assert_eq!(h.app.history.undo_depth(), undoable);
+    assert!(h.app.history.can_redo(), "and it can be redone");
+    let _ = std::fs::remove_file(file);
+}
