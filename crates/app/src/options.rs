@@ -317,6 +317,11 @@ pub struct Options {
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub advanced: Advanced,
+    /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
+    /// own starting job until then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub default_job: Option<cut_craft_core::document::Job>,
 }
 
 impl Default for Options {
@@ -355,6 +360,7 @@ impl Default for Options {
             confirmations: Confirmations::default(),
             appearance: Appearance::default(),
             advanced: Advanced::default(),
+            default_job: None,
         }
     }
 }

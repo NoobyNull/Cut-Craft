@@ -3315,3 +3315,26 @@ fn rotary_jobs_need_a_4th_axis_and_save_through_the_post_wrapping_their_side() {
     h.app.doc.job = Job::default();
     assert_eq!(wraps(&h.app), Ok(None), "flat jobs keep the flat default");
 }
+
+#[test]
+fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
+    let mut h = Harness::at_start();
+    h.app.invoke(&h.ctx, "new");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().expect("the Job Setup form");
+    form.params["size"]["width"] = 300.0.into();
+    form.params["size"]["thickness"] = 12.0.into();
+    let button = h
+        .text_at("Set as Default")
+        .expect("a Set as Default button");
+    h.click(button, Modifiers::NONE);
+    h.frame(vec![]);
+    let saved = h.app.options.default_job.expect("kept in the options");
+    assert!((saved.width - 300.0).abs() < 1e-9);
+    h.app.job_setup_cancel();
+    h.app.invoke(&h.ctx, "new");
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().expect("Job Setup again");
+    assert_eq!(form.params["size"]["width"], 300.0);
+    assert_eq!(form.params["size"]["thickness"], 12.0);
+}

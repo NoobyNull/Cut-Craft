@@ -436,7 +436,7 @@ impl Job {
 
 impl Default for Job {
     fn default() -> Self {
-        // ponytail: what Job Setup starts a new job with; preferences could remember the last one
+        // what Job Setup starts a new job with, until its Set as Default keeps another
         Self {
             width: 600.0,
             height: 400.0,
