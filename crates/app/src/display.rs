@@ -18,6 +18,8 @@ pub struct Display {
     pub quality: u32,
     pub origin: bool,
     pub modeling_plane: bool,
+    /// An imported model's undercuts, what a cutter from above cannot reach, drawn marked.
+    pub undercuts: bool,
     pub material_block: bool,
     pub vectors_3d: bool,
     pub light_follows: bool,
@@ -46,6 +48,7 @@ impl Default for Display {
             quality: 1,
             origin: true,
             modeling_plane: false,
+            undercuts: true,
             material_block: true,
             vectors_3d: true,
             light_follows: false,
@@ -89,6 +92,7 @@ impl Display {
             "guides_visible" => &mut self.guides,
             "animate_preview" => &mut self.animate_preview,
             "draw_modeling_plane" => &mut self.modeling_plane,
+            "show_undercuts" => &mut self.undercuts,
             "draw_material_block" => &mut self.material_block,
             "draw_vectors_in_3d_view" => &mut self.vectors_3d,
             "light_follows_viewer" => &mut self.light_follows,
@@ -132,6 +136,14 @@ impl Display {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn undercuts_are_marked_until_turned_off() {
+        let mut d = Display::default();
+        assert_eq!(d.checked("show_undercuts"), Some(true));
+        assert!(d.toggle("show_undercuts"));
+        assert!(!d.undercuts);
+    }
 
     #[test]
     fn toggles_turn_over_and_report_their_state() {

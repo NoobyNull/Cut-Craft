@@ -1239,6 +1239,7 @@ impl MenuSystem {
                         i("Draw Origin"),
                         i("Draw Modeling Plane"),
                         i("Draw Material Block"),
+                        i("Show Undercuts"),
                         i("Draw Vectors in 3D View"),
                         i("Draw Keep-Out Zones in 3D View"),
                         sep(),

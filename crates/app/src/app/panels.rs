@@ -3,9 +3,9 @@
 
 use super::{
     Align, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, LayerId, Layout,
-    MESH_CELLS, Material, Menus, PLAYBACK_SPEEDS, Page, SETTLE_SECONDS, TOOL_HEIGHT_DIAMETERS,
-    TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, egui, file_dialog, file_name, files, gui,
-    menu_items, sheet_length, view3d, wrap_for,
+    MESH_CELLS, Material, Menus, PLANE_OPACITY, PLAYBACK_SPEEDS, Page, SETTLE_SECONDS,
+    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, egui, file_dialog,
+    file_name, files, gui, menu_items, sheet_length, view3d, wrap_for,
 };
 
 impl CutCraftApp {
@@ -1145,7 +1145,15 @@ impl CutCraftApp {
         // outline to judge its size by
         if let Some(model) = self.form.as_ref().and_then(|f| f.model.as_ref()) {
             let origin = local(cut_craft_core::geometry::Point::new(0.0, 0.0), 0.0);
-            let mark = ui.visuals().error_fg_color;
+            // the undercuts marked only while View ▸ Show Undercuts is on
+            let mark = if shown.undercuts {
+                ui.visuals().error_fg_color
+            } else {
+                look.colour
+            };
+            // ponytail: drawn before the model, so what sinks below the plane shows over it too
+            let area = job.area();
+            paint_modeling_plane(ui, &painter, area, |p| screen(local(p, 0.0)));
             painter.add(view3d::triangles(
                 model,
                 |p| screen(p + origin),
@@ -1153,7 +1161,6 @@ impl CutCraftApp {
                 &look,
                 mark,
             ));
-            let area = job.area();
             let (lo, hi) = (local(area.min, 0.0), local(area.max, job.thickness));
             let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
             for [a, b] in view3d::box_edges(lo, hi) {
@@ -1346,4 +1353,32 @@ impl CutCraftApp {
             });
         });
     }
+}
+
+/// The modeling plane (z = 0) under a model being imported, filled so where it sits is
+/// plain: the job's `area` at z = 0, put on screen by `screen`.
+fn paint_modeling_plane(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    area: cut_craft_core::geometry::Rect,
+    screen: impl Fn(cut_craft_core::geometry::Point) -> egui::Pos2,
+) {
+    let (lo, hi) = (area.min, area.max);
+    let corners = [(lo.x, lo.y), (hi.x, lo.y), (hi.x, hi.y), (lo.x, hi.y)]
+        .map(|(x, y)| screen(cut_craft_core::geometry::Point::new(x, y)));
+    let selection = ui.visuals().selection;
+    let dash = ui.spacing().item_spacing.x;
+    let mut outline = corners.to_vec();
+    outline.push(corners[0]);
+    painter.add(egui::Shape::convex_polygon(
+        corners.to_vec(),
+        selection.bg_fill.gamma_multiply(PLANE_OPACITY),
+        egui::Stroke::NONE,
+    ));
+    painter.extend(egui::Shape::dashed_line(
+        &outline,
+        selection.stroke,
+        dash,
+        dash / 2.0,
+    ));
 }

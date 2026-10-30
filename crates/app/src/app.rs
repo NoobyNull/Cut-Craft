@@ -317,6 +317,8 @@ const PLAYBACK_SPEED: f64 = 200.0;
 const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 5.0..=20_000.0;
 /// The tool drawn in the 3D view while a preview plays: this many diameters tall.
 const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
+/// How much of the selection colour the modeling plane is filled with under a model being imported.
+const PLANE_OPACITY: f32 = 0.35;
 /// Beside each recently opened file.
 const RECENT_FILE_ICON: &str = "file/new.png";
 /// This version's changes, one `- ` line each, shown on the start page.
