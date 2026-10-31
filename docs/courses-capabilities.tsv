@@ -60,7 +60,7 @@ trace-bitmap	Trace Bitmap: black and white with threshold, noise, corner fit	yes
 trace-colour	Trace Bitmap colour mode (palette of ≤16 colours, pick colours) and selection box	no	bitmaps are kept in grey; black and white only	trac(e|ing)	colou?r (mode|palette)|number of colou?rs	90
 dimensions	Dimensions: length, vertical, horizontal	yes	dimensions command	dimension	dimensions?
 dimensions-angle-arc	Dimensions: angle and arc (radius / diameter), Shift+click to edit	no	angle and arc dimensions not done	dimension	angle dimension|arc dimension	118
-node-edit	Node editing: move, insert, delete, smooth, cut, start point, spans to line / arc / Bézier	partly	Node Edit; no smooth point toggle, no several nodes at once, no typed node X / Y	node edit|editing	smooth point|node edit	52
+node-edit	Node editing: move, insert, delete, smooth, cut, start point, spans to line / arc / Bézier	yes	Node Edit: drag, insert, delete, Smooth Point, cut, start point, spans to line / arc / Bézier, Node Position (typed X / Y), box-picked nodes moved together	node edit|editing	smooth point|node edit	52
 node-mirror	Node editing with H / V mirror lines	no	not available	node edit	mirror(ing)? line	115
 trim	Trim: interactive trim and Trim Objects (clear inside / outside a boundary)	partly	Interactive Vector Trim; no drag-trimming, no rejoin, no Trim Objects to a boundary	trim	\btrim	65
 offset	Offset vectors: in / out / both, sharp corners, open vectors left / right	yes	offset-vectors command	offset	offset

@@ -39,6 +39,8 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-move-nodes = { path = "../commands/move-nodes" }
+cmd-smooth-point = { path = "../commands/smooth-point" }
 cmd-reorder-toolpath = { path = "../commands/reorder-toolpath" }
 cmd-auto-layout-text = { path = "../commands/auto-layout-text" }
 cmd-align = { path = "../commands/align" }

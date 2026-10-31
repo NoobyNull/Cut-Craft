@@ -1125,7 +1125,7 @@ impl CutCraftApp {
             .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
             .and_then(|at| self.node_target(at, reach));
         let selection_menu = || match node_target {
-            Some(target) => gui::node_menu(&target),
+            Some(target) => gui::node_menu(&self.doc, &target),
             None => self.menus.selection_menu(&self.doc),
         };
         if let Some(action) = self.popup(canvas.response(), selection_menu) {
@@ -1137,6 +1137,14 @@ impl CutCraftApp {
     pub(super) fn node_overlay(&self, gesture: Option<Gesture>, reach: f64) -> Overlay {
         // the dragged node's vector as it would be, drawn over the old one
         let moving = match gesture {
+            Some(Gesture::Dragging(drag)) if self.picked_drag(drag, reach).is_some() => self
+                .picked_drag(drag, reach)
+                .and_then(|params| {
+                    let cmd = self.registry.get("move_nodes")?;
+                    cmd.run_json(&self.doc, &params).ok()
+                })
+                .map(|change| change.added().cloned().collect())
+                .unwrap_or_default(),
             Some(Gesture::Dragging(drag)) => self
                 .node_target(drag.start, reach)
                 .and_then(|t| {
@@ -1154,16 +1162,70 @@ impl CutCraftApp {
             .iter()
             .flat_map(|id| cut_craft_core::nodes::nodes(&self.doc.vectors[id]))
             .collect();
-        Overlay::Nodes { at, moving }
+        let picked = self.picked_nodes.iter().map(|n| n.at.into()).collect();
+        Overlay::Nodes { at, picked, moving }
     }
 
-    /// A drag from a node moves it; any other drag selects, as with the Select tool.
+    /// Move Nodes' params when `drag` starts on one of two or more picked nodes.
+    pub(super) fn picked_drag(&self, drag: Drag, reach: f64) -> Option<Value> {
+        let on_one = self
+            .picked_nodes
+            .iter()
+            .any(|n| Point::from(n.at).distance(drag.start) <= reach);
+        (self.picked_nodes.len() > 1 && on_one).then(|| {
+            let by = drag.end - drag.start;
+            serde_json::json!({
+                "nodes": self.picked_nodes,
+                "by": cut_craft_core::params::Xy::new(by.x, by.y),
+            })
+        })
+    }
+
+    /// The nodes of the selected, editable vectors inside the box `rect`, for Move Nodes.
+    pub(super) fn nodes_in(&self, rect: Rect) -> Vec<cut_craft_core::nodes::NodeAt> {
+        self.doc
+            .selection
+            .iter()
+            .filter(|id| self.doc.editable(**id))
+            .flat_map(|&vector| {
+                cut_craft_core::nodes::nodes(&self.doc.vectors[&vector])
+                    .into_iter()
+                    .filter(|p| rect.contains(*p))
+                    .map(move |p| cut_craft_core::nodes::NodeAt {
+                        vector,
+                        at: cut_craft_core::params::Xy::new(p.x, p.y),
+                        reach: 1e-6,
+                    })
+            })
+            .collect()
+    }
+
+    /// A drag from one of several picked nodes moves them all; from a node moves it; a box
+    /// round nodes of the selected vectors picks them (Shift adds); any other drag selects,
+    /// as with the Select tool.
     pub(super) fn node_drop(&mut self, drag: Drag, shift: bool, reach: f64) {
-        if let Some(params) = self.node_move(drag, reach) {
+        if let Some(params) = self.picked_drag(drag, reach) {
+            let by = drag.end - drag.start;
+            match self.apply("move_nodes", &params) {
+                Ok(()) => {
+                    for n in &mut self.picked_nodes {
+                        n.at = cut_craft_core::params::Xy::new(n.at.x + by.x, n.at.y + by.y);
+                    }
+                }
+                Err(e) => self.status.set_message(&e),
+            }
+        } else if let Some(params) = self.node_move(drag, reach) {
+            self.picked_nodes.clear();
             if let Err(e) = self.apply("move_node", &params) {
                 self.status.set_message(&e);
             }
+        } else if let picked @ [_, ..] = &self.nodes_in(Rect::new(drag.start, drag.end))[..] {
+            if !shift {
+                self.picked_nodes.clear();
+            }
+            self.picked_nodes.extend(picked.iter().cloned());
         } else {
+            self.picked_nodes.clear();
             let ids = self
                 .doc
                 .window(Rect::new(drag.start, drag.end), drag.end.x < drag.start.x);

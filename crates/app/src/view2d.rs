@@ -116,6 +116,8 @@ pub enum Overlay {
     /// Node editing: handles on the selected vectors' nodes, and a node's drag in progress.
     Nodes {
         at: Vec<Point>,
+        /// Nodes picked with a box, drawn filled: a drag of one moves them all.
+        picked: Vec<Point>,
         moving: Vec<Path>,
     },
     /// A selection box in job coordinates; crossing boxes are drawn dashed.
@@ -616,11 +618,16 @@ impl Canvas {
                     painter.add(Shape::line(screen(path), selected));
                 }
             }
-            Overlay::Nodes { at, moving } => {
+            Overlay::Nodes { at, picked, moving } => {
                 let half = ui.spacing().interact_size.y * NODE_HANDLE_SHARE / 2.0;
                 for q in at {
                     let r = Rect::from_center_size(t.to_screen(*q), egui::vec2(half, half) * 2.0);
-                    painter.rect_filled(r, 0.0, ui.visuals().extreme_bg_color);
+                    let fill = if picked.iter().any(|p| p.distance(*q) < 1e-9) {
+                        selected.color
+                    } else {
+                        ui.visuals().extreme_bg_color
+                    };
+                    painter.rect_filled(r, 0.0, fill);
                     painter.rect_stroke(r, 0, selected, egui::StrokeKind::Middle);
                 }
                 for path in moving {

@@ -167,6 +167,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_vector_boundary::VectorBoundary>();
     r.add::<cmd_auto_layout_text::AutoLayoutText>();
     r.add::<cmd_reorder_toolpath::ReorderToolpath>();
+    r.add::<cmd_smooth_point::SmoothPoint>();
+    r.add::<cmd_move_nodes::MoveNodes>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

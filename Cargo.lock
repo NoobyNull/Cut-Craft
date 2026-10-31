@@ -1113,6 +1113,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-move-nodes"
+version = "0.3.3"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-move-to-layer"
 version = "0.3.3"
 dependencies = [
@@ -1423,6 +1432,13 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+]
+
+[[package]]
+name = "cmd-smooth-point"
+version = "0.3.3"
+dependencies = [
+ "cut-craft-core",
 ]
 
 [[package]]
@@ -1887,6 +1903,7 @@ dependencies = [
  "cmd-moulding-toolpath",
  "cmd-move",
  "cmd-move-node",
+ "cmd-move-nodes",
  "cmd-move-to-layer",
  "cmd-move-to-level",
  "cmd-nest-parts",
@@ -1921,6 +1938,7 @@ dependencies = [
  "cmd-show-hide",
  "cmd-sketch-carving-toolpath",
  "cmd-slice",
+ "cmd-smooth-point",
  "cmd-smooth-selected-components",
  "cmd-space-horizontally",
  "cmd-space-vertically",

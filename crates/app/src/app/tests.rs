@@ -421,7 +421,12 @@ fn node_editing_drags_a_corner_and_offers_its_menu() {
         .app
         .node_target(Point::new(10.0, 10.0), 1.0)
         .expect("a node there");
-    let menu = gui::node_menu(&target);
+    let menu = gui::node_menu(&h.app.doc, &target);
+    // Smooth Point turns the corner's spans into Béziers; Node Position opens Move Node there
+    let smooth = leaf(&menu, &["Smooth Point"]);
+    assert!(smooth.action.contains("smooth_point"), "{}", smooth.action);
+    let position = leaf(&menu, &["Node Position..."]);
+    assert!(position.action.contains("move_node"), "{}", position.action);
     let delete = leaf(&menu, &["Delete Point"]);
     h.app.invoke(&h.ctx, &delete.action);
     assert_eq!(
@@ -3918,4 +3923,35 @@ fn preview_visible_leaves_hidden_toolpaths_out_and_undo_last_steps_back_one_prev
     assert_eq!(h.app.simulation.as_ref(), Some(&all));
     h.app.invoke(&h.ctx, "undo_last_preview");
     assert_eq!(h.app.simulation.as_ref(), Some(&visible));
+}
+
+#[test]
+fn node_editing_picks_nodes_with_a_box_and_a_drag_moves_them_together() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "node_edit");
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    // a box round the two right-hand corners picks them
+    h.drag(h.at(25.0, 5.0), h.at(35.0, 25.0));
+    assert_eq!(h.app.picked_nodes.len(), 2);
+    assert_eq!(h.app.doc.selection.len(), 1, "the vector stays selected");
+    // dragging one of them moves both 5 mm right
+    h.drag(h.at(30.0, 10.0), h.at(35.0, 10.0));
+    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    for corner in [Point::new(35.0, 10.0), Point::new(35.0, 20.0)] {
+        assert!(
+            corners.iter().any(|q| q.distance(corner) < 0.5),
+            "{corner} in {corners:?}"
+        );
+    }
+    assert!(
+        corners
+            .iter()
+            .any(|q| q.distance(Point::new(10.0, 10.0)) < 0.5)
+    );
+    // a box with no nodes in it goes back to selecting vectors
+    h.drag(h.at(100.0, 100.0), h.at(120.0, 120.0));
+    assert!(h.app.picked_nodes.is_empty());
 }

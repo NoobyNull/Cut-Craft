@@ -604,6 +604,8 @@ struct CutCraftApp {
     stroke: Vec<Point>,
     /// The previewed material before the last preview, for Undo Last Preview.
     before_preview: Option<BeforePreview>,
+    /// Node editing: the nodes picked with a box, which a drag of one moves together.
+    picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
     /// Save Toolpaths' form, while it is open.
     save_form: Option<SaveForm>,
     /// Snapping Options (F4) and whether their window is open.

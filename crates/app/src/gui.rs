@@ -285,10 +285,24 @@ pub struct MenuSystem {
 }
 
 /// The node-editing popup for the node or span at `at` (Aspire's popup menus 142, 317, 635).
-pub fn node_menu(at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
+pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
+    // Node Position starts at the node itself, not at the click near it
+    let node = at
+        .path(doc)
+        .ok()
+        .and_then(|path| Some(cut_craft_core::nodes::nodes(path)[at.node(path).ok()?]))
+        .map_or(at.at, |p| cut_craft_core::params::Xy::new(p.x, p.y));
     vec![
         MenuItem::run::<cmd_insert_point::InsertPoint>("Insert Point", at),
         MenuItem::run::<cmd_delete_point::DeletePoint>("Delete Point", at),
+        MenuItem::run::<cmd_smooth_point::SmoothPoint>("Smooth Point", at),
+        MenuItem::form::<cmd_move_node::MoveNode>(
+            "Node Position...",
+            &cmd_move_node::Params {
+                from: at.clone(),
+                to: node,
+            },
+        ),
         MenuItem::separator(),
         MenuItem::run::<cmd_convert_span::SpanToLine>("Convert Span to Line", at),
         MenuItem::run::<cmd_convert_span::SpanToBezier>("Convert Span to Bezier", at),

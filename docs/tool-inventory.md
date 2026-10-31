@@ -260,9 +260,11 @@ say "not implemented yet".
   - Node Edit (N): handles on the selected vectors' nodes; drag a node to move it (arcs
     keep their bulge, Bézier handles follow); right-click a node or span for Insert Point,
     Delete Point, Convert Span to Line / Bezier / Arc, Cut Vector, Make Start Point, Reverse Direction,
-    Close With a Line, Exit Node Editing.
-    Dragging control points or spans, several nodes at once, smooth
-    points and Keep Bezier Tangency are not done.
+    Close With a Line, Smooth Point (the spans either side become Béziers with handles in
+    line through the node), Node Position... (Move Node's form, typed X / Y), Exit Node
+    Editing. A box round nodes of the selected vectors picks them (drawn filled; Shift adds)
+    and a drag of one moves them all (Move Nodes). Dragging control points or spans and
+    Keep Bezier Tangency are not done.
   - Text in a Box (Draw Text's other mode): the text scaled to fit a box at the anchor,
     inside a None / Normal / Wide margin, centred (dialog 279; its stretch options are not
     done).
