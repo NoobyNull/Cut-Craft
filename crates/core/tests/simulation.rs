@@ -402,3 +402,121 @@ fn hatch_lines_cross_the_regions_leaving_holes_out() {
         upright[0]
     );
 }
+
+#[test]
+fn bands_of_rows_and_shares_of_items_cover_everything_once_in_order() {
+    use cut_craft_core::simulation::{by_rows, each};
+    // a grid 7 wide and big enough to be split across the cores
+    let mut cells = vec![0_usize; 7 * 900];
+    by_rows(&mut cells, 7, |first, band| {
+        for (i, cell) in band.iter_mut().enumerate() {
+            *cell = (first * 7 + i) * 3;
+        }
+    });
+    assert!(cells.iter().enumerate().all(|(i, &c)| c == i * 3));
+    let items: Vec<usize> = (0..1000).collect();
+    assert_eq!(
+        each(&items, |&i| i * 2),
+        items.iter().map(|i| i * 2).collect::<Vec<_>>()
+    );
+    // a small grid, one band on this thread, and nothing at all
+    let mut few = vec![0_usize; 10];
+    by_rows(&mut few, 5, |first, band| {
+        for (i, cell) in band.iter_mut().enumerate() {
+            *cell = first * 5 + i;
+        }
+    });
+    assert_eq!(few, (0..10).collect::<Vec<_>>());
+    assert_eq!(each(&Vec::<usize>::new(), |&i| i), Vec::<usize>::new());
+}
+
+/// Where two height grids first differ, bit for bit.
+fn first_difference(a: &[f64], b: &[f64]) -> Option<usize> {
+    assert_eq!(a.len(), b.len());
+    a.iter()
+        .zip(b)
+        .position(|(x, y)| x.to_bits() != y.to_bits())
+}
+
+#[test]
+fn cutting_in_bands_leaves_exactly_what_sweeping_move_by_move_does() {
+    // a ball nose waving over the whole grid, rising and falling as it goes
+    let points: Vec<(f64, f64, f64)> = (0..60)
+        .map(|i| {
+            let t = f64::from(i) / 59.0;
+            (
+                5.0 + 90.0 * t,
+                50.0 + 40.0 * (t * 9.0).sin(),
+                -1.0 - 3.0 * (t * 5.0).cos(),
+            )
+        })
+        .collect();
+    let toolpath = with_tool(shaped(ToolShape::BallNose), &points);
+    let mut banded = material();
+    banded.cut(&toolpath);
+    let mut plain = material();
+    for pair in toolpath.moves.windows(2) {
+        plain.sweep(pair[0].to, pair[1].to, &toolpath.tool);
+    }
+    assert!(banded.heights.iter().any(|&z| z < 0.0), "something was cut");
+    assert_eq!(first_difference(&banded.heights, &plain.heights), None);
+}
+
+#[test]
+fn dropping_along_lines_across_the_cores_matches_line_by_line() {
+    use cut_craft_core::toolpath::Drop;
+    let model = grooved(10.0);
+    let tool = shaped(ToolShape::BallNose);
+    let peaks = model.peaks();
+    let drop = Drop {
+        grid: &model,
+        tool: &tool,
+        tolerance: 0.002,
+        floor: f64::NEG_INFINITY,
+        ceiling: f64::INFINITY,
+        over_ceiling: false,
+        peaks: &peaks,
+    };
+    let inside = |p: Point| p.y < 80.0;
+    let lines: Vec<Vec<Point>> = (0..40)
+        .map(|i| {
+            let y = 1.0 + 2.5 * f64::from(i);
+            vec![Point::new(1.0, y), Point::new(99.0, y)]
+        })
+        .collect();
+    let all = drop.along_all(&lines, &inside);
+    let one_by_one: Vec<Vec<DVec3>> = lines.iter().flat_map(|l| drop.along(l, &inside)).collect();
+    assert_ne!(all.len(), 0);
+    assert_eq!(all, one_by_one);
+}
+
+#[test]
+fn a_tool_over_a_slope_leaves_the_slope_wherever_it_can_rest_on_it() {
+    // the surface falls 0.01 mm a row: an end mill rests on the highest cell under it and
+    // its edge comes back down to the slope at every cell its reach spans, so what it leaves
+    // is the slope itself, except at the far edge where it cannot go on past the grid
+    let mut model = material();
+    for row in 0..model.rows {
+        for column in 0..model.columns {
+            #[expect(clippy::cast_precision_loss, reason = "a small row count")]
+            let z = -(row as f64) * 0.01;
+            model.heights[row * model.columns + column] = z;
+        }
+    }
+    let left = model.left_by(&Tool::default()); // 6 mm: 6 cells of reach
+    let reach = 6;
+    let inner = ..(model.rows - reach) * model.columns;
+    assert_eq!(
+        first_difference(&left.heights[inner], &model.heights[inner]),
+        None
+    );
+    assert!(
+        left.heights.iter().zip(&model.heights).all(|(l, m)| l >= m),
+        "nothing is cut below the slope"
+    );
+    let bottom = (model.rows - 1) * model.columns;
+    assert!(
+        left.heights[bottom] > model.heights[bottom],
+        "the far edge is out of reach"
+    );
+}

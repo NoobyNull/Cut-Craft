@@ -230,7 +230,7 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
         over_ceiling: false,
         peaks: &peaks,
     };
-    let runs: Vec<_> = lines.iter().flat_map(|l| drop.along(l, &inside)).collect();
+    let runs = drop.along_all(&lines, &inside);
     // stay down from one line or ring to the next one beside it
     let lift = match p.strategy {
         Strategy::Offset => p.stepover_retract.max(0.0),

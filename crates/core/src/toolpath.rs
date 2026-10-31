@@ -782,7 +782,7 @@ pub fn zigzag_within(
     step: f64,
     tolerance: f64,
     floor: f64,
-    inside: &dyn Fn(Point) -> bool,
+    inside: &(dyn Fn(Point) -> bool + Sync),
 ) -> Vec<Vec<DVec3>> {
     let (first, last) = (
         grid.centre(0, 0),
@@ -799,16 +799,17 @@ pub fn zigzag_within(
         over_ceiling: false,
         peaks: &peaks,
     };
-    let mut runs = vec![];
-    for line in 0..lines {
-        let y = first.y + line as f64 * step;
-        let mut ends = [Point::new(first.x, y), Point::new(last.x, y)];
-        if line % 2 == 1 {
-            ends.reverse();
-        }
-        runs.extend(drop.along(&ends, inside));
-    }
-    runs
+    let lines: Vec<Vec<Point>> = (0..lines)
+        .map(|line| {
+            let y = first.y + line as f64 * step;
+            let mut ends = vec![Point::new(first.x, y), Point::new(last.x, y)];
+            if line % 2 == 1 {
+                ends.reverse();
+            }
+            ends
+        })
+        .collect();
+    drop.along_all(&lines, inside)
 }
 
 /// How to drop a tool along lines over a grid: never below `floor`, every move checked to
@@ -837,7 +838,11 @@ impl Drop<'_> {
         clippy::cast_sign_loss,
         reason = "a small positive count"
     )]
-    pub fn along(&self, line: &[Point], inside: &dyn Fn(Point) -> bool) -> Vec<Vec<DVec3>> {
+    pub fn along(
+        &self,
+        line: &[Point],
+        inside: &(dyn Fn(Point) -> bool + Sync),
+    ) -> Vec<Vec<DVec3>> {
         let at = |p: Point| {
             p.extend(
                 self.grid
@@ -890,6 +895,18 @@ impl Drop<'_> {
             runs.push(tidy(run));
         }
         runs
+    }
+
+    /// [`Self::along`] each of `lines`, in order, a share of them per core.
+    pub fn along_all(
+        &self,
+        lines: &[Vec<Point>],
+        inside: &(dyn Fn(Point) -> bool + Sync),
+    ) -> Vec<Vec<DVec3>> {
+        crate::simulation::each(lines, |line| self.along(line, inside))
+            .into_iter()
+            .flatten()
+            .collect()
     }
 }
 
