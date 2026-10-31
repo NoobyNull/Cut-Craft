@@ -62,7 +62,7 @@ dimensions	Dimensions: length, vertical, horizontal	yes	dimensions command	dimen
 dimensions-angle-arc	Dimensions: angle and arc (radius / diameter), Shift+click to edit	no	angle and arc dimensions not done	dimension	angle dimension|arc dimension	118
 node-edit	Node editing: move, insert, delete, smooth, cut, start point, spans to line / arc / Bézier	yes	Node Edit: drag, insert, delete, Smooth Point, cut, start point, spans to line / arc / Bézier, Node Position (typed X / Y), box-picked nodes moved together	node edit|editing	smooth point|node edit	52
 node-mirror	Node editing with H / V mirror lines	no	not available	node edit	mirror(ing)? line	115
-trim	Trim: interactive trim and Trim Objects (clear inside / outside a boundary)	partly	Interactive Vector Trim; no drag-trimming, no rejoin, no Trim Objects to a boundary	trim	\btrim	65
+trim	Trim: interactive trim and Trim Objects (clear inside / outside a boundary)	yes	Interactive Vector Trim (click a piece) and Trim Objects (selected vectors trimmed to the closed vector picked last, clearing inside or outside, refitting curves)	trim	\btrim	65
 offset	Offset vectors: in / out / both, sharp corners, open vectors left / right	yes	offset-vectors command	offset	offset
 array-copy	Array Copy: rows, columns, gap / offset	partly	array-copy command; no block symmetry, row / column displacement or group copies	array copy	array copy	92
 circular-copy	Circular Copy	partly	circular-copy command; copies not grouped	circular	circular (copy|array)	95

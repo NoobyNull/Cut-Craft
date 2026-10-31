@@ -170,6 +170,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_reorder_toolpath::ReorderToolpath>();
     r.add::<cmd_smooth_point::SmoothPoint>();
     r.add::<cmd_move_nodes::MoveNodes>();
+    r.add::<cmd_trim_objects::TrimObjects>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

@@ -1559,6 +1559,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-trim-objects"
+version = "0.3.3"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-turn-and-spin"
 version = "0.3.3"
 dependencies = [
@@ -1951,6 +1960,7 @@ dependencies = [
  "cmd-toolpath-properties",
  "cmd-toolpath-tiling",
  "cmd-trace-bitmap",
+ "cmd-trim-objects",
  "cmd-turn-and-spin",
  "cmd-two-rail-sweep",
  "cmd-ungroup",

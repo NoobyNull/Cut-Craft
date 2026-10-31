@@ -259,6 +259,9 @@ say "not implemented yet".
   - Create Vector Texture: wavy lines at an angle over the selected closed vectors or the
     job, max spacing with variation, wavelength, amplitude, noise and a seed (vectors go on
     the current layer; no new-layer option yet).
+  - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
+    vector picked last (with its group) and the pieces outside it, or inside it, cleared;
+    the rest are refitted as curves if asked. The boundary stays.
   - Interactive Vector Trim: click a piece of a vector and the stretch between the nearest
     crossings either side goes; what is left comes back as polylines (curves are not kept
     exactly), and drag-trimming and rejoining are not done.
