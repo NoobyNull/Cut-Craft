@@ -1,8 +1,5 @@
-- Free 3D rotation, and SpaceMouse support (Options ▸ SpaceMouse)
-- Favourite tools: right-click a tool, or the Design or Toolpaths tab
-- Cancel on every tool takes back what it did
-- Re-import a model from its own file; toolpaths are marked out of date when it changes
-- Rotary imports preview turned inside the stock; importing opens the 3D view
-- Report a Bug names what was clicked, sends the log, and offers crash reports
-- Job Setup ▸ Set as Default; Paste in Place on Ctrl + Shift + V
-- A seamless window, themes, Help (F1), and dialogs that stay with the window
+- Switch a job between millimetres and inches: Edit ▸ Units, or the mm / in button on the status bar; tools keep units of their own
+- Toolpath forms laid out in Aspire's order and groups, with tabs; the tool's settings come from the Tool Database, with Edit… to change them there
+- Machine limits: Z travel, each axis's fastest rate and acceleration, the spindle's range; the time estimates and checks go by them
+- Side panels never widen past a third of the window
+- Windows builds no longer look for a SpaceMouse
