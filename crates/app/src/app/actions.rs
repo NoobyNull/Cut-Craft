@@ -54,6 +54,7 @@ impl CutCraftApp {
             tools_path: None,
             tool_manager: None,
             shots: None,
+            shaded_shot: None,
             space_mouse: None,
             reporter: cut_craft_bug_report::Reporter::new(
                 super::BUG_REPO,
@@ -75,6 +76,7 @@ impl CutCraftApp {
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
             view_cube: None,
+            area_3d: None,
             recent: vec![],
             playback: None,
             playing: false,
@@ -103,6 +105,9 @@ impl CutCraftApp {
             "undo" => self.history.can_undo(),
             "close" => self.screen != Screen::Start,
             "zoom_selected" => self.doc.selection_bounds().is_some(),
+            "save_shaded_image" => {
+                self.screen == Screen::Job && (self.split.is_some() || self.view == View::ThreeD)
+            }
             id if id.starts_with("open_recent:") => true,
             id if id.starts_with(gui::REIMPORT_MODEL) => self
                 .model_source(id)
@@ -294,6 +299,17 @@ impl CutCraftApp {
             id if self.layout_checked(id).is_some() => self.set_layout(id),
             "find_tool" => self.search = Some(String::new()),
             "refresh_2d_view" => ctx.request_repaint(),
+            "save_shaded_image" => {
+                if let Some(path) = file_dialog()
+                    .add_filter("PNG image", &["png"])
+                    .set_file_name("shaded.png")
+                    .save_file()
+                {
+                    let shot = cut_craft_bug_report::Shot::default();
+                    cut_craft_bug_report::take_screenshot(ctx, &shot);
+                    self.shaded_shot = Some((path.with_extension("png"), shot));
+                }
+            }
             "create_component_from_toolpath_preview" => self.component_from_preview(),
             "copy"
             | "cut"

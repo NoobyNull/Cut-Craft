@@ -27,6 +27,33 @@ impl CutCraftApp {
             shots.step(self, ctx);
             self.shots = Some(shots);
         }
+        self.save_shaded_image(ctx);
+    }
+
+    /// View ▸ Save Shaded Image: once the window's picture lands, the 3D view's part of it
+    /// is saved where the user chose.
+    fn save_shaded_image(&mut self, ctx: &egui::Context) {
+        let Some(image) = self
+            .shaded_shot
+            .as_ref()
+            .and_then(|(_, shot)| cut_craft_bug_report::taken(shot))
+        else {
+            return;
+        };
+        let Some((path, _)) = self.shaded_shot.take() else {
+            return;
+        };
+        let saved = self
+            .area_3d
+            .ok_or_else(|| "nothing in the 3D view to save".to_string())
+            .and_then(|area| shaded_png(&image, area, ctx.pixels_per_point()))
+            .and_then(|png| {
+                cut_craft_core::file::write_atomic(&path, &png).map_err(|e| e.to_string())
+            });
+        self.status.set_message(&match saved {
+            Ok(()) => format!("Saved shaded image {}", path.display()),
+            Err(e) => format!("could not save {}: {e}", path.display()),
+        });
     }
 
     /// Whether Model ▸ Model Resolution's item `id` is the job's resolution; `None` for any
@@ -1481,4 +1508,15 @@ impl CutCraftApp {
             .apply(&c.finish())
             .expect("picked ids come from the document");
     }
+}
+
+/// The part of the window's picture `image` (taken at `pixels_per_point`) inside `area`
+/// (points), as a PNG.
+pub(super) fn shaded_png(
+    image: &egui::ColorImage,
+    area: egui::Rect,
+    pixels_per_point: f32,
+) -> Result<Vec<u8>, String> {
+    let whole = egui::Rect::from_min_size(egui::Pos2::ZERO, image.source_size / pixels_per_point);
+    cut_craft_bug_report::png(&image.region(&area.intersect(whole), Some(pixels_per_point)))
 }

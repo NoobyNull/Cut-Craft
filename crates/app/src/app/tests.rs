@@ -3704,3 +3704,19 @@ fn a_side_panel_never_takes_more_than_its_share_of_the_window() {
         window.width()
     );
 }
+
+#[test]
+fn the_shaded_image_is_the_3d_views_part_of_the_window() {
+    let mut h = Harness::new();
+    h.app.screen = Screen::Job;
+    h.app.view = View::TwoD;
+    assert!(!h.app.available("save_shaded_image"), "no 3D view showing");
+    h.app.view = View::ThreeD;
+    assert!(h.app.available("save_shaded_image"));
+    // a 40 × 20 pixel window at 2 pixels a point; the view runs past its right edge
+    let window = egui::ColorImage::filled([40, 20], egui::Color32::RED);
+    let area = Rect::from_min_max(Pos2::new(5.0, 2.0), Pos2::new(50.0, 8.0));
+    let png = views::shaded_png(&window, area, 2.0).unwrap();
+    let saved = image::load_from_memory(&png).unwrap();
+    assert_eq!((saved.width(), saved.height()), (30, 12));
+}
