@@ -12,7 +12,7 @@ trap 'rm -rf "$work"' EXIT
 python3 -I "$here/make_icons.py" "$work"
 python3 -I "$here/make_3d_icons.py" "$work"
 # drawn from models (scripts/model_pictures.py), so never from their flat stand-ins
-models=" import/pointing_hand import/model_size_xyz import/position_relative_to_modeling_plane "
+models=" import/pointing_hand import/model_size_xyz import/position_relative_to_modeling_plane import/initial_orientation "
 cd "$work"
 find . -name '*.svg' | sort | while read -r svg; do
     name=${svg#./}

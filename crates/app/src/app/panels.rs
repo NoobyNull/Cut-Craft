@@ -1152,7 +1152,9 @@ impl CutCraftApp {
                 ui.visuals().extreme_bg_color
             };
             painter.circle(centre, edge / 2.0, fill, look.bg_stroke);
-            handle_glyph(&painter, handle, centre, edge / 2.0, look.fg_stroke);
+            if let Some(icon) = handle.icon() {
+                self.icons.image(icon).paint_at(ui, rect);
+            }
             self.handles_3d.push((handle, centre));
             if response.drag_started()
                 && let Some(origin) = ui.input(|i| i.pointer.press_origin())
@@ -1166,6 +1168,7 @@ impl CutCraftApp {
                     params,
                     dirty: false,
                     at: rect.left_bottom(),
+                    radios: vec![],
                 });
             }
         }
@@ -1355,14 +1358,7 @@ impl CutCraftApp {
             .fixed_pos(s.at)
             .show(ctx, |ui| {
                 ui.strong("Combine with other components ...");
-                ui.horizontal(|ui| {
-                    for (name, mode) in gui::COMBINE_MODES {
-                        if ui.radio(s.params.combine == mode, name).clicked() {
-                            s.params.combine = mode;
-                            s.dirty = true;
-                        }
-                    }
-                });
+                combine_radios_3d(ui, &self.icons, s);
                 egui::Grid::new("component_settings_3d").show(ui, |ui| {
                     let p = &mut s.params;
                     s.dirty |= ui.checkbox(&mut p.fade.on, "Fade").changed();
@@ -1934,49 +1930,23 @@ fn modeling_plane(
     mesh
 }
 
-/// A handle's picture inside its circle of `radius` about `at`: a block with an arrow up
-/// and down it (total height), a peak with an arrow up it (shape height), a block with its
-/// bottom marked (base height), and sliders (settings).
-fn handle_glyph(
-    painter: &egui::Painter,
-    handle: Handle3d,
-    at: egui::Pos2,
-    radius: f32,
-    stroke: egui::Stroke,
-) {
-    use egui::{Rect, StrokeKind, pos2, vec2};
-    let r = radius / 2.0;
-    match handle {
-        // the transform handles are painted where they are placed
-        Handle3d::Transform(_) => {}
-        Handle3d::Total => {
-            let block = Rect::from_min_max(at + vec2(-r, -r), at + vec2(r / 4.0, r));
-            painter.rect_stroke(block, 0.0, stroke, StrokeKind::Middle);
-            painter.arrow(at + vec2(r * 0.7, 0.0), vec2(0.0, -r), stroke);
-            painter.arrow(at + vec2(r * 0.7, 0.0), vec2(0.0, r), stroke);
-        }
-        Handle3d::Height => {
-            let peak = [
-                at + vec2(-r, r),
-                at + vec2(-r / 4.0, -r / 2.0),
-                at + vec2(r / 2.0, r),
-            ];
-            painter.add(egui::Shape::closed_line(peak.to_vec(), stroke));
-            painter.arrow(at + vec2(r, r), vec2(0.0, -2.0 * r), stroke);
-        }
-        Handle3d::Base => {
-            let block = Rect::from_center_size(at, vec2(2.0 * r, 1.5 * r));
-            painter.rect_stroke(block, 0.0, stroke, StrokeKind::Middle);
-            let y = block.bottom() - block.height() / 3.0;
-            painter.line_segment([pos2(block.left(), y), pos2(block.right(), y)], stroke);
-        }
-        Handle3d::Settings => {
-            for (i, knob) in [-0.4, 0.4, 0.0].into_iter().enumerate() {
-                #[expect(clippy::cast_precision_loss, reason = "three sliders")]
-                let y = at.y + (i as f32 - 1.0) * r * 0.8;
-                painter.line_segment([pos2(at.x - r, y), pos2(at.x + r, y)], stroke);
-                painter.circle_filled(pos2(at.x + knob * r, y), stroke.width * 1.5, stroke.color);
+/// The combine modes as Aspire's small shape icons, the chosen one pressed and the names on
+/// hover; where each is drawn goes to `s.radios`.
+fn combine_radios_3d(ui: &mut egui::Ui, icons: &crate::icons::Icons, s: &mut Settings3d) {
+    let edge = ui.spacing().interact_size.y;
+    s.radios.clear();
+    ui.horizontal(|ui| {
+        for (name, mode, icon) in gui::COMBINE_MODES {
+            let image = icons.image(icon).fit_to_exact_size(egui::Vec2::splat(edge));
+            let radio = egui::Button::image(image)
+                .selected(s.params.combine == mode)
+                .min_size(egui::Vec2::splat(edge));
+            let response = ui.add(radio).on_hover_text(name);
+            if response.clicked() {
+                s.params.combine = mode;
+                s.dirty = true;
             }
+            s.radios.push((mode, response.rect.center()));
         }
-    }
+    });
 }

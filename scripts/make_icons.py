@@ -592,6 +592,37 @@ I[md + "replace_below.svg"] = lambda: [plane(42), profile("round", 6, 42, 40, 30
 I[md + "reset_inside_selected_vectors.svg"] = lambda: [dome(24, 38, 38, 26), circ(24, 26, 7, ACC, 2.5, WHITE, "3 2")]
 I[md + "reset_outside_selected_vectors.svg"] = lambda: [rect(3, 6, 42, 36, 2, ACC, 2.5, WHITE, "3 2"), circ(24, 26, 11, INK, SW, MODEL)]
 I[md + "scale_model_z_height.svg"] = lambda: [plane(42), profile("round", 4, 32, 40, 18), darrow(40, 8, 40, 38)]
+
+
+# the 3D view's editing handles (round buttons: drawn inside the circle) and the combine modes
+# of their settings popup; flat stand-ins, redrawn shaded by make_3d_icons.py
+def height_handle(which):
+    """A dome on its base, the part being changed coloured, with a dimension arrow over it."""
+    top, mid, bot = 10, 28, 38
+    span = {"total": (top, bot), "shape": (top, mid), "base": (mid, bot)}[which]
+    return [rect(8, mid, 24, bot - mid, 0, INK, 2.5, LIGHT if which == "shape" else MODEL),
+            profile("round", 8, 32, mid, mid - top, INK, LIGHT if which == "base" else MODEL),
+            darrow(39, span[0], 39, span[1], ACC, 2.5, 4.5)]
+
+
+def combine_mark(mode, cx=40, cy=9, s=5, c=ACC, w=3.5):
+    """A combine mode's sign: + for add, - subtract, a cup for merge, a cap for low, x multiply."""
+    if mode == "add":
+        return plus(cx, cy, s, c, w)
+    if mode == "subtract":
+        return line(cx - s, cy, cx + s, cy, c, w)
+    if mode == "merge":
+        return path(f"M{cx - s},{cy - s} V{cy} A{s},{s} 0 0 0 {cx + s},{cy} V{cy - s}", c, w)
+    if mode == "low":
+        return path(f"M{cx - s},{cy + s} V{cy} A{s},{s} 0 0 1 {cx + s},{cy} V{cy + s}", c, w)
+    return line(cx - s, cy - s, cx + s, cy + s, c, w) + line(cx + s, cy - s, cx - s, cy + s, c, w)
+
+
+for k in ("total", "shape", "base"):
+    I[md + f"{k}_height.svg"] = (lambda k=k: height_handle(k))
+I[md + "additional_settings.svg"] = lambda: [line(12, y, 36, y, INK, 3) for y in (15, 24, 33)] + [dot(x, y, 3.5) for x, y in ((18, 15), (30, 24), (22, 33))]
+for k in ("add", "subtract", "merge", "low", "multiply"):
+    I[md + f"combine_{k}.svg"] = (lambda k=k: [dome(17, 40, 26, 17), dome(31, 40, 22, 13), combine_mark(k)])
 I[md + "sculpting.svg"] = lambda: [plane(42), path("M4,40 C10,24 16,34 22,24 S34,28 40,40 Z", INK, SW, MODEL),
                                    group([rect(-3, -16, 6, 16, 1, DARK, 2, WOOD), path("M-4,0 H4 L2,7 Q0,10 -2,7 Z", DARK, 2, ACC)], "translate(34,16) rotate(30)")]
 I[md + "slice_model.svg"] = lambda: [plane(42), profile("round", 6, 42, 40, 30)] + [line(4, y, 44, y, ACC, 2, "4 2") for y in (18, 26, 34)]
@@ -704,8 +735,12 @@ def main():
             rel = os.path.relpath(os.path.join(root, f), here).replace(os.sep, "/")
             if f.endswith((".svg", ".bmp", ".png")):
                 wanted.add(rel[:-4] + ".svg")
-    # credited third-party icons, and pictures rendered from models (scripts/model_pictures.py)
-    wanted -= {"file/github_link.svg", "file/thingiverse_link.svg", "import/pointing_hand.svg"}
+    # credited third-party icons, pictures rendered from models (scripts/model_pictures.py), and
+    # the seven drawn by scripts/draw_icons.py
+    wanted -= {"file/github_link.svg", "file/thingiverse_link.svg", "import/pointing_hand.svg",
+               "drawing/join/join_vectors.svg", "drawing/weld_and_offset/plate_production.svg",
+               "modeling/vector_unwrapper.svg", "toolpaths/drag_knife_toolpath.svg", "toolpaths/inlay_toolpath.svg",
+               "toolpaths/material_setup.svg", "toolpaths/materials.svg"}
     missing = sorted(wanted - set(I))
     extra = sorted(set(I) - wanted)
     if missing:

@@ -1767,7 +1767,16 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     let settings = at(&h, Handle3d::Settings);
     h.click(settings, Modifiers::NONE);
     h.frame(vec![]);
-    let subtract = h.text_at("Subtract").expect("the settings popup");
+    let subtract = h
+        .app
+        .settings_3d
+        .as_ref()
+        .expect("the settings popup")
+        .radios
+        .iter()
+        .find(|(m, _)| *m == Combine::Subtract)
+        .map(|(_, at)| *at)
+        .expect("the combine radios, drawn as icons");
     h.click(subtract, Modifiers::NONE);
     h.frame(vec![]);
     assert_eq!(dome(&h).combine, Combine::Subtract);

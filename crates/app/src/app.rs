@@ -509,6 +509,18 @@ impl Handle3d {
             Self::Transform(Handle::Rotate { .. }) => "Rotate: drag (Alt: in 15° steps)",
         }
     }
+
+    /// Its picture, drawn inside the round button; the transform handles are painted where
+    /// they are placed.
+    fn icon(self) -> Option<&'static str> {
+        match self {
+            Self::Total => Some("modeling/total_height.png"),
+            Self::Height => Some("modeling/shape_height.png"),
+            Self::Base => Some("modeling/base_height.png"),
+            Self::Settings => Some("modeling/additional_settings.png"),
+            Self::Transform(_) => None,
+        }
+    }
 }
 
 /// The popup the Settings handle opens: Component Properties' settings as being edited,
@@ -519,6 +531,8 @@ struct Settings3d {
     dirty: bool,
     /// Where it opened on screen.
     at: egui::Pos2,
+    /// Its combine-mode radios, where they were drawn last frame.
+    radios: Vec<(cut_craft_core::component::Combine, egui::Pos2)>,
 }
 
 /// A command whose settings form is open.

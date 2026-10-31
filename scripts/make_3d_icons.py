@@ -10,8 +10,8 @@ import base64, math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import stlrender
-from make_icons import (ACC, DARK, GREY, INK, RED, TP, WHITE, WOODD, arrow, circ, curved_arrow, darrow, dot, eye, folder,
-                        line, path, picture, pl, pencil, plus, rect, solid)
+from make_icons import (ACC, DARK, GREY, INK, RED, TP, WHITE, WOODD, arrow, circ, combine_mark, curved_arrow, darrow, dot,
+                        eye, folder, line, path, picture, pl, pencil, plus, rect, solid)
 
 BODY = "#7aa6e4"   # a 3D component, as in the model pictures
 WOOD = "#f1d6a8"   # material
@@ -513,6 +513,55 @@ def _():
         r = 0.8 * math.sqrt(1 - (k * 0.175 / 0.7) ** 2)
         ic.marks.append(stroke3(ic, ring3(0, 0, r, z + 0.01), TP, 1.6))
     return ic
+
+
+# ---- the 3D view's editing handles, drawn inside their round buttons ----
+
+def height_handle(which):
+    """Total, shape or base height: a dome on its base, the part being changed in BODY and
+    the rest pale, with a dimension arrow beside it over that part."""
+    half, base, dome = 0.42, 0.85, 0.5
+    ic = Icon(fit=(0.15, 0.15, 0.7, 0.86))
+    ic.add([(box(-half, -half, 0, half, half, base), PALE if which == "shape" else BODY),
+            (shift(shape(dome_fn(r=half * 0.95, h=dome)), dz=base), PALE if which == "base" else BODY)])
+    # the screen rise of a height, the view being parallel
+    rise = lambda z: ic.p(0, 0, 0)[1] - ic.p(0, 0, z)[1]
+    bottom = max(ic.p(sx * half, sy * half, 0)[1] for sx in (-1, 1) for sy in (-1, 1))
+    base_top, apex = bottom - rise(base), ic.p(0, 0, base + dome)[1]
+    span = {"total": (apex, bottom), "shape": (apex, base_top), "base": (base_top, bottom)}[which]
+    ic.marks.append(darrow(39, span[0], 39, span[1], ACC, 2.5, 4))
+    return ic
+
+
+for k in ("total", "shape", "base"):
+    I[f"modeling/{k}_height"] = (lambda k=k: height_handle(k))
+
+
+# ---- the combine modes of the handles' settings popup: two domes combined ----
+
+LEFT = dome_fn(-0.28, 0.12, 0.68, 0.6)
+RIGHT = dome_fn(0.35, -0.25, 0.55, 0.5)
+WHOLE = dome_fn(0, 0, 0.85, 0.7)
+
+
+def combined(mode, fn, ghosts=()):
+    """The result of combining, on the model under it, with the shapes it came from pale
+    behind it where it is lower, and the mode's sign in the corner; all five framed alike."""
+    ic = Icon(fit=(0.02, 0.1, 0.86, 0.98), bounds=((-1, -1, -0.05), (1, 1, 0.75)))
+    ic.add([(box(-1, -1, -0.05, 1, 1, 0), "#9fb8e0")], 0.75)
+    for g in ghosts:
+        ic.add([(shape(g), PALE)], 0.45)
+    ic.add([(shape(fn), BODY)])
+    ic.marks.append(combine_mark(mode, 41, 8, 4.5, ACC, 3.2))
+    return ic
+
+
+I["modeling/combine_add"] = lambda: combined("add", lambda X, Y: LEFT(X, Y) + RIGHT(X, Y))
+I["modeling/combine_subtract"] = lambda: combined("subtract", lambda X, Y: np.maximum(LEFT(X, Y) - RIGHT(X, Y), 0))
+I["modeling/combine_merge"] = lambda: combined("merge", pair(LEFT, RIGHT))
+I["modeling/combine_low"] = lambda: combined("low", lambda X, Y: np.minimum(LEFT(X, Y), RIGHT(X, Y)), [LEFT, RIGHT])
+# a 0 to 1 component multiplied in fades what is under it
+I["modeling/combine_multiply"] = lambda: combined("multiply", lambda X, Y: WHOLE(X, Y) * np.clip((0.7 - X) / 1.4, 0, 1), [WHOLE])
 
 
 def main():

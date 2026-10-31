@@ -710,12 +710,21 @@ pub const REIMPORT_MODEL: &str = "reimport_model:";
 /// `select_component:<id>`: the 3D view's menu lists the components under the click.
 pub const SELECT_COMPONENT: &str = "select_component:";
 
-pub const COMBINE_MODES: [(&str, Combine); 5] = [
-    ("Add", Combine::Add),
-    ("Subtract", Combine::Subtract),
-    ("Merge", Combine::Merge),
-    ("Low", Combine::Low),
-    ("Multiply", Combine::Multiply),
+/// The combine modes in Aspire's order, each with its icon.
+pub const COMBINE_MODES: [(&str, Combine, &str); 5] = [
+    ("Add", Combine::Add, "modeling/combine_add.png"),
+    (
+        "Subtract",
+        Combine::Subtract,
+        "modeling/combine_subtract.png",
+    ),
+    ("Merge", Combine::Merge, "modeling/combine_merge.png"),
+    ("Low", Combine::Low, "modeling/combine_low.png"),
+    (
+        "Multiply",
+        Combine::Multiply,
+        "modeling/combine_multiply.png",
+    ),
 ];
 
 /// A level's Mirror Mode submenu, in Aspire's order.
@@ -775,7 +784,7 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
             "Combine Mode",
             COMBINE_MODES
                 .iter()
-                .map(|&(name, c)| mode(name, c))
+                .map(|&(name, c, _)| mode(name, c))
                 .collect(),
         ),
         show,
