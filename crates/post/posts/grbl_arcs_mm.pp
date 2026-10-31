@@ -3,6 +3,12 @@
 + tool, to be resumed from the sender once it is in and zeroed.
 + Written for Cut Craft from the documented .pp format (re/SPEC.md).
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-27 First version: arcs, tool change by hand (M0)
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft GRBL Arcs (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"

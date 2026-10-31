@@ -132,7 +132,8 @@ say "not implemented yet".
   X), and is refused on a machine without the 4th axis or without such a post. Flat jobs
   skip rotary posts. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
-  or after a rename.
+  or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
+  its version (the date of its last change).
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /

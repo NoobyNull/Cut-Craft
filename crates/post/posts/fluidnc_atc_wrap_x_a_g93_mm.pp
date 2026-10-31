@@ -2,6 +2,13 @@
 + Rotary: X wrapped onto A, for a cylinder along Y; feeds in inverse time (G93). Needs an A axis.
 + Made by scripts/make_posts.py: edit its template and run it again.
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-24 First version: automatic tool changer
++ Cut Craft  2026-10-27 Arcs; inch and straight-line variants
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft FluidNC ATC Wrap X to A G93 (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"

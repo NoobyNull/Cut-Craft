@@ -87,6 +87,32 @@ impl Library {
         }
     }
 
+    /// The rows of a post's change log: the comment lines after its `History` comment (rule
+    /// lines of `=` left out), as Who / When / What. Empty for a post without one.
+    pub fn change_log(text: &str) -> Vec<String> {
+        text.lines()
+            .map(str::trim)
+            .skip_while(|l| l.trim_start_matches('+').trim() != "History")
+            .skip(1)
+            .map_while(|l| l.strip_prefix('+'))
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.chars().all(|c| c == '=' || c == ' '))
+            .map(str::to_owned)
+            .collect()
+    }
+
+    /// A post's version: when its last change was made (the change log's last row).
+    pub fn version(text: &str) -> Option<String> {
+        let log = Self::change_log(text);
+        // the first row names the columns
+        log.iter()
+            .skip(1)
+            .last()?
+            .split_whitespace()
+            .find(|w| w.contains(|c: char| c.is_ascii_digit()) && w.contains(['/', '-', '.']))
+            .map(str::to_owned)
+    }
+
     /// The post named `name`, read.
     pub fn load(&self, name: &str) -> Result<Post, String> {
         let entry = self
@@ -221,6 +247,33 @@ fn with_name(text: &str, name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_own_post_has_a_change_log_and_a_version() {
+        for entry in Library::new(None).entries() {
+            let text = Library::text(&entry).unwrap();
+            let log = Library::change_log(&text);
+            assert!(log.len() > 1, "{}: {log:?}", entry.name);
+            assert!(log[0].starts_with("Who"), "{log:?}");
+            assert_eq!(
+                Library::version(&text).as_deref(),
+                Some("2026-10-31"),
+                "{}",
+                entry.name
+            );
+        }
+        // a Vectric-style history, and none
+        let theirs = "+ History\n+ Who  When       What\n+ ==== ========== ====\n+ Mark 14/07/2020 Written\n\nPOST_NAME = \"x\"";
+        assert_eq!(
+            Library::change_log(theirs),
+            ["Who  When       What", "Mark 14/07/2020 Written"]
+        );
+        assert_eq!(Library::version(theirs).as_deref(), Some("14/07/2020"));
+        assert_eq!(
+            Library::change_log("POST_NAME = \"x\""),
+            Vec::<String>::new()
+        );
+    }
 
     fn library(name: &str) -> (Library, PathBuf) {
         let dir =

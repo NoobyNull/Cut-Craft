@@ -2,6 +2,13 @@
 + Rotary: Y wrapped onto A, for a cylinder along X; feeds in units a minute. Needs an A axis.
 + Made by scripts/make_posts.py: edit its template and run it again.
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-24 First version: automatic tool changer
++ Cut Craft  2026-10-27 Arcs; inch and straight-line variants
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft FluidNC ATC Wrap Y to A (inch) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "INCHES"

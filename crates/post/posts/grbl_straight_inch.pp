@@ -4,6 +4,12 @@
 + Straight: lines only, for controllers without arcs.
 + Made by scripts/make_posts.py: edit its template and run it again.
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-27 First version: arcs, tool change by hand (M0)
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft GRBL Straight (inch) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "INCHES"
