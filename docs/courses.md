@@ -19,7 +19,7 @@ most. *Videos* counts every video whose captions match a capability's pattern.
 | 3 | Preview colours: toolpath colour per toolpath, machined area material / surface (painted) / global fill colour, solid colour material | no: the preview is always the material colour | 62 | #59 |
 | 4 | Two Rail Sweep: several cross-sections placed on the rails, sweep between spans, add to all rail nodes, fill centre of closed rails, swap rail order | no: one cross-section only | 49 | #63 |
 | 5 | Sculpting: smooth, smudge, deposit, remove, undo brush; diameter, strength, smoothness | partly: sculpt command in the 2D view; not in the 3D view, no keys for brush size / strength, no overlay image, no presets | 46 | #66 |
-| 6 | Import Component / 3D Model: STL / OBJ / clipart; orientation, size, units, depth, discard below zero | partly: STL and own .ccclip; no OBJ, no rotation handles, no Create Both Sides | 43 | #67 |
+| 6 | Import Component / 3D Model: STL / OBJ / clipart; orientation, size, units, depth, discard below zero | partly: STL, OBJ (v / f, polygons fanned) and own .ccclip through Orientate 3D Model with rotation, size, units, depth, discard below zero; no on-screen rotation handles, no Create Both Sides (needs two-sided jobs, #54) | 43 | #67 |
 | 7 | Extrude and Weave: several sections, square corners, component along rail with overlap, weave under / over | no: one open cross-section along one rail | 40 | #68 |
 | 8 | Clipart tab: folders, drag onto the job, add folder, import to level | partly: Clipart tab lists folders and double-click imports; no drag to a spot, no import to a new level | 39 | #69 |
 | 9 | Toolpath Tiling: individual tiles / feed through, size, overlap, files per tile | partly: tiling, overlap, smallest first and a file per tile; no active tile, preview of one tile or drawing in original position | 32 | #71 |
@@ -204,7 +204,7 @@ most. *Videos* counts every video whose captions match a capability's pattern.
 | Lithophane: component from bitmap, gap below model, Preview Lithophane mode | partly | component from bitmap and gap below model; no lithophane preview mode | 8 |
 | Create Component from Bitmap (height maps) and clear area outside a vector | yes | create-component-from-bitmap, reset-outside-selected-vectors | 24 |
 | Smooth selected components | yes | smooth-selected-components command | 166 |
-| Import Component / 3D Model: STL / OBJ / clipart; orientation, size, units, depth, discard below zero | partly | STL and own .ccclip; no OBJ, no rotation handles, no Create Both Sides | 43 |
+| Import Component / 3D Model: STL / OBJ / clipart; orientation, size, units, depth, discard below zero | partly | STL, OBJ (v / f, polygons fanned) and own .ccclip through Orientate 3D Model with rotation, size, units, depth, discard below zero; no on-screen rotation handles, no Create Both Sides (needs two-sided jobs, #54) | 43 |
 | Import: Highlight Undercuts and Create Both Sides (front and back components) | no | undercuts are reported, not highlighted on the import form; no both sides | 28 |
 | Components right-click Re-Import (back to the import form) | partly | the component menu has Re-import Model | 8 |
 | Export STL (tolerance, triangle count, back face), greyscale bitmap, 3D clipart | partly | Export as STL / Greyscale Bitmap / 3D Clipart; no tolerance, triangle limit or back face options, no OBJ | 12 |

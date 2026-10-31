@@ -296,7 +296,7 @@ impl CutCraftApp {
     pub(super) fn import_file(&mut self, path: &std::path::Path) {
         let stl = path
             .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+            .is_some_and(|e| e.eq_ignore_ascii_case("stl") || e.eq_ignore_ascii_case("obj"));
         if stl {
             self.start_command("orientate_3d_model");
             // the model is placed in 3D, so it is shown there
