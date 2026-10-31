@@ -6,12 +6,12 @@ use super::{
     DESIGN_PANEL_WIDTHS, DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
     JOB_EXTENSION, Key, KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout,
     MODEL_IMPORTERS, Menus, Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point,
-    RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS,
-    SUMMARY_DEFAULTS, SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS,
-    TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW,
-    commands, dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
-    side_tabs, summary_table, template_dialog, tool_picker, toolpath_template_dialog, view3d,
+    RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm,
+    Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
+    file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
+    on_the_desktop, rest_section, selector_section, shortcut, side_panel, side_tabs, summary_table,
+    template_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -65,7 +65,7 @@ impl CutCraftApp {
             clipboard: vec![],
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
-            summary: SUMMARY_DEFAULTS,
+            summary: super::Summary::default(),
             stroke: Vec::new(),
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
@@ -2765,24 +2765,25 @@ impl CutCraftApp {
         } else {
             vec![]
         };
-        let times: Vec<(String, f64, bool)> = self
+        let rows: Vec<super::SummaryRow> = self
             .doc
             .toolpaths
-            .values()
-            .map(|t| {
-                (
-                    t.name.clone(),
-                    t.machining_minutes(self.summary.0) * self.summary.1,
-                    t.visible,
-                )
+            .iter()
+            .map(|(&id, t)| super::SummaryRow {
+                id,
+                name: t.name.clone(),
+                minutes: t.machining_minutes(self.summary.rapid) * self.summary.scale,
+                visible: t.visible,
+                notes: t.summary_notes().to_owned(),
             })
             .collect();
+        let mut noted = None;
         let summary = &mut self.summary;
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
             Info::Help(_) => unreachable!("returned above"),
-            Info::Summary => summary_table(ui, &times, summary, units),
+            Info::Summary => noted = summary_table(ui, &rows, summary, units),
             Info::About => {
                 ui.heading("Cut Craft");
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
@@ -2819,6 +2820,19 @@ impl CutCraftApp {
                 });
             }
         });
+        // Apply under the summary's notes keeps them with their toolpath
+        if let Some((id, notes)) = noted
+            && let Some(t) = self.doc.toolpaths.get(&id)
+        {
+            let name = t.name.clone();
+            let params = serde_json::json!({
+                "toolpath": id, "name": name, "visible": t.visible, "notes": notes
+            });
+            match self.apply("toolpath_properties", &params) {
+                Ok(()) => self.status.set_message(&format!("Notes kept with {name}")),
+                Err(e) => self.status.set_message(&e),
+            }
+        }
         if !open {
             self.info = None;
         }

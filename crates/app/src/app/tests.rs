@@ -4420,3 +4420,44 @@ fn save_shaded_image_saves_the_3d_view_s_part_of_the_window() {
     );
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn the_toolpath_summary_keeps_notes_per_toolpath_and_shows_the_rapid_rate_in_its_units() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    h.app.invoke(&h.ctx, "toolpath_summary");
+    h.frame(vec![]);
+    // the rapid rate is kept in mm/min, shown in the units picked
+    h.app.summary.units = cut_craft_core::toolpath::RateUnits::InchPerMin;
+    h.frame(vec![]);
+    assert!(
+        (h.app.summary.rapid - 5000.0).abs() < 1e-9,
+        "the rate itself is unchanged"
+    );
+    // a toolpath's notes, written under the summary and applied
+    let name = h.app.doc.toolpaths[&id].name.clone();
+    // the summary's row (the toolpath list has the name too, further down)
+    let row = *h.texts_at(&name).first().expect("the toolpath is listed");
+    h.click(row, Modifiers::NONE);
+    assert_eq!(h.app.summary.picked, Some(id));
+    h.app.summary.notes = "Use the 1/4 in downcut".into();
+    h.frame(vec![]);
+    let apply = *h.texts_at("Apply").last().expect("the notes have Apply");
+    h.click(apply, Modifiers::NONE);
+    assert_eq!(
+        h.app.doc.toolpaths[&id].summary_notes(),
+        "Use the 1/4 in downcut"
+    );
+    // recalculating keeps them
+    let change = h.app.registry.edit(&h.app.doc, id, None).unwrap();
+    h.app.doc.apply(&change).unwrap();
+    assert_eq!(
+        h.app.doc.toolpaths[&id].summary_notes(),
+        "Use the 1/4 in downcut"
+    );
+}

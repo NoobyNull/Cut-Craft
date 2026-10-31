@@ -565,6 +565,7 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
         name: toolpath.name.clone(),
         visible: toolpath.visible,
         preview: cmd_toolpath_properties::PreviewFill::Unchanged,
+        notes: None,
     };
     let no_fill = cmd_toolpath_properties::Params {
         preview: cmd_toolpath_properties::PreviewFill::NoFill,

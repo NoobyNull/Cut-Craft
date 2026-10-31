@@ -254,9 +254,38 @@ pub(super) struct SaveForm {
     add_side: bool,
 }
 
-/// Toolpath Summary's rapid rate (mm/min) and scale factor until the user changes them.
-// ponytail: session-only like the other display settings [inf]; Aspire keeps them per machine
-const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
+/// Toolpath Summary's settings: the rapid rate (mm/min) and the units it is shown in, the
+/// scale factor, and the toolpath picked to write notes for, with the notes being written.
+#[derive(Clone, Debug)]
+struct Summary {
+    rapid: f64,
+    units: cut_craft_core::toolpath::RateUnits,
+    scale: f64,
+    picked: Option<EntityId>,
+    notes: String,
+}
+
+impl Default for Summary {
+    fn default() -> Self {
+        Self {
+            rapid: 5000.0,
+            units: cut_craft_core::toolpath::RateUnits::MmPerMin,
+            scale: 1.0,
+            picked: None,
+            notes: String::new(),
+        }
+    }
+}
+
+/// A toolpath's row in the Toolpath Summary: its id, name, time, whether it is shown, and
+/// its notes.
+struct SummaryRow {
+    id: EntityId,
+    name: String,
+    minutes: f64,
+    visible: bool,
+    notes: String,
+}
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
@@ -615,8 +644,8 @@ struct CutCraftApp {
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
     help_cache: egui_commonmark::CommonMarkCache,
-    /// Toolpath Summary's rapid rate (mm/min) and scale factor.
-    summary: (f64, f64),
+    /// Toolpath Summary's settings.
+    summary: Summary,
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
     /// The previewed material before the last preview, for Undo Last Preview.
@@ -826,33 +855,44 @@ fn hms(minutes: f64) -> String {
     format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
 }
 
-/// Each toolpath's estimated time, the visible ones' total, and the rate and scale they use.
+/// Each toolpath's estimated time, the visible ones' total, and the rate (in the units
+/// picked) and scale they use; a toolpath clicked has its notes written below, and Apply
+/// gives back the notes to keep with it.
 fn summary_table(
     ui: &mut egui::Ui,
-    times: &[(String, f64, bool)],
-    (rapid, scale): &mut (f64, f64),
+    rows: &[SummaryRow],
+    summary: &mut Summary,
     units: cut_craft_core::document::Units,
-) {
-    let total: f64 = times.iter().filter(|t| t.2).map(|t| t.1).sum();
+) -> Option<(EntityId, String)> {
+    let total: f64 = rows.iter().filter(|r| r.visible).map(|r| r.minutes).sum();
     ui.strong(format!("Total machining time: {}", hms(total)));
     ui.separator();
     egui::Grid::new("summary").striped(true).show(ui, |ui| {
-        for (name, minutes, visible) in times {
-            ui.add_enabled(*visible, egui::Label::new(name));
-            ui.label(hms(*minutes));
+        for row in rows {
+            let picked = summary.picked == Some(row.id);
+            let name = ui
+                .add_enabled(row.visible, egui::Button::selectable(picked, &row.name))
+                .on_hover_text("Click to write its notes");
+            if name.clicked() {
+                summary.picked = Some(row.id);
+                summary.notes.clone_from(&row.notes);
+            }
+            ui.label(hms(row.minutes));
+            ui.weak(row.notes.lines().next().unwrap_or_default());
             ui.end_row();
         }
     });
     ui.separator();
     ui.weak("Time estimates based on the tools' feed rates");
+    let per = summary.units.mm_per_min();
     let fields = [
         crate::form::Field {
             key: "rapid_rate".into(),
             label: "Rapid rate".into(),
             help: Some("The machine's G0 speed".into()),
             kind: crate::form::Kind::Number {
-                unit: Some("mm/min".into()),
-                min: Some(1.0),
+                unit: None,
+                min: Some(0.001),
                 max: None,
                 integer: false,
                 steps: vec![],
@@ -885,7 +925,10 @@ fn summary_table(
             tab: None,
         },
     ];
-    let mut values = serde_json::json!({ "rapid_rate": *rapid, "scale_factor": *scale });
+    let mut values = serde_json::json!({
+        "rapid_rate": summary.rapid / per,
+        "scale_factor": summary.scale,
+    });
     let picture = |_: &str| None;
     let look = crate::form::Look {
         units,
@@ -894,9 +937,25 @@ fn summary_table(
         tool: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
-        *rapid = values["rapid_rate"].as_f64().unwrap_or(*rapid);
-        *scale = values["scale_factor"].as_f64().unwrap_or(*scale);
+        summary.rapid = values["rapid_rate"]
+            .as_f64()
+            .map_or(summary.rapid, |v| v * per);
+        summary.scale = values["scale_factor"].as_f64().unwrap_or(summary.scale);
     }
+    egui::ComboBox::from_label("Rapid rate units")
+        .selected_text(summary.units.label())
+        .show_ui(ui, |ui| {
+            for u in cut_craft_core::toolpath::RateUnits::ALL {
+                ui.selectable_value(&mut summary.units, u, u.label());
+            }
+        });
+    let picked = rows.iter().find(|r| Some(r.id) == summary.picked)?;
+    ui.separator();
+    ui.label(format!("Notes for {}", picked.name));
+    ui.add(egui::TextEdit::multiline(&mut summary.notes).desired_rows(3));
+    ui.button("Apply")
+        .clicked()
+        .then(|| (picked.id, summary.notes.clone()))
 }
 
 use cut_craft_core::file::TEMPLATE_EXTENSION as TEMPLATE;

@@ -597,6 +597,13 @@ const MODEL_STRATEGIES: [&str; 3] = [
 /// null for no fill (the material's colour).
 pub const PREVIEW_COLOUR: &str = "preview_colour";
 
+/// The key a toolpath's notes for the Toolpath Summary are kept under in its params.
+pub const SUMMARY_NOTES: &str = "summary_notes";
+
+/// What a toolpath keeps in its params that is its own, not one of its settings: kept when
+/// it is recalculated.
+pub const OWN_PARAMS: [&str; 2] = [PREVIEW_COLOUR, SUMMARY_NOTES];
+
 /// The colours toolpaths take in a Toolpath Color preview until given their own, in list
 /// order.
 const PREVIEW_PALETTE: [[u8; 3]; 8] = [
@@ -615,6 +622,14 @@ fn shown() -> bool {
 }
 
 impl Toolpath {
+    /// Its notes for the Toolpath Summary.
+    pub fn summary_notes(&self) -> &str {
+        self.params
+            .get(SUMMARY_NOTES)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+    }
+
     /// Its colour in a Toolpath Color preview, `place` being where it is in the list: the
     /// one it was given, none if it was given no fill, else the palette's for its place.
     pub fn preview_colour(&self, place: usize) -> Option<[u8; 3]> {

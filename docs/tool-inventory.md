@@ -333,8 +333,10 @@ say "not implemented yet".
     or bottom edge), or about the line between the ends of the vector picked last; Create
     Mirrored Copy keeps the originals and adds the flipped copies.
 - Toolpaths ▸ Toolpath Summary: each toolpath's estimated time and the visible ones' total
-  (moves at their feed, plunge or rapid rate, times a scale factor; dialog 231). Rapid rate
-  and scale last for the session; no summary notes.
+  (moves at their feed, plunge or rapid rate, times a scale factor; dialog 231). The rapid
+  rate is shown in the units picked (mm/sec to feet/min); rate, units and scale last for
+  the session. A toolpath clicked there has Notes to write and Apply, kept with it (and
+  through recalculation).
 - File ▸ New from Template and Save As Template: `.ccjobt` job templates, kept in
   `~/.config/cut-craft/templates`; a template opens as a new, unsaved job.
 - Toolpaths ▸ Templates: save the selected or all visible toolpaths' settings as a

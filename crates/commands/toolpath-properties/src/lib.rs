@@ -2,7 +2,7 @@
 //! colour in a Toolpath Color preview.
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::toolpath::{PREVIEW_COLOUR, Toolpath};
+use cut_craft_core::toolpath::{PREVIEW_COLOUR, SUMMARY_NOTES, Toolpath};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,10 @@ pub struct Params {
     #[serde(default)]
     #[schemars(skip)]
     pub preview: PreviewFill,
+    /// Its notes for the Toolpath Summary, when they are being set
+    #[serde(default)]
+    #[schemars(skip)]
+    pub notes: Option<String>,
 }
 
 /// What Toolpath Properties does to the toolpath's preview colour.
@@ -40,6 +44,7 @@ impl Default for Params {
             name: "Toolpath".into(),
             visible: true,
             preview: PreviewFill::Unchanged,
+            notes: None,
         }
     }
 }
@@ -66,6 +71,7 @@ impl Command for ToolpathProperties {
                 name: t.name.clone(),
                 visible: t.visible,
                 preview: PreviewFill::Unchanged,
+                notes: None,
             })
     }
 
@@ -80,6 +86,9 @@ impl Command for ToolpathProperties {
             PreviewFill::Unchanged => {}
             PreviewFill::NoFill => after.params[PREVIEW_COLOUR] = serde_json::Value::Null,
             PreviewFill::Colour(c) => after.params[PREVIEW_COLOUR] = serde_json::json!(c),
+        }
+        if let Some(notes) = &p.notes {
+            after.params[SUMMARY_NOTES] = serde_json::json!(notes);
         }
         let mut c = Change::builder(doc);
         c.replace_toolpath(p.toolpath, after);
@@ -134,6 +143,21 @@ mod tests {
         );
         run_on::<ToolpathProperties>(&mut doc, &p(PreviewFill::NoFill));
         assert_eq!(doc.toolpaths[&EntityId(1)].preview_colour(1), None);
+        let noted = Params {
+            notes: Some("check the clamps".into()),
+            ..start.clone()
+        };
+        run_on::<ToolpathProperties>(&mut doc, &noted);
+        assert_eq!(
+            doc.toolpaths[&EntityId(1)].summary_notes(),
+            "check the clamps"
+        );
+        run_on::<ToolpathProperties>(&mut doc, &start);
+        assert_eq!(
+            doc.toolpaths[&EntityId(1)].summary_notes(),
+            "check the clamps",
+            "kept when not being set"
+        );
     }
 
     #[test]
