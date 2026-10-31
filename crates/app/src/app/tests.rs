@@ -464,6 +464,34 @@ fn measuring_reports_distances_and_spans() {
         i,
         "Line, length 10.000 mm; vector perimeter 40.000 mm, area 100.000 mm²"
     );
+    // the form's rows: the points, and the span's ends and the vector's span count
+    let rows = measured_rows(Point::ZERO, Point::new(3.0, 4.0), Units::Mm);
+    assert!(rows.contains(&("Second point".into(), "3.000 mm, 4.000 mm".into())));
+    let rows = inspected_rows(&square, Point::new(5.0, 0.0), 0.5, Units::Mm);
+    assert!(
+        rows.contains(&("End".into(), "10.000 mm, 0.000 mm".into())),
+        "{rows:?}"
+    );
+    assert!(rows.contains(&("Number of spans".into(), "4".into())));
+    let circle = Path::circle(Point::new(5.0, 5.0), 2.0);
+    let rows = inspected_rows(&circle, Point::new(7.0, 5.0), 0.5, Units::Mm);
+    assert!(
+        rows.contains(&("Radius".into(), "2.000 mm".into())),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn the_measure_tool_shows_its_results_in_a_form() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "measure_inspect");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Measure / Inspect").is_some());
+    h.drag(h.at(10.0, 10.0), h.at(40.0, 50.0));
+    h.frame(vec![]);
+    assert!(h.text_at("Distance").is_some());
+    assert!(h.text_at("50.000 mm").is_some(), "3-4-5 times 10");
 }
 
 #[test]

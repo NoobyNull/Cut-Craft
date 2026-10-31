@@ -69,6 +69,7 @@ impl CutCraftApp {
             save_form: None,
             before_preview: None,
             picked_nodes: Vec::new(),
+            measure_rows: Vec::new(),
             display: crate::display::Display::default(),
             simulation: None,
             simulation_coarse: None,

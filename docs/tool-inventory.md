@@ -264,7 +264,8 @@ say "not implemented yet".
     exactly), and drag-trimming and rejoining are not done.
   - Measure / Inspect: drag between two points for distance, angle and X / Y distances;
     click a vector for the span's type and length and the vector's perimeter and area, on
-    the status bar (Aspire shows them in a form).
+    the status bar and in the Measure / Inspect form (also the two points, the span's ends,
+    an arc's centre and radius, and the vector's span count).
   - Node Edit (N): handles on the selected vectors' nodes; drag a node to move it (arcs
     keep their bulge, Bézier handles follow); right-click a node or span for Insert Point,
     Delete Point, Convert Span to Line / Bezier / Arc, Cut Vector, Make Start Point, Reverse Direction,

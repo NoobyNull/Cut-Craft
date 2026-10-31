@@ -606,6 +606,8 @@ struct CutCraftApp {
     before_preview: Option<BeforePreview>,
     /// Node editing: the nodes picked with a box, which a drag of one moves together.
     picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
+    /// Measure / Inspect's last result, shown in its form while the tool is on.
+    measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.
     save_form: Option<SaveForm>,
     /// Snapping Options (F4) and whether their window is open.
@@ -687,22 +689,47 @@ fn length(mm: f64, units: cut_craft_core::document::Units) -> String {
     }
 }
 
-/// Measure between two points: distance, angle from horizontal, and the X and Y distances.
-fn measured(from: Point, to: Point, units: cut_craft_core::document::Units) -> String {
+/// Measure between two points, as rows of the Measure / Inspect form: the distance, the angle
+/// from horizontal, the X and Y distances and the two points.
+fn measured_rows(
+    from: Point,
+    to: Point,
+    units: cut_craft_core::document::Units,
+) -> Vec<(String, String)> {
     let d = to - from;
+    let point = |p: Point| format!("{}, {}", length(p.x, units), length(p.y, units));
+    vec![
+        ("Distance".into(), length(d.length(), units)),
+        (
+            "Angle".into(),
+            format!("{:.2}°", d.y.atan2(d.x).to_degrees()),
+        ),
+        ("X distance".into(), length(d.x.abs(), units)),
+        ("Y distance".into(), length(d.y.abs(), units)),
+        ("First point".into(), point(from)),
+        ("Second point".into(), point(to)),
+    ]
+}
+
+/// The first four rows of [`measured_rows`] on one line, for the status bar.
+fn measured(from: Point, to: Point, units: cut_craft_core::document::Units) -> String {
+    let rows = measured_rows(from, to, units);
     format!(
-        "Distance {}, angle {:.2}°, X {}, Y {}",
-        length(d.length(), units),
-        d.y.atan2(d.x).to_degrees(),
-        length(d.x.abs(), units),
-        length(d.y.abs(), units)
+        "Distance {}, angle {}, X {}, Y {}",
+        rows[0].1, rows[1].1, rows[2].1, rows[3].1
     )
 }
 
-/// The clicked span's type and length, and its vector's perimeter and area.
-fn inspected(path: &Path, at: Point, reach: f64, units: cut_craft_core::document::Units) -> String {
+/// The clicked span's type, length, ends (and an arc's centre and radius), and its vector's
+/// perimeter, area and span count, as rows of the Measure / Inspect form.
+fn inspected_rows(
+    path: &Path,
+    at: Point,
+    reach: f64,
+    units: cut_craft_core::document::Units,
+) -> Vec<(String, String)> {
     use cut_craft_core::geometry::Segment;
-    use std::fmt::Write as _;
+    let point = |p: Point| format!("{}, {}", length(p.x, units), length(p.y, units));
     let span = |k: usize| {
         let from = if k == 0 {
             path.start
@@ -721,26 +748,49 @@ fn inspected(path: &Path, at: Point, reach: f64, units: cut_craft_core::document
             .map(|w| w[0].distance(w[1]))
             .sum::<f64>()
     };
-    let mut text =
-        cut_craft_core::nodes::span_near(path, at, reach).map_or_else(String::new, |k| {
-            let kind = match path.segments[k] {
-                Segment::Line { .. } => "Line",
-                Segment::Arc { .. } => "Arc",
-                Segment::Cubic { .. } => "Bezier Curve",
-            };
-            format!("{kind}, length {}; ", length(measure(&span(k)), units))
-        });
-    let _ = write!(text, "vector perimeter {}", length(measure(path), units));
+    let mut rows = vec![];
+    if let Some(k) = cut_craft_core::nodes::span_near(path, at, reach) {
+        let one = span(k);
+        let kind = match path.segments[k] {
+            Segment::Line { .. } => "Line",
+            Segment::Arc { .. } => "Arc",
+            Segment::Cubic { .. } => "Bezier Curve",
+        };
+        rows.push(("Span".into(), kind.into()));
+        rows.push(("Span length".into(), length(measure(&one), units)));
+        rows.push(("Start".into(), point(one.start)));
+        rows.push(("End".into(), point(path.segments[k].end())));
+        if let Segment::Arc { center, .. } = path.segments[k] {
+            rows.push(("Centre".into(), point(center)));
+            rows.push(("Radius".into(), length(center.distance(one.start), units)));
+        }
+    }
+    rows.push(("Vector perimeter".into(), length(measure(path), units)));
     if path.closed {
         let area = cut_craft_core::polygon::area(path);
-        let _ = match units {
-            cut_craft_core::document::Units::Mm => write!(text, ", area {area:.3} mm²"),
-            cut_craft_core::document::Units::Inch => {
-                write!(text, ", area {:.4} in²", area / 645.16)
-            }
-        };
+        rows.push((
+            "Vector area".into(),
+            match units {
+                cut_craft_core::document::Units::Mm => format!("{area:.3} mm²"),
+                cut_craft_core::document::Units::Inch => format!("{:.4} in²", area / 645.16),
+            },
+        ));
     }
-    text
+    rows.push(("Number of spans".into(), path.segments.len().to_string()));
+    rows
+}
+
+/// [`inspected_rows`] on one line, for the status bar.
+fn inspected(path: &Path, at: Point, reach: f64, units: cut_craft_core::document::Units) -> String {
+    let rows = inspected_rows(path, at, reach, units);
+    let get = |name: &str| rows.iter().find(|r| r.0 == name).map(|r| r.1.as_str());
+    let span = match (get("Span"), get("Span length")) {
+        (Some(kind), Some(len)) => format!("{kind}, length {len}; "),
+        _ => String::new(),
+    };
+    let area = get("Vector area").map_or_else(String::new, |a| format!(", area {a}"));
+    let perimeter = get("Vector perimeter").unwrap_or("");
+    format!("{span}vector perimeter {perimeter}{area}")
 }
 
 /// Hours, minutes and seconds.

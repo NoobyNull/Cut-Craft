@@ -73,7 +73,7 @@ plate-production	Plate Production: template with variables, CSV, layout	partly	p
 select	Select: click, window, crossing, Shift	yes	select command	select	select
 transform	Transform mode: scale, stretch, rotate handles with typed values, rotation centre	yes	Transform mode handles	transform|transformation	transform
 group	Group / Ungroup (G / U), ungroup onto original layers	yes	Group / Ungroup (G / U): grouping keeps each member on its layer; right-click Ungroup ▸ onto Original Object Layers or onto Current Layer	group	ungroup|original (object )?layers?	60
-measure	Measure tool: two points and span / contour properties in a form	partly	Measure / Inspect reports on the status bar, not in a form	measure	measure	62
+measure	Measure tool: two points and span / contour properties in a form	yes	Measure / Inspect form: distance, angle, X / Y distances and both points; span type, length, ends, arc centre and radius, vector perimeter, area and span count	measure	measure	62
 weld	Weld, subtract, overlap	yes	weld-vectors, subtract-vectors, overlap-intersect	weld	weld|subtract|overlap
 validator	Vector Validator: overlaps, intersections, zero-length spans (fix), V-carving mode	partly	vector-validator command; no V-carving mode	validator	validator	117
 extend	Extend / close / join vectors (move end points, smooth curve, straight line, tolerance)	yes	close-extend-vector, join-close-vectors, join-vectors, close-with-line	extend|join	join|extend

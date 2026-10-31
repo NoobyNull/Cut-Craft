@@ -6,8 +6,8 @@ use super::{
     EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout, OLD_JOB_EXTENSION, Overlay, Path,
     Point, RESOLUTIONS, Rect, STROKE_TOOLS, Screen, Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS,
     VIEW_ZOOM_QUARTERS, Value, View, ViewTool, ViewTransform, bordered, dialog_size, egui,
-    file_dialog, file_name, files, gui, handles, inspected, measured, paint_focus_ring, side_panel,
-    view2d,
+    file_dialog, file_name, files, gui, handles, inspected, inspected_rows, measured,
+    measured_rows, paint_focus_ring, side_panel, view2d,
 };
 use crate::options::WindowLayout;
 use cut_craft_core::document::Units;
@@ -249,6 +249,7 @@ impl CutCraftApp {
         self.machine_windows(ctx);
         self.info_window(ctx);
         self.save_toolpaths_window(ctx);
+        self.measure_window(ctx);
         self.snap_options_window(ctx);
         self.options_window(ctx);
         self.tool_search(ctx);
@@ -1136,19 +1137,51 @@ impl CutCraftApp {
 
     /// Measure / Inspect: a finished drag measures between its ends, a click inspects a vector.
     pub(super) fn measure(&mut self, gesture: Option<Gesture>, reach: f64) {
+        let units = self.doc.job.units;
         match gesture {
             Some(Gesture::Dropped { drag, .. }) => {
                 self.status
-                    .set_message(&measured(drag.start, drag.end, self.doc.job.units));
+                    .set_message(&measured(drag.start, drag.end, units));
+                self.measure_rows = measured_rows(drag.start, drag.end, units);
             }
             Some(Gesture::Click { at, .. }) => {
-                let message = self.doc.pick(at, reach).map_or_else(
-                    || "click a vector, or drag between two points".to_owned(),
-                    |id| inspected(&self.doc.vectors[&id], at, reach, self.doc.job.units),
-                );
-                self.status.set_message(&message);
+                if let Some(id) = self.doc.pick(at, reach) {
+                    let path = &self.doc.vectors[&id];
+                    self.status.set_message(&inspected(path, at, reach, units));
+                    self.measure_rows = inspected_rows(path, at, reach, units);
+                } else {
+                    self.status
+                        .set_message("click a vector, or drag between two points");
+                }
             }
             _ => {}
+        }
+    }
+
+    /// Measure / Inspect's form while the tool is on: its last measurement or inspection.
+    pub(super) fn measure_window(&mut self, ctx: &egui::Context) {
+        if self.view_tool != Some(ViewTool::Measure) {
+            return;
+        }
+        let mut open = true;
+        let (id, size) = (egui::Id::unique("measure_inspect"), dialog_size(ctx));
+        let rows = &self.measure_rows;
+        cut_craft_bug_report::dialog(ctx, id, "Measure / Inspect", size, &mut open, |ui| {
+            if rows.is_empty() {
+                ui.label("Drag between two points to measure, or click a vector to inspect it.");
+            }
+            egui::Grid::new("measure_rows")
+                .striped(true)
+                .show(ui, |ui| {
+                    for (name, value) in rows {
+                        ui.label(name);
+                        ui.monospace(value);
+                        ui.end_row();
+                    }
+                });
+        });
+        if !open {
+            self.view_tool = None;
         }
     }
 
