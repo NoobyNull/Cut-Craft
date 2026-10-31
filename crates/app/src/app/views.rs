@@ -712,9 +712,21 @@ impl CutCraftApp {
     }
 
     /// Shift-click in drawing tool `id`'s form: a shape that tool drew, under `at`, is
-    /// edited in the form, as Aspire's Shift-click does.
-    fn shift_click_shape(&mut self, id: &'static str, at: Point, reach: f64) {
-        let shape = self.doc.pick(at, reach).and_then(|v| {
+    /// edited in the form, as Aspire's Shift-click does. A tool that keeps its settings with
+    /// the group it made (Dimensions) gives them back from there.
+    pub(super) fn shift_click_shape(&mut self, id: &'static str, at: Point, reach: f64) {
+        let picked = self.doc.pick(at, reach);
+        let recorded = picked.and_then(|v| {
+            let group = self.doc.vector_groups.get(&v)?;
+            let record = self.doc.texts.get(group)?;
+            (record["command"] == id).then(|| {
+                let mut params = record.clone();
+                params["replaces"] = Value::from(*group);
+                (v, params)
+            })
+        });
+        let shape = recorded.or_else(|| {
+            let v = picked?;
             let (command, params) = self
                 .registry
                 .drawn_by(&self.doc, self.doc.vectors.get(&v)?)?;

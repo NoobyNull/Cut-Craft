@@ -210,7 +210,11 @@ pub fn selected_text_group(doc: &Document) -> Option<u64> {
     doc.selection
         .iter()
         .filter_map(|id| doc.vector_groups.get(id))
-        .find(|group| doc.texts.contains_key(group))
+        .find(|group| {
+            doc.texts
+                .get(group)
+                .is_some_and(|t| t.get("text").is_some())
+        })
         .copied()
 }
 

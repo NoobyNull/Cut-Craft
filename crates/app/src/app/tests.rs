@@ -5080,3 +5080,21 @@ fn the_summary_allows_for_the_active_machines_acceleration_when_asked() {
     h.app.summary.scale = 2.0;
     assert!((h.app.estimated_minutes(&t) - 2.0 * allowing).abs() < 1e-9);
 }
+
+#[test]
+fn a_shift_click_on_a_dimension_with_its_form_open_edits_it() {
+    let mut h = Harness::new();
+    let mut params = serde_json::to_value(cmd_dimensions::Params::default()).unwrap();
+    params["font"] = "Test Boxes".into();
+    params["custom_text"] = "W".into();
+    h.app.apply("dimensions", &params).unwrap();
+    let group = *h.app.doc.texts.keys().next().unwrap();
+    h.app.invoke(&h.ctx, "dimensions");
+    // the dimension line runs from (10, 20) to (60, 20): a Shift-click on it
+    h.app
+        .shift_click_shape("dimensions", Point::new(35.0, 20.0), 1.0);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["replaces"], serde_json::json!(group));
+    assert_eq!(form.params["custom_text"], "W");
+    assert!(form.drawn.is_some(), "the shape it edits");
+}

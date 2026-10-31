@@ -145,10 +145,12 @@ impl CutCraftApp {
             | "edit_toolpath" => self.selected_toolpath.is_some(),
             "preview_toolpath" => self.selected_toolpath.is_some() || self.selected_group.is_some(),
             "edit_text" => self.doc.selection.iter().any(|id| {
-                self.doc
-                    .vector_groups
-                    .get(id)
-                    .is_some_and(|g| self.doc.texts.contains_key(g))
+                self.doc.vector_groups.get(id).is_some_and(|g| {
+                    self.doc
+                        .texts
+                        .get(g)
+                        .is_some_and(|t| t.get("text").is_some())
+                })
             }),
             "save_all_visible_toolpaths_as_template" => {
                 self.doc.toolpaths.values().any(|t| t.visible)

@@ -825,3 +825,7 @@ instead of half-cell steps.
 ### Vector Validator's V-Carving Mode [obs: help Vector Validator]
 - Checked, the validator checks as V-carving needs: it ignores intersections within text, which may come from the font (solder the text and validate the result if its intersections matter).
 - **[inf]** Cut Craft: crossings and overlaps between (or within) the letters of one text are let be; open vectors are found too, since V-carving needs closed ones.
+
+### Angle and Arc Dimensions, editing [obs: help Dimensions]
+- Angle Dimension: click the centre (a corner), then the two points of the sweep, then where the dashed dimension line goes, then the text; arrow heads pop outside small angles, extension lines where needed; its own Decimal Places (up to six). Arc Dimension: the first click must be on an arc span (not a Bézier), the second places the text showing the radius, or the diameter with Show Diameter; circles are recognised. Shift while selecting a dimension with the form open edits it; Ctrl+Z undoes dimensions while in the tool.
+- **[inf]** Cut Craft: one drag does it: Angle from the corner (the two straight sides meeting nearest the drag's start, within 2 mm) to where the arc goes, the text outside the arc's middle, the arms drawn out to the arc; Arc from a point on an arc or circle to where the text goes, with a leader and arrow to the arc. The dimension's settings stay with its group, so Shift-click opens them in the form and Apply replaces it. No separate angle decimal places, no dashed lines, no leader snapping.
