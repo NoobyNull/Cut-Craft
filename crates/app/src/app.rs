@@ -622,6 +622,8 @@ struct CutCraftApp {
     /// The toolpath group picked in the list instead of a toolpath: previewed and saved as
     /// one, and joined by the toolpaths made while it is picked.
     selected_group: Option<String>,
+    /// Quick Engrave's Immediate Output: the post and side name it saves with.
+    immediate_output: SaveForm,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,

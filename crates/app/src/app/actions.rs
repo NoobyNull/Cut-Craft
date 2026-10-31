@@ -49,6 +49,12 @@ impl CutCraftApp {
             session: Session::default(),
             selected_toolpath: None,
             selected_group: None,
+            immediate_output: SaveForm {
+                mode: files::SaveMode::Selected,
+                group: false,
+                post: None,
+                add_side: false,
+            },
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             posts: cut_craft_machines::Library::new(None),
@@ -2668,22 +2674,17 @@ impl CutCraftApp {
         };
         open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
         open.dirty |= listed.get();
-        // Texture Toolpath keeps its textures in files, to use again and share
-        let texture = (open.id == "texture_toolpath").then(|| texture_buttons(ui));
-        let (chosen, edit_tool) = asked.into_inner();
-        let edit_listed = edit_listed.into_inner();
+        let (id, new_job) = (open.id, open.new_job);
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
+        let (chosen, edit_tool) = asked.into_inner();
+        let edit_listed = edit_listed.into_inner();
+        self.form_extras(ui, id);
         // Job Setup for a new job keeps its buttons pinned under the panel instead
-        if !open.new_job {
+        if !new_job {
             self.form_buttons(ui);
             ui.separator();
-        }
-        match texture {
-            Some((true, _)) => self.texture_file(false),
-            Some((_, true)) => self.texture_file(true),
-            _ => {}
         }
         if let Some(name) = chosen {
             self.choose_tool(&name);
@@ -2755,6 +2756,30 @@ impl CutCraftApp {
         let form = form.ok_or("no Texture Toolpath form is open")?;
         serde_json::from_value(form.params.clone())
             .map_err(|e| format!("the form's settings do not read: {e}"))
+    }
+
+    /// What some forms have under their fields: Texture Toolpath's Load / Save Texture, and
+    /// Quick Engrave's Immediate Output.
+    fn form_extras(&mut self, ui: &mut egui::Ui, id: &str) {
+        match id {
+            "texture_toolpath" => match texture_buttons(ui) {
+                (true, _) => self.texture_file(false),
+                (_, true) => self.texture_file(true),
+                _ => {}
+            },
+            "quick_engrave_toolpath" => {
+                let choices = self.post_choices();
+                let default = self.output_post().map(|p| p.name);
+                let two_sided = self.doc.job.double_sided.is_some();
+                let ready = self.immediate_output_toolpath().is_some();
+                let output = &mut self.immediate_output;
+                if super::views::immediate_output(ui, output, &default, &choices, two_sided, ready)
+                {
+                    self.immediate_save();
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Reads the user's tool database; a broken one is reported and left untouched on disk.

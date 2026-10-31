@@ -4852,3 +4852,35 @@ fn freehands_stabilizing_circle_is_drawn_round_the_paths_end_while_dragging() {
     assert!((b.center() - Point::new(8.0, 0.0)).length() < 1e-6, "{b:?}");
     assert!((b.size().x - 4.0).abs() < 1e-6, "{b:?}");
 }
+
+#[test]
+fn quick_engraves_immediate_output_saves_the_toolpath_calculated_last() {
+    use crate::files::SaveMode;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    assert_eq!(h.app.immediate_output_toolpath(), None);
+    h.app.invoke(&h.ctx, "quick_engrave_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("quick_engrave_toolpath", &params).unwrap();
+    let id = h.app.immediate_output_toolpath().unwrap();
+    assert_eq!(h.app.doc.toolpaths[&id].strategy, "quick_engrave_toolpath");
+    // what Save Toolpath Now does, short of its file dialog
+    let dir = std::env::temp_dir().join(format!("cut-craft-engrave-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    h.app.selected_toolpath = Some(id);
+    let form = SaveForm {
+        mode: SaveMode::Selected,
+        group: false,
+        post: None,
+        add_side: false,
+    };
+    let post = h.app.output_post().unwrap();
+    let done = h
+        .app
+        .save_toolpaths_to(&form, &post, &dir.join("engrave.nc"))
+        .unwrap();
+    assert!(done.starts_with("Saved"), "{done}");
+    let gcode = std::fs::read_to_string(dir.join("engrave.nc")).unwrap();
+    assert!(gcode.contains("Quick Engrave"), "{gcode}");
+    let _ = std::fs::remove_dir_all(dir);
+}

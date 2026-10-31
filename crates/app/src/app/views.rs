@@ -1731,6 +1731,32 @@ impl CutCraftApp {
         paths
     }
 
+    /// The quick engrave toolpath Immediate Output saves: the one the form is editing, else
+    /// the newest.
+    pub(super) fn immediate_output_toolpath(&self) -> Option<EntityId> {
+        let editing = self.form.as_ref().and_then(|f| f.editing);
+        editing.or_else(|| {
+            self.doc
+                .toolpaths
+                .iter()
+                .rev()
+                .find(|(_, t)| t.strategy == "quick_engrave_toolpath")
+                .map(|(&id, _)| id)
+        })
+    }
+
+    /// Quick Engrave's Save Toolpath Now: that toolpath alone, through the post picked on
+    /// the form, with Save Toolpaths' checks and file dialog.
+    pub(super) fn immediate_save(&mut self) {
+        let Some(id) = self.immediate_output_toolpath() else {
+            return;
+        };
+        self.selected_toolpath = Some(id);
+        self.selected_group = None;
+        let form = self.immediate_output.clone();
+        self.save_toolpaths(&form);
+    }
+
     /// The Help windows, Toolpath Summary and Snapping Options.
     pub(super) fn open_window(&mut self, id: &str) {
         self.info = match id {
@@ -1859,27 +1885,7 @@ impl CutCraftApp {
                         }
                     });
             }
-            let shown = form
-                .post
-                .clone()
-                .unwrap_or_else(|| default.clone().unwrap_or_else(|e| e));
-            egui::ComboBox::from_label("Post-processor")
-                .selected_text(shown)
-                .show_ui(ui, |ui| {
-                    if let Ok(name) = &default
-                        && ui
-                            .selectable_label(form.post.is_none(), format!("{name} (default)"))
-                            .clicked()
-                    {
-                        form.post = None;
-                    }
-                    for name in &choices {
-                        let picked = form.post.as_deref() == Some(name.as_str());
-                        if ui.selectable_label(picked, name).clicked() {
-                            form.post = Some(name.clone());
-                        }
-                    }
-                });
+            post_combo(ui, "save_post", &mut form.post, &default, &choices);
             ui.separator();
             ui.strong("Toolpaths to save");
             for (mode, label) in [
@@ -2244,4 +2250,68 @@ impl CutCraftApp {
             .apply(&c.finish())
             .expect("picked ids come from the document");
     }
+}
+
+/// The post-processor to save through: the machine's default (`default`, or why there is
+/// none), or one of `choices`.
+pub(super) fn post_combo(
+    ui: &mut egui::Ui,
+    salt: &str,
+    post: &mut Option<String>,
+    default: &Result<String, String>,
+    choices: &[String],
+) {
+    let shown = post
+        .clone()
+        .unwrap_or_else(|| default.clone().unwrap_or_else(|e| e));
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt(salt)
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                if let Ok(name) = default
+                    && ui
+                        .selectable_label(post.is_none(), format!("{name} (default)"))
+                        .clicked()
+                {
+                    *post = None;
+                }
+                for name in choices {
+                    let picked = post.as_deref() == Some(name.as_str());
+                    if ui.selectable_label(picked, name).clicked() {
+                        *post = Some(name.clone());
+                    }
+                }
+            });
+        ui.label("Post-processor");
+    });
+}
+
+/// Quick Engrave's Immediate Output: the toolpath calculated last saved through a post from
+/// the form, without closing it. Whether Save Toolpath Now was clicked.
+pub(super) fn immediate_output(
+    ui: &mut egui::Ui,
+    output: &mut super::SaveForm,
+    default: &Result<String, String>,
+    choices: &[String],
+    double_sided: bool,
+    ready: bool,
+) -> bool {
+    let mut save = false;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("Immediate Output");
+        post_combo(ui, "immediate_post", &mut output.post, default, choices);
+        if double_sided {
+            ui.checkbox(&mut output.add_side, "Add side to toolpath name");
+        }
+        // ponytail: Aspire's Output Direct to Machine needs a transfer driver; none here
+        save = ui
+            .add_enabled(ready, egui::Button::new("Save Toolpath Now..."))
+            .on_hover_text(
+                "Save the toolpath calculated last through the post, keeping the form open",
+            )
+            .on_disabled_hover_text("Apply first: there is no quick engrave toolpath yet")
+            .clicked();
+    });
+    save
 }
