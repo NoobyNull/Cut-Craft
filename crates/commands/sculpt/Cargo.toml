@@ -8,6 +8,7 @@ edition.workspace = true
 cut-craft-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
+fmt-export-as-3d-clipart = { path = "../../formats/export-as-3d-clipart" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

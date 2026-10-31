@@ -8,10 +8,11 @@ use super::{
     MODEL_IMPORTERS, Menus, Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point,
     RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm,
     Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
-    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
-    file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
-    on_the_desktop, rest_section, selector_section, shortcut, side_panel, side_tabs, summary_table,
-    template_dialog, texture_dialog, tool_list, tool_picker, toolpath_template_dialog, view3d,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands,
+    dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
+    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
+    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
+    toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -142,6 +143,7 @@ impl CutCraftApp {
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(gui::GUIDE) => true,
+            id if id.starts_with(gui::SAVE_BRUSH) => self.brush_component(id).is_some(),
             id if id.starts_with(EXPORT_LEVEL) => {
                 self.registry.exporter("export_as_3d_clipart").is_some()
             }
@@ -446,6 +448,7 @@ impl CutCraftApp {
             id if self.registry.exporter(id).is_some() => self.export(id),
             id if id.starts_with(gui::REIMPORT_MODEL) => self.reimport_model(id),
             id if id.starts_with(gui::GUIDE) => self.guide_action(id),
+            id if id.starts_with(gui::SAVE_BRUSH) => self.save_brush(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
             }
@@ -459,6 +462,42 @@ impl CutCraftApp {
             .path
             .as_deref()
             .and_then(std::path::Path::parent)
+    }
+
+    /// The component a Save as Sculpting Brush action names.
+    fn brush_component(&self, action: &str) -> Option<EntityId> {
+        let id = EntityId(action.strip_prefix(gui::SAVE_BRUSH)?.parse().ok()?);
+        self.doc.components.contains_key(&id).then_some(id)
+    }
+
+    /// Save as Sculpting Brush: the component as a brush file, in the brushes folder unless
+    /// saved elsewhere, for Sculpting's Load Brush….
+    fn save_brush(&mut self, action: &str) {
+        let Some(id) = self.brush_component(action) else {
+            return;
+        };
+        let name = self.doc.components[&id].name.clone();
+        if let Some(path) = brush_dialog()
+            .set_file_name(format!("{name}.ccclip"))
+            .save_file()
+            && let Err(e) = self.save_brush_to(id, &path.with_extension("ccclip"))
+        {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Writes component `id` as a sculpting brush to `path`.
+    pub(super) fn save_brush_to(
+        &mut self,
+        id: EntityId,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        let k = self.doc.components.get(&id).ok_or("no such component")?;
+        let bytes = fmt_export_as_3d_clipart::clip_bytes(k).map_err(|e| e.to_string())?;
+        std::fs::write(path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+        self.status
+            .set_message(&format!("Saved sculpting brush {}", path.display()));
+        Ok(())
     }
 
     /// The guide menus: Guide Properties, lock and delete on a guide, and guides inserted
@@ -2937,6 +2976,30 @@ impl CutCraftApp {
                 (_, true) => self.texture_file(true),
                 _ => {}
             },
+            "sculpt" => {
+                let (load, round) = ui
+                    .horizontal(|ui| {
+                        let load = ui
+                            .button("Load Brush…")
+                            .on_hover_text(
+                                "A component saved as a sculpting brush, for Deposit and Remove",
+                            )
+                            .clicked();
+                        let round = ui.button("Round Brush").clicked();
+                        (load, round)
+                    })
+                    .inner;
+                let brush = if round {
+                    Some(String::new())
+                } else if load {
+                    brush_dialog().pick_file().map(|p| p.display().to_string())
+                } else {
+                    None
+                };
+                if let (Some(brush), Some(form)) = (brush, self.form.as_mut()) {
+                    form.params["brush"] = brush.into();
+                }
+            }
             "quick_engrave_toolpath" => {
                 let choices = self.post_choices();
                 let default = self.output_post().map(|p| p.name);

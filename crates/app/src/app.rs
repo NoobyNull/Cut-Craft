@@ -1039,6 +1039,11 @@ fn template_dialog() -> rfd::FileDialog {
     settings_dialog("Cut Craft job template", TEMPLATE, "templates")
 }
 
+/// Sculpting brushes, kept in the brushes folder.
+fn brush_dialog() -> rfd::FileDialog {
+    settings_dialog("Sculpting brush", "ccclip", "brushes")
+}
+
 /// Texture Toolpath's textures, kept in the textures folder.
 fn texture_dialog() -> rfd::FileDialog {
     settings_dialog(

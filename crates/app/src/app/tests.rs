@@ -2819,7 +2819,11 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "open_folder",
         "open_clipart_folder",
     ];
-    ASKS.contains(&id) || app.registry.exporter(id).is_some() || id.starts_with(EXPORT_LEVEL)
+    ASKS.contains(&id)
+        || app.registry.exporter(id).is_some()
+        || id.starts_with(EXPORT_LEVEL)
+        // a file dialog for the brush
+        || id.starts_with(gui::SAVE_BRUSH)
 }
 
 /// Every enabled menu item and tool button, run through the app as a click would be on a
@@ -5156,4 +5160,42 @@ fn guides_are_inserted_from_the_menu_and_their_properties_turn_lock_and_add_para
     assert!(h.app.doc.guides[0].locked);
     let menu = gui::guide_menu(0, true);
     assert_eq!(menu[1].name, "Unlock Guide");
+}
+
+#[test]
+fn a_component_saved_as_a_sculpting_brush_is_pressed_into_the_model() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-brush-app-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("dome.ccclip");
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    let id = EntityId(1);
+    let action = format!("{}{}", gui::SAVE_BRUSH, id.0);
+    let menu = gui::component_menu(&h.app.doc, id, &h.app.doc.components[&id]);
+    assert!(
+        menu.iter().any(|m| m.action == action),
+        "on the component's menu"
+    );
+    assert!(h.app.available(&action));
+    h.app.save_brush_to(id, &path).unwrap();
+    let top = |h: &Harness| {
+        h.app.doc.components[&id]
+            .height_at(Point::new(20.0, 20.0))
+            .unwrap()
+    };
+    let before = top(&h);
+    h.app.invoke(&h.ctx, "sculpt");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["tool"] = "deposit".into();
+    params["strength"] = 100.0.into();
+    params["brush"] = path.display().to_string().into();
+    params["points"] = serde_json::json!([{ "x": 20.0, "y": 20.0 }, { "x": 20.0, "y": 20.0 }]);
+    h.app.apply("sculpt", &params).unwrap();
+    // the dome's top is the brush's highest: pressed in its full depth, a fifth of 10 mm
+    assert!(
+        (top(&h) - before - 2.0).abs() < 0.2,
+        "{} from {before}",
+        top(&h)
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }

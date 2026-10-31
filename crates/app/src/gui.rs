@@ -797,6 +797,8 @@ pub const REIMPORT_MODEL: &str = "reimport_model:";
 /// A guide action: then `props:<index>`, `lock:<index>`, `delete:<index>`, or `insert:h`,
 /// `insert:v` or `insert:a` (a horizontal, vertical or angled guide where the menu opened).
 pub const GUIDE: &str = "guide:";
+/// Save as Sculpting Brush on a component: then its id.
+pub const SAVE_BRUSH: &str = "save_brush:";
 
 const COMBINE_MODES: [(&str, Combine); 5] = [
     ("Add", Combine::Add),
@@ -1003,6 +1005,7 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
             "Delete",
             &cmd_delete_component::Params { component: id },
         ),
+        MenuItem::with_action("Save as Sculpting Brush…", &format!("{SAVE_BRUSH}{}", id.0)),
         move_to_level(doc, component),
         MenuItem::form::<cmd_group_components::GroupComponents>(
             "Group",

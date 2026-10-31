@@ -1380,6 +1380,7 @@ name = "cmd-sculpt"
 version = "0.3.3"
 dependencies = [
  "cut-craft-core",
+ "fmt-export-as-3d-clipart",
  "schemars",
  "serde",
 ]
