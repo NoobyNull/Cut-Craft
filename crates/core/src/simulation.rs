@@ -2,9 +2,72 @@
 
 use crate::document::Job;
 use crate::geometry::Point;
-use crate::toolpath::{Tool, ToolShape, Toolpath};
+use crate::toolpath::{Move, Tool, ToolShape, Toolpath};
 use glam::{DVec2, DVec3};
 use std::ops::Range;
+use std::sync::Mutex;
+
+/// Grids under this many cells are worked on the calling thread alone: threads cost more than
+/// they save there.
+const PARALLEL_CELLS: usize = 4096;
+
+/// Bands handed out per core: smaller bands than a core's share, taken as cores come free,
+/// so work bunched in part of the grid does not leave the other cores waiting.
+const BANDS_PER_CORE: usize = 4;
+
+fn cores() -> usize {
+    std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+}
+
+/// Runs `work` on each of `jobs`, a thread per core taking the next as it comes free.
+fn queued<J: Send>(jobs: Vec<J>, threads: usize, work: impl Fn(J) + Sync) {
+    let queue = Mutex::new(jobs);
+    let (queue, work) = (&queue, &work);
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(move || {
+                loop {
+                    let next = queue.lock().expect("a band panicked").pop();
+                    let Some(job) = next else { break };
+                    work(job);
+                }
+            });
+        }
+    });
+}
+
+/// Fills `values`, a grid `columns` wide, in bands of rows across the cores: `fill(first, band)`
+/// gets each band's first row and its cells. A grid under a few thousand cells is one band.
+pub fn by_rows<T: Send>(values: &mut [T], columns: usize, fill: impl Fn(usize, &mut [T]) + Sync) {
+    let rows = values.len() / columns.max(1);
+    let threads = if values.len() < PARALLEL_CELLS {
+        1
+    } else {
+        cores().min(rows)
+    };
+    if threads <= 1 {
+        fill(0, values);
+        return;
+    }
+    let band = rows.div_ceil(threads * BANDS_PER_CORE).max(1);
+    let bands = values.chunks_mut(band * columns).enumerate().collect();
+    queued(bands, threads, |(i, chunk)| fill(i * band, chunk));
+}
+
+/// `f` of each item, in order, worked out across the cores.
+pub fn each<T: Sync, U: Send>(items: &[T], f: impl Fn(&T) -> U + Sync) -> Vec<U> {
+    let threads = cores().min(items.len());
+    if threads <= 1 {
+        return items.iter().map(f).collect();
+    }
+    let share = items.len().div_ceil(threads * BANDS_PER_CORE).max(1);
+    let mut out: Vec<Vec<U>> = (0..items.len().div_ceil(share)).map(|_| vec![]).collect();
+    let shares = items.chunks(share).zip(&mut out).collect();
+    queued(shares, threads, |(chunk, slot): (&[T], &mut Vec<U>)| {
+        *slot = chunk.iter().map(&f).collect();
+    });
+    out.into_iter().flatten().collect()
+}
 
 /// The material seen from above: a grid of square cells, each holding the height of the
 /// surface over it (0 is the top of the material, `bottom` its underside).
@@ -172,15 +235,19 @@ impl Material {
     #[must_use]
     pub fn left_by(&self, tool: &Tool) -> Self {
         let peaks = self.peaks();
-        let tips: Vec<f64> = (0..self.rows)
-            .flat_map(|row| (0..self.columns).map(move |column| (column, row)))
-            .map(|(column, row)| self.drop_tool_on(tool, self.centre(column, row), &peaks))
-            .collect();
+        let mut tips = vec![0.0; self.columns * self.rows];
+        by_rows(&mut tips, self.columns, |first, band| {
+            for (i, tip) in band.iter_mut().enumerate() {
+                let (column, row) = (i % self.columns, first + i / self.columns);
+                *tip = self.drop_tool_on(tool, self.centre(column, row), &peaks);
+            }
+        });
         let floors = Tiles::of(&tips, self.columns, self.rows, f64::INFINITY, f64::min);
         let near = (tool.diameter / 2.0).min(tool.reach());
         let mut left = self.clone();
-        for row in 0..self.rows {
-            for column in 0..self.columns {
+        by_rows(&mut left.heights, self.columns, |first, band| {
+            for (i, height) in band.iter_mut().enumerate() {
+                let (column, row) = (i % self.columns, first + i / self.columns);
                 let at = self.centre(column, row);
                 let mut lowest = f64::INFINITY;
                 let edge_over = |columns: Range<usize>, rows: Range<usize>, lowest: &mut f64| {
@@ -208,34 +275,51 @@ impl Material {
                         }
                     });
                 }
-                let height = &mut left.heights[row * self.columns + column];
                 if lowest.is_finite() {
                     *height = lowest.max(*height);
                 }
             }
-        }
+        });
         left
     }
 
     /// Removes what the tool following `toolpath` cuts away.
     pub fn cut(&mut self, toolpath: &Toolpath) {
-        for pair in toolpath.moves.windows(2) {
-            self.sweep(pair[0].to, pair[1].to, &toolpath.tool);
-        }
+        self.cut_along(&toolpath.moves, &toolpath.tool);
+    }
+
+    /// Removes what `tool` cuts away following `moves`, a band of rows per core: a cell ends
+    /// at the lowest any move reaches there, whichever order the moves come in.
+    pub fn cut_along(&mut self, moves: &[Move], tool: &Tool) {
+        let mut heights = std::mem::take(&mut self.heights);
+        by_rows(&mut heights, self.columns, |first, band| {
+            for pair in moves.windows(2) {
+                self.sweep_band(pair[0].to, pair[1].to, tool, first, band);
+            }
+        });
+        self.heights = heights;
     }
 
     /// Lowers each cell the tool passes over from `a` to `b` to the lowest its cutting edge
     /// reaches there, at the cell centre.
     pub fn sweep(&mut self, a: DVec3, b: DVec3, tool: &Tool) {
+        let mut heights = std::mem::take(&mut self.heights);
+        self.sweep_band(a, b, tool, 0, &mut heights);
+        self.heights = heights;
+    }
+
+    /// [`Self::sweep`] over `band`, the grid's rows from `first`.
+    fn sweep_band(&self, a: DVec3, b: DVec3, tool: &Tool, first: usize, band: &mut [f64]) {
         if a.z >= 0.0 && b.z >= 0.0 {
             return;
         }
         // the material is nowhere above its top, 0
         let (columns, rows) = self.swept(a, b, tool.reach_below(-a.z.min(b.z)));
-        for row in rows {
+        let last = first + band.len() / self.columns;
+        for row in rows.start.max(first)..rows.end.min(last) {
             for column in columns.clone() {
                 if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
-                    let height = &mut self.heights[row * self.columns + column];
+                    let height = &mut band[(row - first) * self.columns + column];
                     *height = height.min(z.max(self.bottom));
                 }
             }
@@ -463,14 +547,15 @@ pub fn rest_areas(
         });
         dx.hypot(dy)
     };
-    let unmachined: Vec<bool> = (0..rows * columns)
-        .map(|i| {
-            let (c, r) = (i % columns, i / columns);
+    let mut unmachined = vec![false; rows * columns];
+    by_rows(&mut unmachined, columns, |first, band| {
+        for (i, cell) in band.iter_mut().enumerate() {
+            let (c, r) = (i % columns, first + i / columns);
             let here = height(c, r);
             let allowed = REST_TOLERANCE + slope(c, r) * model.cell;
-            left.at(model.centre(c, r)).unwrap_or(here) - here > allowed
-        })
-        .collect();
+            *cell = left.at(model.centre(c, r)).unwrap_or(here) - here > allowed;
+        }
+    });
     // keep the areas at least the minimum detail across
     let mut kept = vec![false; rows * columns];
     let mut seen = vec![false; rows * columns];

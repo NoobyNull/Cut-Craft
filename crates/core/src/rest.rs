@@ -87,9 +87,7 @@ pub fn rest_moves(job: &Job, tool: &Tool, moves: &[Move], rest: &Rest) -> Vec<Mo
     let cell = (tool.diameter / 4.0).max(job.model_cell());
     let cells = ((job.width.max(job.height) / cell).ceil() as usize).max(1);
     let mut target = Material::new(job, cells);
-    for pair in moves.windows(2) {
-        target.sweep(pair[0].to, pair[1].to, tool);
-    }
+    target.cut_along(moves, tool);
     let areas: Vec<_> = rest
         .after
         .iter()

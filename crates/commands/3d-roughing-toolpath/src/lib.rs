@@ -6,7 +6,7 @@ use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_mo
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::{Path, Point};
-use cut_craft_core::simulation::Material;
+use cut_craft_core::simulation::{Material, by_rows};
 use cut_craft_core::toolpath::{
     Drop, Move, MoveKind, Tool, cut_points, follow, made_by, pass_depths, raster_lines,
 };
@@ -265,21 +265,18 @@ impl Command for RoughingToolpath3d {
 fn level_runs(
     drop: &Drop,
     lines: &[Vec<Point>],
-    inside: &dyn Fn(Point) -> bool,
+    inside: &(dyn Fn(Point) -> bool + Sync),
     profile: ProfilePass,
     tips: &[f64],
 ) -> Vec<Vec<DVec3>> {
-    let mut runs: Vec<Vec<DVec3>> = lines.iter().flat_map(|l| drop.along(l, inside)).collect();
+    let mut runs = drop.along_all(lines, inside);
     if profile != ProfilePass::None {
         let edge = Drop {
             ceiling: drop.floor + drop.grid.cell,
             over_ceiling: false,
             ..*drop
         };
-        let rings: Vec<Vec<DVec3>> = outline(drop.grid, tips, drop.floor)
-            .iter()
-            .flat_map(|ring| edge.along(ring, inside))
-            .collect();
+        let rings = edge.along_all(&outline(drop.grid, tips, drop.floor), inside);
         if profile == ProfilePass::First {
             runs.splice(0..0, rings);
         } else {
@@ -375,15 +372,16 @@ fn tips(grid: &Material, tool: &Tool, boundary: &[Path]) -> Vec<f64> {
             }
         }
     }
-    (0..rows * columns)
-        .map(|i| {
+    let mut tips = vec![f64::INFINITY; rows * columns];
+    by_rows(&mut tips, columns, |first, band| {
+        for (k, tip) in band.iter_mut().enumerate() {
+            let i = first * columns + k;
             if inside[i] {
-                grid.drop_tool_on(tool, grid.centre(i % columns, i / columns), &peaks)
-            } else {
-                f64::INFINITY
+                *tip = grid.drop_tool_on(tool, grid.centre(i % columns, i / columns), &peaks);
             }
-        })
-        .collect()
+        }
+    });
+    tips
 }
 
 /// The separate areas cut at each level, as a label per cell of the grid: where the tool's
@@ -568,6 +566,27 @@ mod tests {
             "the flat around it: {floor}"
         );
         assert_eq!(cut.at(Point::new(20.0, 20.0)), Some(0.0), "the top is left");
+    }
+
+    #[test]
+    fn tips_inside_the_material_boundary_rest_the_tool_at_every_cell() {
+        let doc = domed();
+        let tool = Tool::default();
+        let grid = placed_model(&doc, &tool).unwrap();
+        let regions = machining_boundary(&doc, MachiningBoundary::Material, 0.0, "").unwrap();
+        let banded = tips(&grid, &tool, &regions);
+        let peaks = grid.peaks();
+        let plain: Vec<f64> = (0..grid.rows * grid.columns)
+            .map(|i| {
+                grid.drop_tool_on(
+                    &tool,
+                    grid.centre(i % grid.columns, i / grid.columns),
+                    &peaks,
+                )
+            })
+            .collect();
+        assert!(grid.rows * grid.columns > 4096, "big enough to be banded");
+        assert_eq!(banded, plain);
     }
 
     #[test]
