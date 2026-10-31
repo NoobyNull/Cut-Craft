@@ -96,6 +96,21 @@ pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
         .collect()
 }
 
+/// The snap grid's points over `job`: multiples of `spacing` from its corner, as grid snapping
+/// rounds to. None when they would come closer than `min_gap` pixels at `pixels_per_mm`, where
+/// they would only grey the material.
+pub fn grid_points(job: JobRect, spacing: f64, pixels_per_mm: f64, min_gap: f64) -> Vec<Point> {
+    if spacing <= 0.0 || spacing * pixels_per_mm < min_gap {
+        return vec![];
+    }
+    let size = job.size();
+    let ys = ruler_ticks(0.0, size.y, spacing);
+    ruler_ticks(0.0, size.x, spacing)
+        .into_iter()
+        .flat_map(|x| ys.iter().map(move |&y| job.min + Point::new(x, y)))
+        .collect()
+}
+
 /// A node handle's edge, as a share of the theme's interactive row height.
 // ponytail: fixed share until a preferences dialog sizes handles
 pub const NODE_HANDLE_SHARE: f32 = 0.35;
@@ -478,6 +493,19 @@ impl Canvas {
         }
     }
 
+    /// The snap grid's points, in the colour and size the options give.
+    fn paint_grid(&self, painter: &egui::Painter, display: &crate::display::Display, spacing: f64) {
+        let size = f32::from(display.grid_point_size);
+        let [r, g, b] = display.grid_colour;
+        let colour = egui::Color32::from_rgb(r, g, b);
+        // points at least two of their own widths apart
+        let gap = f64::from(2.0 * size);
+        let t = self.transform;
+        for p in grid_points(self.job, spacing, f64::from(t.scale), gap) {
+            painter.circle_filled(t.to_screen(p), size / 2.0, colour);
+        }
+    }
+
     /// Guide lines (dashed, while shown) and keep-out zones (in the warning colour, heavier
     /// than vectors).
     fn paint_guides_and_zones(
@@ -544,6 +572,7 @@ impl Canvas {
         overlay: &Overlay,
         highlighted: Option<EntityId>,
         display: &crate::display::Display,
+        grid: Option<f64>,
     ) {
         let painter = ui.painter_at(self.area);
         let visuals = ui.visuals();
@@ -573,6 +602,9 @@ impl Canvas {
             let at = Rect::from_two_pos(t.to_screen(bitmap.rect.min), t.to_screen(bitmap.rect.max));
             let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
             painter.image(texture.id(), at, whole, egui::Color32::WHITE);
+        }
+        if let Some(spacing) = grid {
+            self.paint_grid(&painter, display, spacing);
         }
         self.paint_components(ui, &painter, doc);
         let datum = visuals.widgets.noninteractive.fg_stroke;
@@ -663,6 +695,18 @@ fn to_f32(v: f64) -> f32 {
 mod tests {
     use super::*;
     use eframe::egui::{pos2, vec2};
+
+    #[test]
+    fn grid_points_cover_the_material_from_its_corner_unless_too_dense() {
+        let job = JobRect::new(Point::new(-5.0, 10.0), Point::new(15.0, 20.0));
+        let points = grid_points(job, 10.0, 1.0, 4.0);
+        assert_eq!(points.len(), 3 * 2);
+        assert_eq!(points[0], Point::new(-5.0, 10.0));
+        assert!(points.contains(&Point::new(15.0, 20.0)));
+        // 10 mm at 0.3 px/mm is 3 px apart: a grey wash, so none
+        assert_eq!(grid_points(job, 10.0, 0.3, 4.0), []);
+        assert_eq!(grid_points(job, 0.0, 1.0, 4.0), []);
+    }
 
     #[test]
     fn zooming_keeps_the_point_under_the_cursor_still() {
