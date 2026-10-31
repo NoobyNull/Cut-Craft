@@ -435,8 +435,12 @@ impl Canvas {
             };
             let cut = Stroke::new(cut_width.max(datum.width), colour);
             let travel = Stroke::new(datum.width, visuals.error_fg_color);
+            // ponytail: the active tile is clipped again each frame; cache it if it shows
+            let tiled = doc
+                .tiling
+                .and_then(|tiling| tiling.preview(&toolpath.moves, doc.job.area()));
             let mut from: Option<cut_craft_core::glam::DVec3> = None;
-            for m in &toolpath.moves {
+            for m in tiled.as_deref().unwrap_or(&toolpath.moves) {
                 let to = t.to_screen(m.to.truncate());
                 if let Some(was) = from {
                     let start = t.to_screen(was.truncate());
@@ -513,8 +517,14 @@ impl Canvas {
         if let Some(tiling) = doc.tiling {
             let edge = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
             let overlap = Stroke::new(datum.width, visuals.error_fg_color);
+            let active = tiling.active(doc.job.area());
             for tile in tiling.tiles(doc.job.area()) {
                 let reach = tiling.reach(tile);
+                let edge = if active == Some(tile) {
+                    Stroke::new(edge.width, visuals.selection.stroke.color)
+                } else {
+                    edge
+                };
                 for (r, stroke) in [(reach, overlap), (tile, edge)] {
                     let screen_rect =
                         egui::Rect::from_two_pos(t.to_screen(r.min), t.to_screen(r.max));
