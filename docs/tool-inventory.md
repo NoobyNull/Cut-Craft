@@ -284,6 +284,8 @@ say "not implemented yet".
 - Tool Database: cutting data per material (imported from `.vtdb` and Fusion presets), an
   active material, rate units per tool, thread mills as a tool type. Tools with no data for
   the active material are greyed; the tree's right-click Hide Unset Tools leaves them out.
+  A search box over the tree finds tools by name (indexed by word: each word typed matches
+  the start of a word in the name, in any order and case).
 - 3D view: ViewCube (faces, edges, corners), perspective, tilting underneath, overlays hidden
   behind the model.
 - Drawing tab:

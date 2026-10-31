@@ -66,6 +66,9 @@ pub struct Manager {
     /// The tree leaves out the tools with no cutting data for the active material (else
     /// they are greyed); the tree's right-click Hide Unset Tools.
     pub hide_unset: bool,
+    /// What is typed in the search box over the tree: tools are found by name.
+    pub search: String,
+    index: crate::search::SearchIndex,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -165,6 +168,8 @@ impl Manager {
             changer: None,
             new_material: String::new(),
             hide_unset: false,
+            search: String::new(),
+            index: crate::search::SearchIndex::default(),
         }
     }
 
@@ -252,8 +257,44 @@ impl Manager {
     fn tree(&mut self, ui: &mut egui::Ui, look: &Look) {
         cut_craft_bug_report::mark(ui, "Tool Database tree");
         self.changer_list(ui);
-        let all = tree::groups(&self.draft);
-        self.branch(ui, look, &all, "");
+        ui.add(
+            egui::TextEdit::singleline(&mut self.search)
+                .hint_text("Search tool names")
+                .desired_width(f32::INFINITY),
+        );
+        if self.search.trim().is_empty() {
+            let all = tree::groups(&self.draft);
+            self.branch(ui, look, &all, "");
+        } else {
+            self.found(ui, look);
+        }
+    }
+
+    /// The tools the search finds, each with its group, instead of the tree; a click picks one.
+    fn found(&mut self, ui: &mut egui::Ui, look: &Look) {
+        if self.index.is_stale(&self.draft) {
+            self.index = crate::search::SearchIndex::new(&self.draft);
+        }
+        let found = self.index.find(&self.search);
+        if found.is_empty() {
+            ui.weak("No tool has that name");
+        }
+        let row = ui.spacing().interact_size.y;
+        for i in found {
+            let tool = &self.draft.tools[i];
+            ui.horizontal(|ui| {
+                if let Some(image) = (look.picture)(picture_path(tool.shape)) {
+                    ui.add(image.fit_to_exact_size(egui::vec2(row * PICTURE_ASPECT, row)));
+                }
+                let picked = self.pick == Some(Pick::Tool(i));
+                if ui.selectable_label(picked, &tool.name).clicked() {
+                    self.pick = Some(Pick::Tool(i));
+                }
+                if !tool.group.is_empty() {
+                    ui.weak(&tool.group);
+                }
+            });
+        }
     }
 
     /// The tool changer's slots above the tree; a click picks the tool in it.
@@ -1016,6 +1057,25 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn the_search_box_lists_the_tools_it_finds_by_name() {
+        let ctx = egui::Context::default();
+        let mut m = Manager::new(&ToolDatabase::starter());
+        let all: Vec<String> = m.draft.tools.iter().map(|t| t.name.clone()).collect();
+        let ball: Vec<&String> = all.iter().filter(|n| n.contains("Ball")).collect();
+        assert!(!ball.is_empty() && ball.len() < all.len());
+        m.search = "ball".into();
+        drawn(&mut m, &ctx);
+        let shown = drawn(&mut m, &ctx);
+        for name in &all {
+            assert_eq!(shown.contains(name), name.contains("Ball"), "{name}");
+        }
+        // a renamed tool is found by its new name
+        m.draft.tools[0].name = "Zebra Cutter".into();
+        m.search = "zeb".into();
+        assert!(drawn(&mut m, &ctx).contains(&"Zebra Cutter".to_owned()));
     }
 
     #[test]
