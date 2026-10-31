@@ -4617,3 +4617,41 @@ fn job_sheets_take_the_editor_s_style_and_name_their_side() {
     assert_eq!(h.app.status.message, "Saved 1 job sheet");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn the_layers_list_arrows_move_the_active_layer_and_merge_visible_is_offered() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::two_layers();
+    let first = h.app.doc.layers[0].id;
+    h.app.doc.current_layer = first;
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Layers").unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let up = *h
+        .texts_at("⏶")
+        .first()
+        .expect("the arrows are over the list");
+    h.click(up, Modifiers::NONE);
+    assert_eq!(
+        h.app.doc.layers.last().map(|l| l.id),
+        Some(first),
+        "now at the top"
+    );
+    let menu = gui::layer_menu(&h.app.doc, &h.app.doc.layers[0]);
+    let merge = leaf(&menu, &["Merge Visible"]);
+    assert!(merge.is_enabled, "another layer is visible");
+    // layers with nothing on this sheet can be left out of the list
+    let empty = h
+        .app
+        .doc
+        .layers
+        .iter()
+        .find(|l| h.app.doc.vectors_on(l.id).next().is_none() && l.id != first)
+        .map(|l| l.name.clone());
+    if let Some(name) = empty {
+        h.app.layers_on_sheet = true;
+        h.frame(vec![]);
+        assert!(h.text_at(&name).is_none(), "{name} is left out");
+    }
+}

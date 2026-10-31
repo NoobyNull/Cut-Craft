@@ -1070,6 +1070,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-merge-visible-layers"
+version = "0.3.3"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-merged-toolpath"
 version = "0.3.3"
 dependencies = [
@@ -1255,6 +1264,15 @@ dependencies = [
 
 [[package]]
 name = "cmd-reorder-component"
+version = "0.3.3"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-reorder-layer"
 version = "0.3.3"
 dependencies = [
  "cut-craft-core",
@@ -1909,6 +1927,7 @@ dependencies = [
  "cmd-make-start-point",
  "cmd-material-setup",
  "cmd-materials",
+ "cmd-merge-visible-layers",
  "cmd-merged-toolpath",
  "cmd-mirror",
  "cmd-moulding-toolpath",
@@ -1930,6 +1949,7 @@ dependencies = [
  "cmd-profile-toolpath",
  "cmd-quick-engrave-toolpath",
  "cmd-reorder-component",
+ "cmd-reorder-layer",
  "cmd-reorder-level",
  "cmd-reorder-toolpath",
  "cmd-replace-below",

@@ -663,6 +663,8 @@ struct CutCraftApp {
     snap_window: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
     job_sheet_window: bool,
+    /// The Layers List leaves out the layers with nothing on the active sheet.
+    layers_on_sheet: bool,
     /// What the views draw.
     display: crate::display::Display,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.

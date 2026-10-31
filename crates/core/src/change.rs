@@ -112,6 +112,11 @@ pub enum Edit {
         before: Layer,
         after: Layer,
     },
+    /// The layer at `from` in the list moved to `to` (the order they are listed and drawn).
+    MoveLayer {
+        from: usize,
+        to: usize,
+    },
     SetCurrentLayer {
         before: LayerId,
         after: LayerId,
@@ -166,6 +171,7 @@ pub enum Edit {
 
 impl Edit {
     #[must_use]
+    #[expect(clippy::too_many_lines, reason = "one arm for each kind of edit")]
     pub fn inverse(&self) -> Self {
         match self.clone() {
             Self::Add { id, path } => Self::Remove { id, path },
@@ -220,6 +226,7 @@ impl Edit {
                 before: after,
                 after: before,
             },
+            Self::MoveLayer { from, to } => Self::MoveLayer { from: to, to: from },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
                 before: after,
                 after: before,
@@ -279,6 +286,8 @@ pub enum ApplyError {
     Conflict(EntityId),
     JobConflict,
     MissingLayer(LayerId),
+    /// A layer move from or to a place past the end of the list.
+    LayerOrder,
     LayerExists(LayerId),
     LayerConflict(LayerId),
     /// Vectors are still on it, or it is the last layer.
@@ -303,6 +312,7 @@ impl fmt::Display for ApplyError {
                 id.0
             ),
             Self::LevelConflict(id) => write!(f, "level {id} was changed by something else"),
+            Self::LayerOrder => f.write_str("a layer was moved past the end of the list"),
         }
     }
 }
@@ -887,6 +897,13 @@ impl Document {
                     Some(current) => current.clone_from(after),
                 }
             }
+            Edit::MoveLayer { from, to } => {
+                if *from >= self.layers.len() || *to >= self.layers.len() {
+                    return Err(ApplyError::LayerOrder);
+                }
+                let layer = self.layers.remove(*from);
+                self.layers.insert(*to, layer);
+            }
             // Like the selection, the current layer is view state: `before` is not checked.
             Edit::SetCurrentLayer { after, .. } => {
                 if self.layer(*after).is_none() {
@@ -1208,6 +1225,19 @@ impl ChangeBuilder<'_> {
     }
 
     /// A new layer on top of the others.
+    /// Moves layer `id` to place `to` in the list.
+    pub fn move_layer(&mut self, id: LayerId, to: usize) {
+        let Some(from) = self.layers.iter().position(|l| l.id == id) else {
+            return;
+        };
+        let to = to.min(self.layers.len() - 1);
+        if from != to {
+            let layer = self.layers.remove(from);
+            self.layers.insert(to, layer);
+            self.edits.push(Edit::MoveLayer { from, to });
+        }
+    }
+
     pub fn add_layer(&mut self, name: &str) -> LayerId {
         let id = LayerId(self.layers.iter().map(|l| l.id.0).max().unwrap_or(0) + 1);
         let layer = Layer::new(id, name);

@@ -214,13 +214,52 @@ impl CutCraftApp {
 
     /// Layers, top first: visibility and lock toggles, the current layer highlighted, and
     /// Aspire's layer menu on a right-click.
+    /// The arrows over the Layers List: the active layer one place up or down the list.
+    fn layer_order_arrows(&mut self, ui: &mut egui::Ui) {
+        use cmd_reorder_layer::{Direction, moved_to};
+        let layer = self.doc.current_layer;
+        let mut moved = None;
+        ui.horizontal(|ui| {
+            for (direction, arrow, tip) in [
+                (Direction::Up, "⏶", "Move the active layer up the list"),
+                (Direction::Down, "⏷", "Move the active layer down the list"),
+            ] {
+                let can = moved_to(&self.doc, layer, direction).is_some();
+                if ui
+                    .add_enabled(can, egui::Button::new(arrow))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    moved = Some(direction);
+                }
+            }
+        });
+        ui.checkbox(
+            &mut self.layers_on_sheet,
+            "Show only layers used on this sheet",
+        )
+        .on_hover_text("Leave out the layers with nothing on the active sheet");
+        if let Some(direction) = moved {
+            let params = serde_json::json!({ "layer": layer, "direction": direction });
+            if let Err(e) = self.apply("reorder_layer", &params) {
+                self.status.set_message(&e);
+            }
+        }
+    }
+
     pub(super) fn layers_panel(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Layers tab");
+        self.layer_order_arrows(ui);
         let edge = ui.spacing().interact_size.y;
         let label = |id: &str| self.registry.get(id).map_or("", |c| c.meta().label);
         let mut clicked: Option<(LayerId, &str)> = None;
         let mut chosen = None;
-        for layer in self.doc.layers.iter().rev() {
+        let shown = |l: &&cut_craft_core::document::Layer| {
+            !self.layers_on_sheet
+                || l.id == self.doc.current_layer
+                || self.doc.vectors_on(l.id).next().is_some()
+        };
+        for layer in self.doc.layers.iter().rev().filter(shown) {
             ui.horizontal(|ui| {
                 let (eye, eye_tip) = if layer.visible {
                     ("layers/visible.png", "Hide")

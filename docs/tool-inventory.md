@@ -81,7 +81,9 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
 `form:<command>:<json>` (open its form filled in); none has logic of its own.
 - **Layers panel (967):** Activate, Show ▸, Hide ▸, Lock / Unlock (the one that applies),
   Insert New Layer, Delete ▸ This / Visible / Invisible / Empty, Rename, Select Layer Vectors,
-  Move Selection Here. Merge Visible is greyed.
+  Move Selection Here, Merge Visible (every visible layer's vectors onto this layer, the
+  emptied layers removed). Arrows over the list move the active layer up or down it, and
+  Show Only Layers Used on This Sheet leaves out the empty ones.
 - **Toolpath list (968):** right-click selects the row. Show ▸, Hide ▸, Rename, Recalculate ▸
   This / Visible / All, Preview, Delete ▸ This / Invisible / Visible / All.
 - **Component list (613):** Combine Mode ▸ (current one ticked), Duplicate (a copy in place,

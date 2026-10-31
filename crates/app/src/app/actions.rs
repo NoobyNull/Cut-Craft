@@ -70,6 +70,7 @@ impl CutCraftApp {
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
             job_sheet_window: false,
+            layers_on_sheet: false,
             save_form: None,
             before_preview: None,
             picked_nodes: Vec::new(),
