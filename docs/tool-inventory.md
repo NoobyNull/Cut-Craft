@@ -429,11 +429,13 @@ say "not implemented yet".
     the objects into it as a Coons patch of its four sides (corners: the nodes nearest its
     bounding box's corners) and removes it. Not done: a live envelope (the distortion is
     applied at once, so there is no Bake Distortion), Use Rotated Bounds, the 3D view.
-- Toolpaths tab ▸ Material Setup (help: Material Setup - Flat / Rotary): Model Position in
-  Material, as the gap above the model's top (Gap Outside Model on rotary jobs) or below its
-  bottom (Gap Inside Model, from the axis); 3D roughing and finishing and the wrapped 3D
-  view place the model by it, refusing a model it pushes out of the material. The rest of
-  the form (thickness, Z zero, Z1 / Z2, home) is in Job Setup; Z2 and home are not done.
+- Toolpaths tab ▸ Material Setup (help: Material Setup - Flat / Rotary): the material's
+  thickness (flat jobs), Z zero, XY datum and offset, Rapid Z Gaps (Z1 / Z2) and Home, set as
+  Job Setup sets them; Model Position in Material, as the gap above the model's top (Gap
+  Outside Model on rotary jobs) or below its bottom (Gap Inside Model, from the axis); and
+  the model's thickness, which a new value scales the model to (Aspire's Set). 3D roughing
+  and finishing and the wrapped 3D view place the model by it, refusing a model it pushes
+  out of the material. Toolpath forms do not show Aspire's summary of these settings.
 - Toolpaths ▸ Materials (also beside Material Setup): a library of woods, sheet goods,
   plastics and metals that sets the material's colour in the 3D view (Job Setup's colour);
   Custom keeps Job Setup's. Woods show grain on the 3D view's top (lines along X that drift,

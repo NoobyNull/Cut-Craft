@@ -23,7 +23,7 @@ impl Default for Params {
 }
 
 /// From the model's lowest point to its highest.
-fn model_height(doc: &Document) -> f64 {
+pub fn model_height(doc: &Document) -> f64 {
     let m = model_at_resolution(doc);
     let (lo, hi) = m
         .heights

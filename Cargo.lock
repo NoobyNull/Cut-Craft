@@ -1051,6 +1051,8 @@ dependencies = [
 name = "cmd-material-setup"
 version = "0.3.3"
 dependencies = [
+ "cmd-job-setup",
+ "cmd-scale-model-z-height",
  "cut-craft-core",
  "schemars",
  "serde",
