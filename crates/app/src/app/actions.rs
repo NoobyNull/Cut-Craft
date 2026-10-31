@@ -2,16 +2,16 @@
 //! menus, the start page and the Design and Toolpaths pages.
 
 use super::{
-    APP_NAME, AUTOSAVE_SECONDS, Align, BUILT_INS, Change, CutCraftApp, DESIGN_PANEL_WIDTHS,
-    DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
-    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout, MODEL_IMPORTERS, Menus,
-    Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
-    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SUMMARY_DEFAULTS, Screen,
-    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
-    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
-    file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
-    on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table, template_dialog,
-    tool_picker, toolpath_template_dialog, view3d,
+    APP_NAME, AUTOSAVE_SECONDS, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp,
+    DESIGN_PANEL_WIDTHS, DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
+    JOB_EXTENSION, Key, KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout,
+    MODEL_IMPORTERS, Menus, Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point,
+    RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS,
+    SUMMARY_DEFAULTS, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS,
+    TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW,
+    commands, dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
+    message_dialog, on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table,
+    template_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -2605,6 +2605,14 @@ impl CutCraftApp {
                 ui.heading("Cut Craft");
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.label("2D and 3D design and CNC toolpaths.");
+                ui.separator();
+                ui.strong("Contributors on GitHub");
+                for (login, commits, url) in contributors() {
+                    ui.horizontal(|ui| {
+                        ui.hyperlink_to(login, url);
+                        ui.weak(format!("{commits} commits"));
+                    });
+                }
             }
             Info::Shortcuts => {
                 egui::ScrollArea::vertical()
@@ -2633,4 +2641,16 @@ impl CutCraftApp {
             self.info = None;
         }
     }
+}
+
+/// The GitHub contributors built in: login, commits and profile, most commits first.
+pub(super) fn contributors() -> Vec<(&'static str, &'static str, &'static str)> {
+    CONTRIBUTORS
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            Some((fields.next()?, fields.next()?, fields.next()?))
+        })
+        .filter(|(login, ..)| !login.is_empty())
+        .collect()
 }

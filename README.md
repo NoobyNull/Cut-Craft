@@ -273,6 +273,10 @@ cargo run --release -- --screenshots docs/screenshots
 It sets up each scene, waits for it to settle, saves it, and quits. It reads none of your
 settings and saves nothing.
 
+Help ▸ About lists the repository's contributors on GitHub, built in from
+`crates/app/contributors.tsv`; `scripts/contributors` writes that file again from GitHub
+(through `gh`), so run it before a release.
+
 ### Icons
 
 The icons are drawn for Cut Craft and kept in `assets/icons` as transparent PNGs, built into

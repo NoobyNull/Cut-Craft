@@ -30,6 +30,26 @@ fn cut_copy_and_paste_vectors() {
 }
 
 #[test]
+fn about_lists_the_github_contributors() {
+    let listed = super::actions::contributors();
+    assert!(!listed.is_empty(), "scripts/contributors has been run");
+    assert!(listed.iter().any(|(login, ..)| *login == "NoobyNull"));
+    assert!(
+        listed
+            .iter()
+            .all(|(_, commits, url)| commits.parse::<u32>().is_ok()
+                && url.starts_with("https://github.com/")),
+        "{listed:?}"
+    );
+    let mut h = Harness::new();
+    h.app.info = Some(Info::About);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Contributors on GitHub").is_some());
+    assert!(h.text_at("NoobyNull").is_some());
+}
+
+#[test]
 fn importing_models_offers_what_the_options_say() {
     use crate::options::ModelTypes;
     let mut h = Harness::new();

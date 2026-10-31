@@ -1,0 +1,10 @@
+#!/bin/bash
+# The repository's contributors on GitHub, for Help ▸ About: writes crates/app/contributors.tsv
+# (login, commits, profile URL, one a line, most commits first) from GitHub's API through gh.
+# Run it before a release so the list is current; the file is built into the app.
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")/.."
+repo=${1:-NoobyNull/Cut-Craft}
+gh api --paginate "repos/$repo/contributors" \
+    --jq '.[] | "\(.login)\t\(.contributions)\t\(.html_url)"' >crates/app/contributors.tsv
+echo "$(wc -l <crates/app/contributors.tsv) contributors in crates/app/contributors.tsv"

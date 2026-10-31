@@ -343,6 +343,9 @@ const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
 const RECENT_FILE_ICON: &str = "file/new.png";
 /// This version's changes, one `- ` line each, shown on the start page.
 const WHATS_NEW: &str = include_str!("../whats-new.md");
+/// The repository's contributors on GitHub (login, commits, profile), as
+/// `scripts/contributors` last wrote them; Help ▸ About lists them.
+const CONTRIBUTORS: &str = include_str!("../contributors.tsv");
 /// Where Cut Craft is found online, shown on the start page: label, address and icon (the
 /// social ones are placeholders: each site's home page).
 /// Machine ▸ Search for Machine Online: the machine packages in Cut Craft's repository.
