@@ -258,6 +258,8 @@ say "not implemented yet".
   first: 0 is a bit changed by hand (picked from the Tool Database, written as T0), then each
   holder with its tool. Every tool in a list (clearance tools, finishing tool sets, rest
   machining) has the same picker, Edit... and summary.
+- Snap grid: while Snap to Grid is on, the 2D view draws its points over the job (thinned
+  when zoomed out so they never crowd); Options ▸ Appearance sets the grid colour and point size.
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
 - Clearance Tools on Pocket and V-Carve (the form's "Add a clearance tool from the
   database", kept largest first): each makes a toolpath of its own, named `[1]`, `[2]`... in

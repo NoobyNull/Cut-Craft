@@ -377,7 +377,7 @@ impl Advanced {
 }
 
 /// How Cut Craft looks (not one of Aspire's).
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Appearance {
     /// Light, dark, or the desktop's own
     #[serde(default)]
@@ -386,6 +386,40 @@ pub struct Appearance {
     #[serde(default)]
     #[schemars(title = "Use the desktop's title bar")]
     pub system_title_bar: bool,
+    /// The snap grid's points in the 2D view
+    #[serde(default = "grid_color")]
+    #[schemars(title = "Grid color", extend("x-kind" = "colour"))]
+    pub grid_color: [u8; 3],
+    /// How big the snap grid's points are drawn, in screen points
+    #[serde(default = "grid_point_size")]
+    #[schemars(range(min = 0.5, max = 10))]
+    pub grid_point_size: f32,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            theme: Theme::default(),
+            system_title_bar: false,
+            grid_color: grid_color(),
+            grid_point_size: grid_point_size(),
+        }
+    }
+}
+
+/// The light theme's faint text colour, as other faint marks are.
+fn grid_color() -> [u8; 3] {
+    let c = egui::Visuals::light().weak_text_color();
+    [c.r(), c.g(), c.b()]
+}
+
+/// As thick as two of the theme's lines.
+fn grid_point_size() -> f32 {
+    2.0 * egui::Visuals::light()
+        .widgets
+        .noninteractive
+        .fg_stroke
+        .width
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

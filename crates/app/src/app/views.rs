@@ -894,6 +894,26 @@ impl CutCraftApp {
         }
     }
 
+    /// The 2D view's drawing, and the snap grid's points while snapping to it.
+    fn paint_2d(&self, ui: &egui::Ui, canvas: &view2d::Canvas, overlay: &view2d::Overlay) {
+        canvas.paint(
+            ui,
+            &self.doc,
+            overlay,
+            self.selected_toolpath,
+            &self.display,
+        );
+        if self.snap.snap_to_grid {
+            let look = &self.options.appearance;
+            canvas.paint_grid(
+                ui,
+                self.snap.grid_spacing,
+                look.grid_color,
+                look.grid_point_size,
+            );
+        }
+    }
+
     pub(super) fn view_2d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "2D view");
         let job = self.shown_job();
@@ -935,13 +955,7 @@ impl CutCraftApp {
             (Some(Gesture::Dragging(drag)), _, None) => self.select_drag_overlay(drag, reach),
             _ => Overlay::None,
         };
-        canvas.paint(
-            ui,
-            &self.doc,
-            &overlay,
-            self.selected_toolpath,
-            &self.display,
-        );
+        self.paint_2d(ui, &canvas, &overlay);
         // while Job Setup is open a red square marks the datum, as in Aspire
         if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {
             let edge = ui.spacing().interact_size.y / 2.0;

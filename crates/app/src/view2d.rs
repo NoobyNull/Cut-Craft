@@ -74,6 +74,33 @@ impl ViewTransform {
 
 /// The spacing of ruler labels: the smallest 1, 2 or 5 times a power of ten that puts them at
 /// least `min_gap` pixels apart at `pixels_per_unit`.
+/// How many of their own sizes apart grid points must be on screen to be drawn.
+const GRID_GAP: f32 = 4.0;
+
+/// The distance between grid points drawn: the spacing, or the least multiple of it at
+/// least `min_gap` screen points apart at `scale` points a millimetre; none for no spacing.
+pub fn grid_step(spacing: f64, scale: f64, min_gap: f64) -> Option<f64> {
+    if spacing <= 0.0 || scale <= 0.0 {
+        return None;
+    }
+    let every = (min_gap / (spacing * scale)).ceil().max(1.0);
+    Some(spacing * every)
+}
+
+/// The grid points `step` apart from the job's zero (whole multiples) inside `job`.
+#[expect(clippy::cast_possible_truncation, reason = "counts of grid points")]
+pub fn grid_points(job: cut_craft_core::geometry::Rect, step: f64) -> Vec<Point> {
+    let range = |lo: f64, hi: f64| (lo / step).ceil() as i64..=(hi / step).floor() as i64;
+    let mut points = vec![];
+    for row in range(job.min.y, job.max.y) {
+        for column in range(job.min.x, job.max.x) {
+            #[expect(clippy::cast_precision_loss, reason = "small counts")]
+            points.push(Point::new(column as f64 * step, row as f64 * step));
+        }
+    }
+    points
+}
+
 pub fn ruler_step(pixels_per_unit: f64, min_gap: f64) -> f64 {
     let raw = min_gap / pixels_per_unit;
     let power = 10f64.powf(raw.log10().floor());
@@ -550,6 +577,23 @@ impl Canvas {
         }
     }
 
+    /// The snap grid's points over the job, `spacing` apart, coloured and sized as asked;
+    /// when they would crowd closer than a few of their own size, only every so many.
+    pub fn paint_grid(&self, ui: &egui::Ui, spacing: f64, colour: [u8; 3], size: f32) {
+        let t = self.transform;
+        let Some(step) = grid_step(spacing, f64::from(t.scale), f64::from(GRID_GAP * size)) else {
+            return;
+        };
+        let painter = ui.painter_at(self.area);
+        let colour = egui::Color32::from_rgb(colour[0], colour[1], colour[2]);
+        for p in grid_points(self.job, step) {
+            let at = t.to_screen(p);
+            if self.area.contains(at) {
+                painter.circle_filled(at, size / 2.0, colour);
+            }
+        }
+    }
+
     pub fn paint(
         &self,
         ui: &egui::Ui,
@@ -682,6 +726,21 @@ const ACTIVE_TILE_SHADE: f32 = 0.15;
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_grid_thins_out_when_its_points_would_crowd() {
+        // 10 mm apart at 2 points a mm is 20 points: drawn as it is
+        assert_eq!(grid_step(10.0, 2.0, 8.0), Some(10.0));
+        // at 0.3 points a mm only every third is 8 or more points apart
+        assert_eq!(grid_step(10.0, 0.3, 8.0), Some(30.0));
+        assert_eq!(grid_step(0.0, 1.0, 8.0), None);
+        let job =
+            cut_craft_core::geometry::Rect::new(Point::new(-5.0, 0.0), Point::new(20.0, 10.0));
+        let points = grid_points(job, 10.0);
+        assert_eq!(points.len(), 3 * 2, "x 0, 10, 20 by y 0, 10");
+        assert!(points.contains(&Point::new(20.0, 10.0)));
+    }
+
     use super::*;
     use eframe::egui::{pos2, vec2};
 
