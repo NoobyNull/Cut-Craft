@@ -1227,7 +1227,7 @@ fn tool_summary(ui: &mut egui::Ui, tool: &Tool, passes: Option<f64>, in_database
             rows.push(("Angle", format!("{}°", trimmed(tool.angle))));
         }
         ToolShape::RadiusedEndMill => rows.push(("Tip radius", length(tool.tip_radius))),
-        ToolShape::EndMill | ToolShape::BallNose => {}
+        ToolShape::EndMill | ToolShape::BallNose | ToolShape::FormTool => {}
     }
     if tool.taper > 0.0 {
         rows.push(("Taper angle", format!("{}°", trimmed(tool.taper))));

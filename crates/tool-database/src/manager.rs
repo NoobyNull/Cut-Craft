@@ -51,6 +51,8 @@ pub enum Outcome {
 pub struct Look<'a> {
     /// The picture at an icon path (`tool_database/end_mill.png`), if there is one.
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
+    /// The job's selected open vector, which a form tool can take its shape from.
+    pub profile: Option<&'a cut_craft_core::geometry::Path>,
 }
 
 /// The open window: the database being edited and what is picked in it.
@@ -118,17 +120,19 @@ pub fn picture_path(shape: ToolShape) -> &'static str {
         ToolShape::BallNose => "tool_database/ball_nose.png",
         ToolShape::VBit => "tool_database/v_bit.png",
         ToolShape::RadiusedEndMill => "tool_database/radiused_end_mill.png",
-        // ponytail: no thread mill picture is drawn yet, so none shows
+        // ponytail: no thread mill or form tool picture is drawn yet, so none shows
         ToolShape::ThreadMill => "tool_database/thread_mill.png",
+        ToolShape::FormTool => "tool_database/form_tool.png",
     }
 }
 
-const SHAPES: [(ToolShape, &str); 5] = [
+const SHAPES: [(ToolShape, &str); 6] = [
     (ToolShape::EndMill, "End Mill"),
     (ToolShape::BallNose, "Ball Nose"),
     (ToolShape::VBit, "V-Bit"),
     (ToolShape::RadiusedEndMill, "Radiused End Mill"),
     (ToolShape::ThreadMill, "Thread Mill"),
+    (ToolShape::FormTool, "Form Tool"),
 ];
 
 fn shape_name(shape: ToolShape) -> &'static str {
@@ -680,6 +684,38 @@ fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String
     });
 }
 
+/// A form tool's row in Tool Info: Use Selected Vector takes its shape from the job's
+/// selected open vector, and how many points its profile has.
+fn form_row(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
+    if tool.shape != ToolShape::FormTool {
+        return;
+    }
+    ui.label("Form");
+    ui.horizontal(|ui| {
+        let use_it = ui
+            .add_enabled(
+                look.profile.is_some(),
+                egui::Button::new("Use Selected Vector"),
+            )
+            .on_hover_text(
+                "Half the tool's section, drawn upright: the axis at its left, the \
+                 tip at its lowest point",
+            )
+            .on_disabled_hover_text("Select one open vector in the job first");
+        if use_it.clicked()
+            && let Some(path) = look.profile
+        {
+            tool.set_form(path);
+        }
+        ui.weak(if tool.form.is_empty() {
+            "no profile yet".to_owned()
+        } else {
+            format!("{} points", tool.form.len())
+        });
+    });
+    ui.end_row();
+}
+
 /// Name, type, group and notes, then the geometry beside the tool's picture.
 fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look) {
     egui::Grid::new("tool_info").num_columns(2).show(ui, |ui| {
@@ -730,6 +766,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                 }
             });
         ui.end_row();
+        form_row(ui, tool, look);
         ui.label("Notes");
         ui.add(
             egui::TextEdit::multiline(&mut tool.notes)
@@ -864,7 +901,10 @@ mod tests {
     use super::*;
 
     fn frame(manager: &mut Manager, ctx: &egui::Context) -> Option<Outcome> {
-        let look = Look { picture: &|_| None };
+        let look = Look {
+            picture: &|_| None,
+            profile: None,
+        };
         let mut outcome = None;
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(

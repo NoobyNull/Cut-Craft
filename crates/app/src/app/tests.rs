@@ -4522,3 +4522,31 @@ fn the_status_bar_shows_the_version() {
         .expect("the version is in the status bar");
     assert!(at.y > 700.0, "at the bottom: {at:?}");
 }
+
+#[test]
+fn a_form_tool_takes_its_shape_from_the_selected_vector() {
+    let mut h = Harness::new();
+    let profile = serde_json::json!({ "points": [
+        { "x": 10.0, "y": 10.0 }, { "x": 14.0, "y": 10.0 }, { "x": 16.0, "y": 13.0 }
+    ], "closed": false });
+    h.app.apply("draw_polyline", &profile).unwrap();
+    h.app.form = None;
+    h.app.tools = ToolDatabase {
+        tools: vec![Tool {
+            shape: cut_craft_core::toolpath::ToolShape::FormTool,
+            ..Tool::default()
+        }],
+        ..ToolDatabase::default()
+    };
+    h.app.invoke(&h.ctx, "tool_database");
+    h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(0));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let button = h
+        .text_at("Use Selected Vector")
+        .expect("a form tool offers it");
+    h.click(button, Modifiers::NONE);
+    let tool = &h.app.tool_manager.as_ref().unwrap().draft.tools[0];
+    assert_eq!(tool.form.len(), 3);
+    assert!((tool.diameter - 12.0).abs() < 1e-9);
+}

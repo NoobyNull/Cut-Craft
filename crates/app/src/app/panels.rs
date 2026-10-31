@@ -19,7 +19,15 @@ impl CutCraftApp {
         };
         let icons = &self.icons;
         let picture = |path: &str| icons.find(path, "").map(|p| icons.image(p));
-        let look = cut_craft_tool_database::Look { picture: &picture };
+        // a form tool takes its shape from the one open vector selected
+        let profile = match self.doc.selection.iter().collect::<Vec<_>>()[..] {
+            [id] => self.doc.vectors.get(id).filter(|p| !p.closed),
+            _ => None,
+        };
+        let look = cut_craft_tool_database::Look {
+            picture: &picture,
+            profile,
+        };
         let Some(outcome) = manager.show(ctx, &look) else {
             return;
         };

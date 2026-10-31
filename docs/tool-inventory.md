@@ -253,6 +253,11 @@ say "not implemented yet".
 - 3D Finishing takes a list of tools and makes a toolpath for each (rest machining).
 - Posts: G2/G3 arcs (and helices) fitted to curves when the post has arc blocks, Cut Craft's
   own FluidNC posts included; Plunge (Z2) and the Home / Start Position in Job Setup.
+- Tool Database form tools: Form Tool is a tool type whose cutting edge is a profile;
+  Use Selected Vector takes it from the job's selected open vector (half the section,
+  drawn upright, the axis at its left and the tip at its lowest point; the diameter is
+  twice its width). The preview and the toolpaths cut with that shape. Form tools in
+  `.vtdb` files are still skipped, and no picture is drawn for the type.
 - Tool Database name formats (help: Tool Database - Name Format): a tool's Name Format
   (`{Tool Type} {Diameter|F}`, the variables from a list, modifiers U, L, 0.00 and F for
   inch fractions) names it; Set as Default makes it the format new tools of that type are

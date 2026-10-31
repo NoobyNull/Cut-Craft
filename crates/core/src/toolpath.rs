@@ -28,6 +28,10 @@ pub enum ToolShape {
     /// for the Thread Milling toolpath
     #[schemars(title = "Thread Mill")]
     ThreadMill,
+    /// Cuts the profile it was given: half its section, drawn as a vector (a moulding or
+    /// router bit's shape)
+    #[schemars(title = "Form Tool")]
+    FormTool,
 }
 
 /// The units a tool's feed and plunge rates are shown in, as Aspire's list. Rates are kept
@@ -175,6 +179,21 @@ pub struct Tool {
     #[serde(default = "default_tooth_offset")]
     #[schemars(skip)]
     pub tooth_offset: f64,
+    /// A form tool's cutting edge: (distance from the axis, height above the tip) pairs,
+    /// outward (added with form tools)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub form: Vec<[f64; 2]>,
+}
+
+/// A form tool's edge height at `r` out, between the profile's points (flat past its ends).
+fn form_height(form: &[[f64; 2]], r: f64) -> f64 {
+    let i = form.partition_point(|p| p[0] < r);
+    match (i.checked_sub(1).map(|k| form[k]), form.get(i).copied()) {
+        (Some(a), Some(b)) if b[0] > a[0] => a[1] + (b[1] - a[1]) * (r - a[0]) / (b[0] - a[0]),
+        (_, Some(p)) | (Some(p), None) => p[1],
+        (None, None) => 0.0,
+    }
 }
 
 fn default_angle() -> f64 {
@@ -319,6 +338,27 @@ impl Tool {
         r.min(self.reach())
     }
 
+    /// Makes it a form tool cutting the shape of `path`: half its section, drawn upright
+    /// with the axis on the left (the leftmost point) and the tip at the lowest point. Its
+    /// diameter is twice the profile's width. False when the path has no width.
+    pub fn set_form(&mut self, path: &crate::geometry::Path) -> bool {
+        let pts = path.flatten(crate::polygon::TOLERANCE);
+        let left = pts.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let low = pts.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        let mut form: Vec<[f64; 2]> = pts.iter().map(|p| [p.x - left, p.y - low]).collect();
+        form.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+        // the edge is what the tool cuts: the lowest point at each distance out
+        form.dedup_by(|b, a| (b[0] - a[0]).abs() < 1e-9);
+        let width = form.last().map_or(0.0, |p| p[0]);
+        if width <= 0.0 {
+            return false;
+        }
+        self.shape = ToolShape::FormTool;
+        self.diameter = 2.0 * width;
+        self.form = form;
+        true
+    }
+
     /// How far above its tip the cutting edge is at `r` from the axis; `None` beyond the tool.
     /// A tapered tool's taper counts as edge, out to its shank.
     pub fn profile(&self, r: f64) -> Option<f64> {
@@ -348,6 +388,7 @@ impl Tool {
             // the core under the tooth is flat to the bottom; the tooth's lower flank
             // rises to its tip
             // ponytail: the core is taken to reach the bottom, as most single-point mills do
+            ToolShape::FormTool => form_height(&self.form, r),
             ToolShape::ThreadMill => {
                 let core = radius - self.tooth_size.clamp(0.0, radius);
                 if r <= core {
@@ -386,6 +427,7 @@ impl Default for Tool {
             materials: vec![],
             tooth_size: default_tooth_size(),
             tooth_offset: default_tooth_offset(),
+            form: vec![],
         }
     }
 }
@@ -559,6 +601,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::VBit => "V-Bits",
         ToolShape::RadiusedEndMill => "Radiused End Mills",
         ToolShape::ThreadMill => "Thread Mills",
+        ToolShape::FormTool => "Form Tools",
     }
 }
 

@@ -464,3 +464,46 @@ fn the_other_side_s_cuts_show_on_the_underside_and_cut_through_leaves_nothing() 
         "one-sided: flat"
     );
 }
+
+#[test]
+fn a_form_tool_cuts_the_shape_of_its_vector() {
+    use cut_craft_core::geometry::Path;
+    // half a section: flat 4 out from the axis, then rising 3 over the next 2
+    let profile = Path::polyline(
+        &[
+            Point::new(10.0, 10.0),
+            Point::new(14.0, 10.0),
+            Point::new(16.0, 13.0),
+        ],
+        false,
+    );
+    let mut tool = Tool::default();
+    assert!(tool.set_form(&profile));
+    assert_eq!(tool.shape, ToolShape::FormTool);
+    assert!(
+        (tool.diameter - 12.0).abs() < 1e-9,
+        "twice the profile's width"
+    );
+    assert_eq!(tool.profile(2.0), Some(0.0));
+    assert!((tool.profile(5.0).unwrap() - 1.5).abs() < 1e-9);
+    assert_eq!(tool.profile(6.5), None, "past the tool");
+    // plunged 5 deep: the shape of the profile is left in the material
+    let mut m = material();
+    m.cut(&with_tool(
+        tool,
+        &[(50.0, 50.0, 5.0), (50.0, 50.0, -5.0), (50.0, 50.0, 5.0)],
+    ));
+    assert!((depth_at(&m, 50.0, 50.0) + 5.0).abs() < 1e-9);
+    // half-millimetre cells: the cell at 55 is measured at its centre, 5.25 out
+    assert!(
+        (depth_at(&m, 55.0, 50.0) + 3.125).abs() < 0.05,
+        "{}",
+        depth_at(&m, 55.0, 50.0)
+    );
+    assert!(depth_at(&m, 57.0, 50.0).abs() < 1e-9, "uncut past the tool");
+    let mut flat = Tool::default();
+    assert!(!flat.set_form(&Path::polyline(
+        &[Point::new(1.0, 1.0), Point::new(1.0, 5.0)],
+        false
+    )));
+}
