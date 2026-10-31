@@ -2197,6 +2197,51 @@ fn the_arrow_keys_nudge_the_selection() {
 }
 
 #[test]
+fn sculpting_keys_pick_the_tool_and_size_and_strength() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.frame(vec![]);
+    h.app.invoke(&h.ctx, "sculpt");
+    let param = |h: &Harness, name: &str| h.app.form.as_ref().unwrap().params[name].clone();
+    h.frame(vec![key(Key::Num3)]);
+    assert_eq!(param(&h, "tool"), "deposit");
+    h.frame(vec![key(Key::Num5)]);
+    assert_eq!(param(&h, "tool"), "undo_brush");
+    let diameter = param(&h, "diameter").as_f64().unwrap();
+    h.frame(vec![key(Key::CloseBracket)]);
+    let grown = param(&h, "diameter").as_f64().unwrap();
+    assert!(
+        (grown - diameter * SCULPT_DIAMETER_STEP).abs() < 1e-9,
+        "{grown}"
+    );
+    h.frame(vec![key(Key::OpenBracket)]);
+    let back = param(&h, "diameter").as_f64().unwrap();
+    assert!((back - diameter).abs() < 1e-9, "{back}");
+    let strength = param(&h, "strength").as_f64().unwrap();
+    h.frame(vec![key(Key::CloseCurlyBracket)]);
+    let stronger = param(&h, "strength").as_f64().unwrap();
+    assert!((stronger - strength - SCULPT_STRENGTH_STEP).abs() < 1e-9);
+    let press = Event::Key {
+        key: Key::OpenBracket,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::SHIFT,
+    };
+    h.frame_holding(Modifiers::SHIFT, vec![press]);
+    let weaker = param(&h, "strength").as_f64().unwrap();
+    assert!(
+        (weaker - strength).abs() < 1e-9,
+        "Shift+[ weakens: {weaker}"
+    );
+    let unchanged = param(&h, "diameter").as_f64().unwrap();
+    assert!(
+        (unchanged - diameter).abs() < 1e-9,
+        "Shift+[ leaves the size"
+    );
+}
+
+#[test]
 fn f11_designs_f12_machines_and_switch_layout_swaps() {
     let mut h = Harness::new();
     assert_eq!(h.app.pages, Pages::design_layout());

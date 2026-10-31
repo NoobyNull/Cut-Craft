@@ -273,6 +273,19 @@ const SETTLE_SECONDS: f64 = 0.25;
 const AUTOSAVE_SECONDS: f64 = 30.0;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
 const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
+/// Sculpting's keys: 1 to 5 pick the tool, as in Aspire.
+const SCULPT_TOOL_KEYS: [(Key, &str); 5] = [
+    (Key::Num1, "smooth"),
+    (Key::Num2, "smudge"),
+    (Key::Num3, "deposit"),
+    (Key::Num4, "remove"),
+    (Key::Num5, "undo_brush"),
+];
+/// [ and ] scale the sculpting brush's diameter by this; Shift with them steps its strength
+/// by `SCULPT_STRENGTH_STEP` percent.
+// ponytail: fixed steps until Options has sculpting settings
+const SCULPT_DIAMETER_STEP: f64 = 1.1;
+const SCULPT_STRENGTH_STEP: f64 = 5.0;
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 2] = ["import_stl", "import_3d_clipart"];

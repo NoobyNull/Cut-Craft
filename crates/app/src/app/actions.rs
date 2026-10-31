@@ -6,12 +6,13 @@ use super::{
     DESIGN_PANEL_WIDTHS, DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
     JOB_EXTENSION, Key, KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout,
     MODEL_IMPORTERS, Menus, Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point,
-    RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS,
-    SUMMARY_DEFAULTS, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS,
-    TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW,
-    commands, dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table,
-    template_dialog, tool_picker, toolpath_template_dialog, view3d,
+    RECENT_FILE_ICON, SCULPT_DIAMETER_STEP, SCULPT_STRENGTH_STEP, SCULPT_TOOL_KEYS,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SUMMARY_DEFAULTS, Screen,
+    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
+    file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
+    on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table, template_dialog,
+    tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -1741,6 +1742,41 @@ impl CutCraftApp {
         }
     }
 
+    /// Sculpting's keys while its form is open: 1 to 5 pick the tool, [ and ] shrink and grow
+    /// the brush, and with Shift ({ and }) weaken and strengthen it.
+    fn sculpt_keys(&mut self, ctx: &egui::Context) {
+        if ctx.egui_wants_keyboard_input() {
+            return;
+        }
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "sculpt") else {
+            return;
+        };
+        ctx.input(|i| {
+            for (key, tool) in SCULPT_TOOL_KEYS {
+                if i.key_pressed(key) {
+                    form.params["tool"] = Value::from(tool);
+                }
+            }
+            let shift = i.modifiers.shift;
+            let down =
+                i.key_pressed(Key::OpenCurlyBracket) || (shift && i.key_pressed(Key::OpenBracket));
+            let up = i.key_pressed(Key::CloseCurlyBracket)
+                || (shift && i.key_pressed(Key::CloseBracket));
+            if down || up {
+                let step = if up { 1.0 } else { -1.0 } * SCULPT_STRENGTH_STEP;
+                let strength = form.params["strength"].as_f64().unwrap_or_default();
+                form.params["strength"] = Value::from((strength + step).clamp(0.0, 100.0));
+            } else if let Some(diameter) = form.params["diameter"].as_f64() {
+                if i.key_pressed(Key::OpenBracket) {
+                    form.params["diameter"] = Value::from(diameter / SCULPT_DIAMETER_STEP);
+                }
+                if i.key_pressed(Key::CloseBracket) {
+                    form.params["diameter"] = Value::from(diameter * SCULPT_DIAMETER_STEP);
+                }
+            }
+        });
+    }
+
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
         // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
         // clipboard carries what Copy took, so another Cut Craft window pastes it too
@@ -1796,6 +1832,7 @@ impl CutCraftApp {
             self.pages.done_with(Page::Toolpaths);
         }
         self.nudge(ctx);
+        self.sculpt_keys(ctx);
         ctx.input(|i| {
             if i.key_pressed(Key::F1) {
                 let topic = self.form.as_ref().map_or("contents", |f| f.id);
