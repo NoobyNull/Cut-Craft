@@ -18,6 +18,8 @@ pub enum Slicing {
     SliceThickness,
     /// The model's thickness shared between this many slices
     NumberOfSlices,
+    /// Slices of the thicknesses listed; the last takes what is left
+    CustomList,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -30,6 +32,10 @@ pub struct Params {
     pub from_top: bool,
     #[schemars(range(min = 1, max = 100))]
     pub number_of_slices: u32,
+    /// Thickness of each slice, in slicing order
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"))]
+    pub slice_list: Vec<f64>,
     /// A closed vector round each slice
     pub create_boundary_vectors: bool,
 }
@@ -42,6 +48,7 @@ impl Default for Params {
             slice_thickness: 20.0,
             from_top: true,
             number_of_slices: 2,
+            slice_list: vec![],
             create_boundary_vectors: false,
         }
     }
@@ -96,6 +103,17 @@ impl Command for Slice {
                 ensure_positive("slice thickness", p.slice_thickness)?;
                 bands(top, p.slice_thickness, p.from_top)
             }
+            Slicing::CustomList => {
+                if p.slice_list.is_empty() {
+                    return Err(CommandError::InvalidParams(
+                        "list at least one slice thickness".into(),
+                    ));
+                }
+                for &t in &p.slice_list {
+                    ensure_positive("slice thickness", t)?;
+                }
+                stack(top, &p.slice_list, p.from_top)
+            }
         };
         let mut c = Change::builder(doc);
         for (k, band) in cuts.windows(2).enumerate() {
@@ -132,6 +150,25 @@ fn bands(top: f64, step: f64, from_top: bool) -> Vec<f64> {
     cuts
 }
 
+/// Cut heights from 0 to `top`, slices of `thicknesses` stacked from the top down when
+/// `from_top`, else from the bottom up; past the list, one slice takes what is left.
+fn stack(top: f64, thicknesses: &[f64], from_top: bool) -> Vec<f64> {
+    let mut cuts = vec![0.0];
+    let mut z = 0.0;
+    for t in thicknesses {
+        z += t;
+        if z >= top - 1e-9 {
+            break;
+        }
+        cuts.push(z);
+    }
+    cuts.push(top);
+    if from_top {
+        cuts = cuts.iter().rev().map(|z| top - z).collect();
+    }
+    cuts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,11 +189,32 @@ mod tests {
     }
 
     #[test]
+    fn stack_takes_the_listed_thicknesses_then_the_rest() {
+        let close = |a: &[f64], b: &[f64]| {
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-9)
+        };
+        assert!(close(
+            &stack(10.0, &[2.0, 5.0], false),
+            &[0.0, 2.0, 7.0, 10.0]
+        ));
+        assert!(close(
+            &stack(10.0, &[2.0, 5.0], true),
+            &[0.0, 3.0, 8.0, 10.0]
+        ));
+        assert!(close(
+            &stack(10.0, &[4.0, 6.0, 3.0], false),
+            &[0.0, 4.0, 10.0]
+        ));
+        assert!(close(&stack(10.0, &[20.0], false), &[0.0, 10.0]));
+    }
+
+    #[test]
     fn the_dome_in_two_slices_each_from_zero() {
         let mut doc = domed();
         let p = Params {
             slicing: Slicing::NumberOfSlices,
             number_of_slices: 2,
+            slice_list: vec![],
             create_boundary_vectors: true,
             ..Params::default()
         };
