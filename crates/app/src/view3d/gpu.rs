@@ -311,6 +311,29 @@ impl Piece {
     }
 }
 
+/// The window's device: eframe's, but with buffers as big as the card allows rather than
+/// wgpu's conservative defaults (128 MB a storage binding), so a model's size is bounded by
+/// the card's memory alone.
+pub fn device(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
+    let base = if adapter.get_info().backend == wgpu::Backend::Gl {
+        wgpu::Limits::downlevel_webgl2_defaults()
+    } else {
+        wgpu::Limits::default()
+    };
+    let own = adapter.limits();
+    wgpu::DeviceDescriptor {
+        label: Some("cut craft"),
+        required_limits: wgpu::Limits {
+            max_buffer_size: own.max_buffer_size,
+            max_storage_buffer_binding_size: own.max_storage_buffer_binding_size,
+            // eframe's: the depth texture must cover a 4k+ window
+            max_texture_dimension_2d: 8192,
+            ..base
+        },
+        ..wgpu::DeviceDescriptor::default()
+    }
+}
+
 /// The GPU as the 3D view uses it: the window's device and queue (at hand here for work on
 /// the card beyond drawing), the view's pipeline, and what is on the card.
 pub struct Gpu {

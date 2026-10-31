@@ -1300,6 +1300,15 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         multisampling: settings.view_3d.anti_aliasing.samples(),
         // the 3D view sorts its faces by depth
         depth_buffer: view3d::gpu::DEPTH_BITS,
+        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
+            wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(
+                eframe::egui_wgpu::WgpuSetupCreateNew {
+                    device_descriptor: std::sync::Arc::new(view3d::gpu::device),
+                    ..eframe::egui_wgpu::WgpuSetupCreateNew::without_display_handle()
+                },
+            ),
+            ..Default::default()
+        },
         ..Default::default()
     };
     let samples = options.multisampling;
@@ -1320,10 +1329,11 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             if let Some(rs) = &cc.wgpu_render_state {
                 let info = rs.adapter.get_info();
                 log::info!(
-                    "GPU: {} ({:?}, driver: {})",
+                    "GPU: {} ({:?}, driver: {}), buffers up to {} MB",
                     info.name,
                     info.backend,
-                    info.driver
+                    info.driver,
+                    rs.device.limits().max_storage_buffer_binding_size / 1_000_000
                 );
                 app.gpu_3d = Some(view3d::gpu::Gpu::new(rs, samples));
             }
