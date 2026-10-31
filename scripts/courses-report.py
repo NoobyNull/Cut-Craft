@@ -46,6 +46,45 @@ def cell(text):
     return text.replace("|", "\\|")
 
 
+def write_progress(caps, uses):
+    """re/courses/progress.json and commits.json, for the progress dashboard: every
+    capability in scope with its status, video count and the commit that closed its
+    issue; and every commit on this branch that names an issue."""
+    import re
+    import subprocess
+
+    log = subprocess.run(
+        ["git", "log", "--format=%h%x1f%cI%x1f%s%x1f%b%x1e", "ffad34d..HEAD"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout
+    commits = []
+    for entry in filter(str.strip, log.split("\x1e")):
+        sha, at, subject, body = (entry.strip("\n").split("\x1f") + [""] * 4)[:4]
+        issues = sorted({int(n) for n in re.findall(r"#(\d+)", subject + " " + body)})
+        commits.append({"sha": sha, "at": at, "subject": subject, "issues": ",".join(map(str, issues))})
+    closed_by = {}
+    for c in reversed(commits):
+        for n in filter(None, c["issues"].split(",")):
+            closed_by[n] = c
+    rows = []
+    for c in caps:
+        if c["status"] == "out":
+            continue
+        fix = closed_by.get(c["issue"] or "")
+        rows.append({
+            "key": c["key"],
+            "capability": c["name"],
+            "status": c["status"],
+            "videos": len(uses[c["key"]]),
+            "issue": int(c["issue"]) if c["issue"] else None,
+            "commit": fix["sha"] if fix else "",
+            "done_at": fix["at"][:10] if fix else "",
+            "evidence": c["evidence"],
+        })
+    (COURSES / "progress.json").write_text(json.dumps(rows, indent=1))
+    (COURSES / "commits.json").write_text(json.dumps(commits, indent=1))
+
+
 def main():
     caps = capabilities()
     index = json.loads((COURSES / "index.json").read_text())
@@ -153,6 +192,7 @@ def main():
         for n, c in enumerate(gaps, 1)
     ]
     (COURSES / "gaps.json").write_text(json.dumps(ranked, indent=1))
+    write_progress(caps, uses)
     missing = [k for k, v in uses.items() if not v and by_key[k]["status"] != "out"]
     print(f"wrote {OUT.relative_to(ROOT)}: {len(rows)} rows, {len(gaps)} gaps")
     if missing:
