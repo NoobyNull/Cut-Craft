@@ -5053,3 +5053,30 @@ fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
     h.app.invoke(&h.ctx, "node_edit");
     assert_eq!(h.app.node_mirror, [false, false]);
 }
+
+#[test]
+fn the_summary_allows_for_the_active_machines_acceleration_when_asked() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    let t = h.app.doc.toolpaths.values().next().unwrap().clone();
+    let plain = h.app.estimated_minutes(&t);
+    h.app.summary.acceleration = true;
+    assert!(
+        (h.app.estimated_minutes(&t) - plain).abs() < 1e-12,
+        "no machine: no allowance"
+    );
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Slow".into(),
+        acceleration: [20.0, 20.0, 20.0],
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    let allowing = h.app.estimated_minutes(&t);
+    assert!(allowing > plain, "{allowing} vs {plain}");
+    h.app.summary.scale = 2.0;
+    assert!((h.app.estimated_minutes(&t) - 2.0 * allowing).abs() < 1e-9);
+}

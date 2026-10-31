@@ -770,6 +770,140 @@ impl Toolpath {
             })
             .sum()
     }
+
+    /// [`Self::machining_minutes`] allowing for the machine's `acceleration` (X, Y, Z,
+    /// mm/s²; 0 for an axis places no limit, all 0 is no allowance): the machine stops at
+    /// every corner where the direction changes, and speeds up and slows down along each
+    /// move as fast as the slowest axis it uses allows.
+    // ponytail: corners within 5° run through at the slower of the two feeds [inf]
+    pub fn machining_minutes_accelerating(&self, rapid_rate: f64, acceleration: [f64; 3]) -> f64 {
+        const STRAIGHT: f64 = 0.996; // cos 5°
+        if acceleration.iter().all(|a| *a <= 0.0) {
+            return self.machining_minutes(rapid_rate);
+        }
+        // each move's direction, length and speed (mm/s)
+        let legs: Vec<Option<(DVec3, f64, f64)>> = (1..self.moves.len())
+            .map(|i| {
+                let d = self.moves[i].to - self.moves[i - 1].to;
+                let rate = match self.moves[i].kind {
+                    MoveKind::Rapid => rapid_rate,
+                    MoveKind::Plunge => self.tool.plunge_rate,
+                    MoveKind::Cut => self.tool.feed_rate,
+                } / 60.0;
+                let length = d.length();
+                (length > 0.0 && rate > 0.0).then(|| (d / length, length, rate))
+            })
+            .collect();
+        // the speed through the joint between two legs: on through a near-straight one
+        let joint = |a: Option<(DVec3, f64, f64)>, b: Option<(DVec3, f64, f64)>| match (a, b) {
+            (Some((da, _, va)), Some((db, _, vb))) if da.dot(db) > STRAIGHT => va.min(vb),
+            _ => 0.0,
+        };
+        let mut seconds = 0.0;
+        for (i, leg) in legs.iter().enumerate() {
+            let Some((dir, length, v)) = *leg else {
+                continue;
+            };
+            let limit = (0..3)
+                .filter(|&k| dir[k].abs() > 1e-9 && acceleration[k] > 0.0)
+                .map(|k| acceleration[k] / dir[k].abs())
+                .fold(f64::INFINITY, f64::min);
+            if !limit.is_finite() {
+                seconds += length / v;
+                continue;
+            }
+            let (vs, ve) = (
+                joint(
+                    i.checked_sub(1).and_then(|j| legs[j]),
+                    Some((dir, length, v)),
+                ),
+                joint(Some((dir, length, v)), legs.get(i + 1).copied().flatten()),
+            );
+            let (up, down) = (
+                (v * v - vs * vs) / (2.0 * limit),
+                (v * v - ve * ve) / (2.0 * limit),
+            );
+            seconds += if up + down <= length {
+                (v - vs) / limit + (v - ve) / limit + (length - up - down) / v
+            } else {
+                // too short to reach the feed: up to a peak and straight down again
+                let peak = ((2.0 * limit * length + vs * vs + ve * ve) / 2.0).sqrt();
+                (peak - vs) / limit + (peak - ve) / limit
+            };
+        }
+        seconds / 60.0
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn machining_time_allowing_for_acceleration_stops_at_corners_and_runs_through_straights() {
+    let at = |kind, x, y| Move {
+        kind,
+        to: DVec3::new(x, y, -1.0),
+    };
+    let tool = Tool {
+        feed_rate: 1000.0,
+        plunge_rate: 100.0,
+        ..Tool::default()
+    };
+    let make = |moves| Toolpath {
+        name: "t".into(),
+        strategy: String::new(),
+        params: serde_json::Value::Null,
+        tool: tool.clone(),
+        vectors: vec![],
+        moves,
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+    };
+    // one 500 mm cut at 1000 mm/min (16.67 mm/s): 30 s flat out; with 10 mm/s² the machine
+    // spends 1.67 s speeding up and the same slowing down, 13.9 mm each
+    let one = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 500.0, 0.0),
+    ]);
+    let v = 1000.0 / 60.0;
+    let expected = ((500.0 - 2.0 * v * v / 20.0) / v + 2.0 * v / 10.0) / 60.0;
+    assert!(
+        (one.machining_minutes_accelerating(5000.0, [10.0, 10.0, 10.0]) - expected).abs() < 1e-9
+    );
+    assert!(
+        (one.machining_minutes_accelerating(5000.0, [0.0; 3]) - 0.5).abs() < 1e-12,
+        "no allowance"
+    );
+    // a corner stops the machine; a straight joint does not
+    let bent = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 250.0, 0.0),
+        at(MoveKind::Cut, 250.0, 250.0),
+    ]);
+    let straight = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 250.0, 0.0),
+        at(MoveKind::Cut, 500.0, 0.0),
+    ]);
+    let a = [10.0, 10.0, 10.0];
+    assert!(
+        bent.machining_minutes_accelerating(5000.0, a)
+            > straight.machining_minutes_accelerating(5000.0, a)
+    );
+    assert!(
+        (straight.machining_minutes_accelerating(5000.0, a) - expected).abs() < 1e-9,
+        "as one leg"
+    );
+    // too short to reach the feed: a 1 mm move takes a peak-and-down 0.63 s, not 0.06 s
+    let short = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 1.0, 0.0),
+    ]);
+    let minutes = short.machining_minutes_accelerating(5000.0, a);
+    assert!(
+        (minutes * 60.0 - 2.0 * (1.0_f64 / 10.0).sqrt()).abs() < 1e-9,
+        "{minutes}"
+    );
 }
 
 #[cfg(test)]

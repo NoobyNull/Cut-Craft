@@ -817,3 +817,7 @@ instead of half-cell steps.
 ### Node editing mirror lines [obs: course jzW6RGG8wWk]
 - In node editing, with several nodes box-picked (on one vector or several selected ones), H shows a line through the middle for horizontal mirroring and V one for vertical; the arrow keys then move the picked nodes together, the two sides moving opposite ways so they stay mirrored. Escape leaves node editing.
 - **[inf]** Cut Craft: the lines run through the selection's middle; each toggles with its key while nodes are picked (else H and V mirror the selection as before), the arrows move the picked nodes by the nudge step (Shift, Ctrl as for the selection) with the far side of a line moving the other way; entering or leaving node editing clears the lines.
+
+### Toolpath Summary's Machine Acceleration [obs: help Estimating Machining Times; course WjTQ9RIvaKI]
+- The estimate is each move at its feed, rapids at the Rapid Rate, times the Scale Factor. The Machine Acceleration option picks a machine and its X / Y / Z / A accelerations (kept in Machine Configuration), and the time then accounts for accelerating and decelerating at corners.
+- **[inf]** Cut Craft: a Machine acceleration tick, live while a machine with accelerations is active: the machine stops at each corner (a turn of more than 5° or a change of move kind runs through at the slower feed), and each move speeds up and slows down along what the slowest axis it uses allows (a short move peaks below the feed). No A axis.

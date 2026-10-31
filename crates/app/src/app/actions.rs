@@ -1981,6 +1981,32 @@ impl CutCraftApp {
         Ok(())
     }
 
+    /// The Toolpath Summary's rows: each toolpath with its estimated time and notes.
+    fn summary_rows(&self) -> Vec<super::SummaryRow> {
+        self.doc
+            .toolpaths
+            .iter()
+            .map(|(&id, t)| super::SummaryRow {
+                id,
+                name: t.name.clone(),
+                minutes: self.estimated_minutes(t),
+                visible: t.visible,
+                notes: t.summary_notes().to_owned(),
+            })
+            .collect()
+    }
+
+    /// A toolpath's time for the Toolpath Summary: at the rapid rate, allowing for the
+    /// active machine's accelerations when asked, times the scale factor.
+    pub(super) fn estimated_minutes(&self, t: &cut_craft_core::toolpath::Toolpath) -> f64 {
+        let s = &self.summary;
+        let minutes = match self.machines.active().filter(|_| s.acceleration) {
+            Some(m) => t.machining_minutes_accelerating(s.rapid, m.acceleration),
+            None => t.machining_minutes(s.rapid),
+        };
+        minutes * s.scale
+    }
+
     /// Moves the picked nodes by `by`; across a mirror line (H: up and down through the
     /// selection's middle; V: across it) the nodes on the far side move the other way, so
     /// mirrored pairs stay mirrored.
@@ -3033,25 +3059,18 @@ impl CutCraftApp {
         } else {
             vec![]
         };
-        let rows: Vec<super::SummaryRow> = self
-            .doc
-            .toolpaths
-            .iter()
-            .map(|(&id, t)| super::SummaryRow {
-                id,
-                name: t.name.clone(),
-                minutes: t.machining_minutes(self.summary.rapid) * self.summary.scale,
-                visible: t.visible,
-                notes: t.summary_notes().to_owned(),
-            })
-            .collect();
+        let rows = self.summary_rows();
         let mut noted = None;
+        let machine = self
+            .machines
+            .active()
+            .map(|m| (m.name.clone(), m.acceleration));
         let summary = &mut self.summary;
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
             Info::Help(_) => unreachable!("returned above"),
-            Info::Summary => noted = summary_table(ui, &rows, summary, units),
+            Info::Summary => noted = summary_table(ui, &rows, summary, units, machine.clone()),
             Info::About => {
                 ui.heading("Cut Craft");
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));

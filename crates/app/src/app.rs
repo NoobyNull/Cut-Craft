@@ -263,6 +263,8 @@ struct Summary {
     rapid: f64,
     units: cut_craft_core::toolpath::RateUnits,
     scale: f64,
+    /// Aspire's Machine Acceleration: the times allow for the active machine's accelerations.
+    acceleration: bool,
     picked: Option<EntityId>,
     notes: String,
 }
@@ -273,6 +275,7 @@ impl Default for Summary {
             rapid: 5000.0,
             units: cut_craft_core::toolpath::RateUnits::MmPerMin,
             scale: 1.0,
+            acceleration: false,
             picked: None,
             notes: String::new(),
         }
@@ -876,11 +879,36 @@ fn hms(minutes: f64) -> String {
 /// Each toolpath's estimated time, the visible ones' total, and the rate (in the units
 /// picked) and scale they use; a toolpath clicked has its notes written below, and Apply
 /// gives back the notes to keep with it.
+/// Aspire's Machine Acceleration: the summary's times allow for the active `machine`'s
+/// accelerations (its name and X, Y, Z from Machine Configuration), while there is one.
+fn acceleration_tick(
+    ui: &mut egui::Ui,
+    summary: &mut Summary,
+    machine: Option<(String, [f64; 3])>,
+) {
+    let (name, acceleration) = machine.unzip();
+    let tip = match acceleration {
+        Some([x, y, z]) => format!(
+            "Stops at corners and speeds up and slows down along each move as {} allows: \
+             {x:.0}, {y:.0}, {z:.0} mm/s² (Machine Configuration)",
+            name.unwrap_or_default()
+        ),
+        None => "Needs an active machine with its accelerations in Machine Configuration".into(),
+    };
+    ui.add_enabled(
+        acceleration.is_some(),
+        egui::Checkbox::new(&mut summary.acceleration, "Machine acceleration"),
+    )
+    .on_hover_text(&tip)
+    .on_disabled_hover_text(&tip);
+}
+
 fn summary_table(
     ui: &mut egui::Ui,
     rows: &[SummaryRow],
     summary: &mut Summary,
     units: cut_craft_core::document::Units,
+    machine: Option<(String, [f64; 3])>,
 ) -> Option<(EntityId, String)> {
     let total: f64 = rows.iter().filter(|r| r.visible).map(|r| r.minutes).sum();
     ui.strong(format!("Total machining time: {}", hms(total)));
@@ -967,6 +995,7 @@ fn summary_table(
                 ui.selectable_value(&mut summary.units, u, u.label());
             }
         });
+    acceleration_tick(ui, summary, machine);
     let picked = rows.iter().find(|r| Some(r.id) == summary.picked)?;
     ui.separator();
     ui.label(format!("Notes for {}", picked.name));
