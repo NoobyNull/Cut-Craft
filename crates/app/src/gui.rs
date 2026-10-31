@@ -931,7 +931,11 @@ pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
             ],
         ),
         MenuItem::form::<LayerProperties>("Rename", &layer.clone().into()),
-        MenuItem::with_action("Merge Visible", "merge_visible_layers").enabled(false),
+        MenuItem::run::<cmd_merge_visible_layers::MergeVisibleLayers>(
+            "Merge Visible",
+            &cmd_merge_visible_layers::Params { layer: id },
+        )
+        .enabled(doc.layers.iter().any(|l| l.visible && l.id != id)),
         MenuItem::separator(),
         MenuItem::run::<cmd_select_layer_vectors::SelectLayerVectors>(
             "Select Layer Vectors",
