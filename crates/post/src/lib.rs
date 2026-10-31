@@ -515,7 +515,7 @@ impl Post {
         };
         let tools = tools_used(&toolpaths);
         self.can_write(doc, &toolpaths)?;
-        let number = tool_numbers(&tools, file.slots)?;
+        let number = tool_numbers(&tools, file.slots);
         let mut out = Output {
             post: self,
             text: String::new(),
@@ -885,41 +885,24 @@ enum Step {
 }
 
 /// Each tool's name once, in the order the toolpaths use them.
-/// Each tool's `[T]`: its tool changer slot, or without one the order it is first used.
-/// A tool changer missing a tool used is an error naming them, as the machine would pick
-/// up whatever is in the slot the number says.
-fn tool_numbers<'a>(
-    tools: &[&str],
-    slots: &'a [Option<String>],
-) -> Result<impl Fn(&str) -> u32 + 'a, String> {
-    let slot = |name: &str| {
+/// Each tool's `[T]`: on a machine with a tool changer its holder, or 0 for a bit not in
+/// the magazine (changed by hand); without one, the order it is first used.
+fn tool_numbers<'a>(tools: &[&str], slots: &'a [Option<String>]) -> impl Fn(&str) -> u32 + 'a {
+    let order: Vec<String> = tools.iter().map(|&t| t.to_owned()).collect();
+    move |name: &str| {
+        if slots.is_empty() {
+            return order
+                .iter()
+                .position(|t| t == name)
+                .and_then(|i| u32::try_from(i + 1).ok())
+                .unwrap_or(1);
+        }
         slots
             .iter()
             .position(|s| s.as_deref() == Some(name))
             .and_then(|i| u32::try_from(i + 1).ok())
-    };
-    let missing: Vec<&str> = tools
-        .iter()
-        .copied()
-        .filter(|t| slot(t).is_none())
-        .collect();
-    if !slots.is_empty() && !missing.is_empty() {
-        return Err(format!(
-            "not loaded in the tool changer: {} (load them in the Tool Database)",
-            missing.join(", ")
-        ));
+            .unwrap_or(0)
     }
-    let order: Vec<String> = tools.iter().map(|&t| t.to_owned()).collect();
-    Ok(move |name: &str| {
-        slot(name)
-            .or_else(|| {
-                order
-                    .iter()
-                    .position(|t| t == name)
-                    .and_then(|i| u32::try_from(i + 1).ok())
-            })
-            .unwrap_or(1)
-    })
 }
 
 fn tools_used<'a>(toolpaths: &[&'a cut_craft_core::toolpath::Toolpath]) -> Vec<&'a str> {
@@ -1818,7 +1801,7 @@ begin FOOTER
     }
 
     #[test]
-    fn a_tool_changer_numbers_tools_by_their_slot_and_refuses_unloaded_ones() {
+    fn a_tool_changer_numbers_tools_by_their_slot_and_a_manual_bit_0() {
         let post = BASIC.replace("begin TOOLCHANGE\n", "begin TOOLCHANGE\n\"M6 T[T]\"\n");
         let mut doc = Document::default();
         let mut c = Change::builder(&doc);
@@ -1837,8 +1820,8 @@ begin FOOTER
         let text = post.render(&doc, &file(&slots)).unwrap();
         assert!(text.contains("M6 T2"), "3 mm is in slot 2: {text}");
         let unloaded = [Some("6 mm".to_owned())];
-        let why = post.render(&doc, &file(&unloaded)).unwrap_err();
-        assert!(why.contains("3 mm") && !why.contains("6 mm"), "{why}");
+        let text = post.render(&doc, &file(&unloaded)).unwrap();
+        assert!(text.contains("M6 T0"), "3 mm is changed by hand: {text}");
         // no tool changer: numbered in the order used
         assert!(post.render(&doc, &file(&[])).unwrap().contains("M6 T2"));
     }

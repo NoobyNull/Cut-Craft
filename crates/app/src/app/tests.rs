@@ -2737,11 +2737,18 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
         h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
         Some(3)
     );
-    // the toolpath form offers it first
+    // the toolpath form shows the magazine first: 0 by hand, then each holder
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
-    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    assert!(h.text_at("0  Manual").is_some() && h.text_at("1  (empty)").is_some());
+    let holder = h
+        .text_at("3  3 mm End Mill")
+        .expect("holder 3 and its tool");
+    h.click(holder, Modifiers::NONE);
+    h.frame(vec![]);
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("profile_toolpath", &params).unwrap();
     // the G-code calls slot 3
@@ -2750,10 +2757,15 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
     files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap();
     let gcode = std::fs::read_to_string(&out).unwrap();
     assert!(gcode.contains("M6 T3"), "{gcode}");
-    // a tool not loaded is refused
+    assert_eq!(
+        params["tool"]["name"], "3 mm End Mill",
+        "picked by its holder"
+    );
+    // a tool not in the magazine is changed by hand: T0
     h.app.machines.active_mut().unwrap().slots[2] = None;
-    let why = files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap_err();
-    assert!(why.contains("3 mm End Mill"), "{why}");
+    files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap();
+    let gcode = std::fs::read_to_string(&out).unwrap();
+    assert!(gcode.contains("M6 T0"), "{gcode}");
     let _ = std::fs::remove_file(out);
 }
 

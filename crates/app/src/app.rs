@@ -1167,10 +1167,12 @@ fn tool_picker(
     slots: &[Option<String>],
 ) -> (Option<String>, bool) {
     let current = tool["name"].as_str().unwrap_or_default();
-    let mut chosen = None;
+    let mut chosen = holders(ui, "form_tool", current, tools, slots);
     let edit = ui
         .horizontal(|ui| {
-            chosen = tool_menu(ui, "form_tool", current, tools, slots);
+            if let Some(name) = tool_menu(ui, "form_tool", current, tools, slots) {
+                chosen = Some(name);
+            }
             ui.label("Tool database");
             ui.button("Edit…")
                 .on_hover_text("Change this tool in the Tool Database")
@@ -1191,6 +1193,42 @@ fn tool_picker(
         }
     }
     (chosen, edit)
+}
+
+/// The tool changer's magazine, when the machine has one: 0 for a bit changed by hand (the
+/// Tool Database menu below picks it), then each holder with the tool in it. The holder
+/// holding `current` is ticked; the tool of a holder clicked, if any.
+fn holders(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    current: &str,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+) -> Option<String> {
+    if slots.is_empty() {
+        return None;
+    }
+    let held = slots.iter().position(|s| s.as_deref() == Some(current));
+    let mut chosen = None;
+    ui.push_id(id, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("ATC");
+            ui.selectable_label(held.is_none(), "0  Manual")
+                .on_hover_text("A bit changed by hand: pick it from the Tool Database below");
+            for (i, slot) in slots.iter().enumerate() {
+                let name = slot.as_deref().filter(|t| tools.get(t).is_some());
+                let text = format!("{}  {}", i + 1, name.unwrap_or("(empty)"));
+                let button = ui.add_enabled(
+                    name.is_some(),
+                    egui::Button::selectable(held == Some(i), text),
+                );
+                if button.clicked() {
+                    chosen = name.map(str::to_owned);
+                }
+            }
+        });
+    });
+    chosen
 }
 
 /// The Tool Database's tools to pick from, the tool changer's loaded ones first (as `T1
@@ -1260,6 +1298,12 @@ fn tool_list(
     let (mut changed, mut edit, mut remove) = (false, None, None);
     for (i, item) in items.iter_mut().enumerate() {
         let current = item["name"].as_str().unwrap_or_default().to_owned();
+        if let Some(name) = holders(ui, (key, i, "atc"), &current, tools, slots)
+            && let Some(tool) = tools.pick(&name)
+        {
+            *item = serde_json::to_value(tool).expect("tools serialize");
+            changed = true;
+        }
         ui.horizontal(|ui| {
             if let Some(name) = tool_menu(ui, (key, i), &current, tools, slots)
                 && let Some(tool) = tools.pick(&name)

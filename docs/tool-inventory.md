@@ -254,6 +254,10 @@ say "not implemented yet".
 - Moulding: Vary Stepover (passes a stepover apart along the profile's surface); a Larger
   Area Clearance Tool roughing first in levels as its own [Clear] toolpath, with Machining
   Allowance, Machine Flat Regions and the finish's Skip Flat Regions.
+- Tool picking in toolpath forms: on a machine with a tool changer, the magazine row comes
+  first: 0 is a bit changed by hand (picked from the Tool Database, written as T0), then each
+  holder with its tool. Every tool in a list (clearance tools, finishing tool sets, rest
+  machining) has the same picker, Edit... and summary.
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
 - Clearance Tools on Pocket and V-Carve (the form's "Add a clearance tool from the
   database", kept largest first): each makes a toolpath of its own, named `[1]`, `[2]`... in
