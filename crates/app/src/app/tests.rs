@@ -1643,6 +1643,69 @@ fn right_clicking_a_component_in_the_3d_view_picks_it_and_opens_its_menu() {
 }
 
 #[test]
+fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
+    use cut_craft_core::handles::Handle;
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = |h: &Harness, which: Handle| {
+        h.app
+            .handles_3d
+            .iter()
+            .find(|(k, _)| *k == Handle3d::Transform(which))
+            .map(|(_, at)| *at)
+            .expect("the transform handles are drawn over the selection")
+    };
+    let extent = |h: &Harness| h.app.doc.components[&EntityId(1)].extent();
+    let before = extent(&h);
+    let corner = Handle::Scale { x: 1, y: 1 };
+    // the middle moves: dragged onto the top-right corner handle, the component's centre
+    // lands where that corner was
+    h.drag(at(&h, Handle::Move), at(&h, corner));
+    let moved = extent(&h);
+    assert!((moved.center() - before.max).length() < 0.5, "{moved:?}");
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(extent(&h), before, "one undo");
+    h.frame(vec![]);
+    // a corner scales about the opposite corner keeping the shape: dragged half as far
+    // again from the middle, the box is half as big again
+    let (middle, from) = (at(&h, Handle::Move), at(&h, corner));
+    h.drag(from, from + (from - middle));
+    let scaled = extent(&h);
+    assert!((scaled.min - before.min).length() < 0.5, "{scaled:?}");
+    let grown = before.min + before.size() * 1.5;
+    assert!((scaled.max - grown).length() < 0.5, "{scaled:?}");
+    h.app.invoke(&h.ctx, "undo");
+    h.frame(vec![]);
+    // the rotation arrow with Alt held turns in 15° steps: dragged about 20° round the
+    // middle, the box turns 15°, so its bounds grow by cos 15° + sin 15°
+    let (middle, from) = (at(&h, Handle::Move), at(&h, Handle::Rotate { x: 0, y: 1 }));
+    let to = middle + egui::emath::Rot2::from_angle(20f32.to_radians()) * (from - middle);
+    let alt = Modifiers::ALT;
+    h.frame_holding(alt, vec![Event::PointerMoved(from)]);
+    h.press(from, true, alt);
+    h.frame_holding(alt, vec![Event::PointerMoved(to)]);
+    h.press(to, false, alt);
+    h.frame_holding(alt, vec![]);
+    let turned = extent(&h);
+    let (sin, cos) = 15f64.to_radians().sin_cos();
+    let wide = before.size().x * (cos + sin);
+    assert!(
+        (turned.size().x - wide).abs() < 0.3,
+        "{turned:?}, not {wide} wide"
+    );
+    assert!(
+        (turned.center() - before.center()).length() < 0.5,
+        "about the centre"
+    );
+}
+
+#[test]
 fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     use cut_craft_core::component::Combine;
     let mut h = Harness::new();

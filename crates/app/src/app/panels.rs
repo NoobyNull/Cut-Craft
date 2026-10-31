@@ -2,11 +2,11 @@
 //! playback and the 3D view.
 
 use super::{
-    Align, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, Handle3d, LayerId,
-    Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN, Material, Menus,
-    PLAYBACK_SPEEDS, Page, SETTLE_SECONDS, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
+    Align, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, Handle,
+    Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN, Material,
+    Menus, PLAYBACK_SPEEDS, Page, Point, SETTLE_SECONDS, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
     TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
-    gui, menu_items, sheet_length, view3d, wrap_for,
+    gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
 };
 use cut_craft_core::document::Units;
 
@@ -1110,24 +1110,33 @@ impl CutCraftApp {
         let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
             return;
         };
-        let (orbit, framing) = (self.orbit, self.framing);
-        let screen = view3d::screen_of(&surface, orbit, framing, fit, None);
-        let local = |x: f64, y: f64| DVec3::new(x - surface.origin.x, y - surface.origin.y, 0.0);
+        let camera = view3d::Camera::new(&surface, self.orbit, self.framing, fit, None);
+        let floor = |p: Point| {
+            camera.screen(DVec3::new(
+                p.x - surface.origin.x,
+                p.y - surface.origin.y,
+                0.0,
+            ))
+        };
         let (near, far) = (
-            screen(local(extent.min.x, extent.min.y)),
-            screen(local(extent.max.x, extent.min.y)),
+            floor(extent.min),
+            floor(Point::new(extent.max.x, extent.min.y)),
         );
-        // along the near edge of its box, a button's height apart; an edge seen end-on
-        // runs to the right
+        // a button's height below the near edge of its box (the transform handles sit on
+        // the edge itself), a button's height apart; an edge seen end-on runs to the right
         let edge = ui.spacing().interact_size.y;
         let mut along = (far - near).normalized();
         if !along.is_finite() || along == egui::Vec2::ZERO {
             along = egui::Vec2::X;
         }
+        let mut below = along.rot90();
+        if below.dot(near - floor(extent.center())) < 0.0 {
+            below = -below;
+        }
         let painter = ui.painter_at(area);
         for (i, handle) in Handle3d::ALL.into_iter().enumerate() {
             #[expect(clippy::cast_precision_loss, reason = "four handles")]
-            let centre = near + along * edge * (1.0 + 1.5 * i as f32);
+            let centre = near + along * edge * (1.0 + 1.5 * i as f32) + below * edge;
             let rect = egui::Rect::from_center_size(centre, egui::Vec2::splat(edge));
             let response = ui
                 .interact(
@@ -1160,7 +1169,124 @@ impl CutCraftApp {
                 });
             }
         }
+        self.transform_handles_3d(ui, &painter, &camera, surface.origin);
         self.handle_drag_3d(ui, fit, id);
+    }
+
+    /// Aspire's 3D Transform Handles over the selection's box on the material's top: the 2D
+    /// view's handles at the same places (a cross in the middle moves, white corners and
+    /// black edges scale) and a rotation arrow on a stem above the far edge. Dragged as the
+    /// 2D view's are, with Alt and Shift, and applied once the pointer is let go (one undo);
+    /// while dragging, the box as it will be.
+    // ponytail: the manual's edit box for an exact value, and moving the rotation centre,
+    // are not offered; the Move, Scale and Rotate forms take exact values
+    fn transform_handles_3d(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        camera: &view3d::Camera,
+        origin: Point,
+    ) {
+        use cut_craft_core::glam::DVec3;
+        let Some(bounds) = self.doc.selection_bounds() else {
+            return;
+        };
+        let floor = |p: Point| camera.screen(DVec3::new(p.x - origin.x, p.y - origin.y, 0.0));
+        let visuals = ui.visuals();
+        let (stroke, dark) = (visuals.selection.stroke, visuals.text_color());
+        let edge = ui.spacing().interact_size.y;
+        let half = edge * view2d::NODE_HANDLE_SHARE / 2.0;
+        // the arrow a button's height out from the far edge's middle, on a stem
+        let arrow = Handle::Rotate { x: 0, y: 1 };
+        let far = floor(handles::position(bounds, arrow));
+        let mut out = (far - floor(bounds.center())).normalized();
+        if !out.is_finite() || out == egui::Vec2::ZERO {
+            out = -egui::Vec2::Y;
+        }
+        let tip = far + out * edge;
+        painter.line_segment([far, tip], stroke);
+        let all = handles::handles(false).into_iter().chain([arrow]);
+        for (i, handle) in all.enumerate() {
+            let at = if handle == arrow {
+                tip
+            } else {
+                floor(handles::position(bounds, handle))
+            };
+            let square = egui::Rect::from_center_size(at, egui::Vec2::splat(half * 2.0));
+            match handle {
+                Handle::Move => {
+                    for d in [egui::vec2(half, 0.0), egui::vec2(0.0, half)] {
+                        painter.line_segment([at - d, at + d], stroke);
+                    }
+                }
+                Handle::Scale { x, y } if x != 0 && y != 0 => {
+                    painter.rect_filled(square, 0.0, visuals.extreme_bg_color);
+                    painter.rect_stroke(square, 0, stroke, egui::StrokeKind::Middle);
+                }
+                Handle::Scale { .. } => {
+                    painter.rect_filled(square, 0.0, dark);
+                }
+                Handle::Rotate { .. } => {
+                    // a ring with an arrow head on top
+                    painter.circle_stroke(at, half, egui::Stroke::new(stroke.width, dark));
+                    let top = at - egui::vec2(0.0, half);
+                    painter.add(egui::Shape::convex_polygon(
+                        vec![
+                            top + egui::vec2(half, 0.0),
+                            top + egui::vec2(0.0, half / 2.0),
+                            top - egui::vec2(0.0, half / 2.0),
+                        ],
+                        dark,
+                        egui::Stroke::NONE,
+                    ));
+                }
+            }
+            // picked within the 2D view's reach of it: half a button's height
+            let response = ui
+                .interact(
+                    egui::Rect::from_center_size(at, egui::Vec2::splat(edge)),
+                    ui.scope_id().with(("transform_3d", i)),
+                    egui::Sense::click_and_drag(),
+                )
+                .on_hover_text(Handle3d::Transform(handle).hint());
+            self.handles_3d.push((Handle3d::Transform(handle), at));
+            if response.drag_started()
+                && let Some(from) = ui.input(|i| i.pointer.press_origin())
+            {
+                self.drag_3d = Some((Handle3d::Transform(handle), from));
+            }
+        }
+        let Some((Handle3d::Transform(handle), from)) = self.drag_3d else {
+            return;
+        };
+        let (now, released, keys) = ui.input(|i| {
+            (
+                i.pointer.latest_pos(),
+                i.pointer.primary_released(),
+                handles::Keys {
+                    alt: i.modifiers.alt,
+                    shift: i.modifiers.shift,
+                },
+            )
+        });
+        let on_floor = |at: egui::Pos2| camera.on_floor(at).map(|p| p + origin);
+        let Some((start, end)) = on_floor(from).zip(now.and_then(on_floor)) else {
+            return;
+        };
+        let t = handles::transform(bounds, handle, start, end, keys);
+        let corners = [
+            bounds.min,
+            Point::new(bounds.max.x, bounds.min.y),
+            bounds.max,
+            Point::new(bounds.min.x, bounds.max.y),
+        ];
+        let moved = corners.map(|c| floor(t.transform_point2(c))).to_vec();
+        painter.add(egui::Shape::closed_line(moved, stroke));
+        if released {
+            self.drag_3d = None;
+            let change = Change::transform_selected(&self.doc, |_| t);
+            self.record(change, "Transformed");
+        }
     }
 
     /// A handle's drag: its running value in the status bar and, once the pointer is let
@@ -1197,7 +1323,7 @@ impl CutCraftApp {
                 p.base_height = k.shaping.base_height - f64::from(by.y) * per_pixel;
                 format!("Base height {:.2} mm", p.base_height)
             }
-            Handle3d::Settings => return,
+            Handle3d::Settings | Handle3d::Transform(_) => return,
         };
         self.status.set_message(&message);
         if !released {
@@ -1821,6 +1947,8 @@ fn handle_glyph(
     use egui::{Rect, StrokeKind, pos2, vec2};
     let r = radius / 2.0;
     match handle {
+        // the transform handles are painted where they are placed
+        Handle3d::Transform(_) => {}
         Handle3d::Total => {
             let block = Rect::from_min_max(at + vec2(-r, -r), at + vec2(r / 4.0, r));
             painter.rect_stroke(block, 0.0, stroke, StrokeKind::Middle);

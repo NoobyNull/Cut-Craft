@@ -518,6 +518,24 @@ impl Camera {
         )
     }
 
+    /// The point on the material's top plane (z = 0) under `at` on screen, `None` when the
+    /// plane is seen edge-on.
+    pub(crate) fn on_floor(&self, at: Pos2) -> Option<DVec2> {
+        // the point at the middle's depth under `at`, then along the line of sight to z = 0
+        let off = at - self.centre;
+        let seen = self.middle
+            + self.orbit.to_world(DVec3::new(
+                f64::from(off.x) / self.scale,
+                -f64::from(off.y) / self.scale,
+                0.0,
+            ));
+        let along = self
+            .eye_at()
+            .map_or(-self.orbit.towards_viewer(), |eye| seen - eye)
+            .normalize();
+        (along.z.abs() > EDGE_ON).then(|| (seen - along * (seen.z / along.z)).truncate())
+    }
+
     /// Material coordinates to clip space over `area` (x and y across it, -1 to 1), placing
     /// points as [`Camera::screen`] does in `area`; depth runs from 0 at `reach` radii
     /// nearer than the middle to 1 as far behind it.
@@ -1344,6 +1362,33 @@ mod tests {
             }
         }
         m
+    }
+
+    #[test]
+    fn a_screen_point_goes_back_to_the_top_plane_under_it() {
+        let m = slotted();
+        let area = Rect::from_min_size(pos2(10.0, 20.0), Vec2::new(400.0, 300.0));
+        for perspective in [false, true] {
+            let framing = Framing {
+                zoom: 1.5,
+                pan: Vec2::new(7.0, -3.0),
+                perspective,
+            };
+            let camera = Camera::new(&m, Orbit::default(), framing, area, None);
+            let p = DVec3::new(30.0, 70.0, 0.0);
+            let back = camera.on_floor(camera.screen(p)).unwrap();
+            // screen positions are f32
+            assert!(
+                (back - p.truncate()).length() < 1e-3,
+                "perspective {perspective}: {back}"
+            );
+        }
+        let edge_on = Camera::new(&m, Orbit::FRONT, Framing::default(), area, None);
+        assert_eq!(
+            edge_on.on_floor(area.center()),
+            None,
+            "the plane seen edge-on"
+        );
     }
 
     #[test]

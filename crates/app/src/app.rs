@@ -487,6 +487,9 @@ enum Handle3d {
     Base,
     /// Opens its combine mode, fade, tilt and appearance.
     Settings,
+    /// One of Aspire's 3D Transform Handles over the selection's box: the 2D view's handle
+    /// at the same place; the rotation arrow above the far edge is `Rotate { x: 0, y: 1 }`.
+    Transform(Handle),
 }
 
 impl Handle3d {
@@ -498,6 +501,12 @@ impl Handle3d {
             Self::Height => "Shape height: drag up or down",
             Self::Base => "Base height: drag up or down",
             Self::Settings => "Combine mode, fade, tilt and appearance",
+            Self::Transform(Handle::Move) => "Move: drag (Alt: along one axis)",
+            Self::Transform(Handle::Scale { x, y }) if x != 0 && y != 0 => {
+                "Scale: drag (Alt: each axis on its own, Shift: about the centre)"
+            }
+            Self::Transform(Handle::Scale { .. }) => "Scale one axis: drag (Shift: both)",
+            Self::Transform(Handle::Rotate { .. }) => "Rotate: drag (Alt: in 15° steps)",
         }
     }
 }
