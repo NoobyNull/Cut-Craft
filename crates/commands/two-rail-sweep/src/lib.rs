@@ -216,7 +216,7 @@ fn sweep(
 /// The height `part` of the way across at `station` along the first rail, the rails `gap`
 /// apart: the placed cross-sections' blended, each scaled to the gap when `scaled`, and
 /// (`spans`, sections with as many nodes) node to node rather than at the same `part`.
-fn height(
+pub fn height(
     placed: &[(f64, Section)],
     station: f64,
     part: f64,
@@ -278,16 +278,17 @@ fn fill_centre(made: &mut Component, (one, two): (&Path, &Path), placed: &[(f64,
 /// above its lowest point against 0..1 across from its first end to its last, its width
 /// end to end across, the middle of its ends (where it was placed), and its nodes' shares
 /// across.
-struct Section {
+#[derive(Clone, Debug)]
+pub struct Section {
     shape: Vec<(f64, f64)>,
-    width: f64,
-    middle: Point,
+    pub width: f64,
+    pub middle: Point,
     /// Each node's share of the way across, in order.
     nodes: Vec<f64>,
 }
 
 impl Section {
-    fn new(path: &Path) -> Option<Self> {
+    pub fn new(path: &Path) -> Option<Self> {
         let pts = path.flatten(cut_craft_core::polygon::TOLERANCE);
         let (first, last) = (*pts.first()?, *pts.last()?);
         let chord = last - first;
@@ -363,7 +364,7 @@ impl Rail {
 }
 
 /// `station` along the first rail, mapped onto the second by the paired shares `a` and `b`.
-fn remap(a: &[f64], b: &[f64], station: f64) -> f64 {
+pub fn remap(a: &[f64], b: &[f64], station: f64) -> f64 {
     let i = a.partition_point(|&s| s <= station).clamp(1, a.len() - 1);
     let span = a[i] - a[i - 1];
     let t = if span > 0.0 {

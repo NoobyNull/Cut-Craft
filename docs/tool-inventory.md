@@ -403,9 +403,16 @@ say "not implemented yet".
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
     component with no wall steeper than the draft angle), Create Cross Section Vector (drag
     a line; the profile is drawn from it, height 1:1).
-  - Extrude and Weave: one open cross-section swept along a drive rail (picked first),
-    scaled to height if asked. Several cross-sections placed along the rail, rail reversing
-    and start points, and weaving components are not done.
+  - Extrude and Weave: shapes swept along drive rails (the form's count of vectors picked
+    first). Open cross-sections after them are hung across the rail nearest each, where
+    drawn (first end on the rail's left), and blended along it (node to node with Sweep
+    Between Spans); one section serves every rail. Or the selected component is stretched
+    along each rail or repeated at its size with overlap and alternate copies flipped.
+    Create Sharp Corners mitres corners and squares off open ends. Weave Under/Over at
+    Crossings alternates over and under along each rail, by Scale Shape or Add Base with Z
+    Under / Z Over. Not done: attaching and dragging sections on the rail with the mouse,
+    per-section Smooth, rail reversing and start points in the form (use the vectors'
+    own Reverse Direction / Make Start Point).
   - Two Rail Sweep: open cross-sections stretched between two rails (picked first), read
     upright (X across, Y up from the lowest point; one on its side, as Vector Unwrapper lays them, is read sideways). One section is used all the way;
     several are each placed where drawn along the first rail and blended between, node to
