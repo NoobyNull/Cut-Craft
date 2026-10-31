@@ -93,6 +93,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_ungroup::Ungroup>();
     r.add::<cmd_ungroup::UngroupOntoCurrentLayer>();
     r.add_interactive::<cmd_draw_text::DrawText>();
+    r.add::<cmd_draw_text::BreakTextIntoLines>();
     r.add::<cmd_fit_curves_to_vectors::FitCurvesToVectors>();
     r.add::<cmd_component_boundary::ComponentBoundary>();
     r.add::<cmd_trace_bitmap::TraceBitmap>();

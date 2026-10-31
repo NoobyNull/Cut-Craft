@@ -395,6 +395,7 @@ impl MenuSystem {
                 name: "Align".into(),
                 ..edit("Align Selected Objects")
             },
+            MenuItem::submenu("Text", text_items(doc)),
             MenuItem::separator(),
             MenuItem::with_action("Object Properties", "object_properties"),
             MenuItem::with_action("Bitmap Properties", "bitmap_properties")
@@ -406,6 +407,26 @@ impl MenuSystem {
     pub fn items(&self) -> Vec<&MenuItem> {
         self.menus.iter().flat_map(|m| leaves(&m.items)).collect()
     }
+}
+
+/// The selection's Text submenu: editing the selected text, and breaking a block of lines
+/// into a text per line.
+fn text_items(doc: &Document) -> Vec<MenuItem> {
+    let group = cmd_draw_text::selected_text_group(doc);
+    let lines = group
+        .and_then(|g| doc.texts.get(&g))
+        .and_then(|t| t["text"].as_str())
+        .map_or(0, |t| t.lines().count());
+    vec![
+        MenuItem::with_action("Edit Text", "edit_text"),
+        MenuItem::run::<cmd_draw_text::BreakTextIntoLines>(
+            "Break Block into Lines",
+            &cmd_draw_text::BreakParams {
+                group: group.unwrap_or(0),
+            },
+        )
+        .enabled(lines > 1),
+    ]
 }
 
 /// Every command item of `items`, submenus flattened.

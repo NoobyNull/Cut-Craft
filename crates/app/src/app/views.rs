@@ -646,12 +646,67 @@ impl CutCraftApp {
 
     /// A gesture with drawing tool `id`: the polyline's own clicks and drags, a Shift-click
     /// editing a shape the tool drew, or a finished drag drawing one.
-    fn drawing_gesture(&mut self, id: &'static str, gesture: Option<Gesture>, reach: f64) {
+    fn drawing_gesture(
+        &mut self,
+        id: &'static str,
+        gesture: Option<Gesture>,
+        reach: f64,
+        modifiers: egui::Modifiers,
+    ) {
         match gesture {
             gesture if id == "draw_polyline" => self.polyline_gesture(gesture, reach),
+            Some(Gesture::Click { at, .. }) if id == "draw_text" => {
+                self.text_click(at, reach, modifiers);
+            }
             Some(Gesture::Click { at, shift: true }) => self.shift_click_shape(id, at, reach),
             Some(Gesture::Dropped { drag, .. }) => self.draw(id, drag),
             _ => {}
+        }
+    }
+
+    /// A click with Draw Text open: between two letters it brings them together (Shift:
+    /// apart; Ctrl: by more; Alt: every pair in the block), between two lines it brings the
+    /// lines together (Shift apart, Ctrl by more); anywhere else it places the anchor, or
+    /// with Shift picks text to edit.
+    pub(super) fn text_click(&mut self, at: Point, reach: f64, modifiers: egui::Modifiers) {
+        /// A click's step: a share of the text height between letters, of the pitch
+        /// between lines; Ctrl makes it four.
+        const KERN_STEP: f64 = 0.05;
+        const LINE_STEP: f64 = 0.1;
+        let Some(form) = self.form.as_ref().filter(|f| f.id == "draw_text") else {
+            return;
+        };
+        let Ok(mut p) = serde_json::from_value::<cmd_draw_text::Params>(form.params.clone()) else {
+            return;
+        };
+        let way = if modifiers.shift { 1.0 } else { -1.0 } * if modifiers.ctrl { 4.0 } else { 1.0 };
+        match cmd_draw_text::gap_at(&p, at, reach) {
+            Ok(Some(cmd_draw_text::Gap::Letters { line, index })) => {
+                let by = way * KERN_STEP * p.height;
+                if modifiers.alt {
+                    for (line, index) in cmd_draw_text::letter_gaps(&p).unwrap_or_default() {
+                        p.spacing.kern(line, index, by);
+                    }
+                } else {
+                    p.spacing.kern(line, index, by);
+                }
+            }
+            Ok(Some(cmd_draw_text::Gap::Lines)) => {
+                p.spacing.line_pitch = (p.spacing.line_pitch + way * LINE_STEP).max(LINE_STEP);
+            }
+            _ if modifiers.shift => return self.shift_click_shape("draw_text", at, reach),
+            _ => p.anchor = cut_craft_core::params::Xy::new(at.x, at.y),
+        }
+        let value = serde_json::to_value(&p).expect("text settings serialise");
+        if let Some(form) = self.form.as_mut() {
+            form.params = value.clone();
+        }
+        // text already made follows at once: it is several vectors, not a shape that follows
+        // the form by itself
+        if p.replaces.is_some()
+            && let Err(e) = self.apply_form("draw_text", &value)
+        {
+            self.status.set_message(&e);
         }
     }
 
@@ -962,16 +1017,7 @@ impl CutCraftApp {
             _ => Overlay::None,
         };
         self.paint_2d(ui, &canvas, &overlay);
-        // while Job Setup is open a red square marks the datum, as in Aspire
-        if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {
-            let edge = ui.spacing().interact_size.y / 2.0;
-            let at = canvas.transform.to_screen(job.offset);
-            ui.painter_at(area).rect_filled(
-                egui::Rect::from_center_size(at, egui::vec2(edge, edge)),
-                0.0,
-                ui.visuals().error_fg_color,
-            );
-        }
+        self.datum_mark(ui, &canvas, area, job.offset);
         if self.view_tool == Some(ViewTool::Transform) {
             self.paint_handles(ui, &canvas);
         }
@@ -1003,7 +1049,10 @@ impl CutCraftApp {
                 self.click_select(at, shift, reach);
             }
             (gesture, Some(ViewTool::Transform), _) => self.transform_gesture(ui, gesture, reach),
-            (gesture, None, Some(id)) => self.drawing_gesture(id, gesture, reach),
+            (gesture, None, Some(id)) => {
+                let modifiers = ui.input(|i| i.modifiers);
+                self.drawing_gesture(id, gesture, reach, modifiers);
+            }
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.plain_drop(drag, shift, reach, placing_tabs);
             }
@@ -1017,6 +1066,19 @@ impl CutCraftApp {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
             }
             _ => {}
+        }
+    }
+
+    /// While Job Setup is open a red square marks the datum, as in Aspire.
+    fn datum_mark(&self, ui: &egui::Ui, canvas: &Canvas, area: egui::Rect, datum: Point) {
+        if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {
+            let edge = ui.spacing().interact_size.y / 2.0;
+            let at = canvas.transform.to_screen(datum);
+            ui.painter_at(area).rect_filled(
+                egui::Rect::from_center_size(at, egui::vec2(edge, edge)),
+                0.0,
+                ui.visuals().error_fg_color,
+            );
         }
     }
 

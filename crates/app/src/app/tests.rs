@@ -4929,3 +4929,60 @@ fn orientate_3d_models_drags_turn_the_model_or_move_it_off_the_rotary_axis_when_
     );
     assert_eq!(form.params["axis"]["up"], 0.0);
 }
+
+#[test]
+fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_text");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["text"] = "HI".into();
+    params["font"] = "Test Boxes".into();
+    params["height"] = 10.0.into();
+    params["anchor"] = serde_json::json!({ "x": 10.0, "y": 10.0 });
+    h.app.form.as_mut().unwrap().params = params.clone();
+    h.app.apply_form("draw_text", &params).unwrap();
+    let width = |h: &Harness| {
+        h.app
+            .doc
+            .vectors
+            .values()
+            .map(cut_craft_core::geometry::Path::bounds)
+            .reduce(cut_craft_core::geometry::Rect::union)
+            .unwrap()
+            .size()
+            .x
+    };
+    let before = width(&h);
+    h.frame(vec![]);
+    // between the H and the I, at the gap's middle
+    h.app
+        .text_click(Point::new(19.0, 15.0), 1.0, Modifiers::NONE);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["spacing"]["kerning"][0],
+        serde_json::json!([0, 0, -0.5])
+    );
+    assert!(
+        (width(&h) - (before - 0.5)).abs() < 1e-6,
+        "the letters followed at once: {}",
+        width(&h)
+    );
+    // Shift and Ctrl push them apart by four steps; a click off the text places the anchor
+    h.app.text_click(
+        Point::new(18.5, 15.0),
+        1.0,
+        Modifiers::SHIFT | Modifiers::CTRL,
+    );
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["spacing"]["kerning"][0],
+        serde_json::json!([0, 0, 1.5])
+    );
+    h.app
+        .text_click(Point::new(80.0, 80.0), 1.0, Modifiers::NONE);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["anchor"],
+        serde_json::json!({ "x": 80.0, "y": 80.0 })
+    );
+}
