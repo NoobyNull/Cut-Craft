@@ -218,6 +218,8 @@ fn tabbed(tabs: Tabs) -> Vec<Move> {
             spacing: TabSpacing::ConstantNumber,
             number: 4,
             distance: 0.0,
+            min_number: 0,
+            max_number: 0,
             placement: TabPlacement::Evenly,
         },
         tab_top: -6.0 + 2.0,
@@ -292,6 +294,8 @@ fn tab_middles(placement: TabPlacement, number: u32) -> Vec<Point> {
             spacing: TabSpacing::ConstantNumber,
             number,
             distance: 0.0,
+            min_number: 0,
+            max_number: 0,
             placement,
         },
         tab_top: -4.0,
@@ -325,4 +329,35 @@ fn tabs_can_start_at_the_start_point_or_keep_off_corners() {
     let kept = tab_middles(TabPlacement::AvoidCorners, 3);
     assert_eq!(kept.len(), 3);
     assert!(!kept.iter().any(near_corner), "{kept:?}");
+}
+
+#[test]
+fn tabs_by_distance_keep_to_the_min_and_max_count() {
+    let count = |distance, min_number, max_number| {
+        let entry = Entry {
+            tabs: Tabs::Triangular,
+            tab: TabSettings {
+                size_from_tool: false,
+                length: 4.0,
+                thickness: 2.0,
+                spacing: TabSpacing::ConstantDistance,
+                distance,
+                min_number,
+                max_number,
+                ..TabSettings::default()
+            },
+            tab_top: -4.0,
+            tool_diameter: 2.0,
+            ..Entry::default()
+        };
+        path_moves(&square(), true, &[-6.0], 0.0, SAFE, &entry)
+            .iter()
+            .filter(|m| (m.to.z + 4.0).abs() < 1e-9)
+            .count()
+    };
+    // a 160 mm path: 4 or 8 tabs keep every tab's top off the corners
+    assert_eq!(count(40.0, 0, 0), 4);
+    assert_eq!(count(40.0, 8, 0), 8);
+    assert_eq!(count(20.0, 0, 0), 8);
+    assert_eq!(count(20.0, 0, 4), 4);
 }
