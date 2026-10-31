@@ -18,6 +18,10 @@ pub struct Params {
     pub x: f64,
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
+    /// Turns the X/Y offset by this angle, anticlockwise (relative moves only)
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "deg"))]
+    pub angle: f64,
     /// Point of the selection placed at X/Y (absolute moves only)
     pub anchor: Anchor,
 }
@@ -28,6 +32,7 @@ impl Default for Params {
             relative: true,
             x: 10.0,
             y: 0.0,
+            angle: 0.0,
             anchor: Anchor::BottomLeft,
         }
     }
@@ -52,7 +57,7 @@ impl Command for Move {
             .ok_or(CommandError::NothingSelected)?;
         let to = Point::new(p.x, p.y);
         let delta = if p.relative {
-            to
+            Point::from_angle(p.angle.to_radians()).rotate(to)
         } else {
             to - p.anchor.point(bounds)
         };
@@ -77,12 +82,25 @@ mod tests {
     }
 
     #[test]
+    fn relative_rotated_moves_along_the_angle() {
+        let p = Params {
+            x: 10.0,
+            y: 0.0,
+            angle: 90.0,
+            ..Params::default()
+        };
+        let b = after::<Move>(&p).selection_bounds().unwrap();
+        assert!((b.min - Point::new(10.0, 20.0)).length() < 1e-9, "{b:?}");
+    }
+
+    #[test]
     fn absolute_puts_the_anchor_at_the_point() {
         let p = Params {
             relative: false,
             x: 0.0,
             y: 0.0,
             anchor: Anchor::BottomLeft,
+            ..Params::default()
         };
         let b = after::<Move>(&p).selection_bounds().unwrap();
         assert!(b.min.length() < 1e-9, "{b:?}");
@@ -98,6 +116,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
             anchor: Anchor::BottomLeft,
+            ..Params::default()
         };
         cut_craft_core::testing::run_on::<Move>(&mut doc, &p);
         let e = doc.components[&EntityId(1)].extent();
