@@ -52,6 +52,24 @@ struct FineKey {
     importing: bool,
 }
 
+/// What the 3D view's surface on the GPU was built from: the model as at this revision,
+/// wrapped and sided so (colour and light are the shader's, so not these).
+#[derive(Clone, Debug, PartialEq)]
+struct GeometryKey {
+    revision: u64,
+    job: cut_craft_core::document::Job,
+    wrap: Option<view3d::Wrap>,
+    sides: bool,
+    importing: bool,
+}
+
+/// The imported model's faces on the GPU, and the model they were made from (kept, so no
+/// other model takes its place in memory).
+struct ModelGpu {
+    model: std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+    geometry: std::sync::Arc<view3d::gpu::Geometry>,
+}
+
 /// What the imported model's drawn triangles depend on: the model (by its allocation),
 /// the job, the view, and how it is coloured.
 #[derive(Clone, PartialEq)]
@@ -248,9 +266,10 @@ const THIRD_PARTY: [(&str, &str); 20] = [
 /// 3D view mesh cells along the longer side of the job while the view moves.
 // ponytail: fixed until the 3D view has a detail setting
 const MESH_CELLS: usize = 250;
-/// The most mesh cells along the job's longer side once the 3D view is still: the model's
-/// own cells up to this. Built once per view (about 45 ms at 1200, measured in release).
-// ponytail: CPU-drawn mesh; a GPU one with a depth buffer could draw every cell, moving too
+/// The most mesh cells along the job's longer side: the model's own cells up to this. On the
+/// GPU, built once per change and drawn at every frame, moving too; the CPU mesh (tests)
+/// only once the view is still (about 45 ms at 1200, measured in release).
+// ponytail: 1200² vertices are 40 MB on the card; a detail setting could lift it
 const FINE_MESH_CELLS: usize = 1200;
 /// How wide the Options, Snapping Options and Help windows open, as a share of the main
 /// window's width.
@@ -578,6 +597,13 @@ struct CutCraftApp {
     /// the model changes: sorting and lighting a big model every frame is what made the
     /// window drag while a model was being imported.
     model_3d: Option<(ModelKey, std::sync::Arc<egui::Mesh>)>,
+    /// The window's GPU, when it draws with wgpu, for the 3D view to draw on (the headless
+    /// tests have none and draw the meshes above).
+    gpu_3d: Option<view3d::gpu::Gpu>,
+    /// The 3D view's surface as the GPU draws it, with what it was built from.
+    surface_gpu: Option<(GeometryKey, std::sync::Arc<view3d::gpu::Geometry>)>,
+    /// The imported model as the GPU draws it.
+    model_gpu: Option<ModelGpu>,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
     orbit: view3d::Orbit,
@@ -1272,8 +1298,11 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
         multisampling: settings.view_3d.anti_aliasing.samples(),
+        // the 3D view sorts its faces by depth
+        depth_buffer: view3d::gpu::DEPTH_BITS,
         ..Default::default()
     };
+    let samples = options.multisampling;
     // the pictures' run keeps its egui state apart from the user's
     let name = if shots.is_some() {
         "Cut Craft screenshots"
@@ -1287,6 +1316,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             cc.egui_ctx.set_theme(theme.preference());
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx);
+            let mut app = CutCraftApp::new();
             if let Some(rs) = &cc.wgpu_render_state {
                 let info = rs.adapter.get_info();
                 log::info!(
@@ -1295,8 +1325,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                     info.backend,
                     info.driver
                 );
+                app.gpu_3d = Some(view3d::gpu::Gpu::new(rs, samples));
             }
-            let mut app = CutCraftApp::new();
             if let Some(dir) = shots {
                 // what a fresh clone shows: its icons, the starter tools, nothing of the user's
                 app.shots = Some(screenshots::Shots::new(dir));

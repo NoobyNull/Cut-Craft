@@ -976,22 +976,76 @@ impl CutCraftApp {
         {
             return mesh.clone();
         }
-        let surface = if let Some(material) = &self.simulation {
-            view3d::coarse(material, FINE_MESH_CELLS)
-        } else {
-            let job = &self.doc.job;
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "a small cell count"
-            )]
-            let own = (job.width.max(job.height) / job.model_cell()).ceil() as usize;
-            let cells = own.clamp(MESH_CELLS, FINE_MESH_CELLS);
-            self.model_shape(cells)
-        };
+        let surface = self.fine_surface();
         let mesh = view3d::mesh(&surface, orbit, framing, &look, fit);
         self.fine_3d = Some((key, mesh.clone()));
         mesh
+    }
+
+    /// The preview's material, or the model's shape, at its own detail up to
+    /// [`FINE_MESH_CELLS`].
+    fn fine_surface(&mut self) -> Material {
+        if let Some(material) = &self.simulation {
+            return view3d::coarse(material, FINE_MESH_CELLS);
+        }
+        let job = &self.doc.job;
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a small cell count"
+        )]
+        let own = (job.width.max(job.height) / job.model_cell()).ceil() as usize;
+        self.model_shape(own.clamp(MESH_CELLS, FINE_MESH_CELLS))
+    }
+
+    /// The 3D view's surface as the GPU draws it: at its own detail, built once and kept
+    /// while nothing it shows changes; a playing preview's at the moving detail, every frame.
+    fn surface_geometry(
+        &mut self,
+        wrap: Option<view3d::Wrap>,
+        sides: bool,
+    ) -> std::sync::Arc<view3d::gpu::Geometry> {
+        let key = super::GeometryKey {
+            revision: self.history.revision(),
+            job: self.doc.job,
+            wrap,
+            sides,
+            importing: self
+                .form
+                .as_ref()
+                .is_some_and(|f| f.model.is_some() && f.model_whole),
+        };
+        if let Some(playback) = &self.playback {
+            let surface = view3d::coarse(playback.material(), MESH_CELLS);
+            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+        }
+        if let Some((kept, geometry)) = &self.surface_gpu
+            && *kept == key
+        {
+            return std::sync::Arc::clone(geometry);
+        }
+        let surface = self.fine_surface();
+        let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+        self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+        geometry
+    }
+
+    /// The imported model as the GPU draws it, kept while the model stays.
+    fn model_geometry(
+        &mut self,
+        model: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+    ) -> std::sync::Arc<view3d::gpu::Geometry> {
+        if let Some(kept) = &self.model_gpu
+            && std::sync::Arc::ptr_eq(&kept.model, model)
+        {
+            return std::sync::Arc::clone(&kept.geometry);
+        }
+        let geometry = std::sync::Arc::new(view3d::gpu::model(model));
+        self.model_gpu = Some(super::ModelGpu {
+            model: std::sync::Arc::clone(model),
+            geometry: std::sync::Arc::clone(&geometry),
+        });
+        geometry
     }
 
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
@@ -1041,42 +1095,44 @@ impl CutCraftApp {
     /// The 3D view's picture: background, block and the overlays the View menu turns on.
     /// A full 3D model being imported into a rotary job, turned round the axis inside a
     /// wireframe of the stock, over the wrapped view.
+    #[expect(clippy::too_many_arguments, reason = "one frame's view, taken apart")]
     fn paint_turned(
-        &self,
+        &mut self,
         ui: &egui::Ui,
-        painter: &egui::Painter,
+        area: egui::Rect,
         surface: &cut_craft_core::simulation::Material,
         wrap: view3d::Wrap,
-        fit: egui::Rect,
+        camera: &view3d::Camera,
         look: &view3d::Look,
+        gpu: Option<&mut Option<view3d::gpu::Draw>>,
     ) {
         use cut_craft_core::glam::DVec3;
-        let Some(model) = self.form.as_ref().and_then(|f| f.model.as_ref()) else {
+        let Some(model) = self.form.as_ref().and_then(|f| f.model.clone()) else {
             return;
         };
-        let (orbit, framing) = (self.orbit, self.framing);
-        let screen = view3d::screen_of(surface, orbit, framing, fit, Some(wrap));
+        let painter = ui.painter_at(area);
+        let screen = |p| camera.screen(p);
         // from the job's millimetres (the axis at y = z = 0 for an X axis) to the wrapped
         // view's: along from the material's start; across and up as they are, the model at
         // its true size inside the stock
         let start = if wrap.along_x {
-            surface.origin.x
+            DVec3::new(-surface.origin.x, 0.0, 0.0)
         } else {
-            surface.origin.y
+            DVec3::new(0.0, -surface.origin.y, 0.0)
         };
-        let to_view = |p: DVec3| {
-            if wrap.along_x {
-                DVec3::new(p.x - start, p.y, p.z)
-            } else {
-                DVec3::new(p.x, p.y - start, p.z)
-            }
-        };
-        let shown: Vec<cmd_orientate_3d_model::Seen> = model
-            .iter()
-            .map(|(t, hidden)| (t.map(to_view), *hidden))
-            .collect();
         let mark = ui.visuals().error_fg_color;
-        painter.add(view3d::triangles(&shown, &screen, orbit, look, mark));
+        if let Some(draw) = gpu {
+            let geometry = self.model_geometry(&model);
+            *draw = Some(view3d::gpu::Draw::new(
+                geometry, camera, area, start, look, mark,
+            ));
+        } else {
+            let shown: Vec<cmd_orientate_3d_model::Seen> = model
+                .iter()
+                .map(|(t, hidden)| (t.map(|p| p + start), *hidden))
+                .collect();
+            painter.add(view3d::triangles(&shown, screen, self.orbit, look, mark));
+        }
         let job = self.shown_job().area().size();
         let length = if wrap.along_x { job.x } else { job.y };
         let stroke = egui::Stroke::new(ui.visuals().widgets.noninteractive.fg_stroke.width, mark);
@@ -1176,15 +1232,55 @@ impl CutCraftApp {
             };
             painter.add(modeling_plane(ui, &screen, at(area.min), at(area.max)));
         }
-        painter.add(self.surface_mesh(ui, &surface, (orbit, framing), look, fit));
-        if let Some(wrap) = wrap {
-            if turned {
-                self.paint_turned(ui, &painter, &surface, wrap, fit, &look);
-            }
-            // ponytail: the overlays are drawn flat, so they are left off the wrapped view
-            return;
+        // on the GPU when the window has one (the headless tests draw egui meshes): its
+        // callback takes this place in the painter's order once the model is known too
+        let camera = view3d::Camera::new(&surface, orbit, framing, fit, wrap);
+        let mark = ui.visuals().error_fg_color;
+        let slot = self
+            .gpu_3d
+            .is_some()
+            .then(|| painter.add(egui::Shape::Noop));
+        let (mut surface_draw, mut model_draw) = (None, None);
+        if slot.is_some() {
+            let geometry = self.surface_geometry(look.wrap, look.sides);
+            let at = cut_craft_core::glam::DVec3::ZERO;
+            surface_draw = Some(view3d::gpu::Draw::new(
+                geometry, &camera, area, at, &look, mark,
+            ));
+        } else {
+            painter.add(self.surface_mesh(ui, &surface, (orbit, framing), look, fit));
         }
-        let screen = view3d::screen_of(&surface, orbit, framing, fit, None);
+        let gpu = slot.is_some().then_some(&mut model_draw);
+        if let Some(wrap) = wrap {
+            // ponytail: the overlays are drawn flat, so they are left off the wrapped view
+            if turned {
+                self.paint_turned(ui, area, &surface, wrap, &camera, &look, gpu);
+            }
+        } else {
+            self.paint_flat(ui, area, &surface, &camera, look, tool_at, gpu);
+        }
+        if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
+            painter.set(slot, gpu.paint(area, surface_draw, model_draw));
+        }
+    }
+
+    /// Over the unwrapped surface: the model being imported in the material's outline, a
+    /// playing preview's tool, and the overlays.
+    #[expect(clippy::too_many_arguments, reason = "one frame's view, taken apart")]
+    fn paint_flat(
+        &mut self,
+        ui: &egui::Ui,
+        area: egui::Rect,
+        surface: &Material,
+        camera: &view3d::Camera,
+        look: view3d::Look,
+        tool_at: Option<(cut_craft_core::glam::DVec3, f64)>,
+        gpu: Option<&mut Option<view3d::gpu::Draw>>,
+    ) {
+        let (job, painter) = (self.shown_job(), ui.painter_at(area));
+        let (orbit, framing) = (self.orbit, self.framing);
+        let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
+        let screen = |p| camera.screen(p);
         let local = |p: cut_craft_core::geometry::Point, z: f64| {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
         };
@@ -1192,11 +1288,18 @@ impl CutCraftApp {
         // outline to judge its size by, over the modeling plane it is placed on
         if let Some(model) = self.form.as_ref().and_then(|f| f.model.clone()) {
             let origin = local(cut_craft_core::geometry::Point::new(0.0, 0.0), 0.0);
-            let area = job.area();
             let mark = ui.visuals().error_fg_color;
-            let view = (orbit, framing, fit, look);
-            painter.add(self.model_mesh(&model, view, mark, |p| screen(p + origin)));
-            let (lo, hi) = (local(area.min, 0.0), local(area.max, job.thickness));
+            if let Some(draw) = gpu {
+                let geometry = self.model_geometry(&model);
+                *draw = Some(view3d::gpu::Draw::new(
+                    geometry, camera, area, origin, &look, mark,
+                ));
+            } else {
+                let view = (orbit, framing, fit, look);
+                painter.add(self.model_mesh(&model, view, mark, |p| screen(p + origin)));
+            }
+            let job_area = job.area();
+            let (lo, hi) = (local(job_area.min, 0.0), local(job_area.max, job.thickness));
             let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
             for [a, b] in view3d::box_edges(lo, hi) {
                 painter.line_segment([screen(a), screen(b)], stroke);
@@ -1206,12 +1309,8 @@ impl CutCraftApp {
         // ponytail: drawn whole, over the surface it is cutting into
         if let Some((tip, diameter)) = tool_at {
             let at = local(tip.truncate(), tip.z);
-            let outline = view3d::cylinder(
-                &screen,
-                at,
-                diameter / 2.0,
-                diameter * TOOL_HEIGHT_DIAMETERS,
-            );
+            let outline =
+                view3d::cylinder(screen, at, diameter / 2.0, diameter * TOOL_HEIGHT_DIAMETERS);
             let selection = ui.visuals().selection;
             painter.add(egui::Shape::convex_polygon(
                 outline,
@@ -1219,7 +1318,7 @@ impl CutCraftApp {
                 selection.stroke,
             ));
         }
-        self.overlays_3d(ui, &painter, &surface, (orbit, framing), fit);
+        self.overlays_3d(ui, &painter, surface, (orbit, framing), fit);
     }
 
     /// The vectors, modeling plane and origin over the 3D view's (unwrapped) `surface`, each

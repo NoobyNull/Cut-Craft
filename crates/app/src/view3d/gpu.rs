@@ -1,0 +1,799 @@
+//! The 3D view drawn by the GPU: the material's height grid (and a model being imported)
+//! go to the card once per change, the vertex shader builds the surface from the grid, and
+//! a frame costs only a camera uniform and a draw, the depth buffer putting the near faces
+//! in front. Lighting and colour are the shader's, so a light that follows the view costs
+//! nothing either.
+//!
+//! The app owns the GPU state ([`Gpu`]) and the grid is a storage buffer, so a compute
+//! step over the heights (tool drops, simulation sweeps) can share the device and queue and
+//! write what the view reads.
+
+use super::{
+    AMBIENT, Camera, DEPTH_SHADE, GRAIN_BUNCHES, GRAIN_DEPTH_SHIFT, GRAIN_DRIFTS, GRAIN_SHARPNESS,
+    Look,
+};
+use cut_craft_core::glam::{DMat4, DVec3};
+use cut_craft_core::simulation::Material;
+use eframe::egui::{Color32, Rect, Rgba, Shape};
+use eframe::egui_wgpu::{self, CallbackResources, CallbackTrait, RenderState, wgpu};
+use std::sync::Arc;
+
+/// The window's depth buffer: the view's faces are sorted by it.
+pub const DEPTH_BITS: u8 = 32;
+/// The camera uniform's size: as `Camera` in `surface.wgsl` lays it out.
+const UNIFORM_BYTES: usize = 224;
+/// A height meaning no model there (the grid's NaN, which shaders cannot be trusted with).
+const EMPTY: f32 = -1.0e30;
+/// Numbers a model's face takes in its buffer: three corners and a mark.
+const FACE_WORDS: usize = 10;
+/// How far the depth range reaches either side of the middle, in bounding-sphere radii:
+/// the camera is fitted to a coarser surface than the one drawn, so a peak it never saw
+/// must still be inside.
+const DEPTH_REACH: f64 = 2.0;
+
+/// A surface's grid: cells across and up, a cell's edge and the block's bottom.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Grid {
+    columns: u32,
+    rows: u32,
+    cell: f64,
+    bottom: f64,
+}
+
+/// What goes to the card: a surface's heights (and the triangles over them), or a model's
+/// faces, as bytes ready to upload.
+#[derive(Default)]
+pub struct Geometry {
+    data: Vec<u8>,
+    /// The surface's triangles; a model's faces are drawn in order.
+    indices: Vec<u8>,
+    /// Vertices the shader makes: the grid's cells and its sides', or three a face.
+    vertices: u32,
+    grid: Option<Grid>,
+}
+
+impl Geometry {
+    fn quad(&mut self, [a, b, c, d]: [u32; 4]) {
+        for i in [a, b, c, a, c, d] {
+            self.indices.extend_from_slice(&i.to_ne_bytes());
+        }
+    }
+
+    #[cfg(test)]
+    pub fn triangles(&self) -> usize {
+        if self.grid.is_some() {
+            self.indices.len() / 12
+        } else {
+            self.vertices as usize / 3
+        }
+    }
+
+    /// Bytes on the card.
+    #[cfg(test)]
+    pub fn bytes(&self) -> usize {
+        self.data.len() + self.indices.len()
+    }
+
+    /// What a draw counts: indices, or vertices in order.
+    fn count(&self) -> u32 {
+        if self.grid.is_some() {
+            u32::try_from(self.indices.len() / 4).expect("fits u32")
+        } else {
+            self.vertices
+        }
+    }
+}
+
+/// The material's surface: its heights, and a quad over each four neighbouring cells that
+/// have a model; with `sides` the block's sides and bottom; round the axis when `wrap`, the
+/// way round closed on itself. The shader places and lights the vertices.
+#[expect(clippy::cast_possible_truncation, reason = "millimetres fit f32")]
+pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry {
+    let height = |c: usize, r: usize| m.heights[r * m.columns + c];
+    let mut g = Geometry {
+        grid: Some(Grid {
+            columns: u32::try_from(m.columns).expect("a cell count"),
+            rows: u32::try_from(m.rows).expect("a cell count"),
+            cell: m.cell,
+            bottom: m.bottom,
+        }),
+        ..Geometry::default()
+    };
+    for &h in &m.heights {
+        let h = if h.is_nan() { EMPTY } else { h as f32 };
+        g.data.extend_from_slice(&h.to_ne_bytes());
+    }
+    let index = |c: usize, r: usize| u32::try_from(r * m.columns + c).expect("fits u32");
+    let (columns, rows) = match wrap {
+        Some(w) if w.along_x => (m.columns.saturating_sub(1), m.rows),
+        Some(_) => (m.columns, m.rows.saturating_sub(1)),
+        None => (m.columns.saturating_sub(1), m.rows.saturating_sub(1)),
+    };
+    for r in 0..rows {
+        for c in 0..columns {
+            let (nc, nr) = ((c + 1) % m.columns, (r + 1) % m.rows);
+            let corners = [(c, r), (nc, r), (nc, nr), (c, nr)];
+            if corners.iter().any(|&(c, r)| height(c, r).is_nan()) {
+                continue;
+            }
+            g.quad(corners.map(|(c, r)| index(c, r)));
+        }
+    }
+    let cells = m.columns * m.rows;
+    g.vertices = u32::try_from(cells).expect("fits u32");
+    if sides && wrap.is_none() {
+        // the shader's side vertices: a top and a bottom one for each edge cell going round
+        // (front, back, left, right), then the bottom's four corners
+        let edges = [
+            (0..m.columns).map(|c| (c, 0)).collect::<Vec<_>>(),
+            (0..m.columns).map(|c| (c, m.rows - 1)).collect(),
+            (0..m.rows).map(|r| (0, r)).collect(),
+            (0..m.rows).map(|r| (m.columns - 1, r)).collect(),
+        ];
+        let mut start = cells;
+        for edge in edges {
+            for (k, pair) in edge.windows(2).enumerate() {
+                if pair.iter().any(|&(c, r)| height(c, r).is_nan()) {
+                    continue;
+                }
+                let top = u32::try_from(start + 2 * k).expect("fits u32");
+                g.quad([top, top + 2, top + 3, top + 1]);
+            }
+            start += 2 * edge.len();
+        }
+        let bottom = u32::try_from(start).expect("fits u32");
+        g.quad([bottom, bottom + 1, bottom + 2, bottom + 3]);
+        g.vertices = bottom + 4;
+    }
+    g
+}
+
+/// An imported model's faces: three corners and whether the face is marked, each.
+#[expect(clippy::cast_possible_truncation, reason = "millimetres fit f32")]
+pub fn model(faces: &[cmd_orientate_3d_model::Seen]) -> Geometry {
+    let mut g = Geometry::default();
+    g.data.reserve(faces.len() * FACE_WORDS * 4);
+    for (t, marked) in faces {
+        for v in t.iter().flat_map(DVec3::to_array) {
+            g.data.extend_from_slice(&(v as f32).to_ne_bytes());
+        }
+        g.data
+            .extend_from_slice(&f32::from(u8::from(*marked)).to_ne_bytes());
+    }
+    g.vertices = u32::try_from(faces.len() * 3).expect("fits u32");
+    g
+}
+
+/// One frame's drawing of a geometry: how the camera sees and colours it.
+pub struct Draw {
+    geometry: Arc<Geometry>,
+    uniform: Vec<u8>,
+}
+
+impl Draw {
+    /// `geometry` seen by `camera` over `area` (the callback's rect), moved by `offset` in
+    /// the material's coordinates, coloured and lit as `look` says; a model's marked faces
+    /// in `mark`, and its backs left out.
+    #[expect(clippy::cast_possible_truncation, reason = "the GPU takes f32")]
+    pub fn new(
+        geometry: Arc<Geometry>,
+        camera: &Camera,
+        area: Rect,
+        offset: DVec3,
+        look: &Look,
+        mark: Color32,
+    ) -> Self {
+        let clip = camera.clip(area, DEPTH_REACH) * DMat4::from_translation(offset);
+        let grid = geometry.grid;
+        let mut uniform = Vec::with_capacity(UNIFORM_BYTES);
+        let floats = |uniform: &mut Vec<u8>, values: &[f64]| {
+            for v in values {
+                uniform.extend_from_slice(&(*v as f32).to_ne_bytes());
+            }
+        };
+        let words = |uniform: &mut Vec<u8>, values: &[u32]| {
+            for v in values {
+                uniform.extend_from_slice(&v.to_ne_bytes());
+            }
+        };
+        let linear = |c: Color32| Rgba::from(c).to_array().map(f64::from);
+        floats(&mut uniform, &clip.to_cols_array());
+        floats(&mut uniform, &light_unit(look.light).to_array());
+        floats(&mut uniform, &[AMBIENT]);
+        floats(&mut uniform, &camera.orbit.towards_viewer().to_array());
+        words(&mut uniform, &[u32::from(grid.is_none())]);
+        floats(&mut uniform, &linear(look.colour));
+        floats(&mut uniform, &linear(mark));
+        let g = grid.unwrap_or(Grid {
+            columns: 0,
+            rows: 0,
+            cell: 0.0,
+            bottom: 0.0,
+        });
+        words(&mut uniform, &[g.columns, g.rows]);
+        floats(&mut uniform, &[g.cell, g.bottom]);
+        let wrap = look.wrap.filter(|_| grid.is_some());
+        words(
+            &mut uniform,
+            &[wrap.map_or(0, |w| if w.along_x { 1 } else { 2 })],
+        );
+        floats(
+            &mut uniform,
+            &[
+                wrap.map_or(0.0, |w| w.radius),
+                wrap.map_or(0.0, |w| w.surface),
+                DEPTH_SHADE,
+            ],
+        );
+        let grain = look
+            .grain
+            .filter(|_| look.wrap.is_none())
+            .map(|grain| grain.on_cells(g.cell));
+        for [first, second] in [GRAIN_DRIFTS, GRAIN_BUNCHES] {
+            floats(&mut uniform, &[first.0, first.1, second.0, second.1]);
+        }
+        floats(
+            &mut uniform,
+            &[
+                f64::from(GRAIN_SHARPNESS),
+                GRAIN_DEPTH_SHIFT,
+                grain.map_or(1.0, |grain| grain.spacing),
+                grain.map_or(0.0, |grain| f64::from(grain.depth)),
+            ],
+        );
+        words(&mut uniform, &[u32::from(grid.is_none()), 0, 0, 0]);
+        debug_assert_eq!(uniform.len(), UNIFORM_BYTES);
+        Self { geometry, uniform }
+    }
+}
+
+/// `light` at unit length.
+fn light_unit(light: DVec3) -> DVec3 {
+    light.normalize_or(super::LIGHT.normalize())
+}
+
+/// The card's copy of a geometry, with its camera. The heights (or the faces) are a storage
+/// buffer, held by the bind group, that a compute step could bind and write too.
+struct Piece {
+    geometry: Arc<Geometry>,
+    indices: Option<wgpu::Buffer>,
+    uniform: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+}
+
+impl Piece {
+    fn new(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, geometry: Arc<Geometry>) -> Self {
+        use wgpu::util::DeviceExt;
+        let buffer = |label, contents: &[u8], usage| {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents,
+                usage,
+            })
+        };
+        let data = buffer(
+            "view3d data",
+            &geometry.data,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        );
+        let indices = (!geometry.indices.is_empty()).then(|| {
+            buffer(
+                "view3d indices",
+                &geometry.indices,
+                wgpu::BufferUsages::INDEX,
+            )
+        });
+        let uniform = buffer(
+            "view3d camera",
+            &[0; UNIFORM_BYTES],
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        );
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("view3d"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: data.as_entire_binding(),
+                },
+            ],
+        });
+        Self {
+            geometry,
+            indices,
+            uniform,
+            bind_group,
+        }
+    }
+}
+
+/// The GPU as the 3D view uses it: the window's device and queue (at hand here for work on
+/// the card beyond drawing), the view's pipeline, and what is on the card.
+pub struct Gpu {
+    state: RenderState,
+    pipeline: wgpu::RenderPipeline,
+    layout: wgpu::BindGroupLayout,
+    surface: Option<Piece>,
+    model: Option<Piece>,
+}
+
+/// One draw of the frame: what the shader reads, and how many it draws.
+struct Call {
+    bind_group: wgpu::BindGroup,
+    indices: Option<wgpu::Buffer>,
+    count: u32,
+}
+
+/// What the 3D view draws this frame, for egui's render pass: the surface and, importing,
+/// the model, sharing the depth buffer so the model sits in the material.
+struct Paint {
+    pipeline: wgpu::RenderPipeline,
+    calls: Vec<Call>,
+}
+
+impl Gpu {
+    /// Readies the window's GPU for the 3D view, with the window's multisampling.
+    pub fn new(state: &RenderState, samples: u16) -> Self {
+        let device = &state.device;
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("view3d"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("surface.wgsl").into()),
+        });
+        let buffer = |binding, visibility, ty| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: wgpu::BindingType::Buffer {
+                ty,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("view3d"),
+            entries: &[
+                buffer(
+                    0,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    wgpu::BufferBindingType::Uniform,
+                ),
+                buffer(
+                    1,
+                    wgpu::ShaderStages::VERTEX,
+                    wgpu::BufferBindingType::Storage { read_only: true },
+                ),
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("view3d"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("view3d"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: Some("vs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: egui_wgpu::depth_format_from_bits(DEPTH_BITS, 0).expect("a depth format"),
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: u32::from(samples.max(1)),
+                ..wgpu::MultisampleState::default()
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                // egui prefers a framebuffer that takes sRGB; a linear one takes linear
+                entry_point: Some(if state.target_format.is_srgb() {
+                    "fs_linear"
+                } else {
+                    "fs_gamma"
+                }),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(state.target_format.into())],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+        Self {
+            state: state.clone(),
+            pipeline,
+            layout,
+            surface: None,
+            model: None,
+        }
+    }
+
+    /// This frame's picture over `rect`: uploads what changed, sets the cameras, and gives
+    /// the shape that draws it. A geometry not drawn leaves the card.
+    pub fn paint(&mut self, rect: Rect, surface: Option<Draw>, model: Option<Draw>) -> Shape {
+        let mut calls = vec![];
+        for (slot, draw) in [(&mut self.surface, surface), (&mut self.model, model)] {
+            let Some(draw) = draw.filter(|d| d.geometry.count() > 0) else {
+                *slot = None;
+                continue;
+            };
+            let piece = match slot {
+                Some(p) if Arc::ptr_eq(&p.geometry, &draw.geometry) => p,
+                _ => slot.insert(Piece::new(
+                    &self.state.device,
+                    &self.layout,
+                    Arc::clone(&draw.geometry),
+                )),
+            };
+            self.state
+                .queue
+                .write_buffer(&piece.uniform, 0, &draw.uniform);
+            calls.push(Call {
+                bind_group: piece.bind_group.clone(),
+                indices: piece.indices.clone(),
+                count: piece.geometry.count(),
+            });
+        }
+        let paint = Paint {
+            pipeline: self.pipeline.clone(),
+            calls,
+        };
+        Shape::Callback(egui_wgpu::Callback::new_paint_callback(rect, paint))
+    }
+}
+
+impl CallbackTrait for Paint {
+    fn paint(
+        &self,
+        _info: eframe::egui::PaintCallbackInfo,
+        pass: &mut wgpu::RenderPass<'static>,
+        _resources: &CallbackResources,
+    ) {
+        pass.set_pipeline(&self.pipeline);
+        for call in &self.calls {
+            pass.set_bind_group(0, &call.bind_group, &[]);
+            match &call.indices {
+                Some(indices) => {
+                    pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..call.count, 0, 0..1);
+                }
+                None => pass.draw(0..call.count, 0..1),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{Framing, LIGHT, Orbit, Wrap};
+    use super::*;
+    use cut_craft_core::document::Job;
+    use cut_craft_core::glam::DVec4;
+    use eframe::egui::pos2;
+
+    fn plain() -> Look {
+        Look {
+            colour: Color32::WHITE,
+            sides: false,
+            light: LIGHT,
+            wrap: None,
+            grain: None,
+        }
+    }
+
+    /// 100 x 100 mm in 1 mm cells, with a 5 mm deep slot from x = 40 to 60 running along y.
+    fn slotted() -> Material {
+        let job = Job {
+            width: 100.0,
+            height: 100.0,
+            ..Job::default()
+        };
+        let mut m = Material::new(&job, 100);
+        for row in 0..m.rows {
+            for column in 40..60 {
+                m.heights[row * m.columns + column] = -5.0;
+            }
+        }
+        m
+    }
+
+    fn f32s(bytes: &[u8]) -> Vec<f32> {
+        bytes
+            .chunks(4)
+            .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
+            .collect()
+    }
+
+    fn u32s(bytes: &[u8]) -> Vec<u32> {
+        bytes
+            .chunks(4)
+            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn the_surface_uploads_its_heights_and_a_quad_over_each_cell() {
+        let m = slotted();
+        let g = surface(&m, None, false);
+        let heights = f32s(&g.data);
+        assert_eq!(heights.len(), m.columns * m.rows);
+        assert_eq!(heights[50 * m.columns + 50], -5.0);
+        assert_eq!(g.triangles(), 2 * (m.columns - 1) * (m.rows - 1));
+        assert_eq!(g.vertices as usize, m.columns * m.rows);
+        let indices = u32s(&g.indices);
+        assert_eq!(&indices[..6], &[0, 1, 101, 0, 101, 100], "the first quad");
+        assert_eq!(g.grid.unwrap().cell, 1.0);
+    }
+
+    #[test]
+    fn empty_cells_are_marked_and_left_out_and_sides_add_their_vertices() {
+        let mut half = slotted();
+        let columns = half.columns;
+        for (i, h) in half.heights.iter_mut().enumerate() {
+            if i % columns < columns / 2 {
+                *h = f64::NAN;
+            }
+        }
+        let full = surface(&slotted(), None, false).triangles();
+        let shown = surface(&half, None, false);
+        assert!(f32s(&shown.data)[..50].iter().all(|&h| h == EMPTY));
+        assert!(shown.triangles() < full * 2 / 3 && shown.triangles() > 0);
+        let sided = surface(&slotted(), None, true);
+        // four sides of 99 quads each and the bottom
+        assert_eq!(sided.triangles(), full + 2 * (4 * 99 + 1));
+        // a top and bottom vertex for each of the 400 edge cells, and the bottom's corners
+        assert_eq!(sided.vertices as usize, 100 * 100 + 2 * 400 + 4);
+        let indices = u32s(&sided.indices);
+        let first_side = &indices[3 * full..][..6];
+        assert_eq!(
+            first_side,
+            &[10_000, 10_002, 10_003, 10_000, 10_003, 10_001]
+        );
+        assert_eq!(indices.last(), Some(&10_803));
+    }
+
+    #[test]
+    fn a_wrapped_surface_closes_the_way_round() {
+        let m = slotted();
+        let wrap = Wrap {
+            along_x: true,
+            radius: 20.0,
+            surface: 0.0,
+        };
+        let g = surface(&m, Some(wrap), true);
+        // along the axis the quads stop; round it they meet themselves; no sides
+        assert_eq!(g.triangles(), 2 * (m.columns - 1) * m.rows);
+        let indices = u32s(&g.indices);
+        let last_quad = &indices[indices.len() - 6..];
+        let first_row = u32::try_from(m.columns).unwrap();
+        assert!(
+            last_quad.iter().any(|&i| i < first_row),
+            "the last row's quads reach the first: {last_quad:?}"
+        );
+    }
+
+    #[test]
+    fn a_model_packs_ten_numbers_a_face() {
+        let faces = [
+            ([DVec3::ZERO, DVec3::X, DVec3::Y], false),
+            ([DVec3::ZERO, DVec3::Y, DVec3::X], true),
+        ];
+        let g = model(&faces);
+        assert_eq!((g.triangles(), g.vertices, g.count()), (2, 6, 6));
+        let words = f32s(&g.data);
+        assert_eq!(words.len(), 2 * FACE_WORDS);
+        assert_eq!(&words[3..6], &[1.0, 0.0, 0.0]);
+        assert_eq!(
+            (words[9], words[19]),
+            (0.0, 1.0),
+            "the second face is marked"
+        );
+    }
+
+    #[test]
+    #[expect(clippy::cast_possible_truncation, reason = "small test coordinates")]
+    fn the_clip_matrix_places_points_where_the_camera_does() {
+        let m = slotted();
+        let area = Rect::from_min_max(pos2(100.0, 50.0), pos2(500.0, 350.0));
+        let framing = Framing {
+            zoom: 1.5,
+            pan: eframe::egui::vec2(20.0, -10.0),
+            perspective: false,
+        };
+        for perspective in [false, true] {
+            let framing = Framing {
+                perspective,
+                ..framing
+            };
+            let camera = Camera::new(&m, Orbit::default(), framing, area, None);
+            let clip = camera.clip(area, DEPTH_REACH);
+            let mut last_z = f64::NEG_INFINITY;
+            // far to near across the block
+            for p in [
+                DVec3::new(90.0, 90.0, -5.0),
+                DVec3::new(50.0, 50.0, 0.0),
+                DVec3::new(10.0, 10.0, 0.0),
+            ] {
+                let c = clip * DVec4::new(p.x, p.y, p.z, 1.0);
+                let ndc = c / c.w;
+                let (centre, half) = (area.center(), area.size() / 2.0);
+                let on = pos2(
+                    (f64::from(centre.x) + ndc.x * f64::from(half.x)) as f32,
+                    (f64::from(centre.y) - ndc.y * f64::from(half.y)) as f32,
+                );
+                let expected = camera.screen(p);
+                assert!(
+                    on.distance(expected) < 1e-3,
+                    "perspective {perspective}: {p} at {on:?}, not {expected:?}"
+                );
+                assert!(ndc.z > 0.0 && ndc.z < 1.0, "depth in range: {}", ndc.z);
+                assert!(
+                    ndc.z < last_z || last_z == f64::NEG_INFINITY,
+                    "nearer is less deep"
+                );
+                last_z = ndc.z;
+            }
+        }
+    }
+
+    #[test]
+    #[expect(clippy::cast_possible_truncation, reason = "the GPU takes f32")]
+    fn a_draw_packs_the_camera_uniform_as_the_shader_reads_it() {
+        let m = slotted();
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let camera = Camera::new(&m, Orbit::default(), Framing::default(), area, None);
+        let look = Look {
+            colour: Color32::from_rgb(255, 0, 0),
+            grain: Some(super::super::Grain {
+                spacing: 4.0,
+                depth: 0.3,
+            }),
+            ..plain()
+        };
+        let g = Arc::new(surface(&m, None, true));
+        let draw = Draw::new(g, &camera, area, DVec3::ZERO, &look, Color32::RED);
+        assert_eq!(draw.uniform.len(), UNIFORM_BYTES);
+        let words = u32s(&draw.uniform);
+        let floats = f32s(&draw.uniform);
+        assert_eq!(words[23], 0, "the surface is not culled");
+        assert!((f64::from(floats[19]) - AMBIENT).abs() < 1e-6);
+        assert_eq!(&floats[24..27], &[1.0, 0.0, 0.0], "red, linear");
+        assert_eq!(&words[32..34], &[100, 100], "the grid");
+        assert_eq!(&floats[34..36], &[1.0, m.bottom as f32]);
+        assert_eq!(words[36], 0, "flat");
+        assert_eq!(floats[39], DEPTH_SHADE as f32);
+        assert_eq!(floats[40], GRAIN_DRIFTS[0].0 as f32);
+        // a spacing of 4 cells is too coarse for full-strength grain: 4 of the 6 it needs
+        assert_eq!(floats[50], 4.0, "the grain's spacing");
+        assert!(
+            (floats[51] - 0.3 * 4.0 / 6.0).abs() < 1e-6,
+            "its depth, faded"
+        );
+        assert_eq!(words[52], 0, "a surface");
+        let model_draw = Draw::new(
+            Arc::new(model(&[([DVec3::ZERO, DVec3::X, DVec3::Y], false)])),
+            &camera,
+            area,
+            DVec3::ZERO,
+            &look,
+            Color32::RED,
+        );
+        let words = u32s(&model_draw.uniform);
+        assert_eq!((words[23], words[52]), (1, 1), "a model, its backs culled");
+    }
+
+    /// `cargo test --release -p cut-craft -- --ignored gpu_timing --nocapture`: what a frame
+    /// of the CPU meshes costs against building the GPU's geometry once and its uniform each
+    /// frame, for a job at 1200 cells and a two-million-face model.
+    #[test]
+    #[ignore = "timing, by hand"]
+    #[expect(clippy::cast_precision_loss, reason = "a test grid")]
+    fn gpu_timing() {
+        use cut_craft_core::component::{Combine, Component};
+        use std::time::Instant;
+        let mut doc = cut_craft_core::document::Document::default();
+        let origin = doc.job.area().min;
+        let rect = cut_craft_core::geometry::Rect::new(
+            origin + cut_craft_core::geometry::Point::new(150.0, 100.0),
+            origin + cut_craft_core::geometry::Point::new(450.0, 250.0),
+        );
+        let mut change = cut_craft_core::Change::builder(&doc);
+        change.add_component(Component::from_fn(
+            "m",
+            Combine::Add,
+            rect,
+            doc.job.model_cell(),
+            |p| Some((p.x * 0.3).sin() + (p.y * 0.2).cos() + 3.0),
+        ));
+        doc.apply(&change.finish()).unwrap();
+        let area = Rect::from_min_size(eframe::egui::Pos2::ZERO, eframe::egui::vec2(1400.0, 900.0));
+        let look = Look {
+            colour: Color32::GRAY,
+            ..plain()
+        };
+        let shape = cut_craft_core::component::model_shape(&doc, 1200);
+        let camera = Camera::new(&shape, Orbit::default(), Framing::default(), area, None);
+        let started = Instant::now();
+        let mesh = super::super::mesh(&shape, Orbit::default(), Framing::default(), &look, area);
+        eprintln!(
+            "surface, 1200 cells: CPU mesh a frame {:?} ({} triangles)",
+            started.elapsed(),
+            mesh.indices.len() / 3
+        );
+        let started = Instant::now();
+        let geometry = Arc::new(surface(&shape, None, false));
+        let built = started.elapsed();
+        let started = Instant::now();
+        let draw = Draw::new(
+            Arc::clone(&geometry),
+            &camera,
+            area,
+            DVec3::ZERO,
+            &look,
+            Color32::RED,
+        );
+        eprintln!(
+            "surface, 1200 cells: GPU geometry once {built:?} ({} triangles, {} MB), a frame {:?}",
+            geometry.triangles(),
+            geometry.bytes() / 1_000_000,
+            started.elapsed()
+        );
+        drop(draw);
+        // the model big_model_timing builds, as faces
+        let side = 1000;
+        let height =
+            |x: usize, y: usize| ((x as f64 / 37.0).sin() + (y as f64 / 23.0).cos()) * 5.0 + 10.0;
+        let at = |x: usize, y: usize| DVec3::new(x as f64 / 10.0, y as f64 / 10.0, height(x, y));
+        let faces: Vec<cmd_orientate_3d_model::Seen> = (0..side)
+            .flat_map(|x| (0..side).map(move |y| (x, y)))
+            .flat_map(|(x, y)| {
+                [
+                    ([at(x, y), at(x + 1, y), at(x + 1, y + 1)], false),
+                    ([at(x, y), at(x + 1, y + 1), at(x, y + 1)], y % 7 == 0),
+                ]
+            })
+            .collect();
+        let started = Instant::now();
+        let mesh = super::super::triangles(
+            &faces,
+            |p| camera.screen(p),
+            Orbit::default(),
+            &look,
+            Color32::RED,
+        );
+        eprintln!(
+            "model, {} faces: CPU triangles a frame {:?} ({} drawn)",
+            faces.len(),
+            started.elapsed(),
+            mesh.indices.len() / 3
+        );
+        let started = Instant::now();
+        let geometry = Arc::new(model(&faces));
+        let built = started.elapsed();
+        let started = Instant::now();
+        let draw = Draw::new(
+            Arc::clone(&geometry),
+            &camera,
+            area,
+            DVec3::ZERO,
+            &look,
+            Color32::RED,
+        );
+        eprintln!(
+            "model, {} faces: GPU geometry once {built:?} ({} MB), a frame {:?}",
+            faces.len(),
+            geometry.bytes() / 1_000_000,
+            started.elapsed()
+        );
+        drop(draw);
+    }
+}

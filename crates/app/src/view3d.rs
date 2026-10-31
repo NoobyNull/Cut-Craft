@@ -6,6 +6,8 @@ use eframe::egui::{
     Align2, Color32, FontId, Mesh, Painter, Pos2, Rect, Rgba, Shape, Vec2, Visuals,
 };
 
+pub mod gpu;
+
 // ponytail: fixed lighting until the 3D view has light settings
 /// Where the light comes from: upper left (-x, +y) and above.
 const LIGHT: DVec3 = DVec3::new(-1.0, 1.0, 1.0);
@@ -299,6 +301,13 @@ fn lit(normal: DVec3, light: DVec3) -> f64 {
     AMBIENT + (1.0 - AMBIENT) * normal.normalize().dot(light.normalize()).max(0.0)
 }
 
+/// `colour` at `brightness` (0 to 1), shaded in linear light.
+#[expect(clippy::cast_possible_truncation, reason = "brightness fits f32")]
+fn shaded(colour: Color32, brightness: f64) -> Color32 {
+    let (base, b) = (Rgba::from(colour), brightness as f32);
+    Color32::from(Rgba::from_rgb(base.r() * b, base.g() * b, base.b() * b))
+}
+
 /// `material` with at most `most` cells along its longer side, each the deepest of the
 /// cells it covers so narrow cuts stay visible.
 #[expect(clippy::cast_precision_loss, reason = "a small step")]
@@ -455,10 +464,11 @@ fn extent(material: &Material, wrap: Option<Wrap>) -> (DVec3, DVec3) {
 /// never changes its size, then zoomed and panned. In perspective the eye stands just far
 /// enough off for the sphere to fill [`FIELD_OF_VIEW`].
 #[derive(Clone, Copy, Debug)]
-struct Camera {
+pub(crate) struct Camera {
     orbit: Orbit,
-    /// The bounding sphere's middle, in the material's own coordinates.
+    /// The bounding sphere's middle, in the material's own coordinates, and its radius.
     middle: DVec3,
+    radius: f64,
     /// In perspective, the eye's distance from `middle`.
     eye: Option<f64>,
     /// Points on screen per mm (at `middle`'s depth, in perspective).
@@ -468,7 +478,7 @@ struct Camera {
 }
 
 impl Camera {
-    fn new(
+    pub(crate) fn new(
         material: &Material,
         orbit: Orbit,
         framing: Framing,
@@ -485,6 +495,7 @@ impl Camera {
         Self {
             orbit,
             middle: (lo + hi) / 2.0,
+            radius,
             eye,
             scale: f64::from(area.width().min(area.height())) / (2.0 * reach)
                 * f64::from(framing.zoom),
@@ -496,7 +507,7 @@ impl Camera {
         clippy::cast_possible_truncation,
         reason = "screen coordinates fit f32"
     )]
-    fn screen(&self, p: DVec3) -> Pos2 {
+    pub(crate) fn screen(&self, p: DVec3) -> Pos2 {
         let (at, depth) = self.orbit.project(p - self.middle);
         // nearer the eye is larger; nothing drawn is as near as the eye, outside the sphere
         let nearer = self.eye.map_or(1.0, |e| e / (e - depth).max(f64::EPSILON));
@@ -505,6 +516,42 @@ impl Camera {
             self.centre.x + offset.x as f32,
             self.centre.y - offset.y as f32,
         )
+    }
+
+    /// Material coordinates to clip space over `area` (x and y across it, -1 to 1), placing
+    /// points as [`Camera::screen`] does in `area`; depth runs from 0 at `reach` radii
+    /// nearer than the middle to 1 as far behind it.
+    fn clip(&self, area: Rect, reach: f64) -> cut_craft_core::glam::DMat4 {
+        use cut_craft_core::glam::{DMat4, DVec4};
+        let rotation = self.orbit.matrix();
+        let (right, up, depth) = (rotation.row(0), rotation.row(1), rotation.row(2));
+        let half = area.size() / 2.0;
+        let off = self.centre - area.center();
+        let reach = self.radius * reach;
+        // the fourth clip coordinate: 1, or in perspective the distance from the eye
+        let (nearer, fourth) = match self.eye {
+            None => (1.0, DVec4::W),
+            Some(eye) => (eye, (-depth).extend(eye)),
+        };
+        let along = |axis: DVec3, half: f32, off: f32| {
+            axis.extend(0.0) * (self.scale * nearer / f64::from(half))
+                + fourth * (f64::from(off) / f64::from(half))
+        };
+        let into = match self.eye {
+            None => (-depth / (2.0 * reach)).extend(0.5),
+            Some(eye) => {
+                // far / (far - near) times (distance - near), near and far `reach` about the middle
+                let spread = (eye + reach) / (2.0 * reach);
+                (-depth * spread).extend(spread * reach)
+            }
+        };
+        let rows = DMat4::from_cols(
+            along(right, half.x, off.x),
+            along(up, half.y, -off.y),
+            into,
+            fourth,
+        );
+        rows.transpose() * DMat4::from_translation(-self.middle)
     }
 
     /// Where the eye is, in perspective.
@@ -545,10 +592,9 @@ pub fn screen_of(
 /// leave out what this hides.
 // ponytail: a ray from the point towards the eye, stepped half a cell at a time over the
 // height grid until it is above (or below) everything or off the material. The surface is a
-// height grid, so this is exact to a cell and needs no depth buffer, and the mesh stays
-// egui's own. The app renders with wgpu, but a paint callback with a depth buffer would
-// mean shaders, a pipeline of its own and a GPU in the headless tests. Walk the cells (DDA)
-// instead if long side-on rays ever show in a profile.
+// height grid, so this is exact to a cell; the overlays stay egui's own lines rather than
+// going through the GPU's depth buffer with the surface. Walk the cells (DDA) instead if long
+// side-on rays ever show in a profile.
 pub fn seen_of(material: &Material, orbit: Orbit, framing: Framing) -> impl Fn(DVec3) -> bool {
     let m = material;
     // only the eye is wanted, which is the same whatever size the view is
@@ -689,18 +735,10 @@ pub fn background(area: Rect, top: Color32, bottom: Color32) -> Mesh {
 }
 
 /// The material seen from `orbit`, placed by [`screen_of`] and drawn far to near.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    reason = "screen coordinates and brightness fit f32; cell indices fit f64"
-)]
+#[expect(clippy::cast_precision_loss, reason = "cell indices fit f64")]
 pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, area: Rect) -> Mesh {
     let m = material;
-    let base = Rgba::from(look.colour);
-    let shade = |brightness: f64| {
-        let b = brightness as f32;
-        Color32::from(Rgba::from_rgb(base.r() * b, base.g() * b, base.b() * b))
-    };
+    let shade = |brightness: f64| shaded(look.colour, brightness);
     let top = |column: usize, row: usize| {
         DVec3::new(
             (column as f64 + 0.5) * m.cell,
@@ -800,7 +838,6 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
 /// Triangles in the material's coordinates (as [`screen_of`] takes them), lit as the
 /// surface is and drawn far to near with their backs left out; the `true` ones in `mark`.
 // ponytail: sorted every frame; cache by view as fine_mesh does if big models drag
-#[expect(clippy::cast_possible_truncation, reason = "brightness fits f32")]
 pub fn triangles(
     tris: &[cmd_orientate_3d_model::Seen],
     screen: impl Fn(DVec3) -> Pos2,
@@ -821,9 +858,7 @@ pub fn triangles(
     seen.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut mesh = Mesh::default();
     for (_, t, colour, normal) in seen {
-        let base = Rgba::from(colour);
-        let b = lit(normal, look.light) as f32;
-        let shade = Color32::from(Rgba::from_rgb(base.r() * b, base.g() * b, base.b() * b));
+        let shade = shaded(colour, lit(normal, look.light));
         let first = u32::try_from(mesh.vertices.len()).expect("mesh fits u32 indices");
         for &corner in t {
             mesh.colored_vertex(screen(corner), shade);
