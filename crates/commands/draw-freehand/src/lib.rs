@@ -15,6 +15,14 @@ pub struct Params {
     /// How far the smoothed curve may stray from the drawn path
     #[schemars(title = "Smoothing", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance: f64,
+    /// Stabilise: the line trails the pointer by this distance, so the hand's jitter is
+    /// left behind (0 is off)
+    #[serde(default)]
+    #[schemars(title = "Stabilise", extend("x-unit" = "mm"), range(min = 0))]
+    pub stabilise: f64,
+    /// With Stabilise, carry the line on to where the pointer let go
+    #[serde(default)]
+    pub end_at_cursor: bool,
     /// The drawn path; drag in the 2D view to draw it
     #[schemars(skip)]
     #[serde(default)]
@@ -26,6 +34,8 @@ impl Default for Params {
         Self {
             // ponytail: 0.5 mm [inf]; Aspire's freehand smoothing is not described
             tolerance: 0.5,
+            stabilise: 0.0,
+            end_at_cursor: false,
             points: vec![
                 Xy::new(10.0, 10.0),
                 Xy::new(20.0, 15.0),
@@ -50,7 +60,13 @@ impl Command for DrawFreehand {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("smoothing", p.tolerance)?;
-        let mut pts: Vec<Point> = p.points.iter().map(|&q| q.into()).collect();
+        if p.stabilise < 0.0 || !p.stabilise.is_finite() {
+            return Err(CommandError::InvalidParams(
+                "stabilise must be 0 or more".into(),
+            ));
+        }
+        let raw: Vec<Point> = p.points.iter().map(|&q| q.into()).collect();
+        let mut pts = stabilised(&raw, p.stabilise, p.end_at_cursor);
         pts.dedup_by(|a, b| a.distance(*b) < 1e-9);
         if pts.len() < 2 {
             return Err(CommandError::InvalidParams("drag to draw".into()));
@@ -58,6 +74,31 @@ impl Command for DrawFreehand {
         let path = trace::fit(&pts, false, Fit::Beziers, p.tolerance, 60_f64.to_radians());
         Ok(Change::add_and_select(doc, path))
     }
+}
+
+/// A lazy string `distance` long: the line moves only when the pointer pulls it taut, so it
+/// trails the pointer and smooths out its jitter. With `end_at_cursor` the last stretch to
+/// the pointer is added back.
+fn stabilised(points: &[Point], distance: f64, end_at_cursor: bool) -> Vec<Point> {
+    let Some(&first) = points.first() else {
+        return Vec::new();
+    };
+    if distance <= 0.0 {
+        return points.to_vec();
+    }
+    let mut at = first;
+    let mut out = vec![at];
+    for &q in &points[1..] {
+        let gap = at.distance(q);
+        if gap > distance {
+            at = at + (q - at) * ((gap - distance) / gap);
+            out.push(at);
+        }
+    }
+    if end_at_cursor {
+        out.extend(points.last());
+    }
+    out
 }
 
 impl Interactive for DrawFreehand {
@@ -110,5 +151,30 @@ mod tests {
             ..Params::default()
         };
         assert!(rejection::<DrawFreehand>(&one).contains("drag"));
+    }
+
+    #[test]
+    fn stabilise_trails_the_pointer_and_end_at_cursor_catches_up() {
+        let jitter: Vec<Point> = (0..=100)
+            .map(|i| {
+                let x = f64::from(i) * 0.5;
+                Point::new(x, if i % 2 == 0 { 0.4 } else { -0.4 })
+            })
+            .collect();
+        let line = stabilised(&jitter, 3.0, false);
+        assert!(
+            line[line.len() / 2..].iter().all(|q| q.y.abs() < 0.1),
+            "jitter left behind"
+        );
+        let end = *line.last().unwrap();
+        assert!((end.x - 47.0).abs() < 0.1, "trails by 3 mm: {end}");
+        let caught_up = stabilised(&jitter, 3.0, true);
+        assert_eq!(caught_up.last(), jitter.last());
+        assert_eq!(stabilised(&jitter, 0.0, false), jitter, "0 is off");
+        let p = Params {
+            stabilise: -1.0,
+            ..Params::default()
+        };
+        assert!(rejection::<DrawFreehand>(&p).contains("stabilise"));
     }
 }
