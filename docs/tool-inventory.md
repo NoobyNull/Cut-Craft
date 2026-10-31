@@ -250,6 +250,11 @@ say "not implemented yet".
 - 3D Finishing takes a list of tools and makes a toolpath for each (rest machining).
 - Posts: G2/G3 arcs (and helices) fitted to curves when the post has arc blocks, Cut Craft's
   own FluidNC posts included; Plunge (Z2) and the Home / Start Position in Job Setup.
+- Tool Database name formats (help: Tool Database - Name Format): a tool's Name Format
+  (`{Tool Type} {Diameter|F}`, the variables from a list, modifiers U, L, 0.00 and F for
+  inch fractions) names it; Set as Default makes it the format new tools of that type are
+  named by, Restore puts it back; a toolpath's copy is named for the active material.
+  Not done: custom variables, Update Existing Tools, machine variables.
 - Tool Database: cutting data per material (imported from `.vtdb` and Fusion presets), an
   active material, rate units per tool, thread mills as a tool type.
 - 3D view: ViewCube (faces, edges, corners), perspective, tilting underneath, overlays hidden

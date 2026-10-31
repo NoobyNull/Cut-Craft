@@ -93,12 +93,19 @@ pub fn add_group(db: &mut ToolDatabase, group: &str) -> String {
 
 /// A new end mill in `group`, with the defaults; its index.
 pub fn add_tool(db: &mut ToolDatabase, group: &str) -> usize {
-    let name = unique("New Tool", &|n| db.get(n).is_some());
-    db.tools.push(Tool {
-        name,
+    let mut tool = Tool {
+        name: "New Tool".into(),
         group: group.to_owned(),
         ..Tool::default()
-    });
+    };
+    // named by its type's default name format, if it has one
+    let key = cut_craft_core::tool_names::type_key(tool.shape);
+    if let Some(format) = db.name_formats.get(&key) {
+        tool.name_format.clone_from(format);
+        tool.renamed(&db.material);
+    }
+    tool.name = unique(&tool.name, &|n| db.get(n).is_some());
+    db.tools.push(tool);
     db.tools.len() - 1
 }
 
@@ -160,6 +167,7 @@ pub fn export_group(db: &ToolDatabase, group: &str) -> ToolDatabase {
             .collect(),
         materials: db.materials.clone(),
         material: String::new(),
+        name_formats: db.name_formats.clone(),
     }
 }
 
@@ -285,5 +293,27 @@ mod tests {
         incoming.add_material("MDF");
         import(&mut d, incoming, "Vendor");
         assert_eq!(d.materials, ["Oak", "MDF"]);
+    }
+}
+
+#[cfg(test)]
+mod name_format_tests {
+    use super::*;
+
+    #[test]
+    fn new_tools_take_their_type_s_default_format_and_toolpaths_the_material_s_name() {
+        let mut db = ToolDatabase::default();
+        db.name_formats.insert(
+            "end_mill".into(),
+            "{Tool Type} {Diameter} {Material Name}".into(),
+        );
+        db.material = "Oak".into();
+        let i = add_tool(&mut db, "");
+        assert_eq!(db.tools[i].name, "End Mill 6 Oak");
+        // a toolpath takes the tool for its material, named for it
+        assert_eq!(db.tools[i].for_material("MDF").name, "End Mill 6 MDF");
+        // a second one the same is still a name of its own
+        let j = add_tool(&mut db, "");
+        assert_ne!(db.tools[j].name, db.tools[i].name);
     }
 }

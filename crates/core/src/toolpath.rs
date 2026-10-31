@@ -95,6 +95,11 @@ pub struct CuttingData {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Tool {
     pub name: String,
+    /// The Tool Database's name format its name is made from (`{Tool Type} {Diameter|F}`,
+    /// see [`crate::tool_names`]); empty for a name typed as it is (added with name formats)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub name_format: String,
     #[serde(default)]
     pub shape: ToolShape,
     /// Radius of a radiused end mill's rounded corners
@@ -237,6 +242,7 @@ impl Tool {
     }
 
     /// A copy that cuts with `material`'s data where it has some: what a toolpath takes.
+    /// A name made from a format is made again, for the material.
     #[must_use]
     pub fn for_material(&self, material: &str) -> Tool {
         let mut tool = self.clone();
@@ -246,7 +252,15 @@ impl Tool {
                 ..set.clone()
             });
         }
+        tool.renamed(material);
         tool
+    }
+
+    /// Its name made again from its name format, if it has one, for `material`.
+    pub fn renamed(&mut self, material: &str) {
+        if !self.name_format.is_empty() {
+            self.name = crate::tool_names::expand(&self.name_format, self, material, "");
+        }
     }
 
     /// `material`'s own set, matched whatever the case; none for the default.
@@ -351,6 +365,7 @@ impl Default for Tool {
     fn default() -> Self {
         Self {
             name: "6 mm End Mill".into(),
+            name_format: String::new(),
             shape: ToolShape::EndMill,
             tip_radius: default_tip_radius(),
             angle: default_angle(),
@@ -393,6 +408,10 @@ pub struct ToolDatabase {
     // ponytail: active for the whole database, as Aspire's; not kept per job
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub material: String,
+    /// Each tool type's default name format, by type (`end_mill`), for tools made new
+    /// (added with name formats)
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub name_formats: std::collections::BTreeMap<String, String>,
 }
 
 /// A Tool Database group: `/` between levels, as [`Tool::group`].

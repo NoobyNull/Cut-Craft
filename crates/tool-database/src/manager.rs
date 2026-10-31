@@ -6,6 +6,7 @@ use crate::tree;
 use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
+use std::collections::BTreeMap;
 
 /// The window's share of the screen when it first opens.
 /// The window's own id (its title's hashing is egui's).
@@ -422,7 +423,12 @@ impl Manager {
                 let groups = tree::groups(&self.draft);
                 let before = self.draft.tools[i].name.clone();
                 let material = self.draft.material.clone();
-                tool_details(ui, &mut self.draft.tools[i], &groups, look, &material);
+                let ToolDatabase {
+                    tools,
+                    name_formats,
+                    ..
+                } = &mut self.draft;
+                tool_details(ui, &mut tools[i], (&groups, name_formats), look, &material);
                 let name = self.draft.tools[i].name.clone();
                 if let Some(changer) = &mut self.changer {
                     changer.rename(&before, &name);
@@ -588,7 +594,7 @@ fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
 fn tool_details(
     ui: &mut egui::Ui,
     tool: &mut Tool,
-    groups: &[String],
+    (groups, formats): (&[String], &mut BTreeMap<String, String>),
     look: &Look,
     material: &str,
 ) {
@@ -608,6 +614,11 @@ fn tool_details(
     section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown));
     section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown));
     keep_cutting(tool, &shown, material);
+    // folded away at the end, as Aspire keeps it in a dialog of its own
+    egui::CollapsingHeader::new("Name Format")
+        .id_salt("name_format")
+        .show(ui, |ui| name_format(ui, tool, formats));
+    tool.renamed(material);
 }
 
 /// Keeps what was edited in `shown` (the tool as it cuts `material`) as the tool's data for
@@ -623,11 +634,61 @@ fn keep_cutting(tool: &mut Tool, shown: &Tool, material: &str) {
     }
 }
 
+/// The tool's name format (Aspire's Name Format): `{Variable|Modifier}` filled in from the
+/// tool, a variable picked from the list put on the end; Set as Default makes it its type's
+/// for new tools, Restore puts the type's back. A tool with a format is named by it.
+fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String, String>) {
+    use cut_craft_core::tool_names::{VARIABLES, type_key};
+    let key = type_key(tool.shape);
+    ui.horizontal(|ui| {
+        ui.label("Name format");
+        ui.add(
+            egui::TextEdit::singleline(&mut tool.name_format)
+                .hint_text("{Tool Type} {Diameter|F}")
+                .desired_width(f32::INFINITY),
+        )
+        .on_hover_text(
+            "Leave empty to type the name. Modifiers: |U upper case, |L lower case, \
+             |0.00 decimals, |F inches as a fraction",
+        );
+    });
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt("name_variable")
+            .selected_text("Add variable")
+            .show_ui(ui, |ui| {
+                for v in VARIABLES {
+                    if ui.selectable_label(false, v).clicked() {
+                        tool.name_format.extend(["{", v, "}"]);
+                    }
+                }
+            });
+        if ui
+            .button("Set as Default")
+            .on_hover_text("New tools of this type are named by this format")
+            .clicked()
+        {
+            formats.insert(key.clone(), tool.name_format.clone());
+        }
+        if let Some(default) = formats.get(&key).filter(|d| **d != tool.name_format)
+            && ui
+                .button("Restore")
+                .on_hover_text(format!("Back to this type's default: {default}"))
+                .clicked()
+        {
+            tool.name_format.clone_from(default);
+        }
+    });
+}
+
 /// Name, type, group and notes, then the geometry beside the tool's picture.
 fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look) {
     egui::Grid::new("tool_info").num_columns(2).show(ui, |ui| {
         ui.label("Name");
-        ui.add(egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY));
+        // a name made from its name format is not typed
+        ui.add_enabled(
+            tool.name_format.is_empty(),
+            egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY),
+        );
         ui.end_row();
         ui.label("Tool Type");
         ui.horizontal(|ui| {

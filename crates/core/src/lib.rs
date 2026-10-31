@@ -29,6 +29,7 @@ pub mod snap;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod tiling;
+pub mod tool_names;
 pub mod toolpath;
 pub mod trace;
 pub mod vfont;
