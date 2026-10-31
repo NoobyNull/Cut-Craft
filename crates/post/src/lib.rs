@@ -55,6 +55,7 @@ const NUMBERS: &[&str] = &[
     "ArcMidYI",
     "Radius",
     "Angle",
+    "DWELL",
 ];
 const LENGTHS: &[&str] = &[
     "X",
@@ -148,7 +149,7 @@ const TEXTS: [&str; 18] = [
 /// Texts that are lists: a template line holding one is written once per item.
 const LISTS: [&str; 2] = ["TOOLS_USED", "TOOLPATHS_OUTPUT"];
 /// The blocks Cut Craft writes; a post may define others (arcs, lasers...) that it never uses.
-const WRITTEN: [&str; 22] = [
+const WRITTEN: [&str; 23] = [
     "JET_TOOL_ON",
     "JET_TOOL_POWER",
     "JET_TOOL_OFF",
@@ -171,6 +172,7 @@ const WRITTEN: [&str; 22] = [
     "CW_HELICAL_ARC_MOVE",
     "FIRST_CCW_HELICAL_ARC_MOVE",
     "CCW_HELICAL_ARC_MOVE",
+    "DWELL_MOVE",
 ];
 // ponytail: arcs are fitted to cuts only, so the helical plunge arc and tape splitting blocks
 // are never written; posts using unknown variables in written blocks are refused
@@ -194,6 +196,15 @@ pub struct File<'a> {
     /// tool prints its slot as `[T]`; every tool used must be loaded. Empty for a machine
     /// without one: tools are numbered in the order they are first used.
     pub slots: &'a [Option<String>],
+}
+
+/// How long, in seconds, `toolpath` waits at the bottom of each plunge (Drilling's dwell).
+fn dwell(toolpath: &Toolpath) -> f64 {
+    toolpath
+        .params
+        .get("dwell")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0)
 }
 
 #[derive(Clone, Debug)]
@@ -590,6 +601,11 @@ impl Post {
                     }
                 };
                 out.block(block, &v);
+                // a drill waits at the bottom of each peck when its toolpath asks
+                if kind == MoveKind::Plunge && dwell(toolpath) > 0.0 {
+                    v.numbers.insert("DWELL", dwell(toolpath));
+                    out.block("DWELL_MOVE", &v);
+                }
             }
             if burning.is_some() {
                 out.block("JET_TOOL_OFF", &v);
@@ -611,6 +627,15 @@ impl Post {
         {
             return Err(format!(
                 "this post wraps {axis} onto {letter}: set the job up as rotary in Job Setup"
+            ));
+        }
+        if let Some(t) = toolpaths
+            .iter()
+            .find(|t| dwell(t) > 0.0 && !self.blocks.contains_key("DWELL_MOVE"))
+        {
+            return Err(format!(
+                "{} dwells at the bottom of each peck, but this post has no DWELL_MOVE block",
+                t.name
             ));
         }
         if let Some(t) = toolpaths
@@ -1427,6 +1452,34 @@ begin FOOTER
         assert!(!Post::parse(&without).unwrap().changes_tools());
         let job = cut_craft_core::document::Job::default();
         assert!(Post::default_for(&job).changes_tools());
+    }
+
+    #[test]
+    fn a_dwelling_drill_waits_after_each_plunge_where_the_post_can() {
+        let mut drill = toolpath("Holes", "6 mm");
+        drill.params = serde_json::json!({ "dwell": 0.5 });
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(drill);
+        doc.apply(&c.finish()).unwrap();
+        let file = File {
+            path: std::path::Path::new("/out.nc"),
+            job: None,
+            made: chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            slots: &[],
+        };
+        let plain = Post::parse(BASIC).unwrap();
+        let why = plain.render(&doc, &file).unwrap_err();
+        assert!(why.contains("DWELL_MOVE"), "{why}");
+        let dwelling = Post::parse(&format!(
+            "{BASIC}\nVAR DWELL_TIME = [DWELL|A|P|1.1]\nbegin DWELL_MOVE\n\"G4 [DWELL]\"\n"
+        ))
+        .unwrap();
+        let g = dwelling.render(&doc, &file).unwrap();
+        assert!(g.contains("G4 P0.5"), "{g}");
     }
 
     #[test]
