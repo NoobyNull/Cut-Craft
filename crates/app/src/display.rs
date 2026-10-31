@@ -31,6 +31,10 @@ pub struct Display {
     pub animate_preview: bool,
     /// What solid 2D previews are drawn in ([r, g, b]).
     pub solid_colour: [u8; 3],
+    /// What the snap grid's points are drawn in ([r, g, b]).
+    pub grid_colour: [u8; 3],
+    /// The snap grid's points' width, in pixels.
+    pub grid_point_size: u8,
 }
 
 impl Default for Display {
@@ -59,6 +63,12 @@ impl Default for Display {
                 let c = eframe::egui::Visuals::light().warn_fg_color;
                 [c.r(), c.g(), c.b()]
             },
+            // the theme's faint text, so the grid sits behind the vectors
+            grid_colour: {
+                let c = eframe::egui::Visuals::light().weak_text_color();
+                [c.r(), c.g(), c.b()]
+            },
+            grid_point_size: 2,
         }
     }
 }

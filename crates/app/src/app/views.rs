@@ -628,6 +628,7 @@ impl CutCraftApp {
             &overlay,
             self.selected_toolpath,
             &self.display,
+            self.snap.snap_to_grid.then_some(self.snap.grid_spacing),
         );
         // while Job Setup is open a red square marks the datum, as in Aspire
         if self.form.as_ref().is_some_and(|f| f.id == "job_setup") {

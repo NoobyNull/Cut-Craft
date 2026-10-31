@@ -314,6 +314,22 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Window layout")]
     pub layout: WindowLayout,
+    /// The snap grid's points in the 2D view, drawn while Grid Snapping is on
+    #[serde(default = "grid_colour")]
+    #[schemars(title = "Grid color", extend("x-kind" = "colour"))]
+    pub grid_color: [u8; 3],
+    /// How big the grid's points are drawn, in pixels
+    #[serde(default = "grid_point_size")]
+    #[schemars(range(min = 1, max = 10))]
+    pub grid_point_size: u8,
+}
+
+fn grid_colour() -> [u8; 3] {
+    Display::default().grid_colour
+}
+
+fn grid_point_size() -> u8 {
+    Display::default().grid_point_size
 }
 
 /// Importing 3D models: what Orientate 3D Model offers (not one of Aspire's).
@@ -537,6 +553,8 @@ impl Default for Options {
                 preload_icons: on(),
                 file_dialog_default: FileDialogDefault::default(),
                 layout: WindowLayout::default(),
+                grid_color: d.grid_colour,
+                grid_point_size: d.grid_point_size,
             },
             confirmations: Confirmations::default(),
             import: Import::default(),
@@ -581,6 +599,8 @@ impl Options {
         d.previews_2d = t.create_2d_previews;
         d.solid_previews = t.solid_2d_previews;
         d.solid_colour = t.solid_2d_preview_color;
+        d.grid_colour = self.general.grid_color;
+        d.grid_point_size = self.general.grid_point_size;
     }
 
     /// How many recent files are kept.
@@ -626,10 +646,13 @@ mod tests {
         o.view_3d.draw_origin = false;
         o.toolpaths.solid_2d_previews = true;
         o.toolpaths.solid_2d_preview_color = [1, 2, 3];
+        o.general.grid_color = [4, 5, 6];
+        o.general.grid_point_size = 3;
         let mut d = Display::default();
         o.apply_to(&mut d);
         assert!(!d.origin && d.solid_previews);
         assert_eq!(d.solid_colour, [1, 2, 3]);
+        assert_eq!((d.grid_colour, d.grid_point_size), ([4, 5, 6], 3));
     }
 
     #[test]
