@@ -63,6 +63,8 @@ pub struct Manager {
     pub changer: Option<Changer>,
     /// The name typed for a new material.
     pub new_material: String,
+    /// Duplicate Material copies every tool's cutting data for the material too.
+    pub copy_cutting_data: bool,
     /// The tree leaves out the tools with no cutting data for the active material (else
     /// they are greyed); the tree's right-click Hide Unset Tools.
     pub hide_unset: bool,
@@ -167,10 +169,24 @@ impl Manager {
             pick: None,
             changer: None,
             new_material: String::new(),
+            copy_cutting_data: true,
             hide_unset: false,
             search: String::new(),
             index: crate::search::SearchIndex::default(),
         }
+    }
+
+    /// Aspire's Duplicate Material: the active material copied under the typed name, or
+    /// its own with " copy", with every tool's cutting data for it when asked, and made
+    /// active.
+    pub fn duplicate_material(&mut self) {
+        let from = self.draft.material.clone();
+        if from.is_empty() {
+            return;
+        }
+        let name = std::mem::take(&mut self.new_material);
+        self.draft
+            .duplicate_material(&from, &name, self.copy_cutting_data);
     }
 
     /// Aspire's Add Material: the typed name joins the list and becomes active (the one
@@ -515,8 +531,7 @@ impl Manager {
     /// Aspire's Material combo and Material Management in one row: the active material,
     /// whose cutting data tools show and toolpaths get; adding one, and deleting the active
     /// one with every tool's data for it.
-    // ponytail: no renaming or duplicating materials, and no machine combo (the data is per
-    // material only)
+    // ponytail: no renaming materials, and no machine combo (the data is per material only)
     fn materials(&mut self, ui: &mut egui::Ui) {
         const DEFAULT: &str = "(default)";
         ui.horizontal_wrapped(|ui| {
@@ -554,6 +569,18 @@ impl Manager {
                 let gone = self.draft.material.clone();
                 self.draft.delete_material(&gone);
             }
+            if ui
+                .add_enabled(
+                    !self.draft.material.is_empty(),
+                    egui::Button::new("Duplicate Material"),
+                )
+                .on_hover_text("A copy of the active material, named as typed (or \"… copy\")")
+                .clicked()
+            {
+                self.duplicate_material();
+            }
+            ui.checkbox(&mut self.copy_cutting_data, "with cutting data")
+                .on_hover_text("The copy gets every tool's cutting data for the material");
         });
     }
 
@@ -681,6 +708,7 @@ fn tool_details(
              keeps it as {material}'s own"
         ));
     }
+    copy_settings_from(ui, tool, material);
     let mut shown = tool.for_material(material);
     section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown));
     section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown));
@@ -690,6 +718,31 @@ fn tool_details(
         .id_salt("name_format")
         .show(ui, |ui| name_format(ui, tool, formats));
     tool.renamed(material);
+}
+
+/// Aspire's Copy Settings From: the tool's cutting data for another material (or its
+/// default) copied as its data for `material`, where it has any to copy.
+fn copy_settings_from(ui: &mut egui::Ui, tool: &mut Tool, material: &str) {
+    let others: Vec<String> = std::iter::once(String::new())
+        .chain(tool.materials.iter().map(|m| m.material.clone()))
+        .filter(|m| !m.eq_ignore_ascii_case(material))
+        .collect();
+    if others.is_empty() {
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.label("Copy settings from");
+        egui::ComboBox::from_id_salt("copy_cutting_from")
+            .selected_text("another material…")
+            .show_ui(ui, |ui| {
+                for from in &others {
+                    let label = if from.is_empty() { "(default)" } else { from };
+                    if ui.selectable_label(false, label).clicked() {
+                        tool.copy_cutting(from, material);
+                    }
+                }
+            });
+    });
 }
 
 /// Keeps what was edited in `shown` (the tool as it cuts `material`) as the tool's data for
@@ -1030,6 +1083,44 @@ mod tests {
             m.draft.tools[thread_mill].materials.is_empty(),
             "only drawing it makes no data"
         );
+    }
+
+    #[test]
+    fn a_material_is_duplicated_with_its_cutting_data_and_settings_copy_between_materials() {
+        let mut m = Manager::new(&ToolDatabase::starter());
+        m.draft.add_material("Oak");
+        m.draft.material = "Oak".into();
+        let mut oak = m.draft.tools[0].cutting("");
+        oak.material = "Oak".into();
+        oak.feed_rate = 777.0;
+        m.draft.tools[0].set_cutting(oak);
+        m.new_material = " Ash ".into();
+        m.duplicate_material();
+        assert_eq!(m.draft.materials, ["Oak", "Ash"]);
+        assert_eq!(
+            (m.draft.material.as_str(), m.new_material.as_str()),
+            ("Ash", "")
+        );
+        assert!((m.draft.tools[0].cutting("Ash").feed_rate - 777.0).abs() < 1e-9);
+        assert!(
+            !m.draft.tools[1].has_data_for("Ash"),
+            "no Oak data, none copied"
+        );
+        // without the data, named after the original, and made unique
+        m.draft.material = "Oak".into();
+        m.copy_cutting_data = false;
+        m.duplicate_material();
+        assert_eq!(m.draft.materials, ["Oak", "Ash", "Oak copy"]);
+        assert!(!m.draft.tools[0].has_data_for("Oak copy"));
+        m.draft.material = "Oak".into();
+        m.duplicate_material();
+        assert_eq!(m.draft.material, "Oak copy 2");
+        // Copy Settings From another material, or from the default
+        let tool = &mut m.draft.tools[0];
+        tool.copy_cutting("Oak", "Oak copy");
+        assert!((tool.cutting("Oak copy").feed_rate - 777.0).abs() < 1e-9);
+        tool.copy_cutting("", "Oak");
+        assert!((tool.cutting("Oak").feed_rate - tool.feed_rate).abs() < 1e-9);
     }
 
     /// Every piece of text one frame draws.

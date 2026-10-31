@@ -586,6 +586,7 @@ What was found, and what Cut Craft does where Aspire's behaviour is not known.
   (shared file, not edited).
 
 ### Cutting data per material, rate units and thread mills
+- **Material Management** [obs: help]: Add Material; Duplicate Material, optionally with Copy Cutting Data (every tool's data for the original copied for the new material); Delete Material deletes every tool's data for it; Name (two materials cannot share one). Cutting data missing for a tool is created with defaults, copied from the same tool for a different material, or from an identical tool. **[inf]** Cut Craft: Duplicate Material (a "with cutting data" tick) names the copy as typed or "… copy", numbered while taken; Copy settings from, over a tool's cutting data, copies from another material or the default. Data is per material only; machines carry none.
 
 #### What the vendor files contain (Amana ×2 copies, CIC, IDC Woodcraft, SpeTool `.vtdb`)
 - Each file has exactly one machine ("Imported", "iQ 2x3 - Default", "Desktop") and one material

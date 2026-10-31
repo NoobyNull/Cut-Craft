@@ -260,6 +260,16 @@ impl Tool {
         }
     }
 
+    /// Copy Settings From: the data this tool cuts `from` with (its default for none) kept
+    /// as its data for `to` (its default for none).
+    pub fn copy_cutting(&mut self, from: &str, to: &str) {
+        let data = self.cutting(from);
+        self.set_cutting(CuttingData {
+            material: to.to_owned(),
+            ..data
+        });
+    }
+
     /// A copy that cuts with `material`'s data where it has some: what a toolpath takes.
     /// A name made from a format is made again, for the material.
     #[must_use]
@@ -567,6 +577,33 @@ impl ToolDatabase {
         if !name.is_empty() && !self.materials.iter().any(|m| m.eq_ignore_ascii_case(name)) {
             self.materials.push(name.to_owned());
         }
+    }
+
+    /// Aspire's Duplicate Material: `from` copied as `name` (its own name and " copy" when
+    /// none is given; a number added while the name is taken), with every tool's cutting
+    /// data for it when `with_data`. The copy becomes the active material; its name.
+    pub fn duplicate_material(&mut self, from: &str, name: &str, with_data: bool) -> String {
+        let base = if name.trim().is_empty() {
+            format!("{from} copy")
+        } else {
+            name.trim().to_owned()
+        };
+        let mut copy = base.clone();
+        let mut next = 2;
+        while self.materials.iter().any(|m| m.eq_ignore_ascii_case(&copy)) {
+            copy = format!("{base} {next}");
+            next += 1;
+        }
+        self.materials.push(copy.clone());
+        if with_data {
+            for tool in &mut self.tools {
+                if tool.material_data(from).is_some() {
+                    tool.copy_cutting(from, &copy);
+                }
+            }
+        }
+        self.material.clone_from(&copy);
+        copy
     }
 
     /// Takes `name` off the material list with every tool's data for it, as Aspire's Delete
