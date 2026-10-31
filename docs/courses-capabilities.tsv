@@ -61,7 +61,7 @@ trace-colour	Trace Bitmap colour mode (palette of ≤16 colours, pick colours) a
 dimensions	Dimensions: length, vertical, horizontal	yes	dimensions command	dimension	dimensions?
 dimensions-angle-arc	Dimensions: angle and arc (radius / diameter), Shift+click to edit	no	angle and arc dimensions not done	dimension	angle dimension|arc dimension	118
 node-edit	Node editing: move, insert, delete, smooth, cut, start point, spans to line / arc / Bézier	yes	Node Edit: drag, insert, delete, Smooth Point, cut, start point, spans to line / arc / Bézier, Node Position (typed X / Y), box-picked nodes moved together	node edit|editing	smooth point|node edit	52
-node-mirror	Node editing with H / V mirror lines	no	not available	node edit	mirror(ing)? line	115
+node-mirror	Node editing with H / V mirror lines	yes	Node editing: with nodes box-picked, H and V toggle mirror lines through the selection's middle (drawn in the view) and the arrow keys move the picked nodes by the nudge step, those on the far side of a line the other way, so mirrored pairs stay mirrored	node edit	mirror(ing)? line	115
 trim	Trim: interactive trim and Trim Objects (clear inside / outside a boundary)	yes	Interactive Vector Trim (click a piece, or drag across pieces; rejoin trimmed sections) and Trim Objects (selected vectors trimmed to the closed vector picked last, clearing inside or outside, refitting curves)	trim	\btrim	65
 offset	Offset vectors: in / out / both, sharp corners, open vectors left / right	yes	offset-vectors command	offset	offset
 array-copy	Array Copy: rows, columns, gap / offset	yes	array-copy: gap / offset, symmetry (mirror columns / rows / both, rotate), row / column displacement, group copies	array copy	array copy	92

@@ -83,6 +83,7 @@ impl CutCraftApp {
             save_form: None,
             before_preview: None,
             picked_nodes: Vec::new(),
+            node_mirror: [false, false],
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
             simulation: None,
@@ -1980,6 +1981,61 @@ impl CutCraftApp {
         Ok(())
     }
 
+    /// Moves the picked nodes by `by`; across a mirror line (H: up and down through the
+    /// selection's middle; V: across it) the nodes on the far side move the other way, so
+    /// mirrored pairs stay mirrored.
+    pub(super) fn nudge_nodes(&mut self, by: Point) {
+        use cut_craft_core::nodes::{move_node, node_near};
+        let Some(middle) = self
+            .doc
+            .selection_bounds()
+            .map(cut_craft_core::geometry::Rect::center)
+        else {
+            return;
+        };
+        let [mirror_h, mirror_v] = self.node_mirror;
+        let delta = |at: Point| {
+            Point::new(
+                if mirror_h && at.x > middle.x {
+                    -by.x
+                } else {
+                    by.x
+                },
+                if mirror_v && at.y > middle.y {
+                    -by.y
+                } else {
+                    by.y
+                },
+            )
+        };
+        let mut c = Change::builder(&self.doc);
+        let vectors: std::collections::BTreeSet<EntityId> =
+            self.picked_nodes.iter().map(|n| n.vector).collect();
+        for vector in vectors {
+            let Some(original) = self.doc.vectors.get(&vector) else {
+                continue;
+            };
+            let mut path = original.clone();
+            for n in self.picked_nodes.iter().filter(|n| n.vector == vector) {
+                let at = Point::from(n.at);
+                if let Some(k) = node_near(original, at, n.reach.max(1e-3)) {
+                    path = move_node(&path, k, at + delta(at));
+                }
+            }
+            c.replace(vector, path);
+        }
+        let change = c.finish();
+        match self.history.apply(&mut self.doc, change) {
+            Ok(()) => {
+                for n in &mut self.picked_nodes {
+                    let at = Point::from(n.at) + delta(Point::from(n.at));
+                    n.at = cut_craft_core::params::Xy::new(at.x, at.y);
+                }
+            }
+            Err(e) => self.status.set_message(&e.to_string()),
+        }
+    }
+
     /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
     /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl +
     /// Shift); with Ctrl alone, by Snapping Options' Fixed Nudge Distance.
@@ -2007,7 +2063,15 @@ impl CutCraftApp {
             .filter(|(key, ..)| i.key_pressed(*key))
             .fold(Point::ZERO, |sum, &(_, x, y)| sum + Point::new(x, y) * step)
         });
-        if by == Point::ZERO || self.doc.selection_bounds().is_none() {
+        if by == Point::ZERO {
+            return;
+        }
+        // node editing with nodes picked: the arrows move those, mirrored across the lines
+        if self.view_tool == Some(super::ViewTool::NodeEdit) && !self.picked_nodes.is_empty() {
+            self.nudge_nodes(by);
+            return;
+        }
+        if self.doc.selection_bounds().is_none() {
             return;
         }
         let params =
@@ -2040,6 +2104,18 @@ impl CutCraftApp {
             if let Some(paths) = pasted.and_then(|text| serde_json::from_str(&text).ok()) {
                 self.clipboard = paths;
                 self.invoke(ctx, "paste");
+            }
+        }
+        // node editing with nodes picked: H and V toggle the mirror lines, not Mirror
+        if !ctx.egui_wants_keyboard_input()
+            && self.view_tool == Some(super::ViewTool::NodeEdit)
+            && !self.picked_nodes.is_empty()
+        {
+            for (key, line) in [(Key::H, 0), (Key::V, 1)] {
+                let shortcut = KeyboardShortcut::new(Modifiers::NONE, key);
+                if ctx.input_mut(|i| i.consume_shortcut(&shortcut)) {
+                    self.node_mirror[line] = !self.node_mirror[line];
+                }
             }
         }
         // single-letter shortcuts must not fire while typing in a form field

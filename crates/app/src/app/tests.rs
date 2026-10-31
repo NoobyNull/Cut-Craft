@@ -4992,3 +4992,64 @@ fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
         serde_json::json!({ "x": 80.0, "y": 80.0 })
     );
 }
+
+#[test]
+fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
+    use cut_craft_core::geometry::Rect as JobRect;
+    use cut_craft_core::nodes::nodes;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.invoke(&h.ctx, "node_edit");
+    assert_eq!(h.app.view_tool, Some(ViewTool::NodeEdit));
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    // the two top nodes picked, as a box round them picks them
+    let top = JobRect::new(Point::new(5.0, 25.0), Point::new(35.0, 35.0));
+    h.app.picked_nodes = h.app.nodes_in(top);
+    assert_eq!(h.app.picked_nodes.len(), 2);
+    h.frame(vec![key(Key::H)]);
+    assert_eq!(
+        h.app.node_mirror,
+        [true, false],
+        "H: a mirror line, not Mirror"
+    );
+    let step = h.app.snap.grid_spacing;
+    // the arrows move the two sides opposite ways: Left takes the left node left and the
+    // right node right
+    h.frame(vec![key(Key::ArrowLeft)]);
+    let path = &h.app.doc.vectors[&id];
+    let xs_above = |y: f64| -> Vec<f64> {
+        nodes(path)
+            .iter()
+            .filter(|p| if y > 0.0 { p.y > 20.0 } else { p.y < 20.0 })
+            .map(|p| p.x)
+            .collect()
+    };
+    let mut top = xs_above(1.0);
+    top.sort_by(f64::total_cmp);
+    // the top widened by a step each way
+    assert!(
+        (top[0] - (10.0 - step)).abs() < 1e-9 && (top[1] - (30.0 + step)).abs() < 1e-9,
+        "{top:?}"
+    );
+    let mut bottom = xs_above(-1.0);
+    bottom.sort_by(f64::total_cmp);
+    assert_eq!(bottom, [10.0, 30.0], "the rest of the shape stayed");
+    assert!(
+        h.app
+            .picked_nodes
+            .iter()
+            .all(|n| (n.at.x - 10.0 + step).abs() < 1e-9 || (n.at.x - 30.0 - step).abs() < 1e-9),
+        "the picks follow"
+    );
+    // V adds the other line, H again takes its line off; the overlay draws what is on
+    h.frame(vec![key(Key::V)]);
+    h.frame(vec![key(Key::H)]);
+    assert_eq!(h.app.node_mirror, [false, true]);
+    match h.app.node_overlay(None, 1.0) {
+        crate::view2d::Overlay::Nodes { moving, .. } => assert_eq!(moving.len(), 1, "one line"),
+        _ => panic!("the node overlay"),
+    }
+    // leaving node editing takes the lines away
+    h.app.invoke(&h.ctx, "node_edit");
+    assert_eq!(h.app.node_mirror, [false, false]);
+}

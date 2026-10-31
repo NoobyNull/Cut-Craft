@@ -659,6 +659,9 @@ struct CutCraftApp {
     before_preview: Option<BeforePreview>,
     /// Node editing: the nodes picked with a box, which a drag of one moves together.
     picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
+    /// Node editing's mirror lines, H and V: with the first, nodes either side of the
+    /// selection's middle move opposite ways across; with the second, up and down.
+    node_mirror: [bool; 2],
     /// Measure / Inspect's last result, shown in its form while the tool is on.
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.

@@ -557,6 +557,7 @@ impl CutCraftApp {
                 }
             }
             "node_edit" => {
+                self.node_mirror = [false, false];
                 if self.view_tool == Some(ViewTool::NodeEdit) {
                     self.view_tool = None;
                     "Select"
@@ -1646,7 +1647,7 @@ impl CutCraftApp {
     /// Node handles on the selected vectors, and the dragged node's vector as it would be.
     pub(super) fn node_overlay(&self, gesture: Option<Gesture>, reach: f64) -> Overlay {
         // the dragged node's vector as it would be, drawn over the old one
-        let moving = match gesture {
+        let mut moving: Vec<Path> = match gesture {
             Some(Gesture::Dragging(drag)) if self.picked_drag(drag, reach).is_some() => self
                 .picked_drag(drag, reach)
                 .and_then(|params| {
@@ -1672,6 +1673,24 @@ impl CutCraftApp {
             .iter()
             .flat_map(|id| cut_craft_core::nodes::nodes(&self.doc.vectors[id]))
             .collect();
+        // the mirror lines, through the selection's middle and past its box
+        if let Some(b) = self.doc.selection_bounds() {
+            let (m, out) = (b.center(), b.size().max_element() / 4.0 + reach);
+            if self.node_mirror[0] {
+                let ends = [
+                    Point::new(m.x, b.min.y - out),
+                    Point::new(m.x, b.max.y + out),
+                ];
+                moving.push(Path::polyline(&ends, false));
+            }
+            if self.node_mirror[1] {
+                let ends = [
+                    Point::new(b.min.x - out, m.y),
+                    Point::new(b.max.x + out, m.y),
+                ];
+                moving.push(Path::polyline(&ends, false));
+            }
+        }
         let picked = self.picked_nodes.iter().map(|n| n.at.into()).collect();
         Overlay::Nodes { at, picked, moving }
     }
