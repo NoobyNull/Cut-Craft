@@ -30,6 +30,41 @@ fn cut_copy_and_paste_vectors() {
 }
 
 #[test]
+fn edit_units_switches_the_job_between_millimetres_and_inches() {
+    use cut_craft_core::document::Units;
+    let mut h = Harness::new();
+    assert_eq!(h.app.units_checked("units_mm"), Some(true));
+    assert_eq!(h.app.units_checked("zoom_box"), None);
+    h.app.cursor = Some(Point::new(25.4, 50.8));
+    assert_eq!(h.app.coordinates().map(|(_, unit)| unit), Some("mm"));
+    h.app.invoke(&h.ctx, "units_inch");
+    assert_eq!(h.app.doc.job.units, Units::Inch);
+    assert_eq!(h.app.units_checked("units_inch"), Some(true));
+    assert_eq!(h.app.units_checked("units_mm"), Some(false));
+    let (figures, unit) = h.app.coordinates().unwrap();
+    assert_eq!((figures.as_str(), unit), ("X    1.000  Y    2.000", "in"));
+    h.frame(vec![]);
+    assert!(h.text_at("in").is_some(), "the status bar's unit button");
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.job.units, Units::Mm, "undoable");
+}
+
+#[test]
+fn a_tools_figures_read_in_the_tools_own_units() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.form.as_mut().unwrap().params["tool"]["units"] = Value::from("Inch");
+    // the Toolpaths page flies out unseen on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Pocket Toolpath").is_some(), "the form is drawn");
+    assert!(
+        h.text_at("0.236 in").is_some(),
+        "a 6 mm end mill reads in inches in a mm job"
+    );
+}
+
+#[test]
 fn the_window_layout_menu_picks_and_ticks_a_layout() {
     use crate::options::WindowLayout;
     let mut h = Harness::new();

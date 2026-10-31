@@ -168,6 +168,10 @@ can be opened again later from the File Operations group.
   main window or on another screen.
 - **Ctrl + X / C / V** cut, copy and paste the selected vectors. Copy puts them on the system
   clipboard, so a second Cut Craft window can paste them.
+- **Units:** the `mm` / `in` button at the right of the status bar, or **Edit ▸ Units**,
+  switches the whole job between millimetres and inches: the material, depths, tab
+  heights, every length reads in the new units and the part stays the same size. Each
+  tool in the Tool Database has units of its own and reads in those whatever the job's.
 
 ### Drag and drop
 

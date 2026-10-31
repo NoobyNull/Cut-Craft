@@ -228,6 +228,11 @@ impl Row {
             name,
             shape,
             rate_units: per,
+            units: if self.units == 1 {
+                cut_craft_core::document::Units::Inch
+            } else {
+                cut_craft_core::document::Units::Mm
+            },
             tooth_size: tooth.map_or(base.tooth_size, |s| s * scale),
             tooth_offset: self
                 .tooth_offset

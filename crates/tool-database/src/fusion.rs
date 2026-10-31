@@ -10,6 +10,7 @@
 //! Some `.tools` files are plain JSON instead: groups (`Bits`) of tools keyed by id, lengths
 //! in mm and rates in mm/s whatever `MetricTool` says. Also [inf], from one file (Amana's).
 
+use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use serde_json::Value;
 use std::io::Read;
@@ -217,6 +218,11 @@ fn tool(entry: &Value) -> Option<Tool> {
         } else {
             RateUnits::MmPerMin
         },
+        units: if scale == INCH {
+            Units::Inch
+        } else {
+            Units::Mm
+        },
         diameter,
         tip_radius: if shape == ToolShape::RadiusedEndMill {
             corner * scale
@@ -353,6 +359,8 @@ mod tests {
         let t = &db.tools[0];
         assert_eq!(t.name, "Acme E1 Flat End Mill 0.25in");
         assert_eq!(t.rate_units, RateUnits::InchPerMin);
+        assert_eq!(t.units, Units::Inch, "an inch tool reads in inches");
+        assert_eq!(db.tools[1].units, Units::Mm);
         let soft = t.cutting("Softwood");
         assert!((t.diameter - 6.35).abs() < 1e-9 && (soft.feed_rate - 2540.0).abs() < 1e-9);
         assert!((soft.pass_depth - 3.175).abs() < 1e-9 && (soft.stepover - 0.4).abs() < 1e-9);

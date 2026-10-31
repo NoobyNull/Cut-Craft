@@ -151,6 +151,11 @@ pub struct Tool {
     #[serde(default)]
     #[schemars(skip)]
     pub rate_units: RateUnits,
+    /// What the tool's lengths are shown in, whatever the job's units (they are kept in mm;
+    /// added with the unit switch)
+    #[serde(default)]
+    #[schemars(skip)]
+    pub units: crate::document::Units,
     /// Cutting data for particular materials; the fields above are the default, used for
     /// any other (added with materials)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -362,6 +367,7 @@ impl Default for Tool {
             group: String::new(),
             notes: String::new(),
             rate_units: RateUnits::default(),
+            units: crate::document::Units::Mm,
             materials: vec![],
             tooth_size: default_tooth_size(),
             tooth_offset: default_tooth_offset(),

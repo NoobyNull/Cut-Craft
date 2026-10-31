@@ -4,12 +4,13 @@
 use super::{
     APP_NAME, Align, Canvas, Change, CutCraftApp, DAffine2, DESIGN_TABS, DROP_SHADE, Drag,
     EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout, OLD_JOB_EXTENSION, Overlay, Path,
-    Point, RESOLUTIONS, Rect, STROKE_TOOLS, Screen, Split, TOOL_ICON_ROWS, VIEW_BUTTONS,
+    Point, RESOLUTIONS, Rect, STROKE_TOOLS, Screen, Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS,
     VIEW_ZOOM_QUARTERS, Value, View, ViewTool, ViewTransform, bordered, dialog_size, egui,
     file_dialog, file_name, files, gui, handles, inspected, measured, paint_focus_ring, side_panel,
     view2d,
 };
 use crate::options::WindowLayout;
+use cut_craft_core::document::Units;
 
 impl CutCraftApp {
     /// One pass of the whole window on the root `ui`; apart from the eframe entry so tests
@@ -35,6 +36,40 @@ impl CutCraftApp {
             .iter()
             .find(|(item, ..)| *item == id)
             .map(|&(_, resolution, _)| self.doc.job.resolution == resolution)
+    }
+
+    /// Whether Edit ▸ Units' item `id` is the job's units; `None` for any other item.
+    pub(super) fn units_checked(&self, id: &str) -> Option<bool> {
+        UNITS
+            .iter()
+            .find(|(item, ..)| *item == id)
+            .map(|&(_, units, _)| self.doc.job.units == units)
+    }
+
+    /// Edit ▸ Units: what every length reads in from now on. Lengths are kept in
+    /// millimetres, so the part stays the same size; tools read in their own units.
+    pub(super) fn set_units(&mut self, id: &str) {
+        let Some(&(_, units, name)) = UNITS.iter().find(|(item, ..)| *item == id) else {
+            return;
+        };
+        let mut c = Change::builder(&self.doc);
+        c.set_job(cut_craft_core::document::Job {
+            units,
+            ..self.doc.job
+        });
+        let cell = c.finish();
+        let done = format!("Units: {name}; every length now reads in {name}, tools in their own");
+        self.record(Ok(cell), &done);
+    }
+
+    /// The pointer's position over the 2D view in the job's units: the figures, and the
+    /// unit they are in.
+    pub(super) fn coordinates(&self) -> Option<(String, &'static str)> {
+        let p = self.cursor?;
+        Some(match self.doc.job.units {
+            Units::Mm => (format!("X {:8.2}  Y {:8.2}", p.x, p.y), "mm"),
+            Units::Inch => (format!("X {:8.3}  Y {:8.3}", p.x / 25.4, p.y / 25.4), "in"),
+        })
     }
 
     /// Model ▸ Model Resolution: the job's level of detail for models made from now on, as

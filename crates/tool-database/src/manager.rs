@@ -3,6 +3,7 @@
 //! Edits are made to a copy; only Apply and OK hand it back.
 
 use crate::tree;
+use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
 
@@ -47,7 +48,6 @@ pub enum Outcome {
 
 /// How the window draws: lengths in inches or millimetres, and its pictures.
 pub struct Look<'a> {
-    pub inch: bool,
     /// The picture at an icon path (`tool_database/end_mill.png`), if there is one.
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
 }
@@ -540,9 +540,13 @@ fn load_slot(ui: &mut egui::Ui, changer: &mut Changer, tool: &str) {
     }
 }
 
-/// A length (mm) shown in the job's units; whether it changed.
-fn length(ui: &mut egui::Ui, value: &mut f64, look: &Look) -> bool {
-    let (per, unit) = if look.inch { (INCH, "in") } else { (1.0, "mm") };
+/// A length (mm) shown in the tool's units; whether it changed.
+fn length(ui: &mut egui::Ui, value: &mut f64, units: Units) -> bool {
+    let (per, unit) = if units == Units::Inch {
+        (INCH, "in")
+    } else {
+        (1.0, "mm")
+    };
     number(ui, value, per, unit)
 }
 
@@ -601,8 +605,8 @@ fn tool_details(
         ));
     }
     let mut shown = tool.for_material(material);
-    section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown, look));
-    section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown, look));
+    section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown));
+    section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown));
     keep_cutting(tool, &shown, material);
 }
 
@@ -626,13 +630,29 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
         ui.add(egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY));
         ui.end_row();
         ui.label("Tool Type");
-        egui::ComboBox::from_id_salt("tool_type")
-            .selected_text(shape_name(tool.shape))
-            .show_ui(ui, |ui| {
-                for (shape, name) in SHAPES {
-                    ui.selectable_value(&mut tool.shape, shape, name);
-                }
-            });
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_id_salt("tool_type")
+                .selected_text(shape_name(tool.shape))
+                .show_ui(ui, |ui| {
+                    for (shape, name) in SHAPES {
+                        ui.selectable_value(&mut tool.shape, shape, name);
+                    }
+                });
+            // the tool's own units beside it, whatever the job's: a 6 mm end mill reads
+            // 0.2362 in
+            egui::ComboBox::from_id_salt("tool_units")
+                .selected_text(if tool.units == Units::Inch {
+                    "inches"
+                } else {
+                    "mm"
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut tool.units, Units::Mm, "mm");
+                    ui.selectable_value(&mut tool.units, Units::Inch, "inches");
+                })
+                .response
+                .on_hover_text("Units: how this tool's lengths read; the tool stays the same size");
+        });
         ui.end_row();
         // stands in for dragging a tool between groups
         ui.label("Group");
@@ -663,7 +683,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
             .num_columns(2)
             .show(ui, |ui| {
                 ui.label("Diameter (D)");
-                length(ui, &mut tool.diameter, look);
+                length(ui, &mut tool.diameter, tool.units);
                 ui.end_row();
                 if matches!(tool.shape, ToolShape::VBit | ToolShape::ThreadMill) {
                     ui.label(if tool.shape == ToolShape::VBit {
@@ -680,11 +700,11 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                 }
                 if tool.shape == ToolShape::RadiusedEndMill {
                     ui.label("Tip Radius (R)");
-                    length(ui, &mut tool.tip_radius, look);
+                    length(ui, &mut tool.tip_radius, tool.units);
                     ui.end_row();
                 }
                 if tool.shape == ToolShape::ThreadMill {
-                    thread_mill(ui, tool, look);
+                    thread_mill(ui, tool);
                 }
                 ui.label("Number of Flutes");
                 ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
@@ -699,28 +719,28 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
 
 /// A single-point thread mill's tooth: size, height (which changes the size, the angle
 /// staying, as Aspire's form does) and offset.
-fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
+fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
     ui.label("Tooth Size (S)");
-    length(ui, &mut tool.tooth_size, look);
+    length(ui, &mut tool.tooth_size, tool.units);
     ui.end_row();
     ui.label("Tooth Height (H)");
     let mut height = tool.tooth_height();
-    if length(ui, &mut height, look) {
+    if length(ui, &mut height, tool.units) {
         tool.set_tooth_height(height);
     }
     ui.end_row();
     ui.label("Tooth Offset (O)")
         .on_hover_text("From the bottom of the tool up to the tip of the tooth");
-    length(ui, &mut tool.tooth_offset, look);
+    length(ui, &mut tool.tooth_offset, tool.units);
     ui.end_row();
 }
 
-fn cutting(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
+fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
     egui::Grid::new("tool_cutting")
         .num_columns(2)
         .show(ui, |ui| {
             ui.label("Pass Depth");
-            length(ui, &mut tool.pass_depth, look);
+            length(ui, &mut tool.pass_depth, tool.units);
             ui.end_row();
             ui.label("Stepover");
             let mut percent = tool.stepover * 100.0;
@@ -739,7 +759,7 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
         });
 }
 
-fn feeds(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
+fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
     egui::Grid::new("tool_feeds").num_columns(2).show(ui, |ui| {
         ui.label("Spindle Speed");
         ui.add(
@@ -769,7 +789,7 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
     });
     // Aspire shows the feed per tooth, to check against the cutter maker's figure
     if let Some(load) = tool.chip_load() {
-        let (per, unit, places) = if look.inch {
+        let (per, unit, places) = if tool.units == Units::Inch {
             (INCH, "in", 4)
         } else {
             (1.0, "mm", 3)
@@ -783,10 +803,7 @@ mod tests {
     use super::*;
 
     fn frame(manager: &mut Manager, ctx: &egui::Context) -> Option<Outcome> {
-        let look = Look {
-            inch: false,
-            picture: &|_| None,
-        };
+        let look = Look { picture: &|_| None };
         let mut outcome = None;
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(

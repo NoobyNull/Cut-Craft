@@ -62,6 +62,11 @@ enum Grab {
 }
 
 /// Model ▸ Model Resolution's items, the resolution each sets and its name.
+/// Edit ▸ Units' items: action, units and name.
+const UNITS: [(&str, Units, &str); 2] = [
+    ("units_mm", Units::Mm, "millimetres"),
+    ("units_inch", Units::Inch, "inches"),
+];
 const RESOLUTIONS: [(&str, cut_craft_core::document::Resolution, &str); 3] = [
     (
         "model_resolution_standard",
@@ -940,7 +945,6 @@ fn tool_picker(
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
-    units: Units,
 ) -> (Option<String>, bool) {
     let current = tool["name"].as_str().unwrap_or_default();
     let mut chosen = None;
@@ -988,7 +992,7 @@ fn tool_picker(
                 .as_f64()
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| (depth / tool.pass_depth).ceil().max(1.0));
-            tool_summary(ui, &tool, units, passes, tools.get(&tool.name).is_some());
+            tool_summary(ui, &tool, passes, tools.get(&tool.name).is_some());
         }
         Err(_) => {
             ui.weak("Pick a tool from the Tool Database");
@@ -998,16 +1002,10 @@ fn tool_picker(
 }
 
 /// A toolpath form's tool as the Tool Database has it, read-only: what its shape uses, then
-/// its cutting data for the active material, lengths in `units`.
-fn tool_summary(
-    ui: &mut egui::Ui,
-    tool: &Tool,
-    units: Units,
-    passes: Option<f64>,
-    in_database: bool,
-) {
+/// its cutting data for the active material, lengths in the tool's own units.
+fn tool_summary(ui: &mut egui::Ui, tool: &Tool, passes: Option<f64>, in_database: bool) {
     use cut_craft_core::toolpath::ToolShape;
-    let shown = |value: f64, unit: &str| match form::shown_in(unit, units) {
+    let shown = |value: f64, unit: &str| match form::shown_in(unit, tool.units) {
         Some((per, to)) => format!("{} {to}", trimmed(value / per)),
         None => format!("{} {unit}", trimmed(value)),
     };

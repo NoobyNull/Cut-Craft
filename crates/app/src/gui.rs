@@ -1079,6 +1079,10 @@ impl MenuSystem {
                         a("Nest Selected Objects", "nest_parts"),
                         sep(),
                         i("Job Size and Position"),
+                        sub(
+                            "Units",
+                            vec![a("Millimetres", "units_mm"), a("Inches", "units_inch")],
+                        ),
                         i("Swap Sides"),
                         sep(),
                         a("Notes", "notes"),

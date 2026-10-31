@@ -135,6 +135,7 @@ impl CutCraftApp {
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
+            id if self.units_checked(id).is_some() => self.screen == Screen::Job,
             id if self.layout_checked(id).is_some() => true,
             "cut" | "copy" => !self.doc.selection.is_empty(),
             "create_component_from_toolpath_preview" => self.simulation.is_some(),
@@ -288,6 +289,7 @@ impl CutCraftApp {
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
             id if self.resolution_checked(id).is_some() => self.set_resolution(id),
+            id if self.units_checked(id).is_some() => self.set_units(id),
             id if self.layout_checked(id).is_some() => self.set_layout(id),
             "find_tool" => self.search = Some(String::new()),
             "refresh_2d_view" => ctx.request_repaint(),
@@ -1816,6 +1818,7 @@ impl CutCraftApp {
                                 self.display
                                     .checked(id)
                                     .or_else(|| self.resolution_checked(id))
+                                    .or_else(|| self.units_checked(id))
                                     .or_else(|| self.layout_checked(id))
                             },
                             shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
@@ -2342,8 +2345,7 @@ impl CutCraftApp {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
-                *asked.borrow_mut() =
-                    tool_picker(ui, &params["tool"], params, tools, &slots, units);
+                *asked.borrow_mut() = tool_picker(ui, &params["tool"], params, tools, &slots);
             });
             // every toolpath that cuts with a tool can rest machine after the tools that cut
             // before it (3D Finishing has its own, as `after`)

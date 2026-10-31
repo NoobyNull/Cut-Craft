@@ -3,10 +3,11 @@
 
 use super::{
     Align, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, LayerId, Layout,
-    MESH_CELLS, Material, Menus, PLAYBACK_SPEEDS, Page, SETTLE_SECONDS, TOOL_HEIGHT_DIAMETERS,
-    TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, egui, file_dialog, file_name, files, gui,
-    menu_items, sheet_length, view3d, wrap_for,
+    MESH_CELLS, Material, Menus, PLAYBACK_SPEEDS, Page, SETTLE_SECONDS, Screen,
+    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, egui, file_dialog,
+    file_name, files, gui, menu_items, sheet_length, view3d, wrap_for,
 };
+use cut_craft_core::document::Units;
 
 impl CutCraftApp {
     /// The Tool Database manager; its edits are kept on Apply or OK.
@@ -17,10 +18,7 @@ impl CutCraftApp {
         };
         let icons = &self.icons;
         let picture = |path: &str| icons.find(path, "").map(|p| icons.image(p));
-        let look = cut_craft_tool_database::Look {
-            inch: self.doc.job.units == cut_craft_core::document::Units::Inch,
-            picture: &picture,
-        };
+        let look = cut_craft_tool_database::Look { picture: &picture };
         let Some(outcome) = manager.show(ctx, &look) else {
             return;
         };
@@ -1334,17 +1332,36 @@ impl CutCraftApp {
         }
     }
 
-    pub(super) fn status_bar(&self, ui: &mut egui::Ui) {
+    pub(super) fn status_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Status bar");
+        let mut swap = false;
         ui.horizontal(|ui| {
             ui.label(&self.status.message);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if let Some(p) = self.cursor {
-                    ui.monospace(format!("X {:8.2}  Y {:8.2} mm", p.x, p.y));
+                if self.screen == Screen::Job {
+                    // the job's units, and the one-click way to swap them
+                    let (unit, other) = match self.doc.job.units {
+                        Units::Mm => ("mm", "inches"),
+                        Units::Inch => ("in", "millimetres"),
+                    };
+                    swap = ui
+                        .small_button(unit)
+                        .on_hover_text(format!("Switch to {other} (Edit ▸ Units)"))
+                        .clicked();
+                    if let Some((figures, _)) = self.coordinates() {
+                        ui.monospace(figures);
+                    }
                     ui.separator();
                 }
                 ui.label(format!("Tool: {}", self.status.current_tool));
             });
         });
+        if swap {
+            let to = match self.doc.job.units {
+                Units::Mm => "units_inch",
+                Units::Inch => "units_mm",
+            };
+            self.set_units(to);
+        }
     }
 }

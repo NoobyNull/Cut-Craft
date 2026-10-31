@@ -77,6 +77,17 @@ fn tool_profiles_rise_from_the_tip() {
 }
 
 #[test]
+fn tools_saved_before_units_read_in_millimetres() {
+    let mut json = serde_json::to_value(Tool::default()).unwrap();
+    json.as_object_mut()
+        .unwrap()
+        .remove("units")
+        .expect("units are saved");
+    let tool: Tool = serde_json::from_value(json).unwrap();
+    assert_eq!(tool.units, cut_craft_core::document::Units::Mm);
+}
+
+#[test]
 fn tools_saved_before_shapes_existed_are_end_mills() {
     let mut json = serde_json::to_value(Tool::default()).unwrap();
     let fields = json.as_object_mut().unwrap();
