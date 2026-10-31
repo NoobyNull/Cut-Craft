@@ -13,8 +13,8 @@ pub struct ImportStl;
 impl Importer for ImportStl {
     const ID: &'static str = "import_stl";
     const FORMAT: FileFormat = FileFormat {
-        label: "STL model",
-        extensions: &["stl"],
+        label: "STL / OBJ model",
+        extensions: &["stl", "obj"],
     };
 
     fn import(doc: &Document, bytes: &[u8]) -> Result<Change, CommandError> {
@@ -142,7 +142,7 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
     });
 }
 
-/// The triangles of a binary or ASCII STL file.
+/// The triangles of a binary or ASCII STL file, or a Wavefront OBJ file.
 pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
     let binary_count = bytes
         .get(80..84)
@@ -162,9 +162,9 @@ pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
             })
             .collect());
     }
-    let text = std::str::from_utf8(bytes).map_err(|_| "not an STL file".to_string())?;
+    let text = std::str::from_utf8(bytes).map_err(|_| "not an STL or OBJ file".to_string())?;
     if !text.trim_start().starts_with("solid") {
-        return Err("not an STL file".into());
+        return obj(text);
     }
     let mut vertices = Vec::new();
     let mut words = text.split_whitespace();
@@ -184,6 +184,53 @@ pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
         return Err("the STL file has a broken triangle".into());
     }
     Ok(vertices.as_chunks::<3>().0.to_vec())
+}
+
+/// The triangles of a Wavefront OBJ file: its `v` vertices and `f` faces, each face fanned
+/// into triangles from its first corner.
+// ponytail: geometry only; materials, normals, texture coordinates and groups are ignored
+fn obj(text: &str) -> Result<Vec<[DVec3; 3]>, String> {
+    let mut vertices = Vec::new();
+    let mut triangles = Vec::new();
+    for line in text.lines() {
+        let mut words = line.split_whitespace();
+        match words.next() {
+            Some("v") => {
+                let mut xyz = [0.0; 3];
+                for v in &mut xyz {
+                    *v = words
+                        .next()
+                        .and_then(|s| s.parse().ok())
+                        .ok_or("a vertex in the OBJ file is not three numbers")?;
+                }
+                vertices.push(DVec3::from(xyz));
+            }
+            Some("f") => {
+                // each corner is v, v/vt, v//vn or v/vt/vn; 1-based, or negative from the end
+                let corners = words
+                    .map(|w| {
+                        let i: i64 = w.split('/').next()?.parse().ok()?;
+                        let at = if i < 0 {
+                            vertices.len().checked_sub(usize::try_from(-i).ok()?)?
+                        } else {
+                            usize::try_from(i).ok()?.checked_sub(1)?
+                        };
+                        vertices.get(at).copied()
+                    })
+                    .collect::<Option<Vec<DVec3>>>()
+                    .ok_or("a face in the OBJ file names a vertex it does not have")?;
+                if corners.len() < 3 {
+                    return Err("a face in the OBJ file has fewer than three corners".into());
+                }
+                triangles.extend(corners.windows(2).skip(1).map(|w| [corners[0], w[0], w[1]]));
+            }
+            _ => {}
+        }
+    }
+    if triangles.is_empty() {
+        return Err("not an STL or OBJ file".into());
+    }
+    Ok(triangles)
 }
 
 #[cfg(test)]
@@ -324,5 +371,27 @@ mod tests {
         assert!(k.extent().size().y <= job.height + 2.0 * k.cell);
         assert!(ImportStl::import(&Document::default(), b"not a model").is_err());
         assert!(ImportStl::import(&Document::default(), b"solid x\n vertex 1 2\n").is_err());
+    }
+
+    #[test]
+    fn an_obj_pyramid_reads_like_the_stl_one() {
+        // quad base, corners written v, v/vt, v//vn and v/vt/vn, the apex by a negative index
+        let obj = "# pyramid\no pyramid\nv 0 0 0\nv 20 0 0\nv 20 20 0\nv 0 20 0\nv 10 10 10\n\
+                   vn 0 0 1\nf 1 2 -1\nf 2/1 3/1 5/1\nf 3//1 4//1 5//1\nf 4/1/1 1/1/1 5/1/1\n\
+                   f 1 4 3 2\n";
+        let tris = triangles(obj.as_bytes()).unwrap();
+        assert_eq!(tris.len(), 6, "four sides and a quad base fanned in two");
+        let k = imported(obj.as_bytes());
+        let centre = Document::default().job.area().center();
+        let peak = k.height_at(centre).unwrap();
+        assert!((peak - 10.0).abs() < 0.2, "{peak}");
+        assert!(
+            triangles(b"v 0 0 0\nf 1 2 3\n").is_err(),
+            "a missing vertex"
+        );
+        assert!(
+            triangles(b"v 0 0 0\nv 1 0 0\nf 1 2\n").is_err(),
+            "a two-corner face"
+        );
     }
 }

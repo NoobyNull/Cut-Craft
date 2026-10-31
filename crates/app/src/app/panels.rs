@@ -294,10 +294,10 @@ impl CutCraftApp {
     /// Brings `path` into the job: meshes through Orientate 3D Model, as Aspire's import
     /// does; anything else through its importer.
     pub(super) fn import_file(&mut self, path: &std::path::Path) {
-        let stl = path
+        let mesh = path
             .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
-        if stl {
+            .is_some_and(|e| e.eq_ignore_ascii_case("stl") || e.eq_ignore_ascii_case("obj"));
+        if mesh {
             self.start_command("orientate_3d_model");
             // the model is placed in 3D, so it is shown there
             self.view = View::ThreeD;
