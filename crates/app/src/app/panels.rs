@@ -1899,6 +1899,10 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             ui.label(&self.status.message);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                // the version, at the far right, as Help ▸ About gives it
+                ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
+                    .on_hover_text("Cut Craft's version (Help ▸ About)");
+                ui.separator();
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
                     let (unit, other) = match self.doc.job.units {

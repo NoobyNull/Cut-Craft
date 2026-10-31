@@ -4508,3 +4508,14 @@ fn a_double_clicked_tile_is_previewed_alone() {
     );
     assert!(cut_beyond(area.min.x), "it is cut");
 }
+
+#[test]
+fn the_status_bar_shows_the_version() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+    let at = h
+        .text_at(version)
+        .expect("the version is in the status bar");
+    assert!(at.y > 700.0, "at the bottom: {at:?}");
+}
