@@ -68,6 +68,7 @@ impl CutCraftApp {
             snap_window: false,
             display: crate::display::Display::default(),
             simulation: None,
+            preview_undo: Vec::new(),
             simulation_coarse: None,
             fine_3d: None,
             model_3d: None,
@@ -134,6 +135,7 @@ impl CutCraftApp {
             }
             "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
+            "undo_last_preview" => !self.preview_undo.is_empty(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
             id if self.units_checked(id).is_some() => self.screen == Screen::Job,
@@ -346,9 +348,15 @@ impl CutCraftApp {
                 }
             }
             "preview_all_toolpaths" => self.preview_all(),
+            "undo_last_preview" => {
+                if let Some(before) = self.preview_undo.pop() {
+                    (self.simulation, self.simulation_coarse, self.fine_3d) = (before, None, None);
+                    (self.playback, self.playing) = (None, false);
+                }
+            }
             "reset_preview" => {
                 (self.simulation, self.simulation_coarse, self.fine_3d) = (None, None, None);
-                (self.playback, self.playing) = (None, false);
+                (self.playback, self.playing, self.preview_undo) = (None, false, Vec::new());
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -1073,9 +1081,10 @@ impl CutCraftApp {
         (
             self.selected_toolpath,
             self.simulation,
+            self.preview_undo,
             self.simulation_coarse,
             self.fine_3d,
-        ) = (None, None, None, None);
+        ) = (None, None, Vec::new(), None, None);
         self.clear_recovery();
     }
 

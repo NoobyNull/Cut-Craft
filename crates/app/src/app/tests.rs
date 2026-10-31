@@ -2841,6 +2841,32 @@ fn preview_all_leaves_hidden_toolpaths_out() {
 }
 
 #[test]
+fn undo_last_preview_takes_back_only_the_last_toolpath() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for id in ["drilling_toolpath", "profile_toolpath"] {
+        let params = h.app.registry.get(id).unwrap().initial_params(&h.app.doc);
+        h.app.apply(id, &params).unwrap();
+    }
+    let ids: Vec<EntityId> = h.app.doc.toolpaths.keys().copied().collect();
+    assert!(!h.app.available("undo_last_preview"));
+    h.app.selected_toolpath = Some(ids[0]);
+    h.app.invoke(&h.ctx, "preview_toolpath");
+    let first = h.app.simulation.clone();
+    h.app.selected_toolpath = Some(ids[1]);
+    h.app.invoke(&h.ctx, "preview_toolpath");
+    assert_ne!(h.app.simulation, first);
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    assert_eq!(h.app.simulation, first);
+    assert!(!h.app.available("undo_last_preview"), "one step back");
+    h.app.selected_toolpath = Some(ids[0]);
+    h.app.invoke(&h.ctx, "reset_preview");
+    h.app.invoke(&h.ctx, "preview_toolpath");
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    assert!(h.app.simulation.is_none(), "back to uncut material");
+}
+
+#[test]
 fn deleting_the_selected_toolpath_is_undoable() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

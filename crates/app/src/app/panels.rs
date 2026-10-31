@@ -441,6 +441,7 @@ impl CutCraftApp {
     /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet).
     pub(super) fn play(&mut self, toolpaths: &[EntityId]) {
         self.finish_playback();
+        self.preview_undo = vec![self.simulation.clone()];
         let start = self
             .simulation
             .take()
@@ -473,6 +474,7 @@ impl CutCraftApp {
         let Some(toolpath) = self.doc.toolpaths.get(&id) else {
             return;
         };
+        self.preview_undo = vec![self.simulation.clone()];
         self.simulation
             .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()))
             .cut(toolpath);
@@ -1336,6 +1338,7 @@ impl CutCraftApp {
                 "delete_toolpath",
                 "preview_toolpath",
                 "preview_all_toolpaths",
+                "undo_last_preview",
                 "reset_preview",
             ],
         }];
