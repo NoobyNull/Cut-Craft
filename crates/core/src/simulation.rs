@@ -217,6 +217,49 @@ impl Material {
         left
     }
 
+    /// Takes away the piece of material at `p`: every cell joined to it, side to side,
+    /// without a cut right through between (the preview's double-click on a part or the
+    /// waste cut free of it). Taken cells hold NaN, which the views leave out. Returns how
+    /// many cells went; none when `p` is off the material, cut through or already gone.
+    pub fn remove_piece(&mut self, p: Point) -> usize {
+        let (column, row) = (
+            ((p.x - self.origin.x) / self.cell).floor(),
+            ((p.y - self.origin.y) / self.cell).floor(),
+        );
+        if column < 0.0 || row < 0.0 {
+            return 0;
+        }
+        let (column, row) = (column as usize, row as usize);
+        if column >= self.columns || row >= self.rows {
+            return 0;
+        }
+        // through means at the underside, to within a hair
+        let solid = |h: f64| !h.is_nan() && h > self.bottom + 1e-9;
+        let mut stack = vec![(column, row)];
+        let mut removed = 0;
+        while let Some((c, r)) = stack.pop() {
+            let height = &mut self.heights[r * self.columns + c];
+            if !solid(*height) {
+                continue;
+            }
+            *height = f64::NAN;
+            removed += 1;
+            if c > 0 {
+                stack.push((c - 1, r));
+            }
+            if r > 0 {
+                stack.push((c, r - 1));
+            }
+            if c + 1 < self.columns {
+                stack.push((c + 1, r));
+            }
+            if r + 1 < self.rows {
+                stack.push((c, r + 1));
+            }
+        }
+        removed
+    }
+
     /// Removes what the tool following `toolpath` cuts away.
     pub fn cut(&mut self, toolpath: &Toolpath) {
         for pair in toolpath.moves.windows(2) {
@@ -236,7 +279,10 @@ impl Material {
             for column in columns.clone() {
                 if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
                     let height = &mut self.heights[row * self.columns + column];
-                    *height = height.min(z.max(self.bottom));
+                    // a piece already taken away (NaN) stays away
+                    if !height.is_nan() {
+                        *height = height.min(z.max(self.bottom));
+                    }
                 }
             }
         }

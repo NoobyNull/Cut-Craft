@@ -402,3 +402,34 @@ fn hatch_lines_cross_the_regions_leaving_holes_out() {
         upright[0]
     );
 }
+
+#[test]
+fn a_piece_cut_free_is_removed_whole_and_what_it_was_cut_from_stays() {
+    let mut m = material();
+    // a 40 mm square cut right through, round (30, 30)..(70, 70)
+    let square = [
+        (30.0, 30.0, -25.0),
+        (70.0, 30.0, -25.0),
+        (70.0, 70.0, -25.0),
+        (30.0, 70.0, -25.0),
+        (30.0, 30.0, -25.0),
+    ];
+    m.cut(&toolpath(&square));
+    // a double-click on the waste outside takes the waste, not the part
+    let removed = m.remove_piece(Point::new(5.0, 5.0));
+    assert!(removed > 0);
+    assert!(
+        m.at(Point::new(5.0, 95.0)).unwrap().is_nan(),
+        "all the waste"
+    );
+    assert_eq!(depth_at(&m, 50.0, 50.0), 0.0, "the part stays");
+    // clicking a cut-through cell, or one already gone, removes nothing
+    assert_eq!(m.remove_piece(Point::new(30.0, 50.0)), 0);
+    assert_eq!(m.remove_piece(Point::new(5.0, 5.0)), 0);
+    // a later cut does not bring removed material back
+    m.cut(&toolpath(&[(5.0, 5.0, -2.0), (15.0, 5.0, -2.0)]));
+    assert!(m.at(Point::new(10.0, 5.0)).unwrap().is_nan());
+    // the part is a piece of its own too
+    assert!(m.remove_piece(Point::new(50.0, 50.0)) > 0);
+    assert!(m.heights.iter().all(|h| h.is_nan() || *h <= m.bottom));
+}

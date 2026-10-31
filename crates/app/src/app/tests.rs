@@ -3839,3 +3839,52 @@ fn the_toolpath_list_shows_hides_edits_and_reorders_its_rows() {
     assert_eq!(h.app.selected_toolpath, Some(EntityId(1)));
     assert!(h.app.form.is_some(), "the toolpath's form is open");
 }
+
+#[test]
+fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
+    let mut h = Harness::new();
+    h.app.doc.job.width = 100.0;
+    h.app.doc.job.height = 100.0;
+    let job = h.app.doc.job;
+    let mut m = cut_craft_core::simulation::Material::new(&job, 200);
+    // a ring cut right through round the middle
+    let ring = [
+        (30.0, 30.0),
+        (70.0, 30.0),
+        (70.0, 70.0),
+        (30.0, 70.0),
+        (30.0, 30.0),
+    ];
+    m.cut(&Toolpath {
+        name: "cut out".into(),
+        strategy: "test".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![],
+        moves: ring
+            .iter()
+            .map(|&(x, y)| Move {
+                kind: MoveKind::Cut,
+                to: DVec3::new(x, y, -job.thickness - 1.0),
+            })
+            .collect(),
+        visible: true,
+        power: vec![],
+        stale: false,
+    });
+    h.app.simulation = Some(m);
+    h.app.orbit = view3d::Orbit::TOP;
+    let fit = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 400.0));
+    // the middle of the view is the part: it goes, the waste round it stays
+    assert!(h.app.remove_preview_piece(fit, fit.center()));
+    let sim = h.app.simulation.as_ref().unwrap();
+    let at = |x, y| sim.at(cut_craft_core::geometry::Point::new(x, y)).unwrap();
+    assert!(at(50.0, 50.0).is_nan());
+    assert_eq!(at(5.0, 5.0), 0.0);
+    assert!(
+        !h.app.remove_preview_piece(fit, fit.center()),
+        "already gone"
+    );
+}

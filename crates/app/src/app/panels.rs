@@ -911,8 +911,15 @@ impl CutCraftApp {
             .double_clicked()
             .then(|| response.interact_pointer_pos())
             .flatten();
-        let picked = double.and_then(|at| self.component_at_3d(fit, at));
-        if let Some(id) = picked {
+        // while a preview shows, a double-click takes away the piece cut free under it
+        let removed = double
+            .filter(|_| self.playback.is_none() && self.simulation.is_some())
+            .is_some_and(|at| self.remove_preview_piece(fit, at));
+        let picked = double
+            .filter(|_| !removed)
+            .and_then(|at| self.component_at_3d(fit, at));
+        if removed {
+        } else if let Some(id) = picked {
             if ui.input(|i| i.modifiers.shift) {
                 if !self.doc.selected_components.remove(&id) {
                     self.doc.selected_components.insert(id);
@@ -1048,6 +1055,28 @@ impl CutCraftApp {
             geometry: std::sync::Arc::clone(&geometry),
         });
         geometry
+    }
+
+    /// Takes away the previewed material's piece under `at` in the 3D view's picture `fit`
+    /// (Aspire's double-click on waste); false when the click is off the material or on
+    /// material cut right through.
+    pub(super) fn remove_preview_piece(&mut self, fit: egui::Rect, at: egui::Pos2) -> bool {
+        let job = self.shown_job();
+        let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return false;
+        };
+        let wrap = wrap_for(&job, on, true, &surface);
+        let Some((column, row)) = view3d::pick(&surface, orbit, framing, fit, wrap, at) else {
+            return false;
+        };
+        let p = surface.centre(column, row);
+        let removed = self.simulation.as_mut().map_or(0, |m| m.remove_piece(p));
+        if removed > 0 {
+            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.status.set_message("Removed the piece cut free");
+        }
+        removed > 0
     }
 
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.

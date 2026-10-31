@@ -323,6 +323,8 @@ pub fn coarse(material: &Material, most: usize) -> Material {
                 .flat_map(|r| span(column, m.columns).map(move |c| m.heights[r * m.columns + c]))
                 .fold(f64::INFINITY, f64::min)
         })
+        // a block of cells all taken away (NaN, which min passes over) stays away
+        .map(|h: f64| if h.is_infinite() { f64::NAN } else { h })
         .collect();
     Material {
         origin: m.origin,
@@ -1403,6 +1405,19 @@ mod tests {
                 mesh.indices.len() / 3
             );
         }
+    }
+
+    #[test]
+    fn coarse_cells_of_taken_away_material_stay_empty() {
+        let mut m = slotted();
+        m.heights
+            .iter_mut()
+            .take(m.columns * 8)
+            .for_each(|h| *h = f64::NAN);
+        let c = coarse(&m, 30);
+        assert!(c.heights[0].is_nan(), "a block all gone is gone");
+        assert!(c.heights[c.columns].is_nan(), "rows 0..8 are 2 coarse rows");
+        assert!(c.heights[2 * c.columns].is_finite(), "the rest stays");
     }
 
     #[test]
