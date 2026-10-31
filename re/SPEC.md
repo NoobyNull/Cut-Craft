@@ -845,3 +845,7 @@ instead of half-cell steps.
 ### Copy Along Vectors: Copy Circles [obs: help Copy Along Vectors]
 - Copy Object copies the first vector or group selected along the others; Copy Circles copies circles of the diameter entered along the selected vectors.
 - **[inf]** Cut Craft: with Copy Circles every selected vector is one to copy along, the circles centred on the points the spacing gives, on a new layer when asked.
+
+### Space Selection inside the last vector [obs: help Alignment Tools]
+- Space Selection spreads the objects evenly, the outermost staying put; with Ctrl the order of selection counts; with Inside last vector the items are spread within the bounds of the last object selected.
+- **[inf]** Cut Craft: inside the last vector, the gaps at its two edges equal the gaps between the objects; the last vector does not move.

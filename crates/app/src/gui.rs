@@ -1177,16 +1177,22 @@ impl MenuSystem {
         let sub = MenuItem::submenu;
         let sep = MenuItem::separator;
         let a = MenuItem::with_action;
-        let space_h = |name: &str, order| {
+        let space_h = |name: &str, order, inside_last_vector| {
             MenuItem::run::<cmd_space_horizontally::SpaceHorizontally>(
                 name,
-                &cmd_space_horizontally::Params { order },
+                &cmd_space_horizontally::Params {
+                    order,
+                    inside_last_vector,
+                },
             )
         };
-        let space_v = |name: &str, order| {
+        let space_v = |name: &str, order, inside_last_vector| {
             MenuItem::run::<cmd_space_vertically::SpaceVertically>(
                 name,
-                &cmd_space_vertically::Params { order },
+                &cmd_space_vertically::Params {
+                    order,
+                    inside_last_vector,
+                },
             )
         };
         let menu = |name: &str, items: Vec<MenuItem>| Menu {
@@ -1280,10 +1286,12 @@ impl MenuSystem {
                                 i("Center Horizontally"),
                                 i("Center Vertically"),
                                 sep(),
-                                space_h("Left To Right", SpaceH::LeftToRight),
-                                space_h("Right To Left", SpaceH::RightToLeft),
-                                space_v("Top To Bottom", SpaceV::TopToBottom),
-                                space_v("Bottom To Top", SpaceV::BottomToTop),
+                                space_h("Left To Right", SpaceH::LeftToRight, false),
+                                space_h("Right To Left", SpaceH::RightToLeft, false),
+                                space_v("Top To Bottom", SpaceV::TopToBottom, false),
+                                space_v("Bottom To Top", SpaceV::BottomToTop, false),
+                                space_h("Horizontally Inside Last Vector", SpaceH::AsPlaced, true),
+                                space_v("Vertically Inside Last Vector", SpaceV::AsPlaced, true),
                             ],
                         ),
                         k("Join Vectors", "J"),
@@ -1603,7 +1611,8 @@ mod menu_tests {
         for item in align
             .children
             .iter()
-            .filter(|i| !i.is_separator() && !i.name.contains(" To "))
+            // the spacing items run their command with its settings
+            .filter(|i| !i.is_separator() && !i.action.starts_with("run:"))
         {
             assert!(
                 registry.get(&item.action).is_some(),

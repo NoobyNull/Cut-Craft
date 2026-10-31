@@ -425,10 +425,14 @@ impl Change {
     /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
     /// stay put and the others move so the gaps between their extents are equal, keeping
     /// their order and their other coordinate.
+    /// Spaces the selected objects evenly along x (or y when `vertical`) in `sequence`: the
+    /// outermost stay put; or with `inside_last`, the last one picked stays and the others
+    /// are spread inside it, the same gap at its edges as between them.
     pub fn space_selected(
         doc: &Document,
         vertical: bool,
         sequence: Sequence,
+        inside_last: bool,
     ) -> Result<Self, CommandError> {
         let along = |r: Rect| {
             if vertical {
@@ -445,7 +449,13 @@ impl Change {
                 (id, lo, hi)
             })
             .collect();
-        if items.len() < 3 {
+        let frame = if inside_last { items.pop() } else { None };
+        if frame.is_some() && items.is_empty() {
+            return Err(CommandError::Failed(
+                "select the objects to space, then the vector to space them inside".into(),
+            ));
+        }
+        if frame.is_none() && items.len() < 3 {
             return Err(CommandError::Failed(
                 "select at least three objects to space".into(),
             ));
@@ -457,12 +467,17 @@ impl Change {
             Sequence::PickedFromLow => {}
             Sequence::PickedFromHigh => items.reverse(),
         }
-        let span = end - start;
         let sizes: f64 = items.iter().map(|(_, lo, hi)| hi - lo).sum();
         #[expect(clippy::cast_precision_loss, reason = "a few objects")]
-        let gap = (span - sizes) / (items.len() - 1) as f64;
+        let (gap, mut at) = match frame {
+            // a gap at each edge of the frame as well as between them
+            Some((_, lo, hi)) => {
+                let gap = (hi - lo - sizes) / (items.len() + 1) as f64;
+                (gap, lo + gap)
+            }
+            None => ((end - start - sizes) / (items.len() - 1) as f64, start),
+        };
         let mut c = Self::builder(doc);
-        let mut at = start;
         for &(id, lo, hi) in &items {
             let by = at - lo;
             if by.abs() > 1e-12 {

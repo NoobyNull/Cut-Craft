@@ -24,6 +24,10 @@ pub enum Order {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub order: Order,
+    /// Spread them inside the last vector picked, which stays put
+    #[serde(default)]
+    #[schemars(title = "Inside last vector")]
+    pub inside_last_vector: bool,
 }
 
 impl Command for SpaceHorizontally {
@@ -45,7 +49,7 @@ impl Command for SpaceHorizontally {
             Order::LeftToRight => Sequence::PickedFromLow,
             Order::RightToLeft => Sequence::PickedFromHigh,
         };
-        Change::space_selected(doc, false, sequence)
+        Change::space_selected(doc, false, sequence, p.inside_last_vector)
     }
 }
 
@@ -95,7 +99,14 @@ mod tests {
 
     fn picked_starts(order: Order, picked: [f64; 3]) -> Vec<f64> {
         let mut doc = document_with(picked.map(at).to_vec());
-        let change = SpaceHorizontally::run(&doc, &Params { order }).unwrap();
+        let change = SpaceHorizontally::run(
+            &doc,
+            &Params {
+                order,
+                inside_last_vector: false,
+            },
+        )
+        .unwrap();
         doc.apply(&change).unwrap();
         doc.selection
             .iter()
@@ -115,4 +126,33 @@ mod tests {
             [100.0, 50.0, 0.0]
         );
     }
+}
+
+#[cfg(test)]
+#[test]
+fn inside_the_last_vector_the_gaps_at_its_edges_match_those_between() {
+    use cut_craft_core::testing::{document_with, square};
+    // two 10 wide squares picked, then a 100 wide frame: three gaps of 80 / 3
+    let frame = cut_craft_core::geometry::Path::polyline(
+        &[
+            cut_craft_core::geometry::Point::new(0.0, -20.0),
+            cut_craft_core::geometry::Point::new(100.0, -20.0),
+            cut_craft_core::geometry::Point::new(100.0, 40.0),
+        ],
+        true,
+    );
+    let mut doc = document_with(vec![square(5.0, 0.0, 10.0), square(30.0, 0.0, 10.0), frame]);
+    let p = Params {
+        inside_last_vector: true,
+        ..Params::default()
+    };
+    let change = SpaceHorizontally::run(&doc, &p).unwrap();
+    doc.apply(&change).unwrap();
+    let starts: Vec<f64> = doc.vectors.values().map(|v| v.bounds().min.x).collect();
+    let gap = 80.0 / 3.0;
+    assert!(
+        (starts[0] - gap).abs() < 1e-9 && (starts[1] - (2.0 * gap + 10.0)).abs() < 1e-9,
+        "{starts:?}"
+    );
+    assert!(starts[2].abs() < 1e-9, "the frame stays");
 }
