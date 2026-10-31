@@ -350,7 +350,9 @@ say "not implemented yet".
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset. Mirror flips about
     the selection's centre or the job's, or beside the selection (about its left, right, top
     or bottom edge), or about the line between the ends of the vector picked last; Create
-    Mirrored Copy keeps the originals and adds the flipped copies. Set Size scales the
+    Mirrored Copy keeps the originals and adds the flipped copies. Move goes to a point
+    (an anchor of the selection's box there) or by an offset, which Relative Rotated turns
+    by an angle. Set Size scales the
     selection as one, or each item on its own (Scale Items Individually), to a width and
     height in millimetres or as percentages, Link XY keeping proportions (Auto Scale Z for
     components and rotated bounds are not done).
