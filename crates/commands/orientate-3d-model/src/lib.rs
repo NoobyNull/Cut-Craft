@@ -176,6 +176,12 @@ pub struct Params {
     #[schemars(title = "Scale model to fit material")]
     #[serde(default)]
     pub fit_material: bool,
+    /// Rotary jobs, a full 3D model: the turning axis moved across from the middle of the
+    /// model's box, in the model's millimetres before scaling. Its first number is across
+    /// the job (Y for an X axis, X for a Y axis), its second is up (Z)
+    #[schemars(title = "Move rotation axis", extend("x-unit" = "mm"))]
+    #[serde(default)]
+    pub axis_offset: Xy,
     /// What Options ▸ Importing Models offers; never shown. Set by the app when the form
     /// opens; one kind alone also sets `model_type`
     #[schemars(extend("x-hide-when" = {"offered": ["full", "flat", "both"]}))]
@@ -234,6 +240,7 @@ impl Default for Params {
             show_undercuts: true,
             model_type: ModelType::Full,
             fit_material: false,
+            axis_offset: Xy::default(),
             offered: Offered::Both,
         }
     }
@@ -543,7 +550,7 @@ fn face_up(face: Face) -> DMat3 {
 }
 
 /// How a full 3D model sits in a rotary job: its axis along the job's, through the middle
-/// of its box across, scaled to the material (or to Model Size's X as its length), from
+/// of its box across (moved by Move rotation axis), scaled to the material (or to Model Size's X as its length), from
 /// where it starts along the job.
 struct Turning {
     x_axis: bool,
@@ -580,7 +587,7 @@ impl Turning {
                 x_axis,
             },
         };
-        let middle = probe.across((lo + hi) / 2.0);
+        let middle = probe.across((lo + hi) / 2.0) + Point::from(params.axis_offset);
         let length = probe.along(hi) - probe.along(lo);
         let reach = tris
             .iter()
@@ -1172,6 +1179,25 @@ mod rotary {
             ((first - job.min.x) - (job.max.x - last)).abs() < 1e-6,
             "centred"
         );
+    }
+
+    #[test]
+    fn moving_the_rotation_axis_turns_the_model_round_the_new_line() {
+        let faces = cylinder(10.0, 50.0);
+        let reach = |offset: Xy| {
+            let p = Params {
+                model_type: ModelType::Full,
+                axis_offset: offset,
+                ..Params::default()
+            };
+            let (_, k) = import("off_axis", &faces, &p);
+            k.height_range().unwrap().1
+        };
+        let centred = reach(Xy::default());
+        assert!((centred - 10.0).abs() < 0.5, "{centred}");
+        // the axis 5 mm up the model's side: its far side is 15 out
+        let moved = reach(Xy::new(0.0, 5.0));
+        assert!((moved - 15.0).abs() < 0.5, "{moved}");
     }
 
     #[test]
