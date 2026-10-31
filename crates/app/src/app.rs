@@ -109,7 +109,7 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 84] = [
+const BUILT_INS: [&str; 85] = [
     "find_tool",
     "machine_configuration",
     "add_machine",
@@ -154,6 +154,7 @@ const BUILT_INS: [&str; 84] = [
     "create_component_from_toolpath_preview",
     "toolpath_summary",
     "refresh_2d_view",
+    "save_shaded_image",
     "cut",
     "copy",
     "paste",
@@ -553,6 +554,8 @@ struct CutCraftApp {
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
     shots: Option<screenshots::Shots>,
+    /// View ▸ Save Shaded Image: where the picture goes, and the window's picture once taken.
+    shaded_shot: Option<(std::path::PathBuf, cut_craft_bug_report::Shot)>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
     /// An open Help window.
@@ -584,6 +587,8 @@ struct CutCraftApp {
     framing: view3d::Framing,
     /// Where the 3D view last drew its view cube.
     view_cube: Option<view3d::ViewCube>,
+    /// Where the 3D view last drew its model (`None` while it has nothing to show).
+    area_3d: Option<egui::Rect>,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
     /// A preview playing (or paused): the tool cutting the material a distance at a time.

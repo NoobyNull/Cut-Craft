@@ -846,6 +846,7 @@ impl CutCraftApp {
             ui.centered_and_justified(|ui| {
                 ui.weak("Nothing in 3D yet: create a shape or preview the toolpaths")
             });
+            self.area_3d = None;
             return;
         }
         ui.horizontal(|ui| self.view_3d_buttons(ui));
@@ -925,6 +926,7 @@ impl CutCraftApp {
             self.moved_3d = ui.input(|i| i.time);
         }
         self.paint_3d(ui, area);
+        self.area_3d = Some(area);
         let painter = ui.painter_at(area);
         cube.paint(&painter, self.orbit, hovered, ui.visuals(), &font);
         self.view_cube = Some(cube);
