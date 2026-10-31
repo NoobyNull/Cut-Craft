@@ -475,18 +475,24 @@ impl Change {
         Self::copy_vectors(doc, &originals, transforms)
     }
 
+    /// [`Self::copy_selected`], with the originals and all the copies made one new group.
+    pub fn copy_selected_grouped(doc: &Document, transforms: &[DAffine2]) -> Self {
+        let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
+        let mut c = Self::builder(doc);
+        let all = c.copies(doc, &originals, transforms);
+        let group = doc.next_group();
+        for &id in &all {
+            c.set_group(id, Some(group));
+        }
+        c.select(all);
+        c.finish()
+    }
+
     /// Adds a copy of each of `originals` under each of `transforms`, on the same layer as
     /// its original, and selects the originals and all the copies.
     pub fn copy_vectors(doc: &Document, originals: &[EntityId], transforms: &[DAffine2]) -> Self {
         let mut c = Self::builder(doc);
-        let mut selected = originals.to_vec();
-        for t in transforms {
-            for &id in originals {
-                let copy = c.add(doc.vectors[&id].transformed(t));
-                c.move_to_layer(copy, doc.layer_of(id));
-                selected.push(copy);
-            }
-        }
+        let selected = c.copies(doc, originals, transforms);
         c.select(selected);
         c.finish()
     }
@@ -1012,6 +1018,25 @@ pub struct ChangeBuilder<'a> {
 }
 
 impl ChangeBuilder<'_> {
+    /// Adds a copy of each of `originals` under each of `transforms`, on its original's
+    /// layer: the originals then the copies, in order.
+    pub fn copies(
+        &mut self,
+        doc: &Document,
+        originals: &[EntityId],
+        transforms: &[DAffine2],
+    ) -> Vec<EntityId> {
+        let mut all = originals.to_vec();
+        for t in transforms {
+            for &id in originals {
+                let copy = self.add(doc.vectors[&id].transformed(t));
+                self.move_to_layer(copy, doc.layer_of(id));
+                all.push(copy);
+            }
+        }
+        all
+    }
+
     /// Current path of `id` as seen by this change so far.
     pub fn path(&self, id: EntityId) -> Option<&Path> {
         shadowed(&self.pending, &self.doc.vectors, id)

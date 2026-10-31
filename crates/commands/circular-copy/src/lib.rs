@@ -50,6 +50,9 @@ pub struct Params {
     /// Turn each copy to match its place on the circle; off, copies keep the original's
     /// orientation
     pub rotate_copies: bool,
+    /// The original and its copies made one group
+    #[serde(default)]
+    pub group_copies: bool,
 }
 
 impl Default for Params {
@@ -62,6 +65,7 @@ impl Default for Params {
             angle_mode: AngleMode::Total,
             angle: 360.0,
             rotate_copies: true,
+            group_copies: false,
         }
     }
 }
@@ -120,7 +124,11 @@ impl Command for CircularCopy {
                 }
             })
             .collect();
-        Ok(Change::copy_selected(doc, &transforms))
+        Ok(if p.group_copies {
+            Change::copy_selected_grouped(doc, &transforms)
+        } else {
+            Change::copy_selected(doc, &transforms)
+        })
     }
 }
 
@@ -179,6 +187,24 @@ mod tests {
                 ((0.0, 50.0), (10.0, 20.0)),
             ]
         );
+    }
+
+    #[test]
+    fn copies_can_be_made_one_group_with_the_original() {
+        let mut doc = document_with(vec![bar()]);
+        let p = Params {
+            group_copies: true,
+            ..around_origin()
+        };
+        doc.apply(&CircularCopy::run(&doc, &p).unwrap()).unwrap();
+        let groups: std::collections::BTreeSet<_> = doc
+            .vectors
+            .keys()
+            .map(|id| doc.vector_groups.get(id))
+            .collect();
+        assert_eq!(doc.vectors.len(), 4);
+        assert_eq!(groups.len(), 1, "{groups:?}");
+        assert!(groups.iter().all(Option::is_some));
     }
 
     #[test]

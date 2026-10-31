@@ -327,7 +327,7 @@ say "not implemented yet".
     tolerance, sharp corners kept past a max angle, replacing or beside the originals.
   - Array Copy (rows × columns by gap or offset; symmetry block of mirrors or half turns,
     row / column displacement, Group Copies) and Circular Copy (round the selection's
-    middle, the job centre or a point; total or step angle, clockwise positive; turning the
+    middle, the job centre or a point; total or step angle, clockwise positive; Group Copies; turning the
     copies or not). Copies stay on their originals' layers; copies of grouped vectors are
     not grouped.
   - Nest Parts (Edit ▸ Nest Selected Objects too): parts (grouped or overlapping vectors)

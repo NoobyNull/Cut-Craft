@@ -145,26 +145,11 @@ impl Command for ArrayCopy {
                 }
             }
         }
-        if !p.group_copies {
-            return Ok(Change::copy_selected(doc, &transforms));
-        }
-        // as copy_selected, with everything put in one new group
-        let group = doc.next_group();
-        let mut c = Change::builder(doc);
-        let originals: Vec<_> = doc.selection.iter().copied().collect();
-        let mut all = originals.clone();
-        for t in &transforms {
-            for &id in &originals {
-                let copy = c.add(doc.vectors[&id].transformed(t));
-                c.move_to_layer(copy, doc.layer_of(id));
-                all.push(copy);
-            }
-        }
-        for &id in &all {
-            c.set_group(id, Some(group));
-        }
-        c.select(all);
-        Ok(c.finish())
+        Ok(if p.group_copies {
+            Change::copy_selected_grouped(doc, &transforms)
+        } else {
+            Change::copy_selected(doc, &transforms)
+        })
     }
 }
 
