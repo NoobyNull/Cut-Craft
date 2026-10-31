@@ -4884,3 +4884,48 @@ fn quick_engraves_immediate_output_saves_the_toolpath_calculated_last() {
     assert!(gcode.contains("Quick Engrave"), "{gcode}");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn orientate_3d_models_drags_turn_the_model_or_move_it_off_the_rotary_axis_when_asked() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::X);
+    h.app.invoke(&h.ctx, "orientate_3d_model");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["rotary"], true,
+        "the form knows the job is rotary"
+    );
+    assert_eq!(form.params["turn"]["mode"], "view");
+    let (size, down, right) = (
+        egui::vec2(400.0, 200.0),
+        egui::vec2(0.0, 100.0),
+        egui::vec2(100.0, 0.0),
+    );
+    // dragging the view turns the view, not the model
+    assert!(
+        !h.app
+            .import_drag(Some(view3d::DragMode::Rotate), down, size)
+    );
+    h.app.form.as_mut().unwrap().params["turn"]["mode"] = Value::from("x");
+    assert!(
+        h.app
+            .import_drag(Some(view3d::DragMode::Rotate), down, size)
+    );
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["turn"]["x"], 90.0,
+        "half the view's height: a quarter turn"
+    );
+    assert!(form.dirty, "the model follows");
+    // a pan moves the view unless Drag moves the axis is on
+    assert!(!h.app.import_drag(Some(view3d::DragMode::Pan), right, size));
+    h.app.form.as_mut().unwrap().params["axis"]["drag"] = Value::from(true);
+    assert!(h.app.import_drag(Some(view3d::DragMode::Pan), right, size));
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["axis"]["across"], 15.0,
+        "a quarter of the view: half a diameter"
+    );
+    assert_eq!(form.params["axis"]["up"], 0.0);
+}

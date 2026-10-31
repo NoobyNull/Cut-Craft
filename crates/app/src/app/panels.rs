@@ -1058,6 +1058,54 @@ impl CutCraftApp {
     /// The preview or model as a block, with Aspire's 3D mouse controls: left- or right-drag
     /// rotates, middle-drag (or Ctrl+right, or left and right together) pans, the wheel zooms
     /// about the cursor, and a double-click or F fits it again.
+    /// A drag in the 3D view while Orientate 3D Model is open: with Drag turns on the model,
+    /// a turning drag adds to its fine turn (the view's height is half a turn); with Drag
+    /// moves the axis on, a pan drag moves the model off the axis (the view's height is
+    /// about two diameters). Whether the drag was taken.
+    pub(super) fn import_drag(
+        &mut self,
+        mode: Option<view3d::DragMode>,
+        delta: egui::Vec2,
+        size: egui::Vec2,
+    ) -> bool {
+        let diameter = self.doc.job.rotary.map(|r| r.diameter);
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") else {
+            return false;
+        };
+        let add = |value: &mut Value, by: f64| {
+            *value = Value::from(value.as_f64().unwrap_or(0.0) + by);
+        };
+        let (dx, dy) = (f64::from(delta.x / size.x), f64::from(delta.y / size.y));
+        match mode {
+            Some(view3d::DragMode::Rotate) => {
+                let turn = &mut form.params["turn"];
+                let (about_x, about_z) = (dy * 180.0, dx * 180.0);
+                match turn["mode"].as_str() {
+                    Some("x") => add(&mut turn["x"], about_x),
+                    Some("y") => add(&mut turn["y"], about_z),
+                    Some("z") => add(&mut turn["z"], about_z),
+                    Some("xyz") => {
+                        add(&mut turn["x"], about_x);
+                        add(&mut turn["z"], about_z);
+                    }
+                    _ => return false,
+                }
+            }
+            Some(view3d::DragMode::Pan) => {
+                let Some(diameter) = diameter.filter(|_| form.params["axis"]["drag"] == true)
+                else {
+                    return false;
+                };
+                let per_view = 2.0 * diameter;
+                add(&mut form.params["axis"]["across"], dx * per_view);
+                add(&mut form.params["axis"]["up"], -dy * per_view);
+            }
+            None => return false,
+        }
+        form.dirty = true;
+        true
+    }
+
     pub(super) fn view_3d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "3D view");
         self.playback_bar(ui);
@@ -1102,12 +1150,17 @@ impl CutCraftApp {
         let left = left && !sculpting;
         let delta = response.drag_delta();
         if response.dragged() && delta != egui::Vec2::ZERO {
-            match view3d::drag_mode([left, right, middle], ctrl) {
-                Some(view3d::DragMode::Rotate) => {
-                    self.orbit = self.orbit.dragged_by(delta, area.size(), rotation);
+            let mode = view3d::drag_mode([left, right, middle], ctrl);
+            // Orientate 3D Model's Interactive Rotation and Rotation Axis Movement take the
+            // drag for the model when they are on
+            if !self.import_drag(mode, delta, area.size()) {
+                match mode {
+                    Some(view3d::DragMode::Rotate) => {
+                        self.orbit = self.orbit.dragged_by(delta, area.size(), rotation);
+                    }
+                    Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
+                    None => {}
                 }
-                Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
-                None => {}
             }
         }
         // the ViewCube: a drag turns the view, a click looks from the face, edge or corner

@@ -140,6 +140,56 @@ pub struct Placing {
     pub discard_below_zero: bool,
 }
 
+/// Aspire's Interactive Rotation: fine turns about the job's axes after the initial
+/// orientation, which a drag in the 3D view adds to while the drag turns the model.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Turn {
+    /// What a left drag in the 3D view turns: the view, or the model about all three axes
+    /// or about one (the view then looks along it)
+    #[schemars(title = "Drag turns", extend("x-widget" = "row"))]
+    pub mode: TurnMode,
+    #[schemars(title = "X", extend("x-unit" = "deg"))]
+    pub x: f64,
+    #[schemars(title = "Y", extend("x-unit" = "deg"))]
+    pub y: f64,
+    #[schemars(title = "Z", extend("x-unit" = "deg"))]
+    pub z: f64,
+}
+
+/// What a drag in the 3D view turns while Orientate 3D Model is open.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnMode {
+    /// The view, as always
+    #[default]
+    #[schemars(title = "XYZ view")]
+    View,
+    /// The model about all three axes: sideways about Z, up and down about X
+    #[schemars(title = "XYZ model")]
+    Xyz,
+    #[schemars(title = "X")]
+    X,
+    #[schemars(title = "Y")]
+    Y,
+    #[schemars(title = "Z")]
+    Z,
+}
+
+/// Aspire's Rotation Axis Movement: a full 3D model off a rotary job's axis, which sits
+/// through the middle of the model by default.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct AxisMove {
+    /// A pan drag in the 3D view moves the model off the axis instead of moving the view
+    #[schemars(title = "Drag moves the axis")]
+    pub drag: bool,
+    /// How far the model's middle sits across from the axis
+    #[schemars(title = "Across", extend("x-unit" = "mm"))]
+    pub across: f64,
+    /// How far the model's middle sits above the axis
+    #[schemars(title = "Up", extend("x-unit" = "mm"))]
+    pub up: f64,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// The STL file (binary or ASCII)
@@ -181,6 +231,21 @@ pub struct Params {
     #[schemars(extend("x-hide-when" = {"offered": ["full", "flat", "both"]}))]
     #[serde(default)]
     pub offered: Offered,
+    #[schemars(title = "Interactive Rotation", extend("x-section" = true))]
+    #[serde(default)]
+    pub turn: Turn,
+    /// Shown in a rotary job
+    #[schemars(
+        title = "Rotation Axis Movement",
+        extend("x-section" = true),
+        extend("x-show-when" = {"rotary": ["true"]})
+    )]
+    #[serde(default)]
+    pub axis: AxisMove,
+    /// The job is rotary; set by the app when the form opens, never shown
+    #[schemars(extend("x-hide-when" = {"rotary": ["true", "false"]}))]
+    #[serde(default)]
+    pub rotary: bool,
 }
 
 /// What Options ▸ Importing Models lets the form offer.
@@ -235,6 +300,9 @@ impl Default for Params {
             model_type: ModelType::Full,
             fit_material: false,
             offered: Offered::Both,
+            turn: Turn::default(),
+            axis: AxisMove::default(),
+            rotary: false,
         }
     }
 }
@@ -365,8 +433,13 @@ fn oriented(p: &Params) -> Result<(Vec<[DVec3; 3]>, String), CommandError> {
         return Err(CommandError::InvalidParams("choose an STL file".into()));
     }
     let (triangles, md5) = read_file(&p.file)?;
-    let turn =
-        DMat3::from_rotation_z(p.orientation.rotation.to_radians()) * face_up(p.orientation.face);
+    // the fine turns after the initial orientation: about X, then Y, then Z [inf]
+    let fine = DMat3::from_rotation_z(p.turn.z.to_radians())
+        * DMat3::from_rotation_y(p.turn.y.to_radians())
+        * DMat3::from_rotation_x(p.turn.x.to_radians());
+    let turn = fine
+        * DMat3::from_rotation_z(p.orientation.rotation.to_radians())
+        * face_up(p.orientation.face);
     let unit = match p.size.units {
         FileUnits::Mm => 1.0,
         FileUnits::Inches => 25.4,
@@ -554,6 +627,9 @@ struct Turning {
     scale: f64,
     /// Where the scaled model starts along the job, in job mm.
     first: f64,
+    /// How far the model's middle sits across and up from the axis (Rotation Axis
+    /// Movement), in job mm.
+    shift: Point,
     unrolled: Unrolled,
 }
 
@@ -573,6 +649,7 @@ impl Turning {
             start: 0.0,
             scale: 1.0,
             first: 0.0,
+            shift: Point::ZERO,
             unrolled: Unrolled {
                 along_from: 0.0,
                 round_from: 0.0,
@@ -628,6 +705,7 @@ impl Turning {
             start: probe.along(lo),
             scale,
             first,
+            shift: Point::new(params.axis.across, params.axis.up),
             unrolled,
             ..probe
         })
@@ -647,17 +725,17 @@ impl Turning {
 
     /// A vertex as (along, angle round from straight up, out from the axis), in job mm.
     fn cylindrical(&self, v: DVec3) -> (f64, f64, f64) {
-        let off = self.across(v) - self.middle;
+        let off = (self.across(v) - self.middle) * self.scale + self.shift;
         (
             self.first + (self.along(v) - self.start) * self.scale,
             off.x.atan2(off.y),
-            off.length() * self.scale,
+            off.length(),
         )
     }
 
     /// A vertex where the turned model has it: along the job, across and up from the axis.
     fn placed(&self, v: DVec3) -> DVec3 {
-        let off = (self.across(v) - self.middle) * self.scale;
+        let off = (self.across(v) - self.middle) * self.scale + self.shift;
         let along = self.first + (self.along(v) - self.start) * self.scale;
         if self.x_axis {
             DVec3::new(along, off.x, off.y)
@@ -1437,5 +1515,65 @@ mod rotary {
         };
         let (doc, k) = import("flat", &cylinder(10.0, 50.0), &p);
         assert!(k.extent().size().y < doc.job.area().size().y / 2.0);
+    }
+
+    #[test]
+    #[expect(clippy::cast_precision_loss, reason = "a few vertices")]
+    fn a_fine_turn_about_x_stands_the_model_up_and_the_axis_offset_lifts_it_off_the_axis() {
+        // a 20 x 10 x 5 box: turned 90 about X its 10 runs up
+        let p = Params {
+            file: stl("fine_turn", &cuboid([0.0, 0.0, 0.0], [20.0, 10.0, 5.0])),
+            show_undercuts: false,
+            turn: Turn {
+                x: 90.0,
+                ..Turn::default()
+            },
+            ..Params::default()
+        };
+        let seen = preview(&Document::default(), &p).unwrap().unwrap();
+        let z = |pick: fn(f64, f64) -> f64| {
+            seen.iter().flat_map(|(t, _)| t.iter().map(|v| v.z)).fold(
+                if pick(0.0, 1.0) > 0.5 {
+                    f64::NEG_INFINITY
+                } else {
+                    f64::INFINITY
+                },
+                pick,
+            )
+        };
+        assert!(
+            (z(f64::max) - z(f64::min) - 10.0).abs() < 1e-6,
+            "{}",
+            z(f64::max) - z(f64::min)
+        );
+        // in a rotary job, Up 5 puts the model's middle 5 mm above the axis
+        let doc = rotary_job();
+        let centred = Params {
+            fit_material: false,
+            ..p.clone()
+        };
+        let lifted = Params {
+            axis: AxisMove {
+                drag: false,
+                across: 0.0,
+                up: 5.0,
+            },
+            ..centred.clone()
+        };
+        let middle_z = |p: &Params| {
+            let seen = preview(&doc, p).unwrap().unwrap();
+            let zs: Vec<f64> = seen
+                .iter()
+                .flat_map(|(t, _)| t.iter().map(|v| v.z))
+                .collect();
+            zs.iter().sum::<f64>() / zs.len() as f64
+        };
+        assert!(middle_z(&centred).abs() < 1e-6);
+        assert!(
+            (middle_z(&lifted) - 5.0).abs() < 1e-6,
+            "{}",
+            middle_z(&lifted)
+        );
+        let _ = std::fs::remove_file(p.file);
     }
 }

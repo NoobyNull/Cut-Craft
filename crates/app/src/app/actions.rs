@@ -1031,6 +1031,7 @@ impl CutCraftApp {
             if offered != "both" {
                 params["model_type"] = Value::from(offered);
             }
+            params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
         // a toolpath's form in Aspire's order
         let fields = if fields.iter().any(|f| f.key == "tool") {

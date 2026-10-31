@@ -1142,7 +1142,9 @@ mod tests {
             [
                 "Initial Orientation",
                 "Model Size",
-                "Position relative to Modeling Plane"
+                "Position relative to Modeling Plane",
+                "Interactive Rotation",
+                "Rotation Axis Movement"
             ]
         );
         let Kind::Group(orientation) = &field(&f, "orientation").kind else {

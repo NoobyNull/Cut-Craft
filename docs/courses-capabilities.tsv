@@ -138,7 +138,7 @@ two-sided	Two-sided jobs: sides, copy to other side, flip, dowels, preview all s
 rotary	Rotary jobs: wrapped toolpaths, posts wrapping onto A, 3D view wrapping	yes	rotary Job Setup, Auto-Wrapping View, wrapped posts	rotary|column|spindle	rotary|cylinder
 rotary-layouts	Rotary gadgets: fluting layout, spiral layout	yes	wrapped-fluting-layout, wrapped-spiral-layout	fluted column|spiral column|column	fluting layout|spiral layout
 rounding	Rounding toolpath for a square or round blank	yes	rounding-toolpath command	rounded toolpath	rounding
-rotary-import	Rotary import: full / flat model, scale to fit, move the rotation axis, interactive rotation	partly	full / flat model and scale to fit; no rotation handles, no moving the axis	unwrap|relief models for rotary	rotation axis|full 3d model	106
+rotary-import	Rotary import: full / flat model, scale to fit, move the rotation axis, interactive rotation	yes	Orientate 3D Model in a rotary job: full / flat model, scale to fit; Interactive Rotation (Drag turns: XYZ view, XYZ model, X, Y or Z; a drag in the 3D view adds to the fine turn, typed in degrees too) and Rotation Axis Movement (Drag moves the axis: a pan drag moves the model off the axis; Across and Up typed too). The 3D view does not swing to look along the chosen axis	unwrap|relief models for rotary	rotation axis|full 3d model	106
 vector-unwrapper	Vector Unwrapper (rotary)	yes	vector-unwrapper command	spindle	unwrap
 celtic-weave	Celtic Weave Creator gadget	yes	celtic-weave command	celtic	celtic
 gadgets	Gadgets: DXF Batch Processor, Setup Sheet Editor and other Lua gadgets	out	the Lua gadget API is the vendor's; DXF batch import could be built as Cut Craft's own	nest cabinets|nested cabinet	gadget
