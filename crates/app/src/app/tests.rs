@@ -615,6 +615,8 @@ struct Harness {
     shapes: Vec<egui::epaint::ClippedShape>,
     /// What the last frame put on the system clipboard.
     copied: String,
+    /// The last frame's request for the window's picture, if it made one.
+    screenshot: Option<egui::ScreenshotCallback>,
 }
 
 impl Harness {
@@ -626,6 +628,7 @@ impl Harness {
             time: 0.0,
             shapes: vec![],
             copied: String::new(),
+            screenshot: None,
         };
         // previews appear cut at once unless a test plays one
         h.app.display.animate_preview = false;
@@ -708,6 +711,14 @@ impl Harness {
                 _ => None,
             })
             .unwrap_or_default();
+        self.screenshot = out
+            .viewport_output
+            .values()
+            .flat_map(|v| &v.commands)
+            .find_map(|c| match c {
+                egui::ViewportCommand::Screenshot(callback) => Some(callback.clone()),
+                _ => None,
+            });
     }
 
     /// Every place the last frame drew `text`.
@@ -2752,7 +2763,8 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 27] = [
+    const ASKS: [&str; 28] = [
+        "save_shaded_image",
         "add_clipart_folder",
         "segment_3d_model_file",
         "new",
@@ -4361,4 +4373,50 @@ fn a_double_sided_preview_cuts_both_sides_and_turns_over_with_the_job() {
         "the side that was up is now underneath"
     );
     h.frame(vec![]);
+}
+
+#[test]
+fn save_shaded_image_saves_the_3d_view_s_part_of_the_window() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    assert!(h.app.available("save_shaded_image"));
+    let path = std::env::temp_dir().join(format!("cut-craft-shaded-{}.png", std::process::id()));
+    h.app.save_shaded_image(path.clone());
+    h.frame(vec![]);
+    assert_eq!(h.app.view, View::ThreeD, "the 3D view is shown");
+    let asked = h
+        .screenshot
+        .take()
+        .expect("the window's picture is asked for");
+    // the window's picture, 1280 x 800, red inside the 3D view and blue outside it
+    let area = h.app.view_3d_area.unwrap();
+    let mut picture = egui::ColorImage::filled([1280, 800], egui::Color32::BLUE);
+    for y in 0..800 {
+        for x in 0..1280 {
+            #[expect(clippy::cast_precision_loss, reason = "pixel coordinates")]
+            if area.contains(egui::pos2(x as f32 + 0.5, y as f32 + 0.5)) {
+                picture.pixels[y * 1280 + x] = egui::Color32::RED;
+            }
+        }
+    }
+    asked.complete(std::sync::Arc::new(picture));
+    h.frame(vec![]);
+    assert!(
+        h.app.status.message.starts_with("Saved the shaded image"),
+        "{}",
+        h.app.status.message
+    );
+    let saved = image::open(&path).unwrap().to_rgba8();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "pixels"
+    )]
+    let size = (area.width().round() as u32, area.height().round() as u32);
+    assert_eq!(saved.dimensions(), size);
+    assert!(
+        saved.pixels().all(|p| p.0 == [255, 0, 0, 255]),
+        "only the 3D view"
+    );
+    let _ = std::fs::remove_file(path);
 }

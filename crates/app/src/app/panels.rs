@@ -1227,14 +1227,16 @@ impl CutCraftApp {
     /// Takes away the previewed material's piece under `at` in the 3D view's picture `fit`
     /// (Aspire's double-click on waste); false when the click is off the material or on
     /// material cut right through.
-    /// The 3D view's drops and sculpting: clipart dropped on it goes where it was dropped
-    /// on the material, and while sculpting a left drag is a stroke (true then).
+    /// The 3D view's drops, sculpting and saved image: clipart dropped on it goes where it
+    /// was dropped on the material, while sculpting a left drag is a stroke (true then), and
+    /// Save Shaded Image asks for the window's picture once the view is drawn.
     fn view_3d_drop_and_sculpt(
         &mut self,
         ui: &egui::Ui,
         response: &egui::Response,
         area: egui::Rect,
     ) -> bool {
+        self.ask_for_shaded_image(ui.ctx());
         if let Some(path) = response.dnd_release_payload::<std::path::PathBuf>() {
             let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
             let at = ui
@@ -1248,6 +1250,46 @@ impl CutCraftApp {
             self.sculpt_3d(response, area.shrink(ui.spacing().item_spacing.x * 2.0));
         }
         sculpting
+    }
+
+    /// View ▸ Save Shaded Image to `path`: the 3D view is shown, its window's picture asked
+    /// for once it has been drawn, and the 3D view's part saved when it comes.
+    pub(super) fn save_shaded_image(&mut self, path: std::path::PathBuf) {
+        self.view = View::ThreeD;
+        self.shaded_image = Some(path);
+    }
+
+    /// Asks for the window's picture once the 3D view has been drawn for Save Shaded Image;
+    /// the 3D view's part of it is saved when it comes.
+    fn ask_for_shaded_image(&mut self, ctx: &egui::Context) {
+        let (Some(path), Some(area)) = (self.shaded_image.take(), self.view_3d_area) else {
+            return;
+        };
+        let (saved, ctx2) = (std::sync::Arc::clone(&self.shaded_saved), ctx.clone());
+        let pixels = area * ctx.pixels_per_point();
+        let callback = egui::ScreenshotCallback::new(move |picture| {
+            let said = save_part(&picture, pixels, &path).map_or_else(
+                |e| e,
+                |()| format!("Saved the shaded image as {}", path.display()),
+            );
+            if let Ok(mut slot) = saved.lock() {
+                *slot = Some(said);
+            }
+            ctx2.request_repaint();
+        });
+        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(callback));
+    }
+
+    /// What saving the shaded image said, once it has.
+    pub(super) fn shaded_image_arrived(&mut self) {
+        let said = self
+            .shaded_saved
+            .lock()
+            .ok()
+            .and_then(|mut slot| slot.take());
+        if let Some(said) = said {
+            self.status.set_message(&said);
+        }
     }
 
     /// Sculpting in the 3D view: a left drag over the model is a stroke, its points where
@@ -1876,6 +1918,42 @@ impl CutCraftApp {
             self.set_units(to);
         }
     }
+}
+
+/// The part of `picture` inside `area` (in its pixels) saved as a PNG at `path`.
+fn save_part(
+    picture: &egui::ColorImage,
+    area: egui::Rect,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let [width, height] = picture.size;
+    let clamp = |v: f32, most: usize| {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "pixels"
+        )]
+        let v = v.round().max(0.0) as usize;
+        v.min(most)
+    };
+    let (x0, y0) = (clamp(area.min.x, width), clamp(area.min.y, height));
+    let (x1, y1) = (clamp(area.max.x, width), clamp(area.max.y, height));
+    if x1 <= x0 || y1 <= y0 {
+        return Err("the 3D view was not on screen to save".into());
+    }
+    let mut out = image::RgbaImage::new(
+        u32::try_from(x1 - x0).map_err(|e| e.to_string())?,
+        u32::try_from(y1 - y0).map_err(|e| e.to_string())?,
+    );
+    for (y, row) in (y0..y1).enumerate() {
+        for (x, column) in (x0..x1).enumerate() {
+            let c = picture.pixels[row * width + column];
+            let (x, y) = (u32::try_from(x).unwrap_or(0), u32::try_from(y).unwrap_or(0));
+            out.put_pixel(x, y, image::Rgba(c.to_srgba_unmultiplied()));
+        }
+    }
+    out.save(path)
+        .map_err(|e| format!("could not save {}: {e}", path.display()))
 }
 
 /// Whether `path` is a mesh, imported through Orientate 3D Model.

@@ -35,6 +35,8 @@ impl CutCraftApp {
             view_transform: None,
             view_area: None,
             view_3d_area: None,
+            shaded_image: None,
+            shaded_saved: std::sync::Arc::default(),
             camera: None,
             view_tool: None,
             pages: Pages::default(),
@@ -146,6 +148,11 @@ impl CutCraftApp {
                 self.doc.toolpaths.values().any(|t| t.visible)
             }
             "undo_last_preview" => self.before_preview.is_some() && self.playback.is_none(),
+            "save_shaded_image" => {
+                self.simulation.is_some()
+                    || self.playback.is_some()
+                    || !self.doc.components.is_empty()
+            }
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
@@ -356,6 +363,15 @@ impl CutCraftApp {
             "preview_toolpath" => {
                 if let Some(id) = self.selected_toolpath {
                     self.preview_toolpath(id);
+                }
+            }
+            "save_shaded_image" => {
+                if let Some(path) = file_dialog()
+                    .add_filter("PNG image", &["png"])
+                    .set_file_name("shaded.png")
+                    .save_file()
+                {
+                    self.save_shaded_image(path);
                 }
             }
             "preview_all_toolpaths" => self.preview_all(false),

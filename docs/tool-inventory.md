@@ -176,6 +176,8 @@ say "not implemented yet".
   checks before cutting ask before saving.
 - Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
   (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
+- View ▸ Save Shaded Image: the 3D view (the model, or the preview) saved as a PNG, cut
+  from the window's picture once the 3D view is shown.
 - Double-sided jobs (Job Setup's Double Sided, Flip Direction Between Sides): each side keeps
   its own objects; Edit ▸ Swap Sides or the top bar's side button turns over; the other side
   is drawn faint and mirrored; the 2D right-click Copy to Other Side mirrors copies across.
@@ -506,7 +508,7 @@ say "not implemented yet".
   settings, fonts, help and the folder kept for each kind of file;
   document variables linked to fields (a sum is worked out once, when entered).
 - Machine: Update Post Database.
-- View: Guide Lines, Keep-Out Zones, Shadow Shading, Save Shaded Image,
+- View: Guide Lines, Keep-Out Zones, Shadow Shading,
   window tiling and cascade.
 - Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.
 - Drawing tab: Transform, Trim Objects.

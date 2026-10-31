@@ -241,6 +241,7 @@ impl CutCraftApp {
         }
         self.polyline_keys(ctx);
         self.sculpt_keys(ctx);
+        self.shaded_image_arrived();
         self.shortcuts(ctx);
         egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));

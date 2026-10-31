@@ -132,7 +132,7 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 86] = [
+const BUILT_INS: [&str; 87] = [
     "find_tool",
     "machine_configuration",
     "add_machine",
@@ -218,6 +218,7 @@ const BUILT_INS: [&str; 86] = [
     "preview_all_toolpaths",
     "preview_visible_toolpaths",
     "undo_last_preview",
+    "save_shaded_image",
     "reset_preview",
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
@@ -563,6 +564,10 @@ struct CutCraftApp {
     view_area: Option<egui::Rect>,
     /// Where the 3D view was last drawn, for the sculpting brush's wheel.
     view_3d_area: Option<egui::Rect>,
+    /// View ▸ Save Shaded Image: the file the 3D view's picture goes to, until the window's
+    /// picture it is cut from is asked for; then what saving it said, for the status bar.
+    shaded_image: Option<std::path::PathBuf>,
+    shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
     view_tool: Option<ViewTool>,
