@@ -2,10 +2,11 @@
 //! playback and the 3D view.
 
 use super::{
-    Align, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, LayerId, Layout,
-    MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN, Material, Menus, PLAYBACK_SPEEDS,
-    Page, SETTLE_SECONDS, Screen, TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value,
-    View, egui, file_dialog, file_name, files, gui, menu_items, sheet_length, view3d, wrap_for,
+    Align, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, Handle3d, LayerId,
+    Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN, Material, Menus,
+    PLAYBACK_SPEEDS, Page, SETTLE_SECONDS, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
+    TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
+    gui, menu_items, sheet_length, view3d, wrap_for,
 };
 use cut_craft_core::document::Units;
 
@@ -907,6 +908,7 @@ impl CutCraftApp {
         }
         // a double-click picks the component under it, as in Aspire; off the model it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
+        self.fit_3d = Some(fit);
         let double = response
             .double_clicked()
             .then(|| response.interact_pointer_pos())
@@ -917,6 +919,9 @@ impl CutCraftApp {
                 if !self.doc.selected_components.remove(&id) {
                     self.doc.selected_components.insert(id);
                 }
+            } else if self.doc.selected_components.contains(&id) {
+                // again on a selected component: its editing handles, as in Aspire
+                self.invoke(ui.ctx(), "transform");
             } else {
                 self.doc.selected_components = [id].into();
             }
@@ -930,6 +935,23 @@ impl CutCraftApp {
         let painter = ui.painter_at(area);
         cube.paint(&painter, self.orbit, hovered, ui.visuals(), &font);
         self.view_cube = Some(cube);
+        self.handles_3d(ui, area, fit);
+        // a right-click picks the topmost component under it (keeping a selection it is
+        // part of) and opens the view menu listing all of them, as the 2D view's does
+        if response.secondary_clicked()
+            && let Some(at) = response.interact_pointer_pos()
+        {
+            self.under_3d = self.components_at_3d(fit, at);
+            if let Some(&id) = self.under_3d.first()
+                && !self.doc.selected_components.contains(&id)
+            {
+                self.doc.selected_components = [id].into();
+            }
+        }
+        let menu = || self.menus.view_3d_menu(&self.doc, &self.under_3d);
+        if let Some(action) = self.popup(&response, menu) {
+            self.invoke(ui.ctx(), &action);
+        }
     }
 
     /// The 3D view's surface: quick (`surface`) while it moves, then once still the
@@ -1019,7 +1041,8 @@ impl CutCraftApp {
         };
         if let Some(playback) = &self.playback {
             let surface = view3d::coarse(playback.material(), MESH_CELLS);
-            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+            let plain = |_, _| None;
+            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides, plain));
         }
         if let Some((kept, geometry)) = &self.surface_gpu
             && *kept == key
@@ -1027,7 +1050,14 @@ impl CutCraftApp {
             return std::sync::Arc::clone(geometry);
         }
         let surface = self.fine_surface();
-        let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+        // the components' own colours, where the model is theirs (a preview has none)
+        let (doc, modelled) = (&self.doc, self.simulation.is_none());
+        let tint = |c, r| {
+            modelled
+                .then(|| cut_craft_core::component::colour_at(doc, surface.centre(c, r)))
+                .flatten()
+        };
+        let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides, tint));
         self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
         geometry
     }
@@ -1050,21 +1080,258 @@ impl CutCraftApp {
         geometry
     }
 
+    /// Aspire 12's component editing icons in Transform mode: round buttons along the near
+    /// edge of the selected component's box; a drag on the first three sets its total,
+    /// shape or base height, and the last opens its settings. The model's own view has
+    /// them, not a preview.
+    pub(super) fn handles_3d(&mut self, ui: &mut egui::Ui, area: egui::Rect, fit: egui::Rect) {
+        use cut_craft_core::glam::DVec3;
+        self.handles_3d.clear();
+        let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
+        if self.simulation.is_some()
+            || self.playback.is_some()
+            || importing
+            || self.view_tool != Some(ViewTool::Transform)
+        {
+            return;
+        }
+        let chosen = self
+            .doc
+            .selected_components
+            .iter()
+            .rev()
+            .find(|id| self.doc.components.contains_key(id))
+            .copied();
+        let Some(id) = chosen else {
+            self.drag_3d = None;
+            return;
+        };
+        let extent = self.doc.components[&id].extent();
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return;
+        };
+        let (orbit, framing) = (self.orbit, self.framing);
+        let screen = view3d::screen_of(&surface, orbit, framing, fit, None);
+        let local = |x: f64, y: f64| DVec3::new(x - surface.origin.x, y - surface.origin.y, 0.0);
+        let (near, far) = (
+            screen(local(extent.min.x, extent.min.y)),
+            screen(local(extent.max.x, extent.min.y)),
+        );
+        // along the near edge of its box, a button's height apart; an edge seen end-on
+        // runs to the right
+        let edge = ui.spacing().interact_size.y;
+        let mut along = (far - near).normalized();
+        if !along.is_finite() || along == egui::Vec2::ZERO {
+            along = egui::Vec2::X;
+        }
+        let painter = ui.painter_at(area);
+        for (i, handle) in Handle3d::ALL.into_iter().enumerate() {
+            #[expect(clippy::cast_precision_loss, reason = "four handles")]
+            let centre = near + along * edge * (1.0 + 1.5 * i as f32);
+            let rect = egui::Rect::from_center_size(centre, egui::Vec2::splat(edge));
+            let response = ui
+                .interact(
+                    rect,
+                    ui.scope_id().with(("handle_3d", i)),
+                    egui::Sense::click_and_drag(),
+                )
+                .on_hover_text(handle.hint());
+            let look = ui.style().interact(&response);
+            let fill = if response.hovered() || response.dragged() {
+                look.bg_fill
+            } else {
+                ui.visuals().extreme_bg_color
+            };
+            painter.circle(centre, edge / 2.0, fill, look.bg_stroke);
+            handle_glyph(&painter, handle, centre, edge / 2.0, look.fg_stroke);
+            self.handles_3d.push((handle, centre));
+            if response.drag_started()
+                && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+            {
+                self.drag_3d = Some((handle, origin));
+            }
+            if response.clicked() && handle == Handle3d::Settings {
+                let params = cmd_component_properties::Params::of(id, &self.doc.components[&id]);
+                self.settings_3d = Some(Settings3d {
+                    component: id,
+                    params,
+                    dirty: false,
+                    at: rect.left_bottom(),
+                });
+            }
+        }
+        self.handle_drag_3d(ui, fit, id);
+    }
+
+    /// A handle's drag: its running value in the status bar and, once the pointer is let
+    /// go, the component's total, shape or base height set through Component Properties
+    /// (one undo). A drag up a quarter of the view doubles, as the wheel's zoom does; the
+    /// base height moves the material's thickness over that quarter.
+    // ponytail: the component changes when the drag ends; Aspire's follows the drag
+    fn handle_drag_3d(&mut self, ui: &egui::Ui, fit: egui::Rect, id: EntityId) {
+        let Some((handle, origin)) = self.drag_3d else {
+            return;
+        };
+        let (now, released) = ui.input(|i| (i.pointer.latest_pos(), i.pointer.primary_released()));
+        let Some(by) = now.map(|now| now - origin) else {
+            return;
+        };
+        let quarter = fit.size() / VIEW_ZOOM_QUARTERS;
+        let k = &self.doc.components[&id];
+        let mut p = cmd_component_properties::Params::of(id, k);
+        let factor = |px: f32, over: f32| f64::from(2f32.powf(px / over));
+        let message = match handle {
+            Handle3d::Total => {
+                let f = factor(-by.y, quarter.y);
+                p.shape_height = k.shaping.shape_height * f;
+                p.base_height = k.shaping.base_height * f;
+                let total = k.height_range().map_or(0.0, |(_, top)| top) * f;
+                format!("Total height {total:.2} mm")
+            }
+            Handle3d::Height => {
+                p.shape_height = k.shaping.shape_height * factor(-by.y, quarter.y);
+                format!("Shape height {:.0}%", p.shape_height)
+            }
+            Handle3d::Base => {
+                let per_pixel = self.doc.job.thickness / f64::from(quarter.y);
+                p.base_height = k.shaping.base_height - f64::from(by.y) * per_pixel;
+                format!("Base height {:.2} mm", p.base_height)
+            }
+            Handle3d::Settings => return,
+        };
+        self.status.set_message(&message);
+        if !released {
+            return;
+        }
+        self.drag_3d = None;
+        let params = serde_json::to_value(&p).expect("component properties serialize");
+        if let Err(e) = self.apply("component_properties", &params) {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// The Settings handle's popup (Aspire 12's): the combine mode, Fade and Tilt with
+    /// their anchors' Set, Appearance and its colour, and Close; each change applied
+    /// through Component Properties once the pointer is let go.
+    pub(super) fn settings_3d_window(&mut self, ctx: &egui::Context) {
+        use cmd_component_properties::Appearance;
+        let Some(s) = &mut self.settings_3d else {
+            return;
+        };
+        if !self.doc.components.contains_key(&s.component) {
+            self.settings_3d = None;
+            return;
+        }
+        let (mut close, mut set) = (false, false);
+        egui::Window::new("component_settings_3d")
+            .title_bar(false)
+            .resizable(false)
+            .fixed_pos(s.at)
+            .show(ctx, |ui| {
+                ui.strong("Combine with other components ...");
+                ui.horizontal(|ui| {
+                    for (name, mode) in gui::COMBINE_MODES {
+                        if ui.radio(s.params.combine == mode, name).clicked() {
+                            s.params.combine = mode;
+                            s.dirty = true;
+                        }
+                    }
+                });
+                egui::Grid::new("component_settings_3d").show(ui, |ui| {
+                    let p = &mut s.params;
+                    s.dirty |= ui.checkbox(&mut p.fade.on, "Fade").changed();
+                    // ponytail: the anchors are typed in Component Properties, not clicked
+                    set |= ui
+                        .add_enabled(p.fade.on, egui::Button::new("Set"))
+                        .on_hover_text("Set the anchors in Component Properties")
+                        .clicked();
+                    let percent = egui::DragValue::new(&mut p.fade.percent)
+                        .range(0.0..=100.0)
+                        .suffix(" %");
+                    s.dirty |= ui.add_enabled(p.fade.on, percent).changed();
+                    ui.end_row();
+                    s.dirty |= ui.checkbox(&mut p.tilt.on, "Tilt").changed();
+                    set |= ui
+                        .add_enabled(p.tilt.on, egui::Button::new("Set"))
+                        .on_hover_text("Set the anchors in Component Properties")
+                        .clicked();
+                    let angle = egui::DragValue::new(&mut p.tilt.angle)
+                        .range(-90.0..=90.0)
+                        .suffix(" °");
+                    s.dirty |= ui.add_enabled(p.tilt.on, angle).changed();
+                    ui.end_row();
+                    ui.label("Appearance");
+                    egui::ComboBox::from_id_salt("appearance_3d")
+                        .selected_text(p.appearance.label())
+                        .show_ui(ui, |ui| {
+                            for a in Appearance::ALL {
+                                s.dirty |= ui
+                                    .selectable_value(&mut p.appearance, a, a.label())
+                                    .changed();
+                            }
+                        });
+                    ui.end_row();
+                    ui.label("");
+                    ui.horizontal(|ui| {
+                        let solid = p.appearance == Appearance::SolidColor;
+                        s.dirty |= ui
+                            .add_enabled_ui(solid, |ui| ui.color_edit_button_srgb(&mut p.colour))
+                            .inner
+                            .changed();
+                        ui.label("Color...");
+                    });
+                    ui.end_row();
+                });
+                close = ui.button("Close").clicked();
+            });
+        let pressed = ctx.input(|i| i.pointer.any_down());
+        let apply = (s.dirty && !pressed).then(|| s.params.clone());
+        let form = set.then(|| s.params.clone());
+        if close || set {
+            self.settings_3d = None;
+        } else if apply.is_some() {
+            s.dirty = false;
+        }
+        if let Some(p) = apply {
+            let params = serde_json::to_value(&p).expect("component properties serialize");
+            if let Err(e) = self.apply("component_properties", &params) {
+                self.status.set_message(&e);
+            }
+        }
+        if let Some(p) = form {
+            let item = gui::MenuItem::form::<cmd_component_properties::ComponentProperties>(
+                "Component Properties",
+                &p,
+            );
+            self.invoke(ctx, &item.action);
+        }
+    }
+
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
     pub(super) fn component_at_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> Option<EntityId> {
+        self.components_at_3d(fit, at).first().copied()
+    }
+
+    /// Every shown component at the point of the 3D view's picture `fit` under `at`,
+    /// topmost first.
+    pub(super) fn components_at_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> Vec<EntityId> {
         let (job, previewing) = (self.shown_job(), self.simulation.is_some());
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
-        let surface = self.surface_3d()?.into_owned();
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return vec![];
+        };
         let wrap = wrap_for(&job, on, previewing, &surface);
-        let (column, row) = view3d::pick(&surface, orbit, framing, fit, wrap, at)?;
+        let Some((column, row)) = view3d::pick(&surface, orbit, framing, fit, wrap, at) else {
+            return vec![];
+        };
         let p = surface.centre(column, row);
         self.doc
             .components
             .iter()
             .rev()
-            .filter(|(_, k)| k.visible)
-            .find(|(_, k)| k.height_at(p).is_some())
+            .filter(|(_, k)| k.visible && k.height_at(p).is_some())
             .map(|(&id, _)| id)
+            .collect()
     }
 
     /// Behind the 3D view: Options' solid colour, gradient or picture (the gradient when the
@@ -1539,4 +1806,49 @@ fn modeling_plane(
     mesh.add_triangle(0, 1, 2);
     mesh.add_triangle(0, 2, 3);
     mesh
+}
+
+/// A handle's picture inside its circle of `radius` about `at`: a block with an arrow up
+/// and down it (total height), a peak with an arrow up it (shape height), a block with its
+/// bottom marked (base height), and sliders (settings).
+fn handle_glyph(
+    painter: &egui::Painter,
+    handle: Handle3d,
+    at: egui::Pos2,
+    radius: f32,
+    stroke: egui::Stroke,
+) {
+    use egui::{Rect, StrokeKind, pos2, vec2};
+    let r = radius / 2.0;
+    match handle {
+        Handle3d::Total => {
+            let block = Rect::from_min_max(at + vec2(-r, -r), at + vec2(r / 4.0, r));
+            painter.rect_stroke(block, 0.0, stroke, StrokeKind::Middle);
+            painter.arrow(at + vec2(r * 0.7, 0.0), vec2(0.0, -r), stroke);
+            painter.arrow(at + vec2(r * 0.7, 0.0), vec2(0.0, r), stroke);
+        }
+        Handle3d::Height => {
+            let peak = [
+                at + vec2(-r, r),
+                at + vec2(-r / 4.0, -r / 2.0),
+                at + vec2(r / 2.0, r),
+            ];
+            painter.add(egui::Shape::closed_line(peak.to_vec(), stroke));
+            painter.arrow(at + vec2(r, r), vec2(0.0, -2.0 * r), stroke);
+        }
+        Handle3d::Base => {
+            let block = Rect::from_center_size(at, vec2(2.0 * r, 1.5 * r));
+            painter.rect_stroke(block, 0.0, stroke, StrokeKind::Middle);
+            let y = block.bottom() - block.height() / 3.0;
+            painter.line_segment([pos2(block.left(), y), pos2(block.right(), y)], stroke);
+        }
+        Handle3d::Settings => {
+            for (i, knob) in [-0.4, 0.4, 0.0].into_iter().enumerate() {
+                #[expect(clippy::cast_precision_loss, reason = "three sliders")]
+                let y = at.y + (i as f32 - 1.0) * r * 0.8;
+                painter.line_segment([pos2(at.x - r, y), pos2(at.x + r, y)], stroke);
+                painter.circle_filled(pos2(at.x + knob * r, y), stroke.width * 1.5, stroke.color);
+            }
+        }
+    }
 }

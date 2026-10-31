@@ -148,6 +148,27 @@ say "not implemented yet".
   overlays are left off it, and it has not been tried by hand yet).
 - 3D view: left- or right-drag rotates, middle-drag / Ctrl+right-drag / left+right pans, the
   wheel zooms about the cursor, F (or a double-click off the model) fits; Top, Front, Right, Iso, Fit buttons.
+  A right-click picks the component under it and opens the 2D/3D view menu headed by its
+  name (Cut, Copy, Paste, Duplicate, Delete, Group, Ungroup, Select ▸, Activate Layer of
+  Selection, Text ▸, Convert To Vectors, Join / Close Vectors..., Node Edit Mode, Appearance,
+  Component ▸ with Create Vector Boundary, Copy To ▸, Move To ▸; the vector items greyed for a
+  component; the components under the click are listed first, the selected ticked, a click
+  picking one). In Transform mode (a second double-click on a selected component, or the
+  Transform icon) Aspire 12's component editing icons sit along the near edge of the
+  selected component's box: Total Height, Shape Height and Base Height (drag up or down; a
+  quarter of the view doubles, the base height moves the material's thickness over it,
+  applied when the drag ends [inf: Aspire's follow the drag]) and Additional Settings, a
+  popup with the combine modes, Fade and Tilt (their Set opens Component Properties for the
+  anchors [inf: Aspire's are clicked in the 3D view]), Appearance (Same as Parent or Solid
+  Color) and its colour, all applied through Component Properties. A component's Solid Color
+  shows on the GPU-drawn surface [inf: the CPU path of the headless tests leaves it out].
+  Not done: the 3D Transform Handles themselves (move, scale, rotate in the 3D view).
+- Import 3D Model is two pages as Aspire 12's: Orientate (Initial Orientation, Model Size,
+  the model type and Scale to fit), then Position & Import > to "Import 3D Model > Position"
+  (Position relative to Modeling Plane with Depth Below Top, Create both sides, Discard data
+  below zero plane; Highlight undercuts with Update Undercuts; < Back, Import, Cancel).
+  Depth Below Top reads the model's height until a depth is typed. [inf: Aspire's slider
+  beside the picture is not drawn; Overcut Distance is not offered.]
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
   Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components

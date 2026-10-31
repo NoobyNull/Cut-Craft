@@ -44,6 +44,8 @@ struct Camera {
 // the surface's heights row by row (EMPTY where there is no model), or a model's faces:
 // three corners and a mark, ten numbers a face
 @group(0) @binding(1) var<storage, read> data: array<f32>;
+// a surface's cells' own colours, RGBA sRGB a cell, 0 where the material's colour shows
+@group(0) @binding(2) var<storage, read> tints: array<u32>;
 
 const EMPTY: f32 = -1.0e30;
 const TAU: f32 = 6.283185307179586;
@@ -171,7 +173,13 @@ fn surface_vertex(i: u32) -> Placed {
     if camera.wrap == 0u && camera.grain.w > 0.0 {
         shade *= grain(flat(c, r, own));
     }
-    out.colour = camera.colour.rgb * shade;
+    // a component's own colour (Solid Color) over the material's
+    var colour = camera.colour.rgb;
+    let tint = tints[i];
+    if tint != 0u {
+        colour = pow(unpack4x8unorm(tint).rgb, vec3<f32>(2.2));
+    }
+    out.colour = colour * shade;
     return out;
 }
 

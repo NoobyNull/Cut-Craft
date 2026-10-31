@@ -40,6 +40,8 @@ pub struct Field {
     /// `x-tab`: neighbouring fields with a tab show as a strip of tabs, a tab's fields under
     /// it (Aspire's Ramp, Leads, Order, Start At, Corners).
     pub tab: Option<String>,
+    /// `x-page`: the page of the form it is on, from 1 (Aspire's Import 3D Model has two).
+    pub page: u64,
 }
 
 /// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
@@ -176,19 +178,34 @@ pub struct Choice {
 /// Edits `params` through its fields; true when anything changed.
 pub fn show(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look) -> bool {
     let top = params.clone();
-    show_within(ui, fields, params, look, &top)
+    let all: Vec<&Field> = fields.iter().collect();
+    show_within(ui, &all, params, look, &top)
+}
+
+/// [`show`] for the fields on `page` of a form with several.
+pub fn show_page(
+    ui: &mut egui::Ui,
+    fields: &[Field],
+    page: u64,
+    params: &mut Value,
+    look: &Look,
+) -> bool {
+    let top = params.clone();
+    let shown: Vec<&Field> = fields.iter().filter(|f| f.page == page).collect();
+    show_within(ui, &shown, params, look, &top)
 }
 
 /// [`show`] for `params` somewhere inside the form, whose top-level parameters are `top`.
 fn show_within(
     ui: &mut egui::Ui,
-    fields: &[Field],
+    fields: &[&Field],
     params: &mut Value,
     look: &Look,
     top: &Value,
 ) -> bool {
     let shown: Vec<&Field> = fields
         .iter()
+        .copied()
         .filter(|f| f.when.as_ref().is_none_or(|w| w.shown(top)))
         .collect();
     let mut changed = false;
@@ -300,7 +317,10 @@ fn plain(
                             ui.add(picture);
                         }
                         ui.vertical(|ui| match &section.kind {
-                            Kind::Group(inner) => show_within(ui, inner, value, look, top),
+                            Kind::Group(inner) => {
+                                let inner: Vec<&Field> = inner.iter().collect();
+                                show_within(ui, &inner, value, look, top)
+                            }
                             kind => edit(ui, kind, value, look),
                         })
                         .inner
@@ -834,8 +854,14 @@ fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
                 .and_then(|rule| When::from_rule(rule, true)),
             group: s["x-group"].as_str().map(String::from),
             tab: s["x-tab"].as_str().map(String::from),
+            page: s["x-page"].as_u64().unwrap_or(1),
         })
         .collect()
+}
+
+/// How many pages `fields` make: the highest page any is on.
+pub fn pages(fields: &[Field]) -> u64 {
+    fields.iter().map(|f| f.page).max().unwrap_or(1)
 }
 
 /// Follows a local `$ref` into `$defs`, where schemars puts shared types.

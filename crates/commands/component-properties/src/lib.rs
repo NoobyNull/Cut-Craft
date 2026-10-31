@@ -31,6 +31,42 @@ pub struct Params {
     pub tilt: Tilt,
     /// Make the shape and base height, fade and tilt permanent, then reset them
     pub bake: bool,
+    /// How the 3D view colours it
+    #[schemars(extend("x-widget" = "drop-down"))]
+    #[serde(default)]
+    pub appearance: Appearance,
+    /// Its colour, with Solid Color
+    #[schemars(extend("x-kind" = "colour"))]
+    #[serde(default = "solid")]
+    pub colour: [u8; 3],
+}
+
+/// Aspire's Appearance: the parent's colour, or the component's own.
+// ponytail: Use Material and Color from Children are not offered
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Appearance {
+    #[default]
+    #[schemars(title = "Same as Parent")]
+    SameAsParent,
+    #[schemars(title = "Solid Color")]
+    SolidColor,
+}
+
+impl Appearance {
+    pub const ALL: [Self; 2] = [Self::SameAsParent, Self::SolidColor];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::SameAsParent => "Same as Parent",
+            Self::SolidColor => "Solid Color",
+        }
+    }
+}
+
+/// The colour Solid Color starts on: a mid grey, before one is picked.
+fn solid() -> [u8; 3] {
+    [160, 160, 160]
 }
 
 /// Fades the heights down from the first point toward the second.
@@ -84,6 +120,8 @@ impl Default for Params {
                 angle: 5.0,
             },
             bake: false,
+            appearance: Appearance::SameAsParent,
+            colour: solid(),
         }
     }
 }
@@ -98,6 +136,12 @@ impl Params {
             visible: c.visible,
             shape_height: c.shaping.shape_height,
             base_height: c.shaping.base_height,
+            appearance: if c.colour.is_some() {
+                Appearance::SolidColor
+            } else {
+                Appearance::SameAsParent
+            },
+            colour: c.colour.unwrap_or_else(solid),
             ..Params::default()
         };
         // the anchors start across the component, so ticking Fade or Tilt shows something
@@ -177,6 +221,7 @@ impl Command for ComponentProperties {
             combine: p.combine,
             visible: p.visible,
             shaping: p.shaping(),
+            colour: (p.appearance == Appearance::SolidColor).then_some(p.colour),
             ..component.clone()
         };
         if p.bake {
@@ -263,6 +308,29 @@ mod tests {
         let probe = |at: Point| k.height_at(at + (k.extent().center() - at) * 0.4);
         assert!(probe(far).unwrap() < probe(near).unwrap());
         assert!(ComponentProperties::initial_params(&doc).fade.on);
+    }
+
+    #[test]
+    fn solid_color_gives_the_component_its_own_colour_and_same_as_parent_takes_it_back() {
+        let mut doc = domed();
+        let p = Params {
+            appearance: Appearance::SolidColor,
+            colour: [200, 30, 30],
+            ..ComponentProperties::initial_params(&doc)
+        };
+        run_on::<ComponentProperties>(&mut doc, &p);
+        assert_eq!(doc.components[&EntityId(1)].colour, Some([200, 30, 30]));
+        let again = ComponentProperties::initial_params(&doc);
+        assert_eq!(
+            (again.appearance, again.colour),
+            (Appearance::SolidColor, [200, 30, 30])
+        );
+        let p = Params {
+            appearance: Appearance::SameAsParent,
+            ..again
+        };
+        run_on::<ComponentProperties>(&mut doc, &p);
+        assert_eq!(doc.components[&EntityId(1)].colour, None);
     }
 
     #[test]

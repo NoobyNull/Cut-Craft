@@ -24,7 +24,8 @@ Sizes: **S** a day or less, **M** a few days, **L** a week or more. Updated 2026
 These shape the plan: Phase A exists to fix the first three.
 
 1. ~~No component or bitmap selection~~ (Phase A). Components are picked in the Components
-   tab only, not yet by clicking them in the 3D view.
+   tab, by a double-click or right-click in the 3D view, and edited there by Aspire 12's
+   handles (2026-10-30).
 2. ~~The selection has no order~~ (Phase A). Align still aligns to the selection's extent,
    not to the last-picked object: Aspire's help does not say what a window selection does.
 3. ~~No groups~~ (Phase A). Vector groups only; they do not nest, and components and
@@ -51,7 +52,8 @@ Done: selection keeps pick order (`Selection`, `last()`), moulding takes the las
 profile; components picked in the Components tab (`chosen_component`), outlined in 2D;
 bitmaps picked in the 2D view, outlined, deleted, moved and resized (Bitmap Properties),
 used by the picture tools (`chosen_bitmap`); Group / Ungroup with whole-group picking.
-Left for later: picking components in the 3D view, nested groups, grouping components.
+Left for later: nested groups, grouping components. Picking components in the 3D view (a
+double-click or a right-click, which opens the view menu) and editing them there are done.
 
 | Item | Approach | Size |
 |---|---|---|

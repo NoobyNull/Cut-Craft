@@ -60,6 +60,12 @@ impl CutCraftApp {
                 files::config_dir().map(|d| d.join("bug-reports")),
             ),
             clipboard: vec![],
+            clipboard_components: vec![],
+            fit_3d: None,
+            handles_3d: vec![],
+            under_3d: vec![],
+            drag_3d: None,
+            settings_3d: None,
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
             summary: SUMMARY_DEFAULTS,
@@ -110,7 +116,7 @@ impl CutCraftApp {
             id if id.starts_with(gui::REIMPORT_MODEL) => self
                 .model_source(id)
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
-            id if id.starts_with(SELECT_LEVEL) => true,
+            id if id.starts_with(SELECT_LEVEL) || id.starts_with(gui::SELECT_COMPONENT) => true,
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
@@ -141,9 +147,14 @@ impl CutCraftApp {
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
             id if self.units_checked(id).is_some() => self.screen == Screen::Job,
             id if self.layout_checked(id).is_some() => true,
-            "cut" | "copy" => !self.doc.selection.is_empty(),
+            "cut" | "copy" => {
+                !self.doc.selection.is_empty() || !self.doc.selected_components.is_empty()
+            }
             "create_component_from_toolpath_preview" => self.simulation.is_some(),
-            "paste" | "paste_in_place" => !self.clipboard.is_empty(),
+            "paste" | "paste_in_place" => {
+                !self.clipboard.is_empty() || !self.clipboard_components.is_empty()
+            }
+            "activate_layer_of_selection" => !self.doc.selection.is_empty(),
             "increment_and_save" | "find_tool" => self.screen == Screen::Job,
             _ => {
                 BUILT_INS.contains(&id)
@@ -249,6 +260,13 @@ impl CutCraftApp {
                 self.pages.open(Page::Design);
             }
             "delete_all_guides" => self.set_guides(vec![]),
+            // the current layer becomes the selected vectors' (the first picked)
+            "activate_layer_of_selection" => {
+                if let Some(&id) = self.doc.selection.iter().next() {
+                    let layer = self.doc.layer_of(id);
+                    self.layer_action(ctx, layer, "set_current_layer");
+                }
+            }
             "lock_all_existing_guides" | "unlock_all_existing_guides" => {
                 let locked = id.starts_with("lock");
                 let guides = self
@@ -356,6 +374,12 @@ impl CutCraftApp {
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
                     self.open_recent(index);
+                }
+            }
+            // the 3D view's menu: the component picked from those under the click
+            id if id.starts_with(gui::SELECT_COMPONENT) => {
+                if let Ok(id) = id[gui::SELECT_COMPONENT.len()..].parse() {
+                    self.doc.selected_components = [EntityId(id)].into();
                 }
             }
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(EXPORT_LEVEL) => {
@@ -909,6 +933,7 @@ impl CutCraftApp {
                 model_whole: true,
                 applied: None,
                 undo_from: self.history.undo_depth(),
+                step: 1,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -1616,6 +1641,15 @@ impl CutCraftApp {
                 for (key, value) in SIZES.iter().zip(shown) {
                     form.params["size"][key] = Value::from(value);
                 }
+                // Depth Below Top reads the model's height while the plane is at its
+                // bottom (0, or past it, or where its bottom was before it was sized), as
+                // Aspire's does; a depth typed above the bottom stays
+                let depth = &mut form.params["placing"]["depth_below_top"];
+                let (at, tall) = (depth.as_f64().unwrap_or(0.0), shown[2]);
+                let was_bottom = form.shown_size.is_some_and(|s| s[2] == at);
+                if at <= 0.0 || at > tall || was_bottom {
+                    *depth = Value::from(tall);
+                }
                 form.shown_size = Some(shown);
             }
         }
@@ -2262,6 +2296,10 @@ impl CutCraftApp {
     /// The open form's buttons: OK and Cancel for a new job's setup, else Apply and Close.
     pub(super) fn form_buttons(&mut self, ui: &mut egui::Ui) {
         let Some(open) = &self.form else { return };
+        let pages = form::pages(&open.fields);
+        if pages > 1 {
+            return self.page_buttons(ui, pages);
+        }
         let new_job = open.new_job;
         let (apply_label, close_label) = if new_job {
             ("OK", "Cancel")
@@ -2325,6 +2363,48 @@ impl CutCraftApp {
         }
     }
 
+    /// A form of several pages (Import 3D Model, as Aspire's): the next page; on the last,
+    /// < Back and Import, which keeps the model as placed and closes; Cancel takes back what
+    /// the form made and closes.
+    fn page_buttons(&mut self, ui: &mut egui::Ui, pages: u64) {
+        let Some(open) = &self.form else { return };
+        let (last, page) = (open.step == pages, open.page);
+        let (mut next, mut back, mut import, mut cancel) = (false, false, false, false);
+        ui.horizontal(|ui| {
+            if last {
+                back = ui.button("< Back").clicked();
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                cancel = ui
+                    .button("Cancel")
+                    .on_hover_text("Close without importing the model")
+                    .clicked();
+                if last {
+                    import = ui
+                        .button("Import")
+                        .on_hover_text("Keep the model as placed")
+                        .clicked();
+                } else {
+                    next = ui.button(cmd_orientate_3d_model::POSITION_PAGE.1).clicked();
+                }
+            });
+        });
+        if cancel {
+            self.cancel_form();
+        } else if import {
+            self.form = None;
+            self.pages.done_with(page);
+            self.status.set_message("Model imported");
+        } else if let Some(open) = &mut self.form {
+            if next {
+                open.step += 1;
+            }
+            if back {
+                open.step -= 1;
+            }
+        }
+    }
+
     /// Cancel on a tool's form: everything done since the form opened is undone (and can be
     /// redone), and the form closes.
     pub(super) fn cancel_form(&mut self) {
@@ -2349,7 +2429,12 @@ impl CutCraftApp {
                         .fit_to_exact_size(egui::vec2(edge, edge)),
                 );
             }
-            ui.strong(open.label);
+            // ponytail: Import 3D Model is the one form with a second page
+            ui.strong(if open.step > 1 {
+                cmd_orientate_3d_model::POSITION_PAGE.0
+            } else {
+                open.label
+            });
         });
         // a list of tools in running order (rest machining), picked from the database
         let mut earlier = None;
@@ -2395,7 +2480,22 @@ impl CutCraftApp {
             material: form::material(&self.doc, units),
             tool: Some(&tool),
         };
-        open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
+        let pages = form::pages(&open.fields);
+        open.dirty |= if pages > 1 {
+            form::show_page(ui, &open.fields, open.step, &mut open.params, &look)
+        } else {
+            form::show(ui, &open.fields, &mut open.params, &look)
+        };
+        // the Position page's Update Undercuts: the model is judged again (it already follows
+        // every change, so this is the same judging once more)
+        if open.step > 1 && open.id == "orientate_3d_model" {
+            let on = open.params["show_undercuts"].as_bool().unwrap_or(false);
+            let update = ui
+                .add_enabled(on, egui::Button::new("Update Undercuts"))
+                .on_hover_text("Judge again what a cutter from above cannot reach")
+                .on_disabled_hover_text("Tick Highlight undercuts first");
+            open.dirty |= update.clicked();
+        }
         let (chosen, edit_tool) = asked.into_inner();
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
@@ -2516,6 +2616,12 @@ impl CutCraftApp {
                     .iter()
                     .map(|id| self.doc.vectors[id].clone())
                     .collect();
+                self.clipboard_components = self
+                    .doc
+                    .selected_components
+                    .iter()
+                    .filter_map(|id| self.doc.components.get(id).cloned())
+                    .collect();
                 let text = serde_json::to_string(&self.clipboard).expect("paths serialize");
                 ctx.copy_text(text);
                 if id == "cut"
@@ -2529,6 +2635,9 @@ impl CutCraftApp {
                 let mut c = Change::builder(&self.doc);
                 let ids: Vec<_> = self.clipboard.iter().map(|p| c.add(p.clone())).collect();
                 c.select(ids);
+                for k in &self.clipboard_components {
+                    c.add_component(k.clone());
+                }
                 self.record(Ok(c.finish()), "Pasted");
             }
             "increment_and_save" => match self.session.path.clone() {

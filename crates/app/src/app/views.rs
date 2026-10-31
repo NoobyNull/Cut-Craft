@@ -250,6 +250,7 @@ impl CutCraftApp {
         self.info_window(ctx);
         self.snap_options_window(ctx);
         self.options_window(ctx);
+        self.settings_3d_window(ctx);
         self.tool_search(ctx);
         match self.screen {
             Screen::Start => {

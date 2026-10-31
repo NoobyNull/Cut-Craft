@@ -127,8 +127,9 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 84] = [
+const BUILT_INS: [&str; 85] = [
     "find_tool",
+    "activate_layer_of_selection",
     "machine_configuration",
     "add_machine",
     "install_offline_package",
@@ -473,6 +474,44 @@ enum Split {
     SideBySide,
 }
 
+/// Aspire 12's component editing icons in the 3D view (help: Editing in the 3D View):
+/// Total Height, Shape Height, Base Height and Additional Settings, a row of round buttons
+/// along the near edge of the selected component's box in Transform mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Handle3d {
+    /// Dragged up or down: its total height, shape and base together.
+    Total,
+    /// Dragged up or down: its shape height.
+    Height,
+    /// Dragged up or down: its base height, the solid bottom it stands on.
+    Base,
+    /// Opens its combine mode, fade, tilt and appearance.
+    Settings,
+}
+
+impl Handle3d {
+    const ALL: [Self; 4] = [Self::Total, Self::Height, Self::Base, Self::Settings];
+
+    fn hint(self) -> &'static str {
+        match self {
+            Self::Total => "Total height: drag up or down",
+            Self::Height => "Shape height: drag up or down",
+            Self::Base => "Base height: drag up or down",
+            Self::Settings => "Combine mode, fade, tilt and appearance",
+        }
+    }
+}
+
+/// The popup the Settings handle opens: Component Properties' settings as being edited,
+/// applied through the command once the pointer is let go (a dragged value is one undo).
+struct Settings3d {
+    component: EntityId,
+    params: cmd_component_properties::Params,
+    dirty: bool,
+    /// Where it opened on screen.
+    at: egui::Pos2,
+}
+
 /// A command whose settings form is open.
 struct OpenForm {
     id: &'static str,
@@ -506,6 +545,8 @@ struct OpenForm {
     applied: Option<Value>,
     /// How many changes could be undone when it opened: Cancel undoes back to there.
     undo_from: usize,
+    /// The page shown, from 1, of a form with several (Import 3D Model's Position page).
+    step: u64,
 }
 
 #[expect(
@@ -574,6 +615,16 @@ struct CutCraftApp {
     shots: Option<screenshots::Shots>,
     /// What Cut and Copy last took, pasted back in place.
     clipboard: Vec<cut_craft_core::geometry::Path>,
+    clipboard_components: Vec<cut_craft_core::component::Component>,
+    /// Where the 3D view's picture was fitted last frame, for picking.
+    fit_3d: Option<egui::Rect>,
+    /// The 3D view's edit handles, where they were drawn last frame.
+    handles_3d: Vec<(Handle3d, egui::Pos2)>,
+    /// The components under the 3D view's last right-click, topmost first.
+    under_3d: Vec<EntityId>,
+    /// A handle being dragged, from where the pointer pressed.
+    drag_3d: Option<(Handle3d, egui::Pos2)>,
+    settings_3d: Option<Settings3d>,
     /// An open Help window.
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
@@ -765,6 +816,7 @@ fn summary_table(
             enabled: None,
             group: None,
             tab: None,
+            page: 1,
         },
         crate::form::Field {
             key: "scale_factor".into(),
@@ -785,6 +837,7 @@ fn summary_table(
             enabled: None,
             group: None,
             tab: None,
+            page: 1,
         },
     ];
     let mut values = serde_json::json!({ "rapid_rate": *rapid, "scale_factor": *scale });
@@ -1189,16 +1242,20 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             });
         });
     } else if !item.children.is_empty() {
-        ui.menu_button(&item.name, |ui| {
-            menu_items(ui, &item.children, menus, clicked);
+        ui.add_enabled_ui(item.is_enabled, |ui| {
+            ui.menu_button(&item.name, |ui| {
+                menu_items(ui, &item.children, menus, clicked);
+            });
         });
     } else {
         let button = egui::Button::new(&item.name)
             .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
             .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
-        let response = ui
-            .add_enabled(item.is_enabled && (menus.available)(&item.action), button)
-            .on_disabled_hover_text("Not implemented yet");
+        let available = (menus.available)(&item.action);
+        let mut response = ui.add_enabled(item.is_enabled && available, button);
+        if !available {
+            response = response.on_disabled_hover_text("Not implemented yet");
+        }
         if response.clicked() {
             *clicked = Some(item.action.clone());
             ui.close();

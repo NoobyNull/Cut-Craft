@@ -93,6 +93,10 @@ pub struct Component {
     /// The file an imported model came from, to import it again (added with re-import).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
+    /// Its own colour in the 3D view (Component Properties' Solid Color); `None` is its
+    /// parent's, the job's (added with the 3D view's component settings).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<[u8; 3]>,
 }
 
 /// Where an imported model came from: it can be imported again, its settings changed, only
@@ -432,6 +436,7 @@ impl Component {
             level: 0,
             group: None,
             source: None,
+            colour: None,
         }
     }
 
@@ -481,6 +486,7 @@ impl Component {
             level: 0,
             group: None,
             source: None,
+            colour: None,
         }
     }
 
@@ -736,6 +742,17 @@ fn combined(on: &[&Component], p: Point) -> Option<f64> {
             Some(c.combine.apply(under.unwrap_or(0.0), height))
         })
     })
+}
+
+/// The colour of the topmost shown component over `p`, when it has one of its own
+/// (Component Properties' Solid Color); `None` leaves the job's.
+pub fn colour_at(doc: &Document, p: Point) -> Option<[u8; 3]> {
+    doc.components
+        .values()
+        .rev()
+        .filter(|c| c.visible)
+        .find(|c| c.height_at(p).is_some())
+        .and_then(|c| c.colour)
 }
 
 /// The model's surface over the job, on a flat base at 0: each visible level's visible

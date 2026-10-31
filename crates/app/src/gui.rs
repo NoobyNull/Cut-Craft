@@ -311,15 +311,112 @@ impl MenuSystem {
             .unwrap_or_else(|| panic!("there is a {name} menu"))
     }
 
+    /// Edit ▸ `name`, reused as it is.
+    fn edit(&self, name: &str) -> MenuItem {
+        let items = &self.menu("Edit").items;
+        let item = items.iter().find(|i| i.name == name);
+        item.cloned()
+            .unwrap_or_else(|| panic!("there is an Edit ▸ {name}"))
+    }
+
+    /// The 3D view's right-click menu: Aspire 12's 2D/3D view menu (help: Right Mouse Click
+    /// Menu) headed by the components `under` the click, topmost first and the selected
+    /// ticked (a click picks that one, so a buried component can be picked); its vector
+    /// items greyed while no vector is selected, and Component ▸ the chosen component's own
+    /// menu.
+    pub fn view_3d_menu(&self, doc: &Document, under: &[EntityId]) -> Vec<MenuItem> {
+        let edit = |name: &str| self.edit(name);
+        let chosen = doc
+            .selected_components
+            .iter()
+            .rev()
+            .find(|id| doc.components.contains_key(id))
+            .map(|&id| (id, &doc.components[&id]));
+        let vectors = !doc.selection.is_empty();
+        let text = doc.selection.iter().any(|id| {
+            doc.vector_groups
+                .get(id)
+                .is_some_and(|g| doc.texts.contains_key(g))
+        });
+        let layers = doc.layers.iter().map(|l| {
+            MenuItem::run::<cmd_move_to_layer::MoveToLayer>(
+                &l.name,
+                &cmd_move_to_layer::Params { layer: l.id },
+            )
+        });
+        let mut menu: Vec<MenuItem> = under
+            .iter()
+            .filter_map(|id| {
+                let name = &doc.components.get(id)?.name;
+                let pick = format!("{SELECT_COMPONENT}{}", id.0);
+                Some(
+                    MenuItem::with_action(name, &pick)
+                        .checked(doc.selected_components.contains(id)),
+                )
+            })
+            .collect();
+        if !menu.is_empty() {
+            menu.push(MenuItem::separator());
+        }
+        let [duplicate, group, ungroup, component, move_to] =
+            component_items(doc, chosen, layers.collect());
+        menu.extend([
+            edit("Cut"),
+            edit("Copy"),
+            edit("Paste"),
+            duplicate,
+            MenuItem::separator(),
+            edit("Delete"),
+            MenuItem::separator(),
+            group,
+            ungroup,
+            MenuItem::separator(),
+            MenuItem {
+                name: "Select".into(),
+                ..edit("Selection")
+            },
+            MenuItem::with_action("Activate Layer of Selection", "activate_layer_of_selection")
+                .enabled(vectors),
+            MenuItem::separator(),
+            // ponytail: Aspire's Text ▸ also removes text from a curve and breaks a block
+            // into lines; neither exists yet
+            MenuItem::submenu(
+                "Text",
+                vec![MenuItem::with_action(
+                    "Convert to Vectors",
+                    "convert_text_to_curves",
+                )],
+            )
+            .enabled(text),
+            MenuItem::with_action("Convert To Vectors", "convert_text_to_curves").enabled(text),
+            MenuItem::separator(),
+            MenuItem::form::<cmd_join_close_vectors::JoinCloseVectors>(
+                "Join / Close Vectors...",
+                &cmd_join_close_vectors::Params::default(),
+            )
+            .enabled(vectors),
+            MenuItem::with_action("Node Edit Mode", "node_edit").enabled(vectors),
+            MenuItem::separator(),
+            // Appearance fades a picture's greyscale in the 2D view: Bitmap Properties
+            MenuItem::with_action("Appearance", "bitmap_properties")
+                .enabled(!doc.selected_bitmaps.is_empty()),
+            component,
+            MenuItem::submenu(
+                "Copy To",
+                vec![
+                    MenuItem::with_action("Other Side", "copy_to_other_side")
+                        .enabled(doc.job.double_sided.is_some()),
+                ],
+            ),
+            move_to,
+        ]);
+        menu
+    }
+
     /// The 2D view's right-click menu: Aspire's selection menu (MENU 318), plus Move to Layer,
     /// the vector booleans and Align. Edit menu items are reused as they are.
     pub fn selection_menu(&self, doc: &Document) -> Vec<MenuItem> {
-        let edit = |name: &str| {
-            let items = &self.menu("Edit").items;
-            let item = items.iter().find(|i| i.name == name);
-            item.cloned()
-                .unwrap_or_else(|| panic!("there is an Edit ▸ {name}"))
-        };
+        let edit = |name: &str| self.edit(name);
         let layers = doc.layers.iter().map(|l| {
             MenuItem::run::<cmd_move_to_layer::MoveToLayer>(
                 &l.name,
@@ -610,8 +707,10 @@ pub fn favourites_menu(page: crate::pages::Page, only: bool) -> Vec<MenuItem> {
 
 /// The action that imports a model again from its file, followed by the component's id.
 pub const REIMPORT_MODEL: &str = "reimport_model:";
+/// `select_component:<id>`: the 3D view's menu lists the components under the click.
+pub const SELECT_COMPONENT: &str = "select_component:";
 
-const COMBINE_MODES: [(&str, Combine); 5] = [
+pub const COMBINE_MODES: [(&str, Combine); 5] = [
     ("Add", Combine::Add),
     ("Subtract", Combine::Subtract),
     ("Merge", Combine::Merge),
@@ -782,6 +881,57 @@ fn move_to_level(doc: &Document, component: &Component) -> MenuItem {
             })
             .collect(),
     )
+}
+
+/// The view menu's items that act on the chosen component (Duplicate, Group, Ungroup,
+/// Component ▸, Move To ▸), or for vectors when there is none.
+fn component_items(
+    doc: &Document,
+    chosen: Option<(EntityId, &Component)>,
+    layers: Vec<MenuItem>,
+) -> [MenuItem; 5] {
+    let vectors = !doc.selection.is_empty();
+    match chosen {
+        Some((id, k)) => [
+            MenuItem::run::<cmd_duplicate_component::DuplicateComponent>(
+                "Duplicate",
+                &cmd_duplicate_component::Params { component: id },
+            ),
+            MenuItem::form::<cmd_group_components::GroupComponents>(
+                "Group",
+                &cmd_group_components::Params::default(),
+            )
+            .enabled(doc.selected_components.len() > 1),
+            MenuItem::run::<cmd_ungroup_components::UngroupComponents>(
+                "Ungroup",
+                &cmd_ungroup_components::Params {
+                    group: k.group.as_ref().map_or(0, |g| g.id),
+                },
+            )
+            .enabled(k.group.is_some()),
+            {
+                // shape to vector outline, with the component's own menu
+                let mut items = component_menu(doc, id, k);
+                items.push(MenuItem::separator());
+                items.push(MenuItem::with_action(
+                    "Create Vector Boundary",
+                    "component_boundary",
+                ));
+                MenuItem::submenu("Component", items)
+            },
+            MenuItem {
+                name: "Move To".into(),
+                ..move_to_level(doc, k)
+            },
+        ],
+        None => [
+            MenuItem::with_action("Duplicate", "duplicate_component").enabled(false),
+            MenuItem::with_action("Group", "group").enabled(vectors),
+            MenuItem::with_action("Ungroup", "ungroup").enabled(vectors),
+            MenuItem::submenu("Component", vec![]).enabled(false),
+            MenuItem::submenu("Move To", layers).enabled(vectors),
+        ],
+    }
 }
 
 /// Aspire's component menu (MENU 613) for component `id`, its combine mode ticked.

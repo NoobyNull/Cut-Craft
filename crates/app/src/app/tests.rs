@@ -1354,6 +1354,55 @@ fn an_imported_model_shows_at_once_and_follows_its_form() {
 }
 
 #[test]
+fn importing_a_model_goes_through_orientation_then_position() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("pages");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Initial Orientation").is_some());
+    assert!(h.text_at("Depth Below Top").is_none(), "page 1 alone");
+    let next = h
+        .text_at(cmd_orientate_3d_model::POSITION_PAGE.1)
+        .expect("the way to the Position page");
+    h.click(next, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at(cmd_orientate_3d_model::POSITION_PAGE.0).is_some());
+    assert!(h.text_at("Initial Orientation").is_none());
+    assert!(h.text_at("Update Undercuts").is_some());
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["placing"]["depth_below_top"], 5.0,
+        "the whole model to start with, as its height"
+    );
+    let tall = |app: &CutCraftApp| {
+        let k = app.doc.components.values().next().unwrap();
+        k.height_range().unwrap().1
+    };
+    // the apex falls between cells
+    let cell = h.app.doc.job.model_cell();
+    assert!((tall(&h.app) - 5.0).abs() < 2.0 * cell, "{}", tall(&h.app));
+    // the plane halfway down the model keeps its top half
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["depth_below_top"] = Value::from(2.5);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert!((tall(&h.app) - 2.5).abs() < 2.0 * cell, "{}", tall(&h.app));
+    let back = h.text_at("< Back").unwrap();
+    h.click(back, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Initial Orientation").is_some(), "back on page 1");
+    let next = h.text_at(cmd_orientate_3d_model::POSITION_PAGE.1).unwrap();
+    h.click(next, Modifiers::NONE);
+    h.frame(vec![]);
+    let import = h.text_at("Import").unwrap();
+    h.click(import, Modifiers::NONE);
+    assert!(h.app.form.is_none(), "Import closes the form");
+    assert_eq!(h.app.doc.components.len(), 1, "keeping the model");
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
     use cut_craft_core::geometry::Segment;
     let arcs = |app: &CutCraftApp| {
@@ -1550,6 +1599,125 @@ fn a_double_click_in_the_3d_view_picks_the_component_under_it() {
         None,
         "off the dome"
     );
+}
+
+#[test]
+fn right_clicking_a_component_in_the_3d_view_picks_it_and_opens_its_menu() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let fit = h.app.fit_3d.expect("the 3D view has been drawn");
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
+    let z = surface.at(Point::new(20.0, 20.0)).unwrap();
+    let top = screen(cut_craft_core::glam::DVec3::new(
+        20.0 - surface.origin.x,
+        20.0 - surface.origin.y,
+        z,
+    ));
+    h.right_click(top);
+    assert!(h.app.doc.selected_components.contains(&EntityId(1)));
+    assert_eq!(h.app.under_3d, vec![EntityId(1)]);
+    assert!(h.text_at("dome").is_some(), "the menu, headed by its name");
+    let menu = |app: &CutCraftApp| app.menus.view_3d_menu(&app.doc, &app.under_3d);
+    assert!(
+        leaf(&menu(&h.app), &["dome"]).is_checked,
+        "listed as selected"
+    );
+    assert!(
+        !leaf(&menu(&h.app), &["Node Edit Mode"]).is_enabled,
+        "a vector item, greyed for a component"
+    );
+    assert!(leaf(&menu(&h.app), &["Component", "Combine Mode", "Add"]).is_checked);
+    h.choose(menu, &["Component", "Create Vector Boundary"]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "shape to vector outline");
+    h.choose(menu, &["Copy"]);
+    h.choose(menu, &["Paste"]);
+    assert_eq!(h.app.doc.components.len(), 2, "components paste too");
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.choose(menu, &["Delete"]);
+    assert_eq!(h.app.doc.components.len(), 1);
+}
+
+#[test]
+fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
+    use cut_craft_core::component::Combine;
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.handles_3d.is_empty(), "not until Transform mode");
+    // a double-click on the selected component enters it, as Aspire's second click does
+    let fit = h.app.fit_3d.unwrap();
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
+    let z = surface.at(Point::new(20.0, 20.0)).unwrap();
+    h.double_click(screen(cut_craft_core::glam::DVec3::new(
+        20.0 - surface.origin.x,
+        20.0 - surface.origin.y,
+        z,
+    )));
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+    h.frame(vec![]);
+    let at = |h: &Harness, which: Handle3d| {
+        h.app
+            .handles_3d
+            .iter()
+            .find(|(k, _)| *k == which)
+            .map(|(_, at)| *at)
+            .expect("the handles are drawn over the selected component")
+    };
+    let dome = |h: &Harness| h.app.doc.components[&EntityId(1)].clone();
+    // dragging the height handle up a quarter of the view doubles the shape height
+    let quarter = h.app.fit_3d.unwrap().height() / VIEW_ZOOM_QUARTERS;
+    let from = at(&h, Handle3d::Height);
+    h.drag(from, from - vec2(0.0, quarter));
+    let height = dome(&h).shaping.shape_height;
+    assert!((height - 200.0).abs() < 5.0, "{height}");
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(dome(&h).shaping.shape_height, 100.0, "undoable");
+    // the view is fitted to the model again, so the handles move
+    h.frame(vec![]);
+    // the base handle raises it on a solid bottom
+    let from = at(&h, Handle3d::Base);
+    h.drag(from, from - vec2(0.0, quarter));
+    let base = dome(&h).shaping.base_height;
+    assert!((base - h.app.doc.job.thickness).abs() < 0.5, "{base}");
+    // the total height handle scales shape and base together
+    h.frame(vec![]);
+    let before = dome(&h);
+    let from = at(&h, Handle3d::Total);
+    h.drag(from, from - vec2(0.0, quarter));
+    let after = dome(&h);
+    assert!(
+        (after.shaping.shape_height - 200.0).abs() < 5.0,
+        "{after:?}"
+    );
+    assert!((after.shaping.base_height - 2.0 * before.shaping.base_height).abs() < 0.5);
+    // the settings handle opens the popup, which works through Component Properties
+    let settings = at(&h, Handle3d::Settings);
+    h.click(settings, Modifiers::NONE);
+    h.frame(vec![]);
+    let subtract = h.text_at("Subtract").expect("the settings popup");
+    h.click(subtract, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(dome(&h).combine, Combine::Subtract);
+    let fade = h.text_at("Fade").unwrap();
+    h.click(fade, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(dome(&h).shaping.fade.is_some());
+    h.app.invoke(&h.ctx, "undo");
+    assert!(dome(&h).shaping.fade.is_none(), "one undo each");
+    let close = h.text_at("Close").unwrap();
+    h.click(close, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Fade").is_none(), "closed");
 }
 
 #[test]
@@ -3245,7 +3413,9 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     for label in ["Imported model type", "Offered"] {
         assert_eq!(h.text_at(label), None, "{label} is not shown");
     }
-    assert!(h.text_at("Height above bed").is_some());
+    // the placing is on the Position page, as Aspire's
+    assert!(h.text_at("Depth Below Top").is_none());
+    assert!(h.text_at(cmd_orientate_3d_model::POSITION_PAGE.1).is_some());
     let _ = std::fs::remove_file(file);
 }
 

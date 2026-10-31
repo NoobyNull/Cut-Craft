@@ -131,14 +131,23 @@ pub struct Placing {
     pub center: bool,
     /// Where the model's lower-left corner goes when not centred
     pub position: Xy,
-    /// How high the model's lowest point sits above the bed (the material's underside);
-    /// below 0 sinks it into the zero plane
-    #[schemars(title = "Height above bed", extend("x-unit" = "mm"))]
+    /// How far below the model's top the zero plane (the material's surface) cuts it: what
+    /// is above the plane becomes the component; 0 keeps the whole model, sitting on the
+    /// plane
+    #[schemars(title = "Depth Below Top", extend("x-unit" = "mm"))]
     #[serde(default)]
-    pub height_above_bed: f64,
+    pub depth_below_top: f64,
+    /// In a double-sided job, the model seen from below goes to the other side too
+    #[schemars(title = "Create both sides")]
+    #[serde(default)]
+    pub both_sides: bool,
     #[schemars(title = "Discard data below zero plane")]
     pub discard_below_zero: bool,
 }
+
+/// The Position page's heading, and the button on the first page that goes to it, as
+/// Aspire 12 names them.
+pub const POSITION_PAGE: (&str, &str) = ("Import 3D Model > Position", "Position & Import >");
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
@@ -155,12 +164,13 @@ pub struct Params {
     #[schemars(
         title = "Position relative to Modeling Plane",
         extend("x-section" = true),
-        extend("x-icon" = "import/position_relative_to_modeling_plane.png")
+        extend("x-icon" = "import/position_relative_to_modeling_plane.png"),
+        extend("x-page" = 2)
     )]
     pub placing: Placing,
     /// Colour the faces a cutter from above cannot reach (turned down, or under an
     /// overhang) in the 3D view while the form is open
-    #[schemars(title = "Show undercuts")]
+    #[schemars(title = "Highlight undercuts", extend("x-page" = 2))]
     #[serde(default = "yes")]
     pub show_undercuts: bool,
     /// A full 3D model is kept whole: in a double-sided job its underside goes to the other
@@ -228,7 +238,8 @@ impl Default for Params {
             placing: Placing {
                 center: true,
                 position: Xy::new(0.0, 0.0),
-                height_above_bed: 0.0,
+                depth_below_top: 0.0,
+                both_sides: false,
                 discard_below_zero: true,
             },
             show_undercuts: true,
@@ -311,6 +322,7 @@ impl Command for Orientate3dModel {
         c.add_component(k);
         if let Some(two) = doc.job.double_sided
             && p.model_type == ModelType::Full
+            && p.placing.both_sides
         {
             // the model seen from the other side: turned over as the material is, up from
             // that side's face
@@ -394,7 +406,6 @@ fn placed(
         ));
     }
     let area = doc.job.area();
-    let bottom = p.placing.height_above_bed;
     // size: 0 keeps the file's; with the ratio locked the first size given sets all
     let wanted = |want: f64, have: f64| (want > 0.0 && have > 0.0).then(|| want / have);
     let each = [
@@ -403,9 +414,8 @@ fn placed(
         wanted(p.size.z, size.z),
     ];
     let scale = if p.fit_material {
-        // as big as the material allows, every axis at the same rate until one meets it;
-        // the thickness counts only above where the model sits
-        let room = [area.size().x, area.size().y, doc.job.thickness - bottom];
+        // as big as the material allows, every axis at the same rate until one meets it
+        let room = [area.size().x, area.size().y, doc.job.thickness];
         let fits = room
             .into_iter()
             .zip([size.x, size.y, size.z])
@@ -420,6 +430,15 @@ fn placed(
         DVec3::new(x, y, z)
     };
     let footprint = Point::new(size.x * scale.x, size.y * scale.y);
+    // the zero plane Depth Below Top down from the model's top: its lowest point sits that
+    // far below it, less the model's height
+    let tall = size.z * scale.z;
+    let depth = p.placing.depth_below_top;
+    let bottom = if depth > 0.0 {
+        depth.min(tall) - tall
+    } else {
+        0.0
+    };
     let corner = if p.placing.center {
         area.center() - footprint / 2.0
     } else {
@@ -930,7 +949,7 @@ mod tests {
                     ..Params::default().size
                 },
                 placing: Placing {
-                    height_above_bed: 2.0,
+                    depth_below_top: 8.0,
                     discard_below_zero: false,
                     ..Params::default().placing
                 },
@@ -941,11 +960,9 @@ mod tests {
         // 20 wide becomes 40 (ratio locked: the 5 deep front face is 10 tall now)
         assert!((e.size().x - 40.0).abs() < 2.0 * k.cell, "{e:?}");
         assert!((e.size().y - 10.0).abs() < 2.0 * k.cell, "{e:?}");
+        // a box seen from above is its flat top: 8 up, the plane 8 below the doubled face
         let (_, hi) = k.height_range().unwrap();
-        assert!(
-            (hi - 22.0).abs() < 1e-6,
-            "the 10 tall face doubled, from 2 up: {hi}"
-        );
+        assert!((hi - 8.0).abs() < 1e-6, "{hi}");
     }
 
     #[test]
@@ -1022,19 +1039,20 @@ mod tests {
             },
         );
         assert!((k.extent().size().x - 20.0 * 25.4).abs() < 2.0 * k.cell);
-        // sunk 100 into the bed, the 5 high box is all below the zero plane and discarded,
-        // so the import refuses
-        let p = with_file(
+        // the zero plane 2 below the top of the 5 high box: 2 of it is kept above the plane,
+        // the rest discarded
+        let (_, k) = imported(
             "deep",
             &Params {
                 placing: Placing {
-                    height_above_bed: -100.0,
+                    depth_below_top: 2.0,
                     ..Params::default().placing
                 },
                 ..Params::default()
             },
         );
-        assert!(Orientate3dModel::run(&Document::default(), &p).is_err());
+        let (lo, hi) = k.height_range().unwrap();
+        assert!((hi - 2.0).abs() < 1e-6 && lo >= 0.0, "{lo} to {hi}");
     }
 }
 
@@ -1364,7 +1382,7 @@ mod rotary {
                 file: file.clone(),
                 model_type,
                 placing: Placing {
-                    height_above_bed: 0.0,
+                    both_sides: true,
                     ..Params::default().placing
                 },
                 ..Params::default()
