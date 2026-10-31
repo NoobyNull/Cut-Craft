@@ -805,3 +805,7 @@ instead of half-cell steps.
 ### Re-Import [obs: help Import a Component or 3D Model]
 - Once imported, a model can be re-imported to adjust its size, position and slicing plane, "provided it has not been changed significantly": right-click one of its components in the tree ▸ Re-Import. A model that was segmented reopens the 3D Segment dialog in its last state instead.
 - **[inf]** Cut Craft: Re-import Model… on an imported component's menu reopens Orientate 3D Model with the import's settings, from the file where it was (or beside the job, once moved with it); a changed file is imported again as it is now, with a warning. Not built: reopening Segment 3D Model for a segmented model.
+
+### Plate Production toolpaths [obs: help Plate Production]
+- With toolpaths calculated for the master template, Create Toolpaths (on by default then) calculates toolpaths for every plate: one toolpath per operation per sheet of material, named "S1 - Name" after the sheet and the template's toolpath. Unticked, only the vectors are made.
+- **[inf]** Cut Craft: each template toolpath (one whose vectors are in the template) is made again per sheet with its moves shifted onto each plate of that sheet, keeping its strategy, settings and tool, its vectors the plates' copies; a recalculation runs the strategy on those copies.
