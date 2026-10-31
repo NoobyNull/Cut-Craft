@@ -243,6 +243,24 @@ impl Canvas {
 
     /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the
     /// selection colour) and `overlay`.
+    /// Where a guide's line crosses the view, on screen: from edge to edge for one along an
+    /// axis, far past the view either way for an angled one.
+    pub fn guide_ends(&self, g: &cut_craft_core::document::Guide) -> [Pos2; 2] {
+        let t = self.transform;
+        if !g.tilted() {
+            let at = t.to_screen(Point::new(g.at, g.at));
+            return if g.vertical {
+                [pos2(at.x, self.area.top()), pos2(at.x, self.area.bottom())]
+            } else {
+                [pos2(self.area.left(), at.y), pos2(self.area.right(), at.y)]
+            };
+        }
+        let middle = g.nearest(t.to_job(self.area.center()));
+        let far = f64::from(self.area.size().max_elem() / t.scale) * 2.0;
+        let d = g.direction();
+        [t.to_screen(middle - d * far), t.to_screen(middle + d * far)]
+    }
+
     /// Whether `at` is on a ruler: `Some(true)` the left one (it gives vertical guides),
     /// `Some(false)` the top one; the corner where they meet is neither.
     pub fn ruler_at(&self, ui: &egui::Ui, at: Pos2) -> Option<bool> {
@@ -529,13 +547,7 @@ impl Canvas {
         if display.guides {
             let guide = Stroke::new(datum.width, visuals.selection.bg_fill);
             for g in &doc.guides {
-                let at = t.to_screen(Point::new(g.at, g.at));
-                let line = if g.vertical {
-                    [pos2(at.x, self.area.top()), pos2(at.x, self.area.bottom())]
-                } else {
-                    [pos2(self.area.left(), at.y), pos2(self.area.right(), at.y)]
-                };
-                painter.extend(Shape::dashed_line(&line, guide, dash, gap));
+                painter.extend(Shape::dashed_line(&self.guide_ends(g), guide, dash, gap));
             }
         }
         // toolpath tiles: their edges, and their overlap faintly

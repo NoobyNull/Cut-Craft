@@ -5098,3 +5098,62 @@ fn a_shift_click_on_a_dimension_with_its_form_open_edits_it() {
     assert_eq!(form.params["custom_text"], "W");
     assert!(form.drawn.is_some(), "the shape it edits");
 }
+
+#[test]
+fn guides_are_inserted_from_the_menu_and_their_properties_turn_lock_and_add_parallels() {
+    let mut h = Harness::new();
+    h.app.menu_at = Some(Point::new(40.0, 30.0));
+    for insert in ["guide:insert:v", "guide:insert:h", "guide:insert:a"] {
+        assert!(h.app.available(insert));
+        h.app.invoke(&h.ctx, insert);
+    }
+    let guides = h.app.doc.guides.clone();
+    assert_eq!(guides.len(), 3);
+    assert!(guides[0].vertical && (guides[0].at - 40.0).abs() < 1e-9);
+    assert!(!guides[1].vertical && (guides[1].at - 30.0).abs() < 1e-9);
+    let angled = guides[2];
+    assert!((angled.angle() - 45.0).abs() < 1e-9, "{angled:?}");
+    assert!(
+        angled.distance(Point::new(40.0, 30.0)) < 1e-9,
+        "through where the menu opened"
+    );
+    assert_eq!(
+        h.app.guide_props.as_ref().map(|p| p.index),
+        Some(2),
+        "its properties open"
+    );
+    // Guide Properties on the first: a new position and angle, locked
+    h.app.guide_props = Some(GuideProps {
+        index: 0,
+        position: 50.0,
+        angle: 60.0,
+        locked: true,
+        new_at: 10.0,
+        relative: true,
+        count: 2,
+    });
+    h.app.guide_props_apply();
+    let g = h.app.doc.guides[0];
+    assert!(
+        g.locked && (g.at - 50.0).abs() < 1e-9 && (g.angle() - 60.0).abs() < 1e-9,
+        "{g:?}"
+    );
+    // two parallels, 10 and 20 to its left
+    h.app.guide_props_create();
+    assert_eq!(h.app.doc.guides.len(), 5);
+    for (k, i) in [(1.0, 3), (2.0, 4)] {
+        let made = h.app.doc.guides[i];
+        let want = g.parallel(10.0 * k);
+        assert!((made.at - want.at).abs() < 1e-9 && (made.angle() - want.angle()).abs() < 1e-9);
+        assert!(!made.locked);
+    }
+    h.app.guide_props_delete();
+    assert_eq!(h.app.doc.guides.len(), 4);
+    assert!(h.app.guide_props.is_none(), "the window closed");
+    // the menu's lock toggles
+    assert!(!h.app.doc.guides[0].locked);
+    h.app.invoke(&h.ctx, "guide:lock:0");
+    assert!(h.app.doc.guides[0].locked);
+    let menu = gui::guide_menu(0, true);
+    assert_eq!(menu[1].name, "Unlock Guide");
+}

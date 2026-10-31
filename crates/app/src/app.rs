@@ -282,6 +282,19 @@ impl Default for Summary {
     }
 }
 
+/// Guide Properties: which guide, and what is typed: its position and angle, whether it is
+/// locked, and a new guide's position or offset and how many.
+#[derive(Clone, Debug)]
+struct GuideProps {
+    index: usize,
+    position: f64,
+    angle: f64,
+    locked: bool,
+    new_at: f64,
+    relative: bool,
+    count: u32,
+}
+
 /// A toolpath's row in the Toolpath Summary: its id, name, time, whether it is shown, and
 /// its notes.
 struct SummaryRow {
@@ -665,6 +678,11 @@ struct CutCraftApp {
     /// Node editing's mirror lines, H and V: with the first, nodes either side of the
     /// selection's middle move opposite ways across; with the second, up and down.
     node_mirror: [bool; 2],
+    /// Where the 2D view's right-click menu last opened, in job coordinates: guides inserted
+    /// from it go there.
+    menu_at: Option<Point>,
+    /// Guide Properties, open on a guide.
+    guide_props: Option<GuideProps>,
     /// Measure / Inspect's last result, shown in its form while the tool is on.
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.

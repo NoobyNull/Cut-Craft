@@ -581,6 +581,10 @@ pub struct Guide {
     pub at: f64,
     #[serde(default)]
     pub locked: bool,
+    /// Turned from its own direction (up for a vertical guide, across for a horizontal one)
+    /// in degrees anticlockwise, about where it crosses its axis (added with angled guides).
+    #[serde(default)]
+    pub tilt: f64,
 }
 
 impl Guide {
@@ -589,6 +593,7 @@ impl Guide {
             vertical: true,
             at: x,
             locked: false,
+            tilt: 0.0,
         }
     }
 
@@ -597,7 +602,84 @@ impl Guide {
             vertical: false,
             at: y,
             locked: false,
+            tilt: 0.0,
         }
+    }
+
+    /// Its direction in degrees anticlockwise from the X axis: 0 across, 90 up, plus its
+    /// tilt (Aspire's guide angle).
+    #[must_use]
+    pub fn angle(&self) -> f64 {
+        let own = if self.vertical { 90.0 } else { 0.0 };
+        own + self.tilt
+    }
+
+    /// Whether it is turned off its axis.
+    #[must_use]
+    pub fn tilted(&self) -> bool {
+        self.tilt.abs() > 1e-9
+    }
+
+    /// The guide at `degrees` from the X axis.
+    #[must_use]
+    pub fn with_angle(self, degrees: f64) -> Self {
+        Self {
+            tilt: degrees - if self.vertical { 90.0 } else { 0.0 },
+            ..self
+        }
+    }
+
+    /// Where it crosses its axis: (`at`, 0) for a vertical guide, (0, `at`) for a horizontal.
+    #[must_use]
+    pub fn anchor(&self) -> Point {
+        if self.vertical {
+            Point::new(self.at, 0.0)
+        } else {
+            Point::new(0.0, self.at)
+        }
+    }
+
+    #[must_use]
+    pub fn direction(&self) -> Point {
+        Point::from_angle(self.angle().to_radians())
+    }
+
+    /// The point of the guide nearest `p`.
+    #[must_use]
+    pub fn nearest(&self, p: Point) -> Point {
+        let (anchor, d) = (self.anchor(), self.direction());
+        anchor + d * (p - anchor).dot(d)
+    }
+
+    #[must_use]
+    pub fn distance(&self, p: Point) -> f64 {
+        self.nearest(p).distance(p)
+    }
+
+    /// The guide moved to pass through `p`, keeping its direction.
+    #[must_use]
+    pub fn through(self, p: Point) -> Self {
+        let d = self.direction();
+        let at = if self.vertical {
+            if d.y.abs() < 1e-12 {
+                p.x
+            } else {
+                p.x - p.y * d.x / d.y
+            }
+        } else if d.x.abs() < 1e-12 {
+            p.y
+        } else {
+            p.y - p.x * d.y / d.x
+        };
+        Self { at, ..self }
+    }
+
+    /// A guide parallel to this one, `offset` to its left (across its direction).
+    #[must_use]
+    pub fn parallel(self, offset: f64) -> Self {
+        let left = self.direction().perp();
+        let anchor = self.anchor();
+        self.through(anchor + left * offset)
     }
 }
 
@@ -907,4 +989,23 @@ impl Document {
             .find(|name| !groups.contains(name))
             .expect("one more name than groups")
     }
+}
+
+#[cfg(test)]
+#[test]
+fn an_angled_guide_is_a_line_through_where_it_crosses_its_axis() {
+    let g = Guide::horizontal(10.0).with_angle(45.0);
+    assert!((g.angle() - 45.0).abs() < 1e-9 && g.tilted());
+    assert!(!Guide::vertical(3.0).tilted());
+    assert_eq!(Guide::vertical(3.0).angle(), 90.0);
+    // y = x + 10: the point (10, 10) is 10 / sqrt 2 off it
+    assert!((g.distance(Point::new(10.0, 10.0)) - 10.0 / 2f64.sqrt()).abs() < 1e-9);
+    assert!(g.distance(Point::new(5.0, 15.0)) < 1e-9);
+    // moved through (40, 30): y = x - 10
+    let moved = g.through(Point::new(40.0, 30.0));
+    assert!((moved.at + 10.0).abs() < 1e-9 && moved.distance(Point::new(40.0, 30.0)) < 1e-9);
+    // a parallel 10 to its left is 10 away everywhere
+    let beside = g.parallel(10.0);
+    assert!((beside.distance(Point::new(5.0, 15.0)) - 10.0).abs() < 1e-9);
+    assert!((beside.angle() - 45.0).abs() < 1e-9);
 }

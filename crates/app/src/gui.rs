@@ -400,6 +400,8 @@ impl MenuSystem {
             MenuItem::with_action("Object Properties", "object_properties"),
             MenuItem::with_action("Bitmap Properties", "bitmap_properties")
                 .enabled(!doc.selected_bitmaps.is_empty()),
+            MenuItem::separator(),
+            guides_submenu(),
         ]
     }
 
@@ -407,6 +409,30 @@ impl MenuSystem {
     pub fn items(&self) -> Vec<&MenuItem> {
         self.menus.iter().flat_map(|m| leaves(&m.items)).collect()
     }
+}
+
+/// The 2D view's menu on a guide: its properties, locking it, deleting it.
+pub fn guide_menu(index: usize, locked: bool) -> Vec<MenuItem> {
+    vec![
+        MenuItem::with_action("Guide Properties…", &format!("{GUIDE}props:{index}")),
+        MenuItem::with_action(
+            if locked { "Unlock Guide" } else { "Lock Guide" },
+            &format!("{GUIDE}lock:{index}"),
+        ),
+        MenuItem::with_action("Delete Guide", &format!("{GUIDE}delete:{index}")),
+    ]
+}
+
+/// The 2D view's Guidelines submenu: a guide inserted where the menu opened.
+pub fn guides_submenu() -> MenuItem {
+    MenuItem::submenu(
+        "Guidelines",
+        vec![
+            MenuItem::with_action("Insert Horizontal Guide", &format!("{GUIDE}insert:h")),
+            MenuItem::with_action("Insert Vertical Guide", &format!("{GUIDE}insert:v")),
+            MenuItem::with_action("Insert Angled Guide…", &format!("{GUIDE}insert:a")),
+        ],
+    )
 }
 
 /// The selection's Text submenu: editing the selected text, and breaking a block of lines
@@ -768,6 +794,9 @@ pub fn favourites_menu(page: crate::pages::Page, only: bool) -> Vec<MenuItem> {
 
 /// The action that imports a model again from its file, followed by the component's id.
 pub const REIMPORT_MODEL: &str = "reimport_model:";
+/// A guide action: then `props:<index>`, `lock:<index>`, `delete:<index>`, or `insert:h`,
+/// `insert:v` or `insert:a` (a horizontal, vertical or angled guide where the menu opened).
+pub const GUIDE: &str = "guide:";
 
 const COMBINE_MODES: [(&str, Combine); 5] = [
     ("Add", Combine::Add),

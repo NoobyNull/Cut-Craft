@@ -258,6 +258,7 @@ impl CutCraftApp {
         self.stl_window(ctx);
         self.options_window(ctx);
         self.tool_search(ctx);
+        self.guide_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
@@ -1109,10 +1110,7 @@ impl CutCraftApp {
                     .doc
                     .guides
                     .iter()
-                    .position(|g| {
-                        let along = if g.vertical { at.x } else { at.y };
-                        !g.locked && (along - g.at).abs() <= reach
-                    })
+                    .position(|g| !g.locked && g.distance(at) <= reach)
                     .map(|i| (self.doc.guides[i].vertical, Some(i))),
                 None => None,
             };
@@ -1124,23 +1122,15 @@ impl CutCraftApp {
             return true;
         };
         let at = canvas.transform.to_job(pointer);
-        let along = if vertical { at.x } else { at.y };
+        // the guide as the drag leaves it: moved through the pointer, keeping its angle
+        let moved = match index.and_then(|i| self.doc.guides.get(i)) {
+            Some(g) => g.through(at),
+            None if vertical => cut_craft_core::document::Guide::vertical(at.x),
+            None => cut_craft_core::document::Guide::horizontal(at.y),
+        };
         if !canvas.drag_stopped() {
-            let screen = canvas.transform.to_screen(Point::new(along, along));
-            let area = canvas.area;
-            let line = if vertical {
-                [
-                    egui::pos2(screen.x, area.top()),
-                    egui::pos2(screen.x, area.bottom()),
-                ]
-            } else {
-                [
-                    egui::pos2(area.left(), screen.y),
-                    egui::pos2(area.right(), screen.y),
-                ]
-            };
-            ui.painter_at(area)
-                .line_segment(line, ui.visuals().selection.stroke);
+            ui.painter_at(canvas.area)
+                .line_segment(canvas.guide_ends(&moved), ui.visuals().selection.stroke);
             return true;
         }
         self.guide_drag = None;
@@ -1150,16 +1140,144 @@ impl CutCraftApp {
             (Some(i), true) => {
                 guides.remove(i);
             }
-            (Some(i), false) => guides[i].at = along,
-            (None, false) => guides.push(if vertical {
-                cut_craft_core::document::Guide::vertical(along)
-            } else {
-                cut_craft_core::document::Guide::horizontal(along)
-            }),
+            (Some(i), false) => guides[i] = moved,
+            (None, false) => guides.push(moved),
             (None, true) => {}
         }
         self.set_guides(guides);
         true
+    }
+
+    /// Guide Properties, on a right-clicked guide: its position (where it crosses its axis)
+    /// and angle, typed; Lock Guide; new guides parallel to it, at an absolute position or an
+    /// offset from it, one or several a step apart; Delete Guide.
+    pub(super) fn guide_window(&mut self, ctx: &egui::Context) {
+        let Some(mut props) = self.guide_props.clone() else {
+            return;
+        };
+        let Some(g) = self.doc.guides.get(props.index).copied() else {
+            self.guide_props = None;
+            return;
+        };
+        let mut open = true;
+        let (mut apply, mut create, mut delete) = (false, false, false);
+        egui::Window::new("Guide Properties")
+            .id(egui::Id::unique("guide_properties"))
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                cut_craft_bug_report::mark(ui, "Guide Properties");
+                ui.label(if g.vertical {
+                    "A vertical guide: its position is where it crosses the X axis"
+                } else {
+                    "A horizontal guide: its position is where it crosses the Y axis"
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Position");
+                    ui.add(egui::DragValue::new(&mut props.position).speed(0.1));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Angle");
+                    ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).suffix("°"))
+                        .on_hover_text("Degrees anticlockwise from the X axis");
+                });
+                ui.checkbox(&mut props.locked, "Lock Guide")
+                    .on_hover_text("A locked guide cannot be dragged");
+                apply = ui.button("Apply").clicked();
+                ui.separator();
+                ui.strong("New guide");
+                ui.horizontal(|ui| {
+                    // an angled guide gives only relative parallels, as Aspire's
+                    ui.add_enabled_ui(!g.tilted(), |ui| {
+                        ui.radio_value(&mut props.relative, false, "Absolute");
+                    });
+                    ui.radio_value(&mut props.relative, true, "Relative");
+                });
+                ui.horizontal(|ui| {
+                    ui.label(if props.relative { "Offset" } else { "Position" });
+                    ui.add(egui::DragValue::new(&mut props.new_at).speed(0.1));
+                    ui.label("Count");
+                    ui.add(egui::DragValue::new(&mut props.count).range(1..=100));
+                });
+                create = ui
+                    .button("Create New Guide")
+                    .on_hover_text("Parallel to this guide; several are the same step apart")
+                    .clicked();
+                delete = ui.button("Delete Guide").clicked();
+            });
+        if g.tilted() {
+            props.relative = true;
+        }
+        self.guide_props = open.then_some(props);
+        if apply {
+            self.guide_props_apply();
+        }
+        if create {
+            self.guide_props_create();
+        }
+        if delete {
+            self.guide_props_delete();
+        }
+    }
+
+    /// Guide Properties' Apply: the position, angle and lock typed.
+    pub(super) fn guide_props_apply(&mut self) {
+        let Some(props) = self.guide_props.clone() else {
+            return;
+        };
+        let mut guides = self.doc.guides.clone();
+        let Some(g) = guides.get_mut(props.index) else {
+            return;
+        };
+        *g = cut_craft_core::document::Guide {
+            at: props.position,
+            locked: props.locked,
+            ..g.with_angle(props.angle)
+        };
+        self.set_guides(guides);
+    }
+
+    /// Guide Properties' Create New Guide: `count` guides parallel to this one, `new_at`
+    /// apart from it (relative) or the first at that position and the rest the same step on.
+    pub(super) fn guide_props_create(&mut self) {
+        let Some(props) = self.guide_props.clone() else {
+            return;
+        };
+        let mut guides = self.doc.guides.clone();
+        let Some(&g) = guides.get(props.index) else {
+            return;
+        };
+        let step = if props.relative {
+            props.new_at
+        } else {
+            props.new_at - g.at
+        };
+        for k in 1..=props.count {
+            let by = step * f64::from(k);
+            let made = if props.relative {
+                g.parallel(by)
+            } else {
+                cut_craft_core::document::Guide { at: g.at + by, ..g }
+            };
+            guides.push(cut_craft_core::document::Guide {
+                locked: false,
+                ..made
+            });
+        }
+        self.set_guides(guides);
+    }
+
+    /// Guide Properties' Delete Guide, closing the window.
+    pub(super) fn guide_props_delete(&mut self) {
+        let Some(props) = self.guide_props.take() else {
+            return;
+        };
+        let mut guides = self.doc.guides.clone();
+        if props.index < guides.len() {
+            guides.remove(props.index);
+            self.set_guides(guides);
+        }
     }
 
     /// Replaces the guides, undoably.
@@ -1644,12 +1762,19 @@ impl CutCraftApp {
         let pressed = ui
             .input(|i| i.pointer.press_origin())
             .map(|q| canvas.transform.to_job(q));
+        // where the menu opened, for guides inserted from it
+        if canvas.response().secondary_clicked() {
+            self.menu_at = pressed;
+        }
+        let guide =
+            pressed.and_then(|at| self.doc.guides.iter().position(|g| g.distance(at) <= reach));
         let node_target = pressed
             .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
             .and_then(|at| self.node_target(at, reach));
-        let selection_menu = || match node_target {
-            Some(target) => gui::node_menu(&self.doc, &target),
-            None => self.menus.selection_menu(&self.doc),
+        let selection_menu = || match (guide, node_target) {
+            (Some(i), _) => gui::guide_menu(i, self.doc.guides[i].locked),
+            (None, Some(target)) => gui::node_menu(&self.doc, &target),
+            (None, None) => self.menus.selection_menu(&self.doc),
         };
         if let Some(action) = self.popup(canvas.response(), selection_menu) {
             self.invoke(ui.ctx(), &action);

@@ -16,6 +16,10 @@ use super::{
 use crate::options::{CuttingChecks, IntersectionCheck};
 
 impl CutCraftApp {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one line per field of the window's state"
+    )]
     pub(super) fn new() -> Self {
         let menus = gui::MenuSystem::new();
         Self {
@@ -84,6 +88,8 @@ impl CutCraftApp {
             before_preview: None,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
+            menu_at: None,
+            guide_props: None,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
             simulation: None,
@@ -135,6 +141,7 @@ impl CutCraftApp {
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
+            id if id.starts_with(gui::GUIDE) => true,
             id if id.starts_with(EXPORT_LEVEL) => {
                 self.registry.exporter("export_as_3d_clipart").is_some()
             }
@@ -438,6 +445,7 @@ impl CutCraftApp {
             "export_as_stl" => (self.stl_window, self.stl_result) = (true, None),
             id if self.registry.exporter(id).is_some() => self.export(id),
             id if id.starts_with(gui::REIMPORT_MODEL) => self.reimport_model(id),
+            id if id.starts_with(gui::GUIDE) => self.guide_action(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
             }
@@ -451,6 +459,56 @@ impl CutCraftApp {
             .path
             .as_deref()
             .and_then(std::path::Path::parent)
+    }
+
+    /// The guide menus: Guide Properties, lock and delete on a guide, and guides inserted
+    /// where the 2D view's menu opened (an angled one at 45°, its properties opened to set
+    /// the angle).
+    pub(super) fn guide_action(&mut self, id: &str) {
+        use cut_craft_core::document::Guide;
+        let rest = &id[gui::GUIDE.len()..];
+        let (what, arg) = rest.split_once(':').unwrap_or((rest, ""));
+        let index = arg
+            .parse::<usize>()
+            .ok()
+            .filter(|i| *i < self.doc.guides.len());
+        let mut guides = self.doc.guides.clone();
+        let mut props_for = None;
+        match (what, index) {
+            ("props", Some(i)) => props_for = Some(i),
+            ("lock", Some(i)) => guides[i].locked = !guides[i].locked,
+            ("delete", Some(i)) => {
+                guides.remove(i);
+            }
+            ("insert", _) => {
+                let at = self.menu_at.unwrap_or_else(|| self.doc.job.area().center());
+                guides.push(match arg {
+                    "v" => Guide::vertical(at.x),
+                    "h" => Guide::horizontal(at.y),
+                    _ => Guide::horizontal(at.y).with_angle(45.0).through(at),
+                });
+                if arg == "a" {
+                    props_for = Some(guides.len() - 1);
+                }
+            }
+            _ => return,
+        }
+        if guides != self.doc.guides {
+            self.set_guides(guides);
+        }
+        if let Some(i) = props_for
+            && let Some(g) = self.doc.guides.get(i)
+        {
+            self.guide_props = Some(super::GuideProps {
+                index: i,
+                position: g.at,
+                angle: g.angle(),
+                locked: g.locked,
+                new_at: if g.tilted() { 10.0 } else { g.at },
+                relative: g.tilted(),
+                count: 1,
+            });
+        }
     }
 
     /// The component a Re-import Model action names, and where it came from.

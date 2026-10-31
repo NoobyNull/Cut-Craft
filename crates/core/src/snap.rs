@@ -80,9 +80,18 @@ impl SnapOptions {
             // smart snapping, lines through every snap point across and up and down
             // ponytail: Aspire's smart lines go only through the nodes hovered
             let (mut xs, mut ys) = (vec![], vec![]);
+            // angled guides: the point on them nearest the pointer
+            let mut tilted: Vec<Point> = vec![];
             if self.geometry_snapping {
                 for g in &doc.guides {
-                    if g.vertical { &mut xs } else { &mut ys }.push(g.at);
+                    if g.tilted() {
+                        let q = g.nearest(at);
+                        if q.distance(at) <= reach {
+                            tilted.push(q);
+                        }
+                    } else {
+                        if g.vertical { &mut xs } else { &mut ys }.push(g.at);
+                    }
                 }
             }
             if self.smart_snapping {
@@ -101,6 +110,10 @@ impl SnapOptions {
             let (x, y) = (nearest(&xs, at.x), nearest(&ys, at.y));
             let lined = (x.is_some() || y.is_some())
                 .then(|| Point::new(x.unwrap_or(at.x), y.unwrap_or(at.y)));
+            let lined = tilted
+                .into_iter()
+                .chain(lined)
+                .min_by(|a, b| a.distance(at).total_cmp(&b.distance(at)));
             // a span's tangent where it ends, or the line square to it, when nearer
             let along = self
                 .smart_snapping
