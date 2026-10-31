@@ -311,7 +311,7 @@ const SETTLE_SECONDS: f64 = 0.25;
 /// How often unsaved work is copied for recovery after a crash, seconds.
 const AUTOSAVE_SECONDS: f64 = 30.0;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
-const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
+const STROKE_TOOLS: [&str; 3] = ["draw_freehand", "sculpt", "interactive_vector_trim"];
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 2] = ["import_stl", "import_3d_clipart"];

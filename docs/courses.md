@@ -139,7 +139,7 @@ most. *Videos* counts every video whose captions match a capability's pattern.
 | Dimensions: angle and arc (radius / diameter), Shift+click to edit | no | angle and arc dimensions not done | 4 |
 | Node editing: move, insert, delete, smooth, cut, start point, spans to line / arc / Bézier | yes | Node Edit: drag, insert, delete, Smooth Point, cut, start point, spans to line / arc / Bézier, Node Position (typed X / Y), box-picked nodes moved together | 124 |
 | Node editing with H / V mirror lines | no | not available | 5 |
-| Trim: interactive trim and Trim Objects (clear inside / outside a boundary) | yes | Interactive Vector Trim (click a piece) and Trim Objects (selected vectors trimmed to the closed vector picked last, clearing inside or outside, refitting curves) | 47 |
+| Trim: interactive trim and Trim Objects (clear inside / outside a boundary) | yes | Interactive Vector Trim (click a piece, or drag across pieces; rejoin trimmed sections) and Trim Objects (selected vectors trimmed to the closed vector picked last, clearing inside or outside, refitting curves) | 47 |
 | Offset vectors: in / out / both, sharp corners, open vectors left / right | yes | offset-vectors command | 217 |
 | Array Copy: rows, columns, gap / offset | partly | array-copy command; no block symmetry, row / column displacement or group copies | 15 |
 | Circular Copy | partly | circular-copy command; copies not grouped | 12 |

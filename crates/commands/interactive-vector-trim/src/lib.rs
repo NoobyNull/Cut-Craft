@@ -1,5 +1,7 @@
 //! Interactive Vector Trim: click a piece of a vector and the stretch between the nearest
-//! crossings with other vectors either side of the click is cut away.
+//! crossings with other vectors either side of the click is cut away; drag across pieces
+//! and every piece the drag crosses goes. Rejoin puts what is left back together where
+//! pieces meet end to end.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
@@ -17,6 +19,13 @@ pub struct Params {
     /// How near the click must be to a vector
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub reach: f64,
+    /// Join the pieces left by trimming where they meet end to end
+    #[serde(default)]
+    pub rejoin_trimmed_sections: bool,
+    /// A drag across pieces: the points it went through (none for a click)
+    #[serde(default)]
+    #[schemars(skip)]
+    pub points: Vec<Xy>,
 }
 
 impl Default for Params {
@@ -24,6 +33,8 @@ impl Default for Params {
         Self {
             at: Xy::new(0.0, 0.0),
             reach: 1.0,
+            rejoin_trimmed_sections: false,
+            points: vec![],
         }
     }
 }
@@ -42,6 +53,93 @@ impl Command for InteractiveVectorTrim {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        // a click trims at it; a drag at every place it crosses a vector
+        let stroke: Vec<Point> = p.points.iter().map(|&q| q.into()).collect();
+        let places = if stroke.len() < 2 {
+            vec![p.at.into()]
+        } else {
+            crossings_of(doc, &stroke)
+        };
+        let mut scratch = doc.clone();
+        let mut change = Change::default();
+        let mut made = vec![];
+        let mut first_error = None;
+        for at in places {
+            match trim_at(&scratch, at, p.reach) {
+                Ok(step) => {
+                    made.extend(step.edits.iter().filter_map(|e| match e {
+                        cut_craft_core::Edit::Add { id, .. } => Some(*id),
+                        _ => None,
+                    }));
+                    scratch
+                        .apply(&step)
+                        .map_err(|e| CommandError::Failed(e.to_string()))?;
+                    change = change.then(step);
+                }
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                }
+            }
+        }
+        if change.edits.is_empty() {
+            return Err(first_error.unwrap_or_else(|| {
+                CommandError::Failed("the drag crosses no vector to trim".into())
+            }));
+        }
+        if p.rejoin_trimmed_sections {
+            let mut joining = scratch.clone();
+            joining.selection = made
+                .into_iter()
+                .filter(|id| scratch.vectors.contains_key(id))
+                .collect();
+            // the pieces meet where crossings were found on each flattened outline
+            let tight = cmd_join_vectors::Params {
+                tolerance: 10.0 * cut_craft_core::polygon::TOLERANCE,
+            };
+            // nothing meeting end to end is no error
+            if let Ok(join) = <cmd_join_vectors::JoinVectors as Command>::run(&joining, &tight) {
+                change = change.then(join);
+            }
+        }
+        Ok(change)
+    }
+}
+
+/// Where the stroke through `stroke` crosses each shown, editable vector.
+fn crossings_of(doc: &Document, stroke: &[Point]) -> Vec<Point> {
+    let tolerance = cut_craft_core::polygon::TOLERANCE;
+    let mut out = vec![];
+    for (id, path) in &doc.vectors {
+        if !doc.shown(*id) || !doc.editable(*id) {
+            continue;
+        }
+        let mut pts = path.flatten(tolerance);
+        if path.closed {
+            pts.push(pts[0]);
+        }
+        for s in stroke.windows(2) {
+            for q in pts.windows(2) {
+                if let Some(t) = crossing(s[0], s[1], q[0], q[1]) {
+                    let at = s[0].lerp(s[1], t);
+                    // a crossing at a shared point of two chords is one crossing
+                    if !out.iter().any(|o: &Point| o.distance(at) < 1e-9) {
+                        out.push(at);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The trim at one click.
+fn trim_at(doc: &Document, at: Point, reach: f64) -> Result<Change, CommandError> {
+    {
+        let p = Params {
+            at: Xy::new(at.x, at.y),
+            reach,
+            ..Params::default()
+        };
         let at: Point = p.at.into();
         let Some(id) = doc.pick(at, p.reach).filter(|id| doc.editable(*id)) else {
             return Err(CommandError::Failed(
@@ -69,6 +167,24 @@ impl Command for InteractiveVectorTrim {
                     if let Some(t) = crossing(pair[0], pair[1], q[0], q[1]) {
                         cuts.push(lengths[i] + t * pair[0].distance(pair[1]));
                     }
+                }
+            }
+        }
+        // another vector ending on this one (a piece left by an earlier trim) cuts it there:
+        // its end is on the true curve, which this one's flattened chords may just miss
+        for path in doc
+            .vectors
+            .iter()
+            .filter(|(other, path)| **other != id && doc.shown(**other) && !path.closed)
+            .map(|(_, path)| path)
+        {
+            let end = path
+                .segments
+                .last()
+                .map_or(path.start, cut_craft_core::geometry::Segment::end);
+            for q in [path.start, end] {
+                if cut_craft_core::geometry::polyline_distance(&pts, q) <= 2.0 * tolerance {
+                    cuts.push(along(&pts, &lengths, q));
                 }
             }
         }
@@ -198,6 +314,7 @@ mod tests {
         Params {
             at: Xy::new(x, y),
             reach: 1.0,
+            ..Params::default()
         }
     }
 
@@ -254,5 +371,41 @@ mod tests {
             "only the lower half stays"
         );
         assert!(InteractiveVectorTrim::run(&ring, &click(500.0, 500.0)).is_err());
+    }
+
+    #[test]
+    fn a_drag_through_a_figure_eight_trims_the_inner_arcs_and_rejoin_makes_one_outline() {
+        let mut doc = document_with(vec![
+            Path::circle(Point::new(40.0, 50.0), 20.0),
+            Path::circle(Point::new(60.0, 50.0), 20.0),
+        ]);
+        let p = Params {
+            points: vec![Xy::new(35.0, 50.0), Xy::new(65.0, 50.0)],
+            rejoin_trimmed_sections: true,
+            ..Params::default()
+        };
+        doc.apply(&InteractiveVectorTrim::run(&doc, &p).unwrap())
+            .unwrap();
+        assert_eq!(doc.vectors.len(), 1, "one outline");
+        let outline = doc.vectors.values().next().unwrap();
+        assert!(outline.closed);
+        let b = outline.bounds();
+        assert!(
+            (b.min.x - 20.0).abs() < 0.1 && (b.max.x - 80.0).abs() < 0.1,
+            "{b:?}"
+        );
+        // without rejoin the two outer arcs stay apart
+        let mut apart = document_with(vec![
+            Path::circle(Point::new(40.0, 50.0), 20.0),
+            Path::circle(Point::new(60.0, 50.0), 20.0),
+        ]);
+        let p = Params {
+            rejoin_trimmed_sections: false,
+            ..p
+        };
+        apart
+            .apply(&InteractiveVectorTrim::run(&apart, &p).unwrap())
+            .unwrap();
+        assert_eq!(apart.vectors.len(), 2);
     }
 }

@@ -263,8 +263,9 @@ say "not implemented yet".
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.
   - Interactive Vector Trim: click a piece of a vector and the stretch between the nearest
-    crossings either side goes; what is left comes back as polylines (curves are not kept
-    exactly), and drag-trimming and rejoining are not done.
+    crossings either side goes, or drag across pieces and each one the drag crosses goes;
+    Rejoin Trimmed Sections joins what is left where pieces meet end to end. Pieces come
+    back as polylines (curves are not kept exactly).
   - Measure / Inspect: drag between two points for distance, angle and X / Y distances;
     click a vector for the span's type and length and the vector's perimeter and area, on
     the status bar and in the Measure / Inspect form (also the two points, the span's ends,

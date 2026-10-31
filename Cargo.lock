@@ -940,6 +940,7 @@ dependencies = [
 name = "cmd-interactive-vector-trim"
 version = "0.3.3"
 dependencies = [
+ "cmd-join-vectors",
  "cut-craft-core",
  "schemars",
  "serde",
