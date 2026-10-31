@@ -153,6 +153,7 @@ impl CutCraftApp {
                     || self.playback.is_some()
                     || !self.doc.components.is_empty()
             }
+            "edit_object" => self.object_to_edit().is_some(),
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
@@ -363,6 +364,11 @@ impl CutCraftApp {
             "preview_toolpath" => {
                 if let Some(id) = self.selected_toolpath {
                     self.preview_toolpath(id);
+                }
+            }
+            "edit_object" => {
+                if let Some((id, command, params)) = self.object_to_edit() {
+                    self.edit_shape(id, command, params);
                 }
             }
             "save_shaded_image" => {
@@ -1788,6 +1794,35 @@ impl CutCraftApp {
             .set_message(&format!("{} changed", cmd.meta().label));
         self.warn(&toolpaths, &notes);
         Ok(())
+    }
+
+    /// Edit Object (E): the one selected vector, if a drawing tool drew it, with that tool's
+    /// id and the settings that draw it again.
+    pub(super) fn object_to_edit(&self) -> Option<(EntityId, &'static str, Value)> {
+        let [id] = self.doc.selection.iter().copied().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let path = self.doc.vectors.get(&id)?;
+        let (command, params) = self.registry.drawn_by(&self.doc, path)?;
+        Some((id, command, params))
+    }
+
+    /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws
+    /// that shape rather than drawing another, as Aspire's E and Shift-click do.
+    pub(super) fn edit_shape(&mut self, id: EntityId, command: &'static str, params: Value) {
+        if self.form.as_ref().is_none_or(|f| f.id != command) {
+            self.start_command(command);
+        }
+        self.doc.selection = [id].into();
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == command) {
+            form.params = params.clone();
+            form.drawn = Some(id);
+            form.applied = Some(params);
+        }
+        let label = self.registry.get(command).map_or("", |c| c.meta().label);
+        self.status.set_message(&format!(
+            "Editing the shape in {label}: change the form to change it"
+        ));
     }
 
     /// After Swap Sides, a double-sided preview turned over with the job: its other side on

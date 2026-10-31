@@ -1095,6 +1095,7 @@ impl MenuSystem {
                         k("Paste", "Ctrl+V"),
                         k("Paste in Place", "Ctrl+Shift+V"),
                         k("Delete", "Del"),
+                        k("Edit Object", "E"),
                         sep(),
                         k("Find Tool...", "Ctrl+K"),
                         sep(),

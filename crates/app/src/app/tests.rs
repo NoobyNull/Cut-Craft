@@ -4550,3 +4550,48 @@ fn a_form_tool_takes_its_shape_from_the_selected_vector() {
     assert_eq!(tool.form.len(), 3);
     assert!((tool.diameter - 12.0).abs() < 1e-9);
 }
+
+#[test]
+fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
+    let mut h = Harness::new();
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    let rect = *h.app.doc.selection.iter().next().unwrap();
+    assert!(h.app.available("edit_object"));
+    // E opens Draw Rectangle on it; a change to the form changes that rectangle
+    h.frame(vec![key(Key::E)]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_rectangle"));
+    let form = h.app.form.as_mut().unwrap();
+    assert_eq!(form.params["width"], 20.0);
+    form.params["width"] = serde_json::json!(40.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "changed, not drawn again");
+    assert!((h.app.doc.vectors[&rect].bounds().size().x - 40.0).abs() < 1e-9);
+    // a second rectangle drawn elsewhere, then Shift-click edits the first one
+    let second = serde_json::json!({ "x": 100.0, "y": 100.0, "width": 10.0, "height": 10.0,
+        "corners": "rounded", "radius": 2.0 });
+    h.app.form = None;
+    h.app.apply("draw_rectangle", &second).unwrap();
+    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.frame(vec![]);
+    let edge = h.at(10.0, 20.0);
+    h.click(edge, Modifiers::SHIFT);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["width"], 40.0, "the first rectangle's settings");
+    assert_eq!(
+        h.app.doc.selection.iter().copied().collect::<Vec<_>>(),
+        [rect]
+    );
+    // a circle is not Draw Rectangle's
+    h.app.form = None;
+    h.app
+        .apply(
+            "draw_circle",
+            &serde_json::json!({ "center": { "x": 200.0, "y": 50.0 }, "radius": 5.0 }),
+        )
+        .unwrap();
+    h.frame(vec![key(Key::E)]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
+}

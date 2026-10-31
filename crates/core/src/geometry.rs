@@ -130,6 +130,39 @@ impl Path {
     }
 
     /// Full circle as two counter-clockwise half arcs, starting at its rightmost point.
+    /// Whether `other` is this path, point for point, within `tol` (the same spans in the
+    /// same order).
+    pub fn matches(&self, other: &Self, tol: f64) -> bool {
+        let near = |p: Point, q: Point| p.distance(q) <= tol;
+        self.closed == other.closed
+            && near(self.start, other.start)
+            && self.segments.len() == other.segments.len()
+            && self
+                .segments
+                .iter()
+                .zip(&other.segments)
+                .all(|pair| match (*pair.0, *pair.1) {
+                    (Segment::Line { to }, Segment::Line { to: theirs }) => near(to, theirs),
+                    (
+                        Segment::Arc { to, center, ccw },
+                        Segment::Arc {
+                            to: their_to,
+                            center: their_center,
+                            ccw: their_ccw,
+                        },
+                    ) => near(to, their_to) && near(center, their_center) && ccw == their_ccw,
+                    (
+                        Segment::Cubic { c1, c2, to },
+                        Segment::Cubic {
+                            c1: their_c1,
+                            c2: their_c2,
+                            to: their_to,
+                        },
+                    ) => near(c1, their_c1) && near(c2, their_c2) && near(to, their_to),
+                    _ => false,
+                })
+    }
+
     pub fn circle(center: Point, radius: f64) -> Self {
         let right = center + DVec2::X * radius;
         let left = center - DVec2::X * radius;

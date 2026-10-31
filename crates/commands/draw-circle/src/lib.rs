@@ -1,7 +1,7 @@
 //! Draw Circle.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::Path;
+use cut_craft_core::geometry::{Path, Segment};
 use cut_craft_core::params::Xy;
 use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -39,6 +39,19 @@ impl Command for DrawCircle {
         }
     }
 
+    /// A circle, wherever and however big.
+    fn params_from(path: &Path, _: &Params) -> Option<Params> {
+        let Some(Segment::Arc { center, .. }) = path.segments.first() else {
+            return None;
+        };
+        let p = Params {
+            center: Xy::new(center.x, center.y),
+            radius: path.start.distance(*center),
+        };
+        path.matches(&Path::circle(*center, p.radius), 1e-6)
+            .then_some(p)
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("radius", p.radius)?;
         Ok(Change::add_and_select(
@@ -60,6 +73,20 @@ impl Interactive for DrawCircle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_circle_is_read_back_and_other_shapes_are_not() {
+        let back =
+            DrawCircle::params_from(&Path::circle(Point::new(3.0, 4.0), 7.5), &Params::default())
+                .unwrap();
+        assert_eq!(back.center, Xy::new(3.0, 4.0));
+        assert!((back.radius - 7.5).abs() < 1e-9);
+        let square = Path::polyline(
+            &[Point::ZERO, Point::new(1.0, 0.0), Point::new(1.0, 1.0)],
+            true,
+        );
+        assert!(DrawCircle::params_from(&square, &Params::default()).is_none());
+    }
     use cut_craft_core::geometry::{Point, Rect};
     use cut_craft_core::testing::{drawn_path, rejection};
 

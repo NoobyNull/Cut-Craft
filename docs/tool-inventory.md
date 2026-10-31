@@ -270,6 +270,10 @@ say "not implemented yet".
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
+  - Edit ▸ Edit Object (E) opens the tool that drew the one selected vector on it, and a
+    Shift-click in a drawing tool's form edits another shape that tool drew; a change to
+    the form then changes that shape. Rectangles (square, rounded or notched corners, not
+    turned) and circles are read back; ellipses, polygons and stars not yet.
   - Draw Line / Polyline in the 2D view as Aspire's: a click adds a point, a click and drag
     a smooth span (the next one smooth too), S swaps curve mode and straight lines (a click
     on the last point does too), Backspace takes a point back, Tab closes, Space finishes

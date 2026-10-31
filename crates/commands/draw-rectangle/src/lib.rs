@@ -79,6 +79,35 @@ impl Command for DrawRectangle {
         }
     }
 
+    /// A rectangle drawn square to the axes, square, rounded or notched, whatever its size.
+    fn params_from(path: &Path, current: &Params) -> Option<Params> {
+        const TOL: f64 = 1e-6;
+        let b = path.bounds();
+        let mut p = Params {
+            x: b.min.x,
+            y: b.min.y,
+            width: b.size().x,
+            height: b.size().y,
+            corners: Corners::Square,
+            ..current.clone()
+        };
+        if path.matches(&outline(&p), TOL) {
+            return Some(p);
+        }
+        // the corners' radius and kind from the first arc
+        let (r, rounded) = path.segments.iter().find_map(|s| match *s {
+            Segment::Arc { to, center, ccw } => Some((to.distance(center), ccw)),
+            _ => None,
+        })?;
+        p.radius = r;
+        p.corners = if rounded {
+            Corners::Rounded
+        } else {
+            Corners::Notched
+        };
+        path.matches(&outline(&p), TOL).then_some(p)
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("width", p.width)?;
         ensure_positive("height", p.height)?;
@@ -157,6 +186,36 @@ impl Interactive for DrawRectangle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_drawn_rectangle_is_read_back_whatever_its_corners() {
+        for corners in [Corners::Square, Corners::Rounded, Corners::Notched] {
+            let p = Params {
+                x: 12.5,
+                y: -4.0,
+                width: 30.0,
+                height: 20.0,
+                corners,
+                radius: 3.0,
+            };
+            let back = DrawRectangle::params_from(&outline(&p), &Params::default()).unwrap();
+            assert_eq!(back.corners, corners);
+            assert!((back.x - 12.5).abs() < 1e-9 && (back.width - 30.0).abs() < 1e-9);
+            if corners != Corners::Square {
+                assert!((back.radius - 3.0).abs() < 1e-9);
+            }
+        }
+        let skewed = Path::polyline(
+            &[
+                Point::new(0.0, 0.0),
+                Point::new(10.0, 1.0),
+                Point::new(10.0, 10.0),
+                Point::new(0.0, 10.0),
+            ],
+            true,
+        );
+        assert!(DrawRectangle::params_from(&skewed, &Params::default()).is_none());
+    }
     use cut_craft_core::geometry::Rect;
     use cut_craft_core::testing::{drawn_path, rejection};
 

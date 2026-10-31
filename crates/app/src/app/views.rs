@@ -642,6 +642,34 @@ impl CutCraftApp {
         form.params[field] = Value::from((scaled * 100.0).round() / 100.0);
     }
 
+    /// A gesture with drawing tool `id`: the polyline's own clicks and drags, a Shift-click
+    /// editing a shape the tool drew, or a finished drag drawing one.
+    fn drawing_gesture(&mut self, id: &'static str, gesture: Option<Gesture>, reach: f64) {
+        match gesture {
+            gesture if id == "draw_polyline" => self.polyline_gesture(gesture, reach),
+            Some(Gesture::Click { at, shift: true }) => self.shift_click_shape(id, at, reach),
+            Some(Gesture::Dropped { drag, .. }) => self.draw(id, drag),
+            _ => {}
+        }
+    }
+
+    /// Shift-click in drawing tool `id`'s form: a shape that tool drew, under `at`, is
+    /// edited in the form, as Aspire's Shift-click does.
+    fn shift_click_shape(&mut self, id: &'static str, at: Point, reach: f64) {
+        let shape = self.doc.pick(at, reach).and_then(|v| {
+            let (command, params) = self
+                .registry
+                .drawn_by(&self.doc, self.doc.vectors.get(&v)?)?;
+            (command == id).then_some((v, params))
+        });
+        match shape {
+            Some((v, params)) => self.edit_shape(v, id, params),
+            None => self
+                .status
+                .set_message("Shift-click a shape this tool drew to edit it"),
+        }
+    }
+
     /// Draw Line / Polyline's keys while it is the tool: S swaps curves and straight lines;
     /// with a polyline begun, Backspace takes back a point (or a typed character), Tab
     /// closes it, Space finishes it and starts another, Esc finishes it (and closes the
@@ -953,8 +981,7 @@ impl CutCraftApp {
                 self.click_select(at, shift, reach);
             }
             (gesture, Some(ViewTool::Transform), _) => self.transform_gesture(ui, gesture, reach),
-            (gesture, None, Some("draw_polyline")) => self.polyline_gesture(gesture, reach),
-            (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
+            (gesture, None, Some(id)) => self.drawing_gesture(id, gesture, reach),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.plain_drop(drag, shift, reach, placing_tabs);
             }

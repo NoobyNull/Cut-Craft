@@ -132,7 +132,7 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 87] = [
+const BUILT_INS: [&str; 88] = [
     "find_tool",
     "machine_configuration",
     "add_machine",
@@ -219,6 +219,7 @@ const BUILT_INS: [&str; 87] = [
     "preview_visible_toolpaths",
     "undo_last_preview",
     "save_shaded_image",
+    "edit_object",
     "reset_preview",
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
