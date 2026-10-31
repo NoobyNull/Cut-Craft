@@ -1,8 +1,11 @@
 //! Interactive Vector Trim: click a piece of a vector and the stretch between the nearest
 //! crossings with other vectors either side of the click is cut away.
+//!
+//! Trim Objects: the selected vectors are cut where they cross a boundary (the closed vector
+//! picked last) and the pieces inside, or outside, it are cleared away.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::geometry::{Path, Point, inside};
 use cut_craft_core::params::Xy;
 use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta};
 use schemars::JsonSchema;
@@ -112,6 +115,113 @@ impl Interactive for InteractiveVectorTrim {
         }
     }
 }
+pub struct TrimObjects;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Clear {
+    /// Clear what lies inside the boundary
+    #[default]
+    Inside,
+    /// Clear what lies outside the boundary
+    Outside,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct TrimParams {
+    /// Which side of the boundary loses its pieces
+    pub clear: Clear,
+}
+
+impl Command for TrimObjects {
+    const ID: &'static str = "trim_objects";
+    type Params = TrimParams;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Trim Objects",
+            group: "Edit Objects",
+            icon: "drawing/edit_objects/interactive_vector_trim.png",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, p: &TrimParams) -> Result<Change, CommandError> {
+        let boundary = doc
+            .selection
+            .last()
+            .filter(|id| doc.selection.len() > 1 && doc.vectors[id].closed)
+            .ok_or_else(|| {
+                CommandError::Failed(
+                    "select the vectors to trim, then the closed boundary last".into(),
+                )
+            })?;
+        let tolerance = cut_craft_core::polygon::TOLERANCE;
+        let ring = vec![doc.vectors[&boundary].flatten(tolerance)];
+        let keep = |at: Point| inside(&ring, at) == (p.clear == Clear::Outside);
+        let mut removed = vec![];
+        let mut pieces = vec![];
+        for &id in doc.selection.iter().filter(|id| **id != boundary) {
+            let path = &doc.vectors[&id];
+            let pts = path.flatten(tolerance);
+            let mut lengths = vec![0.0];
+            for pair in pts.windows(2) {
+                lengths.push(lengths[lengths.len() - 1] + pair[0].distance(pair[1]));
+            }
+            let total = lengths[lengths.len() - 1];
+            let mut cuts: Vec<f64> = Vec::new();
+            for (i, pair) in pts.windows(2).enumerate() {
+                // a closed path's flattening ends back at its start, so this goes all the way round
+                for q in ring[0].windows(2) {
+                    if let Some(t) = crossing(pair[0], pair[1], q[0], q[1]) {
+                        cuts.push(lengths[i] + t * pair[0].distance(pair[1]));
+                    }
+                }
+            }
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+            if cuts.is_empty() {
+                if !keep(pts[0]) {
+                    removed.push(id);
+                }
+                continue;
+            }
+            // the stretches between neighbouring cuts; a closed vector's last one wraps round
+            let spans: Vec<(f64, f64)> = if path.closed {
+                cuts.windows(2)
+                    .map(|w| (w[0], w[1]))
+                    .chain([(cuts[cuts.len() - 1], cuts[0] + total)])
+                    .collect()
+            } else {
+                std::iter::once(0.0)
+                    .chain(cuts.iter().copied())
+                    .zip(cuts.iter().copied().chain([total]))
+                    .collect()
+            };
+            removed.push(id);
+            for (lo, hi) in spans.into_iter().filter(|(lo, hi)| hi - lo > 1e-9) {
+                let piece = stretch(&pts, &lengths, total, lo, hi, path.closed);
+                let middle = stretch(
+                    &pts,
+                    &lengths,
+                    total,
+                    f64::midpoint(lo, hi),
+                    f64::midpoint(lo, hi),
+                    path.closed,
+                )[0];
+                if keep(middle) {
+                    pieces.push(Path::polyline(&piece, false));
+                }
+            }
+        }
+        if removed.is_empty() {
+            return Err(CommandError::Failed("nothing to clear".into()));
+        }
+        // ponytail: cut pieces come back as polylines, as Interactive Vector Trim's do
+        Ok(Change::swap(doc, removed, pieces))
+    }
+}
+
 /// Where segments ab and cd cross, as a share of ab; `None` when they do not.
 #[expect(
     clippy::many_single_char_names,
@@ -226,6 +336,46 @@ mod tests {
         assert_eq!(pieces.len(), 2);
         let xs: Vec<f64> = pieces.iter().map(|v| v.bounds().size().x).collect();
         assert!(xs.iter().all(|x| (x - 30.0).abs() < 1e-9), "{xs:?}");
+    }
+
+    #[test]
+    fn trim_objects_clears_inside_or_outside_the_boundary() {
+        let boundary = cut_craft_core::testing::square(20.0, 20.0, 60.0);
+        let line = Path::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
+        let far = cut_craft_core::testing::square(200.0, 200.0, 5.0);
+        let doc = document_with(vec![line, far, boundary.clone()]);
+        let mut inner = doc.clone();
+        run_on::<TrimObjects>(&mut inner, &TrimParams::default());
+        // the line's middle and nothing else goes; the far square and the boundary stay
+        let mut widths: Vec<f64> = inner
+            .vectors
+            .values()
+            .map(|v| v.bounds().size().x)
+            .collect();
+        widths.sort_by(f64::total_cmp);
+        assert_eq!(widths.len(), 4, "{widths:?}");
+        assert!((widths[1] - 20.0).abs() < 1e-9 && (widths[2] - 20.0).abs() < 1e-9);
+        assert!(inner.vectors.values().any(|v| *v == boundary));
+        let mut outer = doc.clone();
+        run_on::<TrimObjects>(
+            &mut outer,
+            &TrimParams {
+                clear: Clear::Outside,
+            },
+        );
+        let mut widths: Vec<f64> = outer
+            .vectors
+            .values()
+            .map(|v| v.bounds().size().x)
+            .collect();
+        widths.sort_by(f64::total_cmp);
+        assert_eq!(widths.len(), 2, "{widths:?}");
+        assert!((widths[0] - 60.0).abs() < 1e-9 && (widths[1] - 60.0).abs() < 1e-9);
+        let single = document_with(vec![Path::polyline(
+            &[Point::new(0.0, 0.0), Point::new(1.0, 1.0)],
+            false,
+        )]);
+        assert!(TrimObjects::run(&single, &TrimParams::default()).is_err());
     }
 
     #[test]
