@@ -282,6 +282,12 @@ impl Tool {
         }
     }
 
+    /// Whether it keeps cutting data for `material` (always, for the default): Aspire greys
+    /// the tools that do not.
+    pub fn has_data_for(&self, material: &str) -> bool {
+        material.is_empty() || self.material_data(material).is_some()
+    }
+
     /// `material`'s own set, matched whatever the case; none for the default.
     fn material_data(&self, material: &str) -> Option<&CuttingData> {
         (!material.is_empty())

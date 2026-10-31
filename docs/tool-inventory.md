@@ -271,7 +271,8 @@ say "not implemented yet".
   named by, Restore puts it back; a toolpath's copy is named for the active material.
   Not done: custom variables, Update Existing Tools, machine variables.
 - Tool Database: cutting data per material (imported from `.vtdb` and Fusion presets), an
-  active material, rate units per tool, thread mills as a tool type.
+  active material, rate units per tool, thread mills as a tool type. Tools with no data for
+  the active material are greyed; the tree's right-click Hide Unset Tools leaves them out.
 - 3D view: ViewCube (faces, edges, corners), perspective, tilting underneath, overlays hidden
   behind the model.
 - Drawing tab:

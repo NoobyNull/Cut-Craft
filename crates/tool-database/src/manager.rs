@@ -63,6 +63,9 @@ pub struct Manager {
     pub changer: Option<Changer>,
     /// The name typed for a new material.
     pub new_material: String,
+    /// The tree leaves out the tools with no cutting data for the active material (else
+    /// they are greyed); the tree's right-click Hide Unset Tools.
+    pub hide_unset: bool,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -161,6 +164,7 @@ impl Manager {
             pick: None,
             changer: None,
             new_material: String::new(),
+            hide_unset: false,
         }
     }
 
@@ -287,7 +291,11 @@ impl Manager {
                     }
                     let picked = self.pick == Some(Pick::Group(sub.clone()));
                     let label = egui::RichText::new(tree::leaf(sub)).strong();
-                    if ui.selectable_label(picked, label).clicked() {
+                    let label = ui.selectable_label(picked, label);
+                    label.context_menu(|ui| {
+                        ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
+                    });
+                    if label.clicked() {
                         self.pick = Some(Pick::Group(sub.clone()));
                     }
                 })
@@ -295,12 +303,30 @@ impl Manager {
         }
         for i in tree::tools_in(&self.draft, group) {
             let tool = &self.draft.tools[i];
+            let unset = !tool.has_data_for(&self.draft.material);
+            if unset && self.hide_unset {
+                continue;
+            }
             ui.horizontal(|ui| {
                 if let Some(image) = (look.picture)(picture_path(tool.shape)) {
                     ui.add(image.fit_to_exact_size(egui::vec2(row * PICTURE_ASPECT, row)));
                 }
                 let picked = self.pick == Some(Pick::Tool(i));
-                if ui.selectable_label(picked, &tool.name).clicked() {
+                let mut name = egui::RichText::new(&tool.name);
+                if unset {
+                    name = name.color(ui.visuals().weak_text_color());
+                }
+                let label = ui.selectable_label(picked, name);
+                if unset {
+                    label.clone().on_hover_text(format!(
+                        "No cutting data for {}: it cuts with its default data",
+                        self.draft.material
+                    ));
+                }
+                label.context_menu(|ui| {
+                    ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
+                });
+                if label.clicked() {
                     self.pick = Some(Pick::Tool(i));
                 }
                 if let Some(n) = self.changer.as_ref().and_then(|c| c.slot_of(&tool.name)) {
@@ -963,6 +989,59 @@ mod tests {
             m.draft.tools[thread_mill].materials.is_empty(),
             "only drawing it makes no data"
         );
+    }
+
+    /// Every piece of text one frame draws.
+    fn drawn(manager: &mut Manager, ctx: &egui::Context) -> Vec<String> {
+        let look = Look {
+            picture: &|_| None,
+            profile: None,
+        };
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1200.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let mut output = ctx.run_pass(input, |ctx| {
+            manager.show(ctx, &look);
+        });
+        output.textures_delta.clear();
+        output
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn tools_without_data_for_the_material_are_greyed_or_hidden() {
+        let ctx = egui::Context::default();
+        let mut m = Manager::new(&ToolDatabase::starter());
+        m.draft.add_material("Oak");
+        m.draft.material = "Oak".into();
+        let mut oak = m.draft.tools[0].cutting("");
+        oak.material = "Oak".into();
+        m.draft.tools[0].set_cutting(oak);
+        let (set, unset) = (m.draft.tools[0].name.clone(), m.draft.tools[1].name.clone());
+        assert!(m.draft.tools[0].has_data_for("Oak") && !m.draft.tools[1].has_data_for("oak"));
+        assert!(
+            m.draft.tools[1].has_data_for(""),
+            "the default always has data"
+        );
+        drawn(&mut m, &ctx);
+        let shown = drawn(&mut m, &ctx);
+        assert!(
+            shown.contains(&set) && shown.contains(&unset),
+            "greyed, still listed"
+        );
+        m.hide_unset = true;
+        let shown = drawn(&mut m, &ctx);
+        assert!(shown.contains(&set) && !shown.contains(&unset), "hidden");
     }
 
     #[test]
