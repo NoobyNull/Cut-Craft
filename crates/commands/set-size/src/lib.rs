@@ -21,6 +21,11 @@ pub struct Params {
     pub keep_proportions: bool,
     /// Point of the selection that stays put
     pub anchor: Anchor,
+    /// Scales by this much, keeping proportions, instead of to the width and height (100: off)
+    #[schemars(extend("x-unit" = "%"), range(min = 0))]
+    pub percent: f64,
+    /// Each selected item is scaled about its own anchor point rather than the selection's
+    pub scale_individually: bool,
 }
 
 impl Default for Params {
@@ -30,6 +35,8 @@ impl Default for Params {
             height: 100.0,
             keep_proportions: true,
             anchor: Anchor::Center,
+            percent: 100.0,
+            scale_individually: false,
         }
     }
 }
@@ -59,7 +66,9 @@ impl Command for SetSize {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("width", p.width)?;
-        if !p.keep_proportions {
+        ensure_positive("percent", p.percent)?;
+        let by_percent = (p.percent - 100.0).abs() > f64::EPSILON;
+        if !p.keep_proportions && !by_percent {
             ensure_positive("height", p.height)?;
         }
         let bounds = doc
@@ -72,16 +81,26 @@ impl Command for SetSize {
             ));
         }
         let sx = p.width / size.x;
-        let scale = if p.keep_proportions {
+        let scale = if by_percent {
+            Point::splat(p.percent / 100.0)
+        } else if p.keep_proportions {
             Point::splat(sx)
         } else {
             Point::new(sx, p.height / size.y)
         };
-        let a = p.anchor.point(bounds);
-        let t = DAffine2::from_translation(a)
-            * DAffine2::from_scale(scale)
-            * DAffine2::from_translation(-a);
-        Change::transform_selected(doc, |_| t)
+        let resize = |a: Point| {
+            DAffine2::from_translation(a)
+                * DAffine2::from_scale(scale)
+                * DAffine2::from_translation(-a)
+        };
+        let whole = resize(p.anchor.point(bounds));
+        Change::transform_selected(doc, |item| {
+            if p.scale_individually {
+                resize(p.anchor.point(item))
+            } else {
+                whole
+            }
+        })
     }
 }
 
@@ -143,6 +162,40 @@ mod tests {
             }),
             "invalid parameters: width must be greater than 0"
         );
+    }
+
+    #[test]
+    fn a_percentage_scales_both_sides() {
+        let b = bounds(&Params {
+            percent: 50.0,
+            ..Params::default()
+        });
+        assert!(
+            (b.size() - Point::new(107.5, 57.5)).length() < 1e-6,
+            "{b:?}"
+        );
+    }
+
+    #[test]
+    fn items_scaled_individually_keep_their_own_centres() {
+        let doc = sample_document();
+        assert!(doc.selection.len() > 1, "the sample selects several items");
+        let after = after::<SetSize>(&Params {
+            percent: 50.0,
+            scale_individually: true,
+            ..Params::default()
+        });
+        for id in &doc.selection {
+            let (was, is) = (doc.vectors[id].bounds(), after.vectors[id].bounds());
+            assert!(
+                (was.center() - is.center()).length() < 1e-6,
+                "{was:?} -> {is:?}"
+            );
+            assert!(
+                (was.size() * 0.5 - is.size()).length() < 1e-6,
+                "{was:?} -> {is:?}"
+            );
+        }
     }
 
     #[test]
