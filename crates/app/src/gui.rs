@@ -358,7 +358,16 @@ impl MenuSystem {
             MenuItem::with_action("Overlap", "overlap_intersect"),
             edit("Join Vectors"),
             MenuItem::with_action("Group", "group"),
-            MenuItem::with_action("Ungroup", "ungroup"),
+            MenuItem::submenu(
+                "Ungroup",
+                vec![
+                    MenuItem::with_action("Ungroup onto Original Object Layers", "ungroup"),
+                    MenuItem::with_action(
+                        "Ungroup onto Current Layer",
+                        "ungroup_onto_current_layer",
+                    ),
+                ],
+            ),
             MenuItem {
                 name: "Align".into(),
                 ..edit("Align Selected Objects")

@@ -485,7 +485,9 @@ say "not implemented yet".
   the topmost shown component under it (Shift adds or takes away; off the model it fits).
 - Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
   spacing commands do not yet use it).
-- Groups hold vectors only and do not nest.
+- Groups hold vectors only and do not nest. Grouping leaves each member on its own layer;
+  the right-click Ungroup ▸ puts them back as they were (onto Original Object Layers) or all
+  onto the current layer (Aspire's onto Group's Layer, as Cut Craft's groups have no layer).
 - Display settings (Toolpath Drawing, quality, View toggles) last only for the session.
 - Lasers are not a tool type in the database: their power is on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code

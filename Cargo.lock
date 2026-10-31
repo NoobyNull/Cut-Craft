@@ -1581,7 +1581,6 @@ name = "cmd-ungroup"
 version = "0.3.3"
 dependencies = [
  "cut-craft-core",
- "schemars",
  "serde",
 ]
 
