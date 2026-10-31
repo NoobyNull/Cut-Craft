@@ -117,13 +117,14 @@ pub enum SaveMode {
     VisibleToMultipleFiles,
 }
 
-/// The toolpaths each file holds, in list order: the selected toolpath; every shown one; or
-/// each shown one alone, where `group` puts toolpaths in a row that use the same tool in one
-/// file (Aspire's Group Where Possible).
+/// The toolpaths each file holds, in list order: the selected toolpath (or the toolpaths of
+/// the selected group, as one file); every shown one; or each shown one alone, where `group`
+/// puts toolpaths in a row that use the same tool in one file (Aspire's Group Where Possible).
 pub fn save_plan(
     doc: &Document,
     mode: SaveMode,
     selected: Option<EntityId>,
+    selected_group: Option<&str>,
     group: bool,
 ) -> Result<Vec<Vec<EntityId>>, String> {
     let visible: Vec<EntityId> = doc
@@ -133,9 +134,13 @@ pub fn save_plan(
         .map(|(&id, _)| id)
         .collect();
     let plan = match mode {
-        SaveMode::Selected => match selected.filter(|id| doc.toolpaths.contains_key(id)) {
-            Some(id) => vec![vec![id]],
-            None => return Err("pick the toolpath to save in the toolpath list".into()),
+        SaveMode::Selected => match (selected_group, selected) {
+            (Some(name), _) => match doc.toolpaths_in_group(name) {
+                ids if ids.is_empty() => return Err(format!("{name} has no toolpaths")),
+                ids => vec![ids],
+            },
+            (None, Some(id)) if doc.toolpaths.contains_key(&id) => vec![vec![id]],
+            _ => return Err("pick the toolpath to save in the toolpath list".into()),
         },
         SaveMode::VisibleToOneFile => vec![visible],
         SaveMode::VisibleToMultipleFiles => {
@@ -433,6 +438,7 @@ mod tests {
                 visible: name != "Hidden",
                 power: vec![],
                 stale: false,
+                group: None,
             })
         });
         doc.apply(&c.finish()).unwrap();
@@ -442,7 +448,7 @@ mod tests {
     #[test]
     fn save_plans_take_the_selected_or_shown_toolpaths_in_list_order() {
         let (doc, ids) = four_toolpaths();
-        let plan = |mode, group| save_plan(&doc, mode, Some(ids[2]), group).unwrap();
+        let plan = |mode, group| save_plan(&doc, mode, Some(ids[2]), None, group).unwrap();
         assert_eq!(plan(SaveMode::Selected, false), vec![vec![ids[2]]]);
         assert_eq!(
             plan(SaveMode::VisibleToOneFile, false),
@@ -457,13 +463,13 @@ mod tests {
             plan(SaveMode::VisibleToMultipleFiles, true),
             vec![vec![ids[0], ids[1]], vec![ids[2]], vec![ids[3]]]
         );
-        assert!(save_plan(&doc, SaveMode::Selected, None, false).is_err());
+        assert!(save_plan(&doc, SaveMode::Selected, None, None, false).is_err());
         let mut hidden = doc.clone();
         hidden
             .toolpaths
             .values_mut()
             .for_each(|t| t.visible = false);
-        assert!(save_plan(&hidden, SaveMode::VisibleToOneFile, None, false).is_err());
+        assert!(save_plan(&hidden, SaveMode::VisibleToOneFile, None, None, false).is_err());
     }
 
     #[test]

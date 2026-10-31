@@ -36,6 +36,7 @@ fn with_tool(tool: Tool, points: &[(f64, f64, f64)]) -> Toolpath {
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     }
 }
 

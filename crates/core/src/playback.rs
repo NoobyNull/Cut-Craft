@@ -197,6 +197,7 @@ mod tests {
             visible: true,
             power: vec![],
             stale: false,
+            group: None,
         };
         (Material::new(&job, 100), toolpath)
     }

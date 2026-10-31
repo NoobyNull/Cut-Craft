@@ -162,6 +162,7 @@ cmd-delete-component = { path = "../commands/delete-component" }
 cmd-delete-toolpath = { path = "../commands/delete-toolpath" }
 cmd-component-properties = { path = "../commands/component-properties" }
 cmd-toolpath-properties = { path = "../commands/toolpath-properties" }
+cmd-toolpath-group = { path = "../commands/toolpath-group" }
 cmd-3d-roughing-toolpath = { path = "../commands/3d-roughing-toolpath" }
 cmd-3d-finishing-toolpath = { path = "../commands/3d-finishing-toolpath" }
 cmd-vcarve-engrave-toolpath = { path = "../commands/vcarve-engrave-toolpath" }

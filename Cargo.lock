@@ -1572,6 +1572,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-toolpath-group"
+version = "0.3.3"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-toolpath-properties"
 version = "0.3.3"
 dependencies = [
@@ -2002,6 +2011,7 @@ dependencies = [
  "cmd-texture-area",
  "cmd-texture-toolpath",
  "cmd-thread-milling-toolpath",
+ "cmd-toolpath-group",
  "cmd-toolpath-properties",
  "cmd-toolpath-tiling",
  "cmd-trace-bitmap",

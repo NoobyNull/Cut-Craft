@@ -535,8 +535,6 @@ impl CutCraftApp {
     /// Preview All (or, `visible_only`, Preview Visible): start again from uncut material,
     /// then preview each toolpath (each shown one) in list order.
     pub(super) fn preview_all(&mut self, visible_only: bool) {
-        self.finish_playback();
-        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
         let visible: Vec<EntityId> = self
             .doc
             .toolpaths
@@ -544,16 +542,22 @@ impl CutCraftApp {
             .filter(|(_, t)| t.visible || !visible_only)
             .map(|(&id, _)| id)
             .collect();
+        self.preview_ids(&visible);
+        self.preview_other_side(visible_only);
+    }
+
+    /// Previews `ids` in order on fresh material, as one preview to undo.
+    pub(super) fn preview_ids(&mut self, ids: &[EntityId]) {
+        self.finish_playback();
+        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
         if self.display.animate_preview {
-            self.play(&visible);
-            self.preview_other_side(visible_only);
+            self.play(ids);
             return;
         }
         let before = self.before_preview.take();
-        for id in visible {
+        for &id in ids {
             self.preview_toolpath(id);
         }
-        self.preview_other_side(visible_only);
         // the cascade is one preview to undo
         self.before_preview = before;
     }
@@ -1787,6 +1791,7 @@ impl CutCraftApp {
     /// cut order and stays selected.
     fn toolpath_order_arrows(&mut self, ui: &mut egui::Ui) {
         let mut moved = None;
+        let mut new_group = false;
         ui.horizontal(|ui| {
             use cmd_reorder_toolpath::{Direction, neighbour};
             for (direction, arrow, tip) in [
@@ -1804,7 +1809,20 @@ impl CutCraftApp {
                     moved = Some(direction);
                 }
             }
+            new_group = ui
+                .button("New Group")
+                .on_hover_text("Create Empty Group: toolpaths made while it is picked join it")
+                .clicked();
         });
+        if new_group {
+            let params = serde_json::json!({
+                "toolpaths": [],
+                "group": self.doc.next_toolpath_group_name(),
+            });
+            if let Err(e) = self.apply("group_toolpaths", &params) {
+                self.status.set_message(&e);
+            }
+        }
         if let (Some(direction), Some(id)) = (moved, self.selected_toolpath) {
             let to = cmd_reorder_toolpath::neighbour(&self.doc, id, direction);
             let params = serde_json::json!({ "toolpath": id, "direction": direction });
@@ -1845,6 +1863,45 @@ impl CutCraftApp {
         }
     }
 
+    /// The toolpath list's rows: each group, its toolpaths under it (named with it), then
+    /// the toolpaths in no group; and each toolpath's place in the cut order.
+    fn toolpath_rows(&self) -> (Vec<(Option<EntityId>, String)>, Places) {
+        let mut rows = vec![];
+        for group in self.doc.toolpath_groups_in_use() {
+            rows.push((None, group.clone()));
+            let members = self.doc.toolpaths_in_group(&group);
+            rows.extend(members.into_iter().map(|id| (Some(id), group.clone())));
+        }
+        let ungrouped = self.doc.toolpaths.iter().filter(|(_, t)| t.group.is_none());
+        rows.extend(ungrouped.map(|(&id, _)| (Some(id), String::new())));
+        let places = self
+            .doc
+            .toolpaths
+            .keys()
+            .enumerate()
+            .map(|(n, &id)| (id, n))
+            .collect();
+        (rows, places)
+    }
+
+    /// A group's row in the toolpath list: a click picks it (again: unpicks), a right-click
+    /// picks it and opens its menu. Whether it was picked, and the menu action chosen.
+    fn group_row(&self, ui: &mut egui::Ui, group: &str) -> (Option<bool>, Option<String>) {
+        let picked = self.selected_group.as_deref() == Some(group);
+        let name = egui::RichText::new(format!("📁 {group}")).strong();
+        let label = ui
+            .selectable_label(picked, name)
+            .on_hover_text("A toolpath group: toolpaths made while it is picked join it");
+        let pick = if label.clicked() {
+            Some(!picked)
+        } else if label.secondary_clicked() {
+            Some(true)
+        } else {
+            None
+        };
+        (pick, self.popup(&label, || gui::toolpath_group_menu(group)))
+    }
+
     pub(super) fn toolpath_list(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath list");
         ui.strong("Toolpath List");
@@ -1871,43 +1928,36 @@ impl CutCraftApp {
         let mut shown = None;
         let mut edit = None;
         let mut coloured = None;
+        let (rows, places) = self.toolpath_rows();
+        let mut group_picked = None;
         // each toolpath's colour in the preview, when the machined areas take them
         let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (place, (&id, toolpath)) in self.doc.toolpaths.iter().enumerate() {
+            for (id, group) in &rows {
+                let Some(id) = *id else {
+                    let (picked, action) = self.group_row(ui, group);
+                    if let Some(on) = picked {
+                        group_picked = Some((group.clone(), on));
+                    }
+                    if action.is_some() {
+                        chosen = action;
+                    }
+                    continue;
+                };
+                let toolpath = &self.doc.toolpaths[&id];
                 let selected = self.selected_toolpath == Some(id);
-                let label = ui
-                    .horizontal(|ui| {
-                        let mut visible = toolpath.visible;
-                        if ui
-                            .checkbox(&mut visible, "")
-                            .on_hover_text("Show or hide this toolpath")
-                            .changed()
-                        {
-                            shown = Some((id, visible));
-                        }
-                        if swatches
-                            && let Some(rgb) =
-                                preview_swatch(ui, toolpath, place, self.doc.job.colour)
-                        {
-                            coloured = Some((id, rgb));
-                        }
-                        if toolpath.stale {
-                            let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
-                                .color(ui.visuals().warn_fg_color);
-                            ui.selectable_label(selected, name).on_hover_text(format!(
-                                "{}\nOut of date: what it was made from has changed since. \
-                                 Recalculate it.",
-                                toolpath.tool.name
-                            ))
-                        } else {
-                            ui.selectable_label(selected, &toolpath.name)
-                                .on_hover_text(&toolpath.tool.name)
-                        }
-                    })
-                    .inner;
+                let swatch = swatches.then_some((places[&id], self.doc.job.colour));
+                let (label, ticked, rgb) =
+                    toolpath_row(ui, toolpath, selected, swatch, !group.is_empty());
+                if let Some(visible) = ticked {
+                    shown = Some((id, visible));
+                }
+                if let Some(rgb) = rgb {
+                    coloured = Some((id, rgb));
+                }
                 if label.clicked() {
                     self.selected_toolpath = if selected { None } else { Some(id) };
+                    self.selected_group = None;
                 }
                 // a double-click opens the toolpath's form, as Aspire's list does
                 if label.double_clicked() {
@@ -1916,6 +1966,7 @@ impl CutCraftApp {
                 // Aspire's toolpath menu acts on the row right-clicked, so it selects it
                 if label.secondary_clicked() {
                     self.selected_toolpath = Some(id);
+                    self.selected_group = None;
                 }
                 if let Some(action) =
                     self.popup(&label, || gui::toolpath_menu(&self.doc, id, toolpath))
@@ -1924,6 +1975,10 @@ impl CutCraftApp {
                 }
             }
         });
+        if let Some((group, on)) = group_picked {
+            self.selected_group = on.then_some(group);
+            self.selected_toolpath = None;
+        }
         if let Some((id, visible)) = shown
             && let Some(t) = self.doc.toolpaths.get(&id)
         {
@@ -1978,6 +2033,52 @@ impl CutCraftApp {
             self.set_units(to);
         }
     }
+}
+
+/// Each toolpath's place in the cut order.
+type Places = std::collections::BTreeMap<EntityId, usize>;
+
+/// A toolpath's row in the list: its tick, its preview swatch (given its place and the
+/// material's colour, when the preview takes toolpath colours) and its name, indented in a
+/// group. The name's response, the tick's new state if changed, and the colour picked if any.
+fn toolpath_row(
+    ui: &mut egui::Ui,
+    toolpath: &cut_craft_core::toolpath::Toolpath,
+    selected: bool,
+    swatch: Option<(usize, [u8; 3])>,
+    indented: bool,
+) -> (egui::Response, Option<bool>, Option<[u8; 3]>) {
+    let (mut ticked, mut rgb) = (None, None);
+    let label = ui
+        .horizontal(|ui| {
+            if indented {
+                ui.add_space(ui.spacing().indent);
+            }
+            let mut visible = toolpath.visible;
+            if ui
+                .checkbox(&mut visible, "")
+                .on_hover_text("Show or hide this toolpath")
+                .changed()
+            {
+                ticked = Some(visible);
+            }
+            if let Some((place, material)) = swatch {
+                rgb = preview_swatch(ui, toolpath, place, material);
+            }
+            if toolpath.stale {
+                let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
+                    .color(ui.visuals().warn_fg_color);
+                ui.selectable_label(selected, name).on_hover_text(format!(
+                    "{}\nOut of date: what it was made from has changed since. Recalculate it.",
+                    toolpath.tool.name
+                ))
+            } else {
+                ui.selectable_label(selected, &toolpath.name)
+                    .on_hover_text(&toolpath.tool.name)
+            }
+        })
+        .inner;
+    (label, ticked, rgb)
 }
 
 /// The part of `picture` inside `area` (in its pixels) saved as a PNG at `path`.

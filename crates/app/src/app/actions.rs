@@ -48,6 +48,7 @@ impl CutCraftApp {
             options_path: None,
             session: Session::default(),
             selected_toolpath: None,
+            selected_group: None,
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             posts: cut_craft_machines::Library::new(None),
@@ -133,9 +134,9 @@ impl CutCraftApp {
             "redo" => self.history.can_redo(),
             "recalculate_toolpath"
             | "delete_toolpath"
-            | "preview_toolpath"
             | "save_selected_toolpath_as_template"
             | "edit_toolpath" => self.selected_toolpath.is_some(),
+            "preview_toolpath" => self.selected_toolpath.is_some() || self.selected_group.is_some(),
             "edit_text" => self.doc.selection.iter().any(|id| {
                 self.doc
                     .vector_groups
@@ -369,6 +370,9 @@ impl CutCraftApp {
             "preview_toolpath" => {
                 if let Some(id) = self.selected_toolpath {
                     self.preview_toolpath(id);
+                } else if let Some(group) = &self.selected_group {
+                    // a picked group: its toolpaths in list order, as one preview
+                    self.preview_ids(&self.doc.toolpaths_in_group(group));
                 }
             }
             "job_sheet_editor" => self.job_sheet_window = true,
@@ -698,8 +702,13 @@ impl CutCraftApp {
             Ok(post) => post,
             Err(e) => return self.status.set_message(&e),
         };
-        let plan = match files::save_plan(&self.doc, form.mode, self.selected_toolpath, form.group)
-        {
+        let plan = match files::save_plan(
+            &self.doc,
+            form.mode,
+            self.selected_toolpath,
+            self.selected_group.as_deref(),
+            form.group,
+        ) {
             Ok(plan) => plan,
             Err(e) => return self.status.set_message(&e),
         };
@@ -714,7 +723,13 @@ impl CutCraftApp {
             return self.status.set_message("Toolpaths not saved");
         }
         let extension = post.extension.clone();
-        let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
+        let mut dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
+        // a group saves under its own name, as Aspire's does
+        if form.mode == files::SaveMode::Selected
+            && let Some(group) = &self.selected_group
+        {
+            dialog = dialog.set_file_name(format!("{group}.{extension}"));
+        }
         let Some(path) = dialog.save_file() else {
             return;
         };
@@ -736,7 +751,13 @@ impl CutCraftApp {
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
-        let plan = files::save_plan(&self.doc, form.mode, self.selected_toolpath, form.group)?;
+        let plan = files::save_plan(
+            &self.doc,
+            form.mode,
+            self.selected_toolpath,
+            self.selected_group.as_deref(),
+            form.group,
+        )?;
         let thinned = self.options.toolpaths.thinned(&self.doc);
         let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
             if self.doc.bottom_side {
@@ -1913,6 +1934,11 @@ impl CutCraftApp {
             .map_err(|e| e.to_string())?;
         let change = cut_craft_core::selector::kept(params, change);
         let change = self.onto_import_level(id, change);
+        // a toolpath made while a group is picked in the list joins it
+        let change = match &self.selected_group {
+            Some(group) => change.into_toolpath_group(group),
+            None => change,
+        };
         let (made, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)

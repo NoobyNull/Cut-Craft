@@ -773,3 +773,8 @@ instead of half-cell steps.
 4. The commands behind keys 1, 2 and Ctrl+F1…F9.
 5. Status bar contents.
 6. Toolpath algorithms (V-carve, pocketing, 3D raster). Write our own; the docs describe only parameters and results.
+
+### Toolpath groups [obs: Toolpath Groups Guide, Save Toolpaths FAQ]
+- The toolpath list's right-click menu groups toolpaths: Group Visible (a new group of the shown toolpaths, named Group 1, Group 2…), Create Empty Group, Rename, and Ungroup or Delete (asked whether the group's toolpaths go too). A toolpath is dragged into a group; a toolpath made while a group is highlighted joins it.
+- Clicking a group's name picks it: Preview previews its toolpaths in list order, and Save Toolpaths' Selected mode saves them as one file named after the group. Toolpath templates keep the groups.
+- **[inf]** Cut Craft: Group ▸ Group This / Group Visible / Create Empty Group / Move to Group / Remove from Group on a toolpath's menu, and a New Group button over the list, stand in for dragging; a group's menu has Rename, Ungroup and Delete Group and Its Toolpaths. The group list is kept with the job; a template's toolpaths bring their group names in.

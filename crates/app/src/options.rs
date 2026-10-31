@@ -733,6 +733,7 @@ mod tests {
             visible: true,
             power: vec![],
             stale: false,
+            group: None,
         };
         let mut doc = cut_craft_core::document::Document::default();
         doc.toolpaths.insert(

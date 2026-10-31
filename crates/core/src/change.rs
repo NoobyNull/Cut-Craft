@@ -147,6 +147,11 @@ pub enum Edit {
         before: Vec<Guide>,
         after: Vec<Guide>,
     },
+    /// Replaces the toolpath group list.
+    SetToolpathGroups {
+        before: Vec<String>,
+        after: Vec<String>,
+    },
     /// Replaces the keep-out zones.
     SetKeepOut {
         before: Vec<Path>,
@@ -236,6 +241,10 @@ impl Edit {
                 after: before,
             },
             Self::SetGuides { before, after } => Self::SetGuides {
+                before: after,
+                after: before,
+            },
+            Self::SetToolpathGroups { before, after } => Self::SetToolpathGroups {
                 before: after,
                 after: before,
             },
@@ -525,6 +534,17 @@ impl Change {
         self.edits.is_empty()
     }
 
+    /// This change with the toolpaths it adds put in `group` (the group picked in the list).
+    #[must_use]
+    pub fn into_toolpath_group(mut self, group: &str) -> Self {
+        for edit in &mut self.edits {
+            if let Edit::AddToolpath { toolpath, .. } = edit {
+                toolpath.group = Some(group.to_owned());
+            }
+        }
+        self
+    }
+
     /// The toolpaths this change adds or replaces.
     pub fn toolpaths_made(&self) -> Vec<EntityId> {
         self.edits
@@ -761,6 +781,7 @@ impl Document {
             Edit::SetVariables { after, .. } => self.variables.clone_from(after),
             Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
+            Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
             Edit::SetTiling { after, .. } => self.tiling = *after,
             _ => unreachable!("only settings come here"),
         }
@@ -921,6 +942,7 @@ impl Document {
             | Edit::SetVariables { .. }
             | Edit::SetKeepOut { .. }
             | Edit::SetGuides { .. }
+            | Edit::SetToolpathGroups { .. }
             | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
             Edit::SetLevel { id, before, after } => {
@@ -1352,6 +1374,16 @@ impl ChangeBuilder<'_> {
             self.edits.push(Edit::SetNotes {
                 before: self.doc.notes.clone(),
                 after: after.into(),
+            });
+        }
+    }
+
+    /// Replaces the toolpath group list.
+    pub fn set_toolpath_groups(&mut self, after: Vec<String>) {
+        if self.doc.toolpath_groups != after {
+            self.edits.push(Edit::SetToolpathGroups {
+                before: self.doc.toolpath_groups.clone(),
+                after,
             });
         }
     }

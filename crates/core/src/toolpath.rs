@@ -652,6 +652,9 @@ pub struct Toolpath {
     /// recalculating makes it fresh again.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub stale: bool,
+    /// The toolpath group it is listed under, if any (added with toolpath groups).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
@@ -758,6 +761,7 @@ fn machining_time_is_each_move_at_its_rate() {
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     };
     // 10 mm plunge at 100, 500 mm cut at 1000, 10 mm rapid at 5000
     assert!((tp.machining_minutes(5000.0) - (0.1 + 0.5 + 0.002)).abs() < 1e-12);
@@ -853,6 +857,7 @@ pub fn made_by<C: Command>(
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     }
 }
 

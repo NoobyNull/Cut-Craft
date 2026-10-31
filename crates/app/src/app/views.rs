@@ -1783,7 +1783,8 @@ impl CutCraftApp {
         let mut machine_changed = None;
         let choices = self.post_choices();
         let default = self.output_post().map(|p| p.name);
-        let plan = files::save_plan(&self.doc, form.mode, self.selected_toolpath, form.group);
+        let (picked, group) = (self.selected_toolpath, self.selected_group.as_deref());
+        let plan = files::save_plan(&self.doc, form.mode, picked, group, form.group);
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong("Machine and post-processor");

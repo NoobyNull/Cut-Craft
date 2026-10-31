@@ -301,6 +301,7 @@ pub fn with_toolpath() -> Document {
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     });
     let change = c.finish();
     doc.apply(&change).expect("a toolpath applies");

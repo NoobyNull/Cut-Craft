@@ -3961,6 +3961,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     });
     h.app.simulation = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
@@ -4748,4 +4749,61 @@ fn a_texture_toolpaths_texture_saves_to_a_file_and_loads_into_another_form() {
     assert_eq!(form.params["name"], "Lid", "the form keeps its own name");
     assert!(h.app.status.message.contains("Loaded texture"));
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn toolpath_groups_are_listed_picked_previewed_saved_as_one_and_joined_by_new_toolpaths() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::three_toolpaths();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    // Group Visible, with the third toolpath hidden
+    let hide = serde_json::json!({ "toolpath": 3, "name": "Profile", "visible": false });
+    h.app.apply("toolpath_properties", &hide).unwrap();
+    let shown: Vec<u64> = h
+        .app
+        .doc
+        .toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible)
+        .map(|(id, _)| id.0)
+        .collect();
+    let group =
+        serde_json::json!({ "toolpaths": shown, "group": h.app.doc.next_toolpath_group_name() });
+    h.app.apply("group_toolpaths", &group).unwrap();
+    assert_eq!(h.app.doc.toolpath_groups, ["Group 1"]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the group's row is drawn; a click picks the group instead of a toolpath
+    h.app.selected_toolpath = Some(EntityId(3));
+    let row = h.text_at("📁 Group 1").unwrap();
+    h.click(row, Modifiers::NONE);
+    assert_eq!(h.app.selected_group.as_deref(), Some("Group 1"));
+    assert_eq!(h.app.selected_toolpath, None);
+    // Save Toolpaths' Selected mode saves the group as one file
+    let plan = files::save_plan(
+        &h.app.doc,
+        files::SaveMode::Selected,
+        None,
+        Some("Group 1"),
+        false,
+    );
+    assert_eq!(plan.unwrap(), [vec![EntityId(1), EntityId(2)]]);
+    // a toolpath made while the group is picked joins it
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "drilling_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("drilling_toolpath", &params).unwrap();
+    let newest = h.app.doc.toolpaths.values().last().unwrap();
+    assert_eq!(newest.group.as_deref(), Some("Group 1"));
+    // Preview with the group picked previews its toolpaths
+    h.app.display.animate_preview = false;
+    assert!(h.app.available("preview_toolpath"));
+    h.app.invoke(&h.ctx, "preview_toolpath");
+    assert!(h.app.simulation.is_some());
+    // ungrouping keeps the toolpaths
+    let ungroup = serde_json::json!({ "group": "Group 1", "delete_toolpaths": false });
+    h.app.apply("ungroup_toolpaths", &ungroup).unwrap();
+    assert_eq!(h.app.doc.toolpath_groups, Vec::<String>::new());
+    assert!(h.app.doc.toolpaths.values().all(|t| t.group.is_none()));
 }

@@ -100,6 +100,7 @@ mod tests {
             visible: true,
             power: vec![],
             stale: false,
+            group: None,
         });
         c.add(cut_craft_core::geometry::Path::polyline(
             &[Point::new(0.0, 0.0), Point::new(10.0, 0.0)],

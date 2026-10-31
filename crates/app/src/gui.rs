@@ -583,6 +583,7 @@ pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<M
             "Duplicate",
             &cmd_duplicate_toolpath::Params { toolpath: id },
         ),
+        MenuItem::submenu("Group", group_items(doc, id, toolpath)),
         MenuItem::separator(),
         MenuItem::submenu(
             "Recalculate",
@@ -616,6 +617,60 @@ pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<M
                 ("All", Which::All),
             ],
         ),
+    ]
+}
+
+/// A toolpath's Group submenu: this toolpath or the shown ones into a new group, a new empty
+/// group, this toolpath into another group, or out of its group.
+fn group_items(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
+    use cmd_toolpath_group::{GroupParams, GroupToolpaths};
+    let into = |name: &str, toolpaths: Vec<EntityId>, group: &str| {
+        MenuItem::run::<GroupToolpaths>(
+            name,
+            &GroupParams {
+                toolpaths,
+                group: group.to_owned(),
+            },
+        )
+    };
+    let new = doc.next_toolpath_group_name();
+    let shown = doc
+        .toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible)
+        .map(|(&id, _)| id)
+        .collect();
+    let others: Vec<MenuItem> = doc
+        .toolpath_groups_in_use()
+        .iter()
+        .filter(|g| toolpath.group.as_ref() != Some(g))
+        .map(|g| into(g, vec![id], g))
+        .collect();
+    vec![
+        into("Group This", vec![id], &new),
+        into("Group Visible", shown, &new),
+        into("Create Empty Group", vec![], &new),
+        MenuItem::submenu("Move to Group", others.clone()).enabled(!others.is_empty()),
+        into("Remove from Group", vec![id], "").enabled(toolpath.group.is_some()),
+    ]
+}
+
+/// The toolpath list's menu on a group: rename it, take it apart, or delete it with its
+/// toolpaths.
+pub fn toolpath_group_menu(group: &str) -> Vec<MenuItem> {
+    use cmd_toolpath_group::{RenameParams, RenameToolpathGroup, UngroupParams, UngroupToolpaths};
+    let rename = RenameParams {
+        group: group.to_owned(),
+        name: group.to_owned(),
+    };
+    let ungroup = |delete_toolpaths| UngroupParams {
+        group: group.to_owned(),
+        delete_toolpaths,
+    };
+    vec![
+        MenuItem::form::<RenameToolpathGroup>("Rename", &rename),
+        MenuItem::run::<UngroupToolpaths>("Ungroup", &ungroup(false)),
+        MenuItem::run::<UngroupToolpaths>("Delete Group and Its Toolpaths", &ungroup(true)),
     ]
 }
 

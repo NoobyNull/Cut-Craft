@@ -555,6 +555,10 @@ pub struct Document {
     /// Guide lines dragged out of the 2D view's rulers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
+    /// The toolpath list's groups in order (added with toolpath groups). A group made empty
+    /// is only here; each toolpath names its own group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub toolpath_groups: Vec<String>,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -608,6 +612,7 @@ impl Default for Document {
             variables: BTreeMap::new(),
             keep_out: vec![],
             guides: vec![],
+            toolpath_groups: vec![],
             tiling: None,
             bottom_side: false,
             other_side: SheetObjects::default(),
@@ -853,5 +858,41 @@ impl Document {
             })
             .map(|(&id, _)| id)
             .collect()
+    }
+}
+
+impl Document {
+    /// The toolpath groups in list order, then any a toolpath names that the list lacks (a
+    /// template brings its toolpaths' groups in).
+    #[must_use]
+    pub fn toolpath_groups_in_use(&self) -> Vec<String> {
+        let mut groups = self.toolpath_groups.clone();
+        for name in self.toolpaths.values().filter_map(|t| t.group.as_ref()) {
+            if !groups.contains(name) {
+                groups.push(name.clone());
+            }
+        }
+        groups
+    }
+
+    /// The toolpaths in `group`, in list order.
+    #[must_use]
+    pub fn toolpaths_in_group(&self, group: &str) -> Vec<EntityId> {
+        self.toolpaths
+            .iter()
+            .filter(|(_, t)| t.group.as_deref() == Some(group))
+            .map(|(&id, _)| id)
+            .collect()
+    }
+
+    /// A name no toolpath group has yet: Group 1, Group 2…
+    #[must_use]
+    pub fn next_toolpath_group_name(&self) -> String {
+        let groups = self.toolpath_groups_in_use();
+        // among one more name than there are groups, one is free
+        (1..=groups.len() + 1)
+            .map(|n| format!("Group {n}"))
+            .find(|name| !groups.contains(name))
+            .expect("one more name than groups")
     }
 }

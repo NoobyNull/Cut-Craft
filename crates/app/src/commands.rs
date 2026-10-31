@@ -59,6 +59,9 @@ pub fn registry() -> Registry {
     r.add::<cmd_vcarve_inlay_toolpath::VcarveInlayToolpath>();
     r.add::<cmd_prism_toolpath::PrismToolpath>();
     r.add::<cmd_texture_toolpath::TextureToolpath>();
+    r.add::<cmd_toolpath_group::GroupToolpaths>();
+    r.add::<cmd_toolpath_group::RenameToolpathGroup>();
+    r.add::<cmd_toolpath_group::UngroupToolpaths>();
     r.add::<cmd_quick_engrave_toolpath::QuickEngraveToolpath>();
     r.add::<cmd_keyhole_toolpath::KeyholeToolpath>();
     r.add::<cmd_drag_knife_toolpath::DragKnifeToolpath>();
