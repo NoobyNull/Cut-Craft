@@ -7,7 +7,7 @@ use super::{
     Page, SETTLE_SECONDS, Screen, TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value,
     View, egui, file_dialog, file_name, files, gui, menu_items, sheet_length, view3d, wrap_for,
 };
-use cut_craft_core::document::Units;
+use cut_craft_core::document::{MachinedArea, Units};
 
 impl CutCraftApp {
     /// The Tool Database manager; its edits are kept on Apply or OK.
@@ -452,7 +452,12 @@ impl CutCraftApp {
             .iter()
             .filter_map(|id| self.doc.toolpaths.get(id))
             .collect();
-        self.playback = Some(cut_craft_core::playback::Playback::new(start, &list));
+        let marks: Vec<u32> = toolpaths
+            .iter()
+            .filter(|id| self.doc.toolpaths.contains_key(id))
+            .map(|&id| super::preview_mark(id))
+            .collect();
+        self.playback = Some(cut_craft_core::playback::Playback::new(start, &list).marked(&marks));
         (self.playing, self.simulation_coarse, self.fine_3d) = (true, None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
@@ -479,9 +484,11 @@ impl CutCraftApp {
             return;
         };
         self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-        self.simulation
-            .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()))
-            .cut(toolpath);
+        let material = self
+            .simulation
+            .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()));
+        material.cutting = super::preview_mark(id);
+        material.cut(toolpath);
         (self.simulation_coarse, self.fine_3d) = (None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
@@ -733,16 +740,44 @@ impl CutCraftApp {
     // the history revision if that grows
     pub(super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
         if let Some(playback) = &self.playback {
-            return Some(Cow::Owned(view3d::coarse(playback.material(), MESH_CELLS)));
+            let coarse = view3d::coarse(playback.material(), MESH_CELLS);
+            return Some(Cow::Owned(self.painted(coarse)));
         }
         if let Some(material) = &self.simulation {
-            return Some(Cow::Borrowed(
-                self.simulation_coarse
-                    .get_or_insert_with(|| view3d::coarse(material, MESH_CELLS)),
-            ));
+            if self.simulation_coarse.is_none() {
+                self.simulation_coarse = Some(view3d::coarse(material, MESH_CELLS));
+            }
+            let coarse = self.simulation_coarse.as_ref().expect("made above");
+            if self.doc.job.machined_area == MachinedArea::MaterialColor {
+                return Some(Cow::Borrowed(coarse));
+            }
+            return Some(Cow::Owned(self.painted(coarse.clone())));
         }
         // before a preview, the model alone: nothing where no component is
         (!self.doc.components.is_empty()).then(|| Cow::Owned(self.model_shape(MESH_CELLS)))
+    }
+
+    /// The preview's `material` painted as the job's Machined Area Color has it: in the
+    /// material's colour, one fill colour, or each toolpath's own.
+    fn painted(&self, material: Material) -> Material {
+        let job = &self.doc.job;
+        let rgb = |[r, g, b]: [u8; 3]| egui::Color32::from_rgb(r, g, b);
+        match job.machined_area {
+            MachinedArea::MaterialColor => material,
+            MachinedArea::GlobalFillColor => {
+                view3d::painted(material, |_| Some(rgb(job.fill_colour)))
+            }
+            MachinedArea::ToolpathColor => {
+                let fills: std::collections::HashMap<u32, Option<[u8; 3]>> = self
+                    .doc
+                    .toolpaths
+                    .iter()
+                    .enumerate()
+                    .map(|(place, (&id, t))| (super::preview_mark(id), t.preview_colour(place)))
+                    .collect();
+                view3d::painted(material, |id| fills.get(&id).copied().flatten().map(rgb))
+            }
+        }
     }
 
     /// The model's shape, `cells` across; while Orientate 3D Model shows its model whole,
@@ -1001,7 +1036,7 @@ impl CutCraftApp {
     /// [`FINE_MESH_CELLS`].
     fn fine_surface(&mut self) -> Material {
         if let Some(material) = &self.simulation {
-            return view3d::coarse(material, FINE_MESH_CELLS);
+            return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
         }
         let job = &self.doc.job;
         #[expect(
@@ -1031,7 +1066,7 @@ impl CutCraftApp {
                 .is_some_and(|f| f.model.is_some() && f.model_whole),
         };
         if let Some(playback) = &self.playback {
-            let surface = view3d::coarse(playback.material(), MESH_CELLS);
+            let surface = self.painted(view3d::coarse(playback.material(), MESH_CELLS));
             return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
         }
         if let Some((kept, geometry)) = &self.surface_gpu
@@ -1494,6 +1529,36 @@ impl CutCraftApp {
         }
     }
 
+    /// The toolpath list's tick showing or hiding a toolpath, or its swatch colouring its
+    /// preview, as a Toolpath Properties edit.
+    fn list_properties(
+        &mut self,
+        shown: Option<(EntityId, bool)>,
+        coloured: Option<(EntityId, [u8; 3])>,
+    ) {
+        // a tick shows or hides a toolpath, a swatch colours its preview
+        let properties = shown
+            .and_then(|(id, visible)| Some((id, self.doc.toolpaths.get(&id)?, visible, None)))
+            .or_else(|| {
+                let (id, rgb) = coloured?;
+                let t = self.doc.toolpaths.get(&id)?;
+                Some((id, t, t.visible, Some(serde_json::json!({ "colour": rgb }))))
+            })
+            .map(|(id, t, visible, preview)| {
+                let mut params =
+                    serde_json::json!({ "toolpath": id, "name": t.name, "visible": visible });
+                if let Some(preview) = preview {
+                    params["preview"] = preview;
+                }
+                params
+            });
+        if let Some(params) = properties
+            && let Err(e) = self.apply("toolpath_properties", &params)
+        {
+            self.status.set_message(&e);
+        }
+    }
+
     pub(super) fn toolpath_list(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath list");
         ui.strong("Toolpath List");
@@ -1519,8 +1584,11 @@ impl CutCraftApp {
         let mut chosen = None;
         let mut shown = None;
         let mut edit = None;
+        let mut coloured = None;
+        // each toolpath's colour in the preview, when the machined areas take them
+        let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (&id, toolpath) in &self.doc.toolpaths {
+            for (place, (&id, toolpath)) in self.doc.toolpaths.iter().enumerate() {
                 let selected = self.selected_toolpath == Some(id);
                 let label = ui
                     .horizontal(|ui| {
@@ -1531,6 +1599,12 @@ impl CutCraftApp {
                             .changed()
                         {
                             shown = Some((id, visible));
+                        }
+                        if swatches
+                            && let Some(rgb) =
+                                preview_swatch(ui, toolpath, place, self.doc.job.colour)
+                        {
+                            coloured = Some((id, rgb));
                         }
                         if toolpath.stale {
                             let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
@@ -1570,6 +1644,7 @@ impl CutCraftApp {
                 self.status.set_message(&e);
             }
         }
+        self.list_properties(shown, coloured);
         if let Some(id) = edit {
             self.selected_toolpath = Some(id);
             self.invoke(ui.ctx(), "edit_toolpath");
@@ -1611,6 +1686,29 @@ impl CutCraftApp {
             self.set_units(to);
         }
     }
+}
+
+/// A toolpath's colour in a Toolpath Color preview, as a swatch beside it in the toolpath
+/// list (the material's `colour` when it has no fill); the colour picked, if one was.
+fn preview_swatch(
+    ui: &mut egui::Ui,
+    toolpath: &cut_craft_core::toolpath::Toolpath,
+    place: usize,
+    colour: [u8; 3],
+) -> Option<[u8; 3]> {
+    let given = toolpath.preview_colour(place);
+    let mut rgb = given.unwrap_or(colour);
+    let tip = if given.is_some() {
+        "Its colour in the preview (right-click it for No Fill)"
+    } else {
+        "No Fill: previewed in the material's colour"
+    };
+    // ponytail: a drag in the picker is an edit a frame; coalesce them if the undo list
+    // gets long
+    ui.color_edit_button_srgb(&mut rgb)
+        .on_hover_text(tip)
+        .changed()
+        .then_some(rgb)
 }
 
 /// The modeling plane as a sheet of light blue (the zero plane a model is placed on), a

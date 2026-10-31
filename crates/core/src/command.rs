@@ -360,6 +360,10 @@ impl Registry {
         if let Some(selector) = settings.get("selector") {
             fresh.params["selector"] = selector.clone();
         }
+        // its preview colour is the toolpath's own, not one of its settings
+        if let Some(colour) = toolpath.params.get(crate::toolpath::PREVIEW_COLOUR) {
+            fresh.params[crate::toolpath::PREVIEW_COLOUR] = colour.clone();
+        }
         let mut c = Change::builder(doc);
         if &fresh != toolpath {
             c.replace_toolpath(id, fresh);

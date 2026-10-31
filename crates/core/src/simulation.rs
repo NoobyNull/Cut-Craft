@@ -19,6 +19,13 @@ pub struct Material {
     pub bottom: f64,
     /// Row by row from y = 0.
     pub heights: Vec<f64>,
+    /// The id of the toolpath that last cut each cell lower, row by row (0: uncut).
+    pub cut_by: Vec<u32>,
+    /// The id `sweep` marks the cells it cuts with: the toolpath being previewed.
+    pub cutting: u32,
+    /// Each cell's preview colour, `0x01RRGGBB` (0: the material's own); the 3D view
+    /// paints it from `cut_by` just before drawing, empty when it is all material colour.
+    pub paint: Vec<u32>,
 }
 
 #[expect(
@@ -40,6 +47,9 @@ impl Material {
             cell,
             bottom: -job.thickness,
             heights: vec![0.0; columns * rows],
+            cut_by: vec![0; columns * rows],
+            cutting: 0,
+            paint: vec![],
         }
     }
 
@@ -278,10 +288,12 @@ impl Material {
         for row in rows {
             for column in columns.clone() {
                 if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
-                    let height = &mut self.heights[row * self.columns + column];
+                    let i = row * self.columns + column;
+                    let (height, z) = (&mut self.heights[i], z.max(self.bottom));
                     // a piece already taken away (NaN) stays away
-                    if !height.is_nan() {
-                        *height = height.min(z.max(self.bottom));
+                    if !height.is_nan() && z < *height {
+                        *height = z;
+                        self.cut_by[i] = self.cutting;
                     }
                 }
             }

@@ -192,6 +192,8 @@ cmd-set-size = { path = "../commands/set-size" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }
+# checks the 3D view's shader as the card would (the version wgpu uses)
+naga = { version = "30", features = ["wgsl-in"] }
 
 [lints]
 workspace = true

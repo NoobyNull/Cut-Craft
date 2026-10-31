@@ -50,6 +50,8 @@ pub struct Geometry {
     /// Vertices the shader makes: the grid's cells and its sides', or three a face.
     vertices: u32,
     grid: Option<Grid>,
+    /// The surface's heights are followed by each cell's preview paint (`Material::paint`).
+    painted: bool,
 }
 
 impl Geometry {
@@ -102,6 +104,10 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
     for &h in &m.heights {
         let h = if h.is_nan() { EMPTY } else { h as f32 };
         g.data.extend_from_slice(&h.to_ne_bytes());
+    }
+    g.painted = !m.paint.is_empty();
+    for &p in &m.paint {
+        g.data.extend_from_slice(&p.to_ne_bytes());
     }
     let index = |c: usize, r: usize| u32::try_from(r * m.columns + c).expect("fits u32");
     let (columns, rows) = match wrap {
@@ -241,7 +247,10 @@ impl Draw {
                 grain.map_or(0.0, |grain| f64::from(grain.depth)),
             ],
         );
-        words(&mut uniform, &[u32::from(grid.is_none()), 0, 0, 0]);
+        words(
+            &mut uniform,
+            &[u32::from(grid.is_none()), u32::from(geometry.painted), 0, 0],
+        );
         debug_assert_eq!(uniform.len(), UNIFORM_BYTES);
         Self { geometry, uniform }
     }
@@ -541,6 +550,33 @@ mod tests {
             .chunks(4)
             .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
             .collect()
+    }
+
+    #[test]
+    fn the_shader_is_valid_wgsl() {
+        let module = naga::front::wgsl::parse_str(include_str!("surface.wgsl"))
+            .unwrap_or_else(|e| panic!("{e}"));
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    }
+
+    #[test]
+    fn a_painted_surface_uploads_its_paint_after_its_heights() {
+        let mut m = slotted();
+        let cells = m.columns * m.rows;
+        assert!(!surface(&m, None, false).painted);
+        m.paint = vec![0x0100_00ff; cells];
+        let g = surface(&m, None, false);
+        assert!(g.painted);
+        assert_eq!(g.data.len(), cells * 8, "a height and a paint a cell");
+        assert_eq!(
+            u32::from_ne_bytes(g.data[cells * 4..cells * 4 + 4].try_into().unwrap()),
+            0x0100_00ff
+        );
     }
 
     #[test]

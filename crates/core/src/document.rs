@@ -347,6 +347,12 @@ pub struct Job {
     /// The material's colour in the 3D view.
     #[serde(default = "default_colour")]
     pub colour: [u8; 3],
+    /// How the preview colours what the toolpaths cut (added with preview colours).
+    #[serde(default)]
+    pub machined_area: MachinedArea,
+    /// Global Fill Color's colour.
+    #[serde(default = "default_fill")]
+    pub fill_colour: [u8; 3],
     /// Set for a rotary job (added with rotary jobs; flat jobs leave it out).
     /// Double-sided jobs: how the material is turned over between sides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -367,6 +373,26 @@ pub struct Job {
 
 fn default_clearance() -> f64 {
     Job::default().clearance
+}
+
+/// How the toolpath preview colours the areas it cuts (Aspire's Material Appearance ▸
+/// Machined Area Color).
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MachinedArea {
+    /// The material's own colour, as the uncut surface
+    #[default]
+    MaterialColor,
+    /// Every machined area in the one fill colour
+    GlobalFillColor,
+    /// Each toolpath's areas in its own colour (none: the material's)
+    ToolpathColor,
+}
+
+fn default_fill() -> [u8; 3] {
+    Job::default().fill_colour
 }
 
 fn default_colour() -> [u8; 3] {
@@ -449,6 +475,8 @@ impl Default for Job {
             resolution: Resolution::Standard,
             // pine, as Toolpaths ▸ Materials has it
             colour: [214, 160, 102],
+            machined_area: MachinedArea::MaterialColor,
+            fill_colour: [70, 130, 180],
             rotary: None,
             double_sided: None,
             model_position: ModelPosition::default(),

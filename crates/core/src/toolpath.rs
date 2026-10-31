@@ -593,11 +593,37 @@ const MODEL_STRATEGIES: [&str; 3] = [
     "sketch_carving_toolpath",
 ];
 
+/// The key a toolpath's own preview colour is kept under in its params: `[r, g, b]`, or
+/// null for no fill (the material's colour).
+pub const PREVIEW_COLOUR: &str = "preview_colour";
+
+/// The colours toolpaths take in a Toolpath Color preview until given their own, in list
+/// order.
+const PREVIEW_PALETTE: [[u8; 3]; 8] = [
+    [220, 60, 60],
+    [60, 140, 220],
+    [70, 170, 80],
+    [230, 170, 40],
+    [150, 80, 200],
+    [40, 180, 180],
+    [230, 110, 170],
+    [130, 130, 130],
+];
+
 fn shown() -> bool {
     true
 }
 
 impl Toolpath {
+    /// Its colour in a Toolpath Color preview, `place` being where it is in the list: the
+    /// one it was given, none if it was given no fill, else the palette's for its place.
+    pub fn preview_colour(&self, place: usize) -> Option<[u8; 3]> {
+        match self.params.get(PREVIEW_COLOUR) {
+            Some(given) => serde_json::from_value(given.clone()).ok(),
+            None => Some(PREVIEW_PALETTE[place % PREVIEW_PALETTE.len()]),
+        }
+    }
+
     /// Whether the 3D model is what it cuts, so changing the model changes it.
     pub fn reads_model(&self) -> bool {
         MODEL_STRATEGIES.contains(&self.strategy.as_str())

@@ -4037,3 +4037,55 @@ fn a_toolpath_with_a_vector_selector_takes_the_vectors_on_its_layers_each_time()
     h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
     assert_eq!(h.app.doc.toolpaths[&id].vectors.len(), 3);
 }
+
+#[test]
+fn the_preview_paints_machined_areas_in_the_materials_a_fill_or_each_toolpaths_colour() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for id in ["drilling_toolpath", "profile_toolpath"] {
+        h.app.invoke(&h.ctx, id);
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply(id, &params).unwrap();
+    }
+    let ids: Vec<EntityId> = h.app.doc.toolpaths.keys().copied().collect();
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let paints = |h: &mut Harness| -> std::collections::BTreeSet<u32> {
+        h.app.surface_3d().unwrap().paint.iter().copied().collect()
+    };
+    let packed = |[r, g, b]: [u8; 3]| u32::from_be_bytes([1, r, g, b]);
+    assert!(
+        paints(&mut h).is_empty(),
+        "the material's colour paints nothing"
+    );
+    // Toolpaths ▸ Materials: one fill colour over every machined area
+    let mut p = h
+        .app
+        .registry
+        .get("materials")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    p["machined_area"] = "global_fill_color".into();
+    p["fill_colour"] = serde_json::json!([0, 0, 255]);
+    h.app.apply("materials", &p).unwrap();
+    assert_eq!(paints(&mut h), [0, packed([0, 0, 255])].into());
+    // each toolpath's own colour: the drilling given red, the profile with no fill
+    p["machined_area"] = "toolpath_color".into();
+    h.app.apply("materials", &p).unwrap();
+    h.frame(vec![]);
+    let colour = |id: EntityId, preview: serde_json::Value| serde_json::json!({ "toolpath": id, "name": "t", "visible": true, "preview": preview });
+    h.app
+        .apply(
+            "toolpath_properties",
+            &colour(ids[0], serde_json::json!({ "colour": [255, 0, 0] })),
+        )
+        .unwrap();
+    h.app
+        .apply("toolpath_properties", &colour(ids[1], "no_fill".into()))
+        .unwrap();
+    assert_eq!(paints(&mut h), [0, packed([255, 0, 0])].into());
+    assert!(
+        h.app.doc.toolpaths[&ids[1]].preview_colour(1).is_none(),
+        "no fill: the profile shows the material"
+    );
+}

@@ -309,31 +309,70 @@ fn shaded(colour: Color32, brightness: f64) -> Color32 {
 }
 
 /// `material` with at most `most` cells along its longer side, each the deepest of the
-/// cells it covers so narrow cuts stay visible.
+/// cells it covers so narrow cuts stay visible, and marked and painted as that cell is.
 #[expect(clippy::cast_precision_loss, reason = "a small step")]
 pub fn coarse(material: &Material, most: usize) -> Material {
     let m = material;
     let step = m.columns.max(m.rows).div_ceil(most.max(1)).max(1);
     let (columns, rows) = (m.columns.div_ceil(step), m.rows.div_ceil(step));
     let span = |block: usize, count: usize| block * step..((block + 1) * step).min(count);
-    let heights = (0..rows)
+    // each block's deepest cell; a block of cells all taken away (NaN) has none
+    let deepest: Vec<Option<usize>> = (0..rows)
         .flat_map(|row| (0..columns).map(move |column| (column, row)))
         .map(|(column, row)| {
             span(row, m.rows)
-                .flat_map(|r| span(column, m.columns).map(move |c| m.heights[r * m.columns + c]))
-                .fold(f64::INFINITY, f64::min)
+                .flat_map(|r| span(column, m.columns).map(move |c| r * m.columns + c))
+                .filter(|&i| !m.heights[i].is_nan())
+                .min_by(|&a, &b| m.heights[a].total_cmp(&m.heights[b]))
         })
-        // a block of cells all taken away (NaN, which min passes over) stays away
-        .map(|h: f64| if h.is_infinite() { f64::NAN } else { h })
         .collect();
+    let of = |cells: &[u32]| -> Vec<u32> {
+        if cells.is_empty() {
+            return vec![];
+        }
+        deepest.iter().map(|d| d.map_or(0, |i| cells[i])).collect()
+    };
     Material {
         origin: m.origin,
         columns,
         rows,
         cell: m.cell * step as f64,
         bottom: m.bottom,
-        heights,
+        heights: deepest
+            .iter()
+            .map(|d| d.map_or(f64::NAN, |i| m.heights[i]))
+            .collect(),
+        cut_by: of(&m.cut_by),
+        cutting: m.cutting,
+        paint: of(&m.paint),
     }
+}
+
+/// `material` painted for the preview: each cell cut by a toolpath in the colour `fill`
+/// gives that toolpath's id, if it gives one.
+pub fn painted(mut material: Material, fill: impl Fn(u32) -> Option<Color32>) -> Material {
+    let paint: Vec<u32> = material
+        .cut_by
+        .iter()
+        .map(|&id| {
+            (id != 0)
+                .then(|| fill(id))
+                .flatten()
+                .map_or(0, |c| u32::from_be_bytes([1, c.r(), c.g(), c.b()]))
+        })
+        .collect();
+    material.paint = if paint.iter().any(|&p| p != 0) {
+        paint
+    } else {
+        vec![]
+    };
+    material
+}
+
+/// A cell's preview colour, if it is painted.
+fn paint_of(material: &Material, cell: usize) -> Option<Color32> {
+    let [flag, red, green, blue] = material.paint.get(cell)?.to_be_bytes();
+    (flag != 0).then(|| Color32::from_rgb(red, green, blue))
 }
 
 /// How the block is drawn.
@@ -772,9 +811,16 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
                 continue;
             }
             let grain = |c, r| look.grain.map_or(1.0, |g| g.on_cells(m.cell).at(top(c, r)));
+            let colour = |c: usize, r: usize| {
+                let b = brightness(m, c, r, look.light);
+                match paint_of(m, r * m.columns + c) {
+                    Some(paint) => shaded(paint, b),
+                    None => shade(b * grain(c, r)),
+                }
+            };
             quads.push((
                 corners.map(|(c, r)| top(c, r)),
-                corners.map(|(c, r)| shade(brightness(m, c, r, look.light) * grain(c, r))),
+                corners.map(|(c, r)| colour(c, r)),
             ));
         }
     }
@@ -1169,6 +1215,36 @@ fn wrapped_quads(m: &Material, wrap: Wrap, light: DVec3) -> Vec<([DVec3; 4], f64
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_preview_is_painted_by_who_cut_each_cell_and_coarse_keeps_the_deepest_cells_paint() {
+        let mut m = Material::new(
+            &cut_craft_core::document::Job {
+                width: 4.0,
+                height: 4.0,
+                ..cut_craft_core::document::Job::default()
+            },
+            4,
+        );
+        // cell 0 cut deepest by toolpath 3, cell 1 by toolpath 9 (unpainted)
+        (m.heights[0], m.cut_by[0]) = (-2.0, 3);
+        (m.heights[1], m.cut_by[1]) = (-1.0, 9);
+        let red = Color32::from_rgb(255, 0, 0);
+        let p = painted(m.clone(), |id| (id == 3).then_some(red));
+        assert_eq!(paint_of(&p, 0), Some(red));
+        assert_eq!(paint_of(&p, 1), None, "no fill");
+        assert_eq!(paint_of(&p, 5), None, "uncut");
+        assert!(
+            painted(m.clone(), |_| None).paint.is_empty(),
+            "nothing to paint"
+        );
+        let c = coarse(&p, 2);
+        assert_eq!(
+            (c.cut_by[0], paint_of(&c, 0)),
+            (3, Some(red)),
+            "the deepest cell's"
+        );
+    }
     use cut_craft_core::document::Job;
     use cut_craft_core::geometry::Point;
     use eframe::egui::pos2;

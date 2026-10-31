@@ -16,6 +16,8 @@ struct Step {
 
 pub struct Playback {
     tools: Vec<Tool>,
+    /// The id each tool's cells are marked with (`Material::cut_by`), by tool.
+    marks: Vec<u32>,
     steps: Vec<Step>,
     /// Distance travelled at the end of each step.
     ends: Vec<f64>,
@@ -47,6 +49,7 @@ impl Playback {
             })
             .collect();
         Self {
+            marks: vec![0; tools.len()],
             tools,
             steps,
             ends,
@@ -54,6 +57,15 @@ impl Playback {
             start,
             at: 0.0,
         }
+    }
+
+    /// The same, each toolpath's cells marked with its id from `marks` (in order).
+    #[must_use]
+    pub fn marked(mut self, marks: &[u32]) -> Self {
+        for (m, &id) in self.marks.iter_mut().zip(marks) {
+            *m = id;
+        }
+        self
     }
 
     /// The material as cut so far.
@@ -114,6 +126,7 @@ impl Playback {
                 let s = &self.steps[k];
                 let (a, b) = (if k == i { ti } else { 0.0 }, if k == j { tj } else { 1.0 });
                 if b > a {
+                    self.material.cutting = self.marks[s.tool];
                     self.material.sweep(
                         s.from.lerp(s.to, a),
                         s.from.lerp(s.to, b),
@@ -179,6 +192,21 @@ mod tests {
             stale: false,
         };
         (Material::new(&job, 100), toolpath)
+    }
+
+    #[test]
+    fn the_cells_a_toolpath_cuts_are_marked_with_its_id() {
+        let (start, toolpath) = line();
+        let mut p = Playback::new(start, &[&toolpath]).marked(&[7]);
+        p.seek(p.length());
+        // millimetre cells: the cell at (50, 50) is cut, the one at (50, 10) is not
+        let m = p.material();
+        assert_eq!(
+            m.cut_by[50 * m.columns + 50],
+            7,
+            "cut by the toolpath marked 7"
+        );
+        assert_eq!(m.cut_by[10 * m.columns + 50], 0, "uncut");
     }
 
     fn depth_at(p: &Playback, x: f64) -> f64 {

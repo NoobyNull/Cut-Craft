@@ -1539,6 +1539,7 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1999,6 +2000,7 @@ dependencies = [
  "fmt-import-svg",
  "image",
  "log",
+ "naga",
  "raw-window-handle",
  "rfd",
  "schemars",

@@ -34,15 +34,16 @@ struct Camera {
     grain: vec4<f32>,
     // 0 the surface, 1 a model
     kind: u32,
+    // 1: the heights are followed by each cell's paint, 0x01RRGGBB in sRGB (0: unpainted)
+    painted: u32,
     // to a whole 16 bytes (scalars: a vec3 would be aligned to 16 and grow the struct)
-    pad_a: u32,
     pad_b: u32,
     pad_c: u32,
 };
 
 @group(0) @binding(0) var<uniform> camera: Camera;
 // the surface's heights row by row (EMPTY where there is no model), or a model's faces:
-// three corners and a mark, ten numbers a face
+// three corners and a mark, ten numbers a face; a painted surface's paint after its heights
 @group(0) @binding(1) var<storage, read> data: array<f32>;
 
 const EMPTY: f32 = -1.0e30;
@@ -172,6 +173,17 @@ fn surface_vertex(i: u32) -> Placed {
         shade *= grain(flat(c, r, own));
     }
     out.colour = camera.colour.rgb * shade;
+    if camera.painted == 1u {
+        let paint = bitcast<u32>(data[cells + i]);
+        if (paint >> 24u) != 0u {
+            let srgb = vec3<f32>(
+                f32((paint >> 16u) & 255u),
+                f32((paint >> 8u) & 255u),
+                f32(paint & 255u),
+            ) / 255.0;
+            out.colour = linear_from_gamma(srgb) * (1.0 - camera.depth_shade * depth);
+        }
+    }
     return out;
 }
 
@@ -260,7 +272,13 @@ fn fs_gamma(f: Fragment) -> @location(0) vec4<f32> {
     return vec4<f32>(gamma_from_linear(lit(f, normal)), 1.0);
 }
 
-// the sRGB transfer curve
+// the sRGB transfer curve, and back
+fn linear_from_gamma(rgb: vec3<f32>) -> vec3<f32> {
+    let low = rgb / 12.92;
+    let high = pow((rgb + 0.055) / 1.055, vec3<f32>(2.4));
+    return select(high, low, rgb < vec3<f32>(0.04045));
+}
+
 fn gamma_from_linear(rgb: vec3<f32>) -> vec3<f32> {
     let low = rgb * 12.92;
     let high = 1.055 * pow(rgb, vec3<f32>(1.0 / 2.4)) - 0.055;

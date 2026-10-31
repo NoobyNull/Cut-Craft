@@ -460,7 +460,13 @@ say "not implemented yet".
   plastics and metals that sets the material's colour in the 3D view (Job Setup's colour);
   Custom keeps Job Setup's. Woods show grain on the 3D view's top (lines along X that drift,
   bunch, and move across as the surface goes down, so carvings show rings); the wrapped
-  rotary view and the block's sides are plain.
+  rotary view and the block's sides are plain. Custom is a solid colour of one's own.
+  As Aspire's Material Appearance it also sets Machined Area Color: Material Color (cuts
+  show the material), Global Fill Color (every cut area in one colour) or Toolpath Color
+  (each toolpath's areas in its own colour: a swatch beside it in the toolpath list, a
+  palette colour until set; right-click ▸ Preview Color: No Fill leaves its areas the
+  material's). Previews mark which toolpath cut each cell last, so changing the colours
+  repaints the preview without previewing again.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
   Preview, Preview Visible (the shown toolpaths), Preview All (every toolpath, shown or not),
   Undo Last Preview (back to before the last preview, once), Reset Preview. Each row has a tick to show or hide it and opens its

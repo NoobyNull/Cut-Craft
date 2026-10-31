@@ -542,11 +542,20 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
         toolpath: id,
         name: toolpath.name.clone(),
         visible: toolpath.visible,
+        preview: cmd_toolpath_properties::PreviewFill::Unchanged,
+    };
+    let no_fill = cmd_toolpath_properties::Params {
+        preview: cmd_toolpath_properties::PreviewFill::NoFill,
+        ..properties.clone()
     };
     vec![
         show,
         hide,
         MenuItem::form::<cmd_toolpath_properties::ToolpathProperties>("Rename", &properties),
+        MenuItem::run::<cmd_toolpath_properties::ToolpathProperties>(
+            "Preview Color: No Fill",
+            &no_fill,
+        ),
         MenuItem::run::<cmd_duplicate_toolpath::DuplicateToolpath>(
             "Duplicate",
             &cmd_duplicate_toolpath::Params { toolpath: id },

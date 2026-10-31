@@ -52,8 +52,13 @@ struct FineKey {
     importing: bool,
 }
 
+/// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id.
+fn preview_mark(id: EntityId) -> u32 {
+    u32::try_from(id.0).unwrap_or(u32::MAX)
+}
+
 /// What the 3D view's surface on the GPU was built from: the model as at this revision,
-/// wrapped and sided so (colour and light are the shader's, so not these).
+/// wrapped and sided so (light is the shader's, so not these).
 #[derive(Clone, Debug, PartialEq)]
 struct GeometryKey {
     revision: u64,
