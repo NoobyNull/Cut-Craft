@@ -745,7 +745,7 @@ impl CutCraftApp {
         let drawn = self
             .form
             .as_ref()
-            .filter(|f| f.model.is_some())
+            .filter(|f| f.model.is_some() && f.model_whole)
             .and_then(|f| f.drawn);
         // hidden for the moment, not as an edit: nothing to undo
         let show = |doc: &mut cut_craft_core::document::Document, visible: bool| {
@@ -966,7 +966,10 @@ impl CutCraftApp {
             framing,
             fit,
             look,
-            importing: self.form.as_ref().is_some_and(|f| f.model.is_some()),
+            importing: self
+                .form
+                .as_ref()
+                .is_some_and(|f| f.model.is_some() && f.model_whole),
         };
         if let Some((kept, mesh)) = &self.fine_3d
             && *kept == key
@@ -1153,6 +1156,7 @@ impl CutCraftApp {
             && self.form.as_ref().is_some_and(|f| {
                 f.id == "orientate_3d_model"
                     && f.model.is_some()
+                    && f.model_whole
                     && f.params["model_type"] == "full"
             });
         let wrap = wrap_for(&job, shown.auto_wrapping || turned, previewing, &surface);

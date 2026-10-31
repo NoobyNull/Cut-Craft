@@ -903,6 +903,7 @@ impl CutCraftApp {
                 shown_size: None,
                 typed_size: [None; 3],
                 model: None,
+                model_whole: true,
                 applied: None,
                 undo_from: self.history.undo_depth(),
             });
@@ -1572,8 +1573,17 @@ impl CutCraftApp {
                 cmd_orientate_3d_model::preview_over(&self.doc, &p, top)
                     .ok()
                     .flatten()
-            })
-            .map(std::sync::Arc::new);
+            });
+        // a huge model is shown as the surface it makes, only its unreachable faces drawn
+        let cap = usize::try_from(self.options.import.preview_faces).unwrap_or(usize::MAX);
+        let (model, whole) = match model {
+            Some(all) if all.len() > cap => (
+                Some(all.into_iter().filter(|(_, red)| *red).collect()),
+                false,
+            ),
+            all => (all, true),
+        };
+        let model = model.map(std::sync::Arc::new);
         // the model's size: its triangles' box, or (wrapped) its component's
         let made = model
             .as_ref()
@@ -1594,6 +1604,7 @@ impl CutCraftApp {
         if let Some(form) = &mut self.form {
             form.error = result.err();
             form.model = model;
+            form.model_whole = whole;
             if let (true, Some(made)) = (sized, made) {
                 // to the hundredth of a millimetre shown, not the cell's float noise
                 let shown = std::array::from_fn(|i| {

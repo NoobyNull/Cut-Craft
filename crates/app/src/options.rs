@@ -317,7 +317,7 @@ pub struct General {
 }
 
 /// Importing 3D models: what Orientate 3D Model offers (not one of Aspire's).
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Import {
     /// What an imported model is kept as: whole (its underside on the other side of a
     /// double-sided job, wrapped in a rotary one), its top seen from above, or the choice
@@ -325,6 +325,25 @@ pub struct Import {
     #[serde(default)]
     #[schemars(title = "Imported model type")]
     pub model_types: ModelTypes,
+    /// A model with more faces than this is shown as the surface it makes while it is
+    /// imported, with only the faces out of reach drawn over it; drawing millions of faces
+    /// a frame makes the view drag
+    #[serde(default = "preview_faces")]
+    #[schemars(title = "Model preview faces", range(min = 1000))]
+    pub preview_faces: u32,
+}
+
+fn preview_faces() -> u32 {
+    250_000
+}
+
+impl Default for Import {
+    fn default() -> Self {
+        Self {
+            model_types: ModelTypes::default(),
+            preview_faces: preview_faces(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

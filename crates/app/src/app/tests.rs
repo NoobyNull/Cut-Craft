@@ -30,6 +30,47 @@ fn cut_copy_and_paste_vectors() {
 }
 
 #[test]
+fn a_model_past_the_preview_limit_is_drawn_as_its_surface_with_only_undercuts_over_it() {
+    let mut h = Harness::new();
+    h.app.options.import.preview_faces = 1000;
+    let file = pyramid_stl("limit");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(form.model_whole && form.model.as_ref().is_some_and(|m| m.len() == 6));
+    let k = *h.app.doc.components.keys().next().unwrap();
+    assert!(
+        h.app
+            .model_shape(MESH_CELLS)
+            .heights
+            .iter()
+            .all(|z| z.is_nan()),
+        "the whole model is drawn in the component's place"
+    );
+    // over the limit: the component shows, and the model keeps only its red faces (none)
+    h.app.options.import.preview_faces = 4;
+    h.app.form.as_mut().unwrap().dirty = true;
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(!form.model_whole);
+    assert_eq!(
+        form.model.as_ref().map(|m| m.len()),
+        Some(0),
+        "a pyramid has no undercuts"
+    );
+    assert!(
+        h.app
+            .model_shape(MESH_CELLS)
+            .heights
+            .iter()
+            .any(|z| !z.is_nan()),
+        "the component is drawn instead"
+    );
+    assert!(h.app.doc.components[&k].visible);
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn about_lists_the_github_contributors() {
     let listed = super::actions::contributors();
     assert!(!listed.is_empty(), "scripts/contributors has been run");

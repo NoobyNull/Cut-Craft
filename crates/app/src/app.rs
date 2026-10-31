@@ -480,6 +480,9 @@ struct OpenForm {
     /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above
     /// cannot reach it: the 3D view shows it whole while the form is open.
     model: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
+    /// Whether `model` is the whole model (drawn in place of its component) or, past
+    /// Options ▸ Model preview faces, only the faces out of reach (drawn over it).
+    model_whole: bool,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
     /// How many changes could be undone when it opened: Cancel undoes back to there.
