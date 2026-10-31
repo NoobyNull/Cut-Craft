@@ -1102,7 +1102,7 @@ fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
     let toolpath = |i: usize| {
         move |app: &CutCraftApp| {
             let (&id, t) = app.doc.toolpaths.iter().nth(i).unwrap();
-            gui::toolpath_menu(id, t)
+            gui::toolpath_menu(&app.doc, id, t)
         }
     };
     let min_x = |app: &CutCraftApp| -> Vec<f64> {
@@ -2841,7 +2841,7 @@ fn every_enabled_control_works() {
         popups.extend(gui::layer_menu(doc, layer));
     }
     for (&id, toolpath) in &doc.toolpaths {
-        popups.extend(gui::toolpath_menu(id, toolpath));
+        popups.extend(gui::toolpath_menu(doc, id, toolpath));
     }
     for (&id, component) in &doc.components {
         popups.extend(gui::component_menu(doc, id, component));
@@ -4595,6 +4595,35 @@ fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
         .unwrap();
     h.frame(vec![key(Key::E)]);
     assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
+}
+
+#[test]
+fn sheets_take_selected_vectors_and_toolpaths_from_their_menus() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::two_sheets();
+    let menu = gui::sheet_menu(&h.app.doc, 1);
+    let item = |name: &str| menu.iter().find(|m| m.name == name).unwrap();
+    assert!(item("Copy Selected Vectors Here").is_enabled);
+    let selected = h.app.doc.selection.len();
+    let action = item("Move Selected Vectors Here").action.clone();
+    h.app.invoke(&h.ctx, &action);
+    assert_eq!(h.app.doc.sheets[1].objects.vectors.len(), selected);
+    // the active sheet's own menu cannot send to itself
+    let own = gui::sheet_menu(&h.app.doc, 0);
+    assert!(
+        !own.iter()
+            .find(|m| m.name == "Copy Selected Vectors Here")
+            .unwrap()
+            .is_enabled
+    );
+    // a toolpath's menu offers the other sheet
+    let mut doc = cut_craft_core::testing::with_toolpath();
+    doc.sheets = cut_craft_core::testing::two_sheets().sheets;
+    let (&id, t) = doc.toolpaths.iter().next().unwrap();
+    let menu = gui::toolpath_menu(&doc, id, t);
+    let copy = menu.iter().find(|m| m.name == "Copy to Sheet").unwrap();
+    let names: Vec<&str> = copy.children.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(names, ["Sheet 2"]);
 }
 
 #[test]

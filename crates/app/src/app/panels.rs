@@ -1917,7 +1917,9 @@ impl CutCraftApp {
                 if label.secondary_clicked() {
                     self.selected_toolpath = Some(id);
                 }
-                if let Some(action) = self.popup(&label, || gui::toolpath_menu(id, toolpath)) {
+                if let Some(action) =
+                    self.popup(&label, || gui::toolpath_menu(&self.doc, id, toolpath))
+                {
                     chosen = Some(action);
                 }
             }

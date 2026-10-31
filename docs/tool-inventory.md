@@ -172,6 +172,8 @@ say "not implemented yet".
 - Menus and drop-downs draw each category in a border.
 - Number fields take sums (Calculation Edit Boxes): + - * / ^, brackets, W H T, P, I, M, '.
 - Sheets keep their own vectors, components, pictures and toolpaths; activating one swaps them.
+  A sheet's right-click menu copies or moves the selected vectors onto it and inserts a new
+  sheet of its size; a toolpath's Copy to Sheet copies it there with the vectors it was made from.
 - Edit ▸ Options (3D view, toolpath and general settings, in options.json) and Edit ▸
   Document Variables (used in sums as {name}). Options also has the 3D view's background
   (solid, gradient or picture, with its colours) and anti-aliasing (4x, from the next start);

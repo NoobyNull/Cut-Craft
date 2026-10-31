@@ -557,7 +557,7 @@ fn delete(items: Items, item: u64, which: &[(&str, cmd_delete_items::Which)]) ->
 
 /// Aspire's toolpath menu (MENU 968) for toolpath `id`. Right-clicking a toolpath selects it,
 /// so Recalculate ▸ This and Preview act on it.
-pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
+pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
     use cmd_delete_items::Which;
     let [show, hide] = show_hide(Items::Toolpaths, id.0);
     let properties = cmd_toolpath_properties::Params {
@@ -593,6 +593,19 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
             ],
         ),
         MenuItem::with_action("Preview", "preview_toolpath"),
+        MenuItem::submenu(
+            "Copy to Sheet",
+            other_sheets(doc, |sheet| {
+                MenuItem::run::<cmd_copy_toolpath_to_sheet::CopyToolpathToSheet>(
+                    &doc.sheets[sheet].name,
+                    &cmd_copy_toolpath_to_sheet::Params {
+                        toolpath: id,
+                        sheet,
+                    },
+                )
+            }),
+        )
+        .enabled(doc.sheets.len() > 1),
         delete(
             Items::Toolpaths,
             id.0,
@@ -604,6 +617,14 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
             ],
         ),
     ]
+}
+
+/// One item for each sheet but the active one.
+fn other_sheets(doc: &Document, item: impl Fn(usize) -> MenuItem) -> Vec<MenuItem> {
+    (0..doc.sheets.len())
+        .filter(|&i| i != doc.active_sheet)
+        .map(item)
+        .collect()
 }
 
 /// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
@@ -932,6 +953,14 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
         };
         MenuItem::run::<SheetProperties>(name, &params).enabled(s.visible != visible)
     };
+    let send = |name: &str, move_vectors: bool| {
+        let params = cmd_send_to_sheet::Params {
+            sheet,
+            move_vectors,
+        };
+        MenuItem::run::<cmd_send_to_sheet::SendToSheet>(name, &params)
+            .enabled(sheet != doc.active_sheet && !doc.selection.is_empty())
+    };
     vec![
         MenuItem::run::<cmd_activate_sheet::ActivateSheet>(
             "Activate",
@@ -941,7 +970,16 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
         shown("Show", true),
         shown("Hide", false),
         MenuItem::separator(),
-        MenuItem::with_action("Insert New Sheet", "add_sheet"),
+        send("Copy Selected Vectors Here", false),
+        send("Move Selected Vectors Here", true),
+        MenuItem::separator(),
+        MenuItem::form::<cmd_add_sheet::AddSheet>(
+            "Insert New Sheet",
+            &cmd_add_sheet::Params {
+                like: Some(sheet),
+                ..cmd_add_sheet::AddSheet::initial_params(doc)
+            },
+        ),
         // ponytail: a sheet is edited while active, in Job Setup; Aspire's Sheet Editor is that form
         MenuItem::with_action("Edit Sheet...", "job_setup").enabled(sheet == doc.active_sheet),
         MenuItem::form::<SheetProperties>("Rename", &props),

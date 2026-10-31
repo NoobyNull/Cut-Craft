@@ -173,6 +173,8 @@ pub fn registry() -> Registry {
     r.add::<cmd_trim_objects::TrimObjects>();
     r.add::<cmd_reorder_layer::ReorderLayer>();
     r.add::<cmd_merge_visible_layers::MergeVisibleLayers>();
+    r.add::<cmd_send_to_sheet::SendToSheet>();
+    r.add::<cmd_copy_toolpath_to_sheet::CopyToolpathToSheet>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
