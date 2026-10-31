@@ -841,3 +841,7 @@ instead of half-cell steps.
 ### Text spell checker [obs: help Create Text; course admEKCLmzX8]
 - The text box underlines misspelled words in red; clicking one offers corrections, Add Word, and Remove Word (only for words the user added). The language is the software's.
 - **[inf]** Cut Craft: Hunspell dictionaries (one-letter flags; PFX and SFX rules with conditions and cross products) from Cut Craft's `dictionaries` folder, else the system's (`/usr/share/hunspell`, `/usr/share/myspell`, `/Library/Spelling`; English first). The misspelled words are listed under the Draw Text form, each with up to six suggestions one edit away (letters from the dictionary's TRY line) and Add Word; user words live in `words.txt` in the settings folder. `!!variables!!` and words with digits are let be. Not built: underlining in the text box, compound rules, long or numeric flags.
+
+### Copy Along Vectors: Copy Circles [obs: help Copy Along Vectors]
+- Copy Object copies the first vector or group selected along the others; Copy Circles copies circles of the diameter entered along the selected vectors.
+- **[inf]** Cut Craft: with Copy Circles every selected vector is one to copy along, the circles centred on the points the spacing gives, on a new layer when asked.
