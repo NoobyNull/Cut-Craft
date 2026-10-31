@@ -457,14 +457,15 @@ impl CutCraftApp {
     }
 
     /// Orientate 3D Model again on a model's own file, with the settings it was imported
-    /// with, its Apply replacing the model: only while the file is where it was and
-    /// unchanged (its MD5 the same).
+    /// with, its Apply replacing the model: only while the file is where it was; a file
+    /// that has changed since is taken as it is now, with a warning (Aspire re-imports a
+    /// model "provided it has not been changed significantly").
     fn reimport_model(&mut self, action: &str) {
         let Some(source) = self.model_source(action).cloned() else {
             return;
         };
-        let path = match source.verified(self.job_folder()) {
-            Ok(path) => path,
+        let (path, changed) = match source.located(self.job_folder()) {
+            Ok(found) => found,
             Err(e) => {
                 self.status.set_message(&e);
                 return;
@@ -481,6 +482,12 @@ impl CutCraftApp {
             form.params["file"] = Value::from(path.display().to_string());
             form.drawn = id;
             self.apply_live();
+        }
+        if changed {
+            self.status.set_message(&format!(
+                "Warning: {} has changed since it was imported; imported again as it is now",
+                path.display()
+            ));
         }
     }
 

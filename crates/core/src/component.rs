@@ -149,18 +149,28 @@ impl Source {
 
     /// The file found, read and checked to be the one imported.
     pub fn verified(&self, folder: Option<&std::path::Path>) -> Result<std::path::PathBuf, String> {
+        match self.located(folder)? {
+            (path, false) => Ok(path),
+            (path, true) => Err(format!(
+                "{} has changed since it was imported",
+                path.display()
+            )),
+        }
+    }
+
+    /// The file found and read: where it is, and whether it has changed since it was
+    /// imported (a re-import then takes it as it is now).
+    pub fn located(
+        &self,
+        folder: Option<&std::path::Path>,
+    ) -> Result<(std::path::PathBuf, bool), String> {
         let name = self.path.display();
         let path = self
             .find(folder)
             .ok_or_else(|| format!("{name} is no longer where it was imported from"))?;
         let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        if Self::md5(&bytes) != self.md5 {
-            return Err(format!(
-                "{} has changed since it was imported",
-                path.display()
-            ));
-        }
-        Ok(path)
+        let changed = Self::md5(&bytes) != self.md5;
+        Ok((path, changed))
     }
 }
 

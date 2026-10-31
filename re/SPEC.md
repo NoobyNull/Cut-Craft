@@ -799,3 +799,7 @@ instead of half-cell steps.
 ### Lithophane preview [obs: help Preview Toolpaths; course RJogq_22TBs]
 - Preview Toolpaths ▸ Machined Area Color ▸ Lithophane: the material shown as if lit from behind, white at zero thickness and the chosen material or solid colour at full thickness, whatever material is picked; a slider beside it goes from very high contrast (left) to a much lighter look, as with no backlight (right).
 - **[inf]** Cut Craft: Toolpaths ▸ Materials ▸ Machined Area Color ▸ Lithophane, with Lithophane light 0 to 1 (0.5 to start). Each cell's colour mixes white and the material's colour by the share of the thickness left, raised to 4^(2 × light − 1): 0 darkens soon, 1 stays light.
+
+### Re-Import [obs: help Import a Component or 3D Model]
+- Once imported, a model can be re-imported to adjust its size, position and slicing plane, "provided it has not been changed significantly": right-click one of its components in the tree ▸ Re-Import. A model that was segmented reopens the 3D Segment dialog in its last state instead.
+- **[inf]** Cut Craft: Re-import Model… on an imported component's menu reopens Orientate 3D Model with the import's settings, from the file where it was (or beside the job, once moved with it); a changed file is imported again as it is now, with a warning. Not built: reopening Segment 3D Model for a segmented model.

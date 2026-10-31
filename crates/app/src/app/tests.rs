@@ -3338,7 +3338,7 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
 
 #[test]
 #[expect(clippy::cast_precision_loss)]
-fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged() {
+fn a_model_imports_again_from_its_own_file_while_it_is_there_a_changed_one_with_a_warning() {
     let mut h = Harness::new();
     let file = pyramid_stl("again");
     h.app.import_file(&file);
@@ -3373,12 +3373,18 @@ fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged(
     let k = h.app.doc.components.values().next().unwrap();
     assert!((width(k) - 25.0).abs() <= k.cell, "{}", width(k));
     h.app.form = None;
-    // changed, it is refused
+    // changed, it is imported again as it is now, with a warning
     let mut changed = std::fs::read(&file).unwrap();
     changed.extend(b"\n");
     std::fs::write(&file, changed).unwrap();
     h.app.invoke(&h.ctx, &again);
-    assert!(h.app.form.is_none(), "not from a changed file");
+    assert!(h.app.form.is_some(), "from the changed file");
+    assert!(
+        h.app.status.message.contains("has changed"),
+        "{}",
+        h.app.status.message
+    );
+    h.app.form = None;
     // gone, it is not offered
     std::fs::remove_file(&file).unwrap();
     assert!(!h.app.available(&again));
