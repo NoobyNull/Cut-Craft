@@ -3788,3 +3788,54 @@ fn save_toolpaths_opens_its_form_and_saves_each_shown_toolpath_to_a_file_of_its_
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn the_toolpath_list_shows_hides_edits_and_reorders_its_rows() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::three_toolpaths();
+    let mut c = Change::builder(&h.app.doc);
+    for (id, name) in [(1, "Pocket"), (2, "Drill"), (3, "Cut Out")] {
+        let mut t = h.app.doc.toolpaths[&EntityId(id)].clone();
+        t.name = name.into();
+        c.replace_toolpath(EntityId(id), t);
+    }
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let names = |h: &Harness| -> Vec<String> {
+        h.app
+            .doc
+            .toolpaths
+            .values()
+            .map(|t| t.name.clone())
+            .collect()
+    };
+    // the tick left of a name hides it
+    let drill = h.text_at("Drill").unwrap();
+    h.click(drill - egui::vec2(24.0, 0.0), Modifiers::NONE);
+    assert!(!h.app.doc.toolpaths[&EntityId(2)].visible);
+    // a click selects, the down arrow moves it below the next one
+    h.click(drill, Modifiers::NONE);
+    assert_eq!(h.app.selected_toolpath, Some(EntityId(2)));
+    let down = h.text_at("⏷").unwrap();
+    h.click(down, Modifiers::NONE);
+    assert_eq!(names(&h), ["Pocket", "Cut Out", "Drill"]);
+    assert_eq!(
+        h.app.selected_toolpath,
+        Some(EntityId(3)),
+        "it stays selected"
+    );
+    assert!(
+        !h.app.doc.toolpaths[&EntityId(3)].visible,
+        "hidden moves with it"
+    );
+    // a double-click opens its form
+    h.frame(vec![]);
+    let pocket = h.text_at("Pocket").unwrap();
+    h.double_click(pocket);
+    h.frame(vec![]);
+    assert_eq!(h.app.selected_toolpath, Some(EntityId(1)));
+    assert!(h.app.form.is_some(), "the toolpath's form is open");
+}

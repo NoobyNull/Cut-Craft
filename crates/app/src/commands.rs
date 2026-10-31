@@ -166,6 +166,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_convert_text_to_curves::ConvertTextToCurves>();
     r.add::<cmd_vector_boundary::VectorBoundary>();
     r.add::<cmd_auto_layout_text::AutoLayoutText>();
+    r.add::<cmd_reorder_toolpath::ReorderToolpath>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

@@ -1425,6 +1425,38 @@ impl CutCraftApp {
 
     /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
     /// a right-click on one opening its menu.
+    /// The up and down arrows over the toolpath list: the selected toolpath moves through the
+    /// cut order and stays selected.
+    fn toolpath_order_arrows(&mut self, ui: &mut egui::Ui) {
+        let mut moved = None;
+        ui.horizontal(|ui| {
+            use cmd_reorder_toolpath::{Direction, neighbour};
+            for (direction, arrow, tip) in [
+                (Direction::Up, "⏶", "Move Toolpath Up (cut it sooner)"),
+                (Direction::Down, "⏷", "Move Toolpath Down (cut it later)"),
+            ] {
+                let can = self
+                    .selected_toolpath
+                    .is_some_and(|id| neighbour(&self.doc, id, direction).is_some());
+                if ui
+                    .add_enabled(can, egui::Button::new(arrow))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    moved = Some(direction);
+                }
+            }
+        });
+        if let (Some(direction), Some(id)) = (moved, self.selected_toolpath) {
+            let to = cmd_reorder_toolpath::neighbour(&self.doc, id, direction);
+            let params = serde_json::json!({ "toolpath": id, "direction": direction });
+            match self.apply("reorder_toolpath", &params) {
+                Ok(()) => self.selected_toolpath = to,
+                Err(e) => self.status.set_message(&e),
+            }
+        }
+    }
+
     pub(super) fn toolpath_list(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath list");
         ui.strong("Toolpath List");
@@ -1444,24 +1476,43 @@ impl CutCraftApp {
         if self.doc.toolpaths.is_empty() {
             ui.weak("No toolpaths yet");
         }
+        self.toolpath_order_arrows(ui);
         let mut chosen = None;
+        let mut shown = None;
+        let mut edit = None;
         egui::ScrollArea::vertical().show(ui, |ui| {
             for (&id, toolpath) in &self.doc.toolpaths {
                 let selected = self.selected_toolpath == Some(id);
-                let label = if toolpath.stale {
-                    let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
-                        .color(ui.visuals().warn_fg_color);
-                    ui.selectable_label(selected, name).on_hover_text(format!(
-                        "{}\nOut of date: what it was made from has changed since. \
-                         Recalculate it.",
-                        toolpath.tool.name
-                    ))
-                } else {
-                    ui.selectable_label(selected, &toolpath.name)
-                        .on_hover_text(&toolpath.tool.name)
-                };
+                let label = ui
+                    .horizontal(|ui| {
+                        let mut visible = toolpath.visible;
+                        if ui
+                            .checkbox(&mut visible, "")
+                            .on_hover_text("Show or hide this toolpath")
+                            .changed()
+                        {
+                            shown = Some((id, visible));
+                        }
+                        if toolpath.stale {
+                            let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
+                                .color(ui.visuals().warn_fg_color);
+                            ui.selectable_label(selected, name).on_hover_text(format!(
+                                "{}\nOut of date: what it was made from has changed since. \
+                                 Recalculate it.",
+                                toolpath.tool.name
+                            ))
+                        } else {
+                            ui.selectable_label(selected, &toolpath.name)
+                                .on_hover_text(&toolpath.tool.name)
+                        }
+                    })
+                    .inner;
                 if label.clicked() {
                     self.selected_toolpath = if selected { None } else { Some(id) };
+                }
+                // a double-click opens the toolpath's form, as Aspire's list does
+                if label.double_clicked() {
+                    edit = Some(id);
                 }
                 // Aspire's toolpath menu acts on the row right-clicked, so it selects it
                 if label.secondary_clicked() {
@@ -1472,6 +1523,18 @@ impl CutCraftApp {
                 }
             }
         });
+        if let Some((id, visible)) = shown
+            && let Some(t) = self.doc.toolpaths.get(&id)
+        {
+            let params = serde_json::json!({ "toolpath": id, "name": t.name, "visible": visible });
+            if let Err(e) = self.apply("toolpath_properties", &params) {
+                self.status.set_message(&e);
+            }
+        }
+        if let Some(id) = edit {
+            self.selected_toolpath = Some(id);
+            self.invoke(ui.ctx(), "edit_toolpath");
+        }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
         }
