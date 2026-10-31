@@ -445,10 +445,11 @@ impl CutCraftApp {
             .simulation
             .take()
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
-        let list: Vec<&cut_craft_core::toolpath::Toolpath> = toolpaths
+        let list: Vec<cut_craft_core::toolpath::Toolpath> = toolpaths
             .iter()
-            .filter_map(|id| self.doc.toolpaths.get(id))
+            .filter_map(|id| self.previewed(*id))
             .collect();
+        let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
         self.playback = Some(cut_craft_core::playback::Playback::new(start, &list));
         (self.playing, self.simulation_coarse, self.fine_3d) = (true, None, None);
         if self.display.auto_open_3d {
@@ -464,18 +465,32 @@ impl CutCraftApp {
         }
     }
 
+    /// A toolpath as the preview cuts it: only the active tile's moves when one is picked.
+    fn previewed(&self, id: EntityId) -> Option<cut_craft_core::toolpath::Toolpath> {
+        let mut toolpath = self.doc.toolpaths.get(&id)?.clone();
+        let area = self.doc.job.area();
+        if let Some(moves) = self
+            .doc
+            .tiling
+            .and_then(|t| t.preview(&toolpath.moves, area))
+        {
+            toolpath.moves = moves;
+        }
+        Some(toolpath)
+    }
+
     pub(super) fn preview_toolpath(&mut self, id: EntityId) {
         if self.display.animate_preview {
             self.play(&[id]);
             return;
         }
         self.finish_playback();
-        let Some(toolpath) = self.doc.toolpaths.get(&id) else {
+        let Some(toolpath) = self.previewed(id) else {
             return;
         };
         self.simulation
             .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()))
-            .cut(toolpath);
+            .cut(&toolpath);
         (self.simulation_coarse, self.fine_3d) = (None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
