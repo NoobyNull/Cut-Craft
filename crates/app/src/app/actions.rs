@@ -65,6 +65,7 @@ impl CutCraftApp {
             handles_3d: vec![],
             under_3d: vec![],
             drag_3d: None,
+            drag_base: None,
             settings_3d: None,
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),

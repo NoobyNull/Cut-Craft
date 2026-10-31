@@ -647,6 +647,10 @@ struct CutCraftApp {
     under_3d: Vec<EntityId>,
     /// A handle being dragged, from where the pointer pressed.
     drag_3d: Option<(Handle3d, egui::Pos2)>,
+    /// A height handle's drag as it follows the pointer: the component's settings and its
+    /// top when the drag began, and the settings last applied (undone and applied again
+    /// each frame the pointer moves, so the whole drag is one undo).
+    drag_base: Option<(cmd_component_properties::Params, f64, Option<Value>)>,
     settings_3d: Option<Settings3d>,
     /// An open Help window.
     info: Option<Info>,

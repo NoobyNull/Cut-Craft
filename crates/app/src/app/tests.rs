@@ -1737,12 +1737,29 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
             .expect("the handles are drawn over the selected component")
     };
     let dome = |h: &Harness| h.app.doc.components[&EntityId(1)].clone();
-    // dragging the height handle up a quarter of the view doubles the shape height
+    // dragging the height handle up a quarter of the view doubles the shape height; the
+    // component follows the drag, and the whole drag is one undo
     let quarter = h.app.fit_3d.unwrap().height() / VIEW_ZOOM_QUARTERS;
+    let depth = h.app.history.undo_depth();
     let from = at(&h, Handle3d::Height);
-    h.drag(from, from - vec2(0.0, quarter));
+    let halfway = from - vec2(0.0, quarter / 2.0);
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(halfway)]);
+    h.frame(vec![Event::PointerMoved(halfway)]);
+    let height = dome(&h).shaping.shape_height;
+    assert!((height - 141.0).abs() < 5.0, "follows the drag: {height}");
+    h.frame(vec![Event::PointerMoved(from - vec2(0.0, quarter))]);
+    h.press(from - vec2(0.0, quarter), false, Modifiers::NONE);
+    h.frame(vec![]);
     let height = dome(&h).shaping.shape_height;
     assert!((height - 200.0).abs() < 5.0, "{height}");
+    assert_eq!(
+        h.app.history.undo_depth(),
+        depth + 1,
+        "one undo for the drag"
+    );
+    assert!(h.app.drag_base.is_none(), "let go");
     h.app.invoke(&h.ctx, "undo");
     assert_eq!(dome(&h).shaping.shape_height, 100.0, "undoable");
     // the view is fitted to the model again, so the handles move

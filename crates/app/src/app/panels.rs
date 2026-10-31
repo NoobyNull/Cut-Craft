@@ -1049,7 +1049,14 @@ impl CutCraftApp {
         {
             return std::sync::Arc::clone(geometry);
         }
-        let surface = self.fine_surface();
+        // while a handle drags the model about, the quick surface, made again each frame
+        // and not kept, so the fine one is made once the drag ends
+        let dragging = self.drag_base.is_some();
+        let surface = if dragging {
+            self.model_shape(MESH_CELLS)
+        } else {
+            self.fine_surface()
+        };
         // the components' own colours, where the model is theirs (a preview has none)
         let (doc, modelled) = (&self.doc, self.simulation.is_none());
         let tint = |c, r| {
@@ -1058,7 +1065,9 @@ impl CutCraftApp {
                 .flatten()
         };
         let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides, tint));
-        self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+        if !dragging {
+            self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+        }
         geometry
     }
 
@@ -1292,50 +1301,71 @@ impl CutCraftApp {
         }
     }
 
-    /// A handle's drag: its running value in the status bar and, once the pointer is let
-    /// go, the component's total, shape or base height set through Component Properties
-    /// (one undo). A drag up a quarter of the view doubles, as the wheel's zoom does; the
-    /// base height moves the material's thickness over that quarter.
-    // ponytail: the component changes when the drag ends; Aspire's follows the drag
+    /// A height handle's drag: the component follows the pointer, its total, shape or base
+    /// height set through Component Properties each frame the pointer moves (the last
+    /// setting undone first, so the whole drag is one undo), its value in the status bar.
+    /// A drag up a quarter of the view doubles, as the wheel's zoom does; the base height
+    /// moves the material's thickness over that quarter.
     fn handle_drag_3d(&mut self, ui: &egui::Ui, fit: egui::Rect, id: EntityId) {
         let Some((handle, origin)) = self.drag_3d else {
             return;
         };
+        if !matches!(handle, Handle3d::Total | Handle3d::Height | Handle3d::Base) {
+            return;
+        }
         let (now, released) = ui.input(|i| (i.pointer.latest_pos(), i.pointer.primary_released()));
         let Some(by) = now.map(|now| now - origin) else {
             return;
         };
+        let doc = &self.doc;
+        let (base, top, applied) = self.drag_base.get_or_insert_with(|| {
+            let k = &doc.components[&id];
+            let top = k.height_range().map_or(0.0, |(_, top)| top);
+            (cmd_component_properties::Params::of(id, k), top, None)
+        });
         let quarter = fit.size() / VIEW_ZOOM_QUARTERS;
-        let k = &self.doc.components[&id];
-        let mut p = cmd_component_properties::Params::of(id, k);
         let factor = |px: f32, over: f32| f64::from(2f32.powf(px / over));
+        let mut p = base.clone();
         let message = match handle {
             Handle3d::Total => {
                 let f = factor(-by.y, quarter.y);
-                p.shape_height = k.shaping.shape_height * f;
-                p.base_height = k.shaping.base_height * f;
-                let total = k.height_range().map_or(0.0, |(_, top)| top) * f;
-                format!("Total height {total:.2} mm")
+                p.shape_height = base.shape_height * f;
+                p.base_height = base.base_height * f;
+                format!("Total height {:.2} mm", *top * f)
             }
             Handle3d::Height => {
-                p.shape_height = k.shaping.shape_height * factor(-by.y, quarter.y);
+                p.shape_height = base.shape_height * factor(-by.y, quarter.y);
                 format!("Shape height {:.0}%", p.shape_height)
             }
-            Handle3d::Base => {
-                let per_pixel = self.doc.job.thickness / f64::from(quarter.y);
-                p.base_height = k.shaping.base_height - f64::from(by.y) * per_pixel;
+            _ => {
+                let per_pixel = doc.job.thickness / f64::from(quarter.y);
+                p.base_height = base.base_height - f64::from(by.y) * per_pixel;
                 format!("Base height {:.2} mm", p.base_height)
             }
-            Handle3d::Settings | Handle3d::Transform(_) => return,
         };
-        self.status.set_message(&message);
-        if !released {
-            return;
-        }
-        self.drag_3d = None;
         let params = serde_json::to_value(&p).expect("component properties serialize");
-        if let Err(e) = self.apply("component_properties", &params) {
-            self.status.set_message(&e);
+        let (same, undo) = (applied.as_ref() == Some(&params), applied.is_some());
+        if !same {
+            if undo {
+                self.history.undo(&mut self.doc);
+            }
+            let done = match self.apply("component_properties", &params) {
+                Ok(()) => Some(params),
+                Err(e) => {
+                    self.status.set_message(&e);
+                    None
+                }
+            };
+            if let Some((.., applied)) = &mut self.drag_base {
+                *applied = done;
+            }
+        }
+        if same || self.drag_base.as_ref().is_some_and(|d| d.2.is_some()) {
+            self.status.set_message(&message);
+        }
+        if released {
+            self.drag_3d = None;
+            self.drag_base = None;
         }
     }
 
