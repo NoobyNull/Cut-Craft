@@ -857,11 +857,24 @@ impl CutCraftApp {
             return;
         };
         let page = self.page_of(cmd.id());
-        let (meta, fields, params) = (
+        let (meta, fields, mut params) = (
             cmd.meta(),
             form::fields(&cmd.schema()),
             cmd.initial_params(&self.doc),
         );
+        // Orientate 3D Model offers what Options ▸ Importing Models says; one kind alone
+        // is the kind, with no choice shown
+        if cmd.id() == "orientate_3d_model" {
+            let offered = match self.options.import.model_types {
+                crate::options::ModelTypes::Full => "full",
+                crate::options::ModelTypes::Flat => "flat",
+                crate::options::ModelTypes::Both => "both",
+            };
+            params["offered"] = Value::from(offered);
+            if offered != "both" {
+                params["model_type"] = Value::from(offered);
+            }
+        }
         // a toolpath's form in Aspire's order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)

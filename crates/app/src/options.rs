@@ -316,6 +316,29 @@ pub struct General {
     pub layout: WindowLayout,
 }
 
+/// Importing 3D models: what Orientate 3D Model offers (not one of Aspire's).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Import {
+    /// What an imported model is kept as: whole (its underside on the other side of a
+    /// double-sided job, wrapped in a rotary one), its top seen from above, or the choice
+    /// of both on the form
+    #[serde(default)]
+    #[schemars(title = "Imported model type")]
+    pub model_types: ModelTypes,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelTypes {
+    #[default]
+    #[schemars(title = "Full 3D model")]
+    Full,
+    #[schemars(title = "Flat model")]
+    Flat,
+    #[schemars(title = "Both, chosen on the form")]
+    Both,
+}
+
 /// Settings only some desktops need, listed only on those (not one of Aspire's).
 // ponytail: wayland_native moved here from General; one saved there before starts off again
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -408,6 +431,9 @@ pub struct Options {
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
     #[serde(default)]
+    #[schemars(title = "Importing Models", extend("x-section" = true))]
+    pub import: Import,
+    #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub appearance: Appearance,
     #[serde(default)]
@@ -494,6 +520,7 @@ impl Default for Options {
                 layout: WindowLayout::default(),
             },
             confirmations: Confirmations::default(),
+            import: Import::default(),
             appearance: Appearance::default(),
             advanced: Advanced::default(),
             space_mouse: SpaceMouse::default(),
@@ -616,6 +643,7 @@ mod tests {
                 "Toolpath Settings",
                 "General Settings",
                 "Confirmation Choices",
+                "Importing Models",
                 "Appearance",
                 "Advanced",
                 "SpaceMouse"

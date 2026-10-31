@@ -112,8 +112,12 @@ Machine Configuration: a machine with a five-slot tool changer and three tools l
 
 ![Machine Configuration](docs/screenshots/07-machine-configuration.png)
 
-Importing a 3D model: it shows in the scene at once, and the settings on the left move and
-size it as they change.
+Importing a 3D model: it shows in the scene at once over the modeling plane, faces a cutter
+cannot reach in red (Show undercuts turns that off), and the settings on the left move and
+size it as they change. **Scale model to fit material** grows it, proportions kept, until
+the material's length, width or thickness stops it. A model is kept whole by default: in a
+double-sided job its underside goes to the other side, in a rotary job it wraps round the
+axis; **Options ▸ Importing Models** can offer the flat, top-only import instead, or both.
 
 ![Importing a 3D model](docs/screenshots/08-import-3d-model.png)
 

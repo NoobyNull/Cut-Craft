@@ -163,46 +163,49 @@ pub struct Params {
     #[schemars(title = "Show undercuts")]
     #[serde(default = "yes")]
     pub show_undercuts: bool,
-    /// Rotary jobs: a full 3D model is wrapped round the axis, its distance out at each angle
-    /// becoming the height; a flat model is placed on the unrolled surface like clipart
-    #[schemars(title = "Imported model type", extend("x-hide-when" = {"job": "flat"}))]
+    /// A full 3D model is kept whole: in a double-sided job its underside goes to the other
+    /// side, and in a rotary job it is wrapped round the axis, its distance out at each
+    /// angle becoming the height. A flat model is its top seen from above, placed like
+    /// clipart. Shown when Options ▸ Importing Models offers both
+    #[schemars(title = "Imported model type", extend("x-hide-when" = {"offered": ["full", "flat"]}))]
     #[serde(default)]
     pub model_type: ModelType,
-    /// Full 3D models: scaled to the material's length and diameter (else Model Size's X is
-    /// its length; 0 keeps the file's size)
-    #[schemars(
-        title = "Scale model to fit material",
-        extend("x-hide-when" = {"job": "flat"})
-    )]
-    #[serde(default = "yes")]
-    pub fit_material: bool,
-    /// The job's kind, so the form shows the rotary choices only in a rotary job; never shown
-    #[schemars(extend("x-hide-when" = {"job": ["flat", "rotary"]}))]
+    /// Scaled to fit the material, keeping its proportions: as big as its length, width and
+    /// thickness allow (a rotary job's length and diameter); else Model Size (0 keeps the
+    /// file's size)
+    #[schemars(title = "Scale model to fit material")]
     #[serde(default)]
-    pub job: JobKind,
+    pub fit_material: bool,
+    /// What Options ▸ Importing Models offers; never shown. Set by the app when the form
+    /// opens; one kind alone also sets `model_type`
+    #[schemars(extend("x-hide-when" = {"offered": ["full", "flat", "both"]}))]
+    #[serde(default)]
+    pub offered: Offered,
 }
 
+/// What Options ▸ Importing Models lets the form offer.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum JobKind {
-    #[default]
+pub enum Offered {
+    Full,
     Flat,
-    Rotary,
+    #[default]
+    Both,
 }
 
 fn yes() -> bool {
     true
 }
 
-/// What a model imported into a rotary job is.
+/// What an imported model is kept as.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelType {
-    /// A model to machine as it is, all the way round
+    /// The whole model: both sides of a double-sided job, all the way round a rotary one
+    #[default]
     #[schemars(title = "Full 3D model")]
     Full,
-    /// Part of a design, like clipart
-    #[default]
+    /// Its top seen from above, like clipart
     #[schemars(title = "Flat model")]
     Flat,
 }
@@ -229,9 +232,9 @@ impl Default for Params {
                 discard_below_zero: true,
             },
             show_undercuts: true,
-            model_type: ModelType::Flat,
-            fit_material: true,
-            job: JobKind::Flat,
+            model_type: ModelType::Full,
+            fit_material: false,
+            offered: Offered::Both,
         }
     }
 }
@@ -249,20 +252,10 @@ impl Command for Orientate3dModel {
         }
     }
 
-    /// A rotary job starts on a full 3D model.
+    /// Every job starts on a full 3D model; a rotary one scaled to its material.
     fn initial_params(doc: &Document) -> Params {
-        let rotary = doc.job.rotary.is_some();
         Params {
-            model_type: if rotary {
-                ModelType::Full
-            } else {
-                ModelType::Flat
-            },
-            job: if rotary {
-                JobKind::Rotary
-            } else {
-                JobKind::Flat
-            },
+            fit_material: doc.job.rotary.is_some(),
             ..Params::default()
         }
     }
@@ -316,6 +309,43 @@ impl Command for Orientate3dModel {
         k.source = source;
         let mut c = Change::builder(doc);
         c.add_component(k);
+        if let Some(two) = doc.job.double_sided
+            && p.model_type == ModelType::Full
+        {
+            // the model seen from the other side: turned over as the material is, up from
+            // that side's face
+            let mirror = two.flip.mirror(doc.job.area());
+            let turn = |v: DVec3| {
+                let xy = mirror.transform_point2(Point::new(v.x, v.y));
+                DVec3::new(xy.x, xy.y, doc.job.thickness - v.z)
+            };
+            let under: Vec<[DVec3; 3]> = tris.iter().map(|t| t.map(turn)).collect();
+            let (near, far) = (
+                mirror.transform_point2(rect.min),
+                mirror.transform_point2(rect.max),
+            );
+            let footprint = Rect::new(near.min(far), near.max(far));
+            let mut other_side = Component::from_fn(
+                "Imported model (other side)",
+                Combine::Add,
+                footprint,
+                doc.job.model_cell(),
+                |_| None,
+            );
+            fmt_import_stl::top_down(&mut other_side, &under);
+            if p.placing.discard_below_zero {
+                for h in &mut other_side.heights {
+                    if *h < 0.0 {
+                        *h = f64::NAN;
+                    }
+                }
+            }
+            if other_side.height_range().is_some() {
+                let (bottom, mut objects) = c.side().clone();
+                objects.components.insert(c.fresh_id(), other_side);
+                c.set_side(bottom, objects);
+            }
+        }
         let hidden = fmt_import_stl::undercut(&tris);
         // ponytail: under a square millimetre is mesh noise, not an undercut
         if hidden >= 1.0 {
@@ -363,6 +393,8 @@ fn placed(
             "the model has no area seen from above".into(),
         ));
     }
+    let area = doc.job.area();
+    let bottom = p.placing.height_above_bed;
     // size: 0 keeps the file's; with the ratio locked the first size given sets all
     let wanted = |want: f64, have: f64| (want > 0.0 && have > 0.0).then(|| want / have);
     let each = [
@@ -370,20 +402,29 @@ fn placed(
         wanted(p.size.y, size.y),
         wanted(p.size.z, size.z),
     ];
-    let scale = if p.size.lock_ratio {
+    let scale = if p.fit_material {
+        // as big as the material allows, every axis at the same rate until one meets it;
+        // the thickness counts only above where the model sits
+        let room = [area.size().x, area.size().y, doc.job.thickness - bottom];
+        let fits = room
+            .into_iter()
+            .zip([size.x, size.y, size.z])
+            .filter(|&(have, need)| have > 0.0 && need > 0.0)
+            .map(|(have, need)| have / need)
+            .fold(f64::INFINITY, f64::min);
+        DVec3::splat(if fits.is_finite() { fits } else { 1.0 })
+    } else if p.size.lock_ratio {
         DVec3::splat(each.into_iter().flatten().next().unwrap_or(1.0))
     } else {
         let [x, y, z] = each.map(|s| s.unwrap_or(1.0));
         DVec3::new(x, y, z)
     };
-    let area = doc.job.area();
     let footprint = Point::new(size.x * scale.x, size.y * scale.y);
     let corner = if p.placing.center {
         area.center() - footprint / 2.0
     } else {
         p.placing.position.into()
     };
-    let bottom = p.placing.height_above_bed;
     let place = |v: DVec3| {
         DVec3::new(
             corner.x + (v.x - lo.x) * scale.x,
@@ -1098,6 +1139,7 @@ mod rotary {
     fn a_full_model_previews_turned_round_the_axis_as_it_is_wrapped() {
         let p = Params {
             model_type: ModelType::Full,
+            fit_material: true,
             ..Params::default()
         };
         let faces = cylinder(10.0, 50.0);
@@ -1259,15 +1301,94 @@ mod rotary {
     }
 
     #[test]
-    fn a_rotary_job_starts_on_a_full_model() {
+    fn every_job_starts_on_a_full_model_a_rotary_one_fitted() {
+        let rotary = Orientate3dModel::initial_params(&rotary_job());
+        let flat = Orientate3dModel::initial_params(&Document::default());
         assert_eq!(
-            Orientate3dModel::initial_params(&rotary_job()).model_type,
-            ModelType::Full
+            (rotary.model_type, flat.model_type),
+            (ModelType::Full, ModelType::Full)
         );
-        assert_eq!(
-            Orientate3dModel::initial_params(&Document::default()).model_type,
-            ModelType::Flat
+        assert!(rotary.fit_material && !flat.fit_material);
+    }
+
+    #[test]
+    #[expect(clippy::cast_precision_loss, reason = "a small grid")]
+    fn scale_to_fit_grows_every_axis_alike_until_one_meets_the_material() {
+        // a 20 x 10 x 5 box in 100 x 50 x 12 mm: 5 times would fit the length and width,
+        // but the thickness stops it at 2.4 times; nothing is stretched
+        let p = Params {
+            file: stl("fit", &cuboid([0.0, 0.0, 0.0], [20.0, 10.0, 5.0])),
+            fit_material: true,
+            ..Params::default()
+        };
+        let mut doc = Document::default();
+        doc.job = cut_craft_core::document::Job {
+            width: 100.0,
+            height: 50.0,
+            thickness: 12.0,
+            ..doc.job
+        };
+        let change = Orientate3dModel::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        let k = doc.components.values().next().unwrap();
+        let (_, top) = k.height_range().unwrap();
+        assert!((top - 12.0).abs() < 0.05, "{top}");
+        let size = Point::new(k.cell * k.columns as f64, k.cell * k.rows as f64);
+        assert!(
+            (size.x - 48.0).abs() < k.cell && (size.y - 24.0).abs() < k.cell,
+            "{size}"
         );
+        let _ = std::fs::remove_file(p.file);
+    }
+
+    #[test]
+    fn a_full_model_in_a_double_sided_job_puts_its_underside_on_the_other_side() {
+        // a slab 3 above the bed on a post under its middle, in 10 mm material
+        let slab = cuboid([0.0, 0.0, 3.0], [10.0, 10.0, 6.0]);
+        let post = cuboid([4.0, 4.0, 0.0], [6.0, 6.0, 3.0]);
+        let faces: Vec<_> = [slab, post].concat();
+        let file = stl("two-sided", &faces);
+        let mut doc = Document::default();
+        doc.job = cut_craft_core::document::Job {
+            width: 100.0,
+            height: 50.0,
+            thickness: 10.0,
+            double_sided: Some(cut_craft_core::document::DoubleSided {
+                flip: cut_craft_core::document::Flip::Horizontal,
+                zero_same_side: false,
+            }),
+            ..doc.job
+        };
+        for (model_type, other_has_one) in [(ModelType::Full, true), (ModelType::Flat, false)] {
+            let p = Params {
+                file: file.clone(),
+                model_type,
+                placing: Placing {
+                    height_above_bed: 0.0,
+                    ..Params::default().placing
+                },
+                ..Params::default()
+            };
+            let mut made = doc.clone();
+            made.apply(&Orientate3dModel::run(&doc, &p).unwrap())
+                .unwrap();
+            let top = made.components.values().next().unwrap();
+            assert!((top.height_at(Point::new(50.0, 25.0)).unwrap() - 6.0).abs() < 1e-6);
+            assert_eq!(made.other_side.components.len(), usize::from(other_has_one));
+            if other_has_one {
+                let under = made.other_side.components.values().next().unwrap();
+                // the post reaches the bed: 10 up from the other face; the slab's underside
+                // 3 above the bed is 7 up from it, mirrored left to right
+                assert!((under.height_at(Point::new(50.0, 25.0)).unwrap() - 10.0).abs() < 1e-6);
+                assert!((under.height_at(Point::new(54.0, 21.0)).unwrap() - 7.0).abs() < 1e-6);
+                assert_eq!(
+                    under.height_at(Point::new(44.0, 21.0)),
+                    None,
+                    "the post's left is the slab's right"
+                );
+            }
+        }
+        let _ = std::fs::remove_file(file);
     }
 
     #[test]
@@ -1296,6 +1417,7 @@ mod rotary {
     fn fitting_the_material_scales_it_to_the_job_diameter() {
         let p = Params {
             model_type: ModelType::Full,
+            fit_material: true,
             ..Params::default()
         };
         let (doc, k) = import("fit", &cylinder(10.0, 50.0), &p);

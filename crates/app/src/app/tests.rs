@@ -30,6 +30,32 @@ fn cut_copy_and_paste_vectors() {
 }
 
 #[test]
+fn importing_models_offers_what_the_options_say() {
+    use crate::options::ModelTypes;
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "orientate_3d_model");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["offered"], "full", "full alone, by default");
+    assert_eq!(form.params["model_type"], "full");
+    h.app.form = None;
+    h.app.options.import.model_types = ModelTypes::Flat;
+    h.app.invoke(&h.ctx, "orientate_3d_model");
+    assert_eq!(h.app.form.as_ref().unwrap().params["model_type"], "flat");
+    h.app.form = None;
+    h.app.options.import.model_types = ModelTypes::Both;
+    h.app.invoke(&h.ctx, "orientate_3d_model");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["offered"], "both");
+    assert_eq!(
+        form.params["model_type"], "full",
+        "the choice starts on Full"
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Full 3D model").is_some(), "the choice is shown");
+}
+
+#[test]
 fn edit_units_switches_the_job_between_millimetres_and_inches() {
     use cut_craft_core::document::Units;
     let mut h = Harness::new();
@@ -3152,9 +3178,11 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     h.frame(vec![]);
     let size = &h.app.form.as_ref().unwrap().params["size"];
     assert!((size["x"].as_f64().unwrap() - 40.0).abs() < 1e-6, "{size}");
-    // a flat job has no rotary choices
-    for label in ["Imported model type", "Scale model to fit material", "Job"] {
-        assert_eq!(h.text_at(label), None, "{label} is a rotary job's");
+    // the fit is offered in a flat job too; the model type only when the options offer
+    // both kinds, and what the options are is never shown
+    assert!(h.text_at("Scale model to fit material").is_some());
+    for label in ["Imported model type", "Offered"] {
+        assert_eq!(h.text_at(label), None, "{label} is not shown");
     }
     assert!(h.text_at("Height above bed").is_some());
     let _ = std::fs::remove_file(file);
