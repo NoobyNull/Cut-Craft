@@ -673,7 +673,7 @@ impl CutCraftApp {
             (gesture, Some(ViewTool::Transform), _) => self.transform_gesture(ui, gesture, reach),
             (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
-                self.select_drop(drag, shift, reach);
+                self.plain_drop(drag, shift, reach, placing_tabs);
             }
             (Some(Gesture::Click { at, .. }), None, None) if placing_tabs => {
                 self.place_tab(at, reach);
@@ -1052,6 +1052,57 @@ impl CutCraftApp {
             .unwrap_or_default()
     }
 
+    /// The point on a selected vector nearest `at`, within `reach`.
+    fn on_selected(&self, at: Point, reach: f64) -> Option<Point> {
+        self.doc
+            .selection
+            .iter()
+            .filter_map(|id| self.doc.vectors.get(id))
+            .filter_map(|path| {
+                let mut flat = path.flatten(cut_craft_core::polygon::TOLERANCE);
+                if path.closed
+                    && let Some(&first) = flat.first()
+                {
+                    flat.push(first);
+                }
+                cut_craft_core::geometry::polyline_closest(&flat, at)
+            })
+            .min_by(|p, q| p.distance(at).total_cmp(&q.distance(at)))
+            .filter(|p| p.distance(at) <= reach)
+    }
+
+    /// A drag with no tool: from a placed tab it moves it, else it selects.
+    fn plain_drop(&mut self, drag: Drag, shift: bool, reach: f64, placing_tabs: bool) {
+        if placing_tabs && self.on_a_tab(drag.start, reach) {
+            self.move_tab(drag, reach);
+        } else {
+            self.select_drop(drag, shift, reach);
+        }
+    }
+
+    /// Whether `at` is on one of the open form's placed tabs.
+    fn on_a_tab(&self, at: Point, reach: f64) -> bool {
+        self.tab_points().iter().any(|t| t.distance(at) <= reach)
+    }
+
+    /// A drag from a placed tab moves it along to the selected vector where it is dropped.
+    pub(super) fn move_tab(&mut self, drag: Drag, reach: f64) {
+        let mut points = self.tab_points();
+        let Some(i) = points.iter().position(|p| p.distance(drag.start) <= reach) else {
+            return;
+        };
+        let Some(on) = self.on_selected(drag.end, reach) else {
+            self.status
+                .set_message("drop a tab on a selected vector to move it there");
+            return;
+        };
+        points[i] = on;
+        self.status.set_message("Tab moved");
+        if let Some(form) = self.form.as_mut() {
+            form.params["tab_points"] = serde_json::json!(points);
+        }
+    }
+
     /// A click while placing tabs: on a tab takes it off, on a selected vector adds one there.
     pub(super) fn place_tab(&mut self, at: Point, reach: f64) {
         let mut points = self.tab_points();
@@ -1059,22 +1110,7 @@ impl CutCraftApp {
             points.remove(i);
             self.status.set_message("Tab removed");
         } else {
-            let on = self
-                .doc
-                .selection
-                .iter()
-                .filter_map(|id| self.doc.vectors.get(id))
-                .filter_map(|path| {
-                    let mut flat = path.flatten(cut_craft_core::polygon::TOLERANCE);
-                    if path.closed
-                        && let Some(&first) = flat.first()
-                    {
-                        flat.push(first);
-                    }
-                    cut_craft_core::geometry::polyline_closest(&flat, at)
-                })
-                .min_by(|p, q| p.distance(at).total_cmp(&q.distance(at)))
-                .filter(|p| p.distance(at) <= reach);
+            let on = self.on_selected(at, reach);
             let Some(on) = on else {
                 self.status.set_message(
                     "click on a selected vector to add a tab, or on a tab to remove it",

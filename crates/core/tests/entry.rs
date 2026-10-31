@@ -219,6 +219,7 @@ fn tabbed(tabs: Tabs) -> Vec<Move> {
             number: 4,
             distance: 0.0,
             placement: TabPlacement::Evenly,
+            ..TabSettings::default()
         },
         tab_top: -6.0 + 2.0,
         tool_diameter: 6.0,
@@ -293,6 +294,7 @@ fn tab_middles(placement: TabPlacement, number: u32) -> Vec<Point> {
             number,
             distance: 0.0,
             placement,
+            ..TabSettings::default()
         },
         tab_top: -4.0,
         tool_diameter: 2.0,

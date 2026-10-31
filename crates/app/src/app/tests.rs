@@ -2986,10 +2986,16 @@ fn tabs_are_placed_and_removed_by_clicking_the_vector() {
         1,
         "the click placed a tab, not a selection"
     );
+    // a drag from the tab moves it along the vector
+    h.app.snap.smart_snapping = false;
+    h.drag(h.at(60.0, 30.0), h.at(60.5, 45.0));
+    let moved = tabs(&h);
+    assert_eq!(moved.len(), 1, "{}", h.app.status.message);
+    assert!(near(moved[0], Point::new(60.0, 45.0)), "{moved:?}");
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("profile_toolpath", &params).unwrap();
     assert_eq!(h.app.doc.toolpaths.len(), 1);
-    h.click(h.at(60.0, 30.0), Modifiers::NONE);
+    h.click(h.at(60.0, 45.0), Modifiers::NONE);
     assert!(tabs(&h).is_empty(), "a second click takes it off");
 }
 

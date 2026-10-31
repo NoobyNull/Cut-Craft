@@ -181,6 +181,14 @@ pub struct TabSettings {
     pub number: u32,
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub distance: f64,
+    /// Constant distance: at least this many tabs on a path
+    #[serde(default = "one")]
+    #[schemars(title = "Minimum Number", range(min = 1))]
+    pub minimum: u32,
+    /// Constant distance: at most this many tabs on a path
+    #[serde(default = "many")]
+    #[schemars(title = "Maximum Number", range(min = 1))]
+    pub maximum: u32,
     /// Where tabs spread by number or distance go (added with tab placement)
     #[serde(default)]
     pub placement: TabPlacement,
@@ -188,6 +196,14 @@ pub struct TabSettings {
 
 fn yes() -> bool {
     true
+}
+
+fn one() -> u32 {
+    1
+}
+
+fn many() -> u32 {
+    100
 }
 
 impl Default for TabSettings {
@@ -200,6 +216,8 @@ impl Default for TabSettings {
             spacing: TabSpacing::Automatic,
             number: 4,
             distance: 150.0,
+            minimum: one(),
+            maximum: many(),
             placement: TabPlacement::Evenly,
         }
     }
@@ -692,10 +710,14 @@ fn tab_centres(line: &Line, entry: &Entry) -> Vec<f64> {
             wanted.min(room).max(1.0) as u32
         }
         TabSpacing::ConstantNumber => t.number,
-        TabSpacing::ConstantDistance if t.distance > 0.0 => {
-            (line.length / t.distance).round().max(1.0) as u32
+        TabSpacing::ConstantDistance => {
+            let wanted = if t.distance > 0.0 {
+                (line.length / t.distance).round().max(1.0) as u32
+            } else {
+                1
+            };
+            wanted.clamp(t.minimum.max(1), t.maximum.max(t.minimum.max(1)))
         }
-        TabSpacing::ConstantDistance => 1,
     };
     let gap = line.length / f64::from(count.max(1));
     let first = if t.placement == TabPlacement::AtStart {
