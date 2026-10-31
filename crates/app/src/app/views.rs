@@ -583,10 +583,24 @@ impl CutCraftApp {
         label.clone_into(&mut self.status.current_tool);
     }
 
+    /// Clipart dragged from the Clipart tab and dropped on the 2D view goes where it was
+    /// dropped.
+    fn clipart_dropped_2d(&mut self, ui: &egui::Ui, canvas: &Canvas) {
+        if let Some(path) = canvas
+            .response()
+            .dnd_release_payload::<std::path::PathBuf>()
+            && let Some(at) = ui.ctx().pointer_latest_pos()
+        {
+            let at = canvas.transform.to_job(at);
+            self.import_clipart(&path, Some(at), None);
+        }
+    }
+
     pub(super) fn view_2d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "2D view");
         let job = self.shown_job();
         let mut canvas = Canvas::new(ui, &job, self.camera);
+        self.clipart_dropped_2d(ui, &canvas);
         let area = canvas.area;
         self.zoom_and_pan(ui, &mut canvas);
         let reach = canvas.pick_tolerance(ui);

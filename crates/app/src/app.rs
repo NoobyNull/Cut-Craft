@@ -624,6 +624,9 @@ struct CutCraftApp {
     simulation: Option<Material>,
     /// `simulation` at the 3D view's mesh resolution.
     simulation_coarse: Option<Material>,
+    /// The level clipart imported through Orientate 3D Model goes on (Import to Level),
+    /// until another command starts.
+    import_level: Option<u64>,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The imported model's triangles as last drawn, kept while nothing about the view or

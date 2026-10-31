@@ -7,6 +7,7 @@ use super::{
     Page, SETTLE_SECONDS, Screen, TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value,
     View, egui, file_dialog, file_name, files, gui, menu_items, sheet_length, view3d, wrap_for,
 };
+use cut_craft_core::Change;
 use cut_craft_core::document::{MachinedArea, Units};
 
 impl CutCraftApp {
@@ -281,23 +282,90 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Clipart tab");
         let registry = &self.registry;
         let importable = |ext: &str| registry.importer_for(ext).is_some();
-        match crate::clipart::panel(ui, &mut self.clipart, &importable) {
+        let levels: Vec<(u64, String)> = (self.doc.levels.iter())
+            .map(|(&id, l)| (id, l.name.clone()))
+            .collect();
+        match crate::clipart::panel(ui, &mut self.clipart, &importable, &levels) {
             Some(crate::clipart::Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
             Some(crate::clipart::Picked::OpenFolder) => {
                 self.invoke(ui.ctx(), "open_clipart_folder");
             }
             Some(crate::clipart::Picked::Import(path)) => self.import_file(&path),
+            Some(crate::clipart::Picked::ImportToLevel(path, level)) => {
+                self.import_clipart(&path, None, Some(level));
+            }
             None => {}
         }
+    }
+
+    /// Brings clipart `path` into the job as a double-click does, then (dropped on a view)
+    /// centred on `at`, and (Import to Level) on `level`: one of the job's, or a new level
+    /// named after the file. A model goes through Orientate 3D Model, placed and
+    /// levelled as it is made.
+    pub(super) fn import_clipart(
+        &mut self,
+        path: &std::path::Path,
+        at: Option<cut_craft_core::geometry::Point>,
+        level: Option<crate::clipart::ToLevel>,
+    ) {
+        let name = path
+            .file_stem()
+            .map_or_else(|| "Clipart".into(), |s| s.to_string_lossy().into_owned());
+        // a new level first, as its own step: the import goes onto it
+        let level = level.map(|level| match level {
+            crate::clipart::ToLevel::Existing(id) => id,
+            crate::clipart::ToLevel::New => {
+                let id = self
+                    .doc
+                    .levels
+                    .keys()
+                    .next_back()
+                    .map_or(0, |last| last + 1);
+                let mut c = Change::builder(&self.doc);
+                c.set_level(
+                    id,
+                    Some(cut_craft_core::component::Level {
+                        name: name.clone(),
+                        ..Default::default()
+                    }),
+                );
+                self.record(Ok(c.finish()), &format!("Inserted level {name}"));
+                id
+            }
+        });
+        if is_model(path) {
+            self.import_file(path);
+            self.import_level = level;
+            if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
+                if let Some(at) = at {
+                    let size = |k: &str| form.params["size"][k].as_f64().unwrap_or(0.0);
+                    let corner = serde_json::json!({
+                        "x": at.x - size("x") / 2.0, "y": at.y - size("y") / 2.0
+                    });
+                    form.params["placing"]["center"] = Value::from(false);
+                    form.params["placing"]["position"] = corner;
+                }
+                self.apply_live();
+            }
+            return;
+        }
+        let change = files::import(&self.registry, &self.doc, path)
+            .map(|c| match level {
+                Some(level) => crate::clipart::onto_level(c, level),
+                None => c,
+            })
+            .map(|c| match at {
+                Some(at) => centred_on(c, at),
+                None => c,
+            })
+            .map_err(cut_craft_core::CommandError::Failed);
+        self.record(change, &format!("Imported {}", path.display()));
     }
 
     /// Brings `path` into the job: meshes through Orientate 3D Model, as Aspire's import
     /// does; anything else through its importer.
     pub(super) fn import_file(&mut self, path: &std::path::Path) {
-        let stl = path
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("stl") || e.eq_ignore_ascii_case("obj"));
-        if stl {
+        if is_model(path) {
             self.start_command("orientate_3d_model");
             // the model is placed in 3D, so it is shown there
             self.view = View::ThreeD;
@@ -886,14 +954,27 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "3D view");
         self.playback_bar(ui);
         if self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty() {
-            ui.centered_and_justified(|ui| {
+            let empty = ui.centered_and_justified(|ui| {
                 ui.weak("Nothing in 3D yet: create a shape or preview the toolpaths")
             });
+            // clipart dropped on the empty view goes in the middle of the job
+            if let Some(path) = empty.response.dnd_release_payload::<std::path::PathBuf>() {
+                self.import_clipart(&path, None, None);
+            }
             return;
         }
         ui.horizontal(|ui| self.view_3d_buttons(ui));
         let (area, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+        // clipart dropped on the view goes where it was dropped on the material
+        if let Some(path) = response.dnd_release_payload::<std::path::PathBuf>() {
+            let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
+            let at = ui
+                .ctx()
+                .pointer_latest_pos()
+                .and_then(|at| self.point_on_surface(fit, at));
+            self.import_clipart(&path, at, None);
+        }
         // the ViewCube over the view's corner, so the view does not see its clicks
         let font = egui::TextStyle::Small.resolve(ui.style());
         let cube = view3d::ViewCube::new(area, ui.painter(), &font, ui.spacing().item_spacing.x);
@@ -1101,6 +1182,20 @@ impl CutCraftApp {
     /// Takes away the previewed material's piece under `at` in the 3D view's picture `fit`
     /// (Aspire's double-click on waste); false when the click is off the material or on
     /// material cut right through.
+    /// The job point of the 3D view's surface under `at` on the picture `fit`, if any.
+    fn point_on_surface(
+        &mut self,
+        fit: egui::Rect,
+        at: egui::Pos2,
+    ) -> Option<cut_craft_core::geometry::Point> {
+        let job = self.shown_job();
+        let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
+        let surface = self.surface_3d().map(Cow::into_owned)?;
+        let wrap = wrap_for(&job, on, true, &surface);
+        let (column, row) = view3d::pick(&surface, orbit, framing, fit, wrap, at)?;
+        Some(surface.centre(column, row))
+    }
+
     pub(super) fn remove_preview_piece(&mut self, fit: egui::Rect, at: egui::Pos2) -> bool {
         let job = self.shown_job();
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
@@ -1686,6 +1781,43 @@ impl CutCraftApp {
             self.set_units(to);
         }
     }
+}
+
+/// Whether `path` is a mesh, imported through Orientate 3D Model.
+fn is_model(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("stl") || e.eq_ignore_ascii_case("obj"))
+}
+
+/// `change` (an import) with what it adds moved to be centred on `at`.
+fn centred_on(mut change: Change, at: cut_craft_core::geometry::Point) -> Change {
+    use cut_craft_core::Edit;
+    use cut_craft_core::geometry::Rect;
+    let boxes = change.edits.iter().filter_map(|e| match e {
+        Edit::Add { path, .. } => Some(path.bounds()),
+        Edit::AddComponent { component, .. } => Some(component.extent()),
+        Edit::AddBitmap { bitmap, .. } => Some(bitmap.rect),
+        _ => None,
+    });
+    let Some(all) = boxes.reduce(Rect::union) else {
+        return change;
+    };
+    let by = at - all.center();
+    let t = cut_craft_core::glam::DAffine2::from_translation(by);
+    for edit in &mut change.edits {
+        match edit {
+            Edit::Add { path, .. } => *path = path.transformed(&t),
+            Edit::AddComponent { component, .. } => **component = component.transformed(&t),
+            Edit::AddBitmap { bitmap, .. } => {
+                bitmap.rect = Rect {
+                    min: bitmap.rect.min + by,
+                    max: bitmap.rect.max + by,
+                };
+            }
+            _ => {}
+        }
+    }
+    change
 }
 
 /// A toolpath's colour in a Toolpath Color preview, as a swatch beside it in the toolpath

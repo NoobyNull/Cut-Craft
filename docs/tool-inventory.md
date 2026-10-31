@@ -156,7 +156,10 @@ say "not implemented yet".
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
   Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
   (headed with the sheet; level menu Select Components and Export as 3D Clipart), Clipart
-  (a library of folders; double-click a thumbnail to import it).
+  (a library of folders; double-click a thumbnail to import it centred on the job, drag it
+  onto the 2D or 3D view to import it centred where it is dropped, or right-click ▸ Import
+  to Level onto one of the job's levels or a New Level named after the file; a model goes
+  through Orientate 3D Model already placed and levelled).
 - Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
   geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
   snap point across or up and down (Aspire's guide lines and woken nodes are not done).

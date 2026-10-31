@@ -2334,6 +2334,18 @@ fn the_clipart_tab_shows_a_library_folder_and_imports_what_is_double_clicked() {
         .expect("the picture is in the browser");
     h.double_click(at);
     assert_eq!(h.app.doc.bitmaps.len(), 1, "double-clicking imports it");
+    // dragged onto the 2D view, it goes where it is dropped
+    let to = h.at(120.0, 90.0);
+    h.drag(at, to);
+    assert_eq!(h.app.doc.bitmaps.len(), 2, "dropping imports another");
+    let dropped = h.app.doc.bitmaps.values().last().unwrap().rect;
+    assert!(
+        dropped
+            .center()
+            .distance(h.app.view_transform.unwrap().to_job(to))
+            < 1e-6,
+        "centred where dropped: {dropped:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -4088,4 +4100,74 @@ fn the_preview_paints_machined_areas_in_the_materials_a_fill_or_each_toolpaths_c
         h.app.doc.toolpaths[&ids[1]].preview_colour(1).is_none(),
         "no fill: the profile shows the material"
     );
+}
+
+#[test]
+fn clipart_dropped_on_a_view_goes_there_and_import_to_level_puts_it_on_a_level() {
+    use crate::clipart::ToLevel;
+    use cut_craft_core::geometry::Point;
+    let mut h = Harness::new();
+    // a 20 mm square drawn as SVG, dropped on the 2D view at (100, 80)
+    let svg = std::env::temp_dir().join(format!("cut-craft-drop-{}.svg", std::process::id()));
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20"><rect x="0" y="0" width="20" height="20"/></svg>"#,
+    )
+    .unwrap();
+    h.app
+        .import_clipart(&svg, Some(Point::new(100.0, 80.0)), None);
+    let bounds = h
+        .app
+        .doc
+        .vectors
+        .values()
+        .map(cut_craft_core::geometry::Path::bounds)
+        .reduce(cut_craft_core::geometry::Rect::union)
+        .expect("the square came in");
+    assert!(
+        bounds.center().distance(Point::new(100.0, 80.0)) < 1e-6,
+        "centred where dropped: {bounds:?}"
+    );
+    h.app.history.undo(&mut h.app.doc);
+    assert!(h.app.doc.vectors.is_empty(), "one undo takes the drop away");
+    let _ = std::fs::remove_file(svg);
+    // a model to a new level named after it, placed where dropped as it is made
+    let file = pyramid_stl("to-level");
+    let levels = h.app.doc.levels.len();
+    h.app
+        .import_clipart(&file, Some(Point::new(150.0, 100.0)), Some(ToLevel::New));
+    assert_eq!(h.app.doc.levels.len(), levels + 1);
+    let (&new, level) = h.app.doc.levels.iter().next_back().unwrap();
+    assert!(
+        level.name.starts_with("cut-craft-to-level"),
+        "{}",
+        level.name
+    );
+    let k = h
+        .app
+        .doc
+        .components
+        .values()
+        .next()
+        .expect("the model is in");
+    assert_eq!(k.level, new, "on the new level");
+    assert!(
+        k.extent().center().distance(Point::new(150.0, 100.0)) < 1.0,
+        "centred where dropped: {:?}",
+        k.extent()
+    );
+    // moving it in the form keeps it on the level
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["position"] = serde_json::json!({ "x": 50.0, "y": 60.0 });
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.values().next().unwrap().level, new);
+    // and to an existing level
+    h.app.form = None;
+    h.app
+        .import_clipart(&file, None, Some(ToLevel::Existing(0)));
+    assert_ne!(new, 0, "the job starts with level 0");
+    assert_eq!(h.app.doc.level_components(0).len(), 1, "the second model");
+    assert_eq!(h.app.doc.level_components(new).len(), 1, "the first stays");
+    let _ = std::fs::remove_file(file);
 }

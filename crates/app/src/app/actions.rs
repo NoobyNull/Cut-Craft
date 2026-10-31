@@ -73,6 +73,7 @@ impl CutCraftApp {
             display: crate::display::Display::default(),
             simulation: None,
             simulation_coarse: None,
+            import_level: None,
             fine_3d: None,
             model_3d: None,
             gpu_3d: None,
@@ -925,6 +926,7 @@ impl CutCraftApp {
 
     /// Runs a registered command: straight away if it has no settings, else opens its form.
     pub(super) fn start_command(&mut self, id: &str) {
+        self.import_level = None;
         // a new job's setup is accepted, as OK would, before another form takes its place:
         // the new-job screen shows only that form, so it would be left bare (issue #17)
         if id != "job_setup" && self.form.as_ref().is_some_and(|f| f.new_job) {
@@ -1745,6 +1747,7 @@ impl CutCraftApp {
             edits: taken.edits.into_iter().chain(made.edits).collect(),
             notes: made.notes,
         };
+        let change = self.onto_import_level(id, change);
         let (toolpaths, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)
@@ -1753,6 +1756,15 @@ impl CutCraftApp {
             .set_message(&format!("{} changed", cmd.meta().label));
         self.warn(&toolpaths, &notes);
         Ok(())
+    }
+
+    /// `change` with the components Orientate 3D Model makes put on the level clipart was
+    /// imported to, if it was (Import to Level).
+    fn onto_import_level(&self, id: &str, change: Change) -> Change {
+        match self.import_level {
+            Some(level) if id == "orientate_3d_model" => crate::clipart::onto_level(change, level),
+            _ => change,
+        }
     }
 
     /// Runs a command and records it for undo.
@@ -1779,6 +1791,7 @@ impl CutCraftApp {
         let change = cut_craft_core::rest::with_rest(&self.doc.job, params, change)
             .map_err(|e| e.to_string())?;
         let change = cut_craft_core::selector::kept(params, change);
+        let change = self.onto_import_level(id, change);
         let (made, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)
