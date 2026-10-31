@@ -1,5 +1,6 @@
 //! Create Vector Texture: rows of wavy lines at an angle over the selected closed vectors
-//! (or the job), their spacing, waves and noise varied by a seeded pattern.
+//! (or the job), their spacing, waves and noise varied by a seeded pattern; on the current
+//! layer, or on a layer of their own.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, Rect, inside};
@@ -29,6 +30,17 @@ pub struct Params {
     pub noise: f64,
     /// Another seed gives another pattern with the same settings
     pub seed: u32,
+    /// Put the lines on the layer named below (made if the job has none of that name)
+    #[serde(default)]
+    #[schemars(title = "Place vectors on layer")]
+    pub place_on_layer: bool,
+    #[serde(default = "texture_layer")]
+    #[schemars(title = "Name", extend("x-show-when" = {"place_on_layer": true}))]
+    pub layer_name: String,
+}
+
+fn texture_layer() -> String {
+    "Vector Texture".into()
 }
 
 impl Default for Params {
@@ -41,6 +53,8 @@ impl Default for Params {
             amplitude: 2.0,
             noise: 0.0,
             seed: 1,
+            place_on_layer: false,
+            layer_name: texture_layer(),
         }
     }
 }
@@ -125,7 +139,22 @@ impl Command for VectorTexture {
                 "the area is too small for the texture".into(),
             ));
         }
-        Ok(Change::swap(doc, vec![], lines))
+        if !p.place_on_layer {
+            return Ok(Change::swap(doc, vec![], lines));
+        }
+        let name = cut_craft_core::ensure_named(&p.layer_name)?;
+        let mut c = Change::builder(doc);
+        let layer = doc
+            .layers
+            .iter()
+            .find(|l| l.name == name)
+            .map_or_else(|| c.add_layer(&name), |l| l.id);
+        let ids: Vec<_> = lines.into_iter().map(|l| c.add(l)).collect();
+        for &id in &ids {
+            c.move_to_layer(id, layer);
+        }
+        c.select(ids);
+        Ok(c.finish())
     }
 }
 
@@ -154,6 +183,32 @@ mod tests {
             let b = l.bounds();
             assert!(b.size().y < 1e-9 && b.min.x >= -1e-9 && b.max.x <= 50.0 + 1e-9);
         }
+    }
+
+    #[test]
+    fn the_lines_can_go_on_a_layer_of_their_own() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 50.0)]);
+        let p = Params {
+            place_on_layer: true,
+            layer_name: "Texture".into(),
+            ..Params::default()
+        };
+        doc.apply(&VectorTexture::run(&doc, &p).unwrap()).unwrap();
+        let layer = doc
+            .layers
+            .iter()
+            .find(|l| l.name == "Texture")
+            .expect("made");
+        let on = doc
+            .vectors
+            .keys()
+            .filter(|&&id| doc.layer_of(id) == layer.id)
+            .count();
+        assert_eq!(on, doc.vectors.len() - 1, "every line, not the square");
+        // a second texture goes on the same layer, not a new one
+        let layers = doc.layers.len();
+        doc.apply(&VectorTexture::run(&doc, &p).unwrap()).unwrap();
+        assert_eq!(doc.layers.len(), layers);
     }
 
     #[test]

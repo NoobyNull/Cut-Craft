@@ -281,8 +281,8 @@ say "not implemented yet".
     closed; points are entered in the form (Aspire places them with clicks).
   - Draw Freehand: the whole drag path, smoothed into Béziers within a tolerance.
   - Create Vector Texture: wavy lines at an angle over the selected closed vectors or the
-    job, max spacing with variation, wavelength, amplitude, noise and a seed (vectors go on
-    the current layer; no new-layer option yet).
+    job, max spacing with variation, wavelength, amplitude, noise and a seed; on the
+    current layer, or (Place Vectors on Layer) on the layer named, made if needed.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.
