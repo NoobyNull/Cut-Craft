@@ -2,7 +2,7 @@
 //! it is from their edges so its sides cut the edges exactly.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::Path;
+use cut_craft_core::geometry::{Path, Point, inside};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
     Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
@@ -49,6 +49,14 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Project toolpath onto 3D Model")]
     pub project_onto_model: bool,
+    /// Each pass starts as near as it can to the start point of the vector it follows;
+    /// otherwise where it starts is left to the program
+    #[serde(default)]
+    pub use_vector_start_points: bool,
+    /// Carve the shapes one after another in the order they were selected; otherwise all
+    /// are carved together, a pass depth at a time
+    #[serde(default)]
+    pub use_vector_selection_order: bool,
 }
 
 impl Default for Params {
@@ -66,6 +74,8 @@ impl Default for Params {
             clearing: None,
             cleared_within: None,
             project_onto_model: false,
+            use_vector_start_points: false,
+            use_vector_selection_order: false,
         }
     }
 }
@@ -231,7 +241,41 @@ fn clearing(
 /// The moves that V-carve the regions `paths` enclose (holes left standing) with `p`'s V-bit.
 /// The edges are cut at the start depth; further in it goes deeper until the cone is as
 /// wide as the bit or reaches the flat depth.
+/// With the vector selection order, each outline (and the vectors inside it) is carved
+/// completely before the next one selected.
 pub fn carve(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
+    if !p.use_vector_selection_order {
+        return carve_together(paths, p, safe);
+    }
+    shapes(paths)
+        .iter()
+        .flat_map(|shape| carve_together(shape, p, safe))
+        .collect()
+}
+
+/// The paths grouped as shapes, in their order: each outline not inside another, with the
+/// paths inside it (its holes and their islands).
+fn shapes(paths: &[Path]) -> Vec<Vec<Path>> {
+    let rings: Vec<Vec<Point>> = paths.iter().map(cut_points).collect();
+    let within = |i: usize, j: usize| i != j && inside(&rings[j..=j], rings[i][0]);
+    (0..paths.len())
+        .filter(|&i| !(0..paths.len()).any(|j| within(i, j)))
+        .map(|i| {
+            (0..paths.len())
+                .filter(|&k| k == i || within(k, i))
+                .map(|k| paths[k].clone())
+                .collect()
+        })
+        .collect()
+}
+
+/// The carving of all `paths` together, ring by ring from the edges in.
+fn carve_together(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
+    let starts: Vec<Point> = if p.use_vector_start_points {
+        paths.iter().map(|path| path.start).collect()
+    } else {
+        vec![]
+    };
     let tool = &p.tool;
     // how far the cone reaches sideways for each millimetre down
     let spread = (tool.angle.to_radians() / 2.0).tan();
@@ -250,10 +294,28 @@ pub fn carve(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
         }
         let depths = pass_depths(p.start_depth + offset.min(reach) / spread, tool.pass_depth);
         for ring in &rings {
-            moves.extend(contour_moves(&cut_points(ring), true, &depths, safe));
+            let points = started_near(cut_points(ring), &starts);
+            moves.extend(contour_moves(&points, true, &depths, safe));
         }
     }
     moves
+}
+
+/// The closed ring of `points` begun at its point nearest any of `starts` (as it is when
+/// there are none).
+fn started_near(mut points: Vec<Point>, starts: &[Point]) -> Vec<Point> {
+    let distance = |q: &Point| {
+        starts
+            .iter()
+            .map(|s| s.distance(*q))
+            .fold(f64::INFINITY, f64::min)
+    };
+    let nearest =
+        (0..points.len()).min_by(|&a, &b| distance(&points[a]).total_cmp(&distance(&points[b])));
+    if let (Some(nearest), false) = (nearest, starts.is_empty()) {
+        points.rotate_left(nearest);
+    }
+    points
 }
 
 /// The regions shrunk by `step`, `2 step`, ... until nothing is left, plus about where the
@@ -290,12 +352,81 @@ fn inward_offsets(regions: &[Path], step: f64) -> Vec<(f64, Vec<Path>)> {
 mod tests {
     use super::*;
     use cut_craft_core::document::Job;
-    use cut_craft_core::geometry::{Path, Point, inside};
     use cut_craft_core::simulation::Material;
     use cut_craft_core::testing::{made_toolpath, square};
     use cut_craft_core::toolpath::{MoveKind, Toolpath};
 
     cut_craft_core::contract_tests!(VcarveEngraveToolpath);
+
+    fn moved(path: &Path, by: Point) -> Path {
+        path.transformed(&cut_craft_core::glam::DAffine2::from_translation(by))
+    }
+
+    #[test]
+    fn in_selection_order_each_shape_is_carved_before_the_next() {
+        let right = moved(&rectangle(10.0, 10.0), Point::new(40.0, 0.0));
+        let left = rectangle(10.0, 10.0);
+        let p = Params {
+            use_vector_selection_order: true,
+            ..Params::default()
+        };
+        let cuts = |t: &Toolpath| -> Vec<bool> {
+            t.moves
+                .iter()
+                .filter(|m| m.kind == MoveKind::Cut)
+                .map(|m| m.to.x > 30.0)
+                .collect()
+        };
+        let ordered = cuts(&carve(vec![right.clone(), left.clone()], &p));
+        let first_left = ordered.iter().position(|&r| !r).unwrap();
+        assert!(
+            ordered[..first_left].iter().all(|&r| r),
+            "the right one first"
+        );
+        assert!(
+            ordered[first_left..].iter().all(|&r| !r),
+            "then the left, once"
+        );
+        // a letter with a hole stays one shape
+        let hole = moved(&rectangle(4.0, 4.0), Point::new(3.0, 3.0));
+        assert_eq!(
+            shapes(&[left, hole, right])
+                .iter()
+                .map(Vec::len)
+                .collect::<Vec<_>>(),
+            [2, 1]
+        );
+    }
+
+    #[test]
+    fn with_vector_start_points_the_first_pass_starts_by_the_vectors_start() {
+        // the square starts at its top right corner
+        let path = Path::polyline(
+            &[
+                Point::new(20.0, 20.0),
+                Point::new(0.0, 20.0),
+                Point::new(0.0, 0.0),
+                Point::new(20.0, 0.0),
+            ],
+            true,
+        );
+        let start = |use_vector_start_points| {
+            let t = carve(
+                vec![path.clone()],
+                &Params {
+                    use_vector_start_points,
+                    ..Params::default()
+                },
+            );
+            let m = t.moves.iter().find(|m| m.kind != MoveKind::Rapid).unwrap();
+            Point::new(m.to.x, m.to.y)
+        };
+        assert!(
+            start(true).distance(Point::new(20.0, 20.0)) < 1.0,
+            "{}",
+            start(true)
+        );
+    }
 
     fn rectangle(width: f64, height: f64) -> Path {
         Path::polyline(

@@ -244,6 +244,8 @@ say "not implemented yet".
 - Profile: nested shapes cut on the right side, inner before outer; cut order (selection
   order, left to right, bottom to top, grid, shortest path; the shortest of those ticked wins);
   start points (keep, optimise, nearest a point of the bounding box); sharp external corners.
+- V-Carve: Use Vector Start Points (each pass begins nearest its vector's start) and Use
+  Vector Selection Order (each shape, with its holes, carved before the next selected).
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
 - Clearance Tools on Pocket and V-Carve (the form's "Add a clearance tool from the
   database", kept largest first): each makes a toolpath of its own, named `[1]`, `[2]`... in

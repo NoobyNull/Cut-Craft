@@ -97,7 +97,7 @@ thread-milling	Thread Milling: pitch presets, internal / external, hand, directi
 inlay	Inlay toolpath: straight / pocket / stepped / hole, allowance	yes	inlay-toolpath command	inlay	inlay
 quick-engrave	Quick Engrave: outline / fill (offset, hatch, cross-hatch), nose cone, save from the form	partly	quick-engrave-toolpath command; no saving from the form	quick engrav	quick engrav|diamond drag	105
 vcarve	V-Carve: start depth, flat depth, project onto model	yes	vcarve-engrave-toolpath command	v ?carve|vcarve	v ?-?carv
-vcarve-order	V-Carve: use vector start points, vector selection order	no	not available on V-carve	vcarve toolpath	vector start points|use vector selection order	91
+vcarve-order	V-Carve: use vector start points, vector selection order	yes	V-Carve: use_vector_start_points, use_vector_selection_order	vcarve toolpath	vector start points|use vector selection order	91
 vcarve-inlay	V-Carve Inlay: pocket depth, glue gap, surface gap, plug sheet, boundary	yes	vcarve-inlay-toolpath command (clearance tools not done)	inlay	inlay
 photo-vcarve	PhotoVCarve: depth, raster / hatch / vectors, spacing, angle	yes	photo-vcarve-toolpath command	photo ?v ?carve	photo ?v ?carve
 fluting	Fluting: ramp types, ramp length / %, start depth	yes	fluting-toolpath command	flut	flut
