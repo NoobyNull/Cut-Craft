@@ -108,6 +108,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "subtract_vectors",
                 "overlap_intersect",
                 "interactive_vector_trim",
+                "trim_objects",
                 "close_extend_vector",
                 "fit_curves_to_vectors",
                 "vector_validator",

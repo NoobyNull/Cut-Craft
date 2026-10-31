@@ -124,6 +124,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_reverse_direction::ReverseDirection>();
     r.add::<cmd_close_with_line::CloseWithLine>();
     r.add_interactive::<cmd_interactive_vector_trim::InteractiveVectorTrim>();
+    r.add::<cmd_interactive_vector_trim::TrimObjects>();
     r.add::<cmd_vector_texture::VectorTexture>();
     r.add_interactive::<cmd_draw_freehand::DrawFreehand>();
     r.add::<cmd_draw_curve::DrawCurve>();
