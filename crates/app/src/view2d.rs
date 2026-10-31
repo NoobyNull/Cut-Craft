@@ -515,12 +515,23 @@ impl Canvas {
         if let Some(tiling) = doc.tiling {
             let edge = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
             let overlap = Stroke::new(datum.width, visuals.error_fg_color);
+            let active = tiling.active_tile(doc.job.area());
             for tile in tiling.tiles(doc.job.area()) {
                 let reach = tiling.reach(tile);
                 for (r, stroke) in [(reach, overlap), (tile, edge)] {
                     let screen_rect =
                         egui::Rect::from_two_pos(t.to_screen(r.min), t.to_screen(r.max));
                     painter.rect_stroke(screen_rect, 0, stroke, egui::StrokeKind::Middle);
+                }
+                // the active tile, shaded
+                if active == Some(tile) {
+                    let screen_rect =
+                        egui::Rect::from_two_pos(t.to_screen(tile.min), t.to_screen(tile.max));
+                    painter.rect_filled(
+                        screen_rect,
+                        0,
+                        visuals.warn_fg_color.gamma_multiply(ACTIVE_TILE_SHADE),
+                    );
                 }
             }
         }
@@ -665,6 +676,9 @@ impl Canvas {
 fn to_f32(v: f64) -> f32 {
     v as f32
 }
+
+/// How strongly the active toolpath tile is shaded in the 2D view.
+const ACTIVE_TILE_SHADE: f32 = 0.15;
 
 #[cfg(test)]
 mod tests {

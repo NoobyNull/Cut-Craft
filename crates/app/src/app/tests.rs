@@ -4461,3 +4461,50 @@ fn the_toolpath_summary_keeps_notes_per_toolpath_and_shows_the_rapid_rate_in_its
         "Use the 1/4 in downcut"
     );
 }
+
+#[test]
+fn a_double_clicked_tile_is_previewed_alone() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    let area = h.app.doc.job.area();
+    // a long thin rectangle right across the job
+    let y = area.center().y;
+    h.rectangle(area.min.x + 10.0, y - 5.0, area.size().x - 20.0, 10.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["cut_depth"] = serde_json::json!(2.0);
+    h.app.apply("profile_toolpath", &params).unwrap();
+    // two tiles side by side, then the right-hand one double-clicked
+    h.app.invoke(&h.ctx, "toolpath_tiling");
+    let form = h.app.form.as_mut().unwrap();
+    form.params["tiling"]["width"] = serde_json::json!(area.size().x / 2.0);
+    form.params["tiling"]["height"] = serde_json::json!(area.size().y);
+    form.params["tiling"]["overlap"] = serde_json::json!(0.0);
+    let params = form.params.clone();
+    h.app.apply("toolpath_tiling", &params).unwrap();
+    // the Toolpaths page docked beside the view, not flown out over it
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let right = h.at(
+        area.max.x - area.size().x / 4.0,
+        area.min.y + area.size().y / 4.0,
+    );
+    h.double_click(right);
+    assert_eq!(h.app.doc.tiling.map(|t| t.active), Some(2));
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let m = h.app.simulation.as_ref().expect("previewed");
+    let cut_beyond = |from_x: f64| {
+        (0..m.rows).any(|r| {
+            (0..m.columns).any(|c| m.centre(c, r).x > from_x && m.heights[r * m.columns + c] < -0.5)
+        })
+    };
+    // the right-hand tile's cut, moved to the machine's corner: nothing on the right half
+    assert!(
+        !cut_beyond(area.center().x + 5.0),
+        "the tile is cut at the corner"
+    );
+    assert!(cut_beyond(area.min.x), "it is cut");
+}

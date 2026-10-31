@@ -834,8 +834,26 @@ impl CutCraftApp {
     }
 
     /// Clipart dragged from the Clipart tab and dropped on the 2D view goes where it was
-    /// dropped.
+    /// dropped; while Toolpath Tiling is open a double-click on a tile makes it the active
+    /// one (on it again, none).
     fn clipart_dropped_2d(&mut self, ui: &egui::Ui, canvas: &Canvas) {
+        if canvas.response().double_clicked()
+            && let Some(form) = self.form.as_mut().filter(|f| f.id == "toolpath_tiling")
+            && let Some(tiling) = self.doc.tiling
+            && let Some(at) = ui.ctx().pointer_latest_pos()
+        {
+            let at = canvas.transform.to_job(at);
+            let tiles = tiling.tiles(self.doc.job.area());
+            if let Some(i) = tiles.iter().position(|t| t.contains(at)) {
+                let picked = u32::try_from(i + 1).unwrap_or(0);
+                let active = if tiling.active == picked { 0 } else { picked };
+                form.params["tiling"]["active"] = Value::from(active);
+                let params = form.params.clone();
+                if let Err(e) = self.apply("toolpath_tiling", &params) {
+                    self.status.set_message(&e);
+                }
+            }
+        }
         if let Some(path) = canvas
             .response()
             .dnd_release_payload::<std::path::PathBuf>()

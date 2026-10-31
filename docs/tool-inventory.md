@@ -190,7 +190,9 @@ say "not implemented yet".
 - Toolpath Tiling (Toolpaths menu): individual tiles or feed-through in X or Y, tile size,
   overlap, smallest tile first; tiles drawn in the 2D view; Save Toolpaths writes one file
   per tile (`name_tileN`), cuts clipped to the tile and its overlap and moved to the job's
-  corner. Not done: the 3D view's active tile and drawing tiles in their original place.
+  corner. Active Tile (or a double-click on a tile while the form is open, shaded in the
+  2D view) makes the preview cut only that tile's moves, at the machine's corner or, with
+  Draw Toolpaths in Original Position, where the tile sits in the finished piece.
 - Gadgets ▸ Wrapped Fluting Layout and Wrapped Spiral Layout (rotary jobs): flutes or
   rope-twist strands, with coves, laid out as vectors for Profile / Fluting toolpaths.
 - Gadgets ▸ Celtic Weave Creator: a knot grid's loops as smooth closed vectors (crossings

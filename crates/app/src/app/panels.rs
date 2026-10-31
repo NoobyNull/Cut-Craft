@@ -539,22 +539,29 @@ impl CutCraftApp {
         }
     }
 
+    /// What a preview cuts: the job's toolpaths, or (Toolpath Tiling with a tile active)
+    /// only the active tile's moves, at the machine's corner or in their original place.
+    fn preview_source(&self) -> Cow<'_, cut_craft_core::document::Document> {
+        match self.doc.tiling.and_then(|t| t.preview(&self.doc)) {
+            Some(tiled) => Cow::Owned(tiled),
+            None => Cow::Borrowed(&self.doc),
+        }
+    }
+
     /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet).
     pub(super) fn play(&mut self, toolpaths: &[EntityId]) {
         self.finish_playback();
+        let source = self.preview_source();
+        let (list, marks): (Vec<cut_craft_core::toolpath::Toolpath>, Vec<u32>) = toolpaths
+            .iter()
+            .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), super::preview_mark(id))))
+            .unzip();
+        drop(source);
         let start = self
             .simulation
             .take()
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
-        let list: Vec<&cut_craft_core::toolpath::Toolpath> = toolpaths
-            .iter()
-            .filter_map(|id| self.doc.toolpaths.get(id))
-            .collect();
-        let marks: Vec<u32> = toolpaths
-            .iter()
-            .filter(|id| self.doc.toolpaths.contains_key(id))
-            .map(|&id| super::preview_mark(id))
-            .collect();
+        let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
         self.playback = Some(cut_craft_core::playback::Playback::new(start, &list).marked(&marks));
         (
             self.playing,
@@ -588,7 +595,7 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        let Some(toolpath) = self.doc.toolpaths.get(&id) else {
+        let Some(toolpath) = self.preview_source().toolpaths.get(&id).cloned() else {
             return;
         };
         self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
@@ -596,7 +603,7 @@ impl CutCraftApp {
             .simulation
             .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()));
         material.cutting = super::preview_mark(id);
-        material.cut(toolpath);
+        material.cut(&toolpath);
         (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;

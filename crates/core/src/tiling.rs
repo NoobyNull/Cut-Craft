@@ -40,6 +40,16 @@ pub struct Tiling {
     /// Put the part-size tile first rather than last
     #[schemars(title = "Machine smallest tile first")]
     pub smallest_first: bool,
+    /// The tile previewed alone, counting from the bottom left along X (double-click one in
+    /// the 2D view while this form is open); 0 previews the whole job
+    #[serde(default)]
+    #[schemars(title = "Active tile", range(min = 0))]
+    pub active: u32,
+    /// Preview the active tile where it sits in the finished piece, not moved to the
+    /// machine's corner as it is cut
+    #[serde(default)]
+    #[schemars(title = "Draw toolpaths in original position")]
+    pub original_position: bool,
 }
 
 impl Default for Tiling {
@@ -50,6 +60,8 @@ impl Default for Tiling {
             height: 600.0,
             overlap: 3.0,
             smallest_first: false,
+            active: 0,
+            original_position: false,
         }
     }
 }
@@ -110,11 +122,34 @@ impl Tiling {
         Rect::new(tile.min - grow, tile.max + grow)
     }
 
+    /// The active tile, if one is picked and there is one of that number.
+    pub fn active_tile(&self, area: Rect) -> Option<Rect> {
+        let i = usize::try_from(self.active.checked_sub(1)?).ok()?;
+        self.tiles(area).get(i).copied()
+    }
+
+    /// What a preview cuts while a tile is active: `doc` with its toolpaths cut to the tile,
+    /// moved to the machine's corner unless they are drawn in their original position.
+    pub fn preview(&self, doc: &Document) -> Option<Document> {
+        let tile = self.active_tile(doc.job.area())?;
+        Some(self.cut_to(doc, tile, !self.original_position))
+    }
+
     /// `doc` with each toolpath's moves cut to `tile` (with the overlap) and moved so the
     /// tile sits where the job's lower-left corner is.
     pub fn tiled(&self, doc: &Document, tile: Rect) -> Document {
+        self.cut_to(doc, tile, true)
+    }
+
+    /// `doc` with each toolpath's moves cut to `tile` (with the overlap), and when `moved`
+    /// moved so the tile sits where the job's lower-left corner is.
+    fn cut_to(&self, doc: &Document, tile: Rect, moved: bool) -> Document {
         let area = doc.job.area();
-        let shift = tile.min - area.min;
+        let shift = if moved {
+            tile.min - area.min
+        } else {
+            Point::ZERO
+        };
         let reach = self.reach(tile);
         let mut out = doc.clone();
         for toolpath in out.toolpaths.values_mut() {
@@ -203,6 +238,80 @@ mod tests {
 
     fn area() -> Rect {
         Rect::new(Point::ZERO, Point::new(1000.0, 500.0))
+    }
+
+    #[test]
+    fn an_active_tile_previews_alone_at_the_corner_or_where_it_sits() {
+        use crate::testing::with_toolpath;
+        let mut doc = with_toolpath();
+        let area = doc.job.area();
+        // one cut right across the job, 1 deep
+        let y = area.center().y;
+        for t in doc.toolpaths.values_mut() {
+            t.moves = [
+                (area.min.x + 1.0, 5.0),
+                (area.min.x + 1.0, -1.0),
+                (area.max.x - 1.0, -1.0),
+            ]
+            .iter()
+            .map(|&(x, z)| Move {
+                kind: MoveKind::Cut,
+                to: DVec3::new(x, y, z),
+            })
+            .collect();
+        }
+        let tiling = Tiling {
+            width: area.size().x / 2.0,
+            height: area.size().y,
+            overlap: 0.0,
+            ..Tiling::default()
+        };
+        assert!(
+            tiling.preview(&doc).is_none(),
+            "no tile active: the whole job"
+        );
+        let second = Tiling {
+            active: 2,
+            ..tiling
+        };
+        doc.tiling = Some(second);
+        let tile = second.active_tile(area).unwrap();
+        let cut_moves = |d: &Document| -> Vec<DVec3> {
+            d.toolpaths
+                .values()
+                .flat_map(|t| t.moves.iter().filter(|m| m.to.z < 0.0).map(|m| m.to))
+                .collect()
+        };
+        let at_corner = second.preview(&doc).unwrap();
+        assert!(
+            cut_moves(&at_corner)
+                .iter()
+                .all(|p| p.x <= area.min.x + tile.size().x + 1e-9)
+        );
+        let original = Tiling {
+            original_position: true,
+            ..second
+        };
+        let in_place = original.preview(&doc).unwrap();
+        assert!(
+            !cut_moves(&in_place).is_empty(),
+            "the toolpath reaches the second tile"
+        );
+        assert!(
+            cut_moves(&in_place)
+                .iter()
+                .all(|p| p.x >= tile.min.x - 1e-9)
+        );
+        assert_ne!(cut_moves(&in_place), cut_moves(&at_corner), "moved, or not");
+        assert!(
+            Tiling {
+                active: 9,
+                ..tiling
+            }
+            .preview(&doc)
+            .is_none(),
+            "no ninth tile"
+        );
     }
 
     #[test]
