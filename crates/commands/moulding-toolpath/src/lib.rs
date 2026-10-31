@@ -1,12 +1,15 @@
 //! Moulding Toolpath: sweeps an open cross-section profile along drive rails, cutting the
 //! moulding in passes parallel to the rails, each as low as the tool can go without cutting
-//! into the profile.
+//! into the profile. Passes can be spaced along the profile's slope (vary stepover), and a
+//! larger clearance tool can rough it first in levels, leaving an allowance, its own toolpath.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by};
+use cut_craft_core::toolpath::{
+    Move, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by, pass_depths,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,6 +17,7 @@ use serde::{Deserialize, Serialize};
 pub struct MouldingToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[expect(clippy::struct_excessive_bools, reason = "one tick box per option")]
 pub struct Params {
     pub name: String,
     /// Mitred corners where the rails have sharp corners, instead of rolling round them
@@ -25,6 +29,30 @@ pub struct Params {
     pub boundary_offset: f64,
     /// Usually a ball nose; its stepover spaces the passes
     pub tool: Tool,
+    /// Space the passes by the stepover along the profile's surface, so they come closer
+    /// together where it is steep
+    #[serde(default)]
+    #[schemars(title = "Vary Stepover")]
+    pub vary_stepover: bool,
+    /// Use Larger Area Clearance Tool: the first of these roughs the moulding first, in
+    /// levels of its pass depth, as a toolpath of its own named [Clear]
+    #[serde(default)]
+    #[schemars(title = "Larger Area Clearance Tool")]
+    pub clearance_tools: Vec<Tool>,
+    /// Material the clearance tool leaves on the profile for the finishing tool
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-group" = "Larger Area Clearance Tool"))]
+    pub machining_allowance: f64,
+    /// The clearance tool cuts the profile's flat parts it fits in to their finished height
+    #[serde(default)]
+    #[schemars(extend("x-group" = "Larger Area Clearance Tool"))]
+    pub machine_flat_regions: bool,
+    /// The finishing tool leaves out the flat parts the clearance tool finished
+    #[serde(default)]
+    #[schemars(extend("x-show-when" = {"machine_flat_regions": true}))]
+    #[schemars(extend("x-group" = "Larger Area Clearance Tool"))]
+    pub skip_flat_regions: bool,
 }
 
 impl Default for Params {
@@ -38,6 +66,11 @@ impl Default for Params {
                 .into_iter()
                 .find(|t| t.shape == ToolShape::BallNose)
                 .expect("the starter tools include a ball nose"),
+            vary_stepover: false,
+            clearance_tools: vec![],
+            machining_allowance: 0.0,
+            machine_flat_regions: false,
+            skip_flat_regions: false,
         }
     }
 }
@@ -142,30 +175,179 @@ impl Command for MouldingToolpath {
             ));
         }
         let section = cross_section(&doc.vectors[&profile_id]);
-        let width = section[section.len() - 1].0 - section[0].0;
+        let rails: Vec<&Path> = ids.iter().map(|id| &doc.vectors[id]).collect();
         // ponytail: a profile taller than the material is cut off at its bottom; Aspire asks
         // for the material or profile to be changed
         let floor = -doc.job.thickness;
-        let step = p.tool.stepover * p.tool.diameter;
         let reach = p.boundary_offset.max(0.0);
-        let corners = if p.create_sharp_corners {
-            Corners::Sharp
-        } else {
-            Corners::Round
+        let span = (section[0].0 - reach, section[section.len() - 1].0 + reach);
+        let sweep = Sweep {
+            rails: &rails,
+            corners: if p.create_sharp_corners {
+                Corners::Sharp
+            } else {
+                Corners::Round
+            },
+            safe: doc.job.clearance,
         };
-        let safe = doc.job.clearance;
-        let mut moves: Vec<Move> = vec![];
-        for rail in ids.iter().map(|id| &doc.vectors[id]) {
-            let mut h = section[0].0 - reach;
-            let mut pass = 0;
-            while h <= section[0].0 + width + reach + 1e-9 {
-                let z = tip_height(&section, &p.tool, h).max(floor);
+        let vectors: Vec<_> = std::iter::once(profile_id)
+            .chain(ids.iter().copied())
+            .collect();
+        let mut c = Change::builder(doc);
+        let mut flats = vec![];
+        if let Some(clearer) = p.clearance_tools.first() {
+            ensure_positive("clearance tool diameter", clearer.diameter)?;
+            ensure_positive("clearance tool pass depth", clearer.pass_depth)?;
+            let (levels, flat) = clearance(&section, clearer, p, span, floor);
+            flats = flat;
+            c.add_toolpath(made_by::<Self>(
+                p,
+                format!("{} [Clear]", p.name),
+                clearer.clone(),
+                vectors.clone(),
+                sweep.moves(&levels),
+            ));
+        }
+        let finished_flat = |h: f64| {
+            p.skip_flat_regions
+                && p.clearance_tools.first().is_some_and(|clearer| {
+                    let r = p.tool.diameter / 2.0;
+                    flat(&section, h - r, h + r)
+                        && flats
+                            .iter()
+                            .any(|&f: &f64| (f - h).abs() <= clearer.diameter / 2.0)
+                })
+        };
+        let levels: Vec<(f64, f64)> = finish_positions(&section, p, span, floor)
+            .into_iter()
+            .filter(|&(h, _)| !finished_flat(h))
+            .collect();
+        c.add_toolpath(made_by::<Self>(
+            p,
+            p.name.clone(),
+            p.tool.clone(),
+            vectors,
+            sweep.moves(&levels),
+        ));
+        Ok(c.finish())
+    }
+}
+
+/// Where the finishing passes go: (distance across, tip height), a stepover apart across,
+/// or (vary stepover) a stepover apart along the surface the tip follows.
+fn finish_positions(
+    section: &[(f64, f64)],
+    p: &Params,
+    (from, to): (f64, f64),
+    floor: f64,
+) -> Vec<(f64, f64)> {
+    let step = p.tool.stepover * p.tool.diameter;
+    let at = |h: f64| (h, tip_height(section, &p.tool, h).max(floor));
+    let mut out = vec![at(from)];
+    if p.vary_stepover {
+        // ponytail: walked in twentieths of a stepover
+        let fine = step / 20.0;
+        let (mut h, mut walked) = (from, 0.0);
+        let mut last = out[0];
+        while h + fine <= to + 1e-9 {
+            h += fine;
+            let here = at(h);
+            let piece = (here.0 - last.0).hypot(here.1 - last.1);
+            // a pass where going on would take it further than a stepover
+            if walked > 0.0 && walked + piece > step + 1e-9 {
+                out.push(last);
+                walked = 0.0;
+            }
+            walked += piece;
+            last = here;
+        }
+        if walked > 0.0 {
+            out.push(last);
+        }
+    } else {
+        let mut h = from + step;
+        while h <= to + 1e-9 {
+            out.push(at(h));
+            h += step;
+        }
+    }
+    out
+}
+
+/// Whether the profile is level from `a` to `b` across.
+fn flat(section: &[(f64, f64)], a: f64, b: f64) -> bool {
+    let level = height(section, a);
+    (height(section, b) - level).abs() < 1e-6
+        && section
+            .iter()
+            .filter(|s| s.0 > a && s.0 < b)
+            .all(|s| (s.1 - level).abs() < 1e-6)
+}
+
+/// The clearance tool's passes, level by level: at each, wherever the material it may cut
+/// reaches below the level above, it cuts down to this level or as far as it may (the
+/// profile plus the allowance, or the profile itself on flats it fits, when asked). Also
+/// where it finished flats.
+fn clearance(
+    section: &[(f64, f64)],
+    clearer: &Tool,
+    p: &Params,
+    (from, to): (f64, f64),
+    floor: f64,
+) -> (Vec<(f64, f64)>, Vec<f64>) {
+    let radius = clearer.diameter / 2.0;
+    let step = clearer.stepover * clearer.diameter;
+    let mut across = vec![];
+    let mut h = from;
+    while h <= to + 1e-9 {
+        across.push(h);
+        h += step;
+    }
+    let on_flat = |h: f64| p.machine_flat_regions && flat(section, h - radius, h + radius);
+    let target = |h: f64| {
+        let tip = tip_height(section, clearer, h);
+        let allowed = if on_flat(h) {
+            tip
+        } else {
+            tip + p.machining_allowance
+        };
+        allowed.max(floor)
+    };
+    let deepest = across.iter().map(|&h| target(h)).fold(0.0, f64::min);
+    let mut levels = vec![];
+    let mut above = 0.0;
+    for z in pass_depths(-deepest, clearer.pass_depth) {
+        for &h in &across {
+            let lowest = target(h);
+            if lowest < above - 1e-9 {
+                levels.push((h, z.max(lowest)));
+            }
+        }
+        above = z;
+    }
+    let flats = across.into_iter().filter(|&h| on_flat(h)).collect();
+    (levels, flats)
+}
+
+/// The rails a moulding follows, and how passes along them are cut.
+struct Sweep<'a> {
+    rails: &'a [&'a Path],
+    corners: Corners,
+    safe: f64,
+}
+
+impl Sweep<'_> {
+    /// A pass along every rail at each (distance across, height), in order.
+    fn moves(&self, levels: &[(f64, f64)]) -> Vec<Move> {
+        let mut moves = vec![];
+        for rail in self.rails {
+            for (pass, &(h, z)) in levels.iter().enumerate() {
                 let lines: Vec<Vec<Point>> = if rail.closed {
                     // the profile hangs outside a closed rail
                     let rings = if h.abs() < 1e-9 {
-                        vec![rail.clone()]
+                        vec![(*rail).clone()]
                     } else {
-                        polygon::offset(std::slice::from_ref(rail), h, corners)
+                        polygon::offset(std::slice::from_ref(*rail), h, self.corners)
                     };
                     rings
                         .iter()
@@ -185,22 +367,11 @@ impl Command for MouldingToolpath {
                     }
                     let cut: Vec<DVec3> = line.iter().map(|q| q.extend(z)).collect();
                     // ponytail: lifts to the safe height between passes; Aspire lifts a stepover
-                    moves.extend(follow(&cut, safe));
+                    moves.extend(follow(&cut, self.safe));
                 }
-                h += step;
-                pass += 1;
             }
         }
-        let vectors = std::iter::once(profile_id).chain(ids).collect();
-        let mut c = Change::builder(doc);
-        c.add_toolpath(made_by::<Self>(
-            p,
-            p.name.clone(),
-            p.tool.clone(),
-            vectors,
-            moves,
-        ));
-        Ok(c.finish())
+        moves
     }
 }
 
@@ -262,6 +433,132 @@ mod tests {
         assert!(
             (passes[3].1 + 1.0).abs() < 1e-6,
             "its edge first reaches the slope: {passes:?}"
+        );
+    }
+
+    /// Flat 2 mm at the top, a 45° slope 3 mm down, then flat 10 mm at -3.
+    fn stepped_profile() -> Path {
+        Path::polyline(
+            &[
+                Point::new(200.0, 0.0),
+                Point::new(202.0, 0.0),
+                Point::new(205.0, -3.0),
+                Point::new(215.0, -3.0),
+            ],
+            false,
+        )
+    }
+
+    fn rail() -> Path {
+        Path::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false)
+    }
+
+    /// The toolpaths made, clearance first: (name, (distance across, height) of each pass).
+    fn made(p: &Params) -> Vec<(String, Vec<(f64, f64)>)> {
+        let mut doc = cut_craft_core::testing::document_with(vec![rail(), stepped_profile()]);
+        doc.apply(&MouldingToolpath::run(&doc, p).unwrap()).unwrap();
+        doc.toolpaths
+            .values()
+            .map(|t| {
+                let passes = t
+                    .moves
+                    .iter()
+                    .filter(|m| m.kind == MoveKind::Plunge)
+                    .map(|m| (50.0 - m.to.y, m.to.z))
+                    .collect();
+                (t.name.clone(), passes)
+            })
+            .collect()
+    }
+
+    fn mill(diameter: f64) -> Tool {
+        Tool {
+            diameter,
+            stepover: 0.5,
+            pass_depth: 1.0,
+            ..Tool::default()
+        }
+    }
+
+    #[test]
+    fn varying_the_stepover_brings_passes_closer_on_the_slope() {
+        let even = made(&Params::default());
+        let varied = made(&Params {
+            vary_stepover: true,
+            ..Params::default()
+        });
+        assert!(
+            varied[0].1.len() > even[0].1.len(),
+            "{varied:?} vs {even:?}"
+        );
+        // a stepover apart along the surface the tip follows, never further
+        let step = Params::default().tool.stepover * Params::default().tool.diameter;
+        for pair in varied[0].1.windows(2) {
+            let along = (pair[1].0 - pair[0].0).hypot(pair[1].1 - pair[0].1);
+            assert!(along <= step + 1e-6, "{pair:?}");
+        }
+    }
+
+    #[test]
+    fn a_clearance_tool_roughs_in_levels_leaving_the_allowance() {
+        let p = Params {
+            tool: mill(2.0),
+            clearance_tools: vec![mill(4.0)],
+            machining_allowance: 0.5,
+            ..Params::default()
+        };
+        let made = made(&p);
+        assert_eq!(made.len(), 2);
+        let (name, clear) = &made[0];
+        assert_eq!(name, "Moulding [Clear]");
+        assert_eq!(made[1].0, "Moulding");
+        #[expect(clippy::cast_possible_truncation, reason = "µm")]
+        let mut levels: Vec<i64> = clear
+            .iter()
+            .map(|&(_, z)| (z * 1000.0).round() as i64)
+            .collect();
+        levels.dedup();
+        // three equal levels down to the flat bottom plus the allowance (2.5 mm)
+        for level in [-833, -1667, -2500] {
+            assert!(levels.contains(&level), "{levels:?}");
+        }
+        // never below the profile plus the allowance, for the 4 mm tool
+        let section = cross_section(&stepped_profile());
+        for &(h, z) in clear {
+            assert!(
+                z >= tip_height(&section, &mill(4.0), h) + 0.5 - 1e-9,
+                "{h} {z}"
+            );
+        }
+    }
+
+    #[test]
+    fn flats_the_clearance_tool_fits_are_cut_to_height_and_can_be_skipped() {
+        let p = Params {
+            tool: mill(2.0),
+            clearance_tools: vec![mill(4.0)],
+            machining_allowance: 0.5,
+            machine_flat_regions: true,
+            ..Params::default()
+        };
+        let made_flat = made(&p);
+        assert!(
+            made_flat[0]
+                .1
+                .iter()
+                .any(|&(h, z)| h > 7.0 && h < 13.0 && (z + 3.0).abs() < 1e-9),
+            "the flat bottom cut to -3: {:?}",
+            made_flat[0].1
+        );
+        let skipped = made(&Params {
+            skip_flat_regions: true,
+            ..p
+        });
+        assert!(skipped[1].1.len() < made_flat[1].1.len());
+        assert!(
+            skipped[1].1.iter().all(|&(h, _)| !(h > 8.0 && h < 12.0)),
+            "{:?}",
+            skipped[1].1
         );
     }
 

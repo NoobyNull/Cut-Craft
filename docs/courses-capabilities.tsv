@@ -103,7 +103,7 @@ photo-vcarve	PhotoVCarve: depth, raster / hatch / vectors, spacing, angle	yes	ph
 fluting	Fluting: ramp types, ramp length / %, start depth	yes	fluting-toolpath command	flut	flut
 texture-toolpath	Texture toolpath: depths, lengths, overlap, variation, vectors as pattern, boundary offset, save / load settings	partly	texture-toolpath command; no Save / Load of settings	texture toolpath	texture tool ?path	101
 prism	Prism carving	yes	prism-toolpath command	prism	prism
-moulding	Moulding toolpath: rail and section, vary stepover, clearance tool, allowance, sharp corners, boundary offset	partly	moulding-toolpath: sharp corners, boundary offset; no vary stepover, clearance tool or allowance	moulding|molding	mou?lding tool ?path	98
+moulding	Moulding toolpath: rail and section, vary stepover, clearance tool, allowance, sharp corners, boundary offset	yes	moulding-toolpath: rails and section, sharp corners, boundary offset, vary stepover, clearance tool [Clear] with allowance, machine / skip flat regions	moulding|molding	mou?lding tool ?path	98
 chamfer	Chamfer toolpath: width / depth, inside / outside, slope, V-bit or ball nose, overcut	yes	chamfer-toolpath command	chamfer	chamfer
 sketch-carving	Sketch Carving: bitmap or model, boundary, line thickness	partly	sketch-carving-toolpath; no live green preview of the areas	sketch carv	sketch carv	127
 roughing-3d	3D Roughing: Z level / raster, allowance, boundary (model, material, vectors, level)	yes	3d-roughing-toolpath command	3d toolpath|roughing	roughing

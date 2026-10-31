@@ -249,6 +249,9 @@ say "not implemented yet".
   start points (keep, optimise, nearest a point of the bounding box); sharp external corners.
 - V-Carve: Use Vector Start Points (each pass begins nearest its vector's start) and Use
   Vector Selection Order (each shape, with its holes, carved before the next selected).
+- Moulding: Vary Stepover (passes a stepover apart along the profile's surface); a Larger
+  Area Clearance Tool roughing first in levels as its own [Clear] toolpath, with Machining
+  Allowance, Machine Flat Regions and the finish's Skip Flat Regions.
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
 - Clearance Tools on Pocket and V-Carve (the form's "Add a clearance tool from the
   database", kept largest first): each makes a toolpath of its own, named `[1]`, `[2]`... in
