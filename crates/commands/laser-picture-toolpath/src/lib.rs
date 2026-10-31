@@ -264,6 +264,7 @@ mod tests {
             grey: (0..60).map(|i| [0, 191, 255][(i % 30) / 10]).collect(),
             rect: Rect::new(Point::ZERO, Point::new(10.0, 2.0)),
             depth: Vec::new(),
+            rgb: Vec::new(),
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

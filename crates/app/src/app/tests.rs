@@ -549,6 +549,7 @@ fn clicking_a_picture_selects_it_and_delete_removes_it() {
         grey: vec![0],
         rect,
         depth: Vec::new(),
+        rgb: Vec::new(),
     });
     h.app.record(Ok(c.finish()), "added");
     h.frame(vec![]);

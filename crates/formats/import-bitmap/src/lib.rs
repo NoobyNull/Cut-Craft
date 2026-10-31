@@ -1,6 +1,7 @@
 //! Import a bitmap picture: kept in grey levels, placed at the job's lower left at 96 pixels
 //! per inch, shrunk to fit the job if it is bigger. A 16-bit or floating point picture (a
-//! depth map) keeps its tones at full precision too, for reliefs made from it.
+//! depth map) keeps its tones at full precision too, for reliefs made from it, and a colour
+//! picture its colours, for tracing by colour.
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::Document;
@@ -39,9 +40,27 @@ impl Importer for ImportBitmap {
             grey,
             rect: Rect::new(area.min, area.min + natural * scale),
             depth,
+            rgb: colours(bytes, columns * rows),
         });
         Ok(c.finish())
     }
+}
+
+/// A colour picture's pixels, three bytes each, if it has `pixels` of them and any is not
+/// grey; empty otherwise.
+fn colours(bytes: &[u8], pixels: usize) -> Vec<u8> {
+    let Ok(picture) = image::load_from_memory(bytes) else {
+        return vec![];
+    };
+    if !picture.color().has_color() {
+        return vec![];
+    }
+    let rgb = picture.to_rgb8().into_raw();
+    let grey = rgb.chunks(3).all(|p| p[0] == p[1] && p[1] == p[2]);
+    if grey || rgb.len() != pixels * 3 {
+        return vec![];
+    }
+    rgb
 }
 
 type Pixels = (usize, usize, Vec<u8>, Vec<f32>);
@@ -128,6 +147,29 @@ fn grey_of(tones: &[f32]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_colour_picture_keeps_its_colours_and_a_grey_one_none() {
+        let png = |pixels: [[u8; 3]; 2]| {
+            let mut picture = image::RgbImage::new(2, 1);
+            for (x, p) in pixels.iter().enumerate() {
+                picture.put_pixel(u32::try_from(x).unwrap(), 0, image::Rgb(*p));
+            }
+            let mut bytes = std::io::Cursor::new(vec![]);
+            picture
+                .write_to(&mut bytes, image::ImageFormat::Png)
+                .unwrap();
+            bytes.into_inner()
+        };
+        assert_eq!(
+            colours(&png([[200, 0, 0], [0, 0, 200]]), 2),
+            [200, 0, 0, 0, 0, 200]
+        );
+        assert!(
+            colours(&png([[9, 9, 9], [200, 200, 200]]), 2).is_empty(),
+            "grey"
+        );
+    }
 
     fn png(width: u32, height: u32) -> Vec<u8> {
         let picture = image::GrayImage::from_fn(width, height, |x, _| {

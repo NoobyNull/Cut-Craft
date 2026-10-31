@@ -23,6 +23,14 @@ pub struct Bitmap {
         with = "crate::packed::f32s"
     )]
     pub depth: Vec<f32>,
+    /// Each pixel's colour, red, green and blue, laid out as `grey` (three bytes a pixel);
+    /// empty for a grey picture (added with colour tracing).
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        with = "crate::packed::u8s"
+    )]
+    pub rgb: Vec<u8>,
 }
 
 impl Bitmap {
@@ -84,6 +92,7 @@ mod tests {
             grey: vec![0, 255],
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
             depth: vec![],
+            rgb: Vec::new(),
         };
         assert_eq!(b.darkness(Point::new(1.0, 5.0)), Some(1.0));
         assert_eq!(b.darkness(Point::new(19.0, 5.0)), Some(0.0));
@@ -101,6 +110,7 @@ mod tests {
             grey: vec![128, 128],
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
             depth: vec![0.5, 0.500_015],
+            rgb: Vec::new(),
         };
         let (left, right) = (
             b.tone(Point::new(1.0, 5.0)).unwrap(),

@@ -347,7 +347,10 @@ say "not implemented yet".
     largest that fits).
   - Not built from these tools' Aspire forms: see each one's section in `re/SPEC.md`.
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
-    corner fit, noise filter and grouping (dialog 347).
+    corner fit, noise filter and grouping (dialog 347); or in Colors mode, a colour picture
+    (imported pictures keep their colours) cut down to 2 to 16 colours, numbered from the
+    darkest, the ones listed (or all but the lightest) traced each onto a layer named after
+    it, the palette given in the status.
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset. Mirror flips about
@@ -563,8 +566,8 @@ say "not implemented yet".
 **Known problems and stand-ins.**
 - Split Component takes closed vectors only (Aspire also extends open ones to the edges).
   Emboss's split into shape and detail is our own [inf].
-- Trace Bitmap has no colour mode (bitmaps are kept in grey) and no traced-area selection;
-  Corner Fit's scale is our own.
+- Trace Bitmap has no traced-area selection, and its colours are picked by number, not by
+  clicking a palette; Corner Fit's scale is our own.
 - TrueType text has no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
 - Components show in the 2D view as greyscale depth maps (black lowest, white highest, per
   component) and a click on one selects it, as in Aspire; in the 3D view a double-click picks
