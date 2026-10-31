@@ -42,6 +42,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_add_layer::AddLayer>();
     r.add::<cmd_delete_layer::DeleteLayer>();
     r.add::<cmd_move_to_layer::MoveToLayer>();
+    r.add::<cmd_merge_visible_layers::MergeVisibleLayers>();
     r.add::<cmd_select_layer_vectors::SelectLayerVectors>();
     r.add::<cmd_layer_properties::LayerProperties>();
     r.add::<cmd_set_current_layer::SetCurrentLayer>();

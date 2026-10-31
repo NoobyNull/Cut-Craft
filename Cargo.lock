@@ -1066,6 +1066,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-merge-visible-layers"
+version = "0.3.3"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-merged-toolpath"
 version = "0.3.3"
 dependencies = [
@@ -1870,6 +1879,7 @@ dependencies = [
  "cmd-make-start-point",
  "cmd-material-setup",
  "cmd-materials",
+ "cmd-merge-visible-layers",
  "cmd-merged-toolpath",
  "cmd-mirror",
  "cmd-moulding-toolpath",

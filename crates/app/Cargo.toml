@@ -163,6 +163,7 @@ cmd-layer-properties = { path = "../commands/layer-properties" }
 cmd-select-layer-vectors = { path = "../commands/select-layer-vectors" }
 cmd-move-to-layer = { path = "../commands/move-to-layer" }
 cmd-delete-layer = { path = "../commands/delete-layer" }
+cmd-merge-visible-layers = { path = "../commands/merge-visible-layers" }
 cmd-add-layer = { path = "../commands/add-layer" }
 cmd-drilling-toolpath = { path = "../commands/drilling-toolpath" }
 cmd-pocket-toolpath = { path = "../commands/pocket-toolpath" }
