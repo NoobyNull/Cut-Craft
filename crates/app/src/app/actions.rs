@@ -2429,16 +2429,21 @@ impl CutCraftApp {
         });
         // a list of tools in running order (rest machining), picked from the database
         let mut earlier = None;
-        if open.params.get("tools").is_some_and(Value::is_array) {
-            egui::ComboBox::from_label("Add a tool from the database")
-                .selected_text("")
-                .show_ui(ui, |ui| {
-                    for tool in &self.tools.tools {
-                        if ui.selectable_label(false, &tool.name).clicked() {
-                            earlier = Some(tool.name.clone());
+        for (list, label) in [
+            ("tools", "Add a tool from the database"),
+            ("clearance_tools", "Add a clearance tool from the database"),
+        ] {
+            if open.params.get(list).is_some_and(Value::is_array) {
+                egui::ComboBox::from_label(label)
+                    .selected_text("")
+                    .show_ui(ui, |ui| {
+                        for tool in &self.tools.tools {
+                            if ui.selectable_label(false, &tool.name).clicked() {
+                                earlier = Some((list, tool.name.clone()));
+                            }
                         }
-                    }
-                });
+                    });
+            }
         }
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
@@ -2487,18 +2492,22 @@ impl CutCraftApp {
         if edit_tool {
             self.edit_form_tool(ui.ctx());
         }
-        if let Some(name) = earlier {
-            self.add_earlier_tool(&name);
+        if let Some((list, name)) = earlier {
+            self.add_earlier_tool(list, &name);
         }
     }
 
-    /// Adds a database tool (cutting the active material) to the end of the open form's
-    /// tool list.
-    pub(super) fn add_earlier_tool(&mut self, name: &str) {
+    /// Adds a database tool (cutting the active material) to the open form's tool `list`:
+    /// at the end of `tools` (running order), or among `clearance_tools` largest first.
+    pub(super) fn add_earlier_tool(&mut self, list: &str, name: &str) {
         if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name))
-            && let Some(tools) = form.params.get_mut("tools").and_then(Value::as_array_mut)
+            && let Some(tools) = form.params.get_mut(list).and_then(Value::as_array_mut)
         {
             tools.push(serde_json::to_value(tool).expect("tools serialize"));
+            if list == "clearance_tools" {
+                let across = |t: &Value| t["diameter"].as_f64().unwrap_or(0.0);
+                tools.sort_by(|a, b| across(b).total_cmp(&across(a)));
+            }
         }
     }
 

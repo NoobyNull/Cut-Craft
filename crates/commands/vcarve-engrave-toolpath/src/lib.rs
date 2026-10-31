@@ -29,6 +29,21 @@ pub struct Params {
     pub flat_depth: f64,
     /// A V-bit; its stepover sets how close together the carving passes are
     pub tool: Tool,
+    /// End mills that clear the flat bottom first, largest first (needs a flat depth): each
+    /// makes a toolpath of its own, and each tool after it, the V-bit last, cuts only what
+    /// the ones before it left (rest machining)
+    #[serde(default)]
+    #[schemars(title = "Clearance Tools")]
+    pub clearance_tools: Vec<Tool>,
+    /// This toolpath is this clearance tool's pass over the flat bottom
+    #[serde(default)]
+    #[schemars(skip)]
+    pub clearing: Option<Tool>,
+    /// The V-bit's toolpath after clearance tools: their smallest radius, so it carves the
+    /// slopes and only this far into the flat bottom they cleared
+    #[serde(default)]
+    #[schemars(skip)]
+    pub cleared_within: Option<f64>,
     /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
     /// model's surface, going no lower than the bottom of the material
     #[serde(default)]
@@ -47,6 +62,9 @@ impl Default for Params {
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
                 .expect("the starter tools include a V-bit"),
+            clearance_tools: vec![],
+            clearing: None,
+            cleared_within: None,
             project_onto_model: false,
         }
     }
@@ -66,7 +84,62 @@ impl Command for VcarveEngraveToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        let mut c = Change::builder(doc);
+        if p.clearance_tools.is_empty() {
+            c.add_toolpath(vcarve(doc, p)?);
+            return Ok(c.finish());
+        }
+        if p.flat_depth <= 0.0 {
+            return Err(CommandError::InvalidParams(
+                "clearance tools clear the flat bottom: give a flat depth".into(),
+            ));
+        }
+        // each clearance tool, largest first (each kept to what the ones before it left),
+        // then the V-bit on the slopes and the edge of the flat bottom
+        let smallest = p
+            .clearance_tools
+            .iter()
+            .map(|t| t.diameter / 2.0)
+            .fold(f64::INFINITY, f64::min);
+        for (i, tool) in p.clearance_tools.iter().enumerate() {
+            let own = Params {
+                name: format!("{} [{}]", p.name, i + 1),
+                clearance_tools: vec![],
+                clearing: Some(tool.clone()),
+                ..p.clone()
+            };
+            let mut toolpath = vcarve(doc, &own)?;
+            if i > 0 {
+                let rest = cut_craft_core::rest::Rest {
+                    after: p.clearance_tools[..i].to_vec(),
+                    ..Default::default()
+                };
+                toolpath.params["rest"] =
+                    serde_json::to_value(&rest).expect("rest settings serialise");
+                let params = toolpath.params.clone();
+                cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
+            }
+            c.add_toolpath(toolpath);
+        }
+        let vbit = Params {
+            name: format!("{} [{}]", p.name, p.clearance_tools.len() + 1),
+            clearance_tools: vec![],
+            cleared_within: Some(smallest),
+            ..p.clone()
+        };
+        c.add_toolpath(vcarve(doc, &vbit)?);
+        Ok(c.finish())
+    }
+}
+
+/// The toolpath for `p`'s own tool: the V-bit's carving, or (`clearing`) an end mill's
+/// pocket of the flat bottom.
+fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
+    {
         let tool = &p.tool;
+        if let Some(clearer) = &p.clearing {
+            return clearing(doc, p, clearer);
+        }
         if tool.shape != ToolShape::VBit {
             return Err(CommandError::InvalidParams(
                 "V-carving needs a V-bit".into(),
@@ -94,10 +167,65 @@ impl Command for VcarveEngraveToolpath {
         if p.project_onto_model {
             moves = project_onto_model(doc, tool, &moves)?;
         }
-        let mut c = Change::builder(doc);
-        c.add_toolpath(made_by::<Self>(p, p.name.clone(), tool.clone(), ids, moves));
-        Ok(c.finish())
+        Ok(made_by::<VcarveEngraveToolpath>(
+            p,
+            p.name.clone(),
+            tool.clone(),
+            ids,
+            moves,
+        ))
     }
+}
+
+/// A clearance tool's pass: the flat bottom (where the V-bit, `p.flat_depth` down, is
+/// narrower than the shape) pocketed with rings stepping in, at each pass depth.
+fn clearing(
+    doc: &Document,
+    p: &Params,
+    tool: &Tool,
+) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
+    ensure_positive("tool diameter", tool.diameter)?;
+    ensure_positive("pass depth", tool.pass_depth)?;
+    let (ids, paths) = doc.selected_paths(|path| path.closed);
+    if ids.is_empty() {
+        return Err(CommandError::Failed(
+            "select the closed vectors to carve".into(),
+        ));
+    }
+    // the V-bit's cone at the flat depth bounds the flat bottom
+    let spread = (p.tool.angle.to_radians() / 2.0).tan();
+    let flat = polygon::offset_regions(
+        &polygon::regions(&paths),
+        -(p.flat_depth * spread + tool.diameter / 2.0),
+        Corners::Round,
+    );
+    if flat.is_empty() {
+        return Err(CommandError::Failed(format!(
+            "{} is too big to clear any of the flat bottom",
+            tool.name
+        )));
+    }
+    let step = tool.stepover * tool.diameter;
+    let depths = pass_depths(p.start_depth + p.flat_depth, tool.pass_depth);
+    let mut rings = vec![];
+    let mut ring = flat;
+    while !ring.is_empty() {
+        let next = polygon::offset(&ring, -step, Corners::Round);
+        rings.extend(ring);
+        ring = next;
+    }
+    rings.reverse(); // from the middle outwards
+    let moves = rings
+        .iter()
+        .flat_map(|r| contour_moves(&cut_points(r), true, &depths, doc.job.clearance))
+        .collect();
+    Ok(made_by::<VcarveEngraveToolpath>(
+        p,
+        p.name.clone(),
+        tool.clone(),
+        ids,
+        moves,
+    ))
 }
 
 /// The moves that V-carve the regions `paths` enclose (holes left standing) with `p`'s V-bit.
@@ -113,8 +241,13 @@ pub fn carve(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
         _ => tool.diameter / 2.0,
     };
     let step = tool.stepover * tool.diameter;
+    // the flat bottom's middle, cleared by end mills, is left alone
+    let last = p.cleared_within.map_or(f64::INFINITY, |r| reach + r);
     let mut moves = vec![];
     for (offset, rings) in inward_offsets(&polygon::regions(paths), step) {
+        if offset > last {
+            break;
+        }
         let depths = pass_depths(p.start_depth + offset.min(reach) / spread, tool.pass_depth);
         for ring in &rings {
             moves.extend(contour_moves(&cut_points(ring), true, &depths, safe));
@@ -189,6 +322,71 @@ mod tests {
         let mut m = Material::new(job, 400);
         m.cut(t);
         m
+    }
+
+    #[test]
+    fn a_clearance_tool_clears_the_flat_bottom_and_the_v_bit_cuts_what_it_left() {
+        use cut_craft_core::testing::document_with;
+        let mill = Tool {
+            name: "6 mm End Mill".into(),
+            ..Tool::default()
+        };
+        let p = Params {
+            flat_depth: 3.0,
+            clearance_tools: vec![mill],
+            ..Params::default()
+        };
+        let mut doc = document_with(vec![rectangle(60.0, 40.0)]);
+        doc.apply(&VcarveEngraveToolpath::run(&doc, &p).unwrap())
+            .unwrap();
+        let made: Vec<&Toolpath> = doc.toolpaths.values().collect();
+        assert_eq!(made.len(), 2);
+        assert_eq!(made[0].tool.name, "6 mm End Mill");
+        assert!(
+            (deepest(made[0]) + 3.0).abs() < 1e-9,
+            "flat at the flat depth"
+        );
+        assert_eq!(made[1].tool.shape, ToolShape::VBit);
+        let alone = carve(
+            vec![rectangle(60.0, 40.0)],
+            &Params {
+                flat_depth: 3.0,
+                ..Params::default()
+            },
+        );
+        assert!(
+            made[1].moves.len() < alone.moves.len(),
+            "the V-bit leaves the middle to the end mill"
+        );
+        // together they carve what the V-bit alone would: flat in the middle, sloped walls
+        let job = Job {
+            width: 60.0,
+            height: 40.0,
+            ..Job::default()
+        };
+        let both = {
+            let mut m = Material::new(&job, 240);
+            m.cut(made[0]);
+            m.cut(made[1]);
+            m
+        };
+        let solo = carved(&alone, &job);
+        for (x, y) in [(30.0, 20.0), (8.0, 20.0), (1.0, 20.0), (4.5, 4.5)] {
+            let (a, b) = (
+                both.at(Point::new(x, y)).unwrap(),
+                solo.at(Point::new(x, y)).unwrap(),
+            );
+            assert!(
+                (a - b).abs() < 0.3,
+                "at ({x}, {y}): {a} with clearance, {b} alone"
+            );
+        }
+        // a clearance tool needs a flat bottom to clear
+        let no_flat = Params {
+            flat_depth: 0.0,
+            ..p
+        };
+        assert!(VcarveEngraveToolpath::run(&doc, &no_flat).is_err());
     }
 
     #[test]

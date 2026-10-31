@@ -231,6 +231,13 @@ say "not implemented yet".
   order, left to right, bottom to top, grid, shortest path; the shortest of those ticked wins);
   start points (keep, optimise, nearest a point of the bounding box); sharp external corners.
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
+- Clearance Tools on Pocket and V-Carve (the form's "Add a clearance tool from the
+  database", kept largest first): each makes a toolpath of its own, named `[1]`, `[2]`... in
+  cutting order. Pocket's later tools (its own last) cut only what the ones before left
+  (rest machining, kept on each so it recalculates alone; a raster only for the first).
+  V-Carve's end mills pocket the flat bottom (needs a flat depth); the V-bit then carves the
+  slopes and only the smallest clearance radius into the flat bottom, so the corners a round
+  end mill misses are still cut.
 - 3D Finishing takes a list of tools and makes a toolpath for each (rest machining).
 - Posts: G2/G3 arcs (and helices) fitted to curves when the post has arc blocks, Cut Craft's
   own FluidNC posts included; Plunge (Z2) and the Home / Start Position in Job Setup.

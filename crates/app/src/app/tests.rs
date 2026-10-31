@@ -1456,7 +1456,7 @@ fn the_tool_database_window_keeps_edits_only_on_ok() {
 fn rest_machining_takes_its_tools_from_the_database() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "3d_finishing_toolpath");
-    h.app.add_earlier_tool("6 mm Ball Nose");
+    h.app.add_earlier_tool("tools", "6 mm Ball Nose");
     let form = h.app.form.as_ref().unwrap();
     // after the ball nose the form starts with
     assert_eq!(form.params["tools"][1]["name"], "6 mm Ball Nose");
