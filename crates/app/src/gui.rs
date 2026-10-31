@@ -605,6 +605,11 @@ pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<M
             &cmd_duplicate_toolpath::Params { toolpath: id },
         ),
         MenuItem::submenu("Group", group_items(doc, id, toolpath)),
+        MenuItem::run::<cmd_merged_toolpath::UngroupMergedToolpath>(
+            "Ungroup",
+            &cmd_merged_toolpath::UngroupParams { toolpath: id },
+        )
+        .enabled(toolpath.strategy == "merged_toolpath"),
         MenuItem::separator(),
         MenuItem::submenu(
             "Recalculate",

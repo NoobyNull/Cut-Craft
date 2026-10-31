@@ -75,6 +75,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_laser_picture_toolpath::LaserPictureToolpath>();
     r.add::<cmd_array_copy_toolpath::ArrayCopyToolpath>();
     r.add::<cmd_merged_toolpath::MergedToolpath>();
+    r.add::<cmd_merged_toolpath::UngroupMergedToolpath>();
     r.add::<cmd_inlay_toolpath::InlayToolpath>();
     r.add::<cmd_space_horizontally::SpaceHorizontally>();
     r.add::<cmd_space_vertically::SpaceVertically>();
