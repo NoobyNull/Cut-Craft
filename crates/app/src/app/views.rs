@@ -597,9 +597,10 @@ impl CutCraftApp {
         };
         self.track_stroke(gesture);
         let placing_tabs = self.placing_tabs();
+        let filleting = self.filleting_corners();
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
-            (None | Some(Gesture::Click { .. }), None, None) if placing_tabs => {
-                self.tab_overlay(reach)
+            (None | Some(Gesture::Click { .. }), None, None) if placing_tabs || filleting => {
+                self.click_overlay(placing_tabs, reach)
             }
             (_, Some(ViewTool::NodeEdit), _) => self.node_overlay(gesture, reach),
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Measure), _) => {
@@ -674,8 +675,8 @@ impl CutCraftApp {
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.select_drop(drag, shift, reach);
             }
-            (Some(Gesture::Click { at, .. }), None, None) if placing_tabs => {
-                self.place_tab(at, reach);
+            (Some(Gesture::Click { at, .. }), None, None) if placing_tabs || filleting => {
+                self.click_mark(placing_tabs, at, reach);
             }
             (Some(Gesture::Click { at, shift }), None, None) => {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
@@ -1033,14 +1034,64 @@ impl CutCraftApp {
         })
     }
 
-    /// A ring round each clicked tab, the size a click on it must land within.
-    fn tab_overlay(&self, reach: f64) -> Overlay {
-        Overlay::Preview(
+    /// Whether the open form is Create Fillets filleting the corners clicked.
+    pub(super) fn filleting_corners(&self) -> bool {
+        self.form
+            .as_ref()
+            .is_some_and(|f| f.id == "create_fillets" && f.params["corners"] == "clicked")
+    }
+
+    /// The sharp corners of the selected vectors, that a click can fillet.
+    fn fillet_corners(&self) -> Vec<Point> {
+        self.doc
+            .selection
+            .iter()
+            .filter_map(|id| self.doc.vectors.get(id))
+            .flat_map(cmd_create_fillets::corner_points)
+            .collect()
+    }
+
+    /// A click placing a tab (`tabs`), else filleting a corner.
+    fn click_mark(&mut self, tabs: bool, at: Point, reach: f64) {
+        if tabs {
+            self.place_tab(at, reach);
+        } else {
+            self.fillet_corner(at, reach);
+        }
+    }
+
+    /// A click while filleting clicked corners: the corner within `reach` is filleted at once,
+    /// with the form's kind and radius (Undo or Cancel takes it back).
+    pub(super) fn fillet_corner(&mut self, at: Point, reach: f64) {
+        let Some(corner) = self
+            .fillet_corners()
+            .into_iter()
+            .filter(|p| p.distance(at) <= reach)
+            .min_by(|p, q| p.distance(at).total_cmp(&q.distance(at)))
+        else {
+            self.status
+                .set_message("click a sharp corner of a selected vector to fillet it");
+            return;
+        };
+        let Some(mut params) = self.form.as_ref().map(|f| f.params.clone()) else {
+            return;
+        };
+        params["clicked"] = serde_json::json!([corner]);
+        let result = self.apply("create_fillets", &params);
+        if let Some(form) = &mut self.form {
+            form.error = result.err();
+        }
+    }
+
+    /// A ring round each clicked tab (`tabs`), else round each corner a click can fillet: the
+    /// size a click on it must land within.
+    fn click_overlay(&self, tabs: bool, reach: f64) -> Overlay {
+        let points = if tabs {
             self.tab_points()
-                .into_iter()
-                .map(|p| Path::circle(p, reach))
-                .collect(),
-        )
+        } else {
+            self.fillet_corners()
+        };
+        Overlay::Preview(points.into_iter().map(|p| Path::circle(p, reach)).collect())
     }
 
     /// The open form's clicked tabs.

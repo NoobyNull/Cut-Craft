@@ -35,6 +35,8 @@ pub enum Corners {
     Outer,
     /// Corners pointing into a closed shape: those a cutter outside the shape cannot reach
     Inner,
+    /// Only corners clicked in the 2D view: each click fillets its corner at once
+    Clicked,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -45,6 +47,10 @@ pub struct Params {
     pub radius: f64,
     /// Open vectors have no inside, so they get every corner
     pub corners: Corners,
+    /// The corners clicked in the 2D view, for [`Corners::Clicked`]: where they are exactly
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub clicked: Vec<Point>,
 }
 
 impl Default for Params {
@@ -53,6 +59,7 @@ impl Default for Params {
             kind: Kind::Normal,
             radius: 3.0,
             corners: Corners::All,
+            clicked: vec![],
         }
     }
 }
@@ -81,7 +88,13 @@ impl Command for CreateFillets {
         let (mut corners, mut done) = (0, 0);
         let mut c = Change::builder(doc);
         for (id, path) in ids.into_iter().zip(&paths) {
-            let found = sharp_corners(path, p.corners);
+            let found: Vec<_> = sharp_corners(path, p.corners)
+                .into_iter()
+                .filter(|(_, c)| {
+                    p.corners != Corners::Clicked
+                        || p.clicked.iter().any(|q| q.distance(c.at) < STRAIGHT)
+                })
+                .collect();
             corners += found.len();
             // corners are filleted in turn, as if clicked one after another: each may use
             // what is left of its sides after the corners before it
@@ -101,6 +114,11 @@ impl Command for CreateFillets {
                 done += plans.len();
                 c.replace(id, rebuilt(path, &plans));
             }
+        }
+        if corners == 0 && p.corners == Corners::Clicked {
+            return Err(CommandError::Failed(
+                "click a sharp corner of a selected vector in the 2D view".into(),
+            ));
         }
         if corners == 0 {
             return Err(CommandError::Failed(
@@ -137,6 +155,14 @@ struct Corner {
     through: Point,
 }
 
+/// Where the sharp corners of `path` are, that a click can fillet.
+pub fn corner_points(path: &Path) -> Vec<Point> {
+    sharp_corners(path, Corners::All)
+        .into_iter()
+        .map(|(_, c)| c.at)
+        .collect()
+}
+
 /// The sharp line-to-line corners of `path` that `which` asks for: (index of the segment
 /// ending at the corner, the corner).
 fn sharp_corners(path: &Path, which: Corners) -> Vec<(usize, Corner)> {
@@ -169,7 +195,7 @@ fn sharp_corners(path: &Path, which: Corners) -> Vec<(usize, Corner)> {
             continue;
         }
         let wanted = match (which, ccw) {
-            (Corners::All, _) | (_, None) => true,
+            (Corners::All | Corners::Clicked, _) | (_, None) => true,
             (Corners::Outer, Some(ccw)) => (turn > 0.0) == ccw,
             (Corners::Inner, Some(ccw)) => (turn > 0.0) != ccw,
         };
@@ -327,7 +353,28 @@ mod tests {
             kind,
             radius,
             corners,
+            clicked: vec![],
         }
+    }
+
+    #[test]
+    fn clicked_corners_fillet_only_the_corner_clicked() {
+        let shape = square(0.0, 0.0, 10.0);
+        let corner = corner_points(&shape)[0];
+        let p = Params {
+            clicked: vec![corner],
+            ..params(Kind::Normal, 2.0, Corners::Clicked)
+        };
+        let [path] = filleted(vec![shape.clone()], &p)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(arcs(&path).len(), 1);
+        let p = Params {
+            clicked: vec![corner + Point::new(0.5, 0.5)],
+            ..p
+        };
+        assert!(filleted(vec![shape], &p).is_err());
     }
 
     fn arcs(path: &Path) -> Vec<Point> {

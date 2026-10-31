@@ -2958,6 +2958,32 @@ fn crossing_vectors_go_to_the_vector_validator_or_on_as_options_say() {
 }
 
 #[test]
+fn a_click_on_a_corner_fillets_only_that_corner() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.click(h.at(60.0, 35.0), Modifiers::NONE);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "create_fillets");
+    h.app.form.as_mut().unwrap().params["corners"] = "clicked".into();
+    h.frame(vec![]);
+    h.click(h.at(59.0, 59.0), Modifiers::NONE);
+    let arcs = |h: &Harness| {
+        h.app.doc.vectors[&id]
+            .segments
+            .iter()
+            .filter(|s| matches!(s, cut_craft_core::geometry::Segment::Arc { .. }))
+            .count()
+    };
+    assert_eq!(arcs(&h), 1, "{}", h.app.status.message);
+    h.click(h.at(35.0, 35.0), Modifiers::NONE);
+    assert_eq!(arcs(&h), 1, "a click away from a corner fillets nothing");
+    assert!(
+        h.app.doc.selection.contains(&id),
+        "nor changes the selection"
+    );
+}
+
+#[test]
 fn tabs_are_placed_and_removed_by_clicking_the_vector() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

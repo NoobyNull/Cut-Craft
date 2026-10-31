@@ -110,6 +110,7 @@ fn cut_craft(tool: &str) -> Vec<Path> {
                 kind: cmd_create_fillets::Kind::Normal,
                 radius: 5.0,
                 corners: cmd_create_fillets::Corners::Outer,
+                clicked: vec![],
             };
             cmd_create_fillets::CreateFillets::run(&doc, &p)
         }
