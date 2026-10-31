@@ -1716,10 +1716,19 @@ impl CutCraftApp {
         let (Some(cmd), Some(form)) = (self.registry.get(id), &self.form) else {
             return vec![];
         };
-        cmd.drag_params(drag, &self.with_stroke(id, &form.params))
+        let mut paths: Vec<Path> = cmd
+            .drag_params(drag, &self.with_stroke(id, &form.params))
             .and_then(|params| cmd.run_json(&self.doc, &params))
             .map(|change| change.added().cloned().collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // Freehand's stabilizing circle, round the path's end: the pointer pulls from its edge
+        if id == "draw_freehand"
+            && let Some(radius) = form.params["stabilize"].as_f64().filter(|r| *r > 0.0)
+            && let Some(&end) = cmd_draw_freehand::stabilized(&self.stroke, radius, false).last()
+        {
+            paths.push(Path::circle(end, radius));
+        }
+        paths
     }
 
     /// The Help windows, Toolpath Summary and Snapping Options.

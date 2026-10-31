@@ -4833,3 +4833,22 @@ fn with_create_fillets_open_a_click_rounds_a_corner_and_a_click_on_the_fillet_ta
     h.click(h.at(mid, mid), Modifiers::NONE);
     assert_eq!(shape(&h), (4, 0), "the sharp corner is back");
 }
+
+#[test]
+fn freehands_stabilizing_circle_is_drawn_round_the_paths_end_while_dragging() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_freehand");
+    h.app.form.as_mut().unwrap().params["stabilize"] = Value::from(2.0);
+    h.app.stroke = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)];
+    let drag = cut_craft_core::Drag {
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        from_center: false,
+        constrain: false,
+    };
+    let paths = h.app.preview("draw_freehand", drag);
+    assert_eq!(paths.len(), 2, "the path and the circle");
+    let b = paths[1].bounds();
+    assert!((b.center() - Point::new(8.0, 0.0)).length() < 1e-6, "{b:?}");
+    assert!((b.size().x - 4.0).abs() < 1e-6, "{b:?}");
+}
