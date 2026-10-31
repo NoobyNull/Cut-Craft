@@ -435,8 +435,8 @@ say "not implemented yet".
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
-    top or bottom, or by count; optional boundary vectors). Slice heights cannot be edited
-    one by one yet.
+    top or bottom, by count, or a Custom Slice List of each slice's thickness; optional
+    boundary vectors).
   - Split Component (by a closed vector: "- A" inside, "- B" outside), Emboss Component
     (broad shape scaled 1–50 %, detail kept, then smoothed), Add Draft to Model (a new
     component with no wall steeper than the draft angle), Create Cross Section Vector (drag
