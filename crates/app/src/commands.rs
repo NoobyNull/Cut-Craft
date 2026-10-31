@@ -114,6 +114,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_nest_parts::NestParts>();
     r.add::<cmd_text_on_a_curve::TextOnACurve>();
     r.add::<cmd_move_node::MoveNode>();
+    r.add::<cmd_move_node::SmoothPoint>();
     r.add::<cmd_insert_point::InsertPoint>();
     r.add::<cmd_delete_point::DeletePoint>();
     r.add::<cmd_cut_vector::CutVector>();

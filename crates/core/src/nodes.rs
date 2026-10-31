@@ -165,6 +165,61 @@ pub fn move_node(path: &Path, k: usize, to: Point) -> Path {
     out
 }
 
+/// `path` with node `k` made smooth: the Bézier handles either side of it turned onto one
+/// line through it, each keeping its length; a handle beside a line or an arc turns onto that
+/// span's direction. `None` when there is no handle there to turn, or nothing to line it up
+/// with.
+#[must_use]
+pub fn smooth_node(path: &Path, k: usize) -> Option<Path> {
+    let n = path.segments.len();
+    let at = nodes(path).get(k).copied()?;
+    let arriving = if k == 0 {
+        path.closed.then(|| n - 1)
+    } else {
+        Some(k - 1)
+    };
+    let leaving = (k < n).then_some(k);
+    // which way a span runs where it touches the node
+    let arc_way = |center: Point, ccw: bool| {
+        let way = (at - center).perp();
+        if ccw { way } else { -way }
+    };
+    let way_in = arriving.map(|a| match path.segments[a] {
+        Segment::Line { .. } => at - span_start(path, a),
+        Segment::Cubic { c2, .. } => at - c2,
+        Segment::Arc { center, ccw, .. } => arc_way(center, ccw),
+    });
+    let way_out = leaving.map(|l| match path.segments[l] {
+        Segment::Line { to } => to - at,
+        Segment::Cubic { c1, .. } => c1 - at,
+        Segment::Arc { center, ccw, .. } => arc_way(center, ccw),
+    });
+    let cubic =
+        |s: Option<usize>| s.is_some_and(|s| matches!(path.segments[s], Segment::Cubic { .. }));
+    let (cubic_in, cubic_out) = (cubic(arriving), cubic(leaving));
+    let way = match (way_in, way_out) {
+        (Some(i), Some(o)) if cubic_in && cubic_out => {
+            i.normalize_or_zero() + o.normalize_or_zero()
+        }
+        (Some(_), Some(o)) if cubic_in => o,
+        (Some(i), Some(_)) if cubic_out => i,
+        _ => return None,
+    }
+    .try_normalize()?;
+    let mut out = path.clone();
+    if let (Some(a), true) = (arriving, cubic_in)
+        && let Segment::Cubic { c2, .. } = &mut out.segments[a]
+    {
+        *c2 = at - way * at.distance(*c2);
+    }
+    if let (Some(l), true) = (leaving, cubic_out)
+        && let Segment::Cubic { c1, .. } = &mut out.segments[l]
+    {
+        *c1 = at + way * at.distance(*c1);
+    }
+    Some(out)
+}
+
 /// `path` without node `k`: its two spans become one straight line. `None` when too few
 /// nodes would be left.
 pub fn delete_node(path: &Path, k: usize) -> Option<Path> {
@@ -457,5 +512,44 @@ mod tests {
         let curvy =
             insert_node(&Path::circle(Point::ZERO, 10.0), Point::new(0.0, 11.0), 2.0).unwrap();
         assert!((nodes(&curvy)[1] - Point::new(0.0, 10.0)).length() < 1e-9);
+    }
+
+    #[test]
+    fn smoothing_a_node_lines_its_handles_up_and_keeps_their_lengths() {
+        let at = Point::new(10.0, 0.0);
+        let kinked = Path {
+            start: Point::ZERO,
+            segments: vec![
+                Segment::Cubic {
+                    c1: Point::new(3.0, 3.0),
+                    c2: Point::new(8.0, -2.0),
+                    to: at,
+                },
+                Segment::Cubic {
+                    c1: Point::new(10.0, 4.0),
+                    c2: Point::new(17.0, 3.0),
+                    to: Point::new(20.0, 0.0),
+                },
+            ],
+            closed: false,
+        };
+        let smooth = smooth_node(&kinked, 1).unwrap();
+        let (Segment::Cubic { c2, .. }, Segment::Cubic { c1, .. }) =
+            (smooth.segments[0], smooth.segments[1])
+        else {
+            unreachable!()
+        };
+        assert!((at - c2).perp_dot(c1 - at).abs() < 1e-9, "in line");
+        assert!((at - c2).dot(c1 - at) > 0.0, "on opposite sides");
+        assert!((at.distance(c2) - 8.0_f64.sqrt()).abs() < 1e-9);
+        assert!((at.distance(c1) - 4.0).abs() < 1e-9);
+        // beside a line, the handle turns onto the line's direction
+        let after_line = smooth_node(&span_to_line(&kinked, 0), 1).unwrap();
+        let Segment::Cubic { c1, .. } = after_line.segments[1] else {
+            unreachable!()
+        };
+        assert!((c1 - Point::new(14.0, 0.0)).length() < 1e-9, "{c1}");
+        // nothing to turn at a corner of straight lines
+        assert!(smooth_node(&square(), 1).is_none());
     }
 }

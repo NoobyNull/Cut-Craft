@@ -1,4 +1,5 @@
-//! Move Node: the node under the point is dragged to a new place.
+//! Move Node: the node under the point is dragged to a new place. Smooth Point: the
+//! Bézier handles either side of it lined up.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::nodes::{self, NodeAt};
@@ -35,6 +36,33 @@ impl Command for MoveNode {
         let k = p.from.node(path)?;
         let mut c = Change::builder(doc);
         c.replace(p.from.vector, nodes::move_node(path, k, p.to.into()));
+        Ok(c.finish())
+    }
+}
+
+pub struct SmoothPoint;
+
+impl Command for SmoothPoint {
+    const ID: &'static str = "smooth_point";
+    type Params = NodeAt;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Smooth Point",
+            group: "Node Editing",
+            icon: "",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, p: &NodeAt) -> Result<Change, CommandError> {
+        let path = p.path(doc)?;
+        let k = p.node(path)?;
+        let smooth = nodes::smooth_node(path, k).ok_or_else(|| {
+            CommandError::Failed("there is no Bézier handle at this point to smooth".into())
+        })?;
+        let mut c = Change::builder(doc);
+        c.replace(p.vector, smooth);
         Ok(c.finish())
     }
 }
