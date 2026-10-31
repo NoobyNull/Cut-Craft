@@ -406,10 +406,14 @@ say "not implemented yet".
   - Extrude and Weave: one open cross-section swept along a drive rail (picked first),
     scaled to height if asked. Several cross-sections placed along the rail, rail reversing
     and start points, and weaving components are not done.
-  - Two Rail Sweep: one open cross-section stretched between two rails (picked first),
-    either rail reversible, optionally scaled with the width and to an exact height (the
-    Two Rail Sweep form). Several sections, blending, capping and Sweep Between Spans are
-    not done.
+  - Two Rail Sweep: open cross-sections stretched between two rails (picked first), read
+    upright (X across, Y up from the lowest point; one on its side, as Vector Unwrapper lays them, is read sideways). One section is used all the way;
+    several are each placed where drawn along the first rail and blended between, node to
+    node with Sweep Between Spans. Add To All Rail Nodes pairs the rails' nodes (corners
+    meet corners); Fill Center fills the inner closed rail to the sections' height there;
+    Swap Rail Order hangs them the other way; either rail reversible; scaled with the
+    width and to an exact height. Not done: attaching and dragging sections on the rails
+    with the mouse, the per-section Smooth switch.
   - Turn and Spin: an open profile turned round the line between its ends, or spun round
     its left end, optionally scaled to an exact height, with name and combine mode.
   - Create Texture Area: the chosen component tiled over the selected closed vectors or
