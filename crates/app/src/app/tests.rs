@@ -5199,3 +5199,30 @@ fn a_component_saved_as_a_sculpting_brush_is_pressed_into_the_model() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn draw_text_lists_words_spelt_wrong_with_suggestions_and_keeps_added_words() {
+    let mut h = Harness::new();
+    let aff = "TRY esianrtolcdugmphbyfvkwz\nSFX S Y 1\nSFX S 0 s .\n";
+    h.app.speller = Some(cut_craft_core::spell::Speller::from_hunspell(
+        aff,
+        "2\nwood/S\nsign\n",
+    ));
+    h.app.speller_looked = true;
+    h.app.invoke(&h.ctx, "draw_text");
+    h.app.form.as_mut().unwrap().params["text"] = "Woood sign Zed".into();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Design, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Spelling").is_some(), "the spelling section");
+    assert!(h.text_at("Woood").is_some(), "the word spelt wrong");
+    assert!(h.text_at("Wood").is_some(), "its suggestion");
+    h.app.fix_spelling("Woood", "Wood");
+    assert_eq!(h.app.form.as_ref().unwrap().params["text"], "Wood sign Zed");
+    h.app.user_word("Zed", true);
+    let s = h.app.speller.as_ref().unwrap();
+    assert_eq!(s.misspelled("Wood sign Zed"), Vec::<String>::new());
+    h.app.user_word("Zed", false);
+    assert_eq!(h.app.speller.as_ref().unwrap().misspelled("Zed"), ["Zed"]);
+}

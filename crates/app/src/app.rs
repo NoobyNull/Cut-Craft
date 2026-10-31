@@ -632,6 +632,11 @@ struct CutCraftApp {
     ribbon_tab: usize,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
+    /// The user's own spelling words, one a line; none in tests.
+    words_path: Option<std::path::PathBuf>,
+    /// Draw Text's dictionary, looked for once when spelling is first wanted.
+    speller: Option<cut_craft_core::spell::Speller>,
+    speller_looked: bool,
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
@@ -1754,6 +1759,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.load_machines();
             app.options = crate::options::Options::load();
             app.options_path = crate::options::Options::path();
+            app.words_path = files::config_dir().map(|d| d.join("words.txt"));
             app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();

@@ -51,6 +51,9 @@ impl CutCraftApp {
             rail_pinned: false,
             ribbon_tab: 0,
             options_path: None,
+            words_path: None,
+            speller: None,
+            speller_looked: false,
             session: Session::default(),
             selected_toolpath: None,
             selected_group: None,
@@ -462,6 +465,116 @@ impl CutCraftApp {
             .path
             .as_deref()
             .and_then(std::path::Path::parent)
+    }
+
+    /// Draw Text's dictionary: found once (Hunspell's, from the dictionaries folder or the
+    /// system), with the user's own words.
+    fn speller(&mut self) -> Option<&mut cut_craft_core::spell::Speller> {
+        if !self.speller_looked {
+            self.speller_looked = true;
+            let words = self
+                .words_path
+                .as_ref()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .unwrap_or_default();
+            self.speller =
+                cut_craft_core::spell::Speller::find().map(|s| s.with_user_words(words.lines()));
+        }
+        self.speller.as_mut()
+    }
+
+    /// Draw Text's spelling: the words of its text not in the dictionary, each with its
+    /// suggestions to click and Add Word; Remove Word takes back a word added.
+    fn spelling(&mut self, ui: &mut egui::Ui) {
+        let text = self
+            .form
+            .as_ref()
+            .and_then(|f| f.params["text"].as_str())
+            .unwrap_or_default()
+            .to_owned();
+        let Some(speller) = self.speller() else {
+            ui.weak("Spelling: no dictionary found (put a Hunspell .dic and .aff in Cut Craft's dictionaries folder)");
+            return;
+        };
+        let wrong = speller.misspelled(&text);
+        let (mut fix, mut add, mut remove) = (None, None, None);
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.strong("Spelling");
+            if wrong.is_empty() {
+                ui.weak("No spelling mistakes");
+            }
+            // ponytail: listed under the text, not underlined in it (the form's text box is
+            // the generic one)
+            for word in wrong.iter().take(8) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(ui.visuals().error_fg_color, word);
+                    for s in speller.suggest(word) {
+                        if ui.small_button(&s).clicked() {
+                            fix = Some((word.clone(), s));
+                        }
+                    }
+                    if ui.small_button("Add Word").clicked() {
+                        add = Some(word.clone());
+                    }
+                });
+            }
+            if !speller.user_words().is_empty() {
+                egui::ComboBox::from_label("Remove Word")
+                    .selected_text("a word added…")
+                    .show_ui(ui, |ui| {
+                        for w in speller.user_words() {
+                            if ui.selectable_label(false, w).clicked() {
+                                remove = Some(w.clone());
+                            }
+                        }
+                    });
+            }
+        });
+        if let Some((from, to)) = fix {
+            self.fix_spelling(&from, &to);
+        }
+        if let Some(word) = add {
+            self.user_word(&word, true);
+        }
+        if let Some(word) = remove {
+            self.user_word(&word, false);
+        }
+    }
+
+    /// Every `from` in Draw Text's text made `to`; text already made follows.
+    pub(super) fn fix_spelling(&mut self, from: &str, to: &str) {
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "draw_text") else {
+            return;
+        };
+        let text = form.params["text"].as_str().unwrap_or_default();
+        form.params["text"] = cut_craft_core::spell::replace_word(text, from, to).into();
+        form.dirty = true;
+        let params = form.params.clone();
+        if params.get("replaces").is_some_and(|r| !r.is_null())
+            && let Err(e) = self.apply_form("draw_text", &params)
+        {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Adds `word` to the user's own words (or takes it off), kept in the words file.
+    pub(super) fn user_word(&mut self, word: &str, add: bool) {
+        let Some(speller) = self.speller() else {
+            return;
+        };
+        if add {
+            speller.add_word(word);
+        } else {
+            speller.remove_word(word);
+        }
+        let words: Vec<String> = speller.user_words().iter().cloned().collect();
+        if let Some(path) = &self.words_path
+            && let Err(e) = std::fs::write(path, words.join("\n"))
+        {
+            self.status
+                .set_message(&format!("cannot keep the words in {}: {e}", path.display()));
+        }
     }
 
     /// The component a Save as Sculpting Brush action names.
@@ -2976,6 +3089,7 @@ impl CutCraftApp {
                 (_, true) => self.texture_file(true),
                 _ => {}
             },
+            "draw_text" => self.spelling(ui),
             "sculpt" => {
                 let (load, round) = ui
                     .horizontal(|ui| {

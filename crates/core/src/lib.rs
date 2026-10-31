@@ -26,6 +26,7 @@ pub mod selector;
 pub mod simplify;
 pub mod simulation;
 pub mod snap;
+pub mod spell;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod texture_area;
