@@ -224,6 +224,55 @@ impl Material {
         }
     }
 
+    /// Takes away the piece of material at `p` once cuts through the material have freed it
+    /// (Aspire's double-click on a waste area in the preview): every cell joined to it
+    /// side by side above the bottom drops to the bottom. False, and nothing changes, off
+    /// the material, on a cut-through cell, or when the piece is all that is left.
+    pub fn remove_piece(&mut self, p: Point) -> bool {
+        let solid = |m: &Self, i: usize| m.heights[i] > m.bottom + 1e-6;
+        let Some(start) = self
+            .at(p)
+            .map(|_| self.index_of(p))
+            .filter(|&i| solid(self, i))
+        else {
+            return false;
+        };
+        let mut piece = vec![false; self.heights.len()];
+        let mut stack = vec![start];
+        piece[start] = true;
+        while let Some(i) = stack.pop() {
+            let (column, row) = (i % self.columns, i / self.columns);
+            let beside = [
+                (column > 0).then(|| i - 1),
+                (column + 1 < self.columns).then(|| i + 1),
+                (row > 0).then(|| i - self.columns),
+                (row + 1 < self.rows).then(|| i + self.columns),
+            ];
+            for j in beside.into_iter().flatten() {
+                if !piece[j] && solid(self, j) {
+                    piece[j] = true;
+                    stack.push(j);
+                }
+            }
+        }
+        if (0..self.heights.len()).all(|i| piece[i] || !solid(self, i)) {
+            return false;
+        }
+        for (height, &in_it) in self.heights.iter_mut().zip(&piece) {
+            if in_it {
+                *height = self.bottom;
+            }
+        }
+        true
+    }
+
+    /// The cell under `p`, which must be on the material.
+    fn index_of(&self, p: Point) -> usize {
+        let column = ((p.x - self.origin.x) / self.cell) as usize;
+        let row = ((p.y - self.origin.y) / self.cell) as usize;
+        row * self.columns + column
+    }
+
     /// Lowers each cell the tool passes over from `a` to `b` to the lowest its cutting edge
     /// reaches there, at the cell centre.
     pub fn sweep(&mut self, a: DVec3, b: DVec3, tool: &Tool) {

@@ -402,3 +402,27 @@ fn hatch_lines_cross_the_regions_leaving_holes_out() {
         upright[0]
     );
 }
+
+#[test]
+fn a_piece_cut_free_is_removed_by_picking_it_and_the_rest_stays() {
+    let mut m = material();
+    // a square cut right through around (50, 50), and a groove that frees nothing
+    m.cut(&toolpath(&[
+        (30.0, 30.0, -25.0),
+        (70.0, 30.0, -25.0),
+        (70.0, 70.0, -25.0),
+        (30.0, 70.0, -25.0),
+        (30.0, 30.0, -25.0),
+    ]));
+    m.cut(&toolpath(&[(5.0, 10.0, -2.0), (95.0, 10.0, -2.0)]));
+    assert!(!m.remove_piece(Point::new(30.0, 50.0)), "on the cut");
+    assert!(!m.remove_piece(Point::new(-1.0, 50.0)), "off the material");
+    assert!(m.remove_piece(Point::new(50.0, 50.0)));
+    assert_eq!(depth_at(&m, 50.0, 50.0), -20.0);
+    assert_eq!(depth_at(&m, 36.0, 36.0), -20.0, "the whole piece");
+    assert_eq!(depth_at(&m, 20.0, 50.0), 0.0, "outside it");
+    assert_eq!(depth_at(&m, 50.0, 10.0), -2.0, "the groove as it was");
+    // what is left is one piece: nothing more is freed
+    assert!(!m.remove_piece(Point::new(20.0, 50.0)));
+    assert_eq!(depth_at(&m, 20.0, 50.0), 0.0);
+}

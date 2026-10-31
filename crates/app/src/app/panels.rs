@@ -909,7 +909,11 @@ impl CutCraftApp {
             .double_clicked()
             .then(|| response.interact_pointer_pos())
             .flatten();
-        let picked = double.and_then(|at| self.component_at_3d(fit, at));
+        // on a preview it first takes away a piece the cuts have freed
+        let removed = double.is_some_and(|at| self.remove_piece_3d(fit, at));
+        let picked = double
+            .filter(|_| !removed)
+            .and_then(|at| self.component_at_3d(fit, at));
         if let Some(id) = picked {
             if ui.input(|i| i.modifiers.shift) {
                 if !self.doc.selected_components.remove(&id) {
@@ -918,7 +922,7 @@ impl CutCraftApp {
             } else {
                 self.doc.selected_components = [id].into();
             }
-        } else if double.is_some() || (response.hovered() && fit_key) {
+        } else if (double.is_some() && !removed) || (response.hovered() && fit_key) {
             self.framing = self.framing.fitted();
         }
         if response.dragged() || on_cube.dragged() || before != (self.orbit, self.framing) {
@@ -992,6 +996,33 @@ impl CutCraftApp {
         let mesh = view3d::mesh(&surface, orbit, framing, &look, fit);
         self.fine_3d = Some((key, mesh.clone()));
         mesh
+    }
+
+    /// Takes away the piece of the previewed material under `at` in the 3D view's picture
+    /// `fit` when cuts have freed it; false when not previewing or nothing is freed there.
+    pub(super) fn remove_piece_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> bool {
+        if self.playback.is_some() || self.simulation.is_none() {
+            return false;
+        }
+        let (job, on) = (self.shown_job(), self.display.auto_wrapping);
+        let (orbit, framing) = (self.orbit, self.framing);
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return false;
+        };
+        let wrap = wrap_for(&job, on, true, &surface);
+        let Some((column, row)) = view3d::pick(&surface, orbit, framing, fit, wrap, at) else {
+            return false;
+        };
+        let p = surface.centre(column, row);
+        let removed = self
+            .simulation
+            .as_mut()
+            .is_some_and(|material| material.remove_piece(p));
+        if removed {
+            (self.simulation_coarse, self.fine_3d) = (None, None);
+            self.status.set_message("Removed a piece the cuts freed");
+        }
+        removed
     }
 
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
