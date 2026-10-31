@@ -320,7 +320,8 @@ say "not implemented yet".
     done).
   - Text on a Curve: one line of text laid along a selected curve, kept or scaled to fill
     it, with spacing, above / on / below, other side, offset, alignment, turned or upright
-    (dialog 426). The result is plain curves (Aspire keeps it editable).
+    (dialog 426). The text stays editable: selected alone, the form opens with its settings
+    and lays it out anew on the curve it keeps.
   - Fit Curves to Vectors (Edit ▸ Curve Fit Vectors): arcs, Béziers or lines within a
     tolerance, sharp corners kept past a max angle, replacing or beside the originals.
   - Array Copy (rows × columns by gap or offset; symmetry block of mirrors or half turns,

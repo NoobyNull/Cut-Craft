@@ -53,7 +53,7 @@ text	Draw Text: TrueType and single-line fonts, bold / italic, alignment, height
 text-spell	Text spell checker (add / remove words)	no	not available	create text	spell ?check	121
 text-kerning	Interactive kerning and line spacing on placed text; Break Block into Lines	no	no in-view kerning	text spacing|text creation	kerning|break block into lines	107
 text-arc	Bend a text line into an arc with handles	no	not available	text spacing	arc(ing)? (the|our) text|green handle	123
-text-on-curve	Text on a Curve (size, spacing, position, offset, alignment, editable)	partly	text-on-a-curve command; result is plain curves, not editable text	text on a curve|wrap text	text on a curve|wrap (the |our )?text	93
+text-on-curve	Text on a Curve (size, spacing, position, offset, alignment, editable)	yes	text-on-a-curve: size, spacing, position, offset, alignment; stays editable (keeps its curve and settings)	text on a curve|wrap text	text on a curve|wrap (the |our )?text	93
 text-in-box	Text in a Box: margins, vertical / horizontal stretch	partly	Text in a Box mode with margins; stretch options not done	text in a box	text in a box	125
 convert-text	Convert text to curves	yes	convert-text-to-curves command	convert text	convert(ed)? (it |the text |our text )?to curves
 trace-bitmap	Trace Bitmap: black and white with threshold, noise, corner fit	yes	trace-bitmap command	trac(e|ing)	trace bit ?map
