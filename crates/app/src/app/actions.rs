@@ -470,8 +470,11 @@ impl CutCraftApp {
                 }
             }
             "segment_3d_model_file" => {
-                // the segmenting form, on an STL picked first
-                if let Some(path) = file_dialog().add_filter("STL", &["stl"]).pick_file() {
+                // the segmenting form, on an STL or OBJ picked first
+                if let Some(path) = file_dialog()
+                    .add_filter("STL / OBJ", &["stl", "obj"])
+                    .pick_file()
+                {
                     self.start_command("segment_3d_model");
                     if let Some(form) = self.form.as_mut().filter(|f| f.id == "segment_3d_model") {
                         form.params["file"] = Value::from(path.display().to_string());
