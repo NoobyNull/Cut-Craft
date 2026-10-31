@@ -4723,3 +4723,29 @@ fn the_layers_list_arrows_move_the_active_layer_and_merge_visible_is_offered() {
         assert!(h.text_at(&name).is_none(), "{name} is left out");
     }
 }
+
+#[test]
+fn a_texture_toolpaths_texture_saves_to_a_file_and_loads_into_another_form() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-texture-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("scallops.vtexture");
+    let mut h = Harness::new();
+    assert_eq!(
+        h.app.save_texture(&path).unwrap_err(),
+        "no Texture Toolpath form is open"
+    );
+    h.app.invoke(&h.ctx, "texture_toolpath");
+    h.app.form.as_mut().unwrap().params["stepover"] = Value::from(7.5);
+    h.app.save_texture(&path).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("\r\nStepover: 7.50000 0\r\n"), "{text}");
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "texture_toolpath");
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Lid");
+    h.app.load_texture(&path).unwrap();
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["stepover"], 7.5);
+    assert_eq!(form.params["name"], "Lid", "the form keeps its own name");
+    assert!(h.app.status.message.contains("Loaded texture"));
+    std::fs::remove_dir_all(dir).unwrap();
+}

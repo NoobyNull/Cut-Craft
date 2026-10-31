@@ -101,7 +101,7 @@ vcarve-order	V-Carve: use vector start points, vector selection order	yes	V-Carv
 vcarve-inlay	V-Carve Inlay: pocket depth, glue gap, surface gap, plug sheet, boundary	yes	vcarve-inlay-toolpath command (clearance tools not done)	inlay	inlay
 photo-vcarve	PhotoVCarve: depth, raster / hatch / vectors, spacing, angle	yes	photo-vcarve-toolpath command	photo ?v ?carve	photo ?v ?carve
 fluting	Fluting: ramp types, ramp length / %, start depth	yes	fluting-toolpath command	flut	flut
-texture-toolpath	Texture toolpath: depths, lengths, overlap, variation, vectors as pattern, boundary offset, save / load settings	partly	texture-toolpath command; no Save / Load of settings	texture toolpath	texture tool ?path	101
+texture-toolpath	Texture toolpath: depths, lengths, overlap, variation, vectors as pattern, boundary offset, save / load settings	yes	Texture Toolpath: max / min depth and length, overlap and variation, stepover, angle, selected vectors as pattern, boundary offset; Load Texture... / Save Texture... keep a texture as a .vtexture file in the textures folder and read the vendor's VectorTextures files	texture toolpath	texture tool ?path	101
 prism	Prism carving	yes	prism-toolpath command	prism	prism
 moulding	Moulding toolpath: rail and section, vary stepover, clearance tool, allowance, sharp corners, boundary offset	yes	moulding-toolpath: rails and section, sharp corners, boundary offset, vary stepover, clearance tool [Clear] with allowance, machine / skip flat regions	moulding|molding	mou?lding tool ?path	98
 chamfer	Chamfer toolpath: width / depth, inside / outside, slope, V-bit or ball nose, overcut	yes	chamfer-toolpath command	chamfer	chamfer

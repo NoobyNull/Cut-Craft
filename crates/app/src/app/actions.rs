@@ -11,7 +11,7 @@ use super::{
     VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
     file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
     on_the_desktop, rest_section, selector_section, shortcut, side_panel, side_tabs, summary_table,
-    template_dialog, tool_list, tool_picker, toolpath_template_dialog, view3d,
+    template_dialog, texture_dialog, tool_list, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -2642,6 +2642,8 @@ impl CutCraftApp {
         };
         open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
         open.dirty |= listed.get();
+        // Texture Toolpath keeps its textures in files, to use again and share
+        let texture = (open.id == "texture_toolpath").then(|| texture_buttons(ui));
         let (chosen, edit_tool) = asked.into_inner();
         let edit_listed = edit_listed.into_inner();
         if let Some(error) = &open.error {
@@ -2651,6 +2653,11 @@ impl CutCraftApp {
         if !open.new_job {
             self.form_buttons(ui);
             ui.separator();
+        }
+        match texture {
+            Some((true, _)) => self.texture_file(false),
+            Some((_, true)) => self.texture_file(true),
+            _ => {}
         }
         if let Some(name) = chosen {
             self.choose_tool(&name);
@@ -2665,6 +2672,63 @@ impl CutCraftApp {
         if edit_listed.is_some() {
             self.edit_tool(ui.ctx(), edit_listed);
         }
+    }
+
+    /// Texture Toolpath's Load… or Save…: the texture as a `.vtexture` file, in the textures
+    /// folder unless taken elsewhere.
+    pub(super) fn texture_file(&mut self, save: bool) {
+        let extension = cmd_texture_toolpath::TEXTURE_EXTENSION;
+        let picked = if save {
+            texture_dialog()
+                .set_file_name(format!("texture.{extension}"))
+                .save_file()
+                .map(|path| path.with_extension(extension))
+        } else {
+            texture_dialog().pick_file()
+        };
+        let Some(path) = picked else { return };
+        let result = if save {
+            self.save_texture(&path)
+        } else {
+            self.load_texture(&path)
+        };
+        if let Err(e) = result {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Writes the open Texture Toolpath form's texture to `path`.
+    pub(super) fn save_texture(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let texture = self.texture_params()?.to_vtexture();
+        std::fs::write(path, texture)
+            .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+        self.status
+            .set_message(&format!("Saved texture {}", path.display()));
+        Ok(())
+    }
+
+    /// Reads the texture in `path` into the open Texture Toolpath form; its name, tool,
+    /// seed and boundary offset stay.
+    pub(super) fn load_texture(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        let params = self.texture_params()?.with_vtexture(&text)?;
+        let Some(form) = &mut self.form else {
+            return Err("no Texture Toolpath form is open".into());
+        };
+        form.params = serde_json::to_value(params).expect("texture settings serialise");
+        form.dirty = true;
+        self.status
+            .set_message(&format!("Loaded texture {}", path.display()));
+        Ok(())
+    }
+
+    /// The open Texture Toolpath form's settings.
+    fn texture_params(&self) -> Result<cmd_texture_toolpath::Params, String> {
+        let form = self.form.as_ref().filter(|f| f.id == "texture_toolpath");
+        let form = form.ok_or("no Texture Toolpath form is open")?;
+        serde_json::from_value(form.params.clone())
+            .map_err(|e| format!("the form's settings do not read: {e}"))
     }
 
     /// Reads the user's tool database; a broken one is reported and left untouched on disk.
@@ -2918,4 +2982,20 @@ pub(super) fn contributors() -> Vec<(&'static str, &'static str, &'static str)> 
         })
         .filter(|(login, ..)| !login.is_empty())
         .collect()
+}
+
+/// Texture Toolpath's Load… and Save…; whether each was clicked.
+fn texture_buttons(ui: &mut egui::Ui) -> (bool, bool) {
+    let mut clicked = (false, false);
+    ui.horizontal(|ui| {
+        clicked.0 = ui
+            .button("Load Texture...")
+            .on_hover_text("A texture saved before, from the textures folder or anywhere")
+            .clicked();
+        clicked.1 = ui
+            .button("Save Texture...")
+            .on_hover_text("Keep these texture settings to use again")
+            .clicked();
+    });
+    clicked
 }

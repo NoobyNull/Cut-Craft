@@ -971,22 +971,35 @@ fn summary_table(
 use cut_craft_core::file::TEMPLATE_EXTENSION as TEMPLATE;
 
 /// Job templates, starting in Cut Craft's `templates` folder.
-fn template_dialog() -> rfd::FileDialog {
-    let dialog = file_dialog().add_filter("Cut Craft job template", &[TEMPLATE]);
-    match files::config_dir().map(|d| d.join("templates")) {
+/// A file dialog opening in one of the user's settings folders (made if need be).
+fn settings_dialog(filter: &str, extension: &str, folder: &str) -> rfd::FileDialog {
+    let dialog = file_dialog().add_filter(filter, &[extension]);
+    match files::config_dir().map(|d| d.join(folder)) {
         Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
         _ => dialog,
     }
 }
 
+fn template_dialog() -> rfd::FileDialog {
+    settings_dialog("Cut Craft job template", TEMPLATE, "templates")
+}
+
+/// Texture Toolpath's textures, kept in the textures folder.
+fn texture_dialog() -> rfd::FileDialog {
+    settings_dialog(
+        "Texture settings",
+        cmd_texture_toolpath::TEXTURE_EXTENSION,
+        "textures",
+    )
+}
+
 /// Toolpath templates, in the same `templates` folder.
 fn toolpath_template_dialog() -> rfd::FileDialog {
-    let dialog =
-        file_dialog().add_filter("Toolpath template", &[files::TOOLPATH_TEMPLATE_EXTENSION]);
-    match files::config_dir().map(|d| d.join("templates")) {
-        Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
-        _ => dialog,
-    }
+    settings_dialog(
+        "Toolpath template",
+        files::TOOLPATH_TEMPLATE_EXTENSION,
+        "templates",
+    )
 }
 
 fn job_dialog() -> rfd::FileDialog {
