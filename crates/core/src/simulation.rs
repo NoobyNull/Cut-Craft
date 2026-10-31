@@ -234,14 +234,7 @@ impl Material {
     /// centre as low as it goes: what its cutting edge cannot reach stays.
     #[must_use]
     pub fn left_by(&self, tool: &Tool) -> Self {
-        let peaks = self.peaks();
-        let mut tips = vec![0.0; self.columns * self.rows];
-        by_rows(&mut tips, self.columns, |first, band| {
-            for (i, tip) in band.iter_mut().enumerate() {
-                let (column, row) = (i % self.columns, first + i / self.columns);
-                *tip = self.drop_tool_on(tool, self.centre(column, row), &peaks);
-            }
-        });
+        let tips = crate::compute::compute().drop_everywhere(self, tool);
         let floors = Tiles::of(&tips, self.columns, self.rows, f64::INFINITY, f64::min);
         let near = (tool.diameter / 2.0).min(tool.reach());
         let mut left = self.clone();
@@ -288,16 +281,11 @@ impl Material {
         self.cut_along(&toolpath.moves, &toolpath.tool);
     }
 
-    /// Removes what `tool` cuts away following `moves`, a band of rows per core: a cell ends
-    /// at the lowest any move reaches there, whichever order the moves come in.
+    /// Removes what `tool` cuts away following `moves`, on the GPU when there is one, else a
+    /// band of rows per core: a cell ends at the lowest any move reaches there, whichever
+    /// order the moves come in.
     pub fn cut_along(&mut self, moves: &[Move], tool: &Tool) {
-        let mut heights = std::mem::take(&mut self.heights);
-        by_rows(&mut heights, self.columns, |first, band| {
-            for pair in moves.windows(2) {
-                self.sweep_band(pair[0].to, pair[1].to, tool, first, band);
-            }
-        });
-        self.heights = heights;
+        crate::compute::compute().cut_along(self, tool, moves);
     }
 
     /// Lowers each cell the tool passes over from `a` to `b` to the lowest its cutting edge
@@ -309,7 +297,14 @@ impl Material {
     }
 
     /// [`Self::sweep`] over `band`, the grid's rows from `first`.
-    fn sweep_band(&self, a: DVec3, b: DVec3, tool: &Tool, first: usize, band: &mut [f64]) {
+    pub(crate) fn sweep_band(
+        &self,
+        a: DVec3,
+        b: DVec3,
+        tool: &Tool,
+        first: usize,
+        band: &mut [f64],
+    ) {
         if a.z >= 0.0 && b.z >= 0.0 {
             return;
         }

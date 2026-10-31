@@ -19,6 +19,11 @@ The project uses `wgpu::Backends::PRIMARY` which includes:
 3. For AMD systems, this typically resolves to Vulkan
 4. Proper error handling ensures compatibility across different hardware
 
+### Compute
+The toolpath preview and the 3D toolpaths run their grid kernels (the tool dropped onto the
+height grid, swept along moves, checked for gouging) as WGSL compute shaders on the same
+device when the window has one, and on the CPU otherwise (`crates/app/src/compute.wgsl`).
+
 ## Testing AMD Support
 
 To verify AMD graphics support:

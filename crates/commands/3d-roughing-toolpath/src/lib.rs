@@ -3,10 +3,11 @@
 //! over the model a pass depth at a time (3D raster).
 
 use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_model};
+use cut_craft_core::compute::compute;
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::{Path, Point};
-use cut_craft_core::simulation::{Material, by_rows};
+use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{
     Drop, Move, MoveKind, Tool, cut_points, follow, made_by, pass_depths, raster_lines,
 };
@@ -226,7 +227,6 @@ impl Command for RoughingToolpath3d {
                     ceiling,
                     // a 3D raster still cuts up to where it rides over the last pass's cut
                     over_ceiling: !z_level,
-                    peaks: &peaks,
                 };
                 level_runs(&drop, &lines, &inside, profile, &tips)
             })
@@ -346,7 +346,6 @@ fn connect(
 /// outside it.
 fn tips(grid: &Material, tool: &Tool, boundary: &[Path]) -> Vec<f64> {
     let (columns, rows) = (grid.columns, grid.rows);
-    let peaks = grid.peaks();
     // the cells inside the boundary, a row at a time (even-odd, so holes stay out)
     let rings: Vec<Vec<Point>> = boundary.iter().map(cut_points).collect();
     let mut inside = vec![false; rows * columns];
@@ -372,16 +371,20 @@ fn tips(grid: &Material, tool: &Tool, boundary: &[Path]) -> Vec<f64> {
             }
         }
     }
-    let mut tips = vec![f64::INFINITY; rows * columns];
-    by_rows(&mut tips, columns, |first, band| {
-        for (k, tip) in band.iter_mut().enumerate() {
-            let i = first * columns + k;
+    let centres: Vec<Point> = (0..rows * columns)
+        .filter(|&i| inside[i])
+        .map(|i| grid.centre(i % columns, i / columns))
+        .collect();
+    let mut dropped = compute().drop_at(grid, tool, &centres).into_iter();
+    (0..rows * columns)
+        .map(|i| {
             if inside[i] {
-                *tip = grid.drop_tool_on(tool, grid.centre(i % columns, i / columns), &peaks);
+                dropped.next().expect("a drop for each cell inside")
+            } else {
+                f64::INFINITY
             }
-        }
-    });
-    tips
+        })
+        .collect()
 }
 
 /// The separate areas cut at each level, as a label per cell of the grid: where the tool's

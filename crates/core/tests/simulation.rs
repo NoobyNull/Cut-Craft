@@ -463,11 +463,10 @@ fn cutting_in_bands_leaves_exactly_what_sweeping_move_by_move_does() {
 }
 
 #[test]
-fn dropping_along_lines_across_the_cores_matches_line_by_line() {
+fn dropping_along_lines_makes_a_run_per_line_inside_split_at_the_ceiling() {
     use cut_craft_core::toolpath::Drop;
     let model = grooved(10.0);
     let tool = shaped(ToolShape::BallNose);
-    let peaks = model.peaks();
     let drop = Drop {
         grid: &model,
         tool: &tool,
@@ -475,7 +474,6 @@ fn dropping_along_lines_across_the_cores_matches_line_by_line() {
         floor: f64::NEG_INFINITY,
         ceiling: f64::INFINITY,
         over_ceiling: false,
-        peaks: &peaks,
     };
     let inside = |p: Point| p.y < 80.0;
     let lines: Vec<Vec<Point>> = (0..40)
@@ -484,10 +482,38 @@ fn dropping_along_lines_across_the_cores_matches_line_by_line() {
             vec![Point::new(1.0, y), Point::new(99.0, y)]
         })
         .collect();
+    let within = lines.iter().filter(|l| inside(l[0])).count();
     let all = drop.along_all(&lines, &inside);
-    let one_by_one: Vec<Vec<DVec3>> = lines.iter().flat_map(|l| drop.along(l, &inside)).collect();
-    assert_ne!(all.len(), 0);
-    assert_eq!(all, one_by_one);
+    assert_eq!(all.len(), within, "a run per line inside");
+    assert!(
+        all.iter().all(|run| {
+            (run.first().unwrap().x - 1.0).abs() < 1e-9
+                && (run.last().unwrap().x - 99.0).abs() < 1e-9
+        }),
+        "each the whole line"
+    );
+    assert!(
+        all.iter().all(|run| run.iter().any(|p| p.z < -1.0)),
+        "each dips into the groove"
+    );
+    // a Z level's flat cut, split where the model stands above it, keeping the point over
+    let level = Drop {
+        floor: -1.5,
+        ceiling: -1.5,
+        over_ceiling: true,
+        ..drop
+    };
+    let all = level.along_all(&lines, &inside);
+    assert_eq!(all.len(), within, "a run per line inside, in the groove");
+    assert!(
+        all.iter().all(|run| run.len() >= 3
+            && run.first().unwrap().z > -1.5
+            && run.last().unwrap().z > -1.5
+            && run[1..run.len() - 1]
+                .iter()
+                .all(|p| (p.z + 1.5).abs() < 1e-9)),
+        "level in the groove between the points over the ceiling at its ends"
+    );
 }
 
 #[test]

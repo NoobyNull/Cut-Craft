@@ -228,7 +228,6 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
         floor: f64::NEG_INFINITY,
         ceiling: f64::INFINITY,
         over_ceiling: false,
-        peaks: &peaks,
     };
     let runs = drop.along_all(&lines, &inside);
     // stay down from one line or ring to the next one beside it

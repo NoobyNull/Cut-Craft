@@ -6,6 +6,7 @@ mod change;
 pub mod checks;
 mod command;
 pub mod component;
+pub mod compute;
 pub mod document;
 pub mod entry;
 pub mod file;

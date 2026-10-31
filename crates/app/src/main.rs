@@ -6,6 +6,7 @@
 mod app;
 mod clipart;
 mod commands;
+mod compute;
 mod display;
 mod files;
 mod form;
