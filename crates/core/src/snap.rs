@@ -141,19 +141,19 @@ impl SnapOptions {
             if !doc.shown(*id) {
                 continue;
             }
-            let mut a = path.start;
-            for s in &path.segments {
-                let b = s.end();
-                match *s {
+            let mut start = path.start;
+            for span in &path.segments {
+                let end = span.end();
+                match *span {
                     Segment::Line { .. } => {
-                        let d = b - a;
-                        let t = (from - a).dot(d) / d.length_squared();
+                        let d = end - start;
+                        let t = (from - start).dot(d) / d.length_squared();
                         if (0.0..=1.0).contains(&t) {
-                            out.push(a + d * t);
+                            out.push(start + d * t);
                         }
                     }
                     Segment::Arc { center, ccw, .. } => {
-                        let (r, v) = ((a - center).length(), from - center);
+                        let (r, v) = ((start - center).length(), from - center);
                         let dist = v.length();
                         if dist > 1e-9 {
                             let u = v / dist;
@@ -164,7 +164,7 @@ impl SnapOptions {
                                     on.push(center + u.rotate(glam::DVec2::from_angle(t)) * r);
                                 }
                             }
-                            let (a0, a1) = (angle(a - center), angle(b - center));
+                            let (a0, a1) = (angle(start - center), angle(end - center));
                             out.extend(
                                 on.into_iter()
                                     .filter(|q| in_sweep(a0, a1, ccw, angle(*q - center))),
@@ -173,7 +173,7 @@ impl SnapOptions {
                     }
                     Segment::Cubic { .. } => {}
                 }
-                a = b;
+                start = end;
             }
         }
         out
