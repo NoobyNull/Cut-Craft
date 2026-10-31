@@ -821,3 +821,7 @@ instead of half-cell steps.
 ### Toolpath Summary's Machine Acceleration [obs: help Estimating Machining Times; course WjTQ9RIvaKI]
 - The estimate is each move at its feed, rapids at the Rapid Rate, times the Scale Factor. The Machine Acceleration option picks a machine and its X / Y / Z / A accelerations (kept in Machine Configuration), and the time then accounts for accelerating and decelerating at corners.
 - **[inf]** Cut Craft: a Machine acceleration tick, live while a machine with accelerations is active: the machine stops at each corner (a turn of more than 5° or a change of move kind runs through at the slower feed), and each move speeds up and slows down along what the slowest axis it uses allows (a short move peaks below the feed). No A axis.
+
+### Vector Validator's V-Carving Mode [obs: help Vector Validator]
+- Checked, the validator checks as V-carving needs: it ignores intersections within text, which may come from the font (solder the text and validate the result if its intersections matter).
+- **[inf]** Cut Craft: crossings and overlaps between (or within) the letters of one text are let be; open vectors are found too, since V-carving needs closed ones.
