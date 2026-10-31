@@ -220,6 +220,39 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
     Ok(c.finish())
 }
 
+/// A toolpath form's settings, saved to load back into the same form later.
+pub const FORM_SETTINGS_EXTENSION: &str = "ccsettings";
+
+/// The settings `params` of the form `id` as a settings file.
+pub fn form_settings(id: &str, params: &serde_json::Value) -> Vec<u8> {
+    serde_json::to_vec_pretty(&serde_json::json!({ "form": id, "settings": params }))
+        .expect("settings serialise")
+}
+
+/// A settings file's values put into the form `id`'s `params`: only the settings the form
+/// has, so a file from an older version still loads.
+pub fn load_form_settings(
+    id: &str,
+    params: &mut serde_json::Value,
+    bytes: &[u8],
+) -> Result<(), String> {
+    let file: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| format!("not a settings file: {e}"))?;
+    let form = file["form"].as_str().unwrap_or_default();
+    if form != id {
+        return Err(format!("these settings are for {form}, not {id}"));
+    }
+    let (Some(saved), Some(params)) = (file["settings"].as_object(), params.as_object_mut()) else {
+        return Err("the file holds no settings".into());
+    };
+    for (key, value) in saved {
+        if let Some(v) = params.get_mut(key) {
+            v.clone_from(value);
+        }
+    }
+    Ok(())
+}
+
 /// Puts `path` first in `recent`, once, keeping the latest `keep` (Options; [`RECENT_COUNT`]
 /// by default).
 pub fn remember(recent: &mut Vec<PathBuf>, path: &Path, keep: usize) {
@@ -282,6 +315,19 @@ mod increment_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn form_settings_load_back_into_the_same_form_only() {
+        let saved = serde_json::json!({ "max_cut_depth": 2.5, "gone": 1 });
+        let bytes = super::form_settings("texture_toolpath", &saved);
+        let mut params = serde_json::json!({ "max_cut_depth": 1.5, "seed": 3 });
+        super::load_form_settings("texture_toolpath", &mut params, &bytes).unwrap();
+        assert_eq!(
+            params,
+            serde_json::json!({ "max_cut_depth": 2.5, "seed": 3 })
+        );
+        assert!(super::load_form_settings("profile_toolpath", &mut params, &bytes).is_err());
+    }
+
     #[test]
     fn toolpath_templates_keep_settings_and_drop_moves() {
         let mut doc = cut_craft_core::testing::with_toolpath();

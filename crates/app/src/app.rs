@@ -796,6 +796,15 @@ fn toolpath_template_dialog() -> rfd::FileDialog {
     }
 }
 
+/// A toolpath form's saved settings, in the same `templates` folder.
+fn form_settings_dialog() -> rfd::FileDialog {
+    let dialog = file_dialog().add_filter("Toolpath settings", &[files::FORM_SETTINGS_EXTENSION]);
+    match files::config_dir().map(|d| d.join("templates")) {
+        Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
+        _ => dialog,
+    }
+}
+
 fn job_dialog() -> rfd::FileDialog {
     file_dialog().add_filter("Cut Craft job", &[JOB_EXTENSION, OLD_JOB_EXTENSION])
 }
