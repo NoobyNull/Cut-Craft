@@ -248,6 +248,7 @@ impl CutCraftApp {
         self.tool_database_window(ctx);
         self.machine_windows(ctx);
         self.info_window(ctx);
+        self.save_toolpaths_window(ctx);
         self.snap_options_window(ctx);
         self.options_window(ctx);
         self.tool_search(ctx);
@@ -1308,6 +1309,107 @@ impl CutCraftApp {
             self.options = options;
             self.save_options();
         }
+    }
+
+    /// Save Toolpaths: the machine and post, which toolpaths go in which file, and Save.
+    pub(super) fn save_toolpaths_window(&mut self, ctx: &egui::Context) {
+        use crate::files::SaveMode;
+        let Some(mut form) = self.save_form.clone() else {
+            return;
+        };
+        let mut open = true;
+        let mut save = false;
+        let mut machine_changed = None;
+        let choices = self.post_choices();
+        let default = self.output_post().map(|p| p.name);
+        let plan = files::save_plan(&self.doc, form.mode, self.selected_toolpath, form.group);
+        let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
+        cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
+            ui.strong("Machine and post-processor");
+            if !self.machines.machines.is_empty() {
+                let active = self.machines.active;
+                let shown = self.machines.active().map_or("", |m| m.name.as_str());
+                egui::ComboBox::from_label("Machine")
+                    .selected_text(shown)
+                    .show_ui(ui, |ui| {
+                        for (n, m) in self.machines.machines.iter().enumerate() {
+                            if ui.selectable_label(n == active, &m.name).clicked() && n != active {
+                                machine_changed = Some(n);
+                            }
+                        }
+                    });
+            }
+            let shown = form
+                .post
+                .clone()
+                .unwrap_or_else(|| default.clone().unwrap_or_else(|e| e));
+            egui::ComboBox::from_label("Post-processor")
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    if let Ok(name) = &default
+                        && ui
+                            .selectable_label(form.post.is_none(), format!("{name} (default)"))
+                            .clicked()
+                    {
+                        form.post = None;
+                    }
+                    for name in &choices {
+                        let picked = form.post.as_deref() == Some(name.as_str());
+                        if ui.selectable_label(picked, name).clicked() {
+                            form.post = Some(name.clone());
+                        }
+                    }
+                });
+            ui.separator();
+            ui.strong("Toolpaths to save");
+            for (mode, label) in [
+                (SaveMode::Selected, "Selected toolpath"),
+                (SaveMode::VisibleToOneFile, "Visible toolpaths to one file"),
+                (
+                    SaveMode::VisibleToMultipleFiles,
+                    "Visible toolpaths to multiple files",
+                ),
+            ] {
+                ui.radio_value(&mut form.mode, mode, label);
+            }
+            ui.add_enabled(
+                form.mode == SaveMode::VisibleToMultipleFiles,
+                egui::Checkbox::new(&mut form.group, "Group where possible"),
+            )
+            .on_hover_text("Toolpaths in a row that use the same tool go in one file");
+            if self.doc.job.double_sided.is_some() {
+                ui.checkbox(&mut form.add_side, "Add side to toolpath name");
+            }
+            ui.separator();
+            match &plan {
+                Ok(plan) => {
+                    for (n, ids) in plan.iter().enumerate() {
+                        let names: Vec<String> = ids
+                            .iter()
+                            .filter_map(|id| self.doc.toolpaths.get(id))
+                            .map(|t| format!("{} ({})", t.name, t.tool.name))
+                            .collect();
+                        ui.label(format!("File {}: {}", n + 1, names.join(", ")));
+                    }
+                }
+                Err(e) => {
+                    ui.colored_label(ui.visuals().warn_fg_color, e);
+                }
+            }
+            ui.add_space(ui.spacing().item_spacing.y);
+            save = ui
+                .add_enabled(plan.is_ok(), egui::Button::new("Save Toolpaths..."))
+                .clicked();
+        });
+        if let Some(n) = machine_changed {
+            self.machines.active = n;
+            form.post = None;
+            self.machines_changed("Machine changed");
+        }
+        if save {
+            self.save_toolpaths(&form);
+        }
+        self.save_form = open.then_some(form);
     }
 
     /// Snapping Options: what drawing and node drags snap to.

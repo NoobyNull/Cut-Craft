@@ -136,8 +136,12 @@ say "not implemented yet".
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
   `x-hide-when`). Rotary Z Zero is still labelled Material Surface / Machine Bed, and Flip
   design is not done.
-- Save Toolpaths: through the installed post, else Cut Craft's own FluidNC posts (tool
-  changer; rotary jobs wrapped onto A in inverse time).
+- Save Toolpaths (a form, as Aspire's): the machine and its posts suiting the job (the
+  machine's default first, else Cut Craft's own FluidNC posts: tool changer, rotary jobs
+  wrapped onto A in inverse time); the selected toolpath, the shown ones to one file, or each
+  shown one to a file of its own (`name_N_Toolpath`), Group Where Possible putting toolpaths
+  in a row with one tool together; Add Side to Toolpath Name on double-sided jobs. A file
+  mixing tools needs a post with a TOOLCHANGE block, else it is refused.
 - Toolpaths menu: Show Toolpaths Tab, Recalculate All, Toolpath Drawing (2D previews, solid
   previews, auto-open 3D view, rapid / plunge / retract / join moves; a join is a feed move above the material [inf]), Preview Simulation Quality,
   Merge Visible Toolpaths, Tool Database.

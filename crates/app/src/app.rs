@@ -228,6 +228,20 @@ enum Info {
     Help(&'static str),
 }
 
+/// Save Toolpaths' choices (Aspire's Save Toolpaths form), while its window is open.
+#[derive(Clone, Debug)]
+pub(super) struct SaveForm {
+    /// Which toolpaths go in which file.
+    mode: files::SaveMode,
+    /// Visible to multiple files: toolpaths in a row using one tool share a file.
+    group: bool,
+    /// The post, by name in the library; `None` is the machine's default (Cut Craft's own
+    /// without a machine).
+    post: Option<String>,
+    /// Double-sided jobs: Top or Bottom on the end of each file name.
+    add_side: bool,
+}
+
 /// Toolpath Summary's rapid rate (mm/min) and scale factor until the user changes them.
 // ponytail: session-only like the other display settings [inf]; Aspire keeps them per machine
 const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
@@ -582,6 +596,8 @@ struct CutCraftApp {
     summary: (f64, f64),
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
+    /// Save Toolpaths' form, while it is open.
+    save_form: Option<SaveForm>,
     /// Snapping Options (F4) and whether their window is open.
     snap: cut_craft_core::snap::SnapOptions,
     snap_window: bool,

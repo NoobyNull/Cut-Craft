@@ -1,7 +1,7 @@
 //! Job files, imports and exports: the app's only file I/O. Every operation takes a path, so
 //! tests run them without dialogs.
 
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::file::{load_job, save_job, write_atomic};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_core::{Change, History, Registry};
@@ -103,6 +103,110 @@ pub fn save_through(
     let text = post.render(doc, &file)?;
     write_atomic(path, text.as_bytes())
         .map_err(|e| format!("could not write {}: {e}", path.display()))
+}
+
+/// How Save Toolpaths splits the toolpaths into files (Aspire's Save Toolpaths form).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SaveMode {
+    /// The toolpath picked in the list, alone.
+    Selected,
+    /// Every shown toolpath in one file.
+    #[default]
+    VisibleToOneFile,
+    /// Each shown toolpath in a file of its own.
+    VisibleToMultipleFiles,
+}
+
+/// The toolpaths each file holds, in list order: the selected toolpath; every shown one; or
+/// each shown one alone, where `group` puts toolpaths in a row that use the same tool in one
+/// file (Aspire's Group Where Possible).
+pub fn save_plan(
+    doc: &Document,
+    mode: SaveMode,
+    selected: Option<EntityId>,
+    group: bool,
+) -> Result<Vec<Vec<EntityId>>, String> {
+    let visible: Vec<EntityId> = doc
+        .toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible)
+        .map(|(&id, _)| id)
+        .collect();
+    let plan = match mode {
+        SaveMode::Selected => match selected.filter(|id| doc.toolpaths.contains_key(id)) {
+            Some(id) => vec![vec![id]],
+            None => return Err("pick the toolpath to save in the toolpath list".into()),
+        },
+        SaveMode::VisibleToOneFile => vec![visible],
+        SaveMode::VisibleToMultipleFiles => {
+            let tool = |id: &EntityId| &doc.toolpaths[id].tool.name;
+            let mut files: Vec<Vec<EntityId>> = vec![];
+            for id in visible {
+                match files.last_mut() {
+                    Some(file) if group && tool(&file[0]) == tool(&id) => file.push(id),
+                    _ => files.push(vec![id]),
+                }
+            }
+            files
+        }
+    };
+    if plan.iter().all(Vec::is_empty) {
+        return Err("no toolpaths are shown: tick the ones to save".into());
+    }
+    Ok(plan)
+}
+
+/// Each file of `plan` as the path it is saved at and the job with only its toolpaths.
+/// One file keeps `path`; several get the number and first toolpath's name after the stem.
+/// `side` (Top or Bottom) goes on the end of each name. A file whose toolpaths use more than
+/// one tool needs a post that changes tools.
+pub fn save_files(
+    post: &Post,
+    doc: &Document,
+    plan: &[Vec<EntityId>],
+    path: &Path,
+    side: Option<&str>,
+) -> Result<Vec<(PathBuf, Document)>, String> {
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let extension = path.extension().unwrap_or_default().to_string_lossy();
+    plan.iter()
+        .enumerate()
+        .map(|(n, ids)| {
+            let tools: std::collections::BTreeSet<&str> = ids
+                .iter()
+                .map(|id| doc.toolpaths[id].tool.name.as_str())
+                .collect();
+            if tools.len() > 1 && !post.changes_tools() {
+                return Err(format!(
+                    "the toolpaths use different tools ({}) and {} does not change tools: \
+                     save them to multiple files or pick a post with tool changes",
+                    tools.into_iter().collect::<Vec<_>>().join(", "),
+                    post.name
+                ));
+            }
+            let mut name = stem.to_string();
+            if plan.len() > 1 {
+                let first = &doc.toolpaths[&ids[0]].name;
+                let first: String = first
+                    .chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '-' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect();
+                name = format!("{name}_{}_{first}", n + 1);
+            }
+            if let Some(side) = side {
+                name = format!("{name}_{side}");
+            }
+            let mut part = doc.clone();
+            part.toolpaths.retain(|id, _| ids.contains(id));
+            Ok((path.with_file_name(format!("{name}.{extension}")), part))
+        })
+        .collect()
 }
 
 pub use cut_craft_core::file::config_dir;
@@ -302,6 +406,93 @@ mod tests {
         assert_eq!(loaded.name, "Profile");
         assert_eq!(loaded.moves, vec![]);
         assert!(super::load_toolpath_template(&doc, b"[]").is_err());
+    }
+
+    /// Four shown toolpaths (End Mill, End Mill, V-Bit, End Mill) and a hidden one.
+    fn four_toolpaths() -> (Document, Vec<EntityId>) {
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        let ids = [
+            ("Pocket", "End Mill"),
+            ("Drill", "End Mill"),
+            ("Text", "V-Bit"),
+            ("Cut Out", "End Mill"),
+            ("Hidden", "V-Bit"),
+        ]
+        .map(|(name, tool)| {
+            c.add_toolpath(cut_craft_core::toolpath::Toolpath {
+                name: name.into(),
+                strategy: "profile_toolpath".into(),
+                params: serde_json::json!({}),
+                tool: cut_craft_core::toolpath::Tool {
+                    name: tool.into(),
+                    ..Default::default()
+                },
+                vectors: vec![],
+                moves: vec![],
+                visible: name != "Hidden",
+                power: vec![],
+                stale: false,
+            })
+        });
+        doc.apply(&c.finish()).unwrap();
+        (doc, ids.to_vec())
+    }
+
+    #[test]
+    fn save_plans_take_the_selected_or_shown_toolpaths_in_list_order() {
+        let (doc, ids) = four_toolpaths();
+        let plan = |mode, group| save_plan(&doc, mode, Some(ids[2]), group).unwrap();
+        assert_eq!(plan(SaveMode::Selected, false), vec![vec![ids[2]]]);
+        assert_eq!(
+            plan(SaveMode::VisibleToOneFile, false),
+            vec![ids[..4].to_vec()]
+        );
+        assert_eq!(
+            plan(SaveMode::VisibleToMultipleFiles, false),
+            ids[..4].iter().map(|&id| vec![id]).collect::<Vec<_>>()
+        );
+        // runs of one tool share a file; the order is kept, so the last end mill is alone
+        assert_eq!(
+            plan(SaveMode::VisibleToMultipleFiles, true),
+            vec![vec![ids[0], ids[1]], vec![ids[2]], vec![ids[3]]]
+        );
+        assert!(save_plan(&doc, SaveMode::Selected, None, false).is_err());
+        let mut hidden = doc.clone();
+        hidden
+            .toolpaths
+            .values_mut()
+            .for_each(|t| t.visible = false);
+        assert!(save_plan(&hidden, SaveMode::VisibleToOneFile, None, false).is_err());
+    }
+
+    #[test]
+    fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tools() {
+        let (doc, ids) = four_toolpaths();
+        let job = cut_craft_core::document::Job::default();
+        let changer = Post::default_for(&job);
+        let path = Path::new("/out/widget.nc");
+        let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
+        let files = save_files(&changer, &doc, &plan, path, Some("Top")).unwrap();
+        let names: Vec<_> = files.iter().map(|(p, _)| p.to_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            ["/out/widget_1_Pocket_Top.nc", "/out/widget_2_Text_Top.nc"]
+        );
+        assert_eq!(files[0].1.toolpaths.len(), 2);
+        assert!(files[1].1.toolpaths.contains_key(&ids[2]));
+        let one = save_files(&changer, &doc, &[ids[..3].to_vec()], path, None).unwrap();
+        assert_eq!(one[0].0, path);
+        // a post without tool changes refuses a file mixing end mill and V-bit
+        let no_changes = Post::parse(
+            "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
+             begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\
+             begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
+        )
+        .unwrap();
+        let why = save_files(&no_changes, &doc, &[ids[..3].to_vec()], path, None).unwrap_err();
+        assert!(why.contains("different tools"), "{why}");
+        assert!(save_files(&no_changes, &doc, &[ids[..2].to_vec()], path, None).is_ok());
     }
 
     use super::*;

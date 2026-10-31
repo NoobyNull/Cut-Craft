@@ -366,6 +366,12 @@ impl Post {
         post
     }
 
+    /// It can change tools within one file: it has a `TOOLCHANGE` block with something in
+    /// it. Toolpaths using different tools need one, or files of their own.
+    pub fn changes_tools(&self) -> bool {
+        self.blocks.get("TOOLCHANGE").is_some_and(|b| !b.is_empty())
+    }
+
     /// The axis it wraps onto the rotary one (`X` or `Y`); `None` for a flat post.
     pub fn wraps(&self) -> Option<&str> {
         self.wrap.as_ref().map(|(axis, _)| *axis)
@@ -1412,6 +1418,15 @@ begin FOOTER
         );
         assert!(g.contains("M6 T1") && g.contains("M6 T2"), "{g}");
         assert!(g.contains("F1000.0") && !g.contains("G93"), "{g}");
+    }
+
+    #[test]
+    fn a_post_changes_tools_only_with_a_toolchange_block() {
+        assert!(Post::parse(BASIC).unwrap().changes_tools());
+        let without = BASIC.replace("begin TOOLCHANGE", "begin UNUSED_BLOCK");
+        assert!(!Post::parse(&without).unwrap().changes_tools());
+        let job = cut_craft_core::document::Job::default();
+        assert!(Post::default_for(&job).changes_tools());
     }
 
     #[test]

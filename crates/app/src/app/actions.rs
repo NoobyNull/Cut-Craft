@@ -7,7 +7,7 @@ use super::{
     JOB_EXTENSION, Key, KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout,
     MODEL_IMPORTERS, Menus, Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point,
     RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS,
-    SUMMARY_DEFAULTS, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS,
+    SUMMARY_DEFAULTS, SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS,
     TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW,
     commands, dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
     message_dialog, on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table,
@@ -66,6 +66,7 @@ impl CutCraftApp {
             stroke: Vec::new(),
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
+            save_form: None,
             display: crate::display::Display::default(),
             simulation: None,
             simulation_coarse: None,
@@ -590,58 +591,119 @@ impl CutCraftApp {
                 }
             }
             "save_toolpaths" => {
-                let post = match self.output_post() {
-                    Ok(post) => post,
-                    Err(e) => return self.status.set_message(&e),
-                };
-                let problems: Vec<String> = self
-                    .doc
-                    .toolpaths
-                    .values()
-                    .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
-                    .collect();
-                let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
-                if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
-                    return self.status.set_message("Toolpaths not saved");
-                }
-                let thinned = self.options.toolpaths.thinned(&self.doc);
-                let extension = post.extension.clone();
-                let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
-                if let Some(path) = dialog.save_file() {
-                    let path = path.with_extension(&extension);
-                    let job = self.session.path.as_deref();
-                    let result = match self.doc.tiling {
-                        // one file per tile, each tile moved to the job's corner
-                        Some(tiling) => {
-                            let tiles = tiling.tiles(self.doc.job.area());
-                            tiles.iter().enumerate().try_for_each(|(n, &tile)| {
-                                let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-                                let named = path
-                                    .with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
-                                files::save_through(
-                                    &post,
-                                    &self.slots(),
-                                    &tiling.tiled(&thinned, tile),
-                                    &named,
-                                    job,
-                                )
-                            })
-                        }
-                        None => files::save_through(&post, &self.slots(), &thinned, &path, job),
-                    };
-                    let told = if problems.is_empty() || ask {
-                        String::new()
-                    } else {
-                        format!(" (check before cutting: {})", problems.join("; "))
-                    };
-                    self.status.set_message(&result.map_or_else(
-                        |e| e,
-                        |()| format!("Saved toolpaths to {}{told}", path.display()),
-                    ));
-                }
+                self.save_form = Some(SaveForm {
+                    mode: files::SaveMode::VisibleToOneFile,
+                    group: false,
+                    post: None,
+                    add_side: self.doc.job.double_sided.is_some(),
+                });
             }
             _ => unreachable!("not a toolpath action: {id}"),
         }
+    }
+
+    /// The posts of the active machine that suit this job (flat, or wrapping its side), for
+    /// Save Toolpaths to choose from; none without a machine (Cut Craft's own is used).
+    pub(super) fn post_choices(&self) -> Vec<String> {
+        let wraps = self.doc.job.rotary.map(|r| match r.along {
+            cut_craft_core::document::Along::X => "Y",
+            cut_craft_core::document::Along::Y => "X",
+        });
+        self.machines.active().map_or_else(Vec::new, |machine| {
+            machine
+                .posts
+                .iter()
+                .filter(|name| {
+                    self.posts
+                        .load(name)
+                        .is_ok_and(|p| p.wraps() == wraps && (wraps.is_none() || machine.rotary))
+                })
+                .cloned()
+                .collect()
+        })
+    }
+
+    /// Save Toolpaths' Save: the checks before cutting, a file name, then each file of the
+    /// form's plan through its post (and each tile, when the job is tiled).
+    pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
+        let post = match form.post.as_deref() {
+            Some(name) => self.posts.load(name),
+            None => self.output_post(),
+        };
+        let post = match post {
+            Ok(post) => post,
+            Err(e) => return self.status.set_message(&e),
+        };
+        let plan = match files::save_plan(&self.doc, form.mode, self.selected_toolpath, form.group)
+        {
+            Ok(plan) => plan,
+            Err(e) => return self.status.set_message(&e),
+        };
+        let saving: Vec<EntityId> = plan.iter().flatten().copied().collect();
+        let problems: Vec<String> = saving
+            .iter()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
+            .collect();
+        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
+            return self.status.set_message("Toolpaths not saved");
+        }
+        let extension = post.extension.clone();
+        let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
+        let Some(path) = dialog.save_file() else {
+            return;
+        };
+        let told = if problems.is_empty() || ask {
+            String::new()
+        } else {
+            format!(" (check before cutting: {})", problems.join("; "))
+        };
+        let result = self.save_toolpaths_to(form, &post, &path.with_extension(&extension));
+        self.status
+            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+    }
+
+    /// Saves the form's plan through `post` at `path`: each file, or each tile of each file
+    /// when the job is tiled, and says what was saved.
+    pub(super) fn save_toolpaths_to(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<String, String> {
+        let plan = files::save_plan(&self.doc, form.mode, self.selected_toolpath, form.group)?;
+        let thinned = self.options.toolpaths.thinned(&self.doc);
+        let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
+            if self.doc.bottom_side {
+                "Bottom"
+            } else {
+                "Top"
+            },
+        );
+        let job = self.session.path.as_deref();
+        let slots = self.slots();
+        let parts = files::save_files(post, &thinned, &plan, path, side)?;
+        for (path, part) in &parts {
+            match self.doc.tiling {
+                // one file per tile, each tile moved to the job's corner
+                Some(tiling) => {
+                    let tiles = tiling.tiles(self.doc.job.area());
+                    for (n, &tile) in tiles.iter().enumerate() {
+                        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+                        let extension = path.extension().unwrap_or_default().to_string_lossy();
+                        let named =
+                            path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
+                        files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
+                    }
+                }
+                None => files::save_through(post, &slots, part, path, job)?,
+            }
+        }
+        Ok(match parts.len() {
+            1 => format!("Saved toolpaths to {}", parts[0].0.display()),
+            n => format!("Saved {n} toolpath files beside {}", path.display()),
+        })
     }
 
     /// The post toolpaths are saved through: the active machine's default when it suits the

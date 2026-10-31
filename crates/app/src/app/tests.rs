@@ -2707,7 +2707,7 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 28] = [
+    const ASKS: [&str; 27] = [
         "add_clipart_folder",
         "segment_3d_model_file",
         "new",
@@ -2730,7 +2730,6 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "install_offline_package",
         // opens the browser
         "search_for_machine_online",
-        "save_toolpaths",
         "exit",
         "recent_files",
         "import_vectors",
@@ -3733,4 +3732,59 @@ fn a_side_panel_never_takes_more_than_its_share_of_the_window() {
         "{width} of {}",
         window.width()
     );
+}
+
+#[test]
+fn save_toolpaths_opens_its_form_and_saves_each_shown_toolpath_to_a_file_of_its_own() {
+    use crate::files::SaveMode;
+    let mut h = Harness::new();
+    for (x, name) in [(10.0, "First"), (80.0, "Second")] {
+        h.rectangle(x, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        h.frame(vec![]);
+        let mut params = h.app.form.as_ref().unwrap().params.clone();
+        params["name"] = name.into();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+    }
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.save_form.is_some());
+    assert!(h.text_at("Visible toolpaths to multiple files").is_some());
+    assert!(h.text_at("Save Toolpaths...").is_some());
+    let dir = std::env::temp_dir().join(format!("cut-craft-save-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let form = SaveForm {
+        mode: SaveMode::VisibleToMultipleFiles,
+        group: false,
+        post: None,
+        add_side: false,
+    };
+    let post = h.app.output_post().unwrap();
+    let done = h
+        .app
+        .save_toolpaths_to(&form, &post, &dir.join("job.nc"))
+        .unwrap();
+    assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
+    for name in ["job_1_First.nc", "job_2_Second.nc"] {
+        let gcode = std::fs::read_to_string(dir.join(name)).unwrap();
+        assert!(gcode.contains(&name[6..name.len() - 3]), "{gcode}");
+    }
+    // hidden toolpaths stay out of a one-file save
+    let first = *h.app.doc.toolpaths.keys().next().unwrap();
+    h.app.doc.toolpaths.get_mut(&first).unwrap().visible = false;
+    let one = SaveForm {
+        mode: SaveMode::VisibleToOneFile,
+        ..form
+    };
+    h.app
+        .save_toolpaths_to(&one, &post, &dir.join("one.nc"))
+        .unwrap();
+    let gcode = std::fs::read_to_string(dir.join("one.nc")).unwrap();
+    assert!(
+        gcode.contains("Second") && !gcode.contains("First"),
+        "{gcode}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }
