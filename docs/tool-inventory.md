@@ -328,8 +328,11 @@ say "not implemented yet".
   - Nest Parts (Edit ▸ Nest Selected Objects too): parts (grouped or overlapping vectors)
     packed by their boxes in rows from a chosen corner, along X or Y, a tool diameter plus
     clearance apart and a border in, quarter-turned where that fits better, moved or
-    copied. True-shape nesting, step angles, mirroring, parts inside parts, copies per
-    part, fillers and bounds layers are not done.
+    copied. True Shape nests each part where its own shape (grown by half the gap) first
+    fits on a grid of the job, inside the boxes of parts already placed first so smaller
+    parts fill holes, turned in the Rotation Step (or quarter turns), with Copies of Each
+    Part. Mirroring, the sheets list, boundary layers, two-sided nesting and filler parts
+    are not done.
   - Copy Along Vectors (the first object picked is copied along the other vectors; by count
     or distance with force even spacing; align, reverse, copies on a new layer).
   - Close / Extend Vector (a closing line, a smooth curve, both ends moved to a common
