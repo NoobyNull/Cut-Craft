@@ -1480,6 +1480,9 @@ begin FOOTER
         .unwrap();
         let g = dwelling.render(&doc, &file).unwrap();
         assert!(g.contains("G4 P0.5"), "{g}");
+        // Cut Craft's own posts dwell
+        let own = Post::default_for(&doc.job).render(&doc, &file).unwrap();
+        assert!(own.contains("G4 P0.5"), "{own}");
     }
 
     #[test]
