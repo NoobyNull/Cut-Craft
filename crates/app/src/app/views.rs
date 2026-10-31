@@ -929,7 +929,13 @@ impl CutCraftApp {
         let gesture = self.snapped(ui, gesture, canvas.transform.scale);
         self.track_stroke(gesture);
         let placing_tabs = self.placing_tabs();
+        let filleting = self.filleting();
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
+            // Create Fillets: the fillet the corner under the pointer would get, or the
+            // fillet a click there would take out
+            (None | Some(Gesture::Click { .. }), None, None) if filleting => {
+                self.fillet_overlay(canvas.cursor(), reach)
+            }
             (None | Some(Gesture::Click { .. }), None, None) if placing_tabs => {
                 self.tab_overlay(reach)
             }
@@ -1000,6 +1006,9 @@ impl CutCraftApp {
             (gesture, None, Some(id)) => self.drawing_gesture(id, gesture, reach),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.plain_drop(drag, shift, reach, placing_tabs);
+            }
+            (Some(Gesture::Click { at, .. }), None, None) if filleting => {
+                self.fillet_click(at, reach);
             }
             (Some(Gesture::Click { at, .. }), None, None) if placing_tabs => {
                 self.place_tab(at, reach);
@@ -1448,6 +1457,46 @@ impl CutCraftApp {
         }
         if let Some(form) = self.form.as_mut() {
             form.params["tab_points"] = serde_json::json!(points);
+        }
+    }
+
+    /// Whether Create Fillets is open: a click on a sharp corner fillets it, a click on a
+    /// fillet takes it out.
+    pub(super) fn filleting(&self) -> bool {
+        self.form.as_ref().is_some_and(|f| f.id == "create_fillets")
+    }
+
+    /// Create Fillets' settings aimed at `at`, within `reach` of it.
+    fn fillet_params(&self, at: Point, reach: f64) -> Option<cmd_create_fillets::Params> {
+        let form = self.form.as_ref().filter(|f| f.id == "create_fillets")?;
+        let mut params: cmd_create_fillets::Params =
+            serde_json::from_value(form.params.clone()).ok()?;
+        params.at = Some(at);
+        params.within = reach;
+        Some(params)
+    }
+
+    /// The vector as a click at `at` would leave it: its corner filleted, or its fillet gone.
+    fn fillet_overlay(&self, at: Option<Point>, reach: f64) -> Overlay {
+        let Some(at) = at else { return Overlay::None };
+        let Some(params) = self.fillet_params(at, reach) else {
+            return Overlay::None;
+        };
+        match cmd_create_fillets::at_click(&self.doc, &params, at) {
+            Ok((_, path, _)) => Overlay::Preview(vec![path]),
+            Err(_) => Overlay::None,
+        }
+    }
+
+    /// A click with Create Fillets open: the corner there filleted, or the fillet there
+    /// taken out.
+    pub(super) fn fillet_click(&mut self, at: Point, reach: f64) {
+        let Some(params) = self.fillet_params(at, reach) else {
+            return;
+        };
+        let params = serde_json::to_value(params).expect("fillet settings serialise");
+        if let Err(e) = self.apply("create_fillets", &params) {
+            self.status.set_message(&e);
         }
     }
 

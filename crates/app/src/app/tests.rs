@@ -4807,3 +4807,29 @@ fn toolpath_groups_are_listed_picked_previewed_saved_as_one_and_joined_by_new_to
     assert_eq!(h.app.doc.toolpath_groups, Vec::<String>::new());
     assert!(h.app.doc.toolpaths.values().all(|t| t.group.is_none()));
 }
+
+#[test]
+fn with_create_fillets_open_a_click_rounds_a_corner_and_a_click_on_the_fillet_takes_it_out() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 30.0);
+    h.app.invoke(&h.ctx, "create_fillets");
+    assert!(h.app.filleting());
+    h.frame(vec![]);
+    let shape = |h: &Harness| {
+        let path = h.app.doc.vectors.values().next().unwrap();
+        let arcs = path
+            .segments
+            .iter()
+            .filter(|s| matches!(s, cut_craft_core::geometry::Segment::Arc { .. }))
+            .count();
+        (path.segments.len(), arcs)
+    };
+    h.click(h.at(10.0, 10.0), Modifiers::NONE);
+    assert_eq!(shape(&h), (5, 1), "one corner rounded");
+    assert!(h.app.filleting(), "the form stays open");
+    // the fillet's middle: a click there takes it out
+    let mid = 10.0 + 3.0 - 3.0 * std::f64::consts::FRAC_1_SQRT_2;
+    h.frame(vec![]);
+    h.click(h.at(mid, mid), Modifiers::NONE);
+    assert_eq!(shape(&h), (4, 0), "the sharp corner is back");
+}
