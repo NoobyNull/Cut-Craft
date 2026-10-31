@@ -162,7 +162,8 @@ say "not implemented yet".
   through Orientate 3D Model already placed and levelled).
 - Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
   geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
-  snap point across or up and down (Aspire's guide lines and woken nodes are not done).
+  snap point across or up and down, and puts it on a span's tangent at the span's ends or
+  square to it (Aspire's woken nodes and connecting lines are not done).
 - Menus and drop-downs draw each category in a border.
 - Number fields take sums (Calculation Edit Boxes): + - * / ^, brackets, W H T, P, I, M, '.
 - Sheets keep their own vectors, components, pictures and toolpaths; activating one swaps them.
@@ -358,7 +359,9 @@ say "not implemented yet".
   time it is recalculated, so a template's toolpaths find new vectors on their layers.
 - Edit ▸ Snap Options (F4): drawing and node drags snap to span ends and middles, arc and
   object centres, the job's centre and corners, and a grid, within a snapping radius in
-  pixels; Shift holds snapping off. Guides, intersections, smart snapping, nudging and
+  pixels; Shift holds snapping off. Guides and smart snapping (see the top bar) snap too.
+  Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
+  with Shift, or with Ctrl and Shift move by the grid, half or a tenth). Intersections and
   cursor text are not done; the options last for the session.
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
   toolpaths summary and each toolpath's tool, feeds and estimated time (the sections of

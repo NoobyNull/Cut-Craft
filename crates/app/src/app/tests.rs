@@ -2219,9 +2219,12 @@ fn the_arrow_keys_nudge_the_selection() {
     );
     h.frame(vec![key(Key::ArrowLeft), key(Key::ArrowDown)]);
     assert!((at(&h) - before).length() < 1e-9, "back where it was");
+    // Ctrl alone: Snapping Options' Fixed Nudge Distance
+    h.app.snap.fixed_nudge = 0.25;
     for (modifiers, share) in [
         (Modifiers::SHIFT, 0.5),
         (Modifiers::SHIFT | Modifiers::COMMAND, 0.1),
+        (Modifiers::COMMAND, 0.25 / square),
     ] {
         let from = at(&h);
         let press = Event::Key {
