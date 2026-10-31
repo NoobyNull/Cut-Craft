@@ -1331,6 +1331,7 @@ impl MenuSystem {
                         MenuItem::with_action("Wrapped Fluting Layout", "wrapped_fluting_layout"),
                         MenuItem::with_action("Wrapped Spiral Layout", "wrapped_spiral_layout"),
                         MenuItem::with_action("Celtic Weave Creator", "celtic_weave"),
+                        MenuItem::with_action("Job Setup Sheet Editor...", "job_sheet_editor"),
                     ],
                 ),
                 menu(

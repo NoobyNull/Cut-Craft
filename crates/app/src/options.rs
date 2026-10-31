@@ -461,6 +461,10 @@ pub struct Options {
     #[serde(default)]
     #[schemars(title = "SpaceMouse", extend("x-section" = true))]
     pub space_mouse: SpaceMouse,
+    /// Gadgets ▸ Job Setup Sheet Editor: how job sheets look.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub job_sheet: fmt_create_job_sheet::Style,
     /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
     /// own starting job until then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -539,6 +543,7 @@ impl Default for Options {
                 layout: WindowLayout::default(),
             },
             confirmations: Confirmations::default(),
+            job_sheet: fmt_create_job_sheet::Style::default(),
             import: Import::default(),
             appearance: Appearance::default(),
             advanced: Advanced::default(),

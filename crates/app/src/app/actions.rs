@@ -69,6 +69,7 @@ impl CutCraftApp {
             stroke: Vec::new(),
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
+            job_sheet_window: false,
             save_form: None,
             before_preview: None,
             picked_nodes: Vec::new(),
@@ -154,6 +155,7 @@ impl CutCraftApp {
                     || !self.doc.components.is_empty()
             }
             "edit_object" => self.object_to_edit().is_some(),
+            "job_sheet_editor" => true,
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
@@ -366,6 +368,8 @@ impl CutCraftApp {
                     self.preview_toolpath(id);
                 }
             }
+            "job_sheet_editor" => self.job_sheet_window = true,
+            "create_job_sheet" => self.create_job_sheet(),
             "edit_object" => {
                 if let Some((id, command, params)) = self.object_to_edit() {
                     self.edit_shape(id, command, params);
@@ -1794,6 +1798,36 @@ impl CutCraftApp {
             .set_message(&format!("{} changed", cmd.meta().label));
         self.warn(&toolpaths, &notes);
         Ok(())
+    }
+
+    /// Toolpaths ▸ Create Job Sheet: the page for each sheet with toolpaths (and the side
+    /// worked on), in the Job Setup Sheet Editor's style, beside the file named.
+    pub(super) fn create_job_sheet(&mut self) {
+        let Some(path) = file_dialog().add_filter("Job sheet", &["html"]).save_file() else {
+            return;
+        };
+        self.write_job_sheets(&path);
+    }
+
+    /// The job sheets written beside `path`, one a page, the page's suffix after its name.
+    pub(super) fn write_job_sheets(&mut self, path: &std::path::Path) {
+        let stem = path
+            .file_stem()
+            .map_or_else(|| "job".into(), |s| s.to_string_lossy().into_owned());
+        let result = fmt_create_job_sheet::sheets(&self.doc, &self.options.job_sheet)
+            .map_err(|e| e.to_string())
+            .and_then(|pages| {
+                for (suffix, html) in &pages {
+                    let file = path.with_file_name(format!("{stem}{suffix}.html"));
+                    cut_craft_core::file::write_atomic(&file, html.as_bytes())
+                        .map_err(|e| format!("could not write {}: {e}", file.display()))?;
+                }
+                Ok(pages.len())
+            });
+        self.status.set_message(&result.map_or_else(
+            |e| e,
+            |n| format!("Saved {n} job sheet{}", if n == 1 { "" } else { "s" }),
+        ));
     }
 
     /// Edit Object (E): the one selected vector, if a drawing tool drew it, with that tool's

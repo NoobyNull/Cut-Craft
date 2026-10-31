@@ -5,7 +5,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+base64.workspace = true
 cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
 fmt-export-svg = { path = "../export-svg" }
 
 [dev-dependencies]

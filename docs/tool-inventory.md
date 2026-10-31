@@ -377,7 +377,11 @@ say "not implemented yet".
   cursor text are not done; the options last for the session.
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
   toolpaths summary and each toolpath's tool, feeds and estimated time (the sections of
-  Aspire's job setup sheet; no logo or colour settings).
+  Aspire's job setup sheet), with the home position and, double-sided, the side and flip.
+  A job of several sheets gets a page for each sheet with toolpaths (`name_Sheet.html`); a
+  double-sided job's page ends `_Top` or `_Bottom`. Gadgets ▸ Job Setup Sheet Editor sets
+  the title, a logo (PNG, JPEG or GIF), the header and footer colours and which of the
+  five sections show, kept with the options.
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of

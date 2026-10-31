@@ -132,7 +132,7 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 88] = [
+const BUILT_INS: [&str; 89] = [
     "find_tool",
     "machine_configuration",
     "add_machine",
@@ -220,6 +220,7 @@ const BUILT_INS: [&str; 88] = [
     "undo_last_preview",
     "save_shaded_image",
     "edit_object",
+    "job_sheet_editor",
     "reset_preview",
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
@@ -660,6 +661,8 @@ struct CutCraftApp {
     /// Snapping Options (F4) and whether their window is open.
     snap: cut_craft_core::snap::SnapOptions,
     snap_window: bool,
+    /// Gadgets ▸ Job Setup Sheet Editor is open.
+    job_sheet_window: bool,
     /// What the views draw.
     display: crate::display::Display,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.

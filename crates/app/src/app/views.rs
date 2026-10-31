@@ -254,6 +254,7 @@ impl CutCraftApp {
         self.save_toolpaths_window(ctx);
         self.measure_window(ctx);
         self.snap_options_window(ctx);
+        self.job_sheet_window(ctx);
         self.options_window(ctx);
         self.tool_search(ctx);
         match self.screen {
@@ -1855,6 +1856,79 @@ impl CutCraftApp {
             self.save_toolpaths(&form);
         }
         self.save_form = open.then_some(form);
+    }
+
+    /// Gadgets ▸ Job Setup Sheet Editor: the job sheets' title, colours, logo and sections,
+    /// kept with the options.
+    pub(super) fn job_sheet_window(&mut self, ctx: &egui::Context) {
+        if !self.job_sheet_window {
+            return;
+        }
+        let mut open = true;
+        let schema = serde_json::to_value(schemars::schema_for!(fmt_create_job_sheet::Style))
+            .expect("a schema serialises");
+        let fields = crate::form::fields(&schema);
+        let mut values = serde_json::to_value(&self.options.job_sheet).expect("a style serialises");
+        let units = self.doc.job.units;
+        let (id, size) = (egui::Id::unique("job_sheet_editor"), dialog_size(ctx));
+        let mut changed = None;
+        let mut pick_logo = false;
+        cut_craft_bug_report::dialog(ctx, id, "Job Setup Sheet Editor", size, &mut open, |ui| {
+            let picture = |_: &str| None;
+            let look = crate::form::Look {
+                units,
+                picture: &picture,
+                material: crate::form::material(&self.doc, units),
+                tool: None,
+            };
+            if crate::form::show(ui, &fields, &mut values, &look)
+                && let Ok(style) = serde_json::from_value(values)
+            {
+                changed = Some(style);
+            }
+            ui.horizontal(|ui| {
+                pick_logo = ui.button("Change Logo...").clicked();
+                let has_logo = !self.options.job_sheet.logo.is_empty();
+                if ui
+                    .add_enabled(has_logo, egui::Button::new("Remove Logo"))
+                    .clicked()
+                {
+                    let mut style = self.options.job_sheet.clone();
+                    style.logo.clear();
+                    changed = Some(style);
+                }
+                if ui.button("Restore Default Sheet").clicked() {
+                    changed = Some(fmt_create_job_sheet::Style::default());
+                }
+            });
+            ui.weak("A logo is scaled to 165 × 52 pixels at most; landscape pictures suit it.");
+        });
+        if pick_logo
+            && let Some(path) = file_dialog()
+                .add_filter("Logo", &["png", "jpg", "jpeg", "gif"])
+                .pick_file()
+        {
+            let ext = path
+                .extension()
+                .map(|e| e.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            match std::fs::read(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|bytes| fmt_create_job_sheet::logo(&bytes, &ext))
+            {
+                Ok(logo) => {
+                    let mut style = self.options.job_sheet.clone();
+                    style.logo = logo;
+                    changed = Some(style);
+                }
+                Err(e) => self.status.set_message(&e),
+            }
+        }
+        if let Some(style) = changed {
+            self.options.job_sheet = style;
+            self.save_options();
+        }
+        self.job_sheet_window = open;
     }
 
     /// Snapping Options: what drawing and node drags snap to.

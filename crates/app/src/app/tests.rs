@@ -4595,3 +4595,25 @@ fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
     h.frame(vec![key(Key::E)]);
     assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
 }
+
+#[test]
+fn job_sheets_take_the_editor_s_style_and_name_their_side() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "job_sheet_editor");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.job_sheet_window);
+    assert!(
+        h.text_at("Job Setup Sheet Editor").is_some(),
+        "the editor is open"
+    );
+    h.app.options.job_sheet.title = "Shop Sheet".into();
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    let dir = std::env::temp_dir().join(format!("cut-craft-sheets-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    h.app.write_job_sheets(&dir.join("sign.html"));
+    let page = std::fs::read_to_string(dir.join("sign_Top.html")).expect("the top side's sheet");
+    assert!(page.contains("<h1>Shop Sheet</h1>"));
+    assert_eq!(h.app.status.message, "Saved 1 job sheet");
+    let _ = std::fs::remove_dir_all(dir);
+}
