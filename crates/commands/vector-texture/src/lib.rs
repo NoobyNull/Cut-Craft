@@ -29,6 +29,8 @@ pub struct Params {
     pub noise: f64,
     /// Another seed gives another pattern with the same settings
     pub seed: u32,
+    /// Put the texture on a new layer of its own
+    pub create_on_new_layer: bool,
 }
 
 impl Default for Params {
@@ -41,6 +43,7 @@ impl Default for Params {
             amplitude: 2.0,
             noise: 0.0,
             seed: 1,
+            create_on_new_layer: false,
         }
     }
 }
@@ -125,7 +128,19 @@ impl Command for VectorTexture {
                 "the area is too small for the texture".into(),
             ));
         }
-        Ok(Change::swap(doc, vec![], lines))
+        if !p.create_on_new_layer {
+            return Ok(Change::swap(doc, vec![], lines));
+        }
+        let mut c = Change::builder(doc);
+        let layer = c.add_layer("Vector Texture");
+        let mut added = Vec::new();
+        for line in lines {
+            let id = c.add(line);
+            c.move_to_layer(id, layer);
+            added.push(id);
+        }
+        c.select(added);
+        Ok(c.finish())
     }
 }
 
@@ -178,5 +193,25 @@ mod tests {
         };
         assert_eq!(noisy(3), noisy(3));
         assert_ne!(noisy(3), noisy(4));
+    }
+
+    #[test]
+    fn the_texture_can_go_on_a_new_layer() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 50.0)]);
+        let layers = doc.layers.len();
+        let p = Params {
+            create_on_new_layer: true,
+            ..Params::default()
+        };
+        doc.apply(&VectorTexture::run(&doc, &p).unwrap()).unwrap();
+        assert_eq!(doc.layers.len(), layers + 1);
+        let new_layer = doc.layers.last().unwrap().id;
+        let lines: Vec<_> = doc.vectors.keys().skip(1).copied().collect();
+        assert!(!lines.is_empty());
+        assert!(lines.iter().all(|id| doc.layer_of(*id) == new_layer));
+        assert!(
+            doc.selection.iter().eq(lines.iter()),
+            "the texture stays selected"
+        );
     }
 }
