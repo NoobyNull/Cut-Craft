@@ -365,8 +365,10 @@ say "not implemented yet".
   STL, and Wavefront OBJ (polygon faces fanned into triangles), through Aspire's Orientate 3D Model form (dialogs 524 and 4104), in its sections and
   pictures on one page (Aspire's has two): initial orientation (a radio per face round the
   model's picture), rotation about Z (-180 … +180 in quarter turns), file units, model size with locked
-  ratio, centre or position, depth below top, discard below the zero plane. No
-  undercut highlighting, perspective or segmenting.
+  ratio, centre or position, depth below top, discard below the zero plane. Show
+  Undercuts colours the faces a cutter from above cannot reach while the form is open; in
+  a double-sided job a full model's underside goes to the other side (Aspire's Create
+  Both Sides). No perspective, segmenting or on-screen rotation handles.
   In a rotary job (help: Orientate 3D Model Rotary) the Imported model type picks Full 3D
   model (the default there) or Flat model (placed like clipart). A full model's axis runs
   along the job's through the middle of its box; each cell of the unrolled job holds how
