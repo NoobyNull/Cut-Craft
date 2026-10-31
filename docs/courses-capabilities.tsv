@@ -82,7 +82,7 @@ vector-boundary	Vector boundary (offset, rubber band)	yes	vector-boundary comman
 edit-bitmap	Edit Picture (contrast, brightness, gamma, invert, greyscale, border) and Crop Bitmap	yes	edit-picture and crop-bitmap commands	edit bitmaps|photo	edit (the )?(picture|bit ?map)|crop
 fillets	Fillets: normal, dog-bone, T-bone, plasma; clicked per corner with live radius	partly	create-fillets applies to all, outer or inner corners at once; no clicking single corners or removing a fillet	fillets	fillet	103
 move	Move: absolute, relative, relative rotated, anchor	partly	move command (absolute / relative, anchor); no relative-rotated	move objects	relative rotat|move selected objects|absolute move|relative move	87
-set-size	Set Size: scale selection or items individually, link XY, %, rotated bounds	partly	set-size command; no scaling items individually, no %	set the size	set (the )?size	82
+set-size	Set Size: scale selection or items individually, link XY, %, rotated bounds	yes	Set Size: Scale Selection or Scale Items Individually, width and height in mm or as a percentage, Link XY, anchor. Auto Scale Z and rotated bounds are not done	set the size	set (the )?size	82
 rotate	Rotate: absolute / relative, pivot from anchor or coordinates	yes	rotate command	rotate	rotat
 mirror	Mirror: flip in place horizontal / vertical / both	yes	mirror command	mirror	mirror
 mirror-copy	Mirror: create mirrored copy beside (left / right / top / bottom), flip about job centre, flip about a line	yes	Mirror: about the selection, the job centre, beside it (left / right / top / bottom) or the line of the vector picked last; Create Mirrored Copy keeps the originals	mirror	mirror(ed)? copy|flip about|create a mirror	64
