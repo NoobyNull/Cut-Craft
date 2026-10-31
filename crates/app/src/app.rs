@@ -52,6 +52,19 @@ struct FineKey {
     importing: bool,
 }
 
+/// What the imported model's drawn triangles depend on: the model (by its allocation),
+/// the job, the view, and how it is coloured.
+#[derive(Clone, PartialEq)]
+struct ModelKey {
+    model: usize,
+    job: cut_craft_core::document::Job,
+    orbit: view3d::Orbit,
+    framing: view3d::Framing,
+    fit: egui::Rect,
+    look: view3d::Look,
+    mark: egui::Color32,
+}
+
 /// What a select-mode drag holds: the whole selection, or one vector or model picked
 /// under the pointer.
 #[derive(Clone, Copy)]
@@ -88,6 +101,10 @@ const RESOLUTIONS: [(&str, cut_craft_core::document::Resolution, &str); 3] = [
 /// How much of the theme's darkest background shades the window while files are dragged
 /// over it.
 const DROP_SHADE: f32 = 0.8;
+/// How far past the material the modeling plane is drawn while a model is imported, as a
+/// share of the material's longer side, and how see-through it is.
+const MODELING_PLANE_MARGIN: f64 = 0.1;
+const MODELING_PLANE_ALPHA: f32 = 0.35;
 
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
@@ -459,7 +476,7 @@ struct OpenForm {
     typed_size: [Option<f64>; 3],
     /// Orientate 3D Model's model as placed, each triangle with whether a cutter from above
     /// cannot reach it: the 3D view shows it whole while the form is open.
-    model: Option<Vec<cmd_orientate_3d_model::Seen>>,
+    model: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
     /// How many changes could be undone when it opened: Cancel undoes back to there.
@@ -551,6 +568,10 @@ struct CutCraftApp {
     simulation_coarse: Option<Material>,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
+    /// The imported model's triangles as last drawn, kept while nothing about the view or
+    /// the model changes: sorting and lighting a big model every frame is what made the
+    /// window drag while a model was being imported.
+    model_3d: Option<(ModelKey, std::sync::Arc<egui::Mesh>)>,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
     orbit: view3d::Orbit,

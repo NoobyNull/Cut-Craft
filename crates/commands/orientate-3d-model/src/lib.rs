@@ -10,8 +10,59 @@ use cut_craft_core::params::Xy;
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 pub struct Orientate3dModel;
+
+/// The last model file read, kept so the live form's changes do not read and parse it
+/// again: its path, its size and modified time (a file written again is read again), its
+/// MD5 and its triangles as drawn.
+// ponytail: one file kept; picking another file drops it
+struct ReadFile {
+    path: String,
+    stamp: Option<(u64, std::time::SystemTime)>,
+    md5: String,
+    triangles: Arc<Vec<[DVec3; 3]>>,
+}
+
+static READ: Mutex<Option<ReadFile>> = Mutex::new(None);
+
+/// A file's triangles as drawn, shared with the cache, and its MD5.
+type Read = (Arc<Vec<[DVec3; 3]>>, String);
+
+/// The file's triangles as drawn and its MD5, read once per file.
+fn read_file(path: &str) -> Result<Read, CommandError> {
+    let stamp = std::fs::metadata(path)
+        .ok()
+        .and_then(|m| Some((m.len(), m.modified().ok()?)));
+    if let Ok(kept) = READ.lock()
+        && let Some(r) = kept
+            .as_ref()
+            .filter(|r| r.path == path && r.stamp == stamp && stamp.is_some())
+    {
+        return Ok((Arc::clone(&r.triangles), r.md5.clone()));
+    }
+    let started = Instant::now();
+    let bytes = std::fs::read(path).map_err(|e| CommandError::Failed(format!("{path}: {e}")))?;
+    let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
+    let md5 = Source::md5(&bytes);
+    log::info!(
+        "Orientate 3D Model: read {path}: {} triangles in {} ms",
+        triangles.len(),
+        started.elapsed().as_millis()
+    );
+    let triangles = Arc::new(triangles);
+    if let Ok(mut kept) = READ.lock() {
+        *kept = Some(ReadFile {
+            path: path.to_owned(),
+            stamp,
+            md5: md5.clone(),
+            triangles: Arc::clone(&triangles),
+        });
+    }
+    Ok((triangles, md5))
+}
 
 /// Which face of the model as drawn is the top.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -107,6 +158,11 @@ pub struct Params {
         extend("x-icon" = "import/position_relative_to_modeling_plane.png")
     )]
     pub placing: Placing,
+    /// Colour the faces a cutter from above cannot reach (turned down, or under an
+    /// overhang) in the 3D view while the form is open
+    #[schemars(title = "Show undercuts")]
+    #[serde(default = "yes")]
+    pub show_undercuts: bool,
     /// Rotary jobs: a full 3D model is wrapped round the axis, its distance out at each angle
     /// becoming the height; a flat model is placed on the unrolled surface like clipart
     #[schemars(title = "Imported model type", extend("x-hide-when" = {"job": "flat"}))]
@@ -172,6 +228,7 @@ impl Default for Params {
                 height_above_bed: 0.0,
                 discard_below_zero: true,
             },
+            show_undercuts: true,
             model_type: ModelType::Flat,
             fit_material: true,
             job: JobKind::Flat,
@@ -228,6 +285,7 @@ impl Command for Orientate3dModel {
             return Ok(c.finish());
         }
         let (tris, rect) = placed(doc, p, tris)?;
+        let started = Instant::now();
         let mut k = Component::from_fn(
             "Imported model",
             Combine::Add,
@@ -236,6 +294,13 @@ impl Command for Orientate3dModel {
             |_| None,
         );
         fmt_import_stl::top_down(&mut k, &tris);
+        log::info!(
+            "Orientate 3D Model: {} triangles into {} x {} cells in {} ms",
+            tris.len(),
+            k.columns,
+            k.rows,
+            started.elapsed().as_millis()
+        );
         if p.placing.discard_below_zero {
             for h in &mut k.heights {
                 if *h < 0.0 {
@@ -269,9 +334,7 @@ fn oriented(p: &Params) -> Result<(Vec<[DVec3; 3]>, String), CommandError> {
     if p.file.is_empty() {
         return Err(CommandError::InvalidParams("choose an STL file".into()));
     }
-    let bytes =
-        std::fs::read(&p.file).map_err(|e| CommandError::Failed(format!("{}: {e}", p.file)))?;
-    let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
+    let (triangles, md5) = read_file(&p.file)?;
     let turn =
         DMat3::from_rotation_z(p.orientation.rotation.to_radians()) * face_up(p.orientation.face);
     let unit = match p.size.units {
@@ -282,7 +345,7 @@ fn oriented(p: &Params) -> Result<(Vec<[DVec3; 3]>, String), CommandError> {
         .iter()
         .map(|t| t.map(|v| turn * v * unit))
         .collect();
-    Ok((turned, Source::md5(&bytes)))
+    Ok((turned, md5))
 }
 
 /// `tris` sized and placed in a flat job (heights up from the bed), and the footprint
@@ -343,8 +406,20 @@ pub type Seen = ([DVec3; 3], bool);
 /// model in a rotary job is shown turned round the job's axis instead (x along it, y and z
 /// across from it), with nothing marked: it is cut all the way round.
 pub fn preview(doc: &Document, params: &Params) -> Result<Option<Vec<Seen>>, CommandError> {
+    preview_over(doc, params, None)
+}
+
+/// [`preview`] judging reach by `top`, the component these settings just made, rather than
+/// rasterising the model again; `None` rasterises it.
+pub fn preview_over(
+    doc: &Document,
+    params: &Params,
+    top: Option<&Component>,
+) -> Result<Option<Vec<Seen>>, CommandError> {
     // ponytail: a tenth of a millimetre clear of the base counts, as fmt_import_stl::undercut
     const ABOVE: f64 = 0.1;
+    /// How far out from a face its reach is judged, in cells: past its own cell.
+    const AWAY: f64 = 1.5;
     if let Some(rotary) = doc.job.rotary
         && params.model_type == ModelType::Full
     {
@@ -357,8 +432,21 @@ pub fn preview(doc: &Document, params: &Params) -> Result<Option<Vec<Seen>>, Com
         ));
     }
     let (tris, rect) = placed(doc, params, oriented(params)?.0)?;
-    let mut top = Component::from_fn("", Combine::Add, rect, doc.job.model_cell(), |_| None);
-    fmt_import_stl::top_down(&mut top, &tris);
+    if !params.show_undercuts {
+        return Ok(Some(tris.into_iter().map(|t| (t, false)).collect()));
+    }
+    let started = Instant::now();
+    let made;
+    let top = if let Some(k) = top {
+        k
+    } else {
+        made = {
+            let mut k = Component::from_fn("", Combine::Add, rect, doc.job.model_cell(), |_| None);
+            fmt_import_stl::top_down(&mut k, &tris);
+            k
+        };
+        &made
+    };
     let lowest = tris
         .iter()
         .flatten()
@@ -366,14 +454,37 @@ pub fn preview(doc: &Document, params: &Params) -> Result<Option<Vec<Seen>>, Com
         .fold(f64::INFINITY, f64::min);
     let hidden = |t: &[DVec3; 3]| {
         let [a, b, c] = *t;
+        let (low, high) = t
+            .iter()
+            .map(|v| v.z)
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), z| {
+                (lo.min(z), hi.max(z))
+            });
+        // the base, and what sits on it, has nothing under it to reach
+        if low <= lowest + ABOVE {
+            return false;
+        }
+        let normal = (b - a).cross(c - a).normalize_or_zero();
+        // turned down: an overhang's underside
+        if normal.z < 0.0 {
+            return true;
+        }
+        // judged by the air beside it, a cell and a half out down the slope (a wall's own
+        // cell, or a steep face's, is higher than its middle, which is no undercut): tucked
+        // under when the surface there is higher than all of the face
         let middle = (a + b + c) / 3.0;
-        // a cell out from the face, so a wall is judged by the air beside it
-        let out = (b - a).cross(c - a).normalize_or_zero() * top.cell;
-        let over = top.height_at(Point::new(middle.x + out.x, middle.y + out.y));
-        let clear = t.iter().map(|v| v.z).fold(f64::INFINITY, f64::min) > lowest + ABOVE;
-        clear && over.is_some_and(|z| middle.z < z - top.cell)
+        let away = DVec3::new(normal.x, normal.y, 0.0).normalize_or_zero() * AWAY * top.cell;
+        let over = top.height_at(Point::new(middle.x + away.x, middle.y + away.y));
+        over.is_some_and(|z| z > high + top.cell)
     };
-    Ok(Some(tris.iter().map(|t| (*t, hidden(t))).collect()))
+    let seen: Vec<Seen> = tris.iter().map(|t| (*t, hidden(t))).collect();
+    log::info!(
+        "Orientate 3D Model: preview judged {} of {} faces out of reach in {} ms",
+        seen.iter().filter(|(_, hidden)| *hidden).count(),
+        seen.len(),
+        started.elapsed().as_millis()
+    );
+    Ok(Some(seen))
 }
 
 /// The turn that brings `face` to the top (looking down the Z axis, Y up the screen).
@@ -1019,6 +1130,99 @@ mod rotary {
             ((first - job.min.x) - (job.max.x - last)).abs() < 1e-6,
             "centred"
         );
+    }
+
+    #[test]
+    fn a_steep_slope_is_within_reach() {
+        // a wedge rising at 70° across the job: every face is cut from above, so none is red
+        // (the old rule marked a steep face by its own cell, which is higher than its middle)
+        let (w, h) = (10.0_f32, 27.5_f32);
+        let faces = vec![
+            [[0.0, 0.0, 0.0], [w, 0.0, h], [w, 10.0, h]],
+            [[0.0, 0.0, 0.0], [w, 10.0, h], [0.0, 10.0, 0.0]],
+            [[0.0, 0.0, 0.0], [0.0, 10.0, 0.0], [w, 10.0, 0.0]],
+            [[0.0, 0.0, 0.0], [w, 10.0, 0.0], [w, 0.0, 0.0]],
+            [[w, 0.0, 0.0], [w, 10.0, 0.0], [w, 10.0, h]],
+            [[w, 0.0, 0.0], [w, 10.0, h], [w, 0.0, h]],
+            [[0.0, 0.0, 0.0], [w, 0.0, 0.0], [w, 0.0, h]],
+            [[0.0, 10.0, 0.0], [w, 10.0, h], [w, 10.0, 0.0]],
+        ];
+        let p = Params {
+            file: stl("wedge", &faces),
+            ..Params::default()
+        };
+        let tris = preview(&Document::default(), &p).unwrap().unwrap();
+        assert!(tris.iter().all(|(_, red)| !red), "nothing is out of reach");
+        let p = Params {
+            show_undercuts: false,
+            ..p
+        };
+        let tris = preview(&Document::default(), &p).unwrap().unwrap();
+        assert!(
+            tris.iter().all(|(_, red)| !red),
+            "nothing marked when not shown"
+        );
+    }
+
+    #[test]
+    fn a_file_is_read_once_until_it_changes() {
+        let file = stl("read-once", &cuboid([0.0, 0.0, 0.0], [5.0, 5.0, 5.0]));
+        let (first, md5) = read_file(&file).unwrap();
+        let (again, _) = read_file(&file).unwrap();
+        assert!(
+            Arc::ptr_eq(&first, &again),
+            "the same triangles, not read again"
+        );
+        // written again with another model: read again
+        std::fs::write(
+            &file,
+            std::fs::read(stl("read-twice", &cuboid([0.0, 0.0, 0.0], [5.0, 5.0, 9.0]))).unwrap(),
+        )
+        .unwrap();
+        let (changed, md5_changed) = read_file(&file).unwrap();
+        assert!(!Arc::ptr_eq(&first, &changed));
+        assert_ne!(md5, md5_changed);
+        assert!(read_file("/nonexistent/model.stl").is_err());
+    }
+
+    /// `cargo test -p cmd-orientate-3d-model -- --ignored --nocapture big_model`: how long
+    /// a two-million-face model takes to place, rasterise and judge.
+    #[test]
+    #[ignore = "timing, by hand"]
+    #[expect(clippy::cast_precision_loss, reason = "a test grid")]
+    fn big_model_timing() {
+        let n = 1000;
+        let mut faces = Vec::with_capacity(2 * n * n);
+        let z =
+            |x: usize, y: usize| ((x as f32 / 37.0).sin() + (y as f32 / 23.0).cos()) * 5.0 + 10.0;
+        let at = |x: usize, y: usize| [x as f32 / 10.0, y as f32 / 10.0, z(x, y)];
+        for x in 0..n {
+            for y in 0..n {
+                faces.push([at(x, y), at(x + 1, y), at(x + 1, y + 1)]);
+                faces.push([at(x, y), at(x + 1, y + 1), at(x, y + 1)]);
+            }
+        }
+        let p = Params {
+            file: stl("big", &faces),
+            ..Params::default()
+        };
+        let doc = Document::default();
+        for pass in 0..3 {
+            let started = Instant::now();
+            let change = Orientate3dModel::run(&doc, &p).unwrap();
+            let ran = started.elapsed();
+            let mut made = doc.clone();
+            made.apply(&change).unwrap();
+            let top = made.components.values().next().unwrap();
+            let started = Instant::now();
+            let seen = preview_over(&doc, &p, Some(top)).unwrap().unwrap();
+            println!(
+                "pass {pass}: run {} ms, preview {} ms, {} faces",
+                ran.as_millis(),
+                started.elapsed().as_millis(),
+                seen.len()
+            );
+        }
     }
 
     #[test]

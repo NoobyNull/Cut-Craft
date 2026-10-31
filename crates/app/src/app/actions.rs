@@ -70,6 +70,7 @@ impl CutCraftApp {
             simulation: None,
             simulation_coarse: None,
             fine_3d: None,
+            model_3d: None,
             moved_3d: 0.0,
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
@@ -1544,14 +1545,22 @@ impl CutCraftApp {
             }
         }
         let result = self.apply_form(id, &params);
+        // the component the settings just made judges what a cutter cannot reach, so the
+        // model is rasterised once per change, not twice
+        let top = self
+            .form
+            .as_ref()
+            .and_then(|f| f.drawn)
+            .and_then(|id| self.doc.components.get(&id));
         let model = serde_json::from_value(params)
             .ok()
             .filter(|_| id == "orientate_3d_model")
             .and_then(|p| {
-                cmd_orientate_3d_model::preview(&self.doc, &p)
+                cmd_orientate_3d_model::preview_over(&self.doc, &p, top)
                     .ok()
                     .flatten()
-            });
+            })
+            .map(std::sync::Arc::new);
         // the model's size: its triangles' box, or (wrapped) its component's
         let made = model
             .as_ref()

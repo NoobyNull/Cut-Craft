@@ -90,37 +90,56 @@ pub fn undercut(triangles: &[[DVec3; 3]]) -> f64 {
     reason = "the triangle's corners and barycentric u, v"
 )]
 pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
-    let cell = k.cell;
-    let index = |v: f64, n: usize| (v.max(0.0) as usize).min(n.saturating_sub(1));
-    for [a, b, c] in triangles {
-        let (ab, ac) = (b - a, c - a);
-        let det = ab.x * ac.y - ab.y * ac.x;
-        if det.abs() < 1e-12 {
-            continue; // edge-on from above
-        }
-        let lo = a.min(*b).min(*c);
-        let hi = a.max(*b).max(*c);
-        let c0 = index((lo.x - k.origin.x) / cell - 0.5, k.columns);
-        let c1 = index((hi.x - k.origin.x) / cell + 0.5, k.columns);
-        let r0 = index((lo.y - k.origin.y) / cell - 0.5, k.rows);
-        let r1 = index((hi.y - k.origin.y) / cell + 0.5, k.rows);
-        for row in r0..=r1 {
-            for col in c0..=c1 {
-                let p = k.origin + Point::new(col as f64 + 0.5, row as f64 + 0.5) * cell;
-                let (dx, dy) = (p.x - a.x, p.y - a.y);
-                let u = (dx * ac.y - dy * ac.x) / det;
-                let v = (ab.x * dy - ab.y * dx) / det;
-                if u < -1e-9 || v < -1e-9 || u + v > 1.0 + 1e-9 {
-                    continue;
-                }
-                let z = a.z + u * ab.z + v * ac.z;
-                let h = &mut k.heights[row * k.columns + col];
-                if h.is_nan() || z > *h {
-                    *h = z;
-                }
-            }
-        }
+    let (cell, origin, columns, rows) = (k.cell, k.origin, k.columns, k.rows);
+    if columns == 0 || rows == 0 || k.heights.len() < columns * rows {
+        return;
     }
+    // the grid in bands of rows, one per core, each thread raising its own band
+    // ponytail: every thread scans every triangle for its band; an index by row if models of
+    // millions of faces drag
+    let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    let band = rows.div_ceil(threads.min(rows));
+    let index = |v: f64, n: usize| (v.max(0.0) as usize).min(n.saturating_sub(1));
+    std::thread::scope(|scope| {
+        for (i, heights) in k.heights[..columns * rows]
+            .chunks_mut(band * columns)
+            .enumerate()
+        {
+            let first = i * band;
+            let last = first + heights.len() / columns - 1;
+            scope.spawn(move || {
+                for [a, b, c] in triangles {
+                    let (ab, ac) = (b - a, c - a);
+                    let det = ab.x * ac.y - ab.y * ac.x;
+                    if det.abs() < 1e-12 {
+                        continue; // edge-on from above
+                    }
+                    let lo = a.min(*b).min(*c);
+                    let hi = a.max(*b).max(*c);
+                    let c0 = index((lo.x - origin.x) / cell - 0.5, columns);
+                    let c1 = index((hi.x - origin.x) / cell + 0.5, columns);
+                    let r0 = index((lo.y - origin.y) / cell - 0.5, rows).max(first);
+                    let r1 = index((hi.y - origin.y) / cell + 0.5, rows).min(last);
+                    for row in r0..=r1 {
+                        for col in c0..=c1 {
+                            let p = origin + Point::new(col as f64 + 0.5, row as f64 + 0.5) * cell;
+                            let (dx, dy) = (p.x - a.x, p.y - a.y);
+                            let u = (dx * ac.y - dy * ac.x) / det;
+                            let v = (ab.x * dy - ab.y * dx) / det;
+                            if u < -1e-9 || v < -1e-9 || u + v > 1.0 + 1e-9 {
+                                continue;
+                            }
+                            let z = a.z + u * ab.z + v * ac.z;
+                            let h = &mut heights[(row - first) * columns + col];
+                            if h.is_nan() || z > *h {
+                                *h = z;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
 }
 
 /// The triangles of a binary or ASCII STL file.
@@ -170,6 +189,43 @@ pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[expect(clippy::cast_precision_loss, reason = "a test grid's columns")]
+    fn every_band_of_rows_is_raised_the_same() {
+        // a slope across a grid taller than the thread count has bands: each must see the
+        // whole triangle, and the heights must read as one surface
+        let (width, depth) = (40.0, 40.0);
+        let slope = |x: f64| x / 4.0;
+        let far = slope(width);
+        let tris = [
+            [
+                DVec3::new(0.0, 0.0, 0.0),
+                DVec3::new(width, 0.0, far),
+                DVec3::new(width, depth, far),
+            ],
+            [
+                DVec3::new(0.0, 0.0, 0.0),
+                DVec3::new(width, depth, far),
+                DVec3::new(0.0, depth, 0.0),
+            ],
+        ];
+        let rect = Rect::new(Point::ZERO, Point::new(width, depth));
+        let cell = 0.5;
+        let mut slab = Component::from_fn("", Combine::Add, rect, cell, |_| None);
+        top_down(&mut slab, &tris);
+        assert!(slab.rows >= 64, "{} rows, enough for bands", slab.rows);
+        for row in 0..slab.rows {
+            for col in 0..slab.columns {
+                let raised = slab.heights[row * slab.columns + col];
+                let centre = (col as f64 + 0.5) * cell;
+                assert!(
+                    (raised - slope(centre)).abs() < 1e-9,
+                    "row {row} col {col}: {raised}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn faces_turned_down_above_the_base_are_undercuts() {

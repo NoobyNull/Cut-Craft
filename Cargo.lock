@@ -1170,6 +1170,7 @@ version = "0.3.2"
 dependencies = [
  "cut-craft-core",
  "fmt-import-stl",
+ "log",
  "schemars",
  "serde",
  "serde_json",

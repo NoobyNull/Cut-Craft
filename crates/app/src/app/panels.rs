@@ -3,9 +3,9 @@
 
 use super::{
     Align, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, LayerId, Layout,
-    MESH_CELLS, Material, Menus, PLAYBACK_SPEEDS, Page, SETTLE_SECONDS, Screen,
-    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, egui, file_dialog,
-    file_name, files, gui, menu_items, sheet_length, view3d, wrap_for,
+    MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN, Material, Menus, PLAYBACK_SPEEDS,
+    Page, SETTLE_SECONDS, Screen, TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value,
+    View, egui, file_dialog, file_name, files, gui, menu_items, sheet_length, view3d, wrap_for,
 };
 use cut_craft_core::document::Units;
 
@@ -1082,6 +1082,35 @@ impl CutCraftApp {
         }
     }
 
+    /// The imported model's triangles drawn for this view, kept from frame to frame while
+    /// the model, the job and the view stay the same.
+    fn model_mesh(
+        &mut self,
+        model: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+        view: (view3d::Orbit, view3d::Framing, egui::Rect, view3d::Look),
+        mark: egui::Color32,
+        screen: impl Fn(cut_craft_core::glam::DVec3) -> egui::Pos2,
+    ) -> std::sync::Arc<egui::Mesh> {
+        let (orbit, framing, fit, look) = view;
+        let key = super::ModelKey {
+            model: std::sync::Arc::as_ptr(model) as usize,
+            job: self.shown_job(),
+            orbit,
+            framing,
+            fit,
+            look,
+            mark,
+        };
+        if let Some((kept, mesh)) = &self.model_3d
+            && *kept == key
+        {
+            return std::sync::Arc::clone(mesh);
+        }
+        let mesh = std::sync::Arc::new(view3d::triangles(model, screen, orbit, &look, mark));
+        self.model_3d = Some((key, std::sync::Arc::clone(&mesh)));
+        mesh
+    }
+
     pub(super) fn paint_3d(&mut self, ui: &egui::Ui, area: egui::Rect) {
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         let shown = self.display;
@@ -1141,18 +1170,19 @@ impl CutCraftApp {
             cut_craft_core::glam::DVec3::new(p.x - surface.origin.x, p.y - surface.origin.y, z)
         };
         // an imported model whole, what a cutter cannot reach marked, inside the material's
-        // outline to judge its size by
-        if let Some(model) = self.form.as_ref().and_then(|f| f.model.as_ref()) {
+        // outline to judge its size by, over the modeling plane it is placed on
+        if let Some(model) = self.form.as_ref().and_then(|f| f.model.clone()) {
             let origin = local(cut_craft_core::geometry::Point::new(0.0, 0.0), 0.0);
-            let mark = ui.visuals().error_fg_color;
-            painter.add(view3d::triangles(
-                model,
-                |p| screen(p + origin),
-                orbit,
-                &look,
-                mark,
-            ));
             let area = job.area();
+            painter.add(modeling_plane(
+                ui,
+                &screen,
+                local(area.min, 0.0),
+                local(area.max, 0.0),
+            ));
+            let mark = ui.visuals().error_fg_color;
+            let view = (orbit, framing, fit, look);
+            painter.add(self.model_mesh(&model, view, mark, |p| screen(p + origin)));
             let (lo, hi) = (local(area.min, 0.0), local(area.max, job.thickness));
             let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
             for [a, b] in view3d::box_edges(lo, hi) {
@@ -1364,4 +1394,34 @@ impl CutCraftApp {
             self.set_units(to);
         }
     }
+}
+
+/// The modeling plane as a sheet of light blue (the zero plane a model is placed on), a
+/// little past the material on every side so it shows under the model.
+fn modeling_plane(
+    ui: &egui::Ui,
+    screen: &dyn Fn(cut_craft_core::glam::DVec3) -> egui::Pos2,
+    lo: cut_craft_core::glam::DVec3,
+    hi: cut_craft_core::glam::DVec3,
+) -> egui::Mesh {
+    use cut_craft_core::glam::DVec3;
+    let margin = (hi - lo).max_element() * MODELING_PLANE_MARGIN;
+    let (lo, hi) = (lo - DVec3::splat(margin), hi + DVec3::splat(margin));
+    let fill = ui
+        .visuals()
+        .selection
+        .bg_fill
+        .gamma_multiply(MODELING_PLANE_ALPHA);
+    let mut mesh = egui::Mesh::default();
+    for corner in [
+        DVec3::new(lo.x, lo.y, 0.0),
+        DVec3::new(hi.x, lo.y, 0.0),
+        DVec3::new(hi.x, hi.y, 0.0),
+        DVec3::new(lo.x, hi.y, 0.0),
+    ] {
+        mesh.colored_vertex(screen(corner), fill);
+    }
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+    mesh
 }
