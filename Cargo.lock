@@ -577,6 +577,7 @@ dependencies = [
 name = "cmd-create-shape"
 version = "0.3.3"
 dependencies = [
+ "cmd-two-rail-sweep",
  "cut-craft-core",
  "schemars",
  "serde",

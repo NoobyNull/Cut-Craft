@@ -422,6 +422,11 @@ say "not implemented yet".
   in a plane go to neither. Aspire's segment tree (cutting one segment again), dragging
   the plane and the layout mode's orientations are not done.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
+  - Create Shape: round, angular, smooth, flat, or Custom (the profile of an open vector
+    selected with the closed ones, drawn upright, edge at its left) over closed vectors; a
+    ring between nested vectors rises from both edges; limit, base, Scale (the profile to a
+    height) and Total Height (profile and base together). Not done: Preserve Internal
+    Corners, Blend to Inner Vectors, the 3D view's handles and E to edit.
   - Component Properties' dynamic properties (help: Component Properties): Shape Height
     (%), Base Height, Fade (kept at one point, lowered by a percentage toward another) and
     Tilt (pivot and raised point, angle), kept apart from the heights and applied as the
