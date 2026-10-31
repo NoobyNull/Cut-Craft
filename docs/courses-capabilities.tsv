@@ -85,7 +85,7 @@ move	Move: absolute, relative, relative rotated, anchor	partly	move command (abs
 set-size	Set Size: scale selection or items individually, link XY, %, rotated bounds	partly	set-size command; no scaling items individually, no %	set the size	set (the )?size	82
 rotate	Rotate: absolute / relative, pivot from anchor or coordinates	yes	rotate command	rotate	rotat
 mirror	Mirror: flip in place horizontal / vertical / both	yes	mirror command	mirror	mirror
-mirror-copy	Mirror: create mirrored copy beside (left / right / top / bottom), flip about job centre, flip about a line	no	mirror flips in place only	mirror	mirror(ed)? copy|flip about|create a mirror	64
+mirror-copy	Mirror: create mirrored copy beside (left / right / top / bottom), flip about job centre, flip about a line	yes	Mirror: about the selection, the job centre, beside it (left / right / top / bottom) or the line of the vector picked last; Create Mirrored Copy keeps the originals	mirror	mirror(ed)? copy|flip about|create a mirror	64
 distort	Distort Object: envelope, above a curve, between curves	yes	distort-object command	distort	distort
 align	Align: to material, to the last-picked vector (centres, edges), space evenly	partly	align and space commands; no "inside last vector" spacing	align	inside last vector|space (them |these )?(evenly|horizontally|vertically)	124
 profile	Profile toolpath: depth, tool, outside / inside / on, climb / conventional, ramps, tabs, nested shapes	yes	profile-toolpath command	profile	profile

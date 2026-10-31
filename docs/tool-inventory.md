@@ -306,7 +306,10 @@ say "not implemented yet".
     corner fit, noise filter and grouping (dialog 347).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
-  - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset.
+  - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset. Mirror flips about
+    the selection's centre or the job's, or beside the selection (about its left, right, top
+    or bottom edge), or about the line between the ends of the vector picked last; Create
+    Mirrored Copy keeps the originals and adds the flipped copies.
 - Toolpaths ▸ Toolpath Summary: each toolpath's estimated time and the visible ones' total
   (moves at their feed, plunge or rapid rate, times a scale factor; dialog 231). Rapid rate
   and scale last for the session; no summary notes.
