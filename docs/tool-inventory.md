@@ -322,9 +322,11 @@ say "not implemented yet".
   Layers dialog is not done.
 - File ▸ Print and Print Preview: the drawing as a PDF opened in the system viewer, which
   prints it (Aspire's own print window with scale and tiling is not done).
-- Edit ▸ Select ▸ Vector Selector: selects shown vectors by open / closed, circles, circles
-  of a diameter within a tolerance, on all visible layers or the current one (dialog 949;
-  Associate with toolpath and Z values are not done).
+- Edit ▸ Select ▸ Vector Selector: selects vectors by open / closed, circles, circles of a
+  diameter within a tolerance, on all visible layers, the current one or the layers named
+  (dialog 949; Z values are not done). Every toolpath form has Associate a Vector Selector
+  with this toolpath: it is then made from the vectors that pass, and takes them again each
+  time it is recalculated, so a template's toolpaths find new vectors on their layers.
 - Edit ▸ Snap Options (F4): drawing and node drags snap to span ends and middles, arc and
   object centres, the job's centre and corners, and a grid, within a snapping radius in
   pixels; Shift holds snapping off. Guides, intersections, smart snapping, nudging and

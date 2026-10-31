@@ -1627,8 +1627,6 @@ name = "cmd-vector-selector"
 version = "0.3.3"
 dependencies = [
  "cut-craft-core",
- "schemars",
- "serde",
 ]
 
 [[package]]

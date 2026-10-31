@@ -1189,6 +1189,58 @@ fn trimmed(value: f64) -> String {
 /// The Rest Machining section of a toolpath form: the tools that cut before this one
 /// (picked from the database, each removable), and, once there are any, the minimum
 /// detail and overlap. Kept as `rest` in the form's settings.
+/// A toolpath form's Vector Selector: associated, the toolpath takes the vectors that pass
+/// it (open, closed, on which layers) each time it is calculated, as templates need.
+fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String]) {
+    use cut_craft_core::selector::{Layers, Selector};
+    let before = Selector::of(params);
+    let mut on = before.is_some();
+    let mut selector = before.clone().unwrap_or_default();
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.checkbox(&mut on, "Associate a Vector Selector with this toolpath")
+            .on_hover_text("Take the vectors that pass it each time the toolpath is calculated");
+        if !on {
+            return;
+        }
+        ui.checkbox(&mut selector.open_vectors, "Open vectors");
+        ui.checkbox(&mut selector.closed_vectors, "Closed vectors");
+        for (layers, label) in [
+            (Layers::AllVisibleLayers, "All visible layers"),
+            (Layers::CurrentLayerOnly, "Current layer only"),
+            (Layers::SelectedLayers, "Selected layers"),
+        ] {
+            ui.radio_value(&mut selector.layers, layers, label);
+        }
+        if selector.layers == Layers::SelectedLayers {
+            for name in layer_names {
+                let mut ticked = selector.layer_names.contains(name);
+                if ui.checkbox(&mut ticked, name).changed() {
+                    if ticked {
+                        selector.layer_names.push(name.clone());
+                    } else {
+                        selector.layer_names.retain(|n| n != name);
+                    }
+                }
+            }
+        }
+    });
+    let after = on.then_some(selector);
+    if after != before {
+        match after {
+            Some(selector) => {
+                params["selector"] =
+                    serde_json::to_value(&selector).expect("selector settings serialise");
+            }
+            None => {
+                if let Some(map) = params.as_object_mut() {
+                    map.remove("selector");
+                }
+            }
+        }
+    }
+}
+
 fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
     use cut_craft_core::rest::Rest;
     let mut rest: Rest = params

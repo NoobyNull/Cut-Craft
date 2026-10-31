@@ -3989,3 +3989,51 @@ fn node_editing_picks_nodes_with_a_box_and_a_drag_moves_them_together() {
     h.drag(h.at(100.0, 100.0), h.at(120.0, 120.0));
     assert!(h.app.picked_nodes.is_empty());
 }
+
+#[test]
+fn a_toolpath_with_a_vector_selector_takes_the_vectors_on_its_layers_each_time() {
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    let cut = c.add_layer("Cut");
+    c.set_current_layer(cut);
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    // the section, drawn on its own (it is below the fold of the profile form): ticking its
+    // box associates a selector
+    let ctx = egui::Context::default();
+    let mut section = serde_json::json!({});
+    let out = headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            selector_section(ui, &mut section, &["Cut".to_owned()]);
+        });
+    }));
+    assert!(out.shapes.iter().any(|c| matches!(&c.shape,
+        egui::Shape::Text(t) if t.galley.text() == "Associate a Vector Selector with this toolpath")));
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["selector"] = serde_json::to_value(cut_craft_core::selector::Selector {
+        layers: cut_craft_core::selector::Layers::SelectedLayers,
+        layer_names: vec!["Cut".into()],
+        ..Default::default()
+    })
+    .unwrap();
+    // nothing selected: the selector finds the rectangle on Cut
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    assert_eq!(h.app.doc.toolpaths[&id].vectors.len(), 1);
+    // a new rectangle on Cut joins it when the toolpath is recalculated
+    h.app.form = None;
+    h.rectangle(80.0, 10.0, 30.0, 30.0);
+    h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
+    assert_eq!(
+        h.app.doc.toolpaths[&id].vectors.len(),
+        2,
+        "{}",
+        h.app.status.message
+    );
+    // and keeps its selector for the next time
+    h.rectangle(130.0, 10.0, 30.0, 30.0);
+    h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
+    assert_eq!(h.app.doc.toolpaths[&id].vectors.len(), 3);
+}

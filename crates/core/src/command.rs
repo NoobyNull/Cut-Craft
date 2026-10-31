@@ -319,18 +319,30 @@ impl Registry {
             ))
         })?;
         let mut sources = doc.clone();
-        sources.selection = toolpath
-            .vectors
-            .iter()
-            .copied()
-            .filter(|v| doc.vectors.contains_key(v))
-            .collect();
-        // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
-        if sources.selection.is_empty() && !toolpath.vectors.is_empty() {
-            return Err(CommandError::Failed(format!(
-                "the vectors {} was made from have been deleted",
-                toolpath.name
-            )));
+        let settings = params.unwrap_or(&toolpath.params);
+        // a toolpath with a Vector Selector takes whatever vectors pass it now
+        if let Some(selector) = crate::selector::Selector::of(settings) {
+            sources.selection = selector.picked(doc).into_iter().collect();
+            if sources.selection.is_empty() {
+                return Err(CommandError::Failed(format!(
+                    "no vectors pass {}'s Vector Selector",
+                    toolpath.name
+                )));
+            }
+        } else {
+            sources.selection = toolpath
+                .vectors
+                .iter()
+                .copied()
+                .filter(|v| doc.vectors.contains_key(v))
+                .collect();
+            // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
+            if sources.selection.is_empty() && !toolpath.vectors.is_empty() {
+                return Err(CommandError::Failed(format!(
+                    "the vectors {} was made from have been deleted",
+                    toolpath.name
+                )));
+            }
         }
         let fresh = strategy
             .run_json(&sources, params.unwrap_or(&toolpath.params))?
@@ -345,6 +357,9 @@ impl Registry {
             })?;
         let mut fresh = fresh;
         crate::rest::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
+        if let Some(selector) = settings.get("selector") {
+            fresh.params["selector"] = selector.clone();
+        }
         let mut c = Change::builder(doc);
         if &fresh != toolpath {
             c.replace_toolpath(id, fresh);

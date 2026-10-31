@@ -10,8 +10,8 @@ use super::{
     SUMMARY_DEFAULTS, SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS,
     TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW,
     commands, dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table,
-    template_dialog, tool_picker, toolpath_template_dialog, view3d,
+    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
+    side_tabs, summary_table, template_dialog, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -1759,10 +1759,23 @@ impl CutCraftApp {
             .registry
             .get(id)
             .expect("only registered commands are applied");
-        let change = cmd.run_json(&self.doc, params).map_err(|e| e.to_string())?;
+        // a toolpath with a Vector Selector is made from whatever vectors pass it
+        let change = match cut_craft_core::selector::Selector::of(params) {
+            Some(selector) => {
+                let mut sources = self.doc.clone();
+                sources.selection = selector.picked(&self.doc).into_iter().collect();
+                if sources.selection.is_empty() {
+                    return Err("no vectors pass the Vector Selector".into());
+                }
+                cmd.run_json(&sources, params)
+            }
+            None => cmd.run_json(&self.doc, params),
+        }
+        .map_err(|e| e.to_string())?;
         // rest machining, for any toolpath whose settings ask for it
         let change = cut_craft_core::rest::with_rest(&self.doc.job, params, change)
             .map_err(|e| e.to_string())?;
+        let change = cut_craft_core::selector::kept(params, change);
         let (made, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)
@@ -2459,6 +2472,7 @@ impl CutCraftApp {
         // the tool block, where the form has its tool: what was picked, and Edit…
         let asked = std::cell::RefCell::new((None, false));
         let tools = &self.tools;
+        let layers: Vec<String> = self.doc.layers.iter().map(|l| l.name.clone()).collect();
         let tool = |ui: &mut egui::Ui, params: &mut Value| {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
@@ -2470,6 +2484,7 @@ impl CutCraftApp {
             if params.get("after").is_none() {
                 rest_section(ui, params, &tools.tools);
             }
+            selector_section(ui, params, &layers);
         };
         let look = form::Look {
             units,
