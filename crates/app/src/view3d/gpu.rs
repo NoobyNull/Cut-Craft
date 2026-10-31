@@ -669,6 +669,52 @@ mod tests {
     }
 
     #[test]
+    fn from_any_way_of_facing_the_block_stays_in_the_clip_box() {
+        let m = slotted();
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let corners = (0..8).map(|i| {
+            DVec3::new(
+                if i & 1 == 1 { 100.0 } else { 0.0 },
+                if i & 2 == 2 { 100.0 } else { 0.0 },
+                if i & 4 == 4 { 0.0 } else { m.bottom },
+            )
+        });
+        for yaw in [-3.0, -1.0, 0.0, 0.7, 2.5] {
+            for pitch in [
+                0.0,
+                0.4,
+                std::f64::consts::FRAC_PI_2,
+                2.8,
+                std::f64::consts::PI,
+            ] {
+                for roll in [-2.0, 0.0, 1.3] {
+                    for perspective in [false, true] {
+                        let orbit = Orbit { yaw, pitch, roll };
+                        let framing = Framing {
+                            perspective,
+                            ..Framing::default()
+                        };
+                        let camera = Camera::new(&m, orbit, framing, area, None);
+                        let clip = camera.clip(area, DEPTH_REACH);
+                        for p in corners.clone() {
+                            let c = clip * DVec4::new(p.x, p.y, p.z, 1.0);
+                            assert!(c.w > 0.0, "{orbit:?} {perspective}: behind the eye");
+                            let ndc = c / c.w;
+                            assert!(
+                                ndc.x.abs() <= 1.0
+                                    && ndc.y.abs() <= 1.0
+                                    && ndc.z > 0.0
+                                    && ndc.z < 1.0,
+                                "{orbit:?} {perspective}: {p} at {ndc}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     #[expect(clippy::cast_possible_truncation, reason = "the GPU takes f32")]
     fn a_draw_packs_the_camera_uniform_as_the_shader_reads_it() {
         let m = slotted();

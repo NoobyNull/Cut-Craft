@@ -17,6 +17,10 @@ const TURN_PER_SECOND: f64 = 3.0 * std::f64::consts::PI;
 const PAN_PER_SECOND: f64 = 2400.0;
 /// How many times the view zooms in a second at full deflection.
 const ZOOM_PER_SECOND: f64 = 8.0;
+/// The longest one motion event is taken to last, seconds: spacenavd's period is the time
+/// since its previous event, so the first after a pause carries the whole pause, and taken
+/// whole it would throw the view off the screen at a touch.
+pub const LONGEST_STEP: f64 = 0.05;
 
 /// The view after a motion of the cap held for `seconds`, as `settings` and `rotation` say:
 /// in Object mode the model follows the cap (pushed in, it goes away), in Camera mode the

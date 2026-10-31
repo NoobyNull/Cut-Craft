@@ -3629,6 +3629,36 @@ fn a_moving_3d_view_keeps_full_detail_unless_simplifying_is_on() {
 }
 
 #[test]
+fn a_space_mouse_event_after_a_pause_is_not_the_pause_long() {
+    use crate::spacemouse::{Input, LONGEST_STEP, moved};
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    let (tx, rx) = std::sync::mpsc::channel();
+    h.app.space_mouse = Some(rx);
+    let before = (h.app.orbit, h.app.framing);
+    // a light twist and push, the first event after half a minute still
+    let motion = ([0, 0, 40], [0, 35, 0]);
+    tx.send(Input::Motion {
+        translate: motion.0,
+        rotate: motion.1,
+        period: 30_000,
+    })
+    .unwrap();
+    h.frame(vec![]);
+    let settings = &h.app.options.space_mouse;
+    let rotation = h.app.options.view_3d.rotation.view();
+    let (orbit, framing) = moved(before, motion, LONGEST_STEP, settings, rotation);
+    assert!(
+        (h.app.orbit.yaw - orbit.yaw).abs() < 1e-9 && h.app.framing == framing,
+        "{:?} against {orbit:?}",
+        h.app.orbit
+    );
+    assert!(h.app.orbit != before.0, "it still turned");
+}
+
+#[test]
 fn importing_a_model_shows_the_3d_view() {
     let mut h = Harness::new();
     h.app.view = View::TwoD;

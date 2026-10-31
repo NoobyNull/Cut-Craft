@@ -782,12 +782,14 @@ impl CutCraftApp {
                     rotate,
                     period,
                 } => {
-                    // spacenavd's own period, else this frame's
+                    // spacenavd's own period, else this frame's; a pause before it is not
+                    // a motion
                     let seconds = if period > 0 {
                         f64::from(period) / 1000.0
                     } else {
                         f64::from(ctx.input(|i| i.stable_dt))
-                    };
+                    }
+                    .min(crate::spacemouse::LONGEST_STEP);
                     let view = (self.orbit, self.framing);
                     let settings = &self.options.space_mouse;
                     (self.orbit, self.framing) =
