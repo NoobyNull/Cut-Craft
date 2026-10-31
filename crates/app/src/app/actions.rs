@@ -1707,8 +1707,9 @@ impl CutCraftApp {
         Ok(())
     }
 
-    /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
-    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl + Shift).
+    /// The arrow keys nudge the selection by the snapping grid's squares, or the fixed nudge
+    /// distance when it is on: a whole one, half with Shift, a tenth with Ctrl + Shift
+    /// (Matthew's steps; Aspire nudges with Ctrl + Shift).
     pub(super) fn nudge(&mut self, ctx: &egui::Context) {
         if self.screen != Screen::Job || ctx.egui_wants_keyboard_input() {
             return;
@@ -1719,7 +1720,12 @@ impl CutCraftApp {
             (true, false) => 0.5,
             _ => 1.0,
         };
-        let step = self.snap.grid_spacing * share;
+        let base = if self.snap.fixed_nudge {
+            self.snap.nudge_distance
+        } else {
+            self.snap.grid_spacing
+        };
+        let step = base * share;
         let by = ctx.input(|i| {
             [
                 (Key::ArrowLeft, -1.0, 0.0),

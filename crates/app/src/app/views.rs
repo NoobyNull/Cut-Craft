@@ -1240,7 +1240,7 @@ impl CutCraftApp {
         let reach = self.snap.snapping_radius / f64::from(scale);
         let snap = |mut drag: Drag| {
             drag.start = self.snap.snap(&self.doc, drag.start, reach);
-            drag.end = self.snap.snap(&self.doc, drag.end, reach);
+            drag.end = self.snap.snap_from(&self.doc, drag.start, drag.end, reach);
             drag
         };
         gesture.map(|g| match g {

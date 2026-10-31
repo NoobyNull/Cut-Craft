@@ -377,12 +377,12 @@ fn segment_touches(from: Point, to: Point, area: Rect) -> bool {
     true
 }
 
-fn angle(v: DVec2) -> f64 {
+pub(crate) fn angle(v: DVec2) -> f64 {
     v.y.atan2(v.x)
 }
 
 /// Is angle `t` within the sweep from `a0` to `a1`? Equal endpoints mean a full turn.
-fn in_sweep(a0: f64, a1: f64, ccw: bool, t: f64) -> bool {
+pub(crate) fn in_sweep(a0: f64, a1: f64, ccw: bool, t: f64) -> bool {
     let (span, offset) = if ccw {
         ((a1 - a0).rem_euclid(TAU), (t - a0).rem_euclid(TAU))
     } else {
