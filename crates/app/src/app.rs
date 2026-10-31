@@ -627,6 +627,8 @@ struct CutCraftApp {
     /// The level clipart imported through Orientate 3D Model goes on (Import to Level),
     /// until another command starts.
     import_level: Option<u64>,
+    /// Draw Line / Polyline's polyline being drawn in the 2D view.
+    polyline: crate::polyline::Draft,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The imported model's triangles as last drawn, kept while nothing about the view or

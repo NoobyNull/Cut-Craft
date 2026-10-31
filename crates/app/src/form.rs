@@ -105,15 +105,20 @@ pub struct Look<'a> {
     pub tool: Option<&'a DrawTool<'a>>,
 }
 
+/// Millimetres in one of `units`.
+pub fn unit_mm(units: Units) -> f64 {
+    match units {
+        Units::Inch => 25.4,
+        Units::Mm => 1.0,
+    }
+}
+
 /// The job's material, in `units`, and its document variables, for [`Look::material`].
 pub fn material(
     doc: &cut_craft_core::document::Document,
     units: Units,
 ) -> cut_craft_core::calc::Values {
-    let factor = match units {
-        Units::Inch => 25.4,
-        Units::Mm => 1.0,
-    };
+    let factor = unit_mm(units);
     let job = &doc.job;
     cut_craft_core::calc::Values {
         width: job.width / factor,

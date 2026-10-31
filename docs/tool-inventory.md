@@ -252,6 +252,14 @@ say "not implemented yet".
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
+  - Draw Line / Polyline in the 2D view as Aspire's: a click adds a point, a click and drag
+    a smooth span (the next one smooth too), S swaps curve mode and straight lines (a click
+    on the last point does too), Backspace takes a point back, Tab closes, Space finishes
+    and starts another, Esc or a right-click finishes, a click on the first point closes;
+    typed values then Enter place the next point (a length along the pointer, `x,y`, or
+    `angle A length L`). Node editing's right-click on an open vector's end node has Edit
+    Polyline, drawing on from it into the same vector. Not done: Ctrl-drag from an end,
+    tangent lines (T).
   - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;

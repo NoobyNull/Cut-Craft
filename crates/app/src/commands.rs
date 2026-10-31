@@ -21,7 +21,7 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_draw_circle::DrawCircle>();
     r.add_interactive::<cmd_draw_ellipse::DrawEllipse>();
     r.add_interactive::<cmd_draw_polygon::DrawPolygon>();
-    r.add::<cmd_draw_polyline::DrawPolyline>();
+    r.add_interactive::<cmd_draw_polyline::DrawPolyline>();
     r.add_interactive::<cmd_draw_rectangle::DrawRectangle>();
     r.add_interactive::<cmd_draw_star::DrawStar>();
     r.add::<cmd_mirror::Mirror>();

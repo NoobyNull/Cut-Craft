@@ -74,6 +74,7 @@ impl CutCraftApp {
             simulation: None,
             simulation_coarse: None,
             import_level: None,
+            polyline: crate::polyline::Draft::default(),
             fine_3d: None,
             model_3d: None,
             gpu_3d: None,
@@ -111,7 +112,7 @@ impl CutCraftApp {
             "undo" => self.history.can_undo(),
             "close" => self.screen != Screen::Start,
             "zoom_selected" => self.doc.selection_bounds().is_some(),
-            id if id.starts_with("open_recent:") => true,
+            id if id.starts_with("open_recent:") || id.starts_with(gui::EDIT_POLYLINE) => true,
             id if id.starts_with(gui::REIMPORT_MODEL) => self
                 .model_source(id)
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
@@ -373,6 +374,14 @@ impl CutCraftApp {
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
                     self.open_recent(index);
+                }
+            }
+            id if id.starts_with(gui::EDIT_POLYLINE) => {
+                let (vector, end) = id[gui::EDIT_POLYLINE.len()..]
+                    .split_once(':')
+                    .unwrap_or_default();
+                if let Ok(vector) = vector.parse() {
+                    self.edit_polyline(EntityId(vector), end == "start");
                 }
             }
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(EXPORT_LEVEL) => {

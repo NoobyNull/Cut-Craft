@@ -286,6 +286,10 @@ pub struct MenuSystem {
 }
 
 /// The node-editing popup for the node or span at `at` (Aspire's popup menus 142, 317, 635).
+/// Edit Polyline's action: drawing on from an open vector's end node, `edit_polyline:` then
+/// the vector's id and `start` or `end`.
+pub const EDIT_POLYLINE: &str = "edit_polyline:";
+
 pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
     // Node Position starts at the node itself, not at the click near it
     let node = at
@@ -293,7 +297,7 @@ pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<Menu
         .ok()
         .and_then(|path| Some(cut_craft_core::nodes::nodes(path)[at.node(path).ok()?]))
         .map_or(at.at, |p| cut_craft_core::params::Xy::new(p.x, p.y));
-    vec![
+    let mut items = vec![
         MenuItem::run::<cmd_insert_point::InsertPoint>("Insert Point", at),
         MenuItem::run::<cmd_delete_point::DeletePoint>("Delete Point", at),
         MenuItem::run::<cmd_smooth_point::SmoothPoint>("Smooth Point", at),
@@ -313,9 +317,27 @@ pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<Menu
         MenuItem::run::<cmd_make_start_point::MakeStartPoint>("Make Start Point", at),
         MenuItem::run::<cmd_reverse_direction::ReverseDirection>("Reverse Direction", at),
         MenuItem::run::<cmd_close_with_line::CloseWithLine>("Close With a Line", at),
+    ];
+    // an open vector's end node draws on from there
+    let end = at.path(doc).ok().filter(|p| !p.closed).and_then(|path| {
+        let last = cut_craft_core::nodes::nodes(path).len().checked_sub(1)?;
+        match at.node(path).ok()? {
+            0 => Some("start"),
+            n if n == last => Some("end"),
+            _ => None,
+        }
+    });
+    if let Some(end) = end {
+        items.push(MenuItem::with_action(
+            "Edit Polyline",
+            &format!("{EDIT_POLYLINE}{}:{end}", at.vector.0),
+        ));
+    }
+    items.extend([
         MenuItem::separator(),
         MenuItem::with_action("Exit Node Editing", "node_edit"),
-    ]
+    ]);
+    items
 }
 
 impl MenuSystem {

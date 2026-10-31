@@ -13,6 +13,7 @@ mod gui;
 mod icons;
 mod options;
 mod pages;
+mod polyline;
 mod shortcut;
 mod spacemouse;
 mod view2d;

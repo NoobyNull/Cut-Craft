@@ -4171,3 +4171,101 @@ fn clipart_dropped_on_a_view_goes_there_and_import_to_level_puts_it_on_a_level()
     assert_eq!(h.app.doc.level_components(new).len(), 1, "the first stays");
     let _ = std::fs::remove_file(file);
 }
+
+#[test]
+fn a_polyline_is_drawn_point_by_point_with_curves_and_its_keys() {
+    use cut_craft_core::geometry::Segment;
+    let mut h = Harness::new();
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    // clicks make straight spans, a drag a curved one
+    let click = |h: &mut Harness, x, y| {
+        let at = h.at(x, y);
+        h.click(at, Modifiers::NONE);
+    };
+    click(&mut h, 10.0, 10.0);
+    click(&mut h, 60.0, 10.0);
+    let (from, to) = (h.at(60.0, 50.0), h.at(70.0, 50.0));
+    h.drag(from, to);
+    // a length typed and Enter: 20 along the pointer, here straight left
+    let left = h.at(0.0, 50.0);
+    h.frame(vec![Event::PointerMoved(left), Event::Text("20".into())]);
+    h.frame(vec![key(Key::Enter)]);
+    assert_eq!(h.app.polyline.points.len(), 4);
+    assert!(
+        h.app.polyline.points[3].distance(Point::new(40.0, 50.0)) < 1e-3,
+        "{:?}",
+        h.app.polyline.points[3]
+    );
+    // Backspace takes it back, Tab closes and makes the polyline
+    h.frame(vec![key(Key::Backspace)]);
+    assert_eq!(h.app.polyline.points.len(), 3);
+    h.frame(vec![key(Key::Tab)]);
+    let path = h.app.doc.vectors.values().last().expect("drawn");
+    assert!(path.closed);
+    assert_eq!(path.segments.len(), 3);
+    assert!(
+        matches!(path.segments[1], Segment::Cubic { .. }),
+        "the dragged span"
+    );
+    assert!(matches!(path.segments[0], Segment::Line { .. }));
+    assert!(h.app.polyline.is_empty(), "ready for the next");
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_polyline"));
+    // S: curve mode, Space finishes an open one
+    h.frame(vec![key(Key::S)]);
+    assert!(h.app.polyline.curved);
+    click(&mut h, 100.0, 100.0);
+    click(&mut h, 150.0, 120.0);
+    click(&mut h, 200.0, 100.0);
+    h.frame(vec![key(Key::Space)]);
+    let path = h.app.doc.vectors.values().last().unwrap();
+    assert!(!path.closed);
+    assert!(
+        path.segments
+            .iter()
+            .all(|s| matches!(s, Segment::Cubic { .. }))
+    );
+    assert!(h.app.polyline.curved, "the mode is kept");
+}
+
+#[test]
+fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
+    use cut_craft_core::nodes::NodeAt;
+    use cut_craft_core::params::Xy;
+    let mut h = Harness::new();
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    let line = serde_json::json!({
+        "points": [{ "x": 10.0, "y": 10.0 }, { "x": 50.0, "y": 10.0 }], "closed": false
+    });
+    h.app.apply("draw_polyline", &line).unwrap();
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    // the node menu offers it at either end, not in the middle of a closed shape
+    let at = |x, y| NodeAt {
+        vector: id,
+        at: Xy::new(x, y),
+        reach: 1.0,
+    };
+    let offered = |h: &Harness, x, y| {
+        gui::node_menu(&h.app.doc, &at(x, y))
+            .iter()
+            .find(|i| i.name == "Edit Polyline")
+            .map(|i| i.action.clone())
+    };
+    let action = offered(&h, 50.0, 10.0).expect("at the end");
+    assert!(offered(&h, 10.0, 10.0).is_some_and(|a| a.ends_with(":start")));
+    h.app.invoke(&h.ctx, &action);
+    h.frame(vec![]);
+    let to = h.at(50.0, 40.0);
+    h.click(to, Modifiers::NONE);
+    h.frame(vec![key(Key::Space)]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "extended, not a new vector");
+    let path = &h.app.doc.vectors[&id];
+    assert_eq!(path.segments.len(), 2);
+    assert!(path.segments[1].end().distance(Point::new(50.0, 40.0)) < 1e-3);
+    // undo takes the extension back
+    h.app.history.undo(&mut h.app.doc);
+    assert_eq!(h.app.doc.vectors[&id].segments.len(), 1);
+}

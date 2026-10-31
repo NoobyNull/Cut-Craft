@@ -239,6 +239,7 @@ impl CutCraftApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
         }
+        self.polyline_keys(ctx);
         self.shortcuts(ctx);
         egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));
@@ -583,6 +584,197 @@ impl CutCraftApp {
         label.clone_into(&mut self.status.current_tool);
     }
 
+    /// Draw Line / Polyline's keys while it is the tool: S swaps curves and straight lines;
+    /// with a polyline begun, Backspace takes back a point (or a typed character), Tab
+    /// closes it, Space finishes it and starts another, Esc finishes it (and closes the
+    /// form), and numbers typed then Enter place the next point.
+    pub(super) fn polyline_keys(&mut self, ctx: &egui::Context) {
+        use egui::{Key, Modifiers};
+        if self.drawing_tool() != Some("draw_polyline") {
+            if !self.polyline.is_empty() {
+                self.polyline = crate::polyline::Draft::default();
+            }
+            return;
+        }
+        // egui moved its focus with the Tab that closed the last polyline: the drawing keeps
+        // the keys
+        if std::mem::take(&mut self.polyline.tabbed) {
+            ctx.memory_mut(|m| {
+                if let Some(id) = m.focused() {
+                    m.surrender_focus(id);
+                }
+            });
+        }
+        if ctx.egui_wants_keyboard_input() {
+            return;
+        }
+        let key = |k: Key| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
+        if key(Key::S) {
+            self.polyline.toggle_curves();
+            let mode = if self.polyline.curved {
+                "curves"
+            } else {
+                "straight lines"
+            };
+            self.status
+                .set_message(&format!("Drawing {mode} (S swaps)"));
+        }
+        // what is typed goes to the next point, not to the shortcuts
+        let typed: String = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Text(t) => Some(t.clone()),
+                    _ => None,
+                })
+                .collect()
+        });
+        let typed: String = typed
+            .chars()
+            .filter(|c| c.is_ascii_digit() || ".,-aAlL ".contains(*c))
+            .collect();
+        if !typed.is_empty() {
+            for k in [Key::A, Key::L, Key::Comma, Key::Period, Key::Minus]
+                .into_iter()
+                .chain((0..=9).filter_map(|n| Key::from_name(&n.to_string())))
+            {
+                key(k);
+            }
+            self.polyline.typed.push_str(&typed);
+            self.status
+                .set_message(&format!("Next point: {}", self.polyline.typed));
+        }
+        if key(Key::Enter) && !self.polyline.typed.is_empty() {
+            let unit = crate::form::unit_mm(self.doc.job.units);
+            let toward = ctx
+                .pointer_latest_pos()
+                .zip(self.view_transform)
+                .map_or(cut_craft_core::geometry::Point::ZERO, |(at, t)| {
+                    t.to_job(at)
+                });
+            match self.polyline.typed_point(unit, toward) {
+                Some(at) => self.polyline.click(at),
+                None => self
+                    .status
+                    .set_message("Type a length, x,y, or an angle A length L"),
+            }
+            self.polyline.typed.clear();
+        }
+        if self.polyline.is_empty() {
+            return;
+        }
+        if key(Key::Backspace) && self.polyline.typed.pop().is_none() {
+            self.polyline.back();
+        }
+        if key(Key::Tab) {
+            self.finish_polyline(true);
+            self.polyline.tabbed = true;
+        }
+        if key(Key::Space) {
+            self.finish_polyline(false);
+        }
+        // Escape is left for the shortcuts, which then close the form
+        if ctx.input(|i| i.key_pressed(Key::Escape)) {
+            self.finish_polyline(false);
+        }
+    }
+
+    /// Edit Polyline: Draw Line / Polyline goes on drawing from an open vector's end (its
+    /// start, `from_start`), and what is drawn extends it.
+    pub(super) fn edit_polyline(&mut self, id: EntityId, from_start: bool) {
+        let Some(path) = self.doc.vectors.get(&id).filter(|p| !p.closed) else {
+            return;
+        };
+        let path = if from_start {
+            path.reversed()
+        } else {
+            path.clone()
+        };
+        let end = path
+            .segments
+            .last()
+            .map_or(path.start, cut_craft_core::geometry::Segment::end);
+        self.view_tool = None;
+        self.start_command("draw_polyline");
+        let curved = self.polyline.curved;
+        self.polyline = crate::polyline::Draft::default();
+        (self.polyline.curved, self.polyline.extends) = (curved, Some((id, path)));
+        self.polyline.click(end);
+        self.status
+            .set_message("Drawing on from the end: Space or Esc finishes, Tab closes it");
+    }
+
+    /// The polyline drawn so far made (closed or not), and a new one begun in the same mode.
+    pub(super) fn finish_polyline(&mut self, closed: bool) {
+        let draft = std::mem::take(&mut self.polyline);
+        self.polyline.curved = draft.curved;
+        if draft.extends.is_some() {
+            if let Some((id, path)) = draft.extended(closed) {
+                let mut c = Change::builder(&self.doc);
+                c.replace(id, path);
+                c.select([id]);
+                self.record(Ok(c.finish()), "Polyline extended");
+            }
+            return;
+        }
+        if let Some(params) = draft.params(closed) {
+            if let Some(form) = &mut self.form {
+                form.params.clone_from(&params);
+            }
+            if let Err(e) = self.apply("draw_polyline", &params) {
+                self.status.set_message(&e);
+            }
+        }
+    }
+
+    /// A click adds the next point (on the first, it closes the polyline; on the last, it
+    /// swaps curves and straight lines); a drag adds one with a smooth span.
+    fn polyline_gesture(&mut self, gesture: Option<Gesture>, reach: f64) {
+        match gesture {
+            Some(Gesture::Click { at, .. }) => {
+                let near = |p: Option<&cut_craft_core::geometry::Point>| {
+                    p.is_some_and(|p| p.distance(at) <= reach)
+                };
+                // the polyline's first point: an extended vector's start
+                let first = match &self.polyline.extends {
+                    Some((_, base)) => Some(&base.start),
+                    None => self
+                        .polyline
+                        .points
+                        .first()
+                        .filter(|_| self.polyline.points.len() >= 3),
+                };
+                if near(first) {
+                    self.finish_polyline(true);
+                } else if near(self.polyline.points.last()) {
+                    self.polyline.toggle_curves();
+                } else {
+                    self.polyline.click(at);
+                }
+            }
+            Some(Gesture::Dropped { drag, .. }) => self.polyline.drag(drag.start, drag.end),
+            _ => {}
+        }
+    }
+
+    /// The polyline being drawn, on to the pointer (or along a drag in progress).
+    fn polyline_overlay(&self, gesture: Option<Gesture>, canvas: &Canvas) -> Overlay {
+        let mut draft = self.polyline.clone();
+        let pointer = match gesture {
+            Some(Gesture::Dragging(drag)) => {
+                draft.drag(drag.start, drag.end);
+                None
+            }
+            _ => canvas.hover().map(|at| canvas.transform.to_job(at)),
+        };
+        Overlay::Preview(
+            draft
+                .path(false, pointer.filter(|_| !draft.is_empty()))
+                .into_iter()
+                .collect(),
+        )
+    }
+
     /// Clipart dragged from the Clipart tab and dropped on the 2D view goes where it was
     /// dropped.
     fn clipart_dropped_2d(&mut self, ui: &egui::Ui, canvas: &Canvas) {
@@ -606,11 +798,9 @@ impl CutCraftApp {
         let reach = canvas.pick_tolerance(ui);
         let gesture = canvas.gesture(ui);
         // a guide being dragged takes the drag over
-        let gesture = if self.guide_gesture(ui, &canvas, reach) {
-            None
-        } else {
-            self.snapped(ui, gesture, canvas.transform.scale)
-        };
+        let guided = self.guide_gesture(ui, &canvas, reach);
+        let gesture = gesture.filter(|_| !guided);
+        let gesture = self.snapped(ui, gesture, canvas.transform.scale);
         self.track_stroke(gesture);
         let placing_tabs = self.placing_tabs();
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
@@ -632,6 +822,7 @@ impl CutCraftApp {
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Transform), _) => {
                 self.transform_overlay(ui, drag, reach)
             }
+            (gesture, None, Some("draw_polyline")) => self.polyline_overlay(gesture, &canvas),
             (Some(Gesture::Dragging(drag)), _, Some(id)) => {
                 Overlay::Preview(self.preview(id, drag))
             }
@@ -686,6 +877,7 @@ impl CutCraftApp {
                 self.click_select(at, shift, reach);
             }
             (gesture, Some(ViewTool::Transform), _) => self.transform_gesture(ui, gesture, reach),
+            (gesture, None, Some("draw_polyline")) => self.polyline_gesture(gesture, reach),
             (Some(Gesture::Dropped { drag, .. }), None, Some(id)) => self.draw(id, drag),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.plain_drop(drag, shift, reach, placing_tabs);
@@ -1201,6 +1393,11 @@ impl CutCraftApp {
 
     /// The 2D view's right-click menu: a node's while node editing, else the selection's.
     pub(super) fn view_menu(&mut self, ui: &egui::Ui, canvas: &Canvas, reach: f64) {
+        // a right-click finishes a polyline being drawn, as in Aspire
+        if !self.polyline.is_empty() && canvas.response().secondary_clicked() {
+            self.finish_polyline(false);
+            return;
+        }
         let pressed = ui
             .input(|i| i.pointer.press_origin())
             .map(|q| canvas.transform.to_job(q));
