@@ -417,25 +417,28 @@ impl CutCraftApp {
         }
     }
 
-    /// Cuts the toolpath from the previewed material (uncut material if there is none yet).
-    /// The cascade: start again from uncut material, then preview each visible toolpath.
-    pub(super) fn preview_all(&mut self) {
+    /// Preview All (or, `visible_only`, Preview Visible): start again from uncut material,
+    /// then preview each toolpath (each shown one) in list order.
+    pub(super) fn preview_all(&mut self, visible_only: bool) {
         self.finish_playback();
-        self.simulation = None;
+        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
         let visible: Vec<EntityId> = self
             .doc
             .toolpaths
             .iter()
-            .filter(|(_, t)| t.visible)
+            .filter(|(_, t)| t.visible || !visible_only)
             .map(|(&id, _)| id)
             .collect();
         if self.display.animate_preview {
             self.play(&visible);
             return;
         }
+        let before = self.before_preview.take();
         for id in visible {
             self.preview_toolpath(id);
         }
+        // the cascade is one preview to undo
+        self.before_preview = before;
     }
 
     /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet).
@@ -466,6 +469,8 @@ impl CutCraftApp {
 
     pub(super) fn preview_toolpath(&mut self, id: EntityId) {
         if self.display.animate_preview {
+            self.finish_playback();
+            self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
             self.play(&[id]);
             return;
         }
@@ -473,6 +478,7 @@ impl CutCraftApp {
         let Some(toolpath) = self.doc.toolpaths.get(&id) else {
             return;
         };
+        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
         self.simulation
             .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()))
             .cut(toolpath);
@@ -1071,8 +1077,10 @@ impl CutCraftApp {
             return false;
         };
         let p = surface.centre(column, row);
+        let before = self.simulation.clone();
         let removed = self.simulation.as_mut().map_or(0, |m| m.remove_piece(p));
         if removed > 0 {
+            self.before_preview = Some(super::BeforePreview(before));
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
             self.status.set_message("Removed the piece cut free");
         }
@@ -1498,6 +1506,8 @@ impl CutCraftApp {
                 "delete_toolpath",
                 "preview_toolpath",
                 "preview_all_toolpaths",
+                "preview_visible_toolpaths",
+                "undo_last_preview",
                 "reset_preview",
             ],
         }];

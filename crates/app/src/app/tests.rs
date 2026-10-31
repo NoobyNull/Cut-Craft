@@ -2822,7 +2822,7 @@ fn every_enabled_control_works() {
 }
 
 #[test]
-fn preview_all_leaves_hidden_toolpaths_out() {
+fn preview_visible_leaves_hidden_toolpaths_out() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for id in ["drilling_toolpath", "profile_toolpath"] {
@@ -2835,7 +2835,7 @@ fn preview_all_leaves_hidden_toolpaths_out() {
     let only_profile = h.app.simulation.clone();
     let drilling = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.doc.toolpaths.get_mut(&drilling).unwrap().visible = false;
-    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.app.invoke(&h.ctx, "preview_visible_toolpaths");
     assert_eq!(h.app.simulation, only_profile);
 }
 
@@ -3887,4 +3887,35 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         !h.app.remove_preview_piece(fit, fit.center()),
         "already gone"
     );
+}
+
+#[test]
+fn preview_visible_leaves_hidden_toolpaths_out_and_undo_last_steps_back_one_preview() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for id in ["drilling_toolpath", "profile_toolpath"] {
+        h.app.invoke(&h.ctx, id);
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply(id, &params).unwrap();
+    }
+    let ids: Vec<EntityId> = h.app.doc.toolpaths.keys().copied().collect();
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let all = h.app.simulation.clone().unwrap();
+    // hide the profile: Preview Visible cuts the drilling only, Preview All both
+    h.app.doc.toolpaths.get_mut(&ids[1]).unwrap().visible = false;
+    h.app.invoke(&h.ctx, "preview_visible_toolpaths");
+    let visible = h.app.simulation.clone().unwrap();
+    assert_ne!(visible, all);
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    assert_eq!(h.app.simulation.as_ref(), Some(&all));
+    // undo goes back to before the last preview, once
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    assert_eq!(h.app.simulation.as_ref(), Some(&visible));
+    assert!(!h.app.available("undo_last_preview"));
+    h.app.selected_toolpath = Some(ids[1]);
+    h.app.invoke(&h.ctx, "preview_toolpath");
+    assert_eq!(h.app.simulation.as_ref(), Some(&all));
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    assert_eq!(h.app.simulation.as_ref(), Some(&visible));
 }

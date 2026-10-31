@@ -67,6 +67,7 @@ impl CutCraftApp {
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
             save_form: None,
+            before_preview: None,
             display: crate::display::Display::default(),
             simulation: None,
             simulation_coarse: None,
@@ -136,7 +137,10 @@ impl CutCraftApp {
             "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
                 !self.doc.toolpaths.is_empty()
             }
-            "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
+            "recalculate_visible_toolpaths" | "preview_visible_toolpaths" => {
+                self.doc.toolpaths.values().any(|t| t.visible)
+            }
+            "undo_last_preview" => self.before_preview.is_some() && self.playback.is_none(),
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
@@ -349,8 +353,17 @@ impl CutCraftApp {
                     self.preview_toolpath(id);
                 }
             }
-            "preview_all_toolpaths" => self.preview_all(),
+            "preview_all_toolpaths" => self.preview_all(false),
+            "preview_visible_toolpaths" => self.preview_all(true),
+            "undo_last_preview" => {
+                if let Some(before) = self.before_preview.take() {
+                    self.simulation = before.0;
+                    (self.simulation_coarse, self.fine_3d) = (None, None);
+                    self.status.set_message("Undid the last preview");
+                }
+            }
             "reset_preview" => {
+                self.before_preview = None;
                 (self.simulation, self.simulation_coarse, self.fine_3d) = (None, None, None);
                 (self.playback, self.playing) = (None, false);
             }

@@ -440,7 +440,8 @@ say "not implemented yet".
   bunch, and move across as the surface goes down, so carvings show rings); the wrapped
   rotary view and the block's sides are plain.
 - Toolpaths tab: every strategy above; the list's Recalculate, Recalculate All, Delete,
-  Preview, Preview All, Reset Preview. Each row has a tick to show or hide it and opens its
+  Preview, Preview Visible (the shown toolpaths), Preview All (every toolpath, shown or not),
+  Undo Last Preview (back to before the last preview, once), Reset Preview. Each row has a tick to show or hide it and opens its
   form on a double-click; the up and down arrows move the selected toolpath through the cut
   and save order (Move Toolpath), Merged and Array Copy toolpaths keeping their sources.
 

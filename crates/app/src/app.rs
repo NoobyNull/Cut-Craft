@@ -127,7 +127,7 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 84] = [
+const BUILT_INS: [&str; 86] = [
     "find_tool",
     "machine_configuration",
     "add_machine",
@@ -211,6 +211,8 @@ const BUILT_INS: [&str; 84] = [
     "tool_database",
     "preview_toolpath",
     "preview_all_toolpaths",
+    "preview_visible_toolpaths",
+    "undo_last_preview",
     "reset_preview",
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
@@ -227,6 +229,10 @@ enum Info {
     /// (`design`, `toolpaths`) or a tool's id.
     Help(&'static str),
 }
+
+/// The previewed material before a preview: `None` was uncut material.
+#[derive(Clone, Debug)]
+pub(super) struct BeforePreview(Option<Material>);
 
 /// Save Toolpaths' choices (Aspire's Save Toolpaths form), while its window is open.
 #[derive(Clone, Debug)]
@@ -596,6 +602,8 @@ struct CutCraftApp {
     summary: (f64, f64),
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
+    /// The previewed material before the last preview, for Undo Last Preview.
+    before_preview: Option<BeforePreview>,
     /// Save Toolpaths' form, while it is open.
     save_form: Option<SaveForm>,
     /// Snapping Options (F4) and whether their window is open.
