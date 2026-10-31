@@ -2194,6 +2194,12 @@ fn the_arrow_keys_nudge_the_selection() {
             "{modifiers:?}: {moved}"
         );
     }
+    h.app.snap.fixed_nudge = true;
+    h.app.snap.nudge_distance = 0.25;
+    let from = at(&h);
+    h.frame(vec![key(Key::ArrowRight)]);
+    let moved = (at(&h) - from).x;
+    assert!((moved - 0.25).abs() < 1e-9, "fixed nudge: {moved}");
 }
 
 #[test]
