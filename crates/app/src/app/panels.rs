@@ -953,6 +953,9 @@ impl CutCraftApp {
                     .collect();
                 view3d::painted(material, |id| fills.get(&id).copied().flatten().map(rgb))
             }
+            MachinedArea::Lithophane => {
+                view3d::lit_through(material, rgb(job.colour), job.lithophane_light)
+            }
         }
     }
 

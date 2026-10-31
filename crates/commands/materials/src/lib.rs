@@ -104,6 +104,19 @@ pub struct Params {
     )]
     #[serde(default = "fill")]
     pub fill_colour: [u8; 3],
+    /// How a lithophane is lit: to the left high contrast, to the right lighter, as with no
+    /// light behind it
+    #[schemars(
+        title = "Lithophane light",
+        range(min = 0, max = 1),
+        extend("x-show-when" = {"machined_area": "lithophane"})
+    )]
+    #[serde(default = "half_light")]
+    pub lithophane_light: f64,
+}
+
+fn half_light() -> f64 {
+    0.5
 }
 
 fn pine() -> [u8; 3] {
@@ -121,6 +134,7 @@ impl Default for Params {
             colour: pine(),
             machined_area: MachinedArea::default(),
             fill_colour: fill(),
+            lithophane_light: half_light(),
         }
     }
 }
@@ -144,6 +158,7 @@ impl Command for Materials {
             colour: doc.job.colour,
             machined_area: doc.job.machined_area,
             fill_colour: doc.job.fill_colour,
+            lithophane_light: doc.job.lithophane_light,
         }
     }
 
@@ -154,6 +169,7 @@ impl Command for Materials {
             colour,
             machined_area: p.machined_area,
             fill_colour: p.fill_colour,
+            lithophane_light: p.lithophane_light.clamp(0.0, 1.0),
             ..doc.job
         });
         Ok(c.finish())
@@ -192,6 +208,15 @@ mod tests {
         assert_eq!(doc.job.colour, [9, 9, 9]);
         assert_eq!(doc.job.machined_area, MachinedArea::GlobalFillColor);
         assert_eq!(doc.job.fill_colour, [0, 0, 255]);
+        // the lithophane preview and its light, kept within 0 to 1
+        let p = Params {
+            machined_area: MachinedArea::Lithophane,
+            lithophane_light: 1.5,
+            ..Materials::initial_params(&doc)
+        };
+        run_on::<Materials>(&mut doc, &p);
+        assert_eq!(doc.job.machined_area, MachinedArea::Lithophane);
+        assert!((doc.job.lithophane_light - 1.0).abs() < 1e-12);
     }
 
     #[test]

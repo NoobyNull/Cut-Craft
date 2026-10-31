@@ -379,6 +379,31 @@ pub fn painted(mut material: Material, fill: impl Fn(u32) -> Option<Color32>) ->
     material
 }
 
+/// `material` painted as a lithophane lit from behind: white where nothing is left, `colour`
+/// (the material's) at full thickness, and between by the share left, raised to a power the
+/// `light` sets: 0 is high contrast (the colour soon), 1 light (white long) [inf].
+#[expect(clippy::cast_possible_truncation, reason = "a share of the thickness")]
+pub fn lit_through(mut material: Material, colour: Color32, light: f64) -> Material {
+    let power = 4f64.powf(2.0 * light.clamp(0.0, 1.0) - 1.0);
+    let thickness = -material.bottom;
+    let (white, base) = (Rgba::WHITE, Rgba::from(colour));
+    material.paint = material
+        .heights
+        .iter()
+        .map(|&height| {
+            if height.is_nan() || thickness <= 0.0 {
+                return 0;
+            }
+            let left = ((height - material.bottom) / thickness)
+                .clamp(0.0, 1.0)
+                .powf(power);
+            let c = Color32::from(white * (1.0 - left as f32) + base * left as f32);
+            u32::from_be_bytes([1, c.r(), c.g(), c.b()])
+        })
+        .collect();
+    material
+}
+
 /// A cell's preview colour, if it is painted.
 fn paint_of(material: &Material, cell: usize) -> Option<Color32> {
     let [flag, red, green, blue] = material.paint.get(cell)?.to_be_bytes();
@@ -1288,6 +1313,31 @@ fn wrapped_quads(m: &Material, wrap: Wrap, light: DVec3) -> Vec<([DVec3; 4], f64
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_lithophane_is_white_where_nothing_is_left_and_the_material_where_it_is_whole() {
+        use cut_craft_core::document::Job;
+        let job = Job {
+            thickness: 10.0,
+            ..Job::default()
+        };
+        let mut m = cut_craft_core::simulation::Material::new(&job, 4);
+        m.heights[0] = 0.0;
+        m.heights[1] = m.bottom;
+        m.heights[2] = m.bottom / 2.0;
+        let colour = Color32::from_rgb(200, 100, 0);
+        let lit = lit_through(m.clone(), colour, 0.5);
+        assert_eq!(paint_of(&lit, 0), Some(colour));
+        assert_eq!(paint_of(&lit, 1), Some(Color32::WHITE));
+        let mid = paint_of(&lit, 2).unwrap();
+        assert!(
+            mid.g() > 100 && mid.b() > 0 && mid.b() < 255,
+            "between: {mid:?}"
+        );
+        // more light: the half-thick cell is lighter still
+        let lighter = paint_of(&lit_through(m, colour, 1.0), 2).unwrap();
+        assert!(lighter.b() > mid.b(), "{lighter:?} vs {mid:?}");
+    }
 
     #[test]
     fn a_preview_is_painted_by_who_cut_each_cell_and_coarse_keeps_the_deepest_cells_paint() {

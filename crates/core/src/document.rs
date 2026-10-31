@@ -353,6 +353,10 @@ pub struct Job {
     /// Global Fill Color's colour.
     #[serde(default = "default_fill")]
     pub fill_colour: [u8; 3],
+    /// The lithophane preview's light, 0 (high contrast) to 1 (light, as with no light
+    /// behind it).
+    #[serde(default = "half_light")]
+    pub lithophane_light: f64,
     /// Set for a rotary job (added with rotary jobs; flat jobs leave it out).
     /// Double-sided jobs: how the material is turned over between sides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -389,6 +393,13 @@ pub enum MachinedArea {
     GlobalFillColor,
     /// Each toolpath's areas in its own colour (none: the material's)
     ToolpathColor,
+    /// Lit from behind: white where nothing is left, the material's colour at full
+    /// thickness, between by what is left (added with the lithophane preview)
+    Lithophane,
+}
+
+fn half_light() -> f64 {
+    0.5
 }
 
 fn default_fill() -> [u8; 3] {
@@ -476,6 +487,7 @@ impl Default for Job {
             // pine, as Toolpaths ▸ Materials has it
             colour: [214, 160, 102],
             machined_area: MachinedArea::MaterialColor,
+            lithophane_light: 0.5,
             fill_colour: [70, 130, 180],
             rotary: None,
             double_sided: None,
