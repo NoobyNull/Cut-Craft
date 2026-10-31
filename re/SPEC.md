@@ -809,3 +809,7 @@ instead of half-cell steps.
 ### Plate Production toolpaths [obs: help Plate Production]
 - With toolpaths calculated for the master template, Create Toolpaths (on by default then) calculates toolpaths for every plate: one toolpath per operation per sheet of material, named "S1 - Name" after the sheet and the template's toolpath. Unticked, only the vectors are made.
 - **[inf]** Cut Craft: each template toolpath (one whose vectors are in the template) is made again per sheet with its moves shifted onto each plate of that sheet, keeping its strategy, settings and tool, its vectors the plates' copies; a recalculation runs the strategy on those copies.
+
+### Texture Area, live [obs: help Create Texture Area]
+- A texture area component remembers it is one: selecting it and opening Create Texture Area (or opening the form, then selecting it) edits it with the form; Edit Textured Area Component drags a transform box on the lower-left tile to resize or move the tile, the pattern following. Resizing the component resizes the boundary tiled, not the tiles. Changing the border shape means starting again.
+- **[inf]** Cut Craft: the component keeps its hidden seed and settings (and a 3D clipart made of it carries them); the form opens on a selected texture area with its settings and Apply replaces it over its own box; a move, scale, rotate, mirror or align of a texture area tiles its new box again with the tiles unchanged. Not built: resizing the tile by handles in the 2D view.

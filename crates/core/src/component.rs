@@ -93,6 +93,10 @@ pub struct Component {
     /// The file an imported model came from, to import it again (added with re-import).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
+    /// A texture area: the hidden seed it repeats and how, so it is edited again from the
+    /// form and tiled again when its box changes (added with live texture areas).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub texture: Option<crate::texture_area::Texture>,
 }
 
 /// Where an imported model came from: it can be imported again, its settings changed, only
@@ -442,6 +446,7 @@ impl Component {
             level: 0,
             group: None,
             source: None,
+            texture: None,
         }
     }
 
@@ -491,6 +496,7 @@ impl Component {
             level: 0,
             group: None,
             source: None,
+            texture: None,
         }
     }
 
@@ -592,6 +598,7 @@ impl Component {
         out.shaping = self.shaping.transformed(t);
         out.level = self.level;
         out.group.clone_from(&self.group);
+        out.texture.clone_from(&self.texture);
         out
     }
 

@@ -398,7 +398,11 @@ impl Change {
             let component = &doc.components[&id];
             let t = f(component.extent());
             if t != DAffine2::IDENTITY {
-                c.replace_component(id, component.transformed(&t));
+                let moved = component.transformed(&t);
+                // a texture area's tiles keep their size: its new box is tiled again
+                let seed_of = |seed| doc.components.get(&seed).cloned();
+                let again = crate::texture_area::retiled(&moved, seed_of);
+                c.replace_component(id, again.unwrap_or(moved));
             }
         }
         Ok(c.finish())

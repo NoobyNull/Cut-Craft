@@ -28,6 +28,7 @@ pub mod simulation;
 pub mod snap;
 #[cfg(feature = "testing")]
 pub mod testing;
+pub mod texture_area;
 pub mod tiling;
 pub mod tool_names;
 pub mod toolpath;
