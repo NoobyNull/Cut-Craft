@@ -499,14 +499,44 @@ impl CutCraftApp {
             .collect();
         if self.display.animate_preview {
             self.play(&visible);
+            self.preview_other_side(visible_only);
             return;
         }
         let before = self.before_preview.take();
         for id in visible {
             self.preview_toolpath(id);
         }
+        self.preview_other_side(visible_only);
         // the cascade is one preview to undo
         self.before_preview = before;
+    }
+
+    /// A double-sided job's other side previewed too (its shown toolpaths, or all), cut
+    /// into the material's other side, which the 3D view shows as its underside.
+    fn preview_other_side(&mut self, visible_only: bool) {
+        if self.doc.job.double_sided.is_none() || self.doc.other_side.toolpaths.is_empty() {
+            return;
+        }
+        let (job, cells) = (self.doc.job, self.display.preview_cells());
+        let mut other = Material::new(&job, cells);
+        for t in self.doc.other_side.toolpaths.values() {
+            if t.visible || !visible_only {
+                other.cut(t);
+            }
+        }
+        let other = Some(std::sync::Arc::new(other));
+        if let Some(playback) = self.playback.as_mut() {
+            playback.set_other_side(other);
+        } else {
+            let material = self
+                .simulation
+                .get_or_insert_with(|| Material::new(&job, cells));
+            material.other_side = other;
+        }
+        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        if self.display.auto_open_3d {
+            self.view = View::ThreeD;
+        }
     }
 
     /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet).
@@ -526,7 +556,12 @@ impl CutCraftApp {
             .map(|&id| super::preview_mark(id))
             .collect();
         self.playback = Some(cut_craft_core::playback::Playback::new(start, &list).marked(&marks));
-        (self.playing, self.simulation_coarse, self.fine_3d) = (true, None, None);
+        (
+            self.playing,
+            self.simulation_coarse,
+            self.fine_3d,
+            self.surface_gpu,
+        ) = (true, None, None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
         }
@@ -536,7 +571,12 @@ impl CutCraftApp {
     pub(super) fn finish_playback(&mut self) {
         if let Some(playback) = self.playback.take() {
             self.simulation = Some(playback.material().clone());
-            (self.playing, self.simulation_coarse, self.fine_3d) = (false, None, None);
+            (
+                self.playing,
+                self.simulation_coarse,
+                self.fine_3d,
+                self.surface_gpu,
+            ) = (false, None, None, None);
         }
     }
 
@@ -557,7 +597,7 @@ impl CutCraftApp {
             .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()));
         material.cutting = super::preview_mark(id);
         material.cut(toolpath);
-        (self.simulation_coarse, self.fine_3d) = (None, None);
+        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
         }
@@ -816,7 +856,9 @@ impl CutCraftApp {
                 self.simulation_coarse = Some(view3d::coarse(material, MESH_CELLS));
             }
             let coarse = self.simulation_coarse.as_ref().expect("made above");
-            if self.doc.job.machined_area == MachinedArea::MaterialColor {
+            if self.doc.job.machined_area == MachinedArea::MaterialColor
+                && coarse.other_side.is_none()
+            {
                 return Some(Cow::Borrowed(coarse));
             }
             return Some(Cow::Owned(self.painted(coarse.clone())));
@@ -829,6 +871,14 @@ impl CutCraftApp {
     /// material's colour, one fill colour, or each toolpath's own.
     fn painted(&self, material: Material) -> Material {
         let job = &self.doc.job;
+        // a double-sided preview's other side, on the underside
+        let material = match job.double_sided {
+            Some(sides) => {
+                let turn = sides.flip.mirror(job.area());
+                material.with_underside(|p| turn.transform_point2(p))
+            }
+            None => material,
+        };
         let rgb = |[r, g, b]: [u8; 3]| egui::Color32::from_rgb(r, g, b);
         match job.machined_area {
             MachinedArea::MaterialColor => material,

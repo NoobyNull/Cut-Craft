@@ -26,6 +26,13 @@ pub struct Material {
     /// Each cell's preview colour, `0x01RRGGBB` (0: the material's own); the 3D view
     /// paints it from `cut_by` just before drawing, empty when it is all material colour.
     pub paint: Vec<u32>,
+    /// A double-sided job's other side as its toolpaths cut it, seen from that side (its
+    /// own top at 0); none until they are previewed.
+    pub other_side: Option<std::sync::Arc<Material>>,
+    /// The underside's height over each cell, row by row (`bottom` where uncut, NaN where
+    /// nothing is left); the 3D view fills it in from `other_side` just before drawing,
+    /// empty for a flat underside.
+    pub under: Vec<f64>,
 }
 
 #[expect(
@@ -50,7 +57,38 @@ impl Material {
             cut_by: vec![0; columns * rows],
             cutting: 0,
             paint: vec![],
+            other_side: None,
+            under: vec![],
         }
+    }
+
+    /// The material with its other side's cuts on its underside, the other side's point
+    /// for each of this side's being where `turn` takes it; a cell cut through from both
+    /// sides is left empty (NaN, top and underside). Unchanged without an other side.
+    #[must_use]
+    pub fn with_underside(mut self, turn: impl Fn(Point) -> Point) -> Self {
+        let Some(other) = self.other_side.clone() else {
+            return self;
+        };
+        let mut under = vec![self.bottom; self.heights.len()];
+        for row in 0..self.rows {
+            for column in 0..self.columns {
+                let i = row * self.columns + column;
+                // the other side's depth below its top is height above this side's bottom
+                let depth = other.at(turn(self.centre(column, row))).unwrap_or(0.0);
+                let depth = if depth.is_nan() {
+                    f64::NEG_INFINITY
+                } else {
+                    depth
+                };
+                under[i] = self.bottom - depth;
+                if under[i] >= self.heights[i] || self.heights[i].is_nan() {
+                    (self.heights[i], under[i]) = (f64::NAN, f64::NAN);
+                }
+            }
+        }
+        self.under = under;
+        self
     }
 
     /// Middle of a cell, job mm.

@@ -363,13 +363,18 @@ impl CutCraftApp {
             "undo_last_preview" => {
                 if let Some(before) = self.before_preview.take() {
                     self.simulation = before.0;
-                    (self.simulation_coarse, self.fine_3d) = (None, None);
+                    (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                     self.status.set_message("Undid the last preview");
                 }
             }
             "reset_preview" => {
                 self.before_preview = None;
-                (self.simulation, self.simulation_coarse, self.fine_3d) = (None, None, None);
+                (
+                    self.simulation,
+                    self.simulation_coarse,
+                    self.fine_3d,
+                    self.surface_gpu,
+                ) = (None, None, None, None);
                 (self.playback, self.playing) = (None, false);
             }
             id if id.starts_with("open_recent:") => {
@@ -1170,7 +1175,8 @@ impl CutCraftApp {
             self.simulation,
             self.simulation_coarse,
             self.fine_3d,
-        ) = (None, None, None, None);
+            self.surface_gpu,
+        ) = (None, None, None, None, None);
         self.clear_recovery();
     }
 
@@ -1768,6 +1774,22 @@ impl CutCraftApp {
         Ok(())
     }
 
+    /// After Swap Sides, a double-sided preview turned over with the job: its other side on
+    /// top, the side that was up underneath.
+    fn turn_preview_over(&mut self) {
+        self.finish_playback();
+        let Some(mut top) = self.simulation.take() else {
+            return;
+        };
+        let under = top.other_side.take();
+        self.simulation = under.map(|under| {
+            let mut now_up = std::sync::Arc::unwrap_or_clone(under);
+            now_up.other_side = Some(std::sync::Arc::new(top));
+            now_up
+        });
+        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+    }
+
     /// `change` with the components Orientate 3D Model makes put on the level clipart was
     /// imported to, if it was (Import to Level).
     fn onto_import_level(&self, id: &str, change: Change) -> Change {
@@ -1823,6 +1845,9 @@ impl CutCraftApp {
                 .set_message(&format!("Each strand makes {turns:.2} revolutions"));
         }
         self.warn(&made, &notes);
+        if id == "swap_sides" {
+            self.turn_preview_over();
+        }
         Ok(())
     }
 

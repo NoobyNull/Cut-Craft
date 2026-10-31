@@ -68,6 +68,13 @@ impl Playback {
         self
     }
 
+    /// A double-sided job's other side, as its toolpaths cut it, kept with the material
+    /// played into (and with it when played back again).
+    pub fn set_other_side(&mut self, other: Option<std::sync::Arc<Material>>) {
+        self.start.other_side.clone_from(&other);
+        self.material.other_side = other;
+    }
+
     /// The material as cut so far.
     pub fn material(&self) -> &Material {
         &self.material

@@ -36,8 +36,9 @@ struct Camera {
     kind: u32,
     // 1: the heights are followed by each cell's paint, 0x01RRGGBB in sRGB (0: unpainted)
     painted: u32,
+    // 1: then each cell's underside height (a double-sided preview), drawn as its own grid
+    under: u32,
     // to a whole 16 bytes (scalars: a vec3 would be aligned to 16 and grow the struct)
-    pad_b: u32,
     pad_c: u32,
 };
 
@@ -187,8 +188,46 @@ fn surface_vertex(i: u32) -> Placed {
     return out;
 }
 
+// where a cell's underside is: the block's bottom, or (a double-sided preview) cut from below
+fn floor_at(c: u32, r: u32) -> f32 {
+    if camera.under == 0u {
+        return camera.bottom;
+    }
+    let cells = camera.columns * camera.rows;
+    let first = cells + select(0u, cells, camera.painted == 1u);
+    return data[first + r * camera.columns + c];
+}
+
+// a cell's underside, shaded down from its neighbours as the top is
+fn underside_vertex(k: u32) -> Placed {
+    let c = k % camera.columns;
+    let r = k / camera.columns;
+    let own = floor_at(c, r);
+    var out: Placed;
+    out.p = flat(c, r, own);
+    let right = step(c, 1, camera.columns, false);
+    let left = step(c, -1, camera.columns, false);
+    let up = step(r, 1, camera.rows, false);
+    let down = step(r, -1, camera.rows, false);
+    let across = flat(right, r, floor_or(right, r, own)) - flat(left, r, floor_or(left, r, own));
+    let along = flat(c, up, floor_or(c, up, own)) - flat(c, down, floor_or(c, down, own));
+    var normal = cross(across, along);
+    if normal.z > 0.0 {
+        normal = -normal;
+    }
+    out.normal = normal;
+    out.colour = camera.colour.rgb;
+    return out;
+}
+
+// a neighbour's underside, or `own` where it has none
+fn floor_or(c: u32, r: u32, own: f32) -> f32 {
+    let h = floor_at(c, r);
+    return select(h, own, h <= EMPTY);
+}
+
 // the block's sides: a top and a bottom vertex for each edge cell, the edges in turn (front,
-// back, left, right), then the bottom's four corners
+// back, left, right), then the bottom's four corners (or the cut underside's grid)
 fn side_vertex(j: u32) -> Placed {
     let columns = camera.columns;
     let rows = camera.rows;
@@ -216,7 +255,9 @@ fn side_vertex(j: u32) -> Placed {
             out.normal = vec3<f32>(1.0, 0.0, 0.0);
         }
         let h = data[r * columns + c];
-        out.p = flat(c, r, select(h, camera.bottom, down));
+        out.p = flat(c, r, select(h, floor_at(c, r), down));
+    } else if camera.under == 1u {
+        return underside_vertex(j - 2u * perimeter);
     } else {
         let k = j - 2u * perimeter;
         let c = select(0u, columns - 1u, k == 1u || k == 2u);

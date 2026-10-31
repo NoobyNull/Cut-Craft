@@ -345,6 +345,16 @@ pub fn coarse(material: &Material, most: usize) -> Material {
         cut_by: of(&m.cut_by),
         cutting: m.cutting,
         paint: of(&m.paint),
+        other_side: m.other_side.clone(),
+        // the underside under each block's deepest cell, as its top
+        under: if m.under.is_empty() {
+            vec![]
+        } else {
+            deepest
+                .iter()
+                .map(|d| d.map_or(f64::NAN, |i| m.under[i]))
+                .collect()
+        },
     }
 }
 
@@ -835,41 +845,8 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
     projected.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut quads: Vec<_> = projected.into_iter().map(|(_, q, c)| (q, c)).collect();
     let camera = Camera::new(m, orbit, framing, area, look.wrap);
-    // then the block's sides that face the viewer, from the surface down to the bottom, and
-    // its bottom seen from below: the block is all behind them, so they go last
-    let (last_column, last_row) = (m.columns - 1, m.rows - 1);
-    let sides: [(DVec3, Vec<(usize, usize)>); 4] = [
-        (DVec3::NEG_Y, (0..m.columns).map(|c| (c, 0)).collect()),
-        (DVec3::Y, (0..m.columns).map(|c| (c, last_row)).collect()),
-        (DVec3::NEG_X, (0..m.rows).map(|r| (0, r)).collect()),
-        (DVec3::X, (0..m.rows).map(|r| (last_column, r)).collect()),
-    ];
-    let down = |p: DVec3| DVec3::new(p.x, p.y, m.bottom);
-    for (outward, edge) in sides
-        .into_iter()
-        .filter(|_| look.sides && look.wrap.is_none())
-    {
-        if !camera.faces(down(top(edge[0].0, edge[0].1)), outward) {
-            continue;
-        }
-        let colour = shade(lit(outward, look.light));
-        for pair in edge.windows(2) {
-            let (a, b) = (top(pair[0].0, pair[0].1), top(pair[1].0, pair[1].1));
-            if a.z.is_nan() || b.z.is_nan() {
-                continue;
-            }
-            quads.push(([a, b, down(b), down(a)], [colour; 4]));
-        }
-    }
-    let bottom = [
-        (0, 0),
-        (last_column, 0),
-        (last_column, last_row),
-        (0, last_row),
-    ]
-    .map(|(c, r)| down(top(c, r)));
-    if look.sides && look.wrap.is_none() && camera.faces(bottom[0], DVec3::NEG_Z) {
-        quads.push((bottom, [shade(lit(DVec3::NEG_Z, look.light)); 4]));
+    if look.sides && look.wrap.is_none() {
+        quads.extend(block_faces(m, &top, &camera, orbit, &shade, look.light));
     }
     let mut mesh = Mesh::default();
     for (corners, colours) in quads {
@@ -881,6 +858,102 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         mesh.add_triangle(first, first + 2, first + 3);
     }
     mesh
+}
+
+/// The block's sides that face the viewer, from the surface down to its underside, and the
+/// underside seen from below: flat, or (a double-sided preview) cut from below. The block
+/// is all behind them, so they go after the top.
+fn block_faces(
+    m: &Material,
+    top: &dyn Fn(usize, usize) -> DVec3,
+    camera: &Camera,
+    orbit: Orbit,
+    shade: &dyn Fn(f64) -> Color32,
+    light: DVec3,
+) -> Vec<([DVec3; 4], [Color32; 4])> {
+    let mut quads = vec![];
+    let (last_column, last_row) = (m.columns - 1, m.rows - 1);
+    let sides: [(DVec3, Vec<(usize, usize)>); 4] = [
+        (DVec3::NEG_Y, (0..m.columns).map(|c| (c, 0)).collect()),
+        (DVec3::Y, (0..m.columns).map(|c| (c, last_row)).collect()),
+        (DVec3::NEG_X, (0..m.rows).map(|r| (0, r)).collect()),
+        (DVec3::X, (0..m.rows).map(|r| (last_column, r)).collect()),
+    ];
+    // the underside: flat at the bottom, or (a double-sided preview) cut from below
+    let floor = |c: usize, r: usize| {
+        let p = top(c, r);
+        let z = m.under.get(r * m.columns + c).copied().unwrap_or(m.bottom);
+        DVec3::new(p.x, p.y, z)
+    };
+    for (outward, edge) in sides {
+        if !camera.faces(floor(edge[0].0, edge[0].1), outward) {
+            continue;
+        }
+        let colour = shade(lit(outward, light));
+        for pair in edge.windows(2) {
+            let (a, b) = (top(pair[0].0, pair[0].1), top(pair[1].0, pair[1].1));
+            let (fa, fb) = (floor(pair[0].0, pair[0].1), floor(pair[1].0, pair[1].1));
+            if a.z.is_nan() || b.z.is_nan() || fa.z.is_nan() || fb.z.is_nan() {
+                continue;
+            }
+            quads.push(([a, b, fb, fa], [colour; 4]));
+        }
+    }
+    if m.under.is_empty() {
+        let bottom = [
+            (0, 0),
+            (last_column, 0),
+            (last_column, last_row),
+            (0, last_row),
+        ]
+        .map(|(c, r)| floor(c, r));
+        if camera.faces(bottom[0], DVec3::NEG_Z) {
+            quads.push((bottom, [shade(lit(DVec3::NEG_Z, light)); 4]));
+        }
+    } else if camera.faces(floor(0, 0), DVec3::NEG_Z) {
+        quads.extend(underside(m, &floor, camera, orbit, shade, light));
+    }
+    quads
+}
+
+/// The underside's quads cut from below, seen from below (it faces the viewer), lit as
+/// they face and far to near.
+fn underside(
+    m: &Material,
+    floor: &dyn Fn(usize, usize) -> DVec3,
+    camera: &Camera,
+    orbit: Orbit,
+    shade: &dyn Fn(f64) -> Color32,
+    light: DVec3,
+) -> Vec<([DVec3; 4], [Color32; 4])> {
+    let mut quads = vec![];
+    for row in 1..m.rows {
+        for column in 1..m.columns {
+            // wound the other way round from the top, as seen from below
+            let corners = [
+                (column - 1, row - 1),
+                (column - 1, row),
+                (column, row),
+                (column, row - 1),
+            ]
+            .map(|(c, r)| floor(c, r));
+            if corners.iter().any(|p| p.z.is_nan()) {
+                continue;
+            }
+            let normal = (corners[1] - corners[0]).cross(corners[3] - corners[0]);
+            let normal = if normal.z > 0.0 { -normal } else { normal };
+            if !camera.faces(corners[0], normal) {
+                continue;
+            }
+            quads.push((corners, [shade(lit(normal, light)); 4]));
+        }
+    }
+    // far first
+    quads.sort_by(|a, b| {
+        let depth = |q: &[DVec3; 4]| q.iter().map(|&c| orbit.project(c).1).sum::<f64>();
+        depth(&a.0).total_cmp(&depth(&b.0))
+    });
+    quads
 }
 
 /// Triangles in the material's coordinates (as [`screen_of`] takes them), lit as the
@@ -1569,6 +1642,30 @@ mod tests {
             centre_y(&mesh.indices[mesh.indices.len() - 3..]),
         );
         assert!(first < last, "far (higher on screen) first, near last");
+    }
+
+    #[test]
+    fn seen_from_below_a_cut_underside_is_drawn_cell_by_cell() {
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let below = Orbit::facing(DVec3::NEG_Z);
+        let flat = mesh(&slotted(), below, Framing::default(), &plain(), area);
+        let mut cut = slotted();
+        cut.under = vec![cut.bottom; cut.heights.len()];
+        cut.under[0] = cut.bottom + 2.0;
+        let shown = mesh(&cut, below, Framing::default(), &plain(), area);
+        assert!(
+            shown.indices.len() > flat.indices.len() * 3 / 2,
+            "the underside's own grid: {} {}",
+            shown.indices.len(),
+            flat.indices.len()
+        );
+        let above = mesh(&cut, Orbit::TOP, Framing::default(), &plain(), area);
+        let plain_above = mesh(&slotted(), Orbit::TOP, Framing::default(), &plain(), area);
+        assert_eq!(
+            above.indices.len(),
+            plain_above.indices.len(),
+            "hidden from above"
+        );
     }
 
     #[test]

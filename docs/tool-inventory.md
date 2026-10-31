@@ -179,6 +179,9 @@ say "not implemented yet".
 - Double-sided jobs (Job Setup's Double Sided, Flip Direction Between Sides): each side keeps
   its own objects; Edit ▸ Swap Sides or the top bar's side button turns over; the other side
   is drawn faint and mirrored; the 2D right-click Copy to Other Side mirrors copies across.
+  Preview All (and Preview Visible) cuts both sides: the 3D view draws the other side's
+  cuts on the block's underside, turned over as Job Setup's flip says, cut through where
+  the two sides meet; Swap Sides turns the preview over with the job.
 - Plate Production (Offset and Layout): a template's !!variables!! filled from a data file's
   columns or a counter, plates laid out inside margins, a layer per sheet of material when
   they need more. Not done: copying the template's toolpaths onto each plate.
@@ -509,8 +512,8 @@ say "not implemented yet".
 - Drawing tab: Transform, Trim Objects.
 - Feeds and speeds: cutting data per machine (it is per material now), Lua-scripted posts;
   toolpath forms still show feeds in mm/min or in/min, not the tool's own units.
-- Double-sided jobs: Zero off same side is kept but not yet used by the posts; the 3D
-  view shows one side.
+- Double-sided jobs: Zero off same side is kept but not yet used by the posts; an animated
+  preview plays this side only (the other side is cut at once).
 
 **Known problems and stand-ins.**
 - Split Component takes closed vectors only (Aspire also extends open ones to the edges).

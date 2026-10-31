@@ -433,3 +433,34 @@ fn a_piece_cut_free_is_removed_whole_and_what_it_was_cut_from_stays() {
     assert!(m.remove_piece(Point::new(50.0, 50.0)) > 0);
     assert!(m.heights.iter().all(|h| h.is_nan() || *h <= m.bottom));
 }
+
+#[test]
+fn the_other_side_s_cuts_show_on_the_underside_and_cut_through_leaves_nothing() {
+    let mut top = material();
+    top.cut(&toolpath(&[(50.0, 10.0, -1.0), (50.0, 90.0, -1.0)]));
+    // the other side, turned over left to right: its x = 20 is this side's x = 80
+    let mut other = material();
+    other.cut(&toolpath(&[(20.0, 10.0, -5.0), (20.0, 90.0, -5.0)]));
+    other.cut(&toolpath(&[(50.0, 10.0, -20.0), (50.0, 90.0, -20.0)]));
+    top.other_side = Some(std::sync::Arc::new(other));
+    let shown = top.with_underside(|p| Point::new(100.0 - p.x, p.y));
+    // half-millimetre cells: x mm is column 2x
+    let cell = |x: usize, y: usize| 2 * y * shown.columns + 2 * x;
+    assert!(
+        (shown.under[cell(80, 50)] - -15.0).abs() < 1e-9,
+        "5 up from the bottom"
+    );
+    assert!(
+        (shown.under[cell(30, 50)] - -20.0).abs() < 1e-9,
+        "uncut: the bottom"
+    );
+    let through = cell(50, 50);
+    assert!(
+        shown.under[through].is_nan() && shown.heights[through].is_nan(),
+        "a slot through"
+    );
+    assert!(
+        material().with_underside(|p| p).under.is_empty(),
+        "one-sided: flat"
+    );
+}

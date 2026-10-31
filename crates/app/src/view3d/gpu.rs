@@ -52,6 +52,8 @@ pub struct Geometry {
     grid: Option<Grid>,
     /// The surface's heights are followed by each cell's preview paint (`Material::paint`).
     painted: bool,
+    /// Then by its underside's heights (`Material::under`), drawn as a grid of its own.
+    undersided: bool,
 }
 
 impl Geometry {
@@ -109,6 +111,12 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
     for &p in &m.paint {
         g.data.extend_from_slice(&p.to_ne_bytes());
     }
+    g.undersided = !m.under.is_empty() && sides && wrap.is_none();
+    for &h in m.under.iter().filter(|_| g.undersided) {
+        let h = if h.is_nan() { EMPTY } else { h as f32 };
+        g.data.extend_from_slice(&h.to_ne_bytes());
+    }
+    let floor = |c: usize, r: usize| m.under.get(r * m.columns + c).copied().unwrap_or(m.bottom);
     let index = |c: usize, r: usize| u32::try_from(r * m.columns + c).expect("fits u32");
     let (columns, rows) = match wrap {
         Some(w) if w.along_x => (m.columns.saturating_sub(1), m.rows),
@@ -139,7 +147,10 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
         let mut start = cells;
         for edge in edges {
             for (k, pair) in edge.windows(2).enumerate() {
-                if pair.iter().any(|&(c, r)| height(c, r).is_nan()) {
+                if pair
+                    .iter()
+                    .any(|&(c, r)| height(c, r).is_nan() || floor(c, r).is_nan())
+                {
                     continue;
                 }
                 let top = u32::try_from(start + 2 * k).expect("fits u32");
@@ -148,8 +159,22 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
             start += 2 * edge.len();
         }
         let bottom = u32::try_from(start).expect("fits u32");
-        g.quad([bottom, bottom + 1, bottom + 2, bottom + 3]);
-        g.vertices = bottom + 4;
+        if g.undersided {
+            // the underside's grid, wound the other way round to face down
+            for r in 0..m.rows.saturating_sub(1) {
+                for c in 0..m.columns.saturating_sub(1) {
+                    let corners = [(c, r), (c, r + 1), (c + 1, r + 1), (c + 1, r)];
+                    if corners.iter().any(|&(c, r)| floor(c, r).is_nan()) {
+                        continue;
+                    }
+                    g.quad(corners.map(|(c, r)| bottom + index(c, r)));
+                }
+            }
+            g.vertices = bottom + u32::try_from(cells).expect("fits u32");
+        } else {
+            g.quad([bottom, bottom + 1, bottom + 2, bottom + 3]);
+            g.vertices = bottom + 4;
+        }
     }
     g
 }
@@ -249,7 +274,12 @@ impl Draw {
         );
         words(
             &mut uniform,
-            &[u32::from(grid.is_none()), u32::from(geometry.painted), 0, 0],
+            &[
+                u32::from(grid.is_none()),
+                u32::from(geometry.painted),
+                u32::from(geometry.undersided),
+                0,
+            ],
         );
         debug_assert_eq!(uniform.len(), UNIFORM_BYTES);
         Self { geometry, uniform }
@@ -591,6 +621,29 @@ mod tests {
         let indices = u32s(&g.indices);
         assert_eq!(&indices[..6], &[0, 1, 101, 0, 101, 100], "the first quad");
         assert_eq!(g.grid.unwrap().cell, 1.0);
+    }
+
+    #[test]
+    fn a_cut_underside_is_a_grid_of_its_own_after_the_sides() {
+        let mut m = slotted();
+        let bottom = m.bottom;
+        m.under = vec![bottom; m.heights.len()];
+        m.under[5_050] = bottom + 3.0;
+        let flat = surface(&slotted(), None, true);
+        let g = surface(&m, None, true);
+        assert!(g.undersided);
+        assert_eq!(g.vertices as usize, 100 * 100 + 2 * 400 + 100 * 100);
+        assert_eq!(
+            g.data.len(),
+            2 * 100 * 100 * 4,
+            "heights, then the underside"
+        );
+        // the flat bottom's one quad becomes 99 x 99
+        assert_eq!(g.triangles(), flat.triangles() - 2 + 2 * 99 * 99);
+        assert!(
+            !surface(&m, None, false).undersided,
+            "no sides, no underside"
+        );
     }
 
     #[test]

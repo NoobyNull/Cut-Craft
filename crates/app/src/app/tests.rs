@@ -4319,3 +4319,46 @@ fn sculpting_works_in_the_3d_view_with_its_keys_and_wheel() {
     assert!(total(&h) > before, "the stroke deposited");
     assert_eq!(h.app.orbit, orbit, "the view stayed put");
 }
+
+#[test]
+fn a_double_sided_preview_cuts_both_sides_and_turns_over_with_the_job() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    // a pocket on this side, a pocket on the other
+    let pocket = |h: &mut Harness| {
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.app.invoke(&h.ctx, "pocket_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("pocket_toolpath", &params).unwrap();
+        h.app.form = None;
+    };
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    assert_eq!(h.app.doc.other_side.toolpaths.len(), 1);
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let preview = h.app.simulation.as_ref().expect("previewed");
+    assert!(
+        preview.other_side.is_some(),
+        "the other side is previewed too"
+    );
+    // the 3D view's surface has the other side's pocket on its underside
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let bottom = surface.bottom;
+    assert!(
+        surface.under.iter().any(|&z| z > bottom + 1e-6),
+        "the underside is cut"
+    );
+    // turned over, the other side's cuts are on top and this side's underneath
+    let before = h.app.simulation.clone().unwrap();
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    let after = h.app.simulation.as_ref().expect("still previewed");
+    assert_eq!(
+        after.other_side.as_deref().map(|m| &m.heights),
+        Some(&before.heights),
+        "the side that was up is now underneath"
+    );
+    h.frame(vec![]);
+}
