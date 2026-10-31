@@ -323,7 +323,8 @@ say "not implemented yet".
     (dialog 426). The result is plain curves (Aspire keeps it editable).
   - Fit Curves to Vectors (Edit ▸ Curve Fit Vectors): arcs, Béziers or lines within a
     tolerance, sharp corners kept past a max angle, replacing or beside the originals.
-  - Array Copy (rows × columns by gap or offset) and Circular Copy (round the selection's
+  - Array Copy (rows × columns by gap or offset; symmetry block of mirrors or half turns,
+    row / column displacement, Group Copies) and Circular Copy (round the selection's
     middle, the job centre or a point; total or step angle, clockwise positive; turning the
     copies or not). Copies stay on their originals' layers; copies of grouped vectors are
     not grouped.

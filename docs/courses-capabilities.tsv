@@ -64,7 +64,7 @@ node-edit	Node editing: move, insert, delete, smooth, cut, start point, spans to
 node-mirror	Node editing with H / V mirror lines	no	not available	node edit	mirror(ing)? line	115
 trim	Trim: interactive trim and Trim Objects (clear inside / outside a boundary)	yes	Interactive Vector Trim (click a piece, or drag across pieces; rejoin trimmed sections) and Trim Objects (selected vectors trimmed to the closed vector picked last, clearing inside or outside, refitting curves)	trim	\btrim	65
 offset	Offset vectors: in / out / both, sharp corners, open vectors left / right	yes	offset-vectors command	offset	offset
-array-copy	Array Copy: rows, columns, gap / offset	partly	array-copy command; no block symmetry, row / column displacement or group copies	array copy	array copy	92
+array-copy	Array Copy: rows, columns, gap / offset	yes	array-copy: gap / offset, symmetry (mirror columns / rows / both, rotate), row / column displacement, group copies	array copy	array copy	92
 circular-copy	Circular Copy	partly	circular-copy command; copies not grouped	circular	circular (copy|array)	95
 copy-along	Copy Along Vectors (objects or circles, align, new layer, reverse)	partly	copy-along-vectors command; no Copy Circles option	copy (vectors )?along	copy along	122
 nesting	Nesting: tool diameter, clearance, border, rotate, nest from corner	yes	Nest Parts: tool diameter, clearance, border gap, rotate parts to fit, nest from a corner along X or Y, keep or move the originals (by bounding boxes; true-shape nesting is #89)	nest	\bnest(ing)?\b	76
