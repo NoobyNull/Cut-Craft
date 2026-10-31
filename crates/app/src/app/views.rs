@@ -255,6 +255,7 @@ impl CutCraftApp {
         self.measure_window(ctx);
         self.snap_options_window(ctx);
         self.job_sheet_window(ctx);
+        self.stl_window(ctx);
         self.options_window(ctx);
         self.tool_search(ctx);
         match self.screen {
@@ -1929,6 +1930,74 @@ impl CutCraftApp {
             self.save_options();
         }
         self.job_sheet_window = open;
+    }
+
+    /// Export as STL: how the model is triangulated (kept with the options), Triangulate to
+    /// see the triangle count and error, and Save STL… to write it.
+    pub(super) fn stl_window(&mut self, ctx: &egui::Context) {
+        if !self.stl_window {
+            return;
+        }
+        let result = self.stl_result;
+        let mut open = true;
+        let schema = serde_json::to_value(schemars::schema_for!(fmt_export_as_stl::Settings))
+            .expect("a schema serialises");
+        let fields = crate::form::fields(&schema);
+        let mut values = serde_json::to_value(self.options.stl).expect("settings serialise");
+        let units = self.doc.job.units;
+        let (id, size) = (egui::Id::unique("export_as_stl"), dialog_size(ctx));
+        let (mut changed, mut triangulate, mut save) = (None, false, false);
+        cut_craft_bug_report::dialog(ctx, id, "Export Model as STL", size, &mut open, |ui| {
+            let picture = |_: &str| None;
+            let look = crate::form::Look {
+                units,
+                picture: &picture,
+                material: crate::form::material(&self.doc, units),
+                tool: None,
+            };
+            if crate::form::show(ui, &fields, &mut values, &look)
+                && let Ok(settings) = serde_json::from_value(values)
+            {
+                changed = Some(settings);
+            }
+            ui.horizontal(|ui| {
+                triangulate = ui.button("Triangulate").clicked();
+                save = ui.button("Save STL…").clicked();
+            });
+            if let Some((count, error)) = result {
+                ui.label(format!("Num Tri Created: {count}"));
+                ui.label(format!("Maximum Error: {}", super::length(error, units)));
+            }
+        });
+        if let Some(settings) = changed {
+            self.options.stl = settings;
+            self.stl_result = None;
+            self.save_options();
+        }
+        if triangulate || save {
+            match fmt_export_as_stl::triangulate(&self.doc, &self.options.stl) {
+                Ok(mesh) => {
+                    self.stl_result = Some((mesh.triangles.len(), mesh.error));
+                    if save {
+                        self.save_stl(&mesh.triangles);
+                    }
+                }
+                Err(e) => self.status.set_message(&e.to_string()),
+            }
+        }
+        self.stl_window = open;
+    }
+
+    fn save_stl(&mut self, triangles: &[[cut_craft_core::glam::DVec3; 3]]) {
+        let Some(path) = file_dialog().add_filter("STL", &["stl"]).save_file() else {
+            return;
+        };
+        let path = path.with_extension("stl");
+        let result = std::fs::write(&path, fmt_export_as_stl::binary_stl(triangles));
+        self.status.set_message(&result.map_or_else(
+            |e| format!("{}: {e}", path.display()),
+            |()| format!("Exported {}", path.display()),
+        ));
     }
 
     /// Snapping Options: what drawing and node drags snap to.

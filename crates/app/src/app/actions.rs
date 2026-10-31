@@ -70,6 +70,8 @@ impl CutCraftApp {
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
             job_sheet_window: false,
+            stl_window: false,
+            stl_result: None,
             layers_on_sheet: false,
             save_form: None,
             before_preview: None,
@@ -420,6 +422,7 @@ impl CutCraftApp {
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(EXPORT_LEVEL) => {
                 self.level_action(id);
             }
+            "export_as_stl" => (self.stl_window, self.stl_result) = (true, None),
             id if self.registry.exporter(id).is_some() => self.export(id),
             id if id.starts_with(gui::REIMPORT_MODEL) => self.reimport_model(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {

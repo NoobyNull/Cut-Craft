@@ -2596,6 +2596,8 @@ name = "fmt-export-as-stl"
 version = "0.3.3"
 dependencies = [
  "cut-craft-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

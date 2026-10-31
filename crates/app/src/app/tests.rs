@@ -4598,6 +4598,23 @@ fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
 }
 
 #[test]
+fn export_as_stl_opens_its_form_and_keeps_its_settings() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "export_as_stl");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.stl_window);
+    for text in [
+        "Export Model as STL",
+        "Triangulate",
+        "Back face of triangulation",
+    ] {
+        assert!(h.text_at(text).is_some(), "{text}");
+    }
+    assert_eq!(h.app.options.stl, fmt_export_as_stl::Settings::default());
+}
+
+#[test]
 fn job_sheets_take_the_editor_s_style_and_name_their_side() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "job_sheet_editor");

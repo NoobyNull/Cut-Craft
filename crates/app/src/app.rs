@@ -663,6 +663,10 @@ struct CutCraftApp {
     snap_window: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
     job_sheet_window: bool,
+    /// Export as STL's form is open.
+    stl_window: bool,
+    /// The triangle count and largest error of its last Triangulate.
+    stl_result: Option<(usize, f64)>,
     /// The Layers List leaves out the layers with nothing on the active sheet.
     layers_on_sheet: bool,
     /// What the views draw.

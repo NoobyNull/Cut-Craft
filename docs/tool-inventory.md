@@ -117,7 +117,9 @@ say "not implemented yet".
   2D view (Bitmap Properties: position and size; Delete removes them).
 - Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
-  Component Properties, Export as STL, Export as Grayscale Bitmap.
+  Component Properties, Export as STL (its form: limit by tolerance or triangle count; back
+  left open or closed by a flat plane, the inverted front or the other side; Triangulate shows
+  the triangle count and largest error), Export as Grayscale Bitmap.
 - Machine: Install Post-Processor (real grbl / FluidNC posts load, rotary G93 ones included).
   Install Offline Package adds the machines in a package (`machines/*.json`: Genmitsu,
   FoxAlien, Sienci, Carbide 3D, Two Trees hobby routers, on Cut Craft GRBL (mm), whose tool

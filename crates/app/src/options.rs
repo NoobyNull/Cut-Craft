@@ -465,6 +465,10 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub job_sheet: fmt_create_job_sheet::Style,
+    /// Export as STL: how the model is triangulated.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub stl: fmt_export_as_stl::Settings,
     /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
     /// own starting job until then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -544,6 +548,7 @@ impl Default for Options {
             },
             confirmations: Confirmations::default(),
             job_sheet: fmt_create_job_sheet::Style::default(),
+            stl: fmt_export_as_stl::Settings::default(),
             import: Import::default(),
             appearance: Appearance::default(),
             advanced: Advanced::default(),
