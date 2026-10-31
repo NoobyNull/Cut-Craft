@@ -412,12 +412,13 @@ say "not implemented yet".
   saved as Cut Craft's own `.ccclip` (JSON); Import Component / 3D Model reads them back,
   centred on the job, on the first level. Aspire's `.3dclip` is encrypted (`re/SPEC.md`),
   so it is neither read nor written; the Clipart tab lists folders of your own files instead.
-- Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by one
-  plane square to X, Y or Z at a percentage of its size; the segment beyond the plane and
-  the one before it (turned over, if asked, so its far side is machined) are laid out side
-  by side across the job, a gap apart, tops at the surface, as two components. Faces lying
-  in the plane go to neither. Aspire's segment tree (several cuts), dragging the plane,
-  the layout mode's orientations and the undercut highlighting are not done.
+- Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by planes
+  square to X, Y or Z: one at a percentage of its size, or (Number of Cuts) several in
+  equal slices; the first segment and the ones after it (turned over, if asked, so their
+  far sides are machined) are laid out side by side across the job, a gap apart, tops at
+  the surface, as components, and a segment that still has undercuts says so. Faces lying
+  in a plane go to neither. Aspire's segment tree (cutting one segment again), dragging
+  the plane and the layout mode's orientations are not done.
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
   - Component Properties' dynamic properties (help: Component Properties): Shape Height
     (%), Base Height, Fade (kept at one point, lowered by a percentage toward another) and

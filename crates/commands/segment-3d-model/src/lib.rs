@@ -1,7 +1,8 @@
-//! Segment 3D Model: an STL split by one plane into two segments, so a model with undercuts
-//! can be machined in pieces on a 3-axis machine. The second segment can be turned over so
-//! its far side is machined; both are laid out side by side across the job, their tops at
-//! the material surface, as two components.
+//! Segment 3D Model: an STL split by planes square to one axis into segments, so a model
+//! with undercuts can be machined in pieces on a 3-axis machine: one cut where asked, or
+//! several in equal slices. The segments after the first can be turned over so their far
+//! sides are machined; all are laid out side by side across the job, their tops at the
+//! material surface, as components, and a segment that still has undercuts says so.
 
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
@@ -40,8 +41,13 @@ pub struct Params {
     pub units: FileUnits,
     #[schemars(title = "Segmenting plane square to")]
     pub axis: Axis,
-    /// Where the plane cuts, as a share of the model's size along the axis
+    /// How many planes cut the model: one where Position says, or several in equal slices
+    #[serde(default = "one")]
+    #[schemars(title = "Number of cuts", range(min = 1, max = 20))]
+    pub cuts: u32,
+    /// Where the one plane cuts, as a share of the model's size along the axis
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
+    #[schemars(extend("x-show-when" = {"cuts": 1}))]
     pub position: f64,
     /// Turn the segment beyond the plane over, so its far side faces up to be machined
     #[schemars(title = "Turn the second segment over")]
@@ -57,6 +63,7 @@ impl Default for Params {
             file: String::new(),
             units: FileUnits::Mm,
             axis: Axis::Z,
+            cuts: 1,
             position: 50.0,
             turn_over: true,
             // ponytail: 5 mm between segments [inf]
@@ -64,6 +71,13 @@ impl Default for Params {
         }
     }
 }
+
+fn one() -> u32 {
+    1
+}
+
+/// Undercut area past which a segment is said to still have undercuts, mm² seen from above.
+const UNDERCUT_NOTE: f64 = 1.0;
 
 /// How close to the segmenting plane counts as on it, mm.
 const PLANE_TOLERANCE: f64 = 1e-9;
@@ -102,6 +116,57 @@ fn bounds(tris: &[[DVec3; 3]]) -> Option<(DVec3, DVec3)> {
             (lo.min(*v), hi.max(*v))
         }))
     })
+}
+
+/// The model cut by `p`'s planes square to `normal` (the model spanning `lo` to `hi`):
+/// the slices, the far one first, the ones after it turned over when asked; empty ones left
+/// out.
+fn slices(
+    tris: &[[DVec3; 3]],
+    p: &Params,
+    normal: DVec3,
+    (lo, hi): (DVec3, DVec3),
+) -> Vec<Vec<[DVec3; 3]>> {
+    // the planes, as shares along the axis
+    let shares: Vec<f64> = if p.cuts <= 1 {
+        vec![p.position / 100.0]
+    } else {
+        (1..=p.cuts)
+            .map(|k| f64::from(k) / f64::from(p.cuts + 1))
+            .collect()
+    };
+    let at = |share: f64| normal.dot(lo) + normal.dot(hi - lo) * share;
+    // the slices between the planes, the far one first (as one cut's segment beyond the
+    // plane leads)
+    let mut edges: Vec<Option<f64>> = vec![None];
+    edges.extend(shares.iter().map(|&s| Some(at(s))));
+    edges.push(None);
+    let slices: Vec<Vec<[DVec3; 3]>> = edges
+        .windows(2)
+        .rev()
+        .map(|w| {
+            let above = w[0].map_or_else(|| tris.to_vec(), |a| clip(tris, normal, a));
+            w[1].map_or(above.clone(), |b| clip(&above, -normal, -b))
+        })
+        .collect();
+    // turned over about the X axis (Y for an X plane, so the turn keeps the cut square)
+    let turn = if p.axis == Axis::X {
+        DMat3::from_rotation_y(std::f64::consts::PI)
+    } else {
+        DMat3::from_rotation_x(std::f64::consts::PI)
+    };
+    slices
+        .into_iter()
+        .enumerate()
+        .map(|(i, s)| {
+            if i > 0 && p.turn_over {
+                s.iter().map(|t| t.map(|v| turn * v)).collect()
+            } else {
+                s
+            }
+        })
+        .filter(|s: &Vec<[DVec3; 3]>| !s.is_empty())
+        .collect()
 }
 
 impl Command for Segment3dModel {
@@ -144,24 +209,7 @@ impl Command for Segment3dModel {
             Axis::Y => DVec3::Y,
             Axis::Z => DVec3::Z,
         };
-        let at = normal.dot(lo) + normal.dot(hi - lo) * p.position / 100.0;
-        // the far segment first (beyond the plane), then the near one
-        let (beyond, near) = (clip(&tris, normal, at), clip(&tris, -normal, -at));
-        // turned over about the X axis (Y for an X plane, so the turn keeps the cut square)
-        let turn = if p.axis == Axis::X {
-            DMat3::from_rotation_y(std::f64::consts::PI)
-        } else {
-            DMat3::from_rotation_x(std::f64::consts::PI)
-        };
-        let second: Vec<[DVec3; 3]> = if p.turn_over {
-            near.iter().map(|t| t.map(|v| turn * v)).collect()
-        } else {
-            near
-        };
-        let segments: Vec<Vec<[DVec3; 3]>> = [beyond, second]
-            .into_iter()
-            .filter(|s| !s.is_empty())
-            .collect();
+        let segments = slices(&tris, p, normal, (lo, hi));
         if segments.len() < 2 {
             return Err(CommandError::Failed(
                 "the plane misses the model: move it inside".into(),
@@ -191,6 +239,13 @@ impl Command for Segment3dModel {
                 |_| None,
             );
             fmt_import_stl::top_down(&mut k, &placed);
+            let under = fmt_import_stl::undercut(&placed);
+            if under > UNDERCUT_NOTE {
+                c.note(format!(
+                    "Segment {} still has undercuts ({under:.0} mm² seen from above)",
+                    n + 1
+                ));
+            }
             for z in &mut k.heights {
                 if *z < 0.0 {
                     *z = f64::NAN;
@@ -283,6 +338,29 @@ mod tests {
         }
         let (low, high) = bottom.height_range().unwrap();
         assert!((high - low).abs() < 1e-6, "the slab's underside is flat");
+    }
+
+    #[test]
+    fn several_cuts_make_equal_slices_laid_out_in_a_row() {
+        // three planes across the L's 20 mm length: four 5 mm slices
+        let doc = segmented(
+            "slices",
+            &Params {
+                axis: Axis::X,
+                cuts: 3,
+                ..Params::default()
+            },
+        );
+        assert_eq!(doc.components.len(), 4);
+        let mut lefts: Vec<f64> = doc.components.values().map(|k| k.extent().min.x).collect();
+        let sorted = {
+            let mut s = lefts.clone();
+            s.sort_by(f64::total_cmp);
+            s
+        };
+        assert_eq!(lefts, sorted, "left to right, in order");
+        lefts.dedup();
+        assert_eq!(lefts.len(), 4);
     }
 
     #[test]
