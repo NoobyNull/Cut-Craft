@@ -1,5 +1,5 @@
-- Switch a job between millimetres and inches: Edit ▸ Units, or the mm / in button on the status bar; tools keep units of their own
-- Toolpath forms laid out in Aspire's order and groups, with tabs; the tool's settings come from the Tool Database, with Edit… to change them there
-- Machine limits: Z travel, each axis's fastest rate and acceleration, the spindle's range; the time estimates and checks go by them
-- Side panels never widen past a third of the window
-- Windows builds no longer look for a SpaceMouse
+- Importing a 3D model is fast again: the file is read once, rasterised across every core, and the drawn model is kept between frames
+- The modeling plane shows as a light-blue sheet under the model while it is imported; the model is in the material's colour, red only where a cutter cannot reach (Show undercuts turns that off)
+- Scale model to fit material in flat jobs: grown in proportion until the material stops it
+- Full 3D model by default; in a double-sided job the underside goes to the other side. Options ▸ Importing Models offers the flat import instead, or both
+- The import logs what it read and how long each step took, for bug reports
