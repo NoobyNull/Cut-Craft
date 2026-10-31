@@ -1292,7 +1292,7 @@ fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
         "the tool's settings are not edited in the form"
     );
     assert_eq!(h.app.form.as_ref().unwrap().params["tool"]["diameter"], 3.0);
-    h.app.edit_form_tool(&h.ctx);
+    h.app.edit_tool(&h.ctx, Some("3 mm End Mill".into()));
     let manager = h
         .app
         .tool_manager
@@ -1496,7 +1496,16 @@ fn the_tool_database_window_keeps_edits_only_on_ok() {
 fn rest_machining_takes_its_tools_from_the_database() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "3d_finishing_toolpath");
-    h.app.add_earlier_tool("tools", "6 mm Ball Nose");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the list's last menu adds a tool, as the form's own tool is picked
+    let add = *h.texts_at("Add a tool…").last().expect("an Add menu");
+    h.click(add, Modifiers::NONE);
+    h.frame(vec![]);
+    let ball = *h.texts_at("6 mm Ball Nose").last().expect("in the menu");
+    h.click(ball, Modifiers::NONE);
+    h.frame(vec![]);
     let form = h.app.form.as_ref().unwrap();
     // after the ball nose the form starts with
     assert_eq!(form.params["tools"][1]["name"], "6 mm Ball Nose");
@@ -2177,14 +2186,14 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     let mut section = serde_json::json!({});
     let out = headless(ctx.run_ui(RawInput::default(), |ui| {
         egui::CentralPanel::default()
-            .show(ui, |ui| rest_section(ui, &mut section, &h.app.tools.tools));
+            .show(ui, |ui| rest_section(ui, &mut section, &h.app.tools, &[]));
     }));
     let drawn = |text: &str| {
         out.shapes
             .iter()
             .any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == text))
     };
-    assert!(drawn("Rest Machining") && drawn("Add an earlier tool"));
+    assert!(drawn("Rest Machining") && drawn("Add a tool…"));
     let mut params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("pocket_toolpath", &params).unwrap();
     let whole = h.app.doc.toolpaths.values().last().unwrap().moves.len();

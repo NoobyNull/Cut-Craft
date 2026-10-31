@@ -1170,36 +1170,8 @@ fn tool_picker(
     let mut chosen = None;
     let edit = ui
         .horizontal(|ui| {
-            let loaded: Vec<(usize, &str)> = slots
-                .iter()
-                .enumerate()
-                .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
-                .filter(|(_, t)| tools.get(t).is_some())
-                .collect();
-            egui::ComboBox::from_label("Tool database")
-                .selected_text(current)
-                .show_ui(ui, |ui| {
-                    for &(n, name) in &loaded {
-                        let label = format!("T{n}  {name}");
-                        if ui.selectable_label(name == current, label).clicked() {
-                            chosen = Some(name.to_owned());
-                        }
-                    }
-                    if !loaded.is_empty() {
-                        ui.separator();
-                    }
-                    for tool in &tools.tools {
-                        if loaded.iter().any(|&(_, t)| t == tool.name) {
-                            continue;
-                        }
-                        if ui
-                            .selectable_label(tool.name == current, &tool.name)
-                            .clicked()
-                        {
-                            chosen = Some(tool.name.clone());
-                        }
-                    }
-                });
+            chosen = tool_menu(ui, "form_tool", current, tools, slots);
+            ui.label("Tool database");
             ui.button("Edit…")
                 .on_hover_text("Change this tool in the Tool Database")
                 .clicked()
@@ -1219,6 +1191,114 @@ fn tool_picker(
         }
     }
     (chosen, edit)
+}
+
+/// The Tool Database's tools to pick from, the tool changer's loaded ones first (as `T1
+/// name`, by slot): the one picked now, if any.
+fn tool_menu(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    current: &str,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+) -> Option<String> {
+    let loaded: Vec<(usize, &str)> = slots
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
+        .filter(|(_, t)| tools.get(t).is_some())
+        .collect();
+    let mut chosen = None;
+    let shown = if current.is_empty() {
+        "Add a tool…"
+    } else {
+        current
+    };
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            for &(n, name) in &loaded {
+                let label = format!("T{n}  {name}");
+                if ui.selectable_label(name == current, label).clicked() {
+                    chosen = Some(name.to_owned());
+                }
+            }
+            if !loaded.is_empty() {
+                ui.separator();
+            }
+            for tool in &tools.tools {
+                if loaded.iter().any(|&(_, t)| t == tool.name) {
+                    continue;
+                }
+                if ui
+                    .selectable_label(tool.name == current, &tool.name)
+                    .clicked()
+                {
+                    chosen = Some(tool.name.clone());
+                }
+            }
+        });
+    chosen
+}
+
+/// A list of tools (clearance tools, a set of finishing tools, rest machining's earlier
+/// tools), each with the form tool's picker, Edit… and summary, and Remove; the last menu
+/// adds one. `largest_first` keeps them in that order. Whether it changed, and the tool
+/// whose Edit… was clicked.
+fn tool_list(
+    ui: &mut egui::Ui,
+    key: &str,
+    list: &mut Value,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+    largest_first: bool,
+) -> (bool, Option<String>) {
+    if !list.is_array() {
+        *list = Value::Array(vec![]);
+    }
+    let items = list.as_array_mut().expect("made a list");
+    let (mut changed, mut edit, mut remove) = (false, None, None);
+    for (i, item) in items.iter_mut().enumerate() {
+        let current = item["name"].as_str().unwrap_or_default().to_owned();
+        ui.horizontal(|ui| {
+            if let Some(name) = tool_menu(ui, (key, i), &current, tools, slots)
+                && let Some(tool) = tools.pick(&name)
+            {
+                *item = serde_json::to_value(tool).expect("tools serialize");
+                changed = true;
+            }
+            if ui
+                .button("Edit…")
+                .on_hover_text("Change this tool in the Tool Database")
+                .clicked()
+            {
+                edit = Some(current.clone());
+            }
+            if ui.small_button("✕").on_hover_text("Remove").clicked() {
+                remove = Some(i);
+            }
+        });
+        if let Ok(tool) = serde_json::from_value::<Tool>(item.clone()) {
+            ui.push_id((key, i), |ui| {
+                tool_summary(ui, &tool, None, tools.get(&tool.name).is_some());
+            });
+        }
+    }
+    if let Some(i) = remove {
+        items.remove(i);
+        changed = true;
+    }
+    if let Some(name) = tool_menu(ui, (key, "add"), "", tools, slots)
+        && let Some(tool) = tools.pick(&name)
+    {
+        items.push(serde_json::to_value(tool).expect("tools serialize"));
+        changed = true;
+    }
+    if largest_first && changed {
+        let across = |t: &Value| t["diameter"].as_f64().unwrap_or(0.0);
+        items.sort_by(|a, b| across(b).total_cmp(&across(a)));
+    }
+    (changed, edit)
 }
 
 /// A toolpath form's tool as the Tool Database has it, read-only: what its shape uses, then
@@ -1332,38 +1412,29 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
     }
 }
 
-fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
+fn rest_section(
+    ui: &mut egui::Ui,
+    params: &mut Value,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+) -> Option<String> {
     use cut_craft_core::rest::Rest;
     let mut rest: Rest = params
         .get("rest")
         .and_then(|r| serde_json::from_value(r.clone()).ok())
         .unwrap_or_default();
     let before = rest.clone();
+    let mut edit = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         ui.strong("Rest Machining")
             .on_hover_text("Cut only what the tools that ran before this one could not reach");
-        let mut remove = None;
-        for (i, tool) in rest.after.iter().enumerate() {
-            ui.horizontal(|ui| {
-                ui.label(&tool.name);
-                if ui.small_button("✕").on_hover_text("Remove").clicked() {
-                    remove = Some(i);
-                }
-            });
+        let mut after = serde_json::to_value(&rest.after).expect("tools serialize");
+        let (changed, edited) = tool_list(ui, "rest_after", &mut after, tools, slots, false);
+        edit = edited;
+        if changed && let Ok(list) = serde_json::from_value(after) {
+            rest.after = list;
         }
-        if let Some(i) = remove {
-            rest.after.remove(i);
-        }
-        egui::ComboBox::from_label("Add an earlier tool")
-            .selected_text("")
-            .show_ui(ui, |ui| {
-                for tool in database {
-                    if ui.selectable_label(false, &tool.name).clicked() {
-                        rest.after.push(tool.clone());
-                    }
-                }
-            });
         if !rest.after.is_empty() {
             egui::Grid::new("rest_settings")
                 .num_columns(2)
@@ -1390,6 +1461,7 @@ fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
     if rest != before {
         params["rest"] = serde_json::to_value(&rest).expect("rest settings serialise");
     }
+    edit
 }
 
 /// A category of a drop-down in a border filling its width, as menus draw theirs.

@@ -11,7 +11,7 @@ use super::{
     VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, commands, dialog_size, egui,
     file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
     on_the_desktop, rest_section, selector_section, shortcut, side_panel, side_tabs, summary_table,
-    template_dialog, tool_picker, toolpath_template_dialog, view3d,
+    template_dialog, tool_list, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
@@ -2584,24 +2584,6 @@ impl CutCraftApp {
             }
             ui.strong(open.label);
         });
-        // a list of tools in running order (rest machining), picked from the database
-        let mut earlier = None;
-        for (list, label) in [
-            ("tools", "Add a tool from the database"),
-            ("clearance_tools", "Add a clearance tool from the database"),
-        ] {
-            if open.params.get(list).is_some_and(Value::is_array) {
-                egui::ComboBox::from_label(label)
-                    .selected_text("")
-                    .show_ui(ui, |ui| {
-                        for tool in &self.tools.tools {
-                            if ui.selectable_label(false, &tool.name).clicked() {
-                                earlier = Some((list, tool.name.clone()));
-                            }
-                        }
-                    });
-            }
-        }
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
         let picture = |path: &str| {
@@ -2614,9 +2596,30 @@ impl CutCraftApp {
         let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
         // the tool block, where the form has its tool: what was picked, and Edit…
         let asked = std::cell::RefCell::new((None, false));
+        // a tool in a list whose Edit… was clicked
+        let edit_listed = std::cell::RefCell::new(None);
+        let listed = std::cell::Cell::new(false);
         let tools = &self.tools;
         let layers: Vec<String> = self.doc.layers.iter().map(|l| l.name.clone()).collect();
-        let tool = |ui: &mut egui::Ui, params: &mut Value| {
+        let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
+            if key != "tool" {
+                // a list of tools, each picked as the form's own tool is
+                ui.group(|ui| {
+                    ui.set_width(ui.available_width());
+                    ui.strong(match key {
+                        "clearance_tools" => "Clearance Tools",
+                        _ => "Tools",
+                    });
+                    let largest_first = key == "clearance_tools";
+                    let (changed, edit) =
+                        tool_list(ui, key, &mut params[key], tools, &slots, largest_first);
+                    listed.set(listed.get() | changed);
+                    if edit.is_some() {
+                        *edit_listed.borrow_mut() = edit;
+                    }
+                });
+                return;
+            }
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
@@ -2624,8 +2627,10 @@ impl CutCraftApp {
             });
             // every toolpath that cuts with a tool can rest machine after the tools that cut
             // before it (3D Finishing has its own, as `after`)
-            if params.get("after").is_none() {
-                rest_section(ui, params, &tools.tools);
+            if params.get("after").is_none()
+                && let Some(edit) = rest_section(ui, params, tools, &slots)
+            {
+                *edit_listed.borrow_mut() = Some(edit);
             }
             selector_section(ui, params, &layers);
         };
@@ -2636,7 +2641,9 @@ impl CutCraftApp {
             tool: Some(&tool),
         };
         open.dirty |= form::show(ui, &open.fields, &mut open.params, &look);
+        open.dirty |= listed.get();
         let (chosen, edit_tool) = asked.into_inner();
+        let edit_listed = edit_listed.into_inner();
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
@@ -2649,24 +2656,14 @@ impl CutCraftApp {
             self.choose_tool(&name);
         }
         if edit_tool {
-            self.edit_form_tool(ui.ctx());
+            let name = self
+                .form
+                .as_ref()
+                .and_then(|f| f.params["tool"]["name"].as_str().map(str::to_owned));
+            self.edit_tool(ui.ctx(), name);
         }
-        if let Some((list, name)) = earlier {
-            self.add_earlier_tool(list, &name);
-        }
-    }
-
-    /// Adds a database tool (cutting the active material) to the open form's tool `list`:
-    /// at the end of `tools` (running order), or among `clearance_tools` largest first.
-    pub(super) fn add_earlier_tool(&mut self, list: &str, name: &str) {
-        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name))
-            && let Some(tools) = form.params.get_mut(list).and_then(Value::as_array_mut)
-        {
-            tools.push(serde_json::to_value(tool).expect("tools serialize"));
-            if list == "clearance_tools" {
-                let across = |t: &Value| t["diameter"].as_f64().unwrap_or(0.0);
-                tools.sort_by(|a, b| across(b).total_cmp(&across(a)));
-            }
+        if edit_listed.is_some() {
+            self.edit_tool(ui.ctx(), edit_listed);
         }
     }
 
@@ -2693,11 +2690,7 @@ impl CutCraftApp {
     }
 
     /// The Tool Database, opened on the open form's tool; saving it updates the form.
-    pub(super) fn edit_form_tool(&mut self, ctx: &egui::Context) {
-        let name = self
-            .form
-            .as_ref()
-            .and_then(|f| f.params["tool"]["name"].as_str().map(str::to_owned));
+    pub(super) fn edit_tool(&mut self, ctx: &egui::Context, name: Option<String>) {
         self.invoke(ctx, "tool_database");
         if let Some(manager) = &mut self.tool_manager {
             manager.pick = name
