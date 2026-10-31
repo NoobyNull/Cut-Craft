@@ -1,0 +1,147 @@
+# Capabilities the vendor's YouTube courses teach, and whether Cut Craft has them.
+# Read by scripts/courses-report.py, which writes docs/courses.md. Tab-separated columns:
+#   key, capability, status (yes / partly / no / out), Cut Craft evidence or what is missing,
+#   title pattern (a video whose title matches teaches it), transcript pattern (a video whose
+#   captions match it uses it), GitHub issue for a gap. Patterns are Python
+#   regular expressions, case-insensitive.
+# "out" = out of scope: laser, the vendor's online services and file formats, its Lua gadget API.
+key	capability	status	cut_craft	title_re	text_re	issue
+job-setup	Job Setup: single, double-sided or rotary job, size, Z zero, XY datum, resolution, material	yes	job-setup command (sides, rotary, datum offset, resolution, colour, gaps, home)	job setup|getting started|interface|overview	job setup|set ?up (the|our|your) job|job size
+material-setup	Material Setup: thickness, datum, Z zero, Z1 / Z2, home, model position (gap above / below, slider, Set model thickness)	partly	Material Setup form keeps model position only; thickness, datum, Z zero, Z1 / Z2 and home are in Job Setup; no slider, no "Set" model thickness, no detailed summary on toolpath forms	set-up your material|material setup	material set ?up|model position|gap (above|below) (the )?model	49
+tool-database	Tool Database: tools by material and machine, cutting data, groups, import / export	yes	tool-database crate (cutting data per material, active material, groups, .vtdb / Fusion import)	tool database	tool database
+tool-db-material-mgmt	Tool Database: Material Management (add, copy, remove) and Copy Settings From another material / machine	partly	Add / Delete Material exist; no Copy material, no Copy Settings From, cutting data is per material not per machine	tool database	copy settings|material management	111
+tool-db-hide-unset	Tool Database: greyed tools without data for the material, right-click Hide Unset Tools	no	every tool is listed for every material	tool database	unset tools|greyed? out	97
+tool-db-name-format	Tool Database: tool name format with variables (diameter, fraction, units, type), default per tool type	no	names are plain text	tool database	name format|naming	75
+tool-db-form-tool	Tool Database: Form Tool from a selected vector profile	no	form tools are skipped on .vtdb import	form tool	form tool	79
+tool-db-online	Online tool database (vendor portal upload, download, shared links)	out	vendor service	online tool database	online tool database|shared tool database
+toolpath-edit-tool	Per-toolpath tool Edit (pass depth, stepover, feeds) without changing the database	yes	toolpath forms hold their own copy of the tool		edit (option|button) here|edit the settings for (this|the) tool
+machine-config	Machine Configuration: machines with posts, default post, offline package, search online	yes	machines crate: Machine Configuration, Add Machine, Install Offline Package, Post-Processor Management	machine configuration	machine configuration
+machine-post-versions	Post versions, change log, Customize (custom copy), Make Default for Laser	partly	Customize and Inspect / Edit exist; no versions or change log; laser default skipped	machine configuration	change log|previous version	94
+keep-out-zones	Keep-out zones: from vectors, clearance border, toolpaths lifted or refused, red in 3D	partly	Keep-Out Zones warn when a toolpath crosses one; toolpaths are not re-routed over them and Save does not refuse	keep.?out	keep.?out	126
+save-toolpaths	Save Toolpaths form: machine and post, selected / visible to one file / visible to multiple files / group where possible, tool-change and tool-number errors	no	Save Toolpaths writes every toolpath through the machine's default post to one file; no form, no per-toolpath files, no grouping by tool	sav(e|ing) toolpaths?|toolpath saving|save toolpath options	save tool ?paths?|tool ?path saving|post ?processors?	51
+toolpath-summary	Toolpath Summary: times, rapid rate with units, scale factor, notes per toolpath	partly	Toolpaths ▸ Toolpath Summary with rapid rate and scale; rapid rate units fixed; no notes per toolpath	estimate toolpath times|time estimate|toolpath admin	toolpath summary|tool path summary|estimated (machining )?time|machining time	74
+toolpath-summary-accel	Toolpath Summary: machine acceleration per axis in the estimate	no	accelerations are stored on the machine but the estimate ignores them	estimate toolpath times	accelerat	116
+preview-form	Preview Toolpaths form: preview selected / visible / all, reset, run / pause / step / run to retract	partly	Preview, Preview All, Reset and an animated playback bar; no Preview Visible, no Undo Last	preview toolpath|preview guide	preview (all |visible |selected )?tool ?paths?|reset (the )?preview|run to retract|single step	50
+preview-colours	Preview colours: toolpath colour per toolpath, machined area material / surface (painted) / global fill colour, solid colour material	no	the preview is always the material colour	preview toolpath	tool ?path colou?r|fill colou?r|surface colou?r|solid colou?r	59
+preview-waste	Preview: double-click a cut-free waste area in 3D to remove it	no	not available	preview toolpath	waste	56
+preview-image	Save preview image (bitmap of the 3D preview)	partly	View ▸ Save Shaded Image is greyed (not built)	preview toolpath	preview image	77
+toolpath-list	Toolpath list: tick to show, double-click to edit, Duplicate, Delete ▸ this / visible / invisible / all, Recalculate ▸ this / visible / all	partly	right-click menu has all of these; rows have no visibility tick and no double-click to edit	edit, duplicate, delete	recalculate|duplicate (the )?tool ?path|tool ?path list	53
+toolpath-order	Move toolpaths up / down in the list (cut order)	no	the list is in creation order	tile your toolpaths	move (these|the|this|that) tool ?paths? (up|down)|up and down arrows|top of (the|our) (tool ?path )?list	81
+toolpath-groups	Toolpath groups: group visible, empty group, preview and save a group	no	no toolpath groups	toolpath groups	tool ?path groups?|group visible|empty group	102
+toolpath-tiling	Toolpath Tiling: individual tiles / feed through, size, overlap, files per tile	partly	tiling, overlap, smallest first and a file per tile; no active tile, preview of one tile or drawing in original position	tiling|tile your	tiling|tile (size|width|height|overlap)|feed through	71
+toolpath-templates	Toolpath templates: save selected / all visible, load (all sheets)	yes	Toolpaths ▸ Templates (.cctpt); Missing Layers dialog not done	template guide|nest cabinets|nested cabinet	tool ?path template
+vector-selector	Vector Selector on toolpaths: open / closed / circles from layers, associated so recalculation re-picks	partly	Edit ▸ Vector Selector selects; toolpaths cannot keep an association with a layer	job templates|nest cabinets|nested cabinet	vector selector|selector	61
+job-templates	Job templates: Save As Template, New from Template	yes	File ▸ Save As Template / New from Template (.ccjobt)	job templates	template
+job-sheet	Job setup sheet: HTML with layout, material, toolpaths, per sheet and side; logo and colours	partly	Toolpaths ▸ Create Job Sheet; no Setup Sheet Editor (logo, colours, sections), no per-sheet files	setup sheet|job sheet	setup sheet|job sheet	83
+notes	Job notes (Edit ▸ Notes) shown on the job sheet	yes	notes command		notes
+array-copy-toolpath	Array Copy Toolpath with minimise tool changes	yes	array-copy-toolpath command	array copy|merging toolpaths	array copy
+merged-toolpath	Merged Toolpath: ordering, merge by part, ungroup	partly	merged-toolpath command; no ordering choice, no merge by part, no ungroup	merg(e|ing) toolpaths	merg(e|ed) tool ?path	112
+interface	Interface: start page, tabs, pin / auto-hide, F11 / F12, 2D / 3D views, tile, view toggles	yes	Cut Craft's own layout with side tabs, top bar, split 2D / 3D views	interface|overview|getting help	interface
+layers	Layers: active layer, colour, visibility, rename, move / copy to layer, new layer dialog	yes	layer commands and Layers tab	layers?	layers?
+layers-advanced	Layers: lock, show only this / all but this, delete empty / visible, merge visible, drag to reorder, show layers on active sheet	partly	Activate, Lock / Unlock, Insert, Delete This / Visible / Invisible / Empty; no Merge Visible, Show Only This, reorder or active-sheet filter	layers?	lock (the |this )?layer|merge visible|show only this	84
+sheets	Sheets: add, edit size per sheet, activate, copy / move vectors to a sheet, toolpaths per sheet	partly	Sheets tab with Add / Edit / Activate / Show / Hide / Rename / Delete; no Copy / Move to Sheet, no Duplicate Sheet, no copying a toolpath to a sheet	sheets?|multi material	copy to sheet|move to sheet|duplicate (the |this |a )?sheet|add (a )?new sheet	99
+guides	Guides: drag from rulers, snap to guides, View ▸ Guide Lines	yes	guide lines from the rulers; Guides Visible, Delete All, Lock / Unlock All	guides|snap	guide ?lines?|guides
+guides-properties	Guide Properties: typed position and angle, angled guides, parallel guides absolute / relative, lock one guide	no	guides are horizontal or vertical only, dragged	guides	guide properties|angled guide|parallel guide	119
+snap-grid	Snap grid with spacing; grid colour and point size in Options	partly	grid snapping and spacing; no grid colour or point size option	snap grid|snapping	snap(ping)? grid|grid spacing	100
+snapping	Snap Options: geometry snaps, smart snapping, snapping radius, fixed nudge	partly	geometry snaps, radius and smart lines; no tangent / perpendicular smart snaps, no fixed nudge distance	snapping options	smart snapping|snap options	72
+draw-shapes	Draw circle, ellipse, rectangle, polygon, star, arc: drag, typed size beside the cursor, click to repeat	yes	draw-* commands, interactive	draw (a|an) (circle|ellipse|rectangle|polygon|star|arc)|basic shapes	draw (a |the )?(circle|ellipse|rectangle|polygon|star)
+draw-shape-edit	Shift+click a shape to edit it in its tool, E reopens the creating form, rectangle corner types	partly	E / reselect edits text and shapes made by the tool; rectangle has no radius corner type handle	draw a rectangle	corner type|radius external	80
+polyline	Polyline: typed lengths, click-drag curves, S curve mode, Backspace, Tab closes, Edit Polyline from a node	partly	Draw Line / Polyline; no drag-to-curve spans, no curve mode, no Edit Polyline from a node	polyline	poly ?line|curve mode|edit (the )?poly ?line	57
+freehand	Freehand drawing with smoothness and stabilise	partly	Draw Freehand with smoothing; no stabilise or end-at-cursor options	freehand	freehand	104
+vector-texture	Create Vector Texture (angle, spacing, variation, waves, noise, own layer)	partly	vector-texture command; no "place on new layer" option, settings not kept with the texture	vector textures?	vector texture	78
+text	Draw Text: TrueType and single-line fonts, bold / italic, alignment, height, rotate, editable text	yes	draw-text command (system and .vfont fonts, text stays editable)	text creation|create text|text guide	draw text|true ?type|single line font
+text-spell	Text spell checker (add / remove words)	no	not available	create text	spell ?check	121
+text-kerning	Interactive kerning and line spacing on placed text; Break Block into Lines	no	no in-view kerning	text spacing|text creation	kerning|break block into lines	107
+text-arc	Bend a text line into an arc with handles	no	not available	text spacing	arc(ing)? (the|our) text|green handle	123
+text-on-curve	Text on a Curve (size, spacing, position, offset, alignment, editable)	partly	text-on-a-curve command; result is plain curves, not editable text	text on a curve|wrap text	text on a curve|wrap (the |our )?text	93
+text-in-box	Text in a Box: margins, vertical / horizontal stretch	partly	Text in a Box mode with margins; stretch options not done	text in a box	text in a box	125
+convert-text	Convert text to curves	yes	convert-text-to-curves command	convert text	convert(ed)? (it |the text |our text )?to curves
+trace-bitmap	Trace Bitmap: black and white with threshold, noise, corner fit	yes	trace-bitmap command	trac(e|ing)	trace bit ?map
+trace-colour	Trace Bitmap colour mode (palette of ≤16 colours, pick colours) and selection box	no	bitmaps are kept in grey; black and white only	trac(e|ing)	colou?r (mode|palette)|number of colou?rs	90
+dimensions	Dimensions: length, vertical, horizontal	yes	dimensions command	dimension	dimensions?
+dimensions-angle-arc	Dimensions: angle and arc (radius / diameter), Shift+click to edit	no	angle and arc dimensions not done	dimension	angle dimension|arc dimension	118
+node-edit	Node editing: move, insert, delete, smooth, cut, start point, spans to line / arc / Bézier	partly	Node Edit; no smooth point toggle, no several nodes at once, no typed node X / Y	node edit|editing	smooth point|node edit	52
+node-mirror	Node editing with H / V mirror lines	no	not available	node edit	mirror(ing)? line	115
+trim	Trim: interactive trim and Trim Objects (clear inside / outside a boundary)	partly	Interactive Vector Trim; no drag-trimming, no rejoin, no Trim Objects to a boundary	trim	\btrim	65
+offset	Offset vectors: in / out / both, sharp corners, open vectors left / right	yes	offset-vectors command	offset	offset
+array-copy	Array Copy: rows, columns, gap / offset	partly	array-copy command; no block symmetry, row / column displacement or group copies	array copy	array copy	92
+circular-copy	Circular Copy	partly	circular-copy command; copies not grouped	circular	circular (copy|array)	95
+copy-along	Copy Along Vectors (objects or circles, align, new layer, reverse)	partly	copy-along-vectors command; no Copy Circles option	copy (vectors )?along	copy along	122
+nesting	Nesting: tool diameter, clearance, border, rotate, nest from corner	partly	Nest Parts by bounding boxes, quarter turns	nest	\bnest(ing)?\b	76
+nesting-advanced	Nesting: true shape, parts in parts, copies per part, mirror, rotation step, sheets list, boundary layer, two-sided, filler parts	no	box packing only	nest	parts? (in|inside) (other )?parts?|filler|true shape|copies (of each|per) part|override active sheet|nest boundary|mirror parts	89
+plate-production	Plate Production: template with variables, CSV, layout	partly	plate-production command; template toolpaths are not copied onto each plate	plate production	plate production	113
+select	Select: click, window, crossing, Shift	yes	select command	select	select
+transform	Transform mode: scale, stretch, rotate handles with typed values, rotation centre	yes	Transform mode handles	transform|transformation	transform
+group	Group / Ungroup (G / U), ungroup onto original layers	partly	Group / Ungroup; ungroup returns to the group's layer only	group	ungroup|original (object )?layers?	60
+measure	Measure tool: two points and span / contour properties in a form	partly	Measure / Inspect reports on the status bar, not in a form	measure	measure	62
+weld	Weld, subtract, overlap	yes	weld-vectors, subtract-vectors, overlap-intersect	weld	weld|subtract|overlap
+validator	Vector Validator: overlaps, intersections, zero-length spans (fix), V-carving mode	partly	vector-validator command; no V-carving mode	validator	validator	117
+extend	Extend / close / join vectors (move end points, smooth curve, straight line, tolerance)	yes	close-extend-vector, join-close-vectors, join-vectors, close-with-line	extend|join	join|extend
+fit-curves	Fit curves to vectors	yes	fit-curves-to-vectors command	fit curves	curve fit|fit curves
+vector-boundary	Vector boundary (offset, rubber band)	yes	vector-boundary command	boundar	vector boundary|boundary vector
+edit-bitmap	Edit Picture (contrast, brightness, gamma, invert, greyscale, border) and Crop Bitmap	yes	edit-picture and crop-bitmap commands	edit bitmaps|photo	edit (the )?(picture|bit ?map)|crop
+fillets	Fillets: normal, dog-bone, T-bone, plasma; clicked per corner with live radius	partly	create-fillets applies to all, outer or inner corners at once; no clicking single corners or removing a fillet	fillets	fillet	103
+move	Move: absolute, relative, relative rotated, anchor	partly	move command (absolute / relative, anchor); no relative-rotated	move objects	relative rotat|move selected objects|absolute move|relative move	87
+set-size	Set Size: scale selection or items individually, link XY, %, rotated bounds	partly	set-size command; no scaling items individually, no %	set the size	set (the )?size	82
+rotate	Rotate: absolute / relative, pivot from anchor or coordinates	yes	rotate command	rotate	rotat
+mirror	Mirror: flip in place horizontal / vertical / both	yes	mirror command	mirror	mirror
+mirror-copy	Mirror: create mirrored copy beside (left / right / top / bottom), flip about job centre, flip about a line	no	mirror flips in place only	mirror	mirror(ed)? copy|flip about|create a mirror	64
+distort	Distort Object: envelope, above a curve, between curves	yes	distort-object command	distort	distort
+align	Align: to material, to the last-picked vector (centres, edges), space evenly	partly	align and space commands; no "inside last vector" spacing	align	inside last vector|space (them |these )?(evenly|horizontally|vertically)	124
+profile	Profile toolpath: depth, tool, outside / inside / on, climb / conventional, ramps, tabs, nested shapes	yes	profile-toolpath command	profile	profile
+profile-tabs	Profile tabs: by number or distance with min / max, avoid corners, first at start point, click to add / remove / move	partly	tabs by number or distance, avoid corners, start at the start point, click to place; no min / max count, no drag to move	profile|tabs	add(ing)? tabs|edit tabs|tabs? (length|thickness)|place (the |our |your )?tabs|tabs to (the|our|your|this) tool ?path	58
+pocket	Pocket toolpath: offset / raster, profile pass, ramp, allowance	yes	pocket-toolpath command	pocket	pocket
+pocket-multi-tool	Pocket and V-carve with several tools: clearance tools, largest first, one toolpath each	no	pocket and V-carve take one tool; no clearance tools	pocket|vcarve|v-carve	clearance tool|second tool|smaller tool|multiple tools|largest tool	55
+drilling	Drilling toolpath with peck, retract choices and dwell	partly	drilling-toolpath always pecks by pass depth; no retract choice, no dwell, no plain drill	drill	drill(ing)? tool ?path|peck|dwell	70
+thread-milling	Thread Milling: pitch presets, internal / external, hand, direction, create circles for internal threads	partly	thread-milling-toolpath command; no ISO / UTS pitch presets, no Create Circles for Internal Threads	thread ?mill	thread	110
+inlay	Inlay toolpath: straight / pocket / stepped / hole, allowance	yes	inlay-toolpath command	inlay	inlay
+quick-engrave	Quick Engrave: outline / fill (offset, hatch, cross-hatch), nose cone, save from the form	partly	quick-engrave-toolpath command; no saving from the form	quick engrav	quick engrav|diamond drag	105
+vcarve	V-Carve: start depth, flat depth, project onto model	yes	vcarve-engrave-toolpath command	v ?carve|vcarve	v ?-?carv
+vcarve-order	V-Carve: use vector start points, vector selection order	no	not available on V-carve	vcarve toolpath	vector start points|use vector selection order	91
+vcarve-inlay	V-Carve Inlay: pocket depth, glue gap, surface gap, plug sheet, boundary	yes	vcarve-inlay-toolpath command (clearance tools not done)	inlay	inlay
+photo-vcarve	PhotoVCarve: depth, raster / hatch / vectors, spacing, angle	yes	photo-vcarve-toolpath command	photo ?v ?carve	photo ?v ?carve
+fluting	Fluting: ramp types, ramp length / %, start depth	yes	fluting-toolpath command	flut	flut
+texture-toolpath	Texture toolpath: depths, lengths, overlap, variation, vectors as pattern, boundary offset, save / load settings	partly	texture-toolpath command; no Save / Load of settings	texture toolpath	texture tool ?path	101
+prism	Prism carving	yes	prism-toolpath command	prism	prism
+moulding	Moulding toolpath: rail and section, vary stepover, clearance tool, allowance, sharp corners, boundary offset	partly	moulding-toolpath: sharp corners, boundary offset; no vary stepover, clearance tool or allowance	moulding|molding	mou?lding tool ?path	98
+chamfer	Chamfer toolpath: width / depth, inside / outside, slope, V-bit or ball nose, overcut	yes	chamfer-toolpath command	chamfer	chamfer
+sketch-carving	Sketch Carving: bitmap or model, boundary, line thickness	partly	sketch-carving-toolpath; no live green preview of the areas	sketch carv	sketch carv	127
+roughing-3d	3D Roughing: Z level / raster, allowance, boundary (model, material, vectors, level)	yes	3d-roughing-toolpath command	3d toolpath|roughing	roughing
+finishing-3d	3D Finishing: raster / offset, stepover, boundary, raster angle	yes	3d-finishing-toolpath command	3d toolpath|finishing	finishing
+project-onto-model	Project 2D toolpaths onto the 3D model	yes	Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve	projected onto	project(ed|ing)? (the |this |your |our )?tool ?paths? onto
+create-shape	Create Shape: round, angled, smooth, flat; angle, base, height	yes	create-shape command	create shape|shape guide|round shape|angled shape|smooth shape|flat plane|basic shapes	create shape|round shape|angled shape|smooth shape|flat shape
+create-shape-advanced	Create Shape: custom profile, limit %, scale, total height, preserve internal corners, ring between two vectors, blend to inner vectors, live 3D handles, E to edit	no	create-shape has profile, angle, height, smoothing, base, combine only	custom profile|round shape|angled shape|smooth shape|create shape	custom profile|preserve internal corners|blend to inner|limit handle|scale handle|total height	88
+fade-tilt	Component fade and tilt	yes	component-properties command (fade, tilt)	round shape|angled shape|smooth shape|flat plane	fade|tilt
+zero-plane	Zero plane (Shift+flat shape) on a hidden layer	yes	add-zero-plane command	zero plane|dish|recess	zero plane
+components	Component tree: levels, groups, combine modes (add, subtract, merge, low, multiply), rename, visibility	yes	Components tab with levels and groups	component tree|assembl|modeling|modelling	component tree|combine mode|levels?
+level-clipping	Level clipping	yes	level-clipping command	level clipping	clipping
+two-rail-sweep	Two Rail Sweep with one cross-section	yes	two-rail-sweep command	two rail sweep	two rail sweep
+sweep-advanced	Two Rail Sweep: several cross-sections placed on the rails, sweep between spans, add to all rail nodes, fill centre of closed rails, swap rail order	no	one cross-section only	two rail sweep	cross.?sections|sweep between spans|fill (the )?cent(er|re)	63
+extrude-weave	Extrude and Weave: one cross-section along a rail	yes	extrude-and-weave command	extrude	extrude
+extrude-advanced	Extrude and Weave: several sections, square corners, component along rail with overlap, weave under / over	no	one open cross-section along one rail	extrude	weave|over and under|square corners	68
+turn-spin	Turn and Spin	yes	turn-and-spin command	turn and spin|spun shape|turned shape|spindle	turn and spin|spin
+sculpting	Sculpting: smooth, smudge, deposit, remove, undo brush; diameter, strength, smoothness	partly	sculpt command in the 2D view; not in the 3D view, no keys for brush size / strength, no overlay image, no presets	sculpt|lioness|portrait|d10[ghi]	sculpt	66
+sculpt-custom-brush	Sculpting with custom component brushes (save brush, stamp, merge, rotation, dynamic rotation)	no	not available	custom brush	custom brush|component brush	120
+texture-area	Create Texture Area: seed tiled over job or vectors, spacing, shift, reflection	partly	texture-area command; result is not live (no re-tiling on resize, no Edit Texture Area, no 3D clipart with settings)	texture area	texture area	114
+dish-multiply	Multiply combine mode for models in a dish	yes	Multiply combine mode on levels	dish|recess	multiply
+lithophane	Lithophane: component from bitmap, gap below model, Preview Lithophane mode	partly	component from bitmap and gap below model; no lithophane preview mode	lithophane	lithophane	108
+component-from-bitmap	Create Component from Bitmap (height maps) and clear area outside a vector	yes	create-component-from-bitmap, reset-outside-selected-vectors	texture|lithophane|bitmap	component from (selected |imported )?bit ?map
+smoothing	Smooth selected components	yes	smooth-selected-components command	smooth	smooth
+import-3d	Import Component / 3D Model: STL / OBJ / clipart; orientation, size, units, depth, discard below zero	partly	STL and own .ccclip; no OBJ, no rotation handles, no Create Both Sides	import and export 3d|importing 3d|3d data|flower model	import (a )?component|\bobj\b|rotation handles?|orientate 3d model	67
+import-3d-undercuts	Import: Highlight Undercuts and Create Both Sides (front and back components)	no	undercuts are reported, not highlighted on the import form; no both sides	import and export 3d|importing 3d|3d data	undercuts?|create both sides	73
+reimport	Components right-click Re-Import (back to the import form)	partly	the component menu has Re-import Model	import and export 3d	re-?import	109
+export-3d	Export STL (tolerance, triangle count, back face), greyscale bitmap, 3D clipart	partly	Export as STL / Greyscale Bitmap / 3D Clipart; no tolerance, triangle limit or back face options, no OBJ	import and export 3d|exporting 3d	export (visible model )?as (an? )?stl|triangulat|export (it )?as (a )?(gr[ae]y ?scale|3d clip)	96
+clipart	Clipart tab: folders, drag onto the job, add folder, import to level	partly	Clipart tab lists folders and double-click imports; no drag to a spot, no import to a new level	clip ?art	clip ?art tab|add folder|import (to|onto) (a )?(new |current )?level|drag (it |this |that )?(onto|into) (the|our|your) (job|work ?sheet|view)	69
+segment	Segment 3D Model: several cuts, segment tree, layout orientations, undercut highlight	partly	segment-3d-model: one plane at a percentage, two parts	segment	segment	85
+slice	Slice Model: by thickness, count, custom slice list	partly	slice command; slice thicknesses cannot be edited one by one	slic	slic	86
+two-sided	Two-sided jobs: sides, copy to other side, flip, dowels, preview all sides	partly	double-sided jobs, Swap Sides, Copy to Other Side; 3D view and preview show one side	two.?sided|2 sided|chess	two.?sided|double.?sided|other side|bottom side	54
+rotary	Rotary jobs: wrapped toolpaths, posts wrapping onto A, 3D view wrapping	yes	rotary Job Setup, Auto-Wrapping View, wrapped posts	rotary|column|spindle	rotary|cylinder
+rotary-layouts	Rotary gadgets: fluting layout, spiral layout	yes	wrapped-fluting-layout, wrapped-spiral-layout	fluted column|spiral column|column	fluting layout|spiral layout
+rounding	Rounding toolpath for a square or round blank	yes	rounding-toolpath command	rounded toolpath	rounding
+rotary-import	Rotary import: full / flat model, scale to fit, move the rotation axis, interactive rotation	partly	full / flat model and scale to fit; no rotation handles, no moving the axis	unwrap|relief models for rotary	rotation axis|full 3d model	106
+vector-unwrapper	Vector Unwrapper (rotary)	yes	vector-unwrapper command	spindle	unwrap
+celtic-weave	Celtic Weave Creator gadget	yes	celtic-weave command	celtic	celtic
+gadgets	Gadgets: DXF Batch Processor, Setup Sheet Editor and other Lua gadgets	out	the Lua gadget API is the vendor's; DXF batch import could be built as Cut Craft's own	nest cabinets|nested cabinet	gadget
+import-toolpaths	Import toolpaths from Machinist / Cut3D / PhotoVCarve (.tp)	out	vendor formats	importing 3d toolpaths|importing photovcarve|machinist	import(ing)? (the )?tool ?paths
+app-data	Application data folder	yes	File ▸ Open Application Data Folder	application data	application data
+whats-new	What's-new overviews of a vendor release	out	release notes, not a capability	what.?s new
