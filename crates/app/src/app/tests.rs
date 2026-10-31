@@ -4269,3 +4269,53 @@ fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
     h.app.history.undo(&mut h.app.doc);
     assert_eq!(h.app.doc.vectors[&id].segments.len(), 1);
 }
+
+#[test]
+fn sculpting_works_in_the_3d_view_with_its_keys_and_wheel() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    let total = |h: &Harness| -> f64 {
+        let k = h.app.doc.components.values().next().unwrap();
+        k.heights.iter().filter(|z| !z.is_nan()).sum()
+    };
+    let before = total(&h);
+    h.app.invoke(&h.ctx, "sculpt");
+    h.frame(vec![]);
+    // 3 picks Deposit; the wheel grows the brush, Shift and the wheel its strength
+    let mid = h.app.view_3d_area.expect("the 3D view is drawn").center();
+    let wheel = |modifiers| Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, 1.0),
+        modifiers,
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    h.frame(vec![
+        Event::PointerMoved(mid),
+        key(Key::Num3),
+        wheel(Modifiers::NONE),
+    ]);
+    let params = &h.app.form.as_ref().unwrap().params;
+    assert_eq!(params["tool"], "deposit");
+    assert!(
+        (params["diameter"].as_f64().unwrap() - 11.0).abs() < 1e-9,
+        "{params}"
+    );
+    h.frame_holding(Modifiers::SHIFT, vec![wheel(Modifiers::SHIFT)]);
+    let strength = h.app.form.as_ref().unwrap().params["strength"]
+        .as_f64()
+        .unwrap();
+    assert!((strength - 22.0).abs() < 1e-9, "{strength}");
+    let orbit = h.app.orbit;
+    // a left drag over the model sculpts it, and does not turn the view
+    h.press(mid, true, Modifiers::NONE);
+    for dx in [5.0, 10.0, 15.0, 20.0] {
+        h.frame(vec![Event::PointerMoved(mid + egui::vec2(dx, 0.0))]);
+    }
+    h.press(mid + egui::vec2(20.0, 0.0), false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(total(&h) > before, "the stroke deposited");
+    assert_eq!(h.app.orbit, orbit, "the view stayed put");
+}

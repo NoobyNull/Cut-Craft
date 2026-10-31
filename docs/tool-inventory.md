@@ -427,14 +427,16 @@ say "not implemented yet".
     the job, with spacing, alternate shifts and a reflection per tile of each four; the
     tile is hidden. The result is an ordinary component (Aspire's stays re-editable).
   - Sculpting (Model ▸ Sculpt Visible Model; help: Sculpting): drag over the selected
-    component in the 2D view (several are baked into one first) with Smooth, Smudge,
+    component in the 2D view, or over the model in the 3D view (there the right button
+    turns the view and the middle pans), several baked into one first, with Smooth, Smudge,
     Deposit, Remove or the Undo Brush (back toward the heights from before the first
     stroke; Erase removes the shape, Aspire's Shift); diameter, strength, smoothness,
     Normal / Raise / Lower mode, Preserve Transparency. Each drag is one undoable stroke.
-    Dab spacing and the deposit rate are our own [inf]. Not done: sculpting in the 3D
-    view, custom brushes, dynamic rotation, merge, presets, the bitmap overlay, the
-    keyboard shortcuts, Keep / Discard (undo does that), and growing the grid past the
-    component's own.
+    Keys 1 to 5 pick the tool; over a view the wheel sizes the brush (finer with Ctrl),
+    Shift and the wheel set the strength, and Alt and the wheel zoom. Dab spacing and the
+    deposit rate are our own [inf]. Not done: custom brushes, dynamic rotation, merge,
+    presets, the bitmap overlay, the V / H constraints, Keep / Discard (undo does that),
+    and growing the grid past the component's own.
   - Vector Unwrapper (rotary jobs; help: Vector Unwrapper, Modelling 3D Rotary Projects):
     a closed cross-section becomes the open profile Two Rail Sweep takes: the distance
     out to it round the centre of the contour, of the job or a typed point, laid along

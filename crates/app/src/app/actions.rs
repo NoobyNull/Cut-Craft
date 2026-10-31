@@ -34,6 +34,7 @@ impl CutCraftApp {
             form: None,
             view_transform: None,
             view_area: None,
+            view_3d_area: None,
             camera: None,
             view_tool: None,
             pages: Pages::default(),

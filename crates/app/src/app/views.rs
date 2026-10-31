@@ -2,12 +2,12 @@
 //! snapping, node editing, transform handles, autosave and the Options windows.
 
 use super::{
-    APP_NAME, Align, Canvas, Change, CutCraftApp, DAffine2, DESIGN_TABS, DROP_SHADE, Drag,
-    EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout, OLD_JOB_EXTENSION, Overlay, Path,
-    Point, RESOLUTIONS, Rect, STROKE_TOOLS, Screen, Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS,
-    VIEW_ZOOM_QUARTERS, Value, View, ViewTool, ViewTransform, bordered, dialog_size, egui,
-    file_dialog, file_name, files, gui, handles, inspected, inspected_rows, measured,
-    measured_rows, paint_focus_ring, side_panel, view2d,
+    APP_NAME, Align, BRUSH_FINE_STEP, BRUSH_STEP, Canvas, Change, CutCraftApp, DAffine2,
+    DESIGN_TABS, DROP_SHADE, Drag, EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout,
+    OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
+    Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
+    ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
+    inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel, view2d,
 };
 use crate::options::WindowLayout;
 use cut_craft_core::document::Units;
@@ -240,6 +240,7 @@ impl CutCraftApp {
             self.title = title;
         }
         self.polyline_keys(ctx);
+        self.sculpt_keys(ctx);
         self.shortcuts(ctx);
         egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));
@@ -582,6 +583,62 @@ impl CutCraftApp {
             }
         };
         label.clone_into(&mut self.status.current_tool);
+    }
+
+    /// Sculpting's keys while its form is open, as Aspire's: 1 to 5 pick the tool, the
+    /// wheel sizes the brush (finer with Ctrl), Shift and the wheel set the strength, and
+    /// Alt and the wheel zoom the view as the wheel alone otherwise does.
+    pub(super) fn sculpt_keys(&mut self, ctx: &egui::Context) {
+        use egui::Key;
+        const TOOLS: [&str; 5] = ["smooth", "smudge", "deposit", "remove", "undo_brush"];
+        if ctx.egui_wants_keyboard_input() {
+            return;
+        }
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "sculpt") else {
+            return;
+        };
+        let keys = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5];
+        for (key, tool) in keys.into_iter().zip(TOOLS) {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, key)) {
+                form.params["tool"] = Value::from(tool);
+            }
+        }
+        let over_view = ctx.pointer_hover_pos().is_some_and(|at| {
+            self.view_area.is_some_and(|a| a.contains(at))
+                || self.view_3d_area.is_some_and(|a| a.contains(at))
+        });
+        // the wheel's notches this frame (a line each, or a line's worth of points)
+        let (modifiers, notches) = ctx.input(|i| {
+            let notches: f32 = (i.raw.events.iter())
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel { unit, delta, .. } => Some(match unit {
+                        egui::MouseWheelUnit::Line => delta.x + delta.y,
+                        egui::MouseWheelUnit::Point => (delta.x + delta.y) / SCROLL_NOTCH,
+                        egui::MouseWheelUnit::Page => (delta.x + delta.y) * SCROLL_NOTCH,
+                    }),
+                    _ => None,
+                })
+                .sum();
+            (i.modifiers, notches)
+        });
+        if !over_view || modifiers.alt || notches == 0.0 {
+            return;
+        }
+        // the wheel is the brush's, not the view's
+        ctx.input_mut(|i| i.smooth_scroll_delta = egui::Vec2::ZERO);
+        let (field, step) = match (modifiers.shift, modifiers.ctrl) {
+            (true, _) => ("strength", BRUSH_STEP),
+            (false, true) => ("diameter", BRUSH_FINE_STEP),
+            (false, false) => ("diameter", BRUSH_STEP),
+        };
+        let value = form.params[field].as_f64().unwrap_or(0.0);
+        let scaled = value * (1.0 + step).powf(f64::from(notches));
+        let scaled = if field == "strength" {
+            scaled.clamp(1.0, 100.0)
+        } else {
+            scaled.max(0.1)
+        };
+        form.params[field] = Value::from((scaled * 100.0).round() / 100.0);
     }
 
     /// Draw Line / Polyline's keys while it is the tool: S swaps curves and straight lines;

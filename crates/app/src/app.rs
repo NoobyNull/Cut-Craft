@@ -317,6 +317,11 @@ const SETTLE_SECONDS: f64 = 0.25;
 const AUTOSAVE_SECONDS: f64 = 30.0;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
 const STROKE_TOOLS: [&str; 3] = ["draw_freehand", "sculpt", "interactive_vector_trim"];
+/// How far one notch of a mouse wheel scrolls, in points, as egui reports a line.
+const SCROLL_NOTCH: f32 = 50.0;
+/// How much a wheel notch grows the sculpting brush, or its strength; with Ctrl, finer.
+const BRUSH_STEP: f64 = 0.1;
+const BRUSH_FINE_STEP: f64 = 0.02;
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 2] = ["import_stl", "import_3d_clipart"];
@@ -556,6 +561,8 @@ struct CutCraftApp {
     view_transform: Option<ViewTransform>,
     /// Where the 2D view was on screen last frame.
     view_area: Option<egui::Rect>,
+    /// Where the 3D view was last drawn, for the sculpting brush's wheel.
+    view_3d_area: Option<egui::Rect>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
     view_tool: Option<ViewTool>,

@@ -966,15 +966,7 @@ impl CutCraftApp {
         ui.horizontal(|ui| self.view_3d_buttons(ui));
         let (area, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
-        // clipart dropped on the view goes where it was dropped on the material
-        if let Some(path) = response.dnd_release_payload::<std::path::PathBuf>() {
-            let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
-            let at = ui
-                .ctx()
-                .pointer_latest_pos()
-                .and_then(|at| self.point_on_surface(fit, at));
-            self.import_clipart(&path, at, None);
-        }
+        self.view_3d_area = Some(area);
         // the ViewCube over the view's corner, so the view does not see its clicks
         let font = egui::TextStyle::Small.resolve(ui.style());
         let cube = view3d::ViewCube::new(area, ui.painter(), &font, ui.spacing().item_spacing.x);
@@ -997,6 +989,9 @@ impl CutCraftApp {
             (self.orbit, self.framing),
             self.options.view_3d.rotation.view(),
         );
+        // while sculpting the left button sculpts; the right turns the view, the middle pans
+        let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
+        let left = left && !sculpting;
         let delta = response.drag_delta();
         if response.dragged() && delta != egui::Vec2::ZERO {
             match view3d::drag_mode([left, right, middle], ctrl) {
@@ -1182,6 +1177,56 @@ impl CutCraftApp {
     /// Takes away the previewed material's piece under `at` in the 3D view's picture `fit`
     /// (Aspire's double-click on waste); false when the click is off the material or on
     /// material cut right through.
+    /// The 3D view's drops and sculpting: clipart dropped on it goes where it was dropped
+    /// on the material, and while sculpting a left drag is a stroke (true then).
+    fn view_3d_drop_and_sculpt(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        area: egui::Rect,
+    ) -> bool {
+        if let Some(path) = response.dnd_release_payload::<std::path::PathBuf>() {
+            let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
+            let at = ui
+                .ctx()
+                .pointer_latest_pos()
+                .and_then(|at| self.point_on_surface(fit, at));
+            self.import_clipart(&path, at, None);
+        }
+        let sculpting = self.form.as_ref().is_some_and(|f| f.id == "sculpt");
+        if sculpting {
+            self.sculpt_3d(response, area.shrink(ui.spacing().item_spacing.x * 2.0));
+        }
+        sculpting
+    }
+
+    /// Sculpting in the 3D view: a left drag over the model is a stroke, its points where
+    /// the pointer met the surface, sculpted as one change when the button comes up.
+    fn sculpt_3d(&mut self, response: &egui::Response, fit: egui::Rect) {
+        if response.drag_started_by(egui::PointerButton::Primary) {
+            self.stroke.clear();
+        }
+        if response.dragged_by(egui::PointerButton::Primary)
+            && let Some(at) = response
+                .interact_pointer_pos()
+                .and_then(|at| self.point_on_surface(fit, at))
+            && self.stroke.last() != Some(&at)
+        {
+            self.stroke.push(at);
+        }
+        if response.drag_stopped_by(egui::PointerButton::Primary)
+            && let (Some(&start), Some(&end)) = (self.stroke.first(), self.stroke.last())
+        {
+            let drag = cut_craft_core::Drag {
+                start,
+                end,
+                from_center: false,
+                constrain: false,
+            };
+            self.draw("sculpt", drag);
+        }
+    }
+
     /// The job point of the 3D view's surface under `at` on the picture `fit`, if any.
     fn point_on_surface(
         &mut self,
