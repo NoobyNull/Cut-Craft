@@ -109,7 +109,7 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 84] = [
+const BUILT_INS: [&str; 85] = [
     "find_tool",
     "machine_configuration",
     "add_machine",
@@ -193,6 +193,7 @@ const BUILT_INS: [&str; 84] = [
     "tool_database",
     "preview_toolpath",
     "preview_all_toolpaths",
+    "undo_last_preview",
     "reset_preview",
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
@@ -570,6 +571,9 @@ struct CutCraftApp {
     display: crate::display::Display,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
     simulation: Option<Material>,
+    /// `simulation` before the last toolpath was previewed into it, for Undo Last Preview.
+    // ponytail: one step back only, each snapshot is a whole material grid
+    preview_undo: Vec<Option<Material>>,
     /// `simulation` at the 3D view's mesh resolution.
     simulation_coarse: Option<Material>,
     /// The 3D view's fine mesh once it is still, with what it was made for.
