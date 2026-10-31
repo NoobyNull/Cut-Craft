@@ -1157,6 +1157,21 @@ impl CutCraftApp {
             });
         let wrap = wrap_for(&job, shown.auto_wrapping || turned, previewing, &surface);
         let look = view3d::Look { wrap, ..look };
+        // the modeling plane a model being imported sits on, under the material so it shows
+        // round it and through what the material leaves open
+        let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
+        if importing && wrap.is_none() {
+            let screen = view3d::screen_of(&surface, orbit, framing, fit, None);
+            let area = job.area();
+            let at = |p: cut_craft_core::geometry::Point| {
+                cut_craft_core::glam::DVec3::new(
+                    p.x - surface.origin.x,
+                    p.y - surface.origin.y,
+                    0.0,
+                )
+            };
+            painter.add(modeling_plane(ui, &screen, at(area.min), at(area.max)));
+        }
         painter.add(self.surface_mesh(ui, &surface, (orbit, framing), look, fit));
         if let Some(wrap) = wrap {
             if turned {
@@ -1174,12 +1189,6 @@ impl CutCraftApp {
         if let Some(model) = self.form.as_ref().and_then(|f| f.model.clone()) {
             let origin = local(cut_craft_core::geometry::Point::new(0.0, 0.0), 0.0);
             let area = job.area();
-            painter.add(modeling_plane(
-                ui,
-                &screen,
-                local(area.min, 0.0),
-                local(area.max, 0.0),
-            ));
             let mark = ui.visuals().error_fg_color;
             let view = (orbit, framing, fit, look);
             painter.add(self.model_mesh(&model, view, mark, |p| screen(p + origin)));
@@ -1251,7 +1260,8 @@ impl CutCraftApp {
             }
         }
         let size = view3d::plan_size(surface);
-        if shown.modeling_plane {
+        // the plane's outline, and always while a model is imported onto it
+        if shown.modeling_plane || self.form.as_ref().is_some_and(|f| f.model.is_some()) {
             let corners = [
                 (0.0, 0.0),
                 (size.x, 0.0),
