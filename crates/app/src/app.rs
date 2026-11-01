@@ -2,9 +2,9 @@
 //! document, its undo history and the command registry.
 
 mod actions;
+mod cutting;
 mod help;
 mod layouts;
-mod loops;
 mod panels;
 mod passes;
 #[path = "screenshots.rs"]

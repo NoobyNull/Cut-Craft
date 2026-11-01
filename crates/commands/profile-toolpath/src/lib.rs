@@ -93,37 +93,22 @@ pub struct Params {
     )]
     pub depth: f64,
     pub tool: Tool,
-    #[schemars(title = "Machine", extend("x-group" = "Machine Vectors…"))]
+    #[schemars(skip)]
     pub side: Side,
     /// Which way round closed shapes are cut: climb is clockwise round a part, anticlockwise
     /// round a hole
     #[serde(default)]
-    #[schemars(extend(
-        "x-group" = "Machine Vectors…",
-        "x-widget" = "named-icons",
-        "x-icon" = "toolpaths/cut_{}_{side}.png"
-    ))]
+    #[schemars(skip)]
     pub direction: Direction,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
-    #[schemars(
-        title = "Passes",
-        extend(
-            "x-group" = "Machine Vectors…",
-            "x-widget" = "named-icons",
-            "x-icon" = "toolpaths/passes_{}.png"
-        )
-    )]
+    #[schemars(skip)]
     pub ways: Ways,
     /// Straight, or in small loops in the waste beside the line, then once along it straight
     #[serde(default)]
-    #[schemars(extend(
-        "x-group" = "Machine Vectors…",
-        "x-widget" = "named-icons",
-        "x-icon" = "toolpaths/motion_{}.png"
-    ))]
+    #[schemars(skip)]
     pub motion: Motion,
-    /// Set in Edit Loops…, under the cut settings when the motion is trochoidal
+    /// Set in the Cutting window, with the motion trochoidal
     #[serde(default)]
     #[schemars(skip)]
     pub loops: Loops,

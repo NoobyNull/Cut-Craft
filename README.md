@@ -61,16 +61,19 @@ please report them (see [Reporting bugs](#reporting-bugs)).
   carving (its areas shown in green before it is made), photo V-carve, quick engrave, drag
   knife.
 - **Rest machining** on any toolpath: only what earlier, larger tools left is cut.
-- **How the tool cuts**, set alone on every toolpath that follows a wall:
+- **How the tool cuts**, set alone on every toolpath that follows a wall. On Profile and
+  Pocket the choices are in one **Cutting** window, and a picture of what they make
+  together (the vector, the way round, the loops, the next pass, the rings' order) shows in
+  the window and beside the Cutting… button, with a line each saying how every pass cuts:
   - **Direction**: Climb or Conventional (Profile, Pocket, Chamfer, Prism).
   - **Passes**: Single direction, or Both directions, where each pass runs back the way the
     last came: climb one pass, conventional the next. This is the only way to cut both.
     Tabs stay in the same place on every pass, and leads stay on the waste side (Profile,
     Pocket, Chamfer, Prism).
   - **Motion**: Straight, or Trochoidal, where the tool circles in small loops as it moves
-    along, so only a sliver of its edge cuts at a time. **Edit Loops** (under Motion) sets
-    the loops' width and step with a picture of them at the cutter's size, and Loops Turn
-    which way they turn, apart from the direction: anticlockwise
+    along, so only a sliver of its edge cuts at a time. The Cutting window sets the loops'
+    width and step with a picture of them at the cutter's size, and Loops Turn which way
+    they turn, apart from the direction: anticlockwise
     loops cut climb and clockwise ones conventional (the spindle always turns clockwise),
     so Climb or Conventional with Straight, Trochoidal anticlockwise or Trochoidal clockwise
     gives six ways to cut. A trochoidal pocket clears in looped bands from the outline in, then cuts once

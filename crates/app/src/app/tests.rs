@@ -6030,19 +6030,16 @@ fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
 }
 
 #[test]
-fn edit_loops_opens_under_a_trochoidal_pocket_and_sets_the_turn() {
+fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "pocket_toolpath");
-    for _ in 0..5 {
-        h.frame(vec![]);
-    }
-    assert!(h.text_at("Edit Loops…").is_none(), "only for trochoidal");
-    h.app.form.as_mut().unwrap().params["motion"] = "trochoidal".into();
-    // down the form to the button
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // down the form to its Clear Pocket, the picture and Cutting… at its foot
     let over = h.text_at("Pocket Toolpath").expect("the form");
     for _ in 0..30 {
-        if h.text_at("Edit Loops…").is_some_and(|b| b.y < 700.0) {
+        if h.text_at("Cutting…").is_some_and(|b| b.y < 700.0) {
             break;
         }
         h.frame(vec![Event::PointerMoved(over + egui::vec2(0.0, 200.0))]);
@@ -6057,17 +6054,31 @@ fn edit_loops_opens_under_a_trochoidal_pocket_and_sets_the_turn() {
     for _ in 0..30 {
         h.frame(vec![]);
     }
-    h.click(
-        h.text_at("Edit Loops…").expect("the button"),
-        Modifiers::NONE,
+    assert!(
+        h.text_at("Pass 1: climb, anticlockwise round the pocket")
+            .is_some(),
+        "the form says what the choices make"
     );
+    h.click(h.text_at("Cutting…").expect("the button"), Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(h.text_at("Loop Width").is_some(), "the window");
-    h.click(h.text_at("Clockwise").unwrap(), Modifiers::NONE);
+    let params = |h: &Harness| h.app.form.as_ref().unwrap().params.clone();
+    for (choice, key, value) in [
+        ("Both directions", "ways", "both"),
+        ("From the outline in", "rings", "outline_in"),
+        ("Trochoidal", "motion", "trochoidal"),
+    ] {
+        h.click(h.text_at(choice).expect(choice), Modifiers::NONE);
+        h.frame(vec![]);
+        assert_eq!(params(&h)[key], value, "{choice}");
+    }
+    // trochoidal: the loops' settings appear, their turn set apart
     h.frame(vec![]);
-    assert_eq!(
-        h.app.form.as_ref().unwrap().params["loops"]["turn"],
-        "clockwise"
+    h.click(h.text_at("Clockwise").expect("the loops"), Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(params(&h)["loops"]["turn"], "clockwise");
+    assert!(
+        h.text_at("In loops turning clockwise: each loop cuts conventional")
+            .is_some()
     );
 }

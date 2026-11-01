@@ -1596,10 +1596,9 @@ fn interactive_rotation_offers_a_named_picture_for_each_turn() {
 fn every_way_of_cutting_has_a_picture_for_each_choice() {
     let registry = crate::commands::registry();
     let icons = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icons");
+    // Profile's and Pocket's are in their Cutting window, drawn there as one picture
     let wanted = [
-        ("profile_toolpath", &["direction", "ways", "motion"][..]),
-        ("pocket_toolpath", &["direction", "ways", "motion", "rings"]),
-        ("chamfer_toolpath", &["cut_direction", "ways"]),
+        ("chamfer_toolpath", &["cut_direction", "ways"][..]),
         ("prism_toolpath", &["cut_direction", "ways"]),
     ];
     for (id, keys) in wanted {
@@ -1625,13 +1624,6 @@ fn every_way_of_cutting_has_a_picture_for_each_choice() {
                 }
             }
         }
-    }
-    // the trochoidal loops' turn, set in Edit Loops (named as its picture would be)
-    for turn in ["anticlockwise", "clockwise"] {
-        assert!(
-            icons.join(format!("toolpaths/loops_{turn}.png")).is_file(),
-            "{turn}"
-        );
     }
     // a profile's climb turns clockwise round a part and anticlockwise in a hole
     let path = |side: &str| {

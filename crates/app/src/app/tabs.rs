@@ -25,7 +25,7 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut serde_json:
     {
         ui.data_mut(|d| d.insert_temp(window_id(), true));
     }
-    super::loops::edit_loops(ui, group, params)
+    super::cutting::group_end(ui, group, params)
 }
 
 impl CutCraftApp {

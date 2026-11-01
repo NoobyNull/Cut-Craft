@@ -86,11 +86,7 @@ pub struct Params {
     pub strategy: Strategy,
     /// Which way round the rings and the profile pass run
     #[serde(default)]
-    #[schemars(extend(
-        "x-group" = "Clear Pocket",
-        "x-widget" = "named-icons",
-        "x-icon" = "toolpaths/cut_{}_inside.png"
-    ))]
+    #[schemars(skip)]
     pub direction: Direction,
     /// Left on the walls; negative cuts past the vectors
     #[serde(default)]
@@ -111,35 +107,19 @@ pub struct Params {
     pub profile_pass: ProfilePass,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
-    #[schemars(
-        title = "Passes",
-        extend(
-            "x-group" = "Clear Pocket",
-            "x-widget" = "named-icons",
-            "x-icon" = "toolpaths/passes_{}.png"
-        )
-    )]
+    #[schemars(skip)]
     pub ways: Ways,
     /// Which way the offset rings step; trochoidal bands always step from the outline in
     /// (added with ring order)
     #[serde(default)]
-    #[schemars(extend(
-        "x-group" = "Clear Pocket",
-        "x-show-when" = {"strategy": "offset"},
-        "x-widget" = "named-icons",
-        "x-icon" = "toolpaths/rings_{}.png"
-    ))]
+    #[schemars(skip)]
     pub rings: RingOrder,
     /// Straight, or in small loops: trochoidal clears in looped bands from the outline in,
     /// then cuts once round the edge
     #[serde(default)]
-    #[schemars(extend(
-        "x-group" = "Clear Pocket",
-        "x-widget" = "named-icons",
-        "x-icon" = "toolpaths/motion_{}.png"
-    ))]
+    #[schemars(skip)]
     pub motion: Motion,
-    /// Set in Edit Loops…, under the cut settings when the motion is trochoidal
+    /// Set in the Cutting window, with the motion trochoidal
     #[serde(default)]
     #[schemars(skip)]
     pub loops: Loops,
