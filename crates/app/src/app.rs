@@ -854,6 +854,8 @@ struct CutCraftApp {
     gpu_3d: Option<view3d::gpu::Gpu>,
     /// The 3D view's surface as the GPU draws it, with what it was built from.
     surface_gpu: Option<(GeometryKey, std::sync::Arc<view3d::gpu::Geometry>)>,
+    /// The model's walls and bottom, made with the surface they hang from (no preview).
+    solid_gpu: Option<std::sync::Arc<view3d::gpu::Geometry>>,
     /// The imported model as the GPU draws it.
     model_gpu: Option<ModelGpu>,
     /// When the 3D view last moved (input time, seconds).

@@ -999,6 +999,109 @@ fn underside(
     quads
 }
 
+/// The model's body under its surface, so it shows solid rather than as a skin: walls
+/// hanging from the edge of the surface the grid draws (its quads between four cells that
+/// have a model) down to the modeling plane (z = 0), and a bottom there; wrapped round the
+/// axis (`wrap`), the walls go down to the axis and need no bottom. Triangles in the
+/// surface's coordinates, wound to face out.
+#[expect(clippy::cast_precision_loss, reason = "cell counts")]
+pub fn solid(material: &Material, wrap: Option<Wrap>) -> Vec<cmd_orientate_3d_model::Seen> {
+    let (cols, rows, cell) = (material.columns, material.rows, material.cell);
+    if cols < 2 || rows < 2 {
+        return vec![];
+    }
+    let height = |col: usize, row: usize| material.heights[row * cols + col];
+    // the quads the surface draws, round again past the end the way the job wraps
+    let (wraps_c, wraps_r) = (
+        wrap.is_some_and(|w| !w.along_x),
+        wrap.is_some_and(|w| w.along_x),
+    );
+    let quads = |n: usize, wraps: bool| if wraps { n } else { n - 1 };
+    let quad = |col: usize, row: usize| {
+        col < quads(cols, wraps_c)
+            && row < quads(rows, wraps_r)
+            && [(0, 0), (1, 0), (1, 1), (0, 1)]
+                .iter()
+                .all(|&(dc, dr)| !height((col + dc) % cols, (row + dr) % rows).is_nan())
+    };
+    // the quad before, if there is one
+    let before = |i: usize, n: usize, wraps: bool| match i {
+        0 => wraps.then(|| n - 1),
+        i => Some(i - 1),
+    };
+    let floor = wrap.map_or(0.0, |w| w.surface - w.radius);
+    let round = |along_x: bool| if along_x { rows } else { cols } as f64 * cell;
+    let flat = |col: usize, row: usize, z: f64| {
+        DVec3::new((col as f64 + 0.5) * cell, (row as f64 + 0.5) * cell, z)
+    };
+    let at = |col: usize, row: usize, z: f64| {
+        let p = flat(col, row, z);
+        wrap.map_or(p, |w| w.place(p, round(w.along_x)))
+    };
+    let mut out = vec![];
+    // a wall below the edge between two cells, facing `outward` before wrapping
+    let mut wall = |from: (usize, usize), to: (usize, usize), outward: DVec3| {
+        let along = flat(to.0, to.1, 0.0) - flat(from.0, from.1, 0.0);
+        let (from, to) = if along.cross(DVec3::Z).dot(outward) < 0.0 {
+            (to, from)
+        } else {
+            (from, to)
+        };
+        let top = (
+            at(from.0, from.1, height(from.0, from.1)),
+            at(to.0, to.1, height(to.0, to.1)),
+        );
+        let low = (at(from.0, from.1, floor), at(to.0, to.1, floor));
+        out.push(([low.0, low.1, top.1], false));
+        out.push(([low.0, top.1, top.0], false));
+    };
+    for row in 0..rows {
+        for col in 0..cols {
+            let (right, up) = ((col + 1) % cols, (row + 1) % rows);
+            let here = quad(col, row);
+            // the edge along the bottom of this quad, drawn where only one side has a quad
+            let below = before(row, rows, wraps_r).is_some_and(|r| quad(col, r));
+            match (here, below) {
+                (true, false) => wall((col, row), (right, row), DVec3::NEG_Y),
+                (false, true) => wall((col, row), (right, row), DVec3::Y),
+                _ => {}
+            }
+            // the edge along its left side
+            let left = before(col, cols, wraps_c).is_some_and(|c| quad(c, row));
+            match (here, left) {
+                (true, false) => wall((col, row), (col, up), DVec3::NEG_X),
+                (false, true) => wall((col, row), (col, up), DVec3::X),
+                _ => {}
+            }
+        }
+    }
+    if wrap.is_none() {
+        // the bottom, a strip for each run of quads along a row, facing down
+        for row in 0..rows - 1 {
+            let mut col = 0;
+            while col < cols - 1 {
+                if !quad(col, row) {
+                    col += 1;
+                    continue;
+                }
+                let first = col;
+                while col < cols - 1 && quad(col, row) {
+                    col += 1;
+                }
+                let corners = [
+                    flat(first, row, floor),
+                    flat(first, row + 1, floor),
+                    flat(col, row + 1, floor),
+                    flat(col, row, floor),
+                ];
+                out.push(([corners[0], corners[1], corners[2]], false));
+                out.push(([corners[0], corners[2], corners[3]], false));
+            }
+        }
+    }
+    out
+}
+
 /// Triangles in the material's coordinates (as [`screen_of`] takes them), lit as the
 /// surface is and drawn far to near with their backs left out; the `true` ones in `mark`.
 // ponytail: sorted every frame; cache by view as fine_mesh does if big models drag
@@ -1546,6 +1649,44 @@ mod tests {
         assert!(
             brightness(&half, columns / 2, 3, LIGHT).is_finite(),
             "an edge cell is lit"
+        );
+    }
+
+    #[test]
+    fn the_model_is_solid_down_to_the_modeling_plane() {
+        // 10 x 10 cells of 1 mm, the model a 4 x 4 block of them 5 high, nothing round it
+        let job = Job {
+            width: 10.0,
+            height: 10.0,
+            ..Job::default()
+        };
+        let mut m = Material::new(&job, 10);
+        for (i, h) in m.heights.iter_mut().enumerate() {
+            let (c, r) = (i % 10, i / 10);
+            *h = if (3..7).contains(&c) && (3..7).contains(&r) {
+                5.0
+            } else {
+                f64::NAN
+            };
+        }
+        let tris = solid(&m, None);
+        // its surface spans 3 x 3 quads: four walls of 3 quads, 2 triangles each, and the
+        // bottom as 3 strips of 2
+        assert_eq!(tris.len(), 4 * 3 * 2 + 3 * 2, "{}", tris.len());
+        let middle = DVec3::new(5.0, 5.0, 2.5);
+        for (t, _) in &tris {
+            let normal = (t[1] - t[0]).cross(t[2] - t[0]);
+            let centre = (t[0] + t[1] + t[2]) / 3.0;
+            assert!(normal.dot(centre - middle) > 0.0, "faces out: {t:?}");
+            assert!(
+                t.iter().all(|p| (0.0..=5.0).contains(&p.z)),
+                "plane to surface"
+            );
+        }
+        assert!(
+            tris.iter()
+                .any(|(t, _)| t.iter().all(|p| p.z.abs() < 1e-12)),
+            "a bottom"
         );
     }
 

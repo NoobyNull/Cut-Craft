@@ -1344,6 +1344,7 @@ impl CutCraftApp {
                 .is_some_and(|f| f.model.is_some() && f.model_whole),
         };
         if let Some(playback) = &self.playback {
+            self.solid_gpu = None;
             let surface = self.painted(view3d::coarse(playback.material(), MESH_CELLS));
             return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
         }
@@ -1375,6 +1376,11 @@ impl CutCraftApp {
                 surface.paint = paint;
             }
         }
+        // the model alone (no preview) is drawn solid down to the modeling plane
+        self.solid_gpu = self
+            .simulation
+            .is_none()
+            .then(|| std::sync::Arc::new(view3d::gpu::model(&view3d::solid(&surface, wrap))));
         let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
         if !dragging {
             self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
@@ -2293,6 +2299,13 @@ impl CutCraftApp {
             }
         } else {
             self.paint_flat(ui, area, &surface, &camera, look, tool_at, gpu);
+        }
+        // no model being imported: the model's body, under its surface
+        if slot.is_some() && model_draw.is_none() && self.simulation.is_none() {
+            model_draw = self.solid_gpu.clone().map(|geometry| {
+                let at = cut_craft_core::glam::DVec3::ZERO;
+                view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
+            });
         }
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
             painter.set(slot, gpu.paint(area, surface_draw, model_draw));

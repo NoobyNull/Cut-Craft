@@ -114,6 +114,7 @@ impl CutCraftApp {
             model_3d: None,
             gpu_3d: None,
             surface_gpu: None,
+            solid_gpu: None,
             model_gpu: None,
             moved_3d: 0.0,
             orbit: view3d::Orbit::default(),

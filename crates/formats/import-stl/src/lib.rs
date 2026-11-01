@@ -78,7 +78,10 @@ pub fn undercut(triangles: &[[DVec3; 3]]) -> f64 {
         .sum()
 }
 
-/// Raises each cell of `k` to the highest triangle above its centre.
+/// Raises each cell of `k` to the highest triangle above its centre. A cell whose highest
+/// triangle is a near-vertical side (only its thin edge seen from above) takes the height of
+/// the top beside it instead, so a model's steep sides do not leave a ring of low cells
+/// (spikes in the 3D view) round its top.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -94,6 +97,8 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
     if columns == 0 || rows == 0 || k.heights.len() < columns * rows {
         return;
     }
+    // each cell's highest triangle is a steep side
+    let mut steep = vec![false; columns * rows];
     // the grid in bands of rows, one per core, each thread raising its own band
     // ponytail: every thread scans every triangle for its band; an index by row if models of
     // millions of faces drag
@@ -101,8 +106,9 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
     let band = rows.div_ceil(threads.min(rows));
     let index = |v: f64, n: usize| (v.max(0.0) as usize).min(n.saturating_sub(1));
     std::thread::scope(|scope| {
-        for (i, heights) in k.heights[..columns * rows]
+        for (i, (heights, steep)) in k.heights[..columns * rows]
             .chunks_mut(band * columns)
+            .zip(steep.chunks_mut(band * columns))
             .enumerate()
         {
             let first = i * band;
@@ -114,6 +120,7 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
                     if det.abs() < 1e-12 {
                         continue; // edge-on from above
                     }
+                    let side = det.abs() < STEEP * ab.cross(ac).length();
                     let lo = a.min(*b).min(*c);
                     let hi = a.max(*b).max(*c);
                     let c0 = index((lo.x - origin.x) / cell - 0.5, columns);
@@ -130,9 +137,11 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
                                 continue;
                             }
                             let z = a.z + u * ab.z + v * ac.z;
-                            let h = &mut heights[(row - first) * columns + col];
+                            let at = (row - first) * columns + col;
+                            let h = &mut heights[at];
                             if h.is_nan() || z > *h {
                                 *h = z;
+                                steep[at] = side;
                             }
                         }
                     }
@@ -140,7 +149,42 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
             });
         }
     });
+    // ponytail: a few cells in from the top at most; a wider steep band keeps its slope
+    for _ in 0..SIDE_CELLS {
+        let mut raised = vec![];
+        for row in 0..rows {
+            for col in 0..columns {
+                let at = row * columns + col;
+                if !steep[at] {
+                    continue;
+                }
+                let top = (row.saturating_sub(1)..=(row + 1).min(rows - 1))
+                    .flat_map(|r| {
+                        (col.saturating_sub(1)..=(col + 1).min(columns - 1))
+                            .map(move |c| r * columns + c)
+                    })
+                    .filter(|&n| !steep[n] && !k.heights[n].is_nan())
+                    .map(|n| k.heights[n])
+                    .fold(f64::NAN, f64::max);
+                if !top.is_nan() {
+                    raised.push((at, top.max(k.heights[at])));
+                }
+            }
+        }
+        if raised.is_empty() {
+            break;
+        }
+        for (at, h) in raised {
+            k.heights[at] = h;
+            steep[at] = false;
+        }
+    }
 }
+
+/// A face this close to vertical (the share of its area seen from above) is a side.
+const STEEP: f64 = 0.1;
+/// How many cells in from a top its steep sides are raised to it.
+const SIDE_CELLS: usize = 4;
 
 /// The triangles of a binary or ASCII STL file, or of a Wavefront OBJ file.
 pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
@@ -398,5 +442,41 @@ mod tests {
         assert!(k.extent().size().y <= job.height + 2.0 * k.cell);
         assert!(ImportStl::import(&Document::default(), b"not a model").is_err());
         assert!(ImportStl::import(&Document::default(), b"solid x\n vertex 1 2\n").is_err());
+    }
+
+    #[test]
+    fn a_plate_with_steep_sides_has_no_low_spikes_round_its_edge() {
+        use cut_craft_core::component::{Combine, Component};
+        use cut_craft_core::geometry::Rect;
+        // a 10 x 10 plate 5 tall whose sides lean out 0.2 mm from top to bottom, so the
+        // cells along its edge sit over the sides, not the top
+        let (t, b) = (0.0, -0.2);
+        let top = [
+            DVec3::new(t, t, 5.0),
+            DVec3::new(10.0 - t, t, 5.0),
+            DVec3::new(10.0 - t, 10.0 - t, 5.0),
+            DVec3::new(t, 10.0 - t, 5.0),
+        ];
+        let low = [
+            DVec3::new(b, b, 0.0),
+            DVec3::new(10.0 - b, b, 0.0),
+            DVec3::new(10.0 - b, 10.0 - b, 0.0),
+            DVec3::new(b, 10.0 - b, 0.0),
+        ];
+        let mut tris = vec![[top[0], top[1], top[2]], [top[0], top[2], top[3]]];
+        for i in 0..4 {
+            let j = (i + 1) % 4;
+            tris.push([low[i], low[j], top[j]]);
+            tris.push([low[i], top[j], top[i]]);
+        }
+        let area = Rect::new(Point::new(-0.25, -0.25), Point::new(10.25, 10.25));
+        let mut k = Component::from_fn("plate", Combine::Add, area, 0.1, |_| None);
+        top_down(&mut k, &tris);
+        let lowest = k
+            .heights
+            .iter()
+            .filter(|h| !h.is_nan())
+            .fold(f64::INFINITY, |a, &h| a.min(h));
+        assert!(lowest > 4.9, "an edge cell fell to {lowest}");
     }
 }
