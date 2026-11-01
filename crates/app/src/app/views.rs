@@ -12,6 +12,9 @@ use super::{
 use crate::options::WindowLayout;
 use cut_craft_core::document::Units;
 
+/// How far beyond the selection's corners its rotation handles sit, in pick reaches.
+const ROTATE_OUT: f64 = 2.5;
+
 /// How big the selection's handles are, as a share of a row: bigger than a node's, as there
 /// are only a few and they are what a drag takes hold of.
 const SELECTION_HANDLE_SHARE: f32 = 0.55;
@@ -1195,6 +1198,10 @@ impl CutCraftApp {
         self.datum_mark(ui, &canvas, area, job.offset);
         if handled || self.view_tool == Some(ViewTool::Transform) {
             self.paint_handles(ui, &canvas);
+            // over a handle, the status bar says what it does and the keys that change it
+            if let Some(handle) = canvas.cursor().and_then(|at| self.handle_at(at, reach)) {
+                self.status.set_message(handle.hint());
+            }
         }
         self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
@@ -1270,12 +1277,6 @@ impl CutCraftApp {
             }
             (Some(Gesture::Click { at, .. }), None, None) if placing_tabs => {
                 self.place_tab(at, reach);
-            }
-            // a click on the middle's cross turns the rotate handles on or off
-            (Some(Gesture::Click { at, .. }), None, None)
-                if handled && self.on_middle(at, reach) =>
-            {
-                self.rotating ^= true;
             }
             (Some(Gesture::Click { at, shift }), None, None) => {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
@@ -1696,40 +1697,49 @@ impl CutCraftApp {
 
     /// Whether `at` is on one of the selection's scale or rotate handles.
     fn on_handle(&self, at: Point, reach: f64) -> bool {
-        self.doc
-            .selection_bounds()
-            .and_then(|b| handles::pick(b, self.rotating, at, reach))
-            .is_some_and(|h| h != Handle::Move)
+        self.handle_at(at, reach).is_some_and(|h| h != Handle::Move)
     }
 
-    /// Whether `at` is on the cross in the middle of the selection.
-    fn on_middle(&self, at: Point, reach: f64) -> bool {
-        self.doc
-            .selection_bounds()
-            .and_then(|b| handles::pick(b, self.rotating, at, reach))
-            == Some(Handle::Move)
+    /// The selection's handles there are, and how far the rotation ones sit beyond its
+    /// corners: in Transform mode the scale or (after a click on the middle) the rotation
+    /// ones, else all of them at once.
+    fn selection_handles(&self, reach: f64) -> (Vec<Handle>, f64) {
+        if self.view_tool == Some(ViewTool::Transform) {
+            (handles::handles(self.rotating), 0.0)
+        } else {
+            (handles::all(), ROTATE_OUT * reach)
+        }
+    }
+
+    /// The selection's handle at `at`, if any.
+    fn handle_at(&self, at: Point, reach: f64) -> Option<Handle> {
+        let bounds = self.doc.selection_bounds()?;
+        let (among, out) = self.selection_handles(reach);
+        handles::pick_among(&among, bounds, at, reach, out)
     }
 
     /// The transform a drag in Transform mode makes, if it started on one of the selection's
     /// handles.
     pub(super) fn handle_drag(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Option<DAffine2> {
         let bounds = self.doc.selection_bounds()?;
-        let handle = handles::pick(bounds, self.rotating, drag.start, reach)?;
+        let handle = self.handle_at(drag.start, reach)?;
         let keys = ui.input(|i| handles::Keys {
             alt: i.modifiers.alt,
             shift: i.modifiers.shift,
+            ctrl: i.modifiers.ctrl || i.modifiers.command,
         });
         Some(handles::transform(
             bounds, handle, drag.start, drag.end, keys,
         ))
     }
 
-    /// The selection's box and handles: white squares scale (the corners both ways, the
-    /// sides one), black ones rotate, and a cross in the middle moves.
+    /// The selection's box and handles: squares scale (the corners and sides), circles beyond
+    /// the corners rotate, and a cross in the middle moves.
     pub(super) fn paint_handles(&self, ui: &egui::Ui, canvas: &Canvas) {
         let Some(bounds) = self.doc.selection_bounds() else {
             return;
         };
+        let (among, out) = self.selection_handles(canvas.pick_tolerance(ui));
         let painter = ui.painter_at(canvas.area);
         let visuals = ui.visuals();
         let stroke = visuals.selection.stroke;
@@ -1744,10 +1754,19 @@ impl CutCraftApp {
         let dash = ui.spacing().interact_size.y / 4.0;
         painter.extend(egui::Shape::dashed_line(&corners, stroke, dash, dash));
         let half = ui.spacing().interact_size.y * SELECTION_HANDLE_SHARE / 2.0;
-        for handle in handles::handles(self.rotating) {
+        for handle in among {
             let at = canvas
                 .transform
-                .to_screen(handles::position(bounds, handle));
+                .to_screen(handles::placed(bounds, handle, out));
+            if let Handle::Rotate { .. } = handle
+                && out > 0.0
+            {
+                // tied to its corner
+                let corner = canvas
+                    .transform
+                    .to_screen(handles::position(bounds, handle));
+                painter.line_segment([corner, at], stroke);
+            }
             let square = egui::Rect::from_center_size(at, egui::vec2(half, half) * 2.0);
             match handle {
                 Handle::Move => {

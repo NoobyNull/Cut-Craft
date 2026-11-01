@@ -1087,23 +1087,49 @@ fn a_selection_always_has_its_handles_to_scale_and_rotate_by() {
         (b.max.x - 40.0).abs() < 0.5 && (b.max.y - 20.0).abs() < 1e-6,
         "{b:?}"
     );
-    // a corner both ways in proportion, the opposite corner staying
+    // a corner freely, each axis on its own
     h.drag(h.at(40.0, 20.0), h.at(50.0, 30.0));
+    let b = h.app.doc.selection_bounds().unwrap();
+    assert!(
+        (b.max.x - 50.0).abs() < 0.5 && (b.max.y - 30.0).abs() < 0.5,
+        "{b:?}"
+    );
+    // with Shift in proportion
+    let (from, to) = (h.at(50.0, 30.0), h.at(70.0, 32.0));
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::SHIFT);
+    h.frame_holding(Modifiers::SHIFT, vec![Event::PointerMoved(to)]);
+    h.press(to, false, Modifiers::SHIFT);
     let b = h.app.doc.selection_bounds().unwrap();
     let size = b.size();
     assert!(
-        size.x > 31.0 && (size.x / size.y - 3.0).abs() < 0.01,
+        size.x > 41.0 && (size.x / size.y - 2.0).abs() < 0.01,
         "{b:?}"
     );
+    // the rotation handles are there too, a little beyond the corners
+    let row = h.ctx.global_style().spacing.interact_size.y;
+    let out = 2.5 * row / 2.0;
+    let corner = h.at(b.max.x, b.max.y);
+    let handle = corner + egui::vec2(out, -out);
+    let centre = h.at(b.center().x, b.center().y);
+    // over it, the status bar says the keys
+    h.frame(vec![Event::PointerMoved(handle)]);
     assert!(
-        (b.min.x - 10.0).abs() < 1e-6 && (b.min.y - 10.0).abs() < 1e-6,
-        "{b:?}"
+        h.app
+            .status
+            .message
+            .contains("Hold Shift to snap to 5.625°, or Ctrl to 1°"),
+        "{}",
+        h.app.status.message
     );
-    // a click on the middle's cross gives the rotate handles
-    let middle = h.at(b.center().x, b.center().y);
-    h.click(middle, Modifiers::NONE);
-    assert!(h.app.rotating, "rotate handles");
-    assert!(!h.app.doc.selection.is_empty(), "still selected");
+    // a quarter turn about the middle
+    let spun = centre + (handle - centre).rot90();
+    h.drag(handle, spun);
+    let turned = h.app.doc.selection_bounds().unwrap().size();
+    assert!(
+        (turned.x - size.y).abs() < 0.5 && (turned.y - size.x).abs() < 0.5,
+        "{size:?} turned to {turned:?}"
+    );
 }
 
 #[test]
@@ -1947,18 +1973,18 @@ fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
     assert!((scaled.max - grown).length() < 0.5, "{scaled:?}");
     h.app.invoke(&h.ctx, "undo");
     h.frame(vec![]);
-    // the rotation arrow with Alt held turns in 15° steps: dragged about 20° round the
-    // middle, the box turns 15°, so its bounds grow by cos 15° + sin 15°
+    // the rotation arrow with Shift held turns in 5.625° steps: dragged about 20° round the
+    // middle, the box turns 22.5°, so its bounds grow by cos 22.5° + sin 22.5°
     let (middle, from) = (at(&h, Handle::Move), at(&h, Handle::Rotate { x: 0, y: 1 }));
     let to = middle + egui::emath::Rot2::from_angle(20f32.to_radians()) * (from - middle);
-    let alt = Modifiers::ALT;
-    h.frame_holding(alt, vec![Event::PointerMoved(from)]);
-    h.press(from, true, alt);
-    h.frame_holding(alt, vec![Event::PointerMoved(to)]);
-    h.press(to, false, alt);
-    h.frame_holding(alt, vec![]);
+    let shift = Modifiers::SHIFT;
+    h.frame_holding(shift, vec![Event::PointerMoved(from)]);
+    h.press(from, true, shift);
+    h.frame_holding(shift, vec![Event::PointerMoved(to)]);
+    h.press(to, false, shift);
+    h.frame_holding(shift, vec![]);
     let turned = extent(&h);
-    let (sin, cos) = 15f64.to_radians().sin_cos();
+    let (sin, cos) = 22.5f64.to_radians().sin_cos();
     let wide = before.size().x * (cos + sin);
     assert!(
         (turned.size().x - wide).abs() < 0.3,

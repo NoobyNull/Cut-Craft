@@ -1597,13 +1597,15 @@ impl CutCraftApp {
                 }
             }
             // picked within the 2D view's reach of it: half a button's height
-            let response = ui
-                .interact(
-                    egui::Rect::from_center_size(at, egui::Vec2::splat(edge)),
-                    ui.scope_id().with(("transform_3d", i)),
-                    egui::Sense::click_and_drag(),
-                )
-                .on_hover_text(Handle3d::Transform(handle).hint());
+            let response = ui.interact(
+                egui::Rect::from_center_size(at, egui::Vec2::splat(edge)),
+                ui.scope_id().with(("transform_3d", i)),
+                egui::Sense::click_and_drag(),
+            );
+            // the status bar says what it does and the keys that change it
+            if response.hovered() || response.dragged() {
+                self.status.set_message(handle.hint());
+            }
             self.handles_3d.push((Handle3d::Transform(handle), at));
             if response.drag_started()
                 && let Some(from) = ui.input(|i| i.pointer.press_origin())
@@ -1621,6 +1623,7 @@ impl CutCraftApp {
                 handles::Keys {
                     alt: i.modifiers.alt,
                     shift: i.modifiers.shift,
+                    ctrl: i.modifiers.ctrl || i.modifiers.command,
                 },
             )
         });

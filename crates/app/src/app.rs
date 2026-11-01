@@ -587,12 +587,7 @@ impl Handle3d {
             Self::Height => "Shape height: drag up or down",
             Self::Base => "Base height: drag up or down",
             Self::Settings => "Combine mode, fade, tilt and appearance",
-            Self::Transform(Handle::Move) => "Move: drag (Alt: along one axis)",
-            Self::Transform(Handle::Scale { x, y }) if x != 0 && y != 0 => {
-                "Scale: drag (Alt: each axis on its own, Shift: about the centre)"
-            }
-            Self::Transform(Handle::Scale { .. }) => "Scale one axis: drag (Shift: both)",
-            Self::Transform(Handle::Rotate { .. }) => "Rotate: drag (Alt: in 15° steps)",
+            Self::Transform(handle) => handle.hint(),
         }
     }
 
