@@ -12,6 +12,21 @@ use super::{
 use crate::options::WindowLayout;
 use cut_craft_core::document::Units;
 
+/// How big the selection's handles are, as a share of a row: bigger than a node's, as there
+/// are only a few and they are what a drag takes hold of.
+const SELECTION_HANDLE_SHARE: f32 = 0.55;
+
+/// What the 2D view's clicks go to besides selecting: the selection's handles (when nothing
+/// else takes them), tracing a bitmap, filleting corners, placing tabs.
+#[derive(Clone, Copy)]
+#[expect(clippy::struct_excessive_bools, reason = "the view's modes, one each")]
+struct Modes {
+    handled: bool,
+    tracing: bool,
+    filleting: bool,
+    placing_tabs: bool,
+}
+
 impl CutCraftApp {
     /// One pass of the whole window on the root `ui`; apart from the eframe entry so tests
     /// can drive it headlessly.
@@ -1124,6 +1139,12 @@ impl CutCraftApp {
         let placing_tabs = self.placing_tabs();
         let filleting = self.filleting();
         let tracing = self.tracing();
+        // the selection's box and handles, whenever nothing else uses the view's clicks
+        let handled = self.view_tool.is_none()
+            && self.drawing_tool().is_none()
+            && !tracing
+            && !filleting
+            && !placing_tabs;
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
             // Trace Bitmap: a box dragged over the picture is the part traced
             (Some(Gesture::Dragging(drag)), None, None) if tracing => Overlay::Window {
@@ -1161,12 +1182,18 @@ impl CutCraftApp {
                     None => self.preview(id, drag),
                 })
             }
+            // select mode: a drag from a scale or rotate handle transforms, as in Transform
+            (Some(Gesture::Dragging(drag)), None, None)
+                if handled && self.on_handle(drag.start, reach) =>
+            {
+                self.transform_overlay(ui, drag, reach)
+            }
             (Some(Gesture::Dragging(drag)), _, None) => self.select_drag_overlay(drag, reach),
             _ => Overlay::None,
         };
         self.paint_2d(ui, &canvas, &overlay);
         self.datum_mark(ui, &canvas, area, job.offset);
-        if self.view_tool == Some(ViewTool::Transform) {
+        if handled || self.view_tool == Some(ViewTool::Transform) {
             self.paint_handles(ui, &canvas);
         }
         self.paint_form_marks(ui, &canvas);
@@ -1176,6 +1203,37 @@ impl CutCraftApp {
         self.view_transform = Some(canvas.transform);
         self.view_area = Some(area);
         self.cursor = canvas.cursor();
+        self.act_2d(
+            ui,
+            gesture,
+            &canvas,
+            reach,
+            area,
+            Modes {
+                handled,
+                tracing,
+                filleting,
+                placing_tabs,
+            },
+        );
+    }
+
+    /// What a gesture in the 2D view does, once the view is drawn.
+    fn act_2d(
+        &mut self,
+        ui: &egui::Ui,
+        gesture: Option<Gesture>,
+        canvas: &Canvas,
+        reach: f64,
+        area: egui::Rect,
+        modes: Modes,
+    ) {
+        let Modes {
+            handled,
+            tracing,
+            filleting,
+            placing_tabs,
+        } = modes;
         match (gesture, self.view_tool, self.drawing_tool()) {
             (Some(Gesture::Dropped { drag, .. }), Some(ViewTool::ZoomBox), _) => {
                 self.zoom_box(ui, area, drag);
@@ -1196,6 +1254,14 @@ impl CutCraftApp {
                 self.set_trace_area(Some(Rect::new(drag.start, drag.end)));
             }
             (Some(Gesture::Click { at, .. }), None, None) if tracing => self.trace_click(at),
+            (Some(Gesture::Dropped { drag, .. }), None, None)
+                if handled && self.on_handle(drag.start, reach) =>
+            {
+                if let Some(t) = self.handle_drag(ui, drag, reach) {
+                    let change = Change::transform_selected(&self.doc, |_| t);
+                    self.record(change, "Transformed");
+                }
+            }
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.plain_drop(drag, shift, reach, placing_tabs);
             }
@@ -1204,6 +1270,12 @@ impl CutCraftApp {
             }
             (Some(Gesture::Click { at, .. }), None, None) if placing_tabs => {
                 self.place_tab(at, reach);
+            }
+            // a click on the middle's cross turns the rotate handles on or off
+            (Some(Gesture::Click { at, .. }), None, None)
+                if handled && self.on_middle(at, reach) =>
+            {
+                self.rotating ^= true;
             }
             (Some(Gesture::Click { at, shift }), None, None) => {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
@@ -1622,6 +1694,22 @@ impl CutCraftApp {
         }
     }
 
+    /// Whether `at` is on one of the selection's scale or rotate handles.
+    fn on_handle(&self, at: Point, reach: f64) -> bool {
+        self.doc
+            .selection_bounds()
+            .and_then(|b| handles::pick(b, self.rotating, at, reach))
+            .is_some_and(|h| h != Handle::Move)
+    }
+
+    /// Whether `at` is on the cross in the middle of the selection.
+    fn on_middle(&self, at: Point, reach: f64) -> bool {
+        self.doc
+            .selection_bounds()
+            .and_then(|b| handles::pick(b, self.rotating, at, reach))
+            == Some(Handle::Move)
+    }
+
     /// The transform a drag in Transform mode makes, if it started on one of the selection's
     /// handles.
     pub(super) fn handle_drag(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Option<DAffine2> {
@@ -1636,8 +1724,8 @@ impl CutCraftApp {
         ))
     }
 
-    /// Transform mode's handles on the selection: white squares scale, black ones rotate,
-    /// and a cross in the middle moves.
+    /// The selection's box and handles: white squares scale (the corners both ways, the
+    /// sides one), black ones rotate, and a cross in the middle moves.
     pub(super) fn paint_handles(&self, ui: &egui::Ui, canvas: &Canvas) {
         let Some(bounds) = self.doc.selection_bounds() else {
             return;
@@ -1645,7 +1733,17 @@ impl CutCraftApp {
         let painter = ui.painter_at(canvas.area);
         let visuals = ui.visuals();
         let stroke = visuals.selection.stroke;
-        let half = ui.spacing().interact_size.y * view2d::NODE_HANDLE_SHARE / 2.0;
+        let corners = [
+            bounds.min,
+            Point::new(bounds.max.x, bounds.min.y),
+            bounds.max,
+            Point::new(bounds.min.x, bounds.max.y),
+            bounds.min,
+        ]
+        .map(|p| canvas.transform.to_screen(p));
+        let dash = ui.spacing().interact_size.y / 4.0;
+        painter.extend(egui::Shape::dashed_line(&corners, stroke, dash, dash));
+        let half = ui.spacing().interact_size.y * SELECTION_HANDLE_SHARE / 2.0;
         for handle in handles::handles(self.rotating) {
             let at = canvas
                 .transform
@@ -1662,7 +1760,12 @@ impl CutCraftApp {
                     painter.rect_stroke(square, 0, stroke, egui::StrokeKind::Middle);
                 }
                 Handle::Rotate { .. } => {
-                    painter.rect_filled(square, 0.0, visuals.text_color());
+                    painter.circle(
+                        at,
+                        half,
+                        stroke.color,
+                        egui::Stroke::new(stroke.width, visuals.extreme_bg_color),
+                    );
                 }
             }
         }

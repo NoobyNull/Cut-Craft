@@ -1072,6 +1072,41 @@ fn transform_mode_scales_by_a_corner_and_rotates_after_a_second_click() {
 }
 
 #[test]
+fn a_selection_always_has_its_handles_to_scale_and_rotate_by() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    // no tool in hand: plain selecting
+    h.app.form = None;
+    h.frame(vec![]);
+    assert_eq!(h.app.view_tool, None);
+    assert!(h.app.drawing_tool().is_none());
+    // a side handle stretches one way only
+    h.drag(h.at(30.0, 15.0), h.at(40.0, 15.0));
+    let b = h.app.doc.selection_bounds().unwrap();
+    assert!(
+        (b.max.x - 40.0).abs() < 0.5 && (b.max.y - 20.0).abs() < 1e-6,
+        "{b:?}"
+    );
+    // a corner both ways in proportion, the opposite corner staying
+    h.drag(h.at(40.0, 20.0), h.at(50.0, 30.0));
+    let b = h.app.doc.selection_bounds().unwrap();
+    let size = b.size();
+    assert!(
+        size.x > 31.0 && (size.x / size.y - 3.0).abs() < 0.01,
+        "{b:?}"
+    );
+    assert!(
+        (b.min.x - 10.0).abs() < 1e-6 && (b.min.y - 10.0).abs() < 1e-6,
+        "{b:?}"
+    );
+    // a click on the middle's cross gives the rotate handles
+    let middle = h.at(b.center().x, b.center().y);
+    h.click(middle, Modifiers::NONE);
+    assert!(h.app.rotating, "rotate handles");
+    assert!(!h.app.doc.selection.is_empty(), "still selected");
+}
+
+#[test]
 fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
