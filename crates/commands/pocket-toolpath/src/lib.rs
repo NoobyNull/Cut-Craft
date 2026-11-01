@@ -27,6 +27,35 @@ pub enum Strategy {
     Raster,
 }
 
+/// Which way an offset pocket's rings step. Turning the cut direction's way, rings stepping
+/// from the middle out cut it (climb, say) and rings stepping from the outline in cut the
+/// other (conventional): the wall's own ring always cuts the chosen direction.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RingOrder {
+    /// The middle ring first, the outline's last
+    #[default]
+    #[schemars(title = "From the middle out")]
+    MiddleOut,
+    /// The outline's ring first, the middle's last
+    #[schemars(title = "From the outline in")]
+    OutlineIn,
+    /// Middle out on the first pass, outline in on the next, and so on: each pass starts
+    /// where the last ended, cutting the chosen direction then the other
+    Alternate,
+}
+
+impl RingOrder {
+    /// Whether pass `pass` (from 0) steps from the outline in.
+    fn inward(self, pass: usize) -> bool {
+        match self {
+            Self::MiddleOut => false,
+            Self::OutlineIn => true,
+            Self::Alternate => pass % 2 == 1,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfilePass {
@@ -80,6 +109,11 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Passes", extend("x-group" = "Clear Pocket", "x-widget" = "row"))]
     pub ways: Ways,
+    /// Which way the offset rings step; trochoidal bands always step from the outline in
+    /// (added with ring order)
+    #[serde(default)]
+    #[schemars(extend("x-group" = "Clear Pocket", "x-show-when" = {"strategy": "offset"}))]
+    pub rings: RingOrder,
     /// Straight, or in small loops: trochoidal clears in looped bands from the outline in,
     /// then cuts once round the edge
     #[serde(default)]
@@ -127,6 +161,7 @@ impl Default for Params {
             raster_angle: 0.0,
             profile_pass: ProfilePass::Last,
             ways: Ways::One,
+            rings: RingOrder::MiddleOut,
             motion: Motion::Straight,
             loops: Loops::default(),
             ramp_plunge_moves: false,
@@ -182,17 +217,23 @@ impl Command for PocketToolpath {
     }
 }
 
+/// The depth and the tool's sizes, checked.
+fn check(p: &Params) -> Result<(), CommandError> {
+    ensure_positive("depth", p.depth)?;
+    ensure_positive("tool diameter", p.tool.diameter)?;
+    ensure_positive("pass depth", p.tool.pass_depth)?;
+    if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
+        return Err(CommandError::InvalidParams(
+            "stepover must be more than 0 and at most 1".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// The pocket for `p`'s own tool.
 fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
     {
-        ensure_positive("depth", p.depth)?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
-        ensure_positive("pass depth", p.tool.pass_depth)?;
-        if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
-            return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
-            ));
-        }
+        check(p)?;
         let (ids, paths) = doc.selected_paths(|path| path.closed);
         if ids.is_empty() {
             return Err(CommandError::Failed(
@@ -214,6 +255,9 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let step = p.tool.stepover * p.tool.diameter;
         let edge = ring.clone();
         let rings = rings_in(ring, step);
+        // the same rings from the outline in: turning the same way, they cut conventional
+        // where the rings from the middle out cut climb (or the other way about)
+        let outline_in: Vec<Path> = rings.iter().rev().cloned().collect();
         let mut loops = vec![];
         if p.motion == Motion::Trochoidal {
             loops = trochoidal(&edge, p);
@@ -258,13 +302,17 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         let mut above = 0.0;
         for (pass, z) in p.tool.pass_depths(p.depth).into_iter().enumerate() {
             let back = p.ways == Ways::Both && pass % 2 == 1;
-            let cut = |paths: &[Path]| cut(paths, z, above, back);
+            let cut_way = |paths: &[Path], back: bool| cut(paths, z, above, back);
+            let cut = |paths: &[Path]| cut_way(paths, back);
             match (p.motion, p.strategy) {
                 (Motion::Trochoidal, _) => {
                     moves.extend(cut(&loops));
                     moves.extend(cut(&edge));
                 }
-                (Motion::Straight, Strategy::Offset) => moves.extend(cut(&rings)),
+                (Motion::Straight, Strategy::Offset) => {
+                    let inward = p.rings.inward(pass);
+                    moves.extend(cut_way(if inward { &outline_in } else { &rings }, back));
+                }
                 (Motion::Straight, Strategy::Raster) => {
                     if p.profile_pass == ProfilePass::First {
                         moves.extend(cut(&edge));
@@ -460,6 +508,7 @@ mod tests {
                 .map(|w| w[0].to.truncate().perp_dot(w[1].to.truncate()))
                 .sum()
         };
+        // each pass goes back round the other way, rings and loops alike
         for motion in [Motion::Straight, Motion::Trochoidal] {
             let p = Params {
                 depth: 9.0,
@@ -474,6 +523,39 @@ mod tests {
                 "{motion:?}: climb, conventional, climb: {ways:?}"
             );
         }
+    }
+
+    #[test]
+    fn rings_step_from_the_middle_out_the_outline_in_or_by_turns() {
+        // how far from the middle each pass's first ring is
+        let first_rings = |rings: RingOrder| -> Vec<f64> {
+            let p = Params {
+                depth: 9.0,
+                rings,
+                ..Params::default()
+            };
+            let tp = pocket(30.0, &p).unwrap();
+            [-3.0, -6.0, -9.0]
+                .map(|z| {
+                    let m = tp
+                        .moves
+                        .iter()
+                        .find(|m| m.kind == MoveKind::Cut && (m.to.z - z).abs() < 1e-9)
+                        .unwrap();
+                    m.to.truncate().distance(Point::new(15.0, 15.0))
+                })
+                .to_vec()
+        };
+        let (middle, outline) = (|d: &f64| *d < 5.0, |d: &f64| *d > 9.0);
+        let out = first_rings(RingOrder::MiddleOut);
+        assert!(out.iter().all(middle), "{out:?}");
+        let inward = first_rings(RingOrder::OutlineIn);
+        assert!(inward.iter().all(outline), "{inward:?}");
+        let turns = first_rings(RingOrder::Alternate);
+        assert!(
+            middle(&turns[0]) && outline(&turns[1]) && middle(&turns[2]),
+            "middle, outline, middle: {turns:?}"
+        );
     }
 
     #[test]

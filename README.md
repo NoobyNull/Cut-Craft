@@ -73,6 +73,10 @@ please report them (see [Reporting bugs](#reporting-bugs)).
     round the edge; a trochoidal profile loops in the waste beside the line, then cuts the
     line straight (with tabs, the loops stop at the tabs' tops) (Profile, Pocket).
   - **Machine**: Inside, Outside or On the vector (Profile, Chamfer).
+  - **Rings** (offset pockets): From the middle out, From the outline in, or Alternate.
+    Turning the cut direction's way, rings stepping out cut that direction and rings
+    stepping in cut the other, so Alternate gives climb then conventional with each pass
+    starting where the last ended; the wall's ring always cuts the chosen direction.
 - **Edit Passes**: a picture of each pass down to the cut depth. Click to add or take away a
   pass, drag one to move it, spread a number of passes evenly, or leave a thin last pass.
 - **Edit Tabs**: 2D or 3D tabs, their length and thickness, how many or how far apart, and
