@@ -1,6 +1,7 @@
 //! The side panels and windows: Tool Database, layers, sheets, clipart, the component tree,
 //! playback and the 3D view.
 
+use super::RING_SHARE;
 use super::{
     Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
@@ -1073,7 +1074,7 @@ impl CutCraftApp {
         delta: egui::Vec2,
         size: egui::Vec2,
     ) -> bool {
-        let diameter = self.doc.job.rotary.map(|r| r.diameter);
+        let (diameter, ring) = (self.doc.job.rotary.map(|r| r.diameter), self.turn_ring);
         let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") else {
             return false;
         };
@@ -1085,7 +1086,9 @@ impl CutCraftApp {
             Some(view3d::DragMode::Rotate) => {
                 let turn = &mut form.params["turn"];
                 let (about_x, about_z) = (dy * 180.0, dx * 180.0);
-                match turn["mode"].as_str() {
+                // a drag from a rotation ring turns about its axis, whatever Drag turns says
+                let mode = ring.or(turn["mode"].as_str()).map(str::to_owned);
+                match mode.as_deref() {
                     Some("x") => add(&mut turn["x"], about_x),
                     Some("y") => add(&mut turn["y"], about_z),
                     Some("z") => add(&mut turn["z"], about_z),
@@ -1154,6 +1157,7 @@ impl CutCraftApp {
         let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
         let left = left && !sculpting;
         let delta = response.drag_delta();
+        self.take_ring(ui, &response);
         if response.dragged() && delta != egui::Vec2::ZERO {
             let mode = view3d::drag_mode([left, right, middle], ctrl);
             // Orientate 3D Model's Interactive Rotation and Rotation Axis Movement take the
@@ -1216,6 +1220,7 @@ impl CutCraftApp {
         cube.paint(&painter, self.orbit, hovered, ui.visuals(), &font);
         self.view_cube = Some(cube);
         self.handles_3d(ui, area, fit);
+        self.rings_3d(ui, area, fit);
         self.anchors_3d(ui, &response, area, fit);
         self.view_3d_menu(ui, &response, fit);
     }
@@ -1900,6 +1905,109 @@ impl CutCraftApp {
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
     pub(super) fn component_at_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> Option<EntityId> {
         self.components_at_3d(fit, at).first().copied()
+    }
+
+    /// Aspire's rotation handles while Orientate 3D Model shows the model in a flat job: red,
+    /// green and blue rings round it turn it about X, Y and Z, and the grey sphere in its
+    /// middle about all three (help: Import 3D Model, Initial Orientation).
+    fn rings_3d(&mut self, ui: &egui::Ui, area: egui::Rect, fit: egui::Rect) {
+        use cut_craft_core::glam::DVec3;
+        self.rings_3d = (vec![], None);
+        let model = self
+            .form
+            .as_ref()
+            .filter(|f| f.id == "orientate_3d_model" && f.model_whole)
+            .and_then(|f| f.model.clone());
+        let Some(model) = model.filter(|_| self.doc.job.rotary.is_none()) else {
+            return;
+        };
+        let corners = model.iter().flat_map(|(t, _)| t);
+        let (Some(lo), Some(hi)) = (
+            corners.clone().copied().reduce(DVec3::min),
+            corners.copied().reduce(DVec3::max),
+        ) else {
+            return;
+        };
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return;
+        };
+        let camera = view3d::Camera::new(&surface, self.orbit, self.framing, fit, None);
+        let origin = DVec3::new(surface.origin.x, surface.origin.y, 0.0);
+        let screen = |p: DVec3| camera.screen(p - origin);
+        let (middle, reach) = ((lo + hi) / 2.0, (hi - lo).max_element() * RING_SHARE);
+        let painter = ui.painter_at(area);
+        let width = 2.0 * ui.visuals().widgets.noninteractive.fg_stroke.width;
+        // a ring's points every few degrees, in the plane square to its axis
+        let steps = 72;
+        for (axis, colour) in [
+            ("x", egui::Color32::RED),
+            ("y", egui::Color32::GREEN),
+            ("z", egui::Color32::BLUE),
+        ] {
+            let points: Vec<egui::Pos2> = (0..=steps)
+                .map(|i| {
+                    let a = std::f64::consts::TAU * f64::from(i) / f64::from(steps);
+                    let (c, s) = (a.cos() * reach, a.sin() * reach);
+                    middle
+                        + match axis {
+                            "x" => DVec3::new(0.0, c, s),
+                            "y" => DVec3::new(c, 0.0, s),
+                            _ => DVec3::new(c, s, 0.0),
+                        }
+                })
+                .map(screen)
+                .collect();
+            let hot = self.turn_ring == Some(axis);
+            let stroke = egui::Stroke::new(if hot { 2.0 * width } else { width }, colour);
+            painter.add(egui::Shape::line(points.clone(), stroke));
+            self.rings_3d.0.push((axis, points));
+        }
+        let (centre, radius) = (screen(middle), ui.spacing().interact_size.y / 2.0);
+        painter.circle(
+            centre,
+            radius,
+            ui.visuals().widgets.inactive.bg_fill,
+            ui.visuals().widgets.inactive.bg_stroke,
+        );
+        self.rings_3d.1 = Some((centre, radius));
+    }
+
+    /// A left drag starting on a rotation handle takes it for the drag; let go, none.
+    fn take_ring(&mut self, ui: &egui::Ui, response: &egui::Response) {
+        if response.drag_started_by(egui::PointerButton::Primary) {
+            self.turn_ring = ui
+                .input(|i| i.pointer.press_origin())
+                .and_then(|at| self.ring_at(at, ui.spacing().interact_size.y / 2.0));
+        } else if !response.dragged() {
+            self.turn_ring = None;
+        }
+    }
+
+    /// The rotation handle within `reach` of `at` as last drawn: the sphere (`xyz`) first,
+    /// else the nearest ring.
+    pub(super) fn ring_at(&self, at: egui::Pos2, reach: f32) -> Option<&'static str> {
+        if let Some((centre, radius)) = self.rings_3d.1
+            && centre.distance(at) <= radius
+        {
+            return Some("xyz");
+        }
+        let off = |points: &[egui::Pos2]| {
+            points
+                .windows(2)
+                .map(|w| {
+                    let (a, b) = (w[0], w[1]);
+                    let along = (at - a).dot(b - a) / (b - a).length_sq().max(f32::EPSILON);
+                    at.distance(a + (b - a) * along.clamp(0.0, 1.0))
+                })
+                .fold(f32::INFINITY, f32::min)
+        };
+        self.rings_3d
+            .0
+            .iter()
+            .map(|(axis, points)| (*axis, off(points)))
+            .filter(|(_, d)| *d <= reach)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(axis, _)| axis)
     }
 
     /// Set in the settings popup: two clicks on the model place the fade's or tilt's

@@ -128,6 +128,8 @@ const DROP_SHADE: f32 = 0.8;
 /// share of the material's longer side, and how see-through it is.
 const MODELING_PLANE_MARGIN: f64 = 0.1;
 const MODELING_PLANE_ALPHA: f32 = 0.35;
+/// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
+const RING_SHARE: f64 = 0.6;
 
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
@@ -636,6 +638,13 @@ impl Anchor {
     }
 }
 
+/// Orientate 3D Model's rotation rings on screen (each ring's axis and its points), and the
+/// middle sphere's centre and radius.
+type Rings3d = (
+    Vec<(&'static str, Vec<egui::Pos2>)>,
+    Option<(egui::Pos2, f32)>,
+);
+
 /// A command whose settings form is open.
 struct OpenForm {
     id: &'static str,
@@ -769,6 +778,12 @@ struct CutCraftApp {
     /// each frame the pointer moves, so the whole drag is one undo).
     drag_base: Option<(cmd_component_properties::Params, f64, Option<Value>)>,
     settings_3d: Option<Settings3d>,
+    /// Orientate 3D Model's rotation handles as drawn last frame: each ring's axis
+    /// (`x`, `y`, `z`) and its points on screen, then the middle sphere's centre and radius.
+    rings_3d: Rings3d,
+    /// The handle a drag started on, which the drag then turns the model about (`xyz`: the
+    /// sphere, all three axes).
+    turn_ring: Option<&'static str>,
     /// An open Help window.
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.

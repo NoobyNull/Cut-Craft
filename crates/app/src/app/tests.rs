@@ -5335,6 +5335,46 @@ fn orientate_3d_models_drags_turn_the_model_or_move_it_off_the_rotary_axis_when_
 }
 
 #[test]
+fn orientate_3d_models_rings_turn_the_model_about_their_axis_and_the_sphere_about_all() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("rings");
+    h.app.import_file(&file);
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (rings, sphere) = h.app.rings_3d.clone();
+    let axes: Vec<&str> = rings.iter().map(|(a, _)| *a).collect();
+    assert_eq!(axes, ["x", "y", "z"], "red, green and blue rings");
+    let (centre, _) = sphere.expect("the grey sphere");
+    let turn = |h: &Harness| h.app.form.as_ref().unwrap().params["turn"].clone();
+    assert_eq!(
+        turn(&h)["mode"],
+        "view",
+        "drags turn the view unless a handle is taken"
+    );
+    // a quarter of the way round the red ring, dragged up: a turn about X only
+    let on_x = rings[0].1[rings[0].1.len() / 4];
+    h.drag(on_x, on_x - vec2(0.0, 60.0));
+    let t = turn(&h);
+    assert!(t["x"].as_f64().unwrap().abs() > 1.0, "{t}");
+    assert_eq!((t["y"].as_f64(), t["z"].as_f64()), (Some(0.0), Some(0.0)));
+    assert!(h.app.turn_ring.is_none(), "let go");
+    // the sphere, dragged across and up: about all three (X and Z here)
+    let before = turn(&h);
+    h.drag(centre, centre + vec2(60.0, -60.0));
+    let t = turn(&h);
+    assert!(t["z"].as_f64() != before["z"].as_f64() && t["x"].as_f64() != before["x"].as_f64());
+    // anywhere else turns the view, not the model
+    let orbit = h.app.orbit;
+    let corner = h.app.fit_3d.unwrap().left_bottom() + vec2(10.0, -10.0);
+    let before = turn(&h);
+    h.drag(corner, corner + vec2(60.0, 0.0));
+    assert_eq!(turn(&h), before);
+    assert_ne!(h.app.orbit, orbit, "the view turned");
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "draw_text");
