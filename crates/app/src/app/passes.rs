@@ -116,7 +116,10 @@ fn picture(
                 visuals.warn_fg_color,
             )
         } else {
-            (visuals.selection.stroke, visuals.text_color())
+            (
+                egui::Stroke::new(grab / 3.0, visuals.selection.bg_fill),
+                visuals.text_color(),
+            )
         };
         painter.hline(block.x_range(), y_of(d), stroke);
         label(y_of(d), show(d), colour);
