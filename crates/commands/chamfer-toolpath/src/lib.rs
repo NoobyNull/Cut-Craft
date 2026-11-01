@@ -3,11 +3,10 @@
 //! approximates it with a series of fine cuts.
 
 use cut_craft_core::document::Document;
+use cut_craft_core::entry::{Ways, contour_ways};
 use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{
-    Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by,
-};
+use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, cut_points, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -69,6 +68,10 @@ pub struct Params {
     pub slope: Slope,
     #[schemars(extend("x-group" = "Chamfer"))]
     pub cut_direction: CutDirection,
+    /// Every pass the same way, or each back the way the last came
+    #[serde(default)]
+    #[schemars(title = "Passes", extend("x-group" = "Chamfer", "x-widget" = "row"))]
+    pub ways: Ways,
     /// A V-bit or a ball nose
     pub tool: Tool,
 }
@@ -84,6 +87,7 @@ impl Default for Params {
             side: Side::Outside,
             slope: Slope::Down,
             cut_direction: CutDirection::Climb,
+            ways: Ways::One,
             tool: ToolDatabase::starter()
                 .tools
                 .into_iter()
@@ -210,7 +214,7 @@ impl Command for ChamferToolpath {
                 if (winding(&points) < 0.0) != (p.cut_direction == CutDirection::Climb) {
                     points.reverse();
                 }
-                moves.extend(contour_moves(&points, true, &depths, safe));
+                moves.extend(contour_ways(p.ways, &points, true, &depths, safe));
             }
         }
         if moves.is_empty() {

@@ -2,9 +2,10 @@
 //! that its sloping sides leave each shape standing as a raised, ridged bevel.
 
 use cut_craft_core::document::Document;
+use cut_craft_core::entry::{Ways, contour_ways};
 use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by};
+use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, cut_points, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -37,6 +38,10 @@ pub struct Params {
     pub depth_for_full_prism: bool,
     #[schemars(extend("x-group" = "Cut Direction"))]
     pub cut_direction: CutDirection,
+    /// Every pass the same way, or each back the way the last came
+    #[serde(default)]
+    #[schemars(title = "Passes", extend("x-group" = "Cut Direction", "x-widget" = "row"))]
+    pub ways: Ways,
     /// A V-bit
     pub tool: Tool,
 }
@@ -49,6 +54,7 @@ impl Default for Params {
             prism_depth: 5.0,
             depth_for_full_prism: false,
             cut_direction: CutDirection::Climb,
+            ways: Ways::One,
             tool: ToolDatabase::starter()
                 .tools
                 .into_iter()
@@ -139,7 +145,7 @@ impl Command for PrismToolpath {
                 if clockwise != (p.cut_direction == CutDirection::Climb) {
                     points.reverse();
                 }
-                contour_moves(&points, true, &depths, safe)
+                contour_ways(p.ways, &points, true, &depths, safe)
             })
             .collect();
         let mut c = Change::builder(doc);
@@ -245,6 +251,36 @@ mod tests {
         };
         assert!(turn(CutDirection::Climb) < 0.0);
         assert!(turn(CutDirection::Conventional) > 0.0);
+    }
+
+    #[test]
+    fn both_directions_runs_every_other_pass_back() {
+        let t = prism(&Params {
+            ways: Ways::Both,
+            prism_depth: 6.0,
+            ..Params::default()
+        });
+        let levels: Vec<f64> = {
+            let mut z: Vec<f64> = t
+                .moves
+                .iter()
+                .filter(|m| m.kind == MoveKind::Cut)
+                .map(|m| m.to.z)
+                .collect();
+            z.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+            z
+        };
+        assert!(levels.len() >= 2, "{levels:?}");
+        let turning = |z: f64| -> f64 {
+            t.moves
+                .windows(2)
+                .filter(|w| w[1].kind == MoveKind::Cut)
+                .filter(|w| w.iter().all(|m| (m.to.z - z).abs() < 1e-9))
+                .map(|w| w[0].to.truncate().perp_dot(w[1].to.truncate()))
+                .sum()
+        };
+        assert!(turning(levels[0]) < 0.0, "climb first");
+        assert!(turning(levels[1]) > 0.0, "then back, conventional");
     }
 
     #[test]

@@ -61,13 +61,18 @@ please report them (see [Reporting bugs](#reporting-bugs)).
   carving (its areas shown in green before it is made), photo V-carve, quick engrave, drag
   knife.
 - **Rest machining** on any toolpath: only what earlier, larger tools left is cut.
-- **Cut direction** on profiles and pockets: Climb, Conventional, or **Climb + Conventional**,
-  where the passes take turns: climb on the first, conventional on the next, and so on, each
-  running back the way the last came. Tabs stay in the same place on every pass, and leads
-  stay on the waste side.
-- **Trochoidal pocket clearing**: the tool circles in small loops as it moves along, so only
-  a sliver of its edge cuts at a time. Loop Width and Loop Step set the loops; a pass round
-  the edge cleans the wall.
+- **How the tool cuts**, set alone on every toolpath that follows a wall:
+  - **Direction**: Climb or Conventional (Profile, Pocket, Chamfer, Prism).
+  - **Passes**: Single direction, or Both directions, where each pass runs back the way the
+    last came: climb one pass, conventional the next. This is the only way to cut both.
+    Tabs stay in the same place on every pass, and leads stay on the waste side (Profile,
+    Pocket, Chamfer, Prism).
+  - **Motion**: Straight, or Trochoidal, where the tool circles in small loops as it moves
+    along, so only a sliver of its edge cuts at a time. Loop Width and Loop Step set the
+    loops. A trochoidal pocket clears in looped bands from the outline in, then cuts once
+    round the edge; a trochoidal profile loops in the waste beside the line, then cuts the
+    line straight (with tabs, the loops stop at the tabs' tops) (Profile, Pocket).
+  - **Machine**: Inside, Outside or On the vector (Profile, Chamfer).
 - **Edit Passes**: a picture of each pass down to the cut depth. Click to add or take away a
   pass, drag one to move it, spread a number of passes evenly, or leave a thin last pass.
 - **Edit Tabs**: 2D or 3D tabs, their length and thickness, how many or how far apart, and

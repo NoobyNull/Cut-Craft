@@ -1,8 +1,8 @@
 //! Ramps, leads and tabs on a path.
 
 use cut_craft_core::entry::{
-    Direction, Entry, Lead, Leads, Ramp, RampBy, Ramping, TabPlacement, TabSettings, TabSpacing,
-    Tabs, directed_moves, path_moves, spread_tabs,
+    Entry, Lead, Leads, Ramp, RampBy, Ramping, TabPlacement, TabSettings, TabSpacing, Tabs, Ways,
+    directed_moves, path_moves, spread_tabs,
 };
 use cut_craft_core::geometry::Point;
 use cut_craft_core::toolpath::{Move, MoveKind};
@@ -379,7 +379,7 @@ fn winding_at(moves: &[Move], z: f64) -> f64 {
 }
 
 #[test]
-fn climb_and_conventional_take_turns_and_keep_the_tabs_in_place() {
+fn both_directions_take_turns_and_keep_the_tabs_in_place() {
     let entry = Entry {
         tabs: Tabs::Flat,
         tab: TabSettings {
@@ -395,7 +395,7 @@ fn climb_and_conventional_take_turns_and_keep_the_tabs_in_place() {
         ..Entry::default()
     };
     let depths = [-2.0, -4.0, -6.0];
-    let moves = directed_moves(Direction::Both, &square(), true, &depths, 0.0, SAFE, &entry);
+    let moves = directed_moves(Ways::Both, &square(), true, &depths, 0.0, SAFE, &entry);
     let turns: Vec<f64> = depths.iter().map(|&z| winding_at(&moves, z)).collect();
     assert!(
         turns[0] > 0.0 && turns[1] < 0.0 && turns[2] > 0.0,
@@ -436,14 +436,6 @@ fn climb_and_conventional_take_turns_and_keep_the_tabs_in_place() {
         "the pass back finds them where the first left them"
     );
     // one way only, every pass goes round the same way
-    let climb = directed_moves(
-        Direction::Climb,
-        &square(),
-        true,
-        &depths,
-        0.0,
-        SAFE,
-        &entry,
-    );
+    let climb = directed_moves(Ways::One, &square(), true, &depths, 0.0, SAFE, &entry);
     assert!(depths.iter().all(|&z| winding_at(&climb, z) > 0.0));
 }

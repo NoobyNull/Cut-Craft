@@ -14,22 +14,127 @@ pub enum Direction {
     /// The cutter's edge meets the material head on: anticlockwise round a hole or pocket,
     /// clockwise round the outside of a part
     #[default]
+    #[serde(alias = "both")]
     Climb,
     /// The other way round
     Conventional,
-    /// Climb on the first pass, conventional on the next, and so on: each pass runs back the
-    /// way the last came, so the wall is cut both ways (added with combined directions)
-    #[schemars(title = "Climb + Conventional")]
+}
+
+/// Whether every pass runs the same way, or each runs back the way the last came: the only
+/// way a toolpath cuts both climb and conventional.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Ways {
+    /// Every pass the cut direction's way
+    #[default]
+    #[schemars(title = "Single direction")]
+    One,
+    /// The first pass the cut direction's way, the next back the other way (climb then
+    /// conventional, or the other way about), and so on
+    #[schemars(title = "Both directions")]
     Both,
+}
+
+/// How the tool moves along its path.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Motion {
+    /// Straight along it, its whole side cutting
+    #[default]
+    Straight,
+    /// In small loops as it moves along, so only a sliver of its edge cuts at a time: a
+    /// light cut at full depth, for hard material or a small machine
+    Trochoidal,
+}
+
+/// The loops a trochoidal toolpath makes, as shares of the tool's diameter.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Loops {
+    /// How wide each loop is
+    #[schemars(title = "Loop Width", extend("x-unit" = "%"), range(min = 10, max = 400))]
+    pub width: f64,
+    /// How far each loop moves on from the last: less is a lighter cut and a longer toolpath
+    #[schemars(title = "Loop Step", extend("x-unit" = "%"), range(min = 1, max = 100))]
+    pub step: f64,
+}
+
+impl Default for Loops {
+    fn default() -> Self {
+        Self {
+            width: 100.0,
+            step: 10.0,
+        }
+    }
+}
+
+impl Loops {
+    /// Each loop's radius and how far it moves on, in mm, for a tool `diameter` across.
+    pub fn sized(self, diameter: f64) -> (f64, f64) {
+        (
+            diameter * self.width / 200.0,
+            (diameter * self.step / 100.0).max(0.01),
+        )
+    }
+}
+
+/// Loops `radius` round the path through `points`, each a whole turn at most `advance` on
+/// from the last, anticlockwise (climb: the loop's outside meets the material head on) or
+/// clockwise. On a closed path they end where they began. Run backwards, they turn the other
+/// way.
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn trochoid(
+    points: &[Point],
+    closed: bool,
+    radius: f64,
+    advance: f64,
+    anticlockwise: bool,
+) -> Vec<Point> {
+    const PER_LOOP: u32 = 24;
+    let mut points = points.to_vec();
+    if closed {
+        points.extend(points.first().copied());
+    }
+    let mut along = vec![0.0];
+    for w in points.windows(2) {
+        along.push(along[along.len() - 1] + w[0].distance(w[1]));
+    }
+    let length = along[along.len() - 1];
+    if points.len() < 2 || length <= 0.0 {
+        return vec![];
+    }
+    let at = |s: f64| {
+        let s = if closed {
+            s.rem_euclid(length)
+        } else {
+            s.clamp(0.0, length)
+        };
+        let i = along
+            .partition_point(|&a| a <= s)
+            .clamp(1, points.len() - 1);
+        let t = (s - along[i - 1]) / (along[i] - along[i - 1]).max(1e-12);
+        points[i - 1].lerp(points[i], t)
+    };
+    let side = if anticlockwise { 1.0 } else { -1.0 };
+    let samples = (length / advance).ceil().max(1.0) as u32 * PER_LOOP;
+    (0..=samples)
+        .map(|k| {
+            let s = length * f64::from(k) / f64::from(samples);
+            // the way on, over a loop's width, so a corner in the path turns the loops smoothly
+            let ahead = (at(s + radius) - at(s - radius))
+                .try_normalize()
+                .unwrap_or(Point::X);
+            let a = std::f64::consts::TAU * f64::from(k % PER_LOOP) / f64::from(PER_LOOP);
+            at(s) + radius * (a.sin() * ahead - side * a.cos() * ahead.perp())
+        })
+        .collect()
 }
 
 impl Direction {
     /// `points` turned to run the way this direction cuts, with the material kept `inside`
-    /// the closed path (a hole or pocket) or outside it (a part's outline). Both turns them
-    /// the climb way, for its first pass.
+    /// the closed path (a hole or pocket) or outside it (a part's outline).
     pub fn orient(self, mut points: Vec<Point>, inside: bool) -> Vec<Point> {
         let anticlockwise = crate::geometry::winding(&points) > 0.0;
-        if anticlockwise != (inside == (self != Self::Conventional)) {
+        if anticlockwise != (inside == (self == Self::Climb)) {
             points.reverse();
         }
         points
@@ -370,12 +475,27 @@ impl Line {
     }
 }
 
-/// Moves cutting `points` at each of `depths` the way `direction` goes: as `path_moves`
-/// does, except that Both runs every other pass (from the second) back along the path, from
-/// where the pass before ended. Tabs stay where the first pass puts them, and leads stay on
-/// the waste side.
+/// A plain contour's moves (no ramps, leads or tabs): `contour_moves` for a single direction,
+/// each pass back the way the last came for both.
+pub fn contour_ways(
+    ways: Ways,
+    points: &[Point],
+    closed: bool,
+    depths: &[f64],
+    safe_z: f64,
+) -> Vec<Move> {
+    match ways {
+        Ways::One => crate::toolpath::contour_moves(points, closed, depths, safe_z),
+        Ways::Both => directed_moves(ways, points, closed, depths, 0.0, safe_z, &Entry::default()),
+    }
+}
+
+/// Moves cutting `points` at each of `depths`: as `path_moves` does, except that Both
+/// directions runs every other pass (from the second) back along the path, from where the
+/// pass before ended. Tabs stay where the first pass puts them, and leads stay on the waste
+/// side.
 pub fn directed_moves(
-    direction: Direction,
+    ways: Ways,
     points: &[Point],
     closed: bool,
     depths: &[f64],
@@ -383,7 +503,7 @@ pub fn directed_moves(
     safe_z: f64,
     entry: &Entry,
 ) -> Vec<Move> {
-    if direction != Direction::Both || depths.len() < 2 {
+    if ways == Ways::One || depths.len() < 2 {
         return path_moves(points, closed, depths, top, safe_z, entry);
     }
     let mut ahead = entry.clone();

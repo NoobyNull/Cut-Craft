@@ -2,7 +2,8 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{
-    Direction, Entry, Lead, Leads, Ramp, Ramping, TabSettings, TabSpacing, Tabs, directed_moves,
+    Direction, Entry, Lead, Leads, Loops, Motion, Ramp, Ramping, TabSettings, TabSpacing, Tabs,
+    Ways, directed_moves, trochoid,
 };
 use cut_craft_core::geometry::{
     Path, Point, Rect, inside, polyline_closest, polyline_distance, winding,
@@ -98,6 +99,21 @@ pub struct Params {
     #[serde(default)]
     #[schemars(extend("x-group" = "Machine Vectors…", "x-widget" = "row"))]
     pub direction: Direction,
+    /// Every pass the same way, or each back the way the last came
+    #[serde(default)]
+    #[schemars(title = "Passes", extend("x-group" = "Machine Vectors…", "x-widget" = "row"))]
+    pub ways: Ways,
+    /// Straight, or in small loops in the waste beside the line, then once along it straight
+    #[serde(default)]
+    #[schemars(extend("x-group" = "Machine Vectors…", "x-widget" = "row"))]
+    pub motion: Motion,
+    #[serde(default)]
+    #[schemars(extend(
+        "x-section" = true,
+        "x-group" = "Machine Vectors…",
+        "x-enable-when" = {"motion": "trochoidal"}
+    ))]
+    pub loops: Loops,
     /// Positive leaves the part bigger (or the hole smaller), negative cuts into it
     #[serde(default)]
     #[schemars(
@@ -184,6 +200,9 @@ impl Default for Params {
             side: Side::Outside,
             tool: Tool::default(),
             direction: Direction::Climb,
+            ways: Ways::One,
+            motion: Motion::Straight,
+            loops: Loops::default(),
             allowance: 0.0,
             ramp: Ramp::None,
             ramping: Ramping::default(),
@@ -295,19 +314,18 @@ impl Command for ProfileToolpath {
                     .filter(|&(_, &owner)| owner == Some(i))
                     .map(|(&t, _)| t)
                     .collect();
-                directed_moves(
-                    p.direction,
-                    &cut.points,
-                    cut.closed,
-                    &depths,
-                    0.0,
-                    doc.job.clearance,
-                    &Entry {
-                        side,
-                        placed,
-                        ..entry.clone()
-                    },
-                )
+                let entry = Entry {
+                    side,
+                    placed,
+                    ..entry.clone()
+                };
+                let safe = doc.job.clearance;
+                match p.motion {
+                    Motion::Straight => {
+                        directed_moves(p.ways, &cut.points, cut.closed, &depths, 0.0, safe, &entry)
+                    }
+                    Motion::Trochoidal => trochoidal(cut, &depths, &entry, safe, p),
+                }
             })
             .collect();
         if p.project_onto_model {
@@ -323,6 +341,62 @@ impl Command for ProfileToolpath {
         ));
         Ok(c.finish())
     }
+}
+
+/// The trochoidal cut of `cut`: loops whose centres ride a loop's radius out into the waste
+/// (on the line itself for On), so each loop just reaches the line, then the line straight.
+/// The loops cut every pass down to the tabs' tops and the line the rest, so the tabs are
+/// left; with no tabs the loops go all the way and the line is cut once at the bottom.
+fn trochoidal(
+    cut: &Cut,
+    depths: &[f64],
+    entry: &Entry,
+    safe: f64,
+    p: &Params,
+) -> Vec<cut_craft_core::toolpath::Move> {
+    let (radius, advance) = p.loops.sized(p.tool.diameter);
+    let rings: Vec<(Vec<Point>, bool)> = if cut.closed && p.side != Side::On {
+        let out = if cut.waste_inside { -radius } else { radius };
+        let ring = Path::polyline(&cut.points, true);
+        polygon::offset(&[ring], out, Corners::Round)
+            .iter()
+            .map(|r| (p.direction.orient(cut_points(r), cut.waste_inside), true))
+            .collect()
+    } else {
+        vec![(cut.points.clone(), cut.closed)]
+    };
+    let (loop_depths, line_depths): (Vec<f64>, Vec<f64>) = if entry.tabs == Tabs::None {
+        (
+            depths.to_vec(),
+            depths.last().copied().into_iter().collect(),
+        )
+    } else {
+        depths.iter().partition(|&&z| z > entry.tab_top)
+    };
+    let looping = Entry {
+        lead: Lead::None,
+        tabs: Tabs::None,
+        ..entry.clone()
+    };
+    let climb = p.direction == Direction::Climb;
+    let mut moves: Vec<_> = rings
+        .iter()
+        .flat_map(|(ring, closed)| {
+            let loops = trochoid(ring, *closed, radius, advance, climb);
+            directed_moves(p.ways, &loops, false, &loop_depths, 0.0, safe, &looping)
+        })
+        .collect();
+    let top = loop_depths.last().copied().unwrap_or(0.0);
+    moves.extend(directed_moves(
+        p.ways,
+        &cut.points,
+        cut.closed,
+        &line_depths,
+        top,
+        safe,
+        entry,
+    ));
+    moves
 }
 
 /// One path the tool's centre follows.
@@ -690,6 +764,74 @@ mod tests {
     }
 
     /// The way round the first closed pass at full depth runs: true anticlockwise.
+    /// How far from the 40 mm square's edge each cutting move at `z` ends, nearest and
+    /// furthest.
+    fn reach_at(tp: &Toolpath, z: f64) -> (f64, f64) {
+        let edge = [
+            Point::new(0.0, 0.0),
+            Point::new(40.0, 0.0),
+            Point::new(40.0, 40.0),
+            Point::new(0.0, 40.0),
+            Point::new(0.0, 0.0),
+        ];
+        tp.moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut && (m.to.z - z).abs() < 1e-9)
+            .map(|m| polyline_distance(&edge, m.to.truncate()))
+            .fold((f64::MAX, 0.0), |(lo, hi), d| (lo.min(d), hi.max(d)))
+    }
+
+    #[test]
+    fn trochoidal_loops_in_the_waste_then_the_line_straight() {
+        let p = Params {
+            depth: 6.0,
+            motion: Motion::Trochoidal,
+            ..Params::default()
+        };
+        let tp = made_toolpath::<ProfileToolpath>(vec![square(0.0, 0.0, 40.0)], &p).unwrap();
+        let r = p.tool.diameter / 2.0;
+        let (loop_r, _) = p.loops.sized(p.tool.diameter);
+        // above the bottom only loops: never into the part, out to two loop radii past the line
+        let (lo, hi) = reach_at(&tp, -3.0);
+        assert!(lo >= r - 0.02, "into the part: {lo}");
+        assert!(
+            (hi - (r + 2.0 * loop_r)).abs() < 0.1,
+            "the loops reach {hi}"
+        );
+        // at the bottom the loops, then the line itself
+        let (lo, _) = reach_at(&tp, -6.0);
+        assert!((lo - r).abs() < 0.02, "the line: {lo}");
+        // with tabs the loops stop at the tabs' tops and the line takes the passes below
+        let tabbed = Params {
+            tabs: Tabs::Flat,
+            ..p.clone()
+        };
+        let tp = made_toolpath::<ProfileToolpath>(vec![square(0.0, 0.0, 40.0)], &tabbed).unwrap();
+        let (_, hi) = reach_at(&tp, -6.0);
+        assert!(hi < r + 0.02, "no loops past the tabs' tops: {hi}");
+    }
+
+    #[test]
+    fn both_directions_take_turns_climb_then_conventional() {
+        let p = Params {
+            depth: 9.0,
+            ways: Ways::Both,
+            ..Params::default()
+        };
+        let tp = made_toolpath::<ProfileToolpath>(vec![square(0.0, 0.0, 40.0)], &p).unwrap();
+        let turning = |z: f64| -> f64 {
+            tp.moves
+                .windows(2)
+                .filter(|w| w[1].kind == MoveKind::Cut)
+                .filter(|w| w.iter().all(|m| (m.to.z - z).abs() < 1e-9))
+                .map(|w| w[0].to.truncate().perp_dot(w[1].to.truncate()))
+                .sum()
+        };
+        // outside a part, climb is clockwise
+        let ways = [turning(-3.0), turning(-6.0), turning(-9.0)];
+        assert!(ways[0] < 0.0 && ways[1] > 0.0 && ways[2] < 0.0, "{ways:?}");
+    }
+
     fn anticlockwise(tp: &Toolpath) -> bool {
         let cuts: Vec<Point> = tp
             .moves
