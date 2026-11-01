@@ -533,6 +533,29 @@ struct Settings3d {
     at: egui::Pos2,
     /// Its combine-mode radios, where they were drawn last frame.
     radios: Vec<(cut_craft_core::component::Combine, egui::Pos2)>,
+    /// Set pressed: the fade's or tilt's anchors being clicked in the 3D view, and the
+    /// first point once clicked.
+    anchors: Option<(Anchor, Option<Point>)>,
+}
+
+/// Whose anchors the 3D view's clicks place (Aspire's help: in the 3D view, the fade's or
+/// tilt's direction is set there).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Anchor {
+    Fade,
+    Tilt,
+}
+
+impl Anchor {
+    /// What to click next, once `first` is placed or not.
+    fn prompt(self, first: bool) -> &'static str {
+        match (self, first) {
+            (Self::Fade, false) => "Click the point that keeps its height",
+            (Self::Fade, true) => "Click the point the component fades down toward",
+            (Self::Tilt, false) => "Click the point that does not move",
+            (Self::Tilt, true) => "Click the point tilted up",
+        }
+    }
 }
 
 /// A command whose settings form is open.
@@ -969,6 +992,8 @@ struct Menus<'a> {
     shortcut_of: &'a dyn Fn(&str) -> Option<&'static str>,
     /// Filled in where the menus have a Recent Files entry.
     recent: &'a [gui::MenuItem],
+    /// An item's picture by its icon path; `None` when the icon is missing.
+    image: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
 }
 
 /// Menu entries, recursing into submenus. Sets `clicked` to the chosen item's action.
@@ -1275,9 +1300,17 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             });
         });
     } else {
-        let button = egui::Button::new(&item.name)
-            .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
-            .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
+        let picture = item.icon.as_deref().and_then(menus.image);
+        let button = match picture {
+            Some(picture) => {
+                let edge = ui.spacing().interact_size.y;
+                let picture = picture.fit_to_exact_size(egui::Vec2::splat(edge));
+                egui::Button::image_and_text(picture, &item.name)
+            }
+            None => egui::Button::new(&item.name),
+        }
+        .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
+        .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
         let available = (menus.available)(&item.action);
         let mut response = ui.add_enabled(item.is_enabled && available, button);
         if !available {

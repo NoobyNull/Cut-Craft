@@ -488,6 +488,8 @@ pub struct MenuItem {
     pub is_checked: bool,
     /// Non-empty for a submenu
     pub children: Vec<MenuItem>,
+    /// Its picture, an icon path, where Aspire's menu has one (the combine modes).
+    pub icon: Option<String>,
 }
 
 impl MenuItem {
@@ -506,6 +508,16 @@ impl MenuItem {
             is_enabled: true,
             is_checked: false,
             children: vec![],
+            icon: None,
+        }
+    }
+
+    /// With a picture.
+    #[must_use]
+    pub fn icon(self, path: &str) -> Self {
+        Self {
+            icon: Some(path.to_owned()),
+            ..self
         }
     }
 
@@ -784,7 +796,7 @@ pub fn level_menu(doc: &Document, id: u64, level: &Level) -> Vec<MenuItem> {
             "Combine Mode",
             COMBINE_MODES
                 .iter()
-                .map(|&(name, c, _)| mode(name, c))
+                .map(|&(name, c, icon)| mode(name, c).icon(icon))
                 .collect(),
         ),
         show,
@@ -857,13 +869,10 @@ pub fn group_menu(group: &Group) -> Vec<MenuItem> {
     vec![
         MenuItem::submenu(
             "Combine Mode",
-            vec![
-                mode("Add", Combine::Add),
-                mode("Subtract", Combine::Subtract),
-                mode("Merge", Combine::Merge),
-                mode("Low", Combine::Low),
-                mode("Multiply", Combine::Multiply),
-            ],
+            COMBINE_MODES
+                .iter()
+                .map(|&(name, c, icon)| mode(name, c).icon(icon))
+                .collect(),
         ),
         MenuItem::run::<cmd_ungroup_components::UngroupComponents>(
             "Ungroup",
@@ -958,13 +967,10 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
     let mut menu = vec![
         MenuItem::submenu(
             "Combine Mode",
-            vec![
-                mode("Add", Combine::Add),
-                mode("Subtract", Combine::Subtract),
-                mode("Merge", Combine::Merge),
-                mode("Low", Combine::Low),
-                mode("Multiply", Combine::Multiply),
-            ],
+            COMBINE_MODES
+                .iter()
+                .map(|&(name, c, icon)| mode(name, c).icon(icon))
+                .collect(),
         ),
         MenuItem::separator(),
         MenuItem::run::<cmd_duplicate_component::DuplicateComponent>(

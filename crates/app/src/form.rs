@@ -166,6 +166,9 @@ pub enum Widget {
     /// A radio button for each face of a model round its picture (`faces`, with `x-icon`),
     /// as Aspire's Initial Orientation.
     Faces { picture: Option<String> },
+    /// A row of picture buttons, one an option, the chosen one pressed (`icons`, with
+    /// `x-icon` naming each picture by the value, `{}`), as Aspire's Combine Mode.
+    Icons { picture: Option<String> },
 }
 
 #[derive(Debug, PartialEq)]
@@ -346,8 +349,11 @@ fn grid(
         .num_columns(2)
         .show(ui, |ui| {
             for f in fields {
-                // the faces widget draws its picture itself, with the radio buttons round it
-                let own = !matches!(f.kind, Kind::Choice(_, Widget::Faces { .. }));
+                // the faces and icons widgets draw their pictures themselves
+                let own = !matches!(
+                    f.kind,
+                    Kind::Choice(_, Widget::Faces { .. } | Widget::Icons { .. })
+                );
                 let picture = f
                     .icon
                     .as_ref()
@@ -532,6 +538,7 @@ fn choose(
             let picture = picture.as_deref().and_then(look.picture);
             faces(ui, options, &current, picture)
         }
+        Widget::Icons { picture } => icon_row(ui, options, &current, look, picture.as_deref()),
     };
     match picked {
         Some(v) if v != current => {
@@ -540,6 +547,36 @@ fn choose(
         }
         _ => false,
     }
+}
+
+/// A picture button an option, side by side, the chosen one pressed; an option with no
+/// picture shows its name.
+fn icon_row(
+    ui: &mut egui::Ui,
+    options: &[Choice],
+    current: &str,
+    look: &Look,
+    template: Option<&str>,
+) -> Option<String> {
+    let edge = egui::Vec2::splat(ui.spacing().interact_size.y);
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        for o in options {
+            let path = template.map(|t| icon_path(t, &Value::String(o.value.clone())));
+            let chosen = o.value == current;
+            let button = match path.as_deref().and_then(look.picture) {
+                Some(picture) => egui::Button::image(picture.fit_to_exact_size(edge))
+                    .selected(chosen)
+                    .min_size(edge),
+                None => egui::Button::selectable(chosen, &o.label),
+            };
+            let response = ui.add(button).on_hover_text(&o.label);
+            if response.clicked() {
+                picked = Some(o.value.clone());
+            }
+        }
+    });
+    picked
 }
 
 fn radios(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
@@ -887,6 +924,9 @@ fn kind(root: &Value, property: &Value) -> Kind {
             Some("faces") => Widget::Faces {
                 picture: marked("x-icon").and_then(Value::as_str).map(String::from),
             },
+            Some("icons") => Widget::Icons {
+                picture: marked("x-icon").and_then(Value::as_str).map(String::from),
+            },
             _ => Widget::Auto,
         };
         return Kind::Choice(options, widget);
@@ -1141,6 +1181,16 @@ mod tests {
         assert_eq!(nearest(0.9, 0.2), Some("top_right"));
         assert_eq!(nearest(0.4, 0.6), Some("centre"));
         assert_eq!(nearest(0.1, 0.8), Some("bottom_left"));
+    }
+
+    #[test]
+    fn combine_mode_is_a_row_of_pictures() {
+        let f = fields(&schema("component_properties"));
+        assert!(matches!(
+            &field(&f, "combine").kind,
+            Kind::Choice(modes, Widget::Icons { picture: Some(p) })
+                if modes.len() == 5 && p == "modeling/combine_{}.png"
+        ));
     }
 
     #[test]

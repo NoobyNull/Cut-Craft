@@ -15,7 +15,11 @@ pub struct ComponentProperties;
 pub struct Params {
     pub component: EntityId,
     pub name: String,
-    #[schemars(title = "Combine Mode")]
+    #[schemars(
+        title = "Combine Mode",
+        extend("x-widget" = "icons"),
+        extend("x-icon" = "modeling/combine_{}.png")
+    )]
     pub combine: Combine,
     /// Hidden components are left out of the model
     pub visible: bool,

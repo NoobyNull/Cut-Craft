@@ -2,11 +2,12 @@
 //! playback and the 3D view.
 
 use super::{
-    Align, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey, Handle,
-    Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN, Material,
-    Menus, PLAYBACK_SPEEDS, Page, Point, SETTLE_SECONDS, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
-    TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
-    gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
+    Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey,
+    Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
+    Material, Menus, PLAYBACK_SPEEDS, Page, Point, SETTLE_SECONDS, Screen, Settings3d,
+    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui,
+    file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
+    wrap_for,
 };
 use cut_craft_core::document::Units;
 
@@ -373,6 +374,7 @@ impl CutCraftApp {
                 checked: &|_| None,
                 shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
                 recent: &[],
+                image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
             };
             menu_items(ui, &menu(), &menus, &mut clicked);
             ui.separator();
@@ -936,8 +938,13 @@ impl CutCraftApp {
         cube.paint(&painter, self.orbit, hovered, ui.visuals(), &font);
         self.view_cube = Some(cube);
         self.handles_3d(ui, area, fit);
-        // a right-click picks the topmost component under it (keeping a selection it is
-        // part of) and opens the view menu listing all of them, as the 2D view's does
+        self.anchors_3d(ui, &response, area, fit);
+        self.view_3d_menu(ui, &response, fit);
+    }
+
+    /// A right-click picks the topmost component under it (keeping a selection it is part
+    /// of) and opens the view menu listing all of them, as the 2D view's does.
+    fn view_3d_menu(&mut self, ui: &egui::Ui, response: &egui::Response, fit: egui::Rect) {
         if response.secondary_clicked()
             && let Some(at) = response.interact_pointer_pos()
         {
@@ -949,7 +956,7 @@ impl CutCraftApp {
             }
         }
         let menu = || self.menus.view_3d_menu(&self.doc, &self.under_3d);
-        if let Some(action) = self.popup(&response, menu) {
+        if let Some(action) = self.popup(response, menu) {
             self.invoke(ui.ctx(), &action);
         }
     }
@@ -1178,6 +1185,7 @@ impl CutCraftApp {
                     dirty: false,
                     at: rect.left_bottom(),
                     radios: vec![],
+                    anchors: None,
                 });
             }
         }
@@ -1381,7 +1389,7 @@ impl CutCraftApp {
             self.settings_3d = None;
             return;
         }
-        let (mut close, mut set) = (false, false);
+        let mut close = false;
         egui::Window::new("component_settings_3d")
             .title_bar(false)
             .resizable(false)
@@ -1392,21 +1400,30 @@ impl CutCraftApp {
                 egui::Grid::new("component_settings_3d").show(ui, |ui| {
                     let p = &mut s.params;
                     s.dirty |= ui.checkbox(&mut p.fade.on, "Fade").changed();
-                    // ponytail: the anchors are typed in Component Properties, not clicked
-                    set |= ui
-                        .add_enabled(p.fade.on, egui::Button::new("Set"))
-                        .on_hover_text("Set the anchors in Component Properties")
-                        .clicked();
+                    // Set: then two clicks in the 3D view, as Aspire's help says
+                    let setting = s.anchors.map(|(which, _)| which);
+                    let set_fade = egui::Button::new("Set").selected(setting == Some(Anchor::Fade));
+                    if ui
+                        .add_enabled(p.fade.on, set_fade)
+                        .on_hover_text(Anchor::Fade.prompt(false))
+                        .clicked()
+                    {
+                        s.anchors = Some((Anchor::Fade, None));
+                    }
                     let percent = egui::DragValue::new(&mut p.fade.percent)
                         .range(0.0..=100.0)
                         .suffix(" %");
                     s.dirty |= ui.add_enabled(p.fade.on, percent).changed();
                     ui.end_row();
                     s.dirty |= ui.checkbox(&mut p.tilt.on, "Tilt").changed();
-                    set |= ui
-                        .add_enabled(p.tilt.on, egui::Button::new("Set"))
-                        .on_hover_text("Set the anchors in Component Properties")
-                        .clicked();
+                    let set_tilt = egui::Button::new("Set").selected(setting == Some(Anchor::Tilt));
+                    if ui
+                        .add_enabled(p.tilt.on, set_tilt)
+                        .on_hover_text(Anchor::Tilt.prompt(false))
+                        .clicked()
+                    {
+                        s.anchors = Some((Anchor::Tilt, None));
+                    }
                     let angle = egui::DragValue::new(&mut p.tilt.angle)
                         .range(-90.0..=90.0)
                         .suffix(" °");
@@ -1438,8 +1455,7 @@ impl CutCraftApp {
             });
         let pressed = ctx.input(|i| i.pointer.any_down());
         let apply = (s.dirty && !pressed).then(|| s.params.clone());
-        let form = set.then(|| s.params.clone());
-        if close || set {
+        if close {
             self.settings_3d = None;
         } else if apply.is_some() {
             s.dirty = false;
@@ -1450,13 +1466,6 @@ impl CutCraftApp {
                 self.status.set_message(&e);
             }
         }
-        if let Some(p) = form {
-            let item = gui::MenuItem::form::<cmd_component_properties::ComponentProperties>(
-                "Component Properties",
-                &p,
-            );
-            self.invoke(ctx, &item.action);
-        }
     }
 
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
@@ -1464,19 +1473,87 @@ impl CutCraftApp {
         self.components_at_3d(fit, at).first().copied()
     }
 
+    /// Set in the settings popup: two clicks on the model place the fade's or tilt's
+    /// anchors, as Aspire's help says the 3D view does; the status bar says which point to
+    /// click, and the first is marked while the second is awaited.
+    fn anchors_3d(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        area: egui::Rect,
+        fit: egui::Rect,
+    ) {
+        let Some((which, first)) = self.settings_3d.as_ref().and_then(|s| s.anchors) else {
+            return;
+        };
+        self.status.set_message(which.prompt(first.is_some()));
+        if response.clicked()
+            && let Some(at) = response.interact_pointer_pos()
+            && let Some(p) = self.point_at_3d(fit, at)
+        {
+            self.place_anchor(which, first, p);
+        }
+        if let Some(first) = first
+            && let Some(surface) = self.surface_3d().map(Cow::into_owned)
+        {
+            let screen = view3d::screen_of(&surface, self.orbit, self.framing, fit, None);
+            let z = surface.at(first).unwrap_or(0.0);
+            let at = screen(cut_craft_core::glam::DVec3::new(
+                first.x - surface.origin.x,
+                first.y - surface.origin.y,
+                z,
+            ));
+            let r = ui.spacing().interact_size.y * view2d::NODE_HANDLE_SHARE / 2.0;
+            ui.painter_at(area)
+                .circle_filled(at, r, ui.visuals().selection.stroke.color);
+        }
+    }
+
+    /// The job point on the drawn surface at the point of the 3D view's picture `fit` under
+    /// `at`; `None` off the surface.
+    pub(super) fn point_at_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> Option<Point> {
+        let (job, previewing) = (self.shown_job(), self.simulation.is_some());
+        let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
+        let surface = self.surface_3d()?.into_owned();
+        let wrap = wrap_for(&job, on, previewing, &surface);
+        let (column, row) = view3d::pick(&surface, orbit, framing, fit, wrap, at)?;
+        Some(surface.centre(column, row))
+    }
+
+    /// A click placing a fade's or tilt's anchor: the first is kept until the second, which
+    /// turns the fade or tilt on between them through the settings popup.
+    fn place_anchor(&mut self, which: Anchor, first: Option<Point>, p: Point) {
+        use cut_craft_core::params::Xy;
+        let Some(s) = &mut self.settings_3d else {
+            return;
+        };
+        let Some(first) = first else {
+            s.anchors = Some((which, Some(p)));
+            return;
+        };
+        let (from, to) = (Xy::new(first.x, first.y), Xy::new(p.x, p.y));
+        match which {
+            Anchor::Fade => {
+                s.params.fade.on = true;
+                s.params.fade.from = from;
+                s.params.fade.to = to;
+            }
+            Anchor::Tilt => {
+                s.params.tilt.on = true;
+                s.params.tilt.pivot = from;
+                s.params.tilt.toward = to;
+            }
+        }
+        s.anchors = None;
+        s.dirty = true;
+    }
+
     /// Every shown component at the point of the 3D view's picture `fit` under `at`,
     /// topmost first.
     pub(super) fn components_at_3d(&mut self, fit: egui::Rect, at: egui::Pos2) -> Vec<EntityId> {
-        let (job, previewing) = (self.shown_job(), self.simulation.is_some());
-        let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
-        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+        let Some(p) = self.point_at_3d(fit, at) else {
             return vec![];
         };
-        let wrap = wrap_for(&job, on, previewing, &surface);
-        let Some((column, row)) = view3d::pick(&surface, orbit, framing, fit, wrap, at) else {
-            return vec![];
-        };
-        let p = surface.centre(column, row);
         self.doc
             .components
             .iter()

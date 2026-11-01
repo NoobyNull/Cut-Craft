@@ -1894,6 +1894,7 @@ impl CutCraftApp {
                             },
                             shortcut_of: &|id| self.registry.get(id).map(|c| c.meta().shortcut),
                             recent: &recent,
+                            image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
                         },
                         &mut clicked,
                     );

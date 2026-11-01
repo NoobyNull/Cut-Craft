@@ -157,10 +157,12 @@ say "not implemented yet".
   Transform icon) Aspire 12's component editing icons sit along the near edge of the
   selected component's box: Total Height, Shape Height and Base Height (drag up or down; a
   quarter of the view doubles, the base height moves the material's thickness over it,
-  applied when the drag ends [inf: Aspire's follow the drag]) and Additional Settings, a
-  popup with the combine modes, Fade and Tilt (their Set opens Component Properties for the
-  anchors [inf: Aspire's are clicked in the 3D view]), Appearance (Same as Parent or Solid
-  Color) and its colour, all applied through Component Properties. A component's Solid Color
+  the component following the drag, one undo in all) and Additional Settings, a popup with
+  the combine modes (Aspire's icons, also in the tree's Combine Mode menus and the
+  Component Properties form), Fade and Tilt (Set, then two clicks on the model in the 3D
+  view: the point that keeps its height or stays put, then the point faded toward or tilted
+  up, as the help says the 3D view does), Appearance (Same as Parent or Solid Color) and its
+  colour, all applied through Component Properties. A component's Solid Color
   shows on the GPU-drawn surface [inf: the CPU path of the headless tests leaves it out].
   Not done: the 3D Transform Handles themselves (move, scale, rotate in the 3D view).
 - Import 3D Model is two pages as Aspire 12's: Orientate (Initial Orientation, Model Size,

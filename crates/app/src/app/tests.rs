@@ -1157,6 +1157,13 @@ fn the_component_menu_acts_on_the_component_clicked() {
     };
     let component = |app: &CutCraftApp| app.doc.components.values().next().unwrap().clone();
     assert!(leaf(&menu(&h.app), &["Combine Mode", "Add"]).is_checked);
+    assert_eq!(
+        leaf(&menu(&h.app), &["Combine Mode", "Add"])
+            .icon
+            .as_deref(),
+        Some("modeling/combine_add.png"),
+        "Aspire's combine icons"
+    );
     h.choose(menu, &["Combine Mode", "Subtract"]);
     assert_eq!(component(&h.app).combine, Combine::Subtract);
     assert!(leaf(&menu(&h.app), &["Combine Mode", "Subtract"]).is_checked);
@@ -1807,6 +1814,64 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     h.click(close, Modifiers::NONE);
     h.frame(vec![]);
     assert!(h.text_at("Fade").is_none(), "closed");
+}
+
+#[test]
+fn set_in_the_3d_settings_places_the_fade_anchors_by_two_clicks() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let settings = h
+        .app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == Handle3d::Settings)
+        .map(|(_, at)| *at)
+        .expect("the editing icons");
+    h.click(settings, Modifiers::NONE);
+    h.frame(vec![]);
+    let fade = h.text_at("Fade").expect("the settings popup");
+    h.click(fade, Modifiers::NONE);
+    h.frame(vec![]);
+    let set = h.texts_at("Set")[0];
+    h.click(set, Modifiers::NONE);
+    h.frame(vec![]);
+    let anchors = |h: &Harness| h.app.settings_3d.as_ref().unwrap().anchors;
+    assert_eq!(anchors(&h), Some((Anchor::Fade, None)));
+    assert_eq!(h.app.status.message, Anchor::Fade.prompt(false));
+    // two clicks on the dome, left then right of its middle
+    let fit = h.app.fit_3d.unwrap();
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
+    let on_dome = |x: f64| {
+        let z = surface.at(Point::new(x, 20.0)).unwrap();
+        screen(cut_craft_core::glam::DVec3::new(
+            x - surface.origin.x,
+            20.0 - surface.origin.y,
+            z,
+        ))
+    };
+    h.click(on_dome(16.0), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(matches!(anchors(&h), Some((Anchor::Fade, Some(_)))));
+    assert_eq!(h.app.status.message, Anchor::Fade.prompt(true));
+    h.click(on_dome(24.0), Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let fade = h.app.doc.components[&EntityId(1)]
+        .shaping
+        .fade
+        .expect("faded between the clicks");
+    assert!(
+        (fade.from.x - 16.0).abs() < 0.5 && (fade.to.x - 24.0).abs() < 0.5,
+        "{fade:?}"
+    );
+    assert_eq!(anchors(&h), None, "placed");
 }
 
 #[test]
