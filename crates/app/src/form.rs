@@ -95,8 +95,9 @@ impl When {
 /// Draws a form's tool block given the parameters holding the tool (see [`Look::tool`]).
 pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) + 'a;
 
-/// Draws more at the foot of a group, given its name: see [`Look::group_end`].
-pub type GroupEnd<'a> = dyn Fn(&mut egui::Ui, &str) + 'a;
+/// Draws more at the foot of a group, given its name and the settings holding it; whether
+/// they changed. See [`Look::group_end`].
+pub type GroupEnd<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) -> bool + 'a;
 
 /// The fields that are lists of Tool Database tools, drawn by [`Look::tool`] as the form's
 /// own tool is.
@@ -114,7 +115,8 @@ pub struct Look<'a> {
     /// parameters holding it; `None` leaves them out.
     pub tool: Option<&'a DrawTool<'a>>,
     /// Draws more at the foot of an `x-group` block, given its name (Profile's Edit Tabs…
-    /// under Tabs); `None` for nothing.
+    /// under Tabs, Edit Loops… under a trochoidal toolpath's cut settings); `None` for
+    /// nothing.
     pub group_end: Option<&'a GroupEnd<'a>>,
 }
 
@@ -248,9 +250,9 @@ fn show_within(
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(group);
-                let changed = plain(ui, block, params, look, top);
+                let mut changed = plain(ui, block, params, look, top);
                 if let Some(end) = look.group_end {
-                    end(ui, group);
+                    changed |= end(ui, group, params);
                 }
                 changed
             })
@@ -1624,25 +1626,12 @@ fn every_way_of_cutting_has_a_picture_for_each_choice() {
             }
         }
     }
-    // the trochoidal loops' turn, in the Loops section
-    let f = fields(&registry.get("pocket_toolpath").unwrap().schema());
-    let Kind::Group(loops) = &f.iter().find(|f| f.key == "loops").unwrap().kind else {
-        panic!("a section")
-    };
-    let turn = loops.iter().find(|f| f.key == "turn").unwrap();
-    let Kind::Choice(
-        options,
-        Widget::Icons {
-            picture: Some(p),
-            named: true,
-        },
-    ) = &turn.kind
-    else {
-        panic!("{:?}", turn.kind)
-    };
-    for o in options {
-        let path = icon_path(p, &Value::String(o.value.clone()));
-        assert!(icons.join(&path).is_file(), "no {path}");
+    // the trochoidal loops' turn, set in Edit Loops (named as its picture would be)
+    for turn in ["anticlockwise", "clockwise"] {
+        assert!(
+            icons.join(format!("toolpaths/loops_{turn}.png")).is_file(),
+            "{turn}"
+        );
     }
     // a profile's climb turns clockwise round a part and anticlockwise in a hole
     let path = |side: &str| {

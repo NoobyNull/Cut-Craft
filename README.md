@@ -68,8 +68,9 @@ please report them (see [Reporting bugs](#reporting-bugs)).
     Tabs stay in the same place on every pass, and leads stay on the waste side (Profile,
     Pocket, Chamfer, Prism).
   - **Motion**: Straight, or Trochoidal, where the tool circles in small loops as it moves
-    along, so only a sliver of its edge cuts at a time. Loop Width and Loop Step set the
-    loops, and Loops Turn sets which way they turn, apart from the direction: anticlockwise
+    along, so only a sliver of its edge cuts at a time. **Edit Loops** (under Motion) sets
+    the loops' width and step with a picture of them at the cutter's size, and Loops Turn
+    which way they turn, apart from the direction: anticlockwise
     loops cut climb and clockwise ones conventional (the spindle always turns clockwise),
     so Climb or Conventional with Straight, Trochoidal anticlockwise or Trochoidal clockwise
     gives six ways to cut. A trochoidal pocket clears in looped bands from the outline in, then cuts once

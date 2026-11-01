@@ -4,6 +4,7 @@
 mod actions;
 mod help;
 mod layouts;
+mod loops;
 mod panels;
 mod passes;
 #[path = "screenshots.rs"]

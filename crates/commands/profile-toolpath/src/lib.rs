@@ -123,12 +123,9 @@ pub struct Params {
         "x-icon" = "toolpaths/motion_{}.png"
     ))]
     pub motion: Motion,
+    /// Set in Edit Loops…, under the cut settings when the motion is trochoidal
     #[serde(default)]
-    #[schemars(extend(
-        "x-section" = true,
-        "x-group" = "Machine Vectors…",
-        "x-enable-when" = {"motion": "trochoidal"}
-    ))]
+    #[schemars(skip)]
     pub loops: Loops,
     /// Positive leaves the part bigger (or the hole smaller), negative cuts into it
     #[serde(default)]

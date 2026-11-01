@@ -139,12 +139,9 @@ pub struct Params {
         "x-icon" = "toolpaths/motion_{}.png"
     ))]
     pub motion: Motion,
+    /// Set in Edit Loops…, under the cut settings when the motion is trochoidal
     #[serde(default)]
-    #[schemars(extend(
-        "x-section" = true,
-        "x-group" = "Clear Pocket",
-        "x-enable-when" = {"motion": "trochoidal"}
-    ))]
+    #[schemars(skip)]
     pub loops: Loops,
     /// Zig zag down over the ramp distance instead of plunging straight down
     #[serde(default)]

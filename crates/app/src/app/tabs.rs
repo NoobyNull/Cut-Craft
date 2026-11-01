@@ -14,8 +14,9 @@ fn window_id() -> egui::Id {
     egui::Id::unique("edit_tabs")
 }
 
-/// The Edit Tabs… button, at the foot of a form's Tabs (Profile Toolpath's).
-pub(super) fn group_end(ui: &mut egui::Ui, group: &str) {
+/// The Edit Tabs… button, at the foot of a form's Tabs (Profile Toolpath's); then what else
+/// a group's foot holds (Edit Loops…). Whether the form's settings changed.
+pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut serde_json::Value) -> bool {
     if group == "Tabs"
         && ui
             .button("Edit Tabs…")
@@ -24,6 +25,7 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str) {
     {
         ui.data_mut(|d| d.insert_temp(window_id(), true));
     }
+    super::loops::edit_loops(ui, group, params)
 }
 
 impl CutCraftApp {
