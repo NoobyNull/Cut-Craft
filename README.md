@@ -228,6 +228,9 @@ folder, pictures included.
 
 ## Building from source
 
+Step-by-step instructions for updating from git, building locally and cutting a release are
+in [BUILDING.md](BUILDING.md).
+
 You need Rust (stable, edition 2024) and, on Linux, the usual graphics and windowing libraries
 (Vulkan or OpenGL, X11 / Wayland).
 
