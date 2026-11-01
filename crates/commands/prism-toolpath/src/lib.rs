@@ -4,9 +4,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{
-    Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
-};
+use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -131,7 +129,7 @@ impl Command for PrismToolpath {
             ensure_positive("prism depth", p.prism_depth)?;
             p.prism_depth
         };
-        let depths = pass_depths(p.start_depth + depth, tool.pass_depth);
+        let depths = tool.pass_depths(p.start_depth + depth);
         let safe = doc.job.clearance;
         let moves = paths
             .iter()

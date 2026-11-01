@@ -9,7 +9,7 @@ use cut_craft_core::entry::{Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{
-    Drop, Move, MoveKind, Tool, cut_points, follow, made_by, pass_depths, raster_lines,
+    Drop, Move, MoveKind, Tool, cut_points, follow, made_by, raster_lines,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use glam::DVec3;
@@ -193,7 +193,7 @@ impl Command for RoughingToolpath3d {
         let inside = |at: Point| material.contains(at);
         let peaks = leave.peaks();
         // down to the lowest of the allowance
-        let levels = pass_depths(-(lowest + p.allowance).min(0.0), tool.pass_depth);
+        let levels = tool.pass_depths(-(lowest + p.allowance).min(0.0));
         let z_level = p.strategy == Strategy::ZLevel;
         // ponytail: the allowance is vertical, not a true 3D offset
         let profile = if z_level {

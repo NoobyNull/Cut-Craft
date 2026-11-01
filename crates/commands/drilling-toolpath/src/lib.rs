@@ -4,7 +4,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::glam::DVec3;
-use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by, pass_depths};
+use cut_craft_core::toolpath::{Move, MoveKind, Tool, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -103,7 +103,7 @@ impl Command for DrillingToolpath {
         }
         let safe = doc.job.clearance;
         let depths = if p.peck {
-            pass_depths(p.depth, p.tool.pass_depth)
+            p.tool.pass_depths(p.depth)
         } else {
             vec![-p.depth]
         };

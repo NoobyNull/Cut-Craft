@@ -4,7 +4,7 @@
 use cut_craft_core::document::{Along, Document};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
-use cut_craft_core::toolpath::{Move, Tool, follow, made_by, pass_depths};
+use cut_craft_core::toolpath::{Move, Tool, follow, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -152,7 +152,9 @@ impl Command for RoundingToolpath {
         let safe = top + doc.job.clearance;
         let surface_radius = rotary.diameter / 2.0;
         let mut moves: Vec<Move> = vec![];
-        for z in pass_depths(p.outer_radius() - finished, p.tool.pass_depth)
+        for z in p
+            .tool
+            .pass_depths(p.outer_radius() - finished)
             .into_iter()
             .map(|down| top + down)
         {

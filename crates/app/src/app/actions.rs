@@ -3144,6 +3144,7 @@ impl CutCraftApp {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
                 *asked.borrow_mut() = tool_picker(ui, &params["tool"], params, tools, &slots);
+                listed.set(listed.get() | super::passes::edit_passes(ui, params, units));
             });
             // every toolpath that cuts with a tool can rest machine after the tools that cut
             // before it (3D Finishing has its own, as `after`)

@@ -7,9 +7,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::entry::{Direction, Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{
-    Move, Tool, cut_points, hatch_lines, made_by, pass_depths, project_onto_model,
-};
+use cut_craft_core::toolpath::{Move, Tool, cut_points, hatch_lines, made_by, project_onto_model};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -270,7 +268,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         // to save time
         let mut moves = vec![];
         let mut above = 0.0;
-        for z in pass_depths(p.depth, p.tool.pass_depth) {
+        for z in p.tool.pass_depths(p.depth) {
             match p.strategy {
                 Strategy::Offset => moves.extend(cut(&rings, z, above)),
                 Strategy::Trochoidal => {

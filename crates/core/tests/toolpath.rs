@@ -106,6 +106,29 @@ fn passes_go_down_in_equal_steps_no_deeper_than_the_pass_depth() {
     assert_eq!(pass_depths(0.5, 3.0), [-0.5]);
 }
 
+#[test]
+fn passes_set_by_hand_or_a_last_pass_thickness_come_before_the_cut_depth() {
+    let mut tool = Tool {
+        pass_depth: 3.0,
+        ..Tool::default()
+    };
+    // set by hand, in any order; those at or past the cut depth are dropped
+    tool.passes = vec![4.0, 1.0, 9.0, 6.0];
+    assert_eq!(tool.pass_depths(6.0), [-1.0, -4.0, -6.0]);
+    tool.passes = vec![6.0];
+    assert_eq!(tool.pass_depths(6.0), [-6.0], "one pass");
+    // a 0.5 mm last pass: the 7.5 mm above it in even passes no deeper than 3 mm
+    tool.passes.clear();
+    tool.last_pass = 0.5;
+    assert_eq!(tool.pass_depths(8.0), [-2.5, -5.0, -7.5, -8.0]);
+    // neither: even passes
+    tool.last_pass = 0.0;
+    assert_eq!(tool.pass_depths(6.0), pass_depths(6.0, 3.0));
+    // a saved tool without them reads back the same
+    let json = serde_json::to_value(&tool).unwrap();
+    assert!(json.get("passes").is_none() && json.get("last_pass").is_none());
+}
+
 fn square() -> Vec<Point> {
     vec![
         Point::new(0.0, 0.0),

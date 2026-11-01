@@ -9,7 +9,7 @@ use cut_craft_core::geometry::{
 };
 use cut_craft_core::params::Anchor;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Tool, cut_points, made_by, pass_depths, project_onto_model};
+use cut_craft_core::toolpath::{Tool, cut_points, made_by, project_onto_model};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -245,7 +245,7 @@ impl Command for ProfileToolpath {
                 "the tool is too big for the inside of the selected shapes".into(),
             ));
         }
-        let depths = pass_depths(p.depth, p.tool.pass_depth);
+        let depths = p.tool.pass_depths(p.depth);
         let tab = p.tab.sized(p.tool.pass_depth, p.depth);
         let entry = Entry {
             ramp: p.ramp,

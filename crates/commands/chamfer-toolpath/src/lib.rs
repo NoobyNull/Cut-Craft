@@ -6,7 +6,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, winding};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
-    Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
+    Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -201,7 +201,7 @@ impl Command for ChamferToolpath {
             };
             // a V-bit steps down in passes; a ball nose's fine cuts are each shallow
             let depths = if v_bit {
-                pass_depths(-z, p.tool.pass_depth)
+                p.tool.pass_depths(-z)
             } else {
                 vec![z]
             };

@@ -5,7 +5,7 @@
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Move, Tool, contour_moves, cut_points, made_by, pass_depths};
+use cut_craft_core::toolpath::{Move, Tool, contour_moves, cut_points, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -87,7 +87,9 @@ pub fn inlay_shape(regions: &[Path], radius: f64) -> Vec<Path> {
 impl Params {
     /// Contours round `rings` at each pass down to `depth` below the start.
     fn around(&self, rings: &[Path], from: f64, depth: f64, safe: f64) -> Vec<Move> {
-        let depths: Vec<f64> = pass_depths(depth, self.tool.pass_depth)
+        let depths: Vec<f64> = self
+            .tool
+            .pass_depths(depth)
             .into_iter()
             .map(|z| z - from)
             .collect();
@@ -109,7 +111,8 @@ impl Params {
             ring = next;
         }
         rings.reverse();
-        pass_depths(depth, self.tool.pass_depth)
+        self.tool
+            .pass_depths(depth)
             .into_iter()
             .flat_map(|z| {
                 let z = z - self.start_depth;

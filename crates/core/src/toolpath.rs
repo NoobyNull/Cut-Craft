@@ -152,6 +152,16 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "is_zero")]
     #[schemars(skip)]
     pub number: u32,
+    /// Pass depths set by hand in Edit Passes, each below where the cut starts, shallowest
+    /// first; the cut depth is always the last. Empty for passes from the pass depth
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub passes: Vec<f64>,
+    /// How thick the last pass is (Edit Passes' Last Pass Thickness), the passes above it
+    /// even at the pass depth; 0 for all passes even
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    #[schemars(skip)]
+    pub last_pass: f64,
     /// The Tool Database group it sits in, `/` between levels (`Metric Tools/End Mills`);
     /// empty at the top (added with tool groups)
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -223,6 +233,14 @@ fn default_flutes() -> u32 {
 )]
 fn is_zero(n: &u32) -> bool {
     *n == 0
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if"
+)]
+fn is_nothing(n: &f64) -> bool {
+    *n == 0.0
 }
 
 fn default_tip_radius() -> f64 {
@@ -334,6 +352,29 @@ impl Tool {
         if slope > 0.0 {
             self.tooth_size = height / (2.0 * slope);
         }
+    }
+
+    /// Its passes (negative z) down to `depth`: those set by hand that are above it (none of
+    /// them: one pass), or even
+    /// ones at the pass depth over all but a set last pass, then `depth` itself.
+    pub fn pass_depths(&self, depth: f64) -> Vec<f64> {
+        let mut set: Vec<f64> = self
+            .passes
+            .iter()
+            .copied()
+            .filter(|&d| d > 0.0 && d < depth - 1e-6)
+            .collect();
+        if !self.passes.is_empty() {
+            set.sort_by(f64::total_cmp);
+            set.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+            return set.iter().map(|d| -d).chain([-depth]).collect();
+        }
+        if self.last_pass > 0.0 && self.last_pass < depth {
+            let mut depths = pass_depths(depth - self.last_pass, self.pass_depth);
+            depths.push(-depth);
+            return depths;
+        }
+        pass_depths(depth, self.pass_depth)
     }
 
     /// The side angle (radians) of a tool that tapers out to its shank, if it does.
@@ -450,6 +491,8 @@ impl Default for Tool {
             flute_length: 0.0,
             flutes: default_flutes(),
             number: 0,
+            passes: vec![],
+            last_pass: 0.0,
             group: String::new(),
             notes: String::new(),
             rate_units: RateUnits::default(),

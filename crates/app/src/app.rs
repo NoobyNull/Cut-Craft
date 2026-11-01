@@ -5,6 +5,7 @@ mod actions;
 mod help;
 mod layouts;
 mod panels;
+mod passes;
 #[path = "screenshots.rs"]
 mod screenshots;
 #[cfg(test)]
@@ -1399,11 +1400,12 @@ fn tool_picker(
         .inner;
     match serde_json::from_value::<Tool>(tool.clone()) {
         Ok(tool) => {
-            // Aspire's Passes: how many the cut depth takes at the tool's pass depth
+            // Aspire's Passes: how many the cut depth takes, as set in Edit Passes
+            #[expect(clippy::cast_precision_loss, reason = "a small count")]
             let passes = top["depth"]
                 .as_f64()
                 .filter(|_| tool.pass_depth > 0.0)
-                .map(|depth| (depth / tool.pass_depth).ceil().max(1.0));
+                .map(|depth| tool.pass_depths(depth).len() as f64);
             tool_summary(ui, &tool, passes, tools.get(&tool.name).is_some());
         }
         Err(_) => {

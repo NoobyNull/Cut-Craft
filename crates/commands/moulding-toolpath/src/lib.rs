@@ -7,9 +7,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{
-    Move, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by, pass_depths,
-};
+use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -316,7 +314,7 @@ fn clearance(
     let deepest = across.iter().map(|&h| target(h)).fold(0.0, f64::min);
     let mut levels = vec![];
     let mut above = 0.0;
-    for z in pass_depths(-deepest, clearer.pass_depth) {
+    for z in clearer.pass_depths(-deepest) {
         for &h in &across {
             let lowest = target(h);
             if lowest < above - 1e-9 {

@@ -5,8 +5,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, inside};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
-    Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, pass_depths,
-    project_onto_model,
+    Move, Tool, ToolDatabase, ToolShape, contour_moves, cut_points, made_by, project_onto_model,
 };
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -216,7 +215,7 @@ fn clearing(
         )));
     }
     let step = tool.stepover * tool.diameter;
-    let depths = pass_depths(p.start_depth + p.flat_depth, tool.pass_depth);
+    let depths = tool.pass_depths(p.start_depth + p.flat_depth);
     let mut rings = vec![];
     let mut ring = flat;
     while !ring.is_empty() {
@@ -292,7 +291,7 @@ fn carve_together(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
         if offset > last {
             break;
         }
-        let depths = pass_depths(p.start_depth + offset.min(reach) / spread, tool.pass_depth);
+        let depths = tool.pass_depths(p.start_depth + offset.min(reach) / spread);
         for ring in &rings {
             let points = started_near(cut_points(ring), &starts);
             moves.extend(contour_moves(&points, true, &depths, safe));

@@ -5904,3 +5904,56 @@ fn the_toolpath_lists_divider_stays_where_it_is_dragged() {
         "dragged up it stays: {before:?} then {after:?}"
     );
 }
+
+#[test]
+fn edit_passes_shows_each_pass_and_a_click_adds_one() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.form.as_mut().unwrap().params["depth"] = serde_json::json!(6.0);
+    h.app.form.as_mut().unwrap().params["tool"]["pass_depth"] = serde_json::json!(3.0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let passes = |h: &Harness| {
+        let tool = &h.app.form.as_ref().unwrap().params["tool"];
+        serde_json::from_value::<Tool>(tool.clone())
+            .unwrap()
+            .pass_depths(6.0)
+    };
+    assert_eq!(passes(&h), [-3.0, -6.0]);
+    h.click(
+        h.text_at("Edit Passes…").expect("the button"),
+        Modifiers::NONE,
+    );
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Cut Depth 6 mm in 2 passes").is_some(),
+        "the window"
+    );
+    // the picture labels each pass by its depth; a click high in the material adds one
+    let top = h.text_at("Top").expect("the picture");
+    let half = h.text_at("3 mm").expect("the first pass");
+    h.click(
+        egui::pos2(top.x - 40.0, f32::midpoint(top.y, half.y)),
+        Modifiers::NONE,
+    );
+    h.frame(vec![]);
+    let set = passes(&h);
+    assert_eq!(set.len(), 3, "{set:?}");
+    assert!(
+        set[0] > -3.0 && set[0] < 0.0 && (set[1] + 3.0).abs() < 1e-9,
+        "{set:?}"
+    );
+    // a click on a pass takes it away
+    h.click(egui::pos2(top.x - 40.0, half.y), Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(passes(&h).len(), 2);
+    // a thin last pass
+    h.click(h.text_at("Last Pass Thickness").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    let set = passes(&h);
+    assert!(
+        (set[set.len() - 2] + 5.4).abs() < 1e-9,
+        "a 0.6 mm last pass: {set:?}"
+    );
+}
