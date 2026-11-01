@@ -127,13 +127,18 @@ pub struct ModelSize {
 /// Aspire's second page, Position relative to Modeling Plane.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Placing {
-    #[schemars(title = "Center model")]
+    /// Centred on the material; the form shows it as the position it gives and clears it,
+    /// so it is never shown (the alignment buttons centre it)
+    #[schemars(
+        title = "Center model",
+        extend("x-hide-when" = {"center": ["true", "false"]})
+    )]
     pub center: bool,
     /// Where the model's lower-left corner goes when not centred
     pub position: Xy,
     /// How far below the model's top the zero plane (the material's surface) cuts it: what
     /// is above the plane becomes the component; 0 keeps the whole model, sitting on the
-    /// plane
+    /// plane. More than the model's height lifts it off the plane, up to the material's top
     #[schemars(title = "Depth Below Top", extend("x-unit" = "mm"))]
     #[serde(default)]
     pub depth_below_top: f64,
@@ -507,11 +512,12 @@ fn placed(
     };
     let footprint = Point::new(size.x * scale.x, size.y * scale.y);
     // the zero plane Depth Below Top down from the model's top: its lowest point sits that
-    // far below it, less the model's height
+    // far below it, less the model's height. Past the model's height, the model is lifted
+    // off the plane, up to the material's top
     let tall = size.z * scale.z;
     let depth = p.placing.depth_below_top;
     let bottom = if depth > 0.0 {
-        depth.min(tall) - tall
+        depth.min(tall.max(doc.job.thickness)) - tall
     } else {
         0.0
     };
@@ -1135,6 +1141,34 @@ mod tests {
         let (lo, hi) = k.height_range().unwrap();
         assert!((hi - 2.0).abs() < 1e-6 && lo >= 0.0, "{lo} to {hi}");
     }
+
+    #[test]
+    fn a_depth_past_the_models_height_lifts_it_up_to_the_materials_top() {
+        let lifted = |depth: f64| {
+            let p = Params {
+                placing: Placing {
+                    depth_below_top: depth,
+                    ..Params::default().placing
+                },
+                ..Params::default()
+            };
+            imported(&format!("lifted-{depth}"), &p)
+                .1
+                .height_range()
+                .unwrap()
+                .1
+        };
+        let thickness = Document::default().job.thickness;
+        assert!(thickness > 8.0, "room above the 5 high box: {thickness}");
+        assert!(
+            (lifted(8.0) - 8.0).abs() < 1e-6,
+            "3 off the plane, its top at 8"
+        );
+        assert!(
+            (lifted(thickness + 100.0) - thickness).abs() < 1e-6,
+            "no higher than the material's top"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1519,7 +1553,7 @@ mod rotary {
             fit_material: true,
             ..Params::default()
         };
-        let (doc, k) = import("fit", &cylinder(10.0, 50.0), &p);
+        let (doc, k) = import("fit-cylinder", &cylinder(10.0, 50.0), &p);
         let (_, hi) = k.height_range().unwrap();
         assert!((hi - 15.0).abs() < 0.05, "{hi}");
         // 1.5 times as long: 75 of the 100

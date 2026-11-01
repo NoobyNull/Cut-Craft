@@ -1367,6 +1367,7 @@ impl CutCraftApp {
                 dirty: false,
                 shown_size: None,
                 typed_size: [None; 3],
+                dragged: None,
                 model: None,
                 model_whole: true,
                 applied: None,
@@ -1978,14 +1979,45 @@ impl CutCraftApp {
 
     /// Once a frame: a form's shape or model made again with its settings once they have
     /// changed and the pointer is let go (so a dragged value is not re-run every frame).
+    /// Orientate 3D Model's size and position follow a drag as it goes, the drag one undo.
     pub(super) fn follow_form(&mut self, ctx: &egui::Context) {
         let pressed = ctx.input(|i| i.pointer.any_down());
-        let Some(form) = self.form.as_mut().filter(|f| f.dirty && !pressed) else {
+        let Some(form) = self.form.as_mut() else {
             return;
         };
+        if !pressed {
+            form.dragged = None;
+        }
+        let live = form.id == "orientate_3d_model"
+            && form.applied.as_ref().is_some_and(|applied| {
+                let mut moved = applied.clone();
+                moved["placing"] = form.params["placing"].clone();
+                moved["size"] = form.params["size"].clone();
+                moved == form.params
+            });
+        if !form.dirty || (pressed && !live) {
+            return;
+        }
         form.dirty = false;
-        if self.drawn_shape().is_some() {
-            self.apply_live();
+        let dragged = form.dragged.take();
+        if self.drawn_shape().is_none() {
+            return;
+        }
+        // the last frame's step of this drag taken back first, so the drag is one undo
+        if let Some((depth, drawn, applied)) = dragged
+            && self.history.undo_depth() == depth
+            && self.history.undo(&mut self.doc)
+            && let Some(form) = self.form.as_mut()
+        {
+            form.drawn = drawn;
+            form.applied = applied;
+        }
+        let Some(form) = &self.form else { return };
+        let before = (self.history.undo_depth(), form.drawn, form.applied.clone());
+        self.apply_live();
+        let depth = self.history.undo_depth();
+        if let (true, Some(form)) = (pressed && depth > before.0, self.form.as_mut()) {
+            form.dragged = Some((depth, before.1, before.2));
         }
     }
 
@@ -2028,6 +2060,7 @@ impl CutCraftApp {
                 params["size"][key] = Value::from(typed.unwrap_or(0.0));
             }
         }
+        let wrapped = self.doc.job.rotary.is_some() && params["model_type"] != "flat";
         let result = self.apply_form(id, &params);
         // the component the settings just made judges what a cutter cannot reach, so the
         // model is rasterised once per change, not twice
@@ -2071,26 +2104,37 @@ impl CutCraftApp {
                 let (lo, hi) = k.height_range().unwrap_or_default();
                 Some([k.cell * k.columns as f64, k.cell * k.rows as f64, hi - lo])
             });
+        let (area, thickness) = (self.doc.job.area(), self.doc.job.thickness);
         if let Some(form) = &mut self.form {
             form.error = result.err();
             form.model = model;
             form.model_whole = whole;
             if let (true, Some(made)) = (sized, made) {
                 // to the hundredth of a millimetre shown, not the cell's float noise
-                let shown = std::array::from_fn(|i| {
-                    form.typed_size[i].unwrap_or((made[i] * 100.0).round() / 100.0)
-                });
+                let round = |v: f64| (v * 100.0).round() / 100.0;
+                let shown = std::array::from_fn(|i| form.typed_size[i].unwrap_or(round(made[i])));
                 for (key, value) in SIZES.iter().zip(shown) {
                     form.params["size"][key] = Value::from(value);
                 }
                 // Depth Below Top reads the model's height while the plane is at its
-                // bottom (0, or past it, or where its bottom was before it was sized), as
-                // Aspire's does; a depth typed above the bottom stays
+                // bottom (0, or where its bottom was before it was sized), as Aspire's
+                // does; a depth typed above the bottom stays, and one past it lifts the
+                // model off the plane, up to the material's top
                 let depth = &mut form.params["placing"]["depth_below_top"];
                 let (at, tall) = (depth.as_f64().unwrap_or(0.0), shown[2]);
                 let was_bottom = form.shown_size.is_some_and(|s| s[2] == at);
-                if at <= 0.0 || at > tall || was_bottom {
+                if at <= 0.0 || was_bottom {
                     *depth = Value::from(tall);
+                } else if at > tall.max(thickness) {
+                    *depth = Value::from(tall.max(thickness));
+                }
+                // centred, the corner it gives is shown instead, for the numbers to move it
+                let placing = &mut form.params["placing"];
+                if placing["center"] == true && !wrapped {
+                    let middle = area.center();
+                    placing["position"]["x"] = Value::from(round(middle.x - shown[0] / 2.0));
+                    placing["position"]["y"] = Value::from(round(middle.y - shown[1] / 2.0));
+                    placing["center"] = Value::Bool(false);
                 }
                 form.shown_size = Some(shown);
             }
@@ -3163,7 +3207,8 @@ impl CutCraftApp {
             tool: Some(&tool),
             group_end: Some(&super::tabs::group_end),
         };
-        open.dirty |= show_form(ui, open, &look);
+        let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
+        open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
         open.dirty |= listed.get();
         let (id, new_job) = (open.id, open.new_job);
         if let Some(error) = &open.error {
@@ -3572,13 +3617,125 @@ fn texture_buttons(ui: &mut egui::Ui) -> (bool, bool) {
 
 /// The open form's fields, the page shown of a form with several, and the Position page's
 /// Update Undercuts; true when anything changed.
-fn show_form(ui: &mut egui::Ui, open: &mut OpenForm, look: &form::Look) -> bool {
+fn show_form(
+    ui: &mut egui::Ui,
+    open: &mut OpenForm,
+    look: &form::Look,
+    job: &cut_craft_core::document::Job,
+    icon: &dyn Fn(&str) -> Option<egui::Image<'static>>,
+) -> bool {
     let changed = if form::pages(&open.fields) > 1 {
         form::show_page(ui, &open.fields, open.step, &mut open.params, look)
     } else {
         form::show(ui, &open.fields, &mut open.params, look)
     };
-    changed | update_undercuts(ui, open)
+    changed | align_in_material(ui, open, job, icon) | update_undercuts(ui, open)
+}
+
+/// The Position page's alignment, as Align Objects' in the material: the model against the
+/// material's sides or centred on it, and in height on the zero plane, in the middle of the
+/// material or at its top. The position numbers are set to match; true when clicked.
+fn align_in_material(
+    ui: &mut egui::Ui,
+    open: &mut OpenForm,
+    job: &cut_craft_core::document::Job,
+    icon: &dyn Fn(&str) -> Option<egui::Image<'static>>,
+) -> bool {
+    /// Each button: its icon, hint, and how far across and up the room it puts the model.
+    type Align = (&'static str, &'static str, Option<f64>, Option<f64>);
+    const ACROSS: [Align; 7] = [
+        ("left", "Left side on the material's left", Some(0.0), None),
+        (
+            "center_horizontally_in_material",
+            "Centred left to right",
+            Some(0.5),
+            None,
+        ),
+        (
+            "right",
+            "Right side on the material's right",
+            Some(1.0),
+            None,
+        ),
+        ("top", "Top side on the material's top", None, Some(1.0)),
+        (
+            "center_vertically_in_material",
+            "Centred top to bottom",
+            None,
+            Some(0.5),
+        ),
+        (
+            "bottom",
+            "Bottom side on the material's bottom",
+            None,
+            Some(0.0),
+        ),
+        (
+            "center_in_material",
+            "Centred on the material",
+            Some(0.5),
+            Some(0.5),
+        ),
+    ];
+    const HEIGHT: [(&str, &str, f64); 3] = [
+        ("Bottom", "The model's bottom on the zero plane", 0.0),
+        (
+            "Middle",
+            "The model in the middle of the material's thickness",
+            0.5,
+        ),
+        ("Top", "The model's top at the material's top", 1.0),
+    ];
+    if open.step < 2 || open.id != "orientate_3d_model" {
+        return false;
+    }
+    let size = |key: &str| open.params["size"][key].as_f64().unwrap_or(0.0);
+    let (sx, sy, tall) = (size("x"), size("y"), size("z"));
+    let area = job.area();
+    let round = |v: f64| (v * 100.0).round() / 100.0;
+    let mut clicked = false;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("Align in Material");
+        let edge = ui.spacing().interact_size.y;
+        ui.horizontal_wrapped(|ui| {
+            for (name, hint, ax, ay) in ACROSS {
+                let path = format!("drawing/align/{name}.png");
+                let button = match icon(&path) {
+                    Some(image) => {
+                        egui::Button::image(image.fit_to_exact_size(egui::vec2(edge, edge)))
+                    }
+                    None => egui::Button::new(name),
+                };
+                if !ui.add(button).on_hover_hint(hint).clicked() {
+                    continue;
+                }
+                let placing = &mut open.params["placing"];
+                placing["center"] = Value::Bool(false);
+                if let Some(ax) = ax {
+                    let x = area.min.x + (area.size().x - sx) * ax;
+                    placing["position"]["x"] = Value::from(round(x));
+                }
+                if let Some(ay) = ay {
+                    let y = area.min.y + (area.size().y - sy) * ay;
+                    placing["position"]["y"] = Value::from(round(y));
+                }
+                clicked = true;
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("Height");
+            for (label, hint, up) in HEIGHT {
+                if ui.button(label).on_hover_hint(hint).clicked() {
+                    // Depth Below Top is the model's top above the zero plane
+                    let depth = tall + (job.thickness - tall) * up;
+                    open.params["placing"]["depth_below_top"] = Value::from(round(depth));
+                    clicked = true;
+                }
+            }
+        });
+    });
+    clicked
 }
 
 /// The Position page's Update Undercuts: the model is judged again (it already follows every

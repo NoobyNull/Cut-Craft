@@ -1720,6 +1720,69 @@ fn importing_a_model_goes_through_orientation_then_position() {
 }
 
 #[test]
+fn the_position_page_lifts_aligns_and_follows_a_drag_as_it_goes() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("align");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let next = h.text_at(cmd_orientate_3d_model::POSITION_PAGE.1).unwrap();
+    h.click(next, Modifiers::NONE);
+    h.frame(vec![]);
+    // centred, the corner it gives is shown, for the numbers to move it from there
+    let (area, thickness) = (h.app.doc.job.area(), h.app.doc.job.thickness);
+    let placing = |app: &CutCraftApp| app.form.as_ref().unwrap().params["placing"].clone();
+    let p = placing(&h.app);
+    assert_eq!(p["center"], false);
+    let x0 = p["position"]["x"].as_f64().unwrap();
+    assert!((x0 - (area.center().x - 10.0)).abs() < 0.01, "{p}");
+    let top = |app: &CutCraftApp| {
+        let k = app.doc.components.values().next().unwrap();
+        k.height_range().unwrap().1
+    };
+    let cell = h.app.doc.job.model_cell();
+    // a depth past the model's 5 mm lifts it off the plane, and stays
+    assert!(thickness > 8.0, "{thickness}");
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["depth_below_top"] = Value::from(8.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(placing(&h.app)["depth_below_top"], 8.0, "not set back");
+    assert!((top(&h.app) - 8.0).abs() < 2.0 * cell, "{}", top(&h.app));
+    // Height ▸ Middle puts it half way up the material
+    let middle = h.text_at("Middle").expect("the height buttons");
+    h.click(middle, Modifiers::NONE);
+    h.frame(vec![]);
+    let half = f64::midpoint(5.0, thickness);
+    let depth = placing(&h.app)["depth_below_top"].as_f64().unwrap();
+    assert!((depth - half).abs() < 0.01, "{depth}");
+    assert!((top(&h.app) - half).abs() < 2.0 * cell, "{}", top(&h.app));
+    // a dragged number moves the model while the button is held, the drag one undo
+    let origin = |app: &CutCraftApp| app.doc.components.values().next().unwrap().origin.x;
+    let undo_from = h.app.history.undo_depth();
+    let held = h.text_at("Align in Material").unwrap();
+    h.press(held, true, Modifiers::NONE);
+    for step in 1..=3 {
+        let x = x0 + 5.0 * f64::from(step);
+        let form = h.app.form.as_mut().unwrap();
+        form.params["placing"]["position"]["x"] = Value::from(x);
+        form.dirty = true;
+        h.frame(vec![]);
+        assert!(
+            (origin(&h.app) - x).abs() < cell,
+            "moved as it goes: {step}"
+        );
+    }
+    h.press(held, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.history.undo_depth(), undo_from + 1, "one undo");
+    assert_eq!(h.app.doc.components.len(), 1);
+    assert!(h.app.history.undo(&mut h.app.doc));
+    assert!((origin(&h.app) - x0).abs() < cell, "back where it was");
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn a_drawn_shape_changes_with_its_form_until_it_is_let_go() {
     use cut_craft_core::geometry::Segment;
     let arcs = |app: &CutCraftApp| {

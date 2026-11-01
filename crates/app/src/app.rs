@@ -678,6 +678,9 @@ struct OpenForm {
     model_whole: bool,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
+    /// While a value is dragged, the undo depth after its last step and the shape and
+    /// settings from before that step: the next step takes it back first.
+    dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
     /// How many changes could be undone when it opened: Cancel undoes back to there.
     undo_from: usize,
     /// The page shown, from 1, of a form with several (Import 3D Model's Position page).
