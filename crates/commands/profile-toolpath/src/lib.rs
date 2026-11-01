@@ -2,7 +2,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{
-    Direction, Entry, Lead, Leads, Ramp, Ramping, TabSettings, TabSpacing, Tabs, path_moves,
+    Direction, Entry, Lead, Leads, Ramp, Ramping, TabSettings, TabSpacing, Tabs, directed_moves,
 };
 use cut_craft_core::geometry::{
     Path, Point, Rect, inside, polyline_closest, polyline_distance, winding,
@@ -295,7 +295,8 @@ impl Command for ProfileToolpath {
                     .filter(|&(_, &owner)| owner == Some(i))
                     .map(|(&t, _)| t)
                     .collect();
-                path_moves(
+                directed_moves(
+                    p.direction,
                     &cut.points,
                     cut.closed,
                     &depths,

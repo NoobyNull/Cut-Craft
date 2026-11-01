@@ -1,8 +1,8 @@
 //! Ramps, leads and tabs on a path.
 
 use cut_craft_core::entry::{
-    Entry, Lead, Leads, Ramp, RampBy, Ramping, TabPlacement, TabSettings, TabSpacing, Tabs,
-    path_moves, spread_tabs,
+    Direction, Entry, Lead, Leads, Ramp, RampBy, Ramping, TabPlacement, TabSettings, TabSpacing,
+    Tabs, directed_moves, path_moves, spread_tabs,
 };
 use cut_craft_core::geometry::Point;
 use cut_craft_core::toolpath::{Move, MoveKind};
@@ -363,4 +363,87 @@ fn add_tabs_spreads_them_on_the_path_to_move_by_hand_after() {
             "{t:?}"
         );
     }
+}
+
+/// Twice the area inside the cutting moves at depth `z`: positive anticlockwise.
+fn winding_at(moves: &[Move], z: f64) -> f64 {
+    let ring: Vec<Point> = moves
+        .iter()
+        .filter(|m| m.kind == MoveKind::Cut && (m.to.z - z).abs() < 1e-9)
+        .map(|m| m.to.truncate())
+        .collect();
+    ring.iter()
+        .zip(ring.iter().cycle().skip(1))
+        .map(|(a, b)| a.perp_dot(*b))
+        .sum()
+}
+
+#[test]
+fn climb_and_conventional_take_turns_and_keep_the_tabs_in_place() {
+    let entry = Entry {
+        tabs: Tabs::Flat,
+        tab: TabSettings {
+            size_from_tool: false,
+            length: 4.0,
+            thickness: 4.0,
+            spacing: TabSpacing::ConstantNumber,
+            number: 3,
+            ..TabSettings::default()
+        },
+        tab_top: -1.0,
+        tool_diameter: 2.0,
+        ..Entry::default()
+    };
+    let depths = [-2.0, -4.0, -6.0];
+    let moves = directed_moves(Direction::Both, &square(), true, &depths, 0.0, SAFE, &entry);
+    let turns: Vec<f64> = depths.iter().map(|&z| winding_at(&moves, z)).collect();
+    assert!(
+        turns[0] > 0.0 && turns[1] < 0.0 && turns[2] > 0.0,
+        "anticlockwise, back, anticlockwise: {turns:?}"
+    );
+    // each pass rises over the same tabs: the places it is up on a tab, by pass
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "tenths of a mm on a small part"
+    )]
+    let tabs = |pass: usize| -> Vec<(i64, i64)> {
+        let start = moves
+            .iter()
+            .position(|m| m.kind == MoveKind::Cut && (m.to.z - depths[pass]).abs() < 1e-9)
+            .unwrap();
+        let end = moves[start..]
+            .iter()
+            .position(|m| m.kind == MoveKind::Rapid)
+            .map_or(moves.len(), |n| start + n);
+        let mut at: Vec<(i64, i64)> = moves[start..end]
+            .iter()
+            .filter(|m| (m.to.z + 1.0).abs() < 1e-9)
+            .map(|m| {
+                (
+                    (m.to.x * 10.0).round() as i64,
+                    (m.to.y * 10.0).round() as i64,
+                )
+            })
+            .collect();
+        at.sort_unstable();
+        at.dedup();
+        at
+    };
+    assert_ne!(tabs(0), [], "the passes lift over tabs");
+    assert_eq!(
+        tabs(0),
+        tabs(1),
+        "the pass back finds them where the first left them"
+    );
+    // one way only, every pass goes round the same way
+    let climb = directed_moves(
+        Direction::Climb,
+        &square(),
+        true,
+        &depths,
+        0.0,
+        SAFE,
+        &entry,
+    );
+    assert!(depths.iter().all(|&z| winding_at(&climb, z) > 0.0));
 }

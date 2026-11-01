@@ -211,7 +211,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         }
         // ponytail: each selected shape is a filled region, so islands (shapes inside shapes)
         // are pocketed over; nest-aware regions when islands are needed
-        let mut ring = polygon::offset(
+        let ring = polygon::offset(
             &polygon::union(&paths),
             -(p.tool.diameter / 2.0 + p.allowance),
             Corners::Round,
@@ -223,13 +223,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         }
         let step = p.tool.stepover * p.tool.diameter;
         let edge = ring.clone();
-        let mut rings = vec![];
-        while !ring.is_empty() {
-            let next = polygon::offset(&ring, -step, Corners::Round);
-            rings.extend(ring);
-            ring = next;
-        }
-        rings.reverse(); // from the middle outwards
+        let rings = rings_in(ring, step);
         let mut loops = vec![];
         if p.strategy == Strategy::Trochoidal {
             loops = trochoidal(&edge, p);
@@ -250,16 +244,20 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             },
             ..Entry::default()
         };
-        // each path at depth `z`, ramping down from the level above
-        let cut = |paths: &[Path], z: f64, above: f64| -> Vec<Move> {
+        // each path at depth `z`, ramping down from the level above; `back` runs it the other
+        // way (Climb + Conventional's every other pass)
+        let cut = |paths: &[Path], z: f64, above: f64, back: bool| -> Vec<Move> {
             paths
                 .iter()
                 .flat_map(|r| {
-                    let points = if r.closed {
+                    let mut points = if r.closed {
                         p.direction.orient(cut_points(r), true)
                     } else {
                         cut_points(r)
                     };
+                    if back {
+                        points.reverse();
+                    }
                     path_moves(&points, r.closed, &[z], above, safe, &entry)
                 })
                 .collect()
@@ -268,21 +266,23 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         // to save time
         let mut moves = vec![];
         let mut above = 0.0;
-        for z in p.tool.pass_depths(p.depth) {
+        for (pass, z) in p.tool.pass_depths(p.depth).into_iter().enumerate() {
+            let back = p.direction == Direction::Both && pass % 2 == 1;
+            let cut = |paths: &[Path]| cut(paths, z, above, back);
             match p.strategy {
-                Strategy::Offset => moves.extend(cut(&rings, z, above)),
+                Strategy::Offset => moves.extend(cut(&rings)),
                 Strategy::Trochoidal => {
-                    moves.extend(cut(&loops, z, above));
-                    moves.extend(cut(&edge, z, above));
+                    moves.extend(cut(&loops));
+                    moves.extend(cut(&edge));
                 }
                 Strategy::Raster => {
                     if p.profile_pass == ProfilePass::First {
-                        moves.extend(cut(&edge, z, above));
+                        moves.extend(cut(&edge));
                     }
                     let lines = raster(&edge, step, p.raster_angle);
-                    moves.extend(cut(&lines, z, above));
+                    moves.extend(cut(&lines));
                     if p.profile_pass == ProfilePass::Last {
-                        moves.extend(cut(&edge, z, above));
+                        moves.extend(cut(&edge));
                     }
                 }
             }
@@ -301,6 +301,18 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
     }
 }
 
+/// Rings `step` apart from `ring` in, worked from the middle outwards.
+fn rings_in(mut ring: Vec<Path>, step: f64) -> Vec<Path> {
+    let mut rings = vec![];
+    while !ring.is_empty() {
+        let next = polygon::offset(&ring, -step, Corners::Round);
+        rings.extend(ring);
+        ring = next;
+    }
+    rings.reverse();
+    rings
+}
+
 /// The trochoidal clearing of the region inside `edge` (where the tool's middle may go):
 /// looping bands from the outline in, each band's loops reaching from the one outside it to
 /// the one inside, then plain rings for a middle too small for a band.
@@ -315,7 +327,12 @@ fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
     while !band.is_empty() {
         for ring in &band {
             let ring = p.direction.orient(cut_points(ring), true);
-            let points = looped(&ring, radius, advance, p.direction == Direction::Climb);
+            let points = looped(
+                &ring,
+                radius,
+                advance,
+                p.direction != Direction::Conventional,
+            );
             out.push(Path::polyline(&points, false));
         }
         last = band;
@@ -332,7 +349,8 @@ fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
 }
 
 /// Loops `radius` round the closed `ring`, each a whole turn at most `advance` on from the
-/// last, anticlockwise (climb, as round a hole) or clockwise. They end where they began.
+/// last, anticlockwise (climb, as round a hole) or clockwise. They end where they began; run
+/// backwards (Climb + Conventional's every other pass) they turn the other way.
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn looped(ring: &[Point], radius: f64, advance: f64, anticlockwise: bool) -> Vec<Point> {
     const PER_LOOP: u32 = 24;
@@ -479,6 +497,33 @@ mod tests {
             "{} turns",
             turns(&tp)
         );
+    }
+
+    #[test]
+    fn climb_and_conventional_take_turns_pass_by_pass() {
+        // twice the area the cuts at `z` go round: positive anticlockwise (climb in a pocket)
+        let turning = |tp: &Toolpath, z: f64| -> f64 {
+            tp.moves
+                .windows(2)
+                .filter(|w| w[1].kind == MoveKind::Cut)
+                .filter(|w| w.iter().all(|m| (m.to.z - z).abs() < 1e-9))
+                .map(|w| w[0].to.truncate().perp_dot(w[1].to.truncate()))
+                .sum()
+        };
+        for strategy in [Strategy::Offset, Strategy::Trochoidal] {
+            let p = Params {
+                depth: 9.0,
+                strategy,
+                direction: Direction::Both,
+                ..Params::default()
+            };
+            let tp = pocket(30.0, &p).unwrap();
+            let ways: Vec<f64> = [-3.0, -6.0, -9.0].map(|z| turning(&tp, z)).to_vec();
+            assert!(
+                ways[0] > 0.0 && ways[1] < 0.0 && ways[2] > 0.0,
+                "{strategy:?}: climb, conventional, climb: {ways:?}"
+            );
+        }
     }
 
     #[test]

@@ -17,14 +17,19 @@ pub enum Direction {
     Climb,
     /// The other way round
     Conventional,
+    /// Climb on the first pass, conventional on the next, and so on: each pass runs back the
+    /// way the last came, so the wall is cut both ways (added with combined directions)
+    #[schemars(title = "Climb + Conventional")]
+    Both,
 }
 
 impl Direction {
     /// `points` turned to run the way this direction cuts, with the material kept `inside`
-    /// the closed path (a hole or pocket) or outside it (a part's outline).
+    /// the closed path (a hole or pocket) or outside it (a part's outline). Both turns them
+    /// the climb way, for its first pass.
     pub fn orient(self, mut points: Vec<Point>, inside: bool) -> Vec<Point> {
         let anticlockwise = crate::geometry::winding(&points) > 0.0;
-        if anticlockwise != (inside == (self == Self::Climb)) {
+        if anticlockwise != (inside == (self != Self::Conventional)) {
             points.reverse();
         }
         points
@@ -363,6 +368,46 @@ impl Line {
         }
         s
     }
+}
+
+/// Moves cutting `points` at each of `depths` the way `direction` goes: as `path_moves`
+/// does, except that Both runs every other pass (from the second) back along the path, from
+/// where the pass before ended. Tabs stay where the first pass puts them, and leads stay on
+/// the waste side.
+pub fn directed_moves(
+    direction: Direction,
+    points: &[Point],
+    closed: bool,
+    depths: &[f64],
+    top: f64,
+    safe_z: f64,
+    entry: &Entry,
+) -> Vec<Move> {
+    if direction != Direction::Both || depths.len() < 2 {
+        return path_moves(points, closed, depths, top, safe_z, entry);
+    }
+    let mut ahead = entry.clone();
+    if ahead.tabs != Tabs::None && ahead.tab.spacing != TabSpacing::Placed {
+        ahead.placed = spread_tabs(points, closed, entry);
+        ahead.tab.spacing = TabSpacing::Placed;
+    }
+    let back = Entry {
+        side: -ahead.side,
+        ..ahead.clone()
+    };
+    let reversed: Vec<Point> = points.iter().rev().copied().collect();
+    let mut above = top;
+    let mut moves = vec![];
+    for (pass, &z) in depths.iter().enumerate() {
+        let (way, entry) = if pass % 2 == 0 {
+            (points, &ahead)
+        } else {
+            (reversed.as_slice(), &back)
+        };
+        moves.extend(path_moves(way, closed, &[z], above, safe_z, entry));
+        above = z;
+    }
+    moves
 }
 
 /// The moves that cut along `points` at each depth in turn, entering from `top` (the depth

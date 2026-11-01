@@ -61,17 +61,31 @@ please report them (see [Reporting bugs](#reporting-bugs)).
   carving (its areas shown in green before it is made), photo V-carve, quick engrave, drag
   knife.
 - **Rest machining** on any toolpath: only what earlier, larger tools left is cut.
-- An animated preview of the material being cut, toolpath by toolpath.
+- **Cut direction** on profiles and pockets: Climb, Conventional, or **Climb + Conventional**,
+  where the passes take turns: climb on the first, conventional on the next, and so on, each
+  running back the way the last came. Tabs stay in the same place on every pass, and leads
+  stay on the waste side.
+- **Trochoidal pocket clearing**: the tool circles in small loops as it moves along, so only
+  a sliver of its edge cuts at a time. Loop Width and Loop Step set the loops; a pass round
+  the edge cleans the wall.
+- **Edit Passes**: a picture of each pass down to the cut depth. Click to add or take away a
+  pass, drag one to move it, spread a number of passes evenly, or leave a thin last pass.
+- **Edit Tabs**: 2D or 3D tabs, their length and thickness, how many or how far apart, and
+  evenly, from the start point, or kept off corners. Add Tabs puts them on the vectors; then
+  click to add or take one away, or drag one to move it.
+- An animated preview of the material being cut, toolpath by toolpath, with a Progress
+  slider to move the tool on or back.
 - Toolpath tiling, templates, merging and array copies.
 
 ### Tools and machines
 
-- A **Tool Database** of tools in groups, each with its geometry, cutting parameters, feeds
-  and speeds, and chip load. It imports `.vtdb` tool databases and Fusion 360 `.tools`
+- A **Tool Database** of tools in groups, each with its geometry (tapered ball noses and
+  flute lengths too), tool number, cutting parameters, feeds and speeds, and chip load. It imports `.vtdb` tool databases and Fusion 360 `.tools`
   libraries, keeping their groups.
 - **Machine Configuration**: your machines, with bed size, controller and post-processors.
-- **Automatic tool changers**: give a machine its slots, load tools into them in the Tool
-  Database, and the G-code calls each tool by its slot. Saving refuses tools that aren't loaded.
+- **Automatic tool changers**: give a machine its slots, load tools into them in Machine ▸
+  Tool Changer (by hand, or by tool number), and the G-code calls each tool by its slot.
+  Without a changer, a tool's own number is used. Saving refuses tools that aren't loaded.
 - **Post-Processor Management**: Cut Craft's own grbl / FluidNC posts (flat, and rotary on
   A), plus any `.pp` post-processor you install or customise.
 
@@ -133,7 +147,7 @@ axis; **Options ▸ Importing Models** can offer the flat, top-only import inste
 ![Importing a 3D model](docs/screenshots/08-import-3d-model.png)
 
 The window can be laid out three ways (**Options ▸ General ▸ Window layout**, or **View ▸
-Window Layout**). Classic is Aspire's, above. Rail puts one icon per tool group down the
+Window Layout**). Classic is the layout above. Rail puts one icon per tool group down the
 left; clicking one lists that group's tools by name, and the inspector on the right holds
 the open tool's form or the sheets, layers, components, clipart and toolpath list.
 

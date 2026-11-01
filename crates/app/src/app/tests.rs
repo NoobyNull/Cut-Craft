@@ -5921,6 +5921,10 @@ fn edit_passes_shows_each_pass_and_a_click_adds_one() {
             .pass_depths(6.0)
     };
     assert_eq!(passes(&h), [-3.0, -6.0]);
+    // the form's panel settles to its width
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
     h.click(
         h.text_at("Edit Passes…").expect("the button"),
         Modifiers::NONE,
