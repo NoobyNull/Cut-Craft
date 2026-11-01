@@ -1,6 +1,7 @@
 //! Sculpting: a brush dragged over the selected component (several are baked into one)
 //! smooths, smudges, adds or removes height, or brings back the shape it had before
-//! sculpting. Each drag is one stroke and one undoable change.
+//! sculpting. Each drag is one stroke and one undoable change. Deposit and Remove can press a
+//! saved component in instead of the round brush: a custom brush.
 
 use cut_craft_core::component::{Component, chosen_or_baked, height_or};
 use cut_craft_core::document::Document;
@@ -44,6 +45,7 @@ pub enum Mode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[expect(clippy::struct_excessive_bools, reason = "Aspire's tick boxes")]
 pub struct Params {
     pub tool: Tool,
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -60,6 +62,24 @@ pub struct Params {
     pub mode: Mode,
     /// With the Undo Brush: remove the shape under the brush altogether (Aspire's Shift)
     pub erase: bool,
+    /// Deposit and Remove: a component saved as a sculpting brush (a `.ccclip` file, Load
+    /// Brush… below) pressed into the surface, its larger side the diameter; empty for the
+    /// round brush
+    #[serde(default)]
+    #[schemars(title = "Custom brush")]
+    pub brush: String,
+    /// The custom brush's turn, degrees anticlockwise
+    #[serde(default)]
+    #[schemars(title = "Angle", extend("x-unit" = "°"))]
+    pub brush_angle: f64,
+    /// The custom brush turns to follow the stroke
+    #[serde(default)]
+    #[schemars(title = "Dynamic Rotation")]
+    pub dynamic_rotation: bool,
+    /// A custom brush's stroke merges with the strokes before it (the higher wins) instead of
+    /// being added onto them
+    #[serde(default)]
+    pub merge: bool,
     /// The stroke; drag over the component in the 2D view to sculpt
     #[schemars(skip)]
     #[serde(default)]
@@ -77,6 +97,10 @@ impl Default for Params {
             preserve_transparency: true,
             mode: Mode::Normal,
             erase: false,
+            brush: String::new(),
+            brush_angle: 0.0,
+            dynamic_rotation: false,
+            merge: false,
             points: vec![Xy::new(16.0, 20.0), Xy::new(24.0, 20.0)],
         }
     }
@@ -148,10 +172,15 @@ impl Command for Sculpt {
                 "drag over the component to sculpt".into(),
             ));
         }
+        let custom = matches!(p.tool, Tool::Deposit | Tool::Remove) && !p.brush.trim().is_empty();
+        let brush = custom.then(|| Brush::load(p.brush.trim())).transpose()?;
         let (ids, before) = chosen_or_baked(doc).ok_or_else(|| {
             CommandError::Failed("there is no component to sculpt: create one first".into())
         })?;
-        let after = sculpted(&before, p);
+        let after = match &brush {
+            Some(brush) => pressed(&before, p, brush),
+            None => sculpted(&before, p),
+        };
         let mut c = Change::builder(doc);
         if let [one] = ids.as_slice() {
             c.replace_component(*one, after);
@@ -238,6 +267,126 @@ fn sculpted(k: &Component, p: &Params) -> Component {
             }
         }
         previous = centre;
+    }
+    out
+}
+
+/// How deep a custom brush presses at full strength, as a share of its diameter.
+// ponytail: a fifth [inf]; Aspire does not give its custom brush's depth
+const BRUSH_DEPTH: f64 = 0.2;
+
+/// A custom brush: a saved component, its heights taken as 0 (its lowest) to 1 (its highest).
+pub struct Brush {
+    shape: Component,
+    low: f64,
+    high: f64,
+}
+
+impl Brush {
+    /// The brush saved at `path`.
+    // ponytail: read for every stroke (and preview); keep it with the form if that is slow
+    pub fn load(path: &str) -> Result<Self, CommandError> {
+        let bytes = std::fs::read(path)
+            .map_err(|e| CommandError::Failed(format!("the brush {path}: {e}")))?;
+        let shape = fmt_export_as_3d_clipart::read_clip(&bytes)?;
+        let (low, high) = shape
+            .height_range()
+            .filter(|(low, high)| high > low)
+            .ok_or_else(|| CommandError::Failed("the brush has no height to press with".into()))?;
+        Ok(Self { shape, low, high })
+    }
+
+    /// 0 to 1, `offset` (the brush's own millimetres) from its middle; 0 off it.
+    fn at(&self, offset: Point) -> f64 {
+        let middle = self.shape.extent().center();
+        self.shape.height_at(middle + offset).map_or(0.0, |h| {
+            ((h - self.low) / (self.high - self.low)).clamp(0.0, 1.0)
+        })
+    }
+
+    /// Its larger side.
+    fn size(&self) -> f64 {
+        self.shape.extent().size().max_element()
+    }
+}
+
+/// `k` after one stroke of a custom brush: the brush pressed in at each dab (turned by the
+/// angle, or along the stroke), the stroke's impression the highest of its dabs; added onto
+/// the surface, or with Merge laid on the surface from before sculpting, the higher kept
+/// (Remove: lowered, the lower kept).
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "cell indices are small"
+)]
+fn pressed(k: &Component, p: &Params, brush: &Brush) -> Component {
+    let mut out = k.clone();
+    let original = out
+        .unsculpted
+        .get_or_insert_with(|| k.heights.clone())
+        .clone();
+    let dabs = p.dabs();
+    let depth = p.diameter * p.strength / 100.0 * BRUSH_DEPTH;
+    let scale = brush.size() / p.diameter;
+    // the brush's square, turned, reaches its corners
+    let reach_mm = p.diameter / 2.0 * std::f64::consts::SQRT_2;
+    let fixed = p.brush_angle.to_radians();
+    let angle = |i: usize| -> f64 {
+        if !p.dynamic_rotation {
+            return fixed;
+        }
+        let (from, to) = match (i.checked_sub(1), dabs.get(i + 1)) {
+            (_, Some(&next)) => (dabs[i], next),
+            (Some(before), None) => (dabs[before], dabs[i]),
+            (None, None) => return fixed,
+        };
+        let along = to - from;
+        if along.length() < 1e-9 {
+            fixed
+        } else {
+            along.to_angle()
+        }
+    };
+    let (columns, rows) = (k.columns as isize, k.rows as isize);
+    let reach = (reach_mm / k.cell).ceil() as isize;
+    let mut impression = vec![0.0_f64; k.heights.len()];
+    for (i, &centre) in dabs.iter().enumerate() {
+        let back = Point::from_angle(-angle(i));
+        let local = (centre - k.origin) / k.cell - 0.5;
+        let (middle_column, middle_row) = (local.x.round() as isize, local.y.round() as isize);
+        for row in (middle_row - reach).max(0)..=(middle_row + reach).min(rows - 1) {
+            for column in (middle_column - reach).max(0)..=(middle_column + reach).min(columns - 1)
+            {
+                let index = (row * columns + column) as usize;
+                let d = k.centre_of(index) - centre;
+                if d.length() > reach_mm {
+                    continue;
+                }
+                let pressed = brush.at(back.rotate(d) * scale) * depth;
+                impression[index] = impression[index].max(pressed);
+            }
+        }
+    }
+    let sign = if p.tool == Tool::Remove { -1.0 } else { 1.0 };
+    for (index, &mark) in impression.iter().enumerate() {
+        let here = k.heights[index];
+        if mark <= 0.0 || (here.is_nan() && p.preserve_transparency) {
+            continue;
+        }
+        let z = height_or(here, 0.0);
+        let base = height_or(original[index], 0.0);
+        let mut new = match (p.merge, sign > 0.0) {
+            (false, _) => z + sign * mark,
+            (true, true) => z.max(base + mark),
+            (true, false) => z.min(base - mark),
+        };
+        match p.mode {
+            Mode::Normal => {}
+            Mode::Raise => new = new.max(z),
+            Mode::Lower => new = new.min(z),
+        }
+        out.heights[index] = new;
     }
     out
 }
@@ -394,5 +543,110 @@ mod tests {
         };
         assert!(Sculpt::run(&domed(), &none).is_err());
         assert!(rejection::<Sculpt>(&Params::default()).contains("no component"));
+    }
+
+    /// A 10 x 10 mm brush rising from 0 on its left to 10 on its right, saved to a file.
+    fn ramp_brush(name: &str) -> String {
+        let k = Component::from_fn(
+            "ramp",
+            Combine::Add,
+            Rect::new(Point::ZERO, Point::splat(10.0)),
+            0.5,
+            |q| Some(q.x),
+        );
+        let path = std::env::temp_dir().join(format!(
+            "cut-craft-brush-{}-{name}.ccclip",
+            std::process::id()
+        ));
+        std::fs::write(&path, fmt_export_as_3d_clipart::clip_bytes(&k).unwrap()).unwrap();
+        path.display().to_string()
+    }
+
+    fn stamp(brush: &str) -> Params {
+        Params {
+            tool: Tool::Deposit,
+            strength: 100.0,
+            brush: brush.to_owned(),
+            points: vec![Xy::new(20.0, 20.0), Xy::new(20.0, 20.0)],
+            ..Params::default()
+        }
+    }
+
+    #[test]
+    fn a_custom_brush_presses_its_shape_in_turned_by_its_angle() {
+        let brush = ramp_brush("angle");
+        let mut doc = plateau(|_| 2.0);
+        run_on::<Sculpt>(&mut doc, &stamp(&brush));
+        // depth 2 at full strength: high on the brush's right, low on its left
+        let (right, left) = (
+            height(&doc, 24.0, 20.0).unwrap(),
+            height(&doc, 16.0, 20.0).unwrap(),
+        );
+        assert!(right > 3.5 && left < 2.5, "{right} {left}");
+        assert!(
+            (height(&doc, 28.0, 28.0).unwrap() - 2.0).abs() < 1e-9,
+            "off the brush"
+        );
+        let mut turned = plateau(|_| 2.0);
+        run_on::<Sculpt>(
+            &mut turned,
+            &Params {
+                brush_angle: 180.0,
+                ..stamp(&brush)
+            },
+        );
+        let (right, left) = (
+            height(&turned, 24.0, 20.0).unwrap(),
+            height(&turned, 16.0, 20.0).unwrap(),
+        );
+        assert!(right < 2.5 && left > 3.5, "turned round: {right} {left}");
+        // Remove presses down
+        let mut removed = plateau(|_| 5.0);
+        run_on::<Sculpt>(
+            &mut removed,
+            &Params {
+                tool: Tool::Remove,
+                ..stamp(&brush)
+            },
+        );
+        assert!(height(&removed, 24.0, 20.0).unwrap() < 3.5);
+        let _ = std::fs::remove_file(brush);
+    }
+
+    #[test]
+    fn strokes_add_up_unless_merged_and_dynamic_rotation_follows_the_stroke() {
+        let brush = ramp_brush("merge");
+        let twice = |merge| {
+            let mut doc = plateau(|_| 2.0);
+            let p = Params {
+                merge,
+                ..stamp(&brush)
+            };
+            run_on::<Sculpt>(&mut doc, &p);
+            run_on::<Sculpt>(&mut doc, &p);
+            height(&doc, 20.0, 20.0).unwrap()
+        };
+        // the middle of the ramp presses about 1 deep
+        let (added, merged) = (twice(false), twice(true));
+        assert!((added - 4.0).abs() < 0.2, "{added}");
+        assert!((merged - 3.0).abs() < 0.1, "{merged}");
+        // up the job: turned to follow the stroke, the high side faces up, not right
+        let up = |dynamic_rotation| {
+            let mut doc = plateau(|_| 2.0);
+            let p = Params {
+                dynamic_rotation,
+                points: vec![Xy::new(20.0, 18.0), Xy::new(20.0, 22.0)],
+                ..stamp(&brush)
+            };
+            run_on::<Sculpt>(&mut doc, &p);
+            height(&doc, 24.0, 20.0).unwrap()
+        };
+        assert!(up(true) < up(false) - 0.3, "{} vs {}", up(true), up(false));
+        let missing = Params {
+            brush: "/no/such/brush.ccclip".into(),
+            ..stamp(&brush)
+        };
+        assert!(rejection::<Sculpt>(&missing).contains("brush"));
+        let _ = std::fs::remove_file(brush);
     }
 }

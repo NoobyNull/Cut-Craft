@@ -6,16 +6,21 @@ use super::{
     DESIGN_PANEL_WIDTHS, DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
     JOB_EXTENSION, Key, KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout,
     MODEL_IMPORTERS, Menus, Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point,
-    RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS,
-    SUMMARY_DEFAULTS, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS,
-    TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW,
-    commands, dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, shortcut, side_panel, side_tabs, summary_table,
-    template_dialog, tool_picker, toolpath_template_dialog, view3d,
+    RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm,
+    Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands,
+    dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
+    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
+    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
+    toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 
 impl CutCraftApp {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one line per field of the window's state"
+    )]
     pub(super) fn new() -> Self {
         let menus = gui::MenuSystem::new();
         Self {
@@ -34,6 +39,9 @@ impl CutCraftApp {
             form: None,
             view_transform: None,
             view_area: None,
+            view_3d_area: None,
+            shaded_image: None,
+            shaded_saved: std::sync::Arc::default(),
             camera: None,
             view_tool: None,
             pages: Pages::default(),
@@ -43,8 +51,18 @@ impl CutCraftApp {
             rail_pinned: false,
             ribbon_tab: 0,
             options_path: None,
+            words_path: None,
+            speller: None,
+            speller_looked: false,
             session: Session::default(),
             selected_toolpath: None,
+            selected_group: None,
+            immediate_output: SaveForm {
+                mode: files::SaveMode::Selected,
+                group: false,
+                post: None,
+                add_side: false,
+            },
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             posts: cut_craft_machines::Library::new(None),
@@ -69,13 +87,26 @@ impl CutCraftApp {
             settings_3d: None,
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
-            summary: SUMMARY_DEFAULTS,
+            summary: super::Summary::default(),
             stroke: Vec::new(),
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
+            job_sheet_window: false,
+            stl_window: false,
+            stl_result: None,
+            layers_on_sheet: false,
+            save_form: None,
+            before_preview: None,
+            picked_nodes: Vec::new(),
+            node_mirror: [false, false],
+            menu_at: None,
+            guide_props: None,
+            measure_rows: Vec::new(),
             display: crate::display::Display::default(),
             simulation: None,
             simulation_coarse: None,
+            import_level: None,
+            polyline: crate::polyline::Draft::default(),
             fine_3d: None,
             model_3d: None,
             gpu_3d: None,
@@ -113,7 +144,7 @@ impl CutCraftApp {
             "undo" => self.history.can_undo(),
             "close" => self.screen != Screen::Start,
             "zoom_selected" => self.doc.selection_bounds().is_some(),
-            id if id.starts_with("open_recent:") => true,
+            id if id.starts_with("open_recent:") || id.starts_with(gui::EDIT_POLYLINE) => true,
             id if id.starts_with(gui::REIMPORT_MODEL) => self
                 .model_source(id)
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
@@ -121,20 +152,24 @@ impl CutCraftApp {
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
+            id if id.starts_with(gui::GUIDE) => true,
+            id if id.starts_with(gui::SAVE_BRUSH) => self.brush_component(id).is_some(),
             id if id.starts_with(EXPORT_LEVEL) => {
                 self.registry.exporter("export_as_3d_clipart").is_some()
             }
             "redo" => self.history.can_redo(),
             "recalculate_toolpath"
             | "delete_toolpath"
-            | "preview_toolpath"
             | "save_selected_toolpath_as_template"
             | "edit_toolpath" => self.selected_toolpath.is_some(),
+            "preview_toolpath" => self.selected_toolpath.is_some() || self.selected_group.is_some(),
             "edit_text" => self.doc.selection.iter().any(|id| {
-                self.doc
-                    .vector_groups
-                    .get(id)
-                    .is_some_and(|g| self.doc.texts.contains_key(g))
+                self.doc.vector_groups.get(id).is_some_and(|g| {
+                    self.doc
+                        .texts
+                        .get(g)
+                        .is_some_and(|t| t.get("text").is_some())
+                })
             }),
             "save_all_visible_toolpaths_as_template" => {
                 self.doc.toolpaths.values().any(|t| t.visible)
@@ -142,7 +177,17 @@ impl CutCraftApp {
             "recalculate_all_toolpaths" | "preview_all_toolpaths" | "save_toolpaths" => {
                 !self.doc.toolpaths.is_empty()
             }
-            "recalculate_visible_toolpaths" => self.doc.toolpaths.values().any(|t| t.visible),
+            "recalculate_visible_toolpaths" | "preview_visible_toolpaths" => {
+                self.doc.toolpaths.values().any(|t| t.visible)
+            }
+            "undo_last_preview" => self.before_preview.is_some() && self.playback.is_none(),
+            "save_shaded_image" => {
+                self.simulation.is_some()
+                    || self.playback.is_some()
+                    || !self.doc.components.is_empty()
+            }
+            "edit_object" => self.object_to_edit().is_some(),
+            "job_sheet_editor" => true,
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
@@ -365,11 +410,44 @@ impl CutCraftApp {
             "preview_toolpath" => {
                 if let Some(id) = self.selected_toolpath {
                     self.preview_toolpath(id);
+                } else if let Some(group) = &self.selected_group {
+                    // a picked group: its toolpaths in list order, as one preview
+                    self.preview_ids(&self.doc.toolpaths_in_group(group));
                 }
             }
-            "preview_all_toolpaths" => self.preview_all(),
+            "job_sheet_editor" => self.job_sheet_window = true,
+            "create_job_sheet" => self.create_job_sheet(),
+            "edit_object" => {
+                if let Some((id, command, params)) = self.object_to_edit() {
+                    self.edit_shape(id, command, params);
+                }
+            }
+            "save_shaded_image" => {
+                if let Some(path) = file_dialog()
+                    .add_filter("PNG image", &["png"])
+                    .set_file_name("shaded.png")
+                    .save_file()
+                {
+                    self.save_shaded_image(path);
+                }
+            }
+            "preview_all_toolpaths" => self.preview_all(false),
+            "preview_visible_toolpaths" => self.preview_all(true),
+            "undo_last_preview" => {
+                if let Some(before) = self.before_preview.take() {
+                    self.simulation = before.0;
+                    (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+                    self.status.set_message("Undid the last preview");
+                }
+            }
             "reset_preview" => {
-                (self.simulation, self.simulation_coarse, self.fine_3d) = (None, None, None);
+                self.before_preview = None;
+                (
+                    self.simulation,
+                    self.simulation_coarse,
+                    self.fine_3d,
+                    self.surface_gpu,
+                ) = (None, None, None, None);
                 (self.playback, self.playing) = (None, false);
             }
             id if id.starts_with("open_recent:") => {
@@ -383,11 +461,22 @@ impl CutCraftApp {
                     self.doc.selected_components = [EntityId(id)].into();
                 }
             }
+            id if id.starts_with(gui::EDIT_POLYLINE) => {
+                let (vector, end) = id[gui::EDIT_POLYLINE.len()..]
+                    .split_once(':')
+                    .unwrap_or_default();
+                if let Ok(vector) = vector.parse() {
+                    self.edit_polyline(EntityId(vector), end == "start");
+                }
+            }
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(EXPORT_LEVEL) => {
                 self.level_action(id);
             }
+            "export_as_stl" => (self.stl_window, self.stl_result) = (true, None),
             id if self.registry.exporter(id).is_some() => self.export(id),
             id if id.starts_with(gui::REIMPORT_MODEL) => self.reimport_model(id),
+            id if id.starts_with(gui::GUIDE) => self.guide_action(id),
+            id if id.starts_with(gui::SAVE_BRUSH) => self.save_brush(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
             }
@@ -403,6 +492,202 @@ impl CutCraftApp {
             .and_then(std::path::Path::parent)
     }
 
+    /// Draw Text's dictionary: found once (Hunspell's, from the dictionaries folder or the
+    /// system), with the user's own words.
+    fn speller(&mut self) -> Option<&mut cut_craft_core::spell::Speller> {
+        if !self.speller_looked {
+            self.speller_looked = true;
+            let words = self
+                .words_path
+                .as_ref()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .unwrap_or_default();
+            self.speller =
+                cut_craft_core::spell::Speller::find().map(|s| s.with_user_words(words.lines()));
+        }
+        self.speller.as_mut()
+    }
+
+    /// Draw Text's spelling: the words of its text not in the dictionary, each with its
+    /// suggestions to click and Add Word; Remove Word takes back a word added.
+    fn spelling(&mut self, ui: &mut egui::Ui) {
+        let text = self
+            .form
+            .as_ref()
+            .and_then(|f| f.params["text"].as_str())
+            .unwrap_or_default()
+            .to_owned();
+        let Some(speller) = self.speller() else {
+            ui.weak("Spelling: no dictionary found (put a Hunspell .dic and .aff in Cut Craft's dictionaries folder)");
+            return;
+        };
+        let wrong = speller.misspelled(&text);
+        let (mut fix, mut add, mut remove) = (None, None, None);
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.strong("Spelling");
+            if wrong.is_empty() {
+                ui.weak("No spelling mistakes");
+            }
+            // ponytail: listed under the text, not underlined in it (the form's text box is
+            // the generic one)
+            for word in wrong.iter().take(8) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(ui.visuals().error_fg_color, word);
+                    for s in speller.suggest(word) {
+                        if ui.small_button(&s).clicked() {
+                            fix = Some((word.clone(), s));
+                        }
+                    }
+                    if ui.small_button("Add Word").clicked() {
+                        add = Some(word.clone());
+                    }
+                });
+            }
+            if !speller.user_words().is_empty() {
+                egui::ComboBox::from_label("Remove Word")
+                    .selected_text("a word added…")
+                    .show_ui(ui, |ui| {
+                        for w in speller.user_words() {
+                            if ui.selectable_label(false, w).clicked() {
+                                remove = Some(w.clone());
+                            }
+                        }
+                    });
+            }
+        });
+        if let Some((from, to)) = fix {
+            self.fix_spelling(&from, &to);
+        }
+        if let Some(word) = add {
+            self.user_word(&word, true);
+        }
+        if let Some(word) = remove {
+            self.user_word(&word, false);
+        }
+    }
+
+    /// Every `from` in Draw Text's text made `to`; text already made follows.
+    pub(super) fn fix_spelling(&mut self, from: &str, to: &str) {
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "draw_text") else {
+            return;
+        };
+        let text = form.params["text"].as_str().unwrap_or_default();
+        form.params["text"] = cut_craft_core::spell::replace_word(text, from, to).into();
+        form.dirty = true;
+        let params = form.params.clone();
+        if params.get("replaces").is_some_and(|r| !r.is_null())
+            && let Err(e) = self.apply_form("draw_text", &params)
+        {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Adds `word` to the user's own words (or takes it off), kept in the words file.
+    pub(super) fn user_word(&mut self, word: &str, add: bool) {
+        let Some(speller) = self.speller() else {
+            return;
+        };
+        if add {
+            speller.add_word(word);
+        } else {
+            speller.remove_word(word);
+        }
+        let words: Vec<String> = speller.user_words().iter().cloned().collect();
+        if let Some(path) = &self.words_path
+            && let Err(e) = std::fs::write(path, words.join("\n"))
+        {
+            self.status
+                .set_message(&format!("cannot keep the words in {}: {e}", path.display()));
+        }
+    }
+
+    /// The component a Save as Sculpting Brush action names.
+    fn brush_component(&self, action: &str) -> Option<EntityId> {
+        let id = EntityId(action.strip_prefix(gui::SAVE_BRUSH)?.parse().ok()?);
+        self.doc.components.contains_key(&id).then_some(id)
+    }
+
+    /// Save as Sculpting Brush: the component as a brush file, in the brushes folder unless
+    /// saved elsewhere, for Sculpting's Load Brush….
+    fn save_brush(&mut self, action: &str) {
+        let Some(id) = self.brush_component(action) else {
+            return;
+        };
+        let name = self.doc.components[&id].name.clone();
+        if let Some(path) = brush_dialog()
+            .set_file_name(format!("{name}.ccclip"))
+            .save_file()
+            && let Err(e) = self.save_brush_to(id, &path.with_extension("ccclip"))
+        {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Writes component `id` as a sculpting brush to `path`.
+    pub(super) fn save_brush_to(
+        &mut self,
+        id: EntityId,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        let k = self.doc.components.get(&id).ok_or("no such component")?;
+        let bytes = fmt_export_as_3d_clipart::clip_bytes(k).map_err(|e| e.to_string())?;
+        std::fs::write(path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+        self.status
+            .set_message(&format!("Saved sculpting brush {}", path.display()));
+        Ok(())
+    }
+
+    /// The guide menus: Guide Properties, lock and delete on a guide, and guides inserted
+    /// where the 2D view's menu opened (an angled one at 45°, its properties opened to set
+    /// the angle).
+    pub(super) fn guide_action(&mut self, id: &str) {
+        use cut_craft_core::document::Guide;
+        let rest = &id[gui::GUIDE.len()..];
+        let (what, arg) = rest.split_once(':').unwrap_or((rest, ""));
+        let index = arg
+            .parse::<usize>()
+            .ok()
+            .filter(|i| *i < self.doc.guides.len());
+        let mut guides = self.doc.guides.clone();
+        let mut props_for = None;
+        match (what, index) {
+            ("props", Some(i)) => props_for = Some(i),
+            ("lock", Some(i)) => guides[i].locked = !guides[i].locked,
+            ("delete", Some(i)) => {
+                guides.remove(i);
+            }
+            ("insert", _) => {
+                let at = self.menu_at.unwrap_or_else(|| self.doc.job.area().center());
+                guides.push(match arg {
+                    "v" => Guide::vertical(at.x),
+                    "h" => Guide::horizontal(at.y),
+                    _ => Guide::horizontal(at.y).with_angle(45.0).through(at),
+                });
+                if arg == "a" {
+                    props_for = Some(guides.len() - 1);
+                }
+            }
+            _ => return,
+        }
+        if guides != self.doc.guides {
+            self.set_guides(guides);
+        }
+        if let Some(i) = props_for
+            && let Some(g) = self.doc.guides.get(i)
+        {
+            self.guide_props = Some(super::GuideProps {
+                index: i,
+                position: g.at,
+                angle: g.angle(),
+                locked: g.locked,
+                new_at: if g.tilted() { 10.0 } else { g.at },
+                relative: g.tilted(),
+                count: 1,
+            });
+        }
+    }
+
     /// The component a Re-import Model action names, and where it came from.
     fn model_source(&self, action: &str) -> Option<&cut_craft_core::component::Source> {
         let id = action.strip_prefix(gui::REIMPORT_MODEL)?.parse().ok()?;
@@ -410,14 +695,15 @@ impl CutCraftApp {
     }
 
     /// Orientate 3D Model again on a model's own file, with the settings it was imported
-    /// with, its Apply replacing the model: only while the file is where it was and
-    /// unchanged (its MD5 the same).
+    /// with, its Apply replacing the model: only while the file is where it was; a file
+    /// that has changed since is taken as it is now, with a warning (Aspire re-imports a
+    /// model "provided it has not been changed significantly").
     fn reimport_model(&mut self, action: &str) {
         let Some(source) = self.model_source(action).cloned() else {
             return;
         };
-        let path = match source.verified(self.job_folder()) {
-            Ok(path) => path,
+        let (path, changed) = match source.located(self.job_folder()) {
+            Ok(found) => found,
             Err(e) => {
                 self.status.set_message(&e);
                 return;
@@ -434,6 +720,12 @@ impl CutCraftApp {
             form.params["file"] = Value::from(path.display().to_string());
             form.drawn = id;
             self.apply_live();
+        }
+        if changed {
+            self.status.set_message(&format!(
+                "Warning: {} has changed since it was imported; imported again as it is now",
+                path.display()
+            ));
         }
     }
 
@@ -499,7 +791,10 @@ impl CutCraftApp {
             }
             "segment_3d_model_file" => {
                 // the segmenting form, on an STL picked first
-                if let Some(path) = file_dialog().add_filter("STL", &["stl"]).pick_file() {
+                if let Some(path) = file_dialog()
+                    .add_filter("STL or OBJ", &["stl", "obj"])
+                    .pick_file()
+                {
                     self.start_command("segment_3d_model");
                     if let Some(form) = self.form.as_mut().filter(|f| f.id == "segment_3d_model") {
                         form.params["file"] = Value::from(path.display().to_string());
@@ -615,58 +910,136 @@ impl CutCraftApp {
                 }
             }
             "save_toolpaths" => {
-                let post = match self.output_post() {
-                    Ok(post) => post,
-                    Err(e) => return self.status.set_message(&e),
-                };
-                let problems: Vec<String> = self
-                    .doc
-                    .toolpaths
-                    .values()
-                    .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
-                    .collect();
-                let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
-                if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
-                    return self.status.set_message("Toolpaths not saved");
-                }
-                let thinned = self.options.toolpaths.thinned(&self.doc);
-                let extension = post.extension.clone();
-                let dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
-                if let Some(path) = dialog.save_file() {
-                    let path = path.with_extension(&extension);
-                    let job = self.session.path.as_deref();
-                    let result = match self.doc.tiling {
-                        // one file per tile, each tile moved to the job's corner
-                        Some(tiling) => {
-                            let tiles = tiling.tiles(self.doc.job.area());
-                            tiles.iter().enumerate().try_for_each(|(n, &tile)| {
-                                let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-                                let named = path
-                                    .with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
-                                files::save_through(
-                                    &post,
-                                    &self.slots(),
-                                    &tiling.tiled(&thinned, tile),
-                                    &named,
-                                    job,
-                                )
-                            })
-                        }
-                        None => files::save_through(&post, &self.slots(), &thinned, &path, job),
-                    };
-                    let told = if problems.is_empty() || ask {
-                        String::new()
-                    } else {
-                        format!(" (check before cutting: {})", problems.join("; "))
-                    };
-                    self.status.set_message(&result.map_or_else(
-                        |e| e,
-                        |()| format!("Saved toolpaths to {}{told}", path.display()),
-                    ));
-                }
+                self.save_form = Some(SaveForm {
+                    mode: files::SaveMode::VisibleToOneFile,
+                    group: false,
+                    post: None,
+                    add_side: self.doc.job.double_sided.is_some(),
+                });
             }
             _ => unreachable!("not a toolpath action: {id}"),
         }
+    }
+
+    /// The posts of the active machine that suit this job (flat, or wrapping its side), for
+    /// Save Toolpaths to choose from; none without a machine (Cut Craft's own is used).
+    pub(super) fn post_choices(&self) -> Vec<String> {
+        let wraps = self.doc.job.rotary.map(|r| match r.along {
+            cut_craft_core::document::Along::X => "Y",
+            cut_craft_core::document::Along::Y => "X",
+        });
+        self.machines.active().map_or_else(Vec::new, |machine| {
+            machine
+                .posts
+                .iter()
+                .filter(|name| {
+                    self.posts
+                        .load(name)
+                        .is_ok_and(|p| p.wraps() == wraps && (wraps.is_none() || machine.rotary))
+                })
+                .cloned()
+                .collect()
+        })
+    }
+
+    /// Save Toolpaths' Save: the checks before cutting, a file name, then each file of the
+    /// form's plan through its post (and each tile, when the job is tiled).
+    pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
+        let post = match form.post.as_deref() {
+            Some(name) => self.posts.load(name),
+            None => self.output_post(),
+        };
+        let post = match post {
+            Ok(post) => post,
+            Err(e) => return self.status.set_message(&e),
+        };
+        let plan = match files::save_plan(
+            &self.doc,
+            form.mode,
+            self.selected_toolpath,
+            self.selected_group.as_deref(),
+            form.group,
+        ) {
+            Ok(plan) => plan,
+            Err(e) => return self.status.set_message(&e),
+        };
+        let saving: Vec<EntityId> = plan.iter().flatten().copied().collect();
+        let problems: Vec<String> = saving
+            .iter()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
+            .collect();
+        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
+            return self.status.set_message("Toolpaths not saved");
+        }
+        let extension = post.extension.clone();
+        let mut dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
+        // a group saves under its own name, as Aspire's does
+        if form.mode == files::SaveMode::Selected
+            && let Some(group) = &self.selected_group
+        {
+            dialog = dialog.set_file_name(format!("{group}.{extension}"));
+        }
+        let Some(path) = dialog.save_file() else {
+            return;
+        };
+        let told = if problems.is_empty() || ask {
+            String::new()
+        } else {
+            format!(" (check before cutting: {})", problems.join("; "))
+        };
+        let result = self.save_toolpaths_to(form, &post, &path.with_extension(&extension));
+        self.status
+            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+    }
+
+    /// Saves the form's plan through `post` at `path`: each file, or each tile of each file
+    /// when the job is tiled, and says what was saved.
+    pub(super) fn save_toolpaths_to(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<String, String> {
+        let plan = files::save_plan(
+            &self.doc,
+            form.mode,
+            self.selected_toolpath,
+            self.selected_group.as_deref(),
+            form.group,
+        )?;
+        let thinned = self.options.toolpaths.thinned(&self.doc);
+        let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
+            if self.doc.bottom_side {
+                "Bottom"
+            } else {
+                "Top"
+            },
+        );
+        let job = self.session.path.as_deref();
+        let slots = self.slots();
+        let parts = files::save_files(post, &thinned, &plan, path, side)?;
+        for (path, part) in &parts {
+            match self.doc.tiling {
+                // one file per tile, each tile moved to the job's corner
+                Some(tiling) => {
+                    let tiles = tiling.tiles(self.doc.job.area());
+                    for (n, &tile) in tiles.iter().enumerate() {
+                        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+                        let extension = path.extension().unwrap_or_default().to_string_lossy();
+                        let named =
+                            path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
+                        files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
+                    }
+                }
+                None => files::save_through(post, &slots, part, path, job)?,
+            }
+        }
+        Ok(match parts.len() {
+            1 => format!("Saved toolpaths to {}", parts[0].0.display()),
+            n => format!("Saved {n} toolpath files beside {}", path.display()),
+        })
     }
 
     /// The post toolpaths are saved through: the active machine's default when it suits the
@@ -870,6 +1243,7 @@ impl CutCraftApp {
 
     /// Runs a registered command: straight away if it has no settings, else opens its form.
     pub(super) fn start_command(&mut self, id: &str) {
+        self.import_level = None;
         // a new job's setup is accepted, as OK would, before another form takes its place:
         // the new-job screen shows only that form, so it would be left bare (issue #17)
         if id != "job_setup" && self.form.as_ref().is_some_and(|f| f.new_job) {
@@ -902,6 +1276,7 @@ impl CutCraftApp {
             if offered != "both" {
                 params["model_type"] = Value::from(offered);
             }
+            params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
         // a toolpath's form in Aspire's order
         let fields = if fields.iter().any(|f| f.key == "tool") {
@@ -1104,7 +1479,8 @@ impl CutCraftApp {
             self.simulation,
             self.simulation_coarse,
             self.fine_3d,
-        ) = (None, None, None, None);
+            self.surface_gpu,
+        ) = (None, None, None, None, None);
         self.clear_recovery();
     }
 
@@ -1700,6 +2076,7 @@ impl CutCraftApp {
             edits: taken.edits.into_iter().chain(made.edits).collect(),
             notes: made.notes,
         };
+        let change = self.onto_import_level(id, change);
         let (toolpaths, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)
@@ -1710,6 +2087,90 @@ impl CutCraftApp {
         Ok(())
     }
 
+    /// Toolpaths ▸ Create Job Sheet: the page for each sheet with toolpaths (and the side
+    /// worked on), in the Job Setup Sheet Editor's style, beside the file named.
+    pub(super) fn create_job_sheet(&mut self) {
+        let Some(path) = file_dialog().add_filter("Job sheet", &["html"]).save_file() else {
+            return;
+        };
+        self.write_job_sheets(&path);
+    }
+
+    /// The job sheets written beside `path`, one a page, the page's suffix after its name.
+    pub(super) fn write_job_sheets(&mut self, path: &std::path::Path) {
+        let stem = path
+            .file_stem()
+            .map_or_else(|| "job".into(), |s| s.to_string_lossy().into_owned());
+        let result = fmt_create_job_sheet::sheets(&self.doc, &self.options.job_sheet)
+            .map_err(|e| e.to_string())
+            .and_then(|pages| {
+                for (suffix, html) in &pages {
+                    let file = path.with_file_name(format!("{stem}{suffix}.html"));
+                    cut_craft_core::file::write_atomic(&file, html.as_bytes())
+                        .map_err(|e| format!("could not write {}: {e}", file.display()))?;
+                }
+                Ok(pages.len())
+            });
+        self.status.set_message(&result.map_or_else(
+            |e| e,
+            |n| format!("Saved {n} job sheet{}", if n == 1 { "" } else { "s" }),
+        ));
+    }
+
+    /// Edit Object (E): the one selected vector, if a drawing tool drew it, with that tool's
+    /// id and the settings that draw it again.
+    pub(super) fn object_to_edit(&self) -> Option<(EntityId, &'static str, Value)> {
+        let [id] = self.doc.selection.iter().copied().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let path = self.doc.vectors.get(&id)?;
+        let (command, params) = self.registry.drawn_by(&self.doc, path)?;
+        Some((id, command, params))
+    }
+
+    /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws
+    /// that shape rather than drawing another, as Aspire's E and Shift-click do.
+    pub(super) fn edit_shape(&mut self, id: EntityId, command: &'static str, params: Value) {
+        if self.form.as_ref().is_none_or(|f| f.id != command) {
+            self.start_command(command);
+        }
+        self.doc.selection = [id].into();
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == command) {
+            form.params = params.clone();
+            form.drawn = Some(id);
+            form.applied = Some(params);
+        }
+        let label = self.registry.get(command).map_or("", |c| c.meta().label);
+        self.status.set_message(&format!(
+            "Editing the shape in {label}: change the form to change it"
+        ));
+    }
+
+    /// After Swap Sides, a double-sided preview turned over with the job: its other side on
+    /// top, the side that was up underneath.
+    fn turn_preview_over(&mut self) {
+        self.finish_playback();
+        let Some(mut top) = self.simulation.take() else {
+            return;
+        };
+        let under = top.other_side.take();
+        self.simulation = under.map(|under| {
+            let mut now_up = std::sync::Arc::unwrap_or_clone(under);
+            now_up.other_side = Some(std::sync::Arc::new(top));
+            now_up
+        });
+        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+    }
+
+    /// `change` with the components Orientate 3D Model makes put on the level clipart was
+    /// imported to, if it was (Import to Level).
+    fn onto_import_level(&self, id: &str, change: Change) -> Change {
+        match self.import_level {
+            Some(level) if id == "orientate_3d_model" => crate::clipart::onto_level(change, level),
+            _ => change,
+        }
+    }
+
     /// Runs a command and records it for undo.
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
         self.crossings_allowed(id, params)?;
@@ -1717,10 +2178,29 @@ impl CutCraftApp {
             .registry
             .get(id)
             .expect("only registered commands are applied");
-        let change = cmd.run_json(&self.doc, params).map_err(|e| e.to_string())?;
+        // a toolpath with a Vector Selector is made from whatever vectors pass it
+        let change = match cut_craft_core::selector::Selector::of(params) {
+            Some(selector) => {
+                let mut sources = self.doc.clone();
+                sources.selection = selector.picked(&self.doc).into_iter().collect();
+                if sources.selection.is_empty() {
+                    return Err("no vectors pass the Vector Selector".into());
+                }
+                cmd.run_json(&sources, params)
+            }
+            None => cmd.run_json(&self.doc, params),
+        }
+        .map_err(|e| e.to_string())?;
         // rest machining, for any toolpath whose settings ask for it
         let change = cut_craft_core::rest::with_rest(&self.doc.job, params, change)
             .map_err(|e| e.to_string())?;
+        let change = cut_craft_core::selector::kept(params, change);
+        let change = self.onto_import_level(id, change);
+        // a toolpath made while a group is picked in the list joins it
+        let change = match &self.selected_group {
+            Some(group) => change.into_toolpath_group(group),
+            None => change,
+        };
         let (made, notes) = (change.toolpaths_made(), change.notes.clone());
         self.history
             .apply(&mut self.doc, change)
@@ -1742,22 +2222,109 @@ impl CutCraftApp {
                 .set_message(&format!("Each strand makes {turns:.2} revolutions"));
         }
         self.warn(&made, &notes);
+        if id == "swap_sides" {
+            self.turn_preview_over();
+        }
         Ok(())
     }
 
+    /// The Toolpath Summary's rows: each toolpath with its estimated time and notes.
+    fn summary_rows(&self) -> Vec<super::SummaryRow> {
+        self.doc
+            .toolpaths
+            .iter()
+            .map(|(&id, t)| super::SummaryRow {
+                id,
+                name: t.name.clone(),
+                minutes: self.estimated_minutes(t),
+                visible: t.visible,
+                notes: t.summary_notes().to_owned(),
+            })
+            .collect()
+    }
+
+    /// A toolpath's time for the Toolpath Summary: at the rapid rate, allowing for the
+    /// active machine's accelerations when asked, times the scale factor.
+    pub(super) fn estimated_minutes(&self, t: &cut_craft_core::toolpath::Toolpath) -> f64 {
+        let s = &self.summary;
+        let minutes = match self.machines.active().filter(|_| s.acceleration) {
+            Some(m) => t.machining_minutes_accelerating(s.rapid, m.acceleration),
+            None => t.machining_minutes(s.rapid),
+        };
+        minutes * s.scale
+    }
+
+    /// Moves the picked nodes by `by`; across a mirror line (H: up and down through the
+    /// selection's middle; V: across it) the nodes on the far side move the other way, so
+    /// mirrored pairs stay mirrored.
+    pub(super) fn nudge_nodes(&mut self, by: Point) {
+        use cut_craft_core::nodes::{move_node, node_near};
+        let Some(middle) = self
+            .doc
+            .selection_bounds()
+            .map(cut_craft_core::geometry::Rect::center)
+        else {
+            return;
+        };
+        let [mirror_h, mirror_v] = self.node_mirror;
+        let delta = |at: Point| {
+            Point::new(
+                if mirror_h && at.x > middle.x {
+                    -by.x
+                } else {
+                    by.x
+                },
+                if mirror_v && at.y > middle.y {
+                    -by.y
+                } else {
+                    by.y
+                },
+            )
+        };
+        let mut c = Change::builder(&self.doc);
+        let vectors: std::collections::BTreeSet<EntityId> =
+            self.picked_nodes.iter().map(|n| n.vector).collect();
+        for vector in vectors {
+            let Some(original) = self.doc.vectors.get(&vector) else {
+                continue;
+            };
+            let mut path = original.clone();
+            for n in self.picked_nodes.iter().filter(|n| n.vector == vector) {
+                let at = Point::from(n.at);
+                if let Some(k) = node_near(original, at, n.reach.max(1e-3)) {
+                    path = move_node(&path, k, at + delta(at));
+                }
+            }
+            c.replace(vector, path);
+        }
+        let change = c.finish();
+        match self.history.apply(&mut self.doc, change) {
+            Ok(()) => {
+                for n in &mut self.picked_nodes {
+                    let at = Point::from(n.at) + delta(Point::from(n.at));
+                    n.at = cut_craft_core::params::Xy::new(at.x, at.y);
+                }
+            }
+            Err(e) => self.status.set_message(&e.to_string()),
+        }
+    }
+
     /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
-    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl + Shift).
+    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl +
+    /// Shift); with Ctrl alone, by Snapping Options' Fixed Nudge Distance.
     pub(super) fn nudge(&mut self, ctx: &egui::Context) {
         if self.screen != Screen::Job || ctx.egui_wants_keyboard_input() {
             return;
         }
         let (shift, ctrl) = ctx.input(|i| (i.modifiers.shift, i.modifiers.command));
-        let share = match (shift, ctrl) {
-            (true, true) => 0.1,
-            (true, false) => 0.5,
-            _ => 1.0,
+        let g = self.snap.grid_spacing;
+        let step = match (shift, ctrl) {
+            (true, true) => 0.1 * g,
+            (true, false) => 0.5 * g,
+            // Snapping Options' Fixed Nudge Distance
+            (false, true) => self.snap.fixed_nudge,
+            (false, false) => g,
         };
-        let step = self.snap.grid_spacing * share;
         let by = ctx.input(|i| {
             [
                 (Key::ArrowLeft, -1.0, 0.0),
@@ -1769,7 +2336,15 @@ impl CutCraftApp {
             .filter(|(key, ..)| i.key_pressed(*key))
             .fold(Point::ZERO, |sum, &(_, x, y)| sum + Point::new(x, y) * step)
         });
-        if by == Point::ZERO || self.doc.selection_bounds().is_none() {
+        if by == Point::ZERO {
+            return;
+        }
+        // node editing with nodes picked: the arrows move those, mirrored across the lines
+        if self.view_tool == Some(super::ViewTool::NodeEdit) && !self.picked_nodes.is_empty() {
+            self.nudge_nodes(by);
+            return;
+        }
+        if self.doc.selection_bounds().is_none() {
             return;
         }
         let params =
@@ -1802,6 +2377,18 @@ impl CutCraftApp {
             if let Some(paths) = pasted.and_then(|text| serde_json::from_str(&text).ok()) {
                 self.clipboard = paths;
                 self.invoke(ctx, "paste");
+            }
+        }
+        // node editing with nodes picked: H and V toggle the mirror lines, not Mirror
+        if !ctx.egui_wants_keyboard_input()
+            && self.view_tool == Some(super::ViewTool::NodeEdit)
+            && !self.picked_nodes.is_empty()
+        {
+            for (key, line) in [(Key::H, 0), (Key::V, 1)] {
+                let shortcut = KeyboardShortcut::new(Modifiers::NONE, key);
+                if ctx.input_mut(|i| i.consume_shortcut(&shortcut)) {
+                    self.node_mirror[line] = !self.node_mirror[line];
+                }
             }
         }
         // single-letter shortcuts must not fire while typing in a form field
@@ -2438,19 +3025,6 @@ impl CutCraftApp {
                 open.label
             });
         });
-        // a list of tools in running order (rest machining), picked from the database
-        let mut earlier = None;
-        if open.params.get("tools").is_some_and(Value::is_array) {
-            egui::ComboBox::from_label("Add a tool from the database")
-                .selected_text("")
-                .show_ui(ui, |ui| {
-                    for tool in &self.tools.tools {
-                        if ui.selectable_label(false, &tool.name).clicked() {
-                            earlier = Some(tool.name.clone());
-                        }
-                    }
-                });
-        }
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
         let picture = |path: &str| {
@@ -2463,8 +3037,30 @@ impl CutCraftApp {
         let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
         // the tool block, where the form has its tool: what was picked, and Edit…
         let asked = std::cell::RefCell::new((None, false));
+        // a tool in a list whose Edit… was clicked
+        let edit_listed = std::cell::RefCell::new(None);
+        let listed = std::cell::Cell::new(false);
         let tools = &self.tools;
-        let tool = |ui: &mut egui::Ui, params: &mut Value| {
+        let layers: Vec<String> = self.doc.layers.iter().map(|l| l.name.clone()).collect();
+        let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
+            if key != "tool" {
+                // a list of tools, each picked as the form's own tool is
+                ui.group(|ui| {
+                    ui.set_width(ui.available_width());
+                    ui.strong(match key {
+                        "clearance_tools" => "Clearance Tools",
+                        _ => "Tools",
+                    });
+                    let largest_first = key == "clearance_tools";
+                    let (changed, edit) =
+                        tool_list(ui, key, &mut params[key], tools, &slots, largest_first);
+                    listed.set(listed.get() | changed);
+                    if edit.is_some() {
+                        *edit_listed.borrow_mut() = edit;
+                    }
+                });
+                return;
+            }
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
@@ -2472,9 +3068,12 @@ impl CutCraftApp {
             });
             // every toolpath that cuts with a tool can rest machine after the tools that cut
             // before it (3D Finishing has its own, as `after`)
-            if params.get("after").is_none() {
-                rest_section(ui, params, &tools.tools);
+            if params.get("after").is_none()
+                && let Some(edit) = rest_section(ui, params, tools, &slots)
+            {
+                *edit_listed.borrow_mut() = Some(edit);
             }
+            selector_section(ui, params, &layers);
         };
         let look = form::Look {
             units,
@@ -2482,28 +3081,17 @@ impl CutCraftApp {
             material: form::material(&self.doc, units),
             tool: Some(&tool),
         };
-        let pages = form::pages(&open.fields);
-        open.dirty |= if pages > 1 {
-            form::show_page(ui, &open.fields, open.step, &mut open.params, &look)
-        } else {
-            form::show(ui, &open.fields, &mut open.params, &look)
-        };
-        // the Position page's Update Undercuts: the model is judged again (it already follows
-        // every change, so this is the same judging once more)
-        if open.step > 1 && open.id == "orientate_3d_model" {
-            let on = open.params["show_undercuts"].as_bool().unwrap_or(false);
-            let update = ui
-                .add_enabled(on, egui::Button::new("Update Undercuts"))
-                .on_hover_text("Judge again what a cutter from above cannot reach")
-                .on_disabled_hover_text("Tick Highlight undercuts first");
-            open.dirty |= update.clicked();
-        }
-        let (chosen, edit_tool) = asked.into_inner();
+        open.dirty |= show_form(ui, open, &look);
+        open.dirty |= listed.get();
+        let (id, new_job) = (open.id, open.new_job);
         if let Some(error) = &open.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
+        let (chosen, edit_tool) = asked.into_inner();
+        let edit_listed = edit_listed.into_inner();
+        self.form_extras(ui, id);
         // Job Setup for a new job keeps its buttons pinned under the panel instead
-        if !open.new_job {
+        if !new_job {
             self.form_buttons(ui);
             ui.separator();
         }
@@ -2511,20 +3099,120 @@ impl CutCraftApp {
             self.choose_tool(&name);
         }
         if edit_tool {
-            self.edit_form_tool(ui.ctx());
+            let name = self
+                .form
+                .as_ref()
+                .and_then(|f| f.params["tool"]["name"].as_str().map(str::to_owned));
+            self.edit_tool(ui.ctx(), name);
         }
-        if let Some(name) = earlier {
-            self.add_earlier_tool(&name);
+        if edit_listed.is_some() {
+            self.edit_tool(ui.ctx(), edit_listed);
         }
     }
 
-    /// Adds a database tool (cutting the active material) to the end of the open form's
-    /// tool list.
-    pub(super) fn add_earlier_tool(&mut self, name: &str) {
-        if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name))
-            && let Some(tools) = form.params.get_mut("tools").and_then(Value::as_array_mut)
-        {
-            tools.push(serde_json::to_value(tool).expect("tools serialize"));
+    /// Texture Toolpath's Load… or Save…: the texture as a `.vtexture` file, in the textures
+    /// folder unless taken elsewhere.
+    pub(super) fn texture_file(&mut self, save: bool) {
+        let extension = cmd_texture_toolpath::TEXTURE_EXTENSION;
+        let picked = if save {
+            texture_dialog()
+                .set_file_name(format!("texture.{extension}"))
+                .save_file()
+                .map(|path| path.with_extension(extension))
+        } else {
+            texture_dialog().pick_file()
+        };
+        let Some(path) = picked else { return };
+        let result = if save {
+            self.save_texture(&path)
+        } else {
+            self.load_texture(&path)
+        };
+        if let Err(e) = result {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Writes the open Texture Toolpath form's texture to `path`.
+    pub(super) fn save_texture(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let texture = self.texture_params()?.to_vtexture();
+        std::fs::write(path, texture)
+            .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+        self.status
+            .set_message(&format!("Saved texture {}", path.display()));
+        Ok(())
+    }
+
+    /// Reads the texture in `path` into the open Texture Toolpath form; its name, tool,
+    /// seed and boundary offset stay.
+    pub(super) fn load_texture(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        let params = self.texture_params()?.with_vtexture(&text)?;
+        let Some(form) = &mut self.form else {
+            return Err("no Texture Toolpath form is open".into());
+        };
+        form.params = serde_json::to_value(params).expect("texture settings serialise");
+        form.dirty = true;
+        self.status
+            .set_message(&format!("Loaded texture {}", path.display()));
+        Ok(())
+    }
+
+    /// The open Texture Toolpath form's settings.
+    fn texture_params(&self) -> Result<cmd_texture_toolpath::Params, String> {
+        let form = self.form.as_ref().filter(|f| f.id == "texture_toolpath");
+        let form = form.ok_or("no Texture Toolpath form is open")?;
+        serde_json::from_value(form.params.clone())
+            .map_err(|e| format!("the form's settings do not read: {e}"))
+    }
+
+    /// What some forms have under their fields: Texture Toolpath's Load / Save Texture, and
+    /// Quick Engrave's Immediate Output.
+    fn form_extras(&mut self, ui: &mut egui::Ui, id: &str) {
+        match id {
+            "texture_toolpath" => match texture_buttons(ui) {
+                (true, _) => self.texture_file(false),
+                (_, true) => self.texture_file(true),
+                _ => {}
+            },
+            "draw_text" => self.spelling(ui),
+            "sculpt" => {
+                let (load, round) = ui
+                    .horizontal(|ui| {
+                        let load = ui
+                            .button("Load Brush…")
+                            .on_hover_text(
+                                "A component saved as a sculpting brush, for Deposit and Remove",
+                            )
+                            .clicked();
+                        let round = ui.button("Round Brush").clicked();
+                        (load, round)
+                    })
+                    .inner;
+                let brush = if round {
+                    Some(String::new())
+                } else if load {
+                    brush_dialog().pick_file().map(|p| p.display().to_string())
+                } else {
+                    None
+                };
+                if let (Some(brush), Some(form)) = (brush, self.form.as_mut()) {
+                    form.params["brush"] = brush.into();
+                }
+            }
+            "quick_engrave_toolpath" => {
+                let choices = self.post_choices();
+                let default = self.output_post().map(|p| p.name);
+                let two_sided = self.doc.job.double_sided.is_some();
+                let ready = self.immediate_output_toolpath().is_some();
+                let output = &mut self.immediate_output;
+                if super::views::immediate_output(ui, output, &default, &choices, two_sided, ready)
+                {
+                    self.immediate_save();
+                }
+            }
+            _ => {}
         }
     }
 
@@ -2551,11 +3239,7 @@ impl CutCraftApp {
     }
 
     /// The Tool Database, opened on the open form's tool; saving it updates the form.
-    pub(super) fn edit_form_tool(&mut self, ctx: &egui::Context) {
-        let name = self
-            .form
-            .as_ref()
-            .and_then(|f| f.params["tool"]["name"].as_str().map(str::to_owned));
+    pub(super) fn edit_tool(&mut self, ctx: &egui::Context, name: Option<String>) {
         self.invoke(ctx, "tool_database");
         if let Some(manager) = &mut self.tool_manager {
             manager.pick = name
@@ -2708,24 +3392,18 @@ impl CutCraftApp {
         } else {
             vec![]
         };
-        let times: Vec<(String, f64, bool)> = self
-            .doc
-            .toolpaths
-            .values()
-            .map(|t| {
-                (
-                    t.name.clone(),
-                    t.machining_minutes(self.summary.0) * self.summary.1,
-                    t.visible,
-                )
-            })
-            .collect();
+        let rows = self.summary_rows();
+        let mut noted = None;
+        let machine = self
+            .machines
+            .active()
+            .map(|m| (m.name.clone(), m.acceleration));
         let summary = &mut self.summary;
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique(("info", &title)), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
             Info::Help(_) => unreachable!("returned above"),
-            Info::Summary => summary_table(ui, &times, summary, units),
+            Info::Summary => noted = summary_table(ui, &rows, summary, units, machine.clone()),
             Info::About => {
                 ui.heading("Cut Craft");
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
@@ -2762,6 +3440,19 @@ impl CutCraftApp {
                 });
             }
         });
+        // Apply under the summary's notes keeps them with their toolpath
+        if let Some((id, notes)) = noted
+            && let Some(t) = self.doc.toolpaths.get(&id)
+        {
+            let name = t.name.clone();
+            let params = serde_json::json!({
+                "toolpath": id, "name": name, "visible": t.visible, "notes": notes
+            });
+            match self.apply("toolpath_properties", &params) {
+                Ok(()) => self.status.set_message(&format!("Notes kept with {name}")),
+                Err(e) => self.status.set_message(&e),
+            }
+        }
         if !open {
             self.info = None;
         }
@@ -2778,4 +3469,44 @@ pub(super) fn contributors() -> Vec<(&'static str, &'static str, &'static str)> 
         })
         .filter(|(login, ..)| !login.is_empty())
         .collect()
+}
+
+/// Texture Toolpath's Load… and Save…; whether each was clicked.
+fn texture_buttons(ui: &mut egui::Ui) -> (bool, bool) {
+    let mut clicked = (false, false);
+    ui.horizontal(|ui| {
+        clicked.0 = ui
+            .button("Load Texture...")
+            .on_hover_text("A texture saved before, from the textures folder or anywhere")
+            .clicked();
+        clicked.1 = ui
+            .button("Save Texture...")
+            .on_hover_text("Keep these texture settings to use again")
+            .clicked();
+    });
+    clicked
+}
+
+/// The open form's fields, the page shown of a form with several, and the Position page's
+/// Update Undercuts; true when anything changed.
+fn show_form(ui: &mut egui::Ui, open: &mut OpenForm, look: &form::Look) -> bool {
+    let changed = if form::pages(&open.fields) > 1 {
+        form::show_page(ui, &open.fields, open.step, &mut open.params, look)
+    } else {
+        form::show(ui, &open.fields, &mut open.params, look)
+    };
+    changed | update_undercuts(ui, open)
+}
+
+/// The Position page's Update Undercuts: the model is judged again (it already follows every
+/// change, so this is the same judging once more); true when clicked.
+fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
+    if open.step < 2 || open.id != "orientate_3d_model" {
+        return false;
+    }
+    let on = open.params["show_undercuts"].as_bool().unwrap_or(false);
+    ui.add_enabled(on, egui::Button::new("Update Undercuts"))
+        .on_hover_text("Judge again what a cutter from above cannot reach")
+        .on_disabled_hover_text("Tick Highlight undercuts first")
+        .clicked()
 }

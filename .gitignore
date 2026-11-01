@@ -1,6 +1,7 @@
 target/
 re/extracted/
 re/re/
+re/courses/
 __pycache__/
 /config/
 /output/

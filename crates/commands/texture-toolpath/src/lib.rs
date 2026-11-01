@@ -12,6 +12,7 @@ use cut_craft_core::toolpath::{
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub struct TextureToolpath;
 
@@ -173,6 +174,74 @@ impl Params {
                 follow(&cut, safe)
             })
             .collect()
+    }
+}
+
+/// Texture settings files: the `.vtexture` text files the vendor keeps in its
+/// `VectorTextures` folder, so a texture saved by either program loads in the other.
+pub const TEXTURE_EXTENSION: &str = "vtexture";
+
+/// The first line of every `.vtexture` file.
+const TEXTURE_HEADER: &str = "Vectric Vector Texture Definition";
+
+impl Params {
+    /// The texture as a `.vtexture` file: its lengths, depths, overlap and angle, each with
+    /// its percentage; not the name, tool, seed or boundary offset.
+    #[must_use]
+    pub fn to_vtexture(&self) -> String {
+        // ponytail: Type 1, Units 1 and the second numbers of Stepover and Angle as in every
+        // file seen (all in millimetres); what else they can hold is unknown (re/SPEC.md)
+        format!(
+            "{TEXTURE_HEADER}\r\nVersion: 1\r\nType: 1\r\nUnits: 1\r\nToolRadius: {:.5}\r\n\
+             Length: {:.5} {:.0}\r\nDepth: {:.5} {:.0}\r\nStepover: {:.5} 0\r\n\
+             Overlap: {:.5} {:.0}\r\nAngle: {:.5} 0\r\n",
+            self.tool.diameter / 2.0,
+            self.max_cut_length,
+            self.min_length_percent,
+            self.max_cut_depth,
+            self.min_depth_percent,
+            self.stepover,
+            self.max_overlap_percent / 100.0,
+            self.overlap_variation_percent,
+            self.angle,
+        )
+    }
+
+    /// These settings with the texture in a `.vtexture` file over them.
+    pub fn with_vtexture(&self, text: &str) -> Result<Self, String> {
+        let mut lines = text.lines().map(str::trim);
+        if lines.next() != Some(TEXTURE_HEADER) {
+            return Err("not a texture settings file".into());
+        }
+        let values: HashMap<&str, Vec<f64>> = lines
+            .filter_map(|line| {
+                let (key, numbers) = line.split_once(':')?;
+                let numbers = numbers.split_whitespace().filter_map(|n| n.parse().ok());
+                Some((key.trim(), numbers.collect()))
+            })
+            .collect();
+        // a setting's value and the percentage after it
+        let pair = |key: &str| -> Result<(f64, f64), String> {
+            let v = values.get(key).filter(|v| !v.is_empty());
+            let v = v.ok_or_else(|| format!("no {key} in the texture file"))?;
+            Ok((v[0], v.get(1).copied().unwrap_or(0.0)))
+        };
+        let (max_cut_length, min_length_percent) = pair("Length")?;
+        let (max_cut_depth, min_depth_percent) = pair("Depth")?;
+        let (stepover, _) = pair("Stepover")?;
+        let (overlap, overlap_variation_percent) = pair("Overlap")?;
+        let (angle, _) = pair("Angle")?;
+        Ok(Self {
+            max_cut_length,
+            min_length_percent,
+            max_cut_depth,
+            min_depth_percent,
+            stepover,
+            max_overlap_percent: overlap * 100.0,
+            overlap_variation_percent,
+            angle,
+            ..self.clone()
+        })
     }
 }
 
@@ -386,6 +455,52 @@ mod tests {
         assert!(
             z[0].abs() < 1e-9 && z[z.len() - 1].abs() < 1e-9,
             "dips in and out"
+        );
+    }
+
+    #[test]
+    fn a_texture_saves_to_a_vtexture_file_and_loads_from_one() {
+        let p = Params {
+            max_cut_length: 20.0,
+            min_length_percent: 66.0,
+            max_cut_depth: 1.2,
+            min_depth_percent: 57.0,
+            stepover: 3.0,
+            max_overlap_percent: 30.0,
+            overlap_variation_percent: 62.0,
+            angle: 15.0,
+            ..Params::default()
+        };
+        let text = p.to_vtexture();
+        assert!(
+            text.starts_with("Vectric Vector Texture Definition\r\n"),
+            "{text}"
+        );
+        assert!(text.contains("\r\nOverlap: 0.30000 62\r\n"), "{text}");
+        let q = Params {
+            name: "Lid".into(),
+            seed: 7,
+            ..Params::default()
+        }
+        .with_vtexture(&text)
+        .unwrap();
+        assert_eq!(q.to_vtexture(), text, "the same texture again");
+        assert!((q.max_overlap_percent - 30.0).abs() < 1e-9);
+        assert_eq!((q.name.as_str(), q.seed), ("Lid", 7), "the form's own stay");
+    }
+
+    #[test]
+    fn a_file_that_is_no_texture_or_lacks_a_setting_is_refused() {
+        let p = Params::default();
+        assert_eq!(
+            p.with_vtexture("Hello\r\nLength: 1 1").unwrap_err(),
+            "not a texture settings file"
+        );
+        let short = "Vectric Vector Texture Definition\nVersion: 1\nLength: 10 50\nDepth: 2 50\n\
+                     Stepover: 4 0\nAngle: 0 0\n";
+        assert_eq!(
+            p.with_vtexture(short).unwrap_err(),
+            "no Overlap in the texture file"
         );
     }
 }

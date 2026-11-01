@@ -36,6 +36,7 @@ fn with_tool(tool: Tool, points: &[(f64, f64, f64)]) -> Toolpath {
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     }
 }
 
@@ -517,6 +518,68 @@ fn dropping_along_lines_makes_a_run_per_line_inside_split_at_the_ceiling() {
 }
 
 #[test]
+fn a_piece_cut_free_is_removed_whole_and_what_it_was_cut_from_stays() {
+    let mut m = material();
+    // a 40 mm square cut right through, round (30, 30)..(70, 70)
+    let square = [
+        (30.0, 30.0, -25.0),
+        (70.0, 30.0, -25.0),
+        (70.0, 70.0, -25.0),
+        (30.0, 70.0, -25.0),
+        (30.0, 30.0, -25.0),
+    ];
+    m.cut(&toolpath(&square));
+    // a double-click on the waste outside takes the waste, not the part
+    let removed = m.remove_piece(Point::new(5.0, 5.0));
+    assert!(removed > 0);
+    assert!(
+        m.at(Point::new(5.0, 95.0)).unwrap().is_nan(),
+        "all the waste"
+    );
+    assert_eq!(depth_at(&m, 50.0, 50.0), 0.0, "the part stays");
+    // clicking a cut-through cell, or one already gone, removes nothing
+    assert_eq!(m.remove_piece(Point::new(30.0, 50.0)), 0);
+    assert_eq!(m.remove_piece(Point::new(5.0, 5.0)), 0);
+    // a later cut does not bring removed material back
+    m.cut(&toolpath(&[(5.0, 5.0, -2.0), (15.0, 5.0, -2.0)]));
+    assert!(m.at(Point::new(10.0, 5.0)).unwrap().is_nan());
+    // the part is a piece of its own too
+    assert!(m.remove_piece(Point::new(50.0, 50.0)) > 0);
+    assert!(m.heights.iter().all(|h| h.is_nan() || *h <= m.bottom));
+}
+
+#[test]
+fn the_other_side_s_cuts_show_on_the_underside_and_cut_through_leaves_nothing() {
+    let mut top = material();
+    top.cut(&toolpath(&[(50.0, 10.0, -1.0), (50.0, 90.0, -1.0)]));
+    // the other side, turned over left to right: its x = 20 is this side's x = 80
+    let mut other = material();
+    other.cut(&toolpath(&[(20.0, 10.0, -5.0), (20.0, 90.0, -5.0)]));
+    other.cut(&toolpath(&[(50.0, 10.0, -20.0), (50.0, 90.0, -20.0)]));
+    top.other_side = Some(std::sync::Arc::new(other));
+    let shown = top.with_underside(|p| Point::new(100.0 - p.x, p.y));
+    // half-millimetre cells: x mm is column 2x
+    let cell = |x: usize, y: usize| 2 * y * shown.columns + 2 * x;
+    assert!(
+        (shown.under[cell(80, 50)] - -15.0).abs() < 1e-9,
+        "5 up from the bottom"
+    );
+    assert!(
+        (shown.under[cell(30, 50)] - -20.0).abs() < 1e-9,
+        "uncut: the bottom"
+    );
+    let through = cell(50, 50);
+    assert!(
+        shown.under[through].is_nan() && shown.heights[through].is_nan(),
+        "a slot through"
+    );
+    assert!(
+        material().with_underside(|p| p).under.is_empty(),
+        "one-sided: flat"
+    );
+}
+
+#[test]
 fn a_tool_over_a_slope_leaves_the_slope_wherever_it_can_rest_on_it() {
     // the surface falls 0.01 mm a row: an end mill rests on the highest cell under it and
     // its edge comes back down to the slope at every cell its reach spans, so what it leaves
@@ -545,4 +608,47 @@ fn a_tool_over_a_slope_leaves_the_slope_wherever_it_can_rest_on_it() {
         left.heights[bottom] > model.heights[bottom],
         "the far edge is out of reach"
     );
+}
+
+#[test]
+fn a_form_tool_cuts_the_shape_of_its_vector() {
+    use cut_craft_core::geometry::Path;
+    // half a section: flat 4 out from the axis, then rising 3 over the next 2
+    let profile = Path::polyline(
+        &[
+            Point::new(10.0, 10.0),
+            Point::new(14.0, 10.0),
+            Point::new(16.0, 13.0),
+        ],
+        false,
+    );
+    let mut tool = Tool::default();
+    assert!(tool.set_form(&profile));
+    assert_eq!(tool.shape, ToolShape::FormTool);
+    assert!(
+        (tool.diameter - 12.0).abs() < 1e-9,
+        "twice the profile's width"
+    );
+    assert_eq!(tool.profile(2.0), Some(0.0));
+    assert!((tool.profile(5.0).unwrap() - 1.5).abs() < 1e-9);
+    assert_eq!(tool.profile(6.5), None, "past the tool");
+    // plunged 5 deep: the shape of the profile is left in the material
+    let mut m = material();
+    m.cut(&with_tool(
+        tool,
+        &[(50.0, 50.0, 5.0), (50.0, 50.0, -5.0), (50.0, 50.0, 5.0)],
+    ));
+    assert!((depth_at(&m, 50.0, 50.0) + 5.0).abs() < 1e-9);
+    // half-millimetre cells: the cell at 55 is measured at its centre, 5.25 out
+    assert!(
+        (depth_at(&m, 55.0, 50.0) + 3.125).abs() < 0.05,
+        "{}",
+        depth_at(&m, 55.0, 50.0)
+    );
+    assert!(depth_at(&m, 57.0, 50.0).abs() < 1e-9, "uncut past the tool");
+    let mut flat = Tool::default();
+    assert!(!flat.set_form(&Path::polyline(
+        &[Point::new(1.0, 1.0), Point::new(1.0, 5.0)],
+        false
+    )));
 }

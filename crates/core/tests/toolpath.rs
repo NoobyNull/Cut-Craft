@@ -29,6 +29,7 @@ fn toolpath(name: &str) -> Toolpath {
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     }
 }
 

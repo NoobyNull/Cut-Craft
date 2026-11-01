@@ -8,6 +8,7 @@ edition.workspace = true
 cut-craft-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
+cmd-two-rail-sweep = { path = "../two-rail-sweep" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

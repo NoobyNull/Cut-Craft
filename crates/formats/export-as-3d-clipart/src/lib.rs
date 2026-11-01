@@ -25,6 +25,39 @@ const CLIPART: FileFormat = FileFormat {
     extensions: &["ccclip"],
 };
 
+/// `k` as a clipart file: baked with its shaping, its grid at the origin, on no level or
+/// group (also what a sculpting brush is saved as).
+pub fn clip_bytes(k: &Component) -> Result<Vec<u8>, CommandError> {
+    let mut component = k.baked();
+    component.origin = Point::ZERO;
+    component.level = 0;
+    component.group = None;
+    component.unsculpted = None;
+    component.visible = true;
+    let clip = Clip {
+        format: FORMAT_NAME.into(),
+        version: VERSION,
+        component,
+    };
+    serde_json::to_vec(&clip).map_err(|e| CommandError::Failed(e.to_string()))
+}
+
+/// The component a clipart file holds, its grid at the origin as saved.
+pub fn read_clip(bytes: &[u8]) -> Result<Component, CommandError> {
+    let clip: Clip = serde_json::from_slice(bytes)
+        .map_err(|e| CommandError::Failed(format!("not a Cut Craft clipart file: {e}")))?;
+    if clip.format != FORMAT_NAME || clip.version > VERSION {
+        return Err(CommandError::Failed(
+            "not a clipart file this version of Cut Craft reads".into(),
+        ));
+    }
+    let k = clip.component;
+    if k.heights.len() != k.columns * k.rows {
+        return Err(CommandError::Failed("the clipart file is damaged".into()));
+    }
+    Ok(k)
+}
+
 pub struct ExportClipart;
 
 impl Exporter for ExportClipart {
@@ -35,18 +68,7 @@ impl Exporter for ExportClipart {
         let (_, k) = chosen_or_baked(doc).ok_or_else(|| {
             CommandError::Failed("there is no component to export: create one first".into())
         })?;
-        let mut component = k.baked();
-        component.origin = Point::ZERO;
-        component.level = 0;
-        component.group = None;
-        component.unsculpted = None;
-        component.visible = true;
-        let clip = Clip {
-            format: FORMAT_NAME.into(),
-            version: VERSION,
-            component,
-        };
-        serde_json::to_vec(&clip).map_err(|e| CommandError::Failed(e.to_string()))
+        clip_bytes(&k)
     }
 }
 
@@ -57,17 +79,7 @@ impl Importer for ImportClipart {
     const FORMAT: FileFormat = CLIPART;
 
     fn import(doc: &Document, bytes: &[u8]) -> Result<Change, CommandError> {
-        let clip: Clip = serde_json::from_slice(bytes)
-            .map_err(|e| CommandError::Failed(format!("not a Cut Craft clipart file: {e}")))?;
-        if clip.format != FORMAT_NAME || clip.version > VERSION {
-            return Err(CommandError::Failed(
-                "not a clipart file this version of Cut Craft reads".into(),
-            ));
-        }
-        let mut k = clip.component;
-        if k.heights.len() != k.columns * k.rows {
-            return Err(CommandError::Failed("the clipart file is damaged".into()));
-        }
+        let mut k = read_clip(bytes)?;
         k.origin = doc.job.area().center() - k.extent().size() / 2.0;
         k.level = doc.levels.keys().next().copied().unwrap_or(0);
         let mut c = Change::builder(doc);

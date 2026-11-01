@@ -4,7 +4,7 @@
 //! its offset on the form.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::Point;
+use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{Move, MoveKind, Tool, ToolDatabase, ToolShape, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -41,6 +41,104 @@ pub enum CutDirection {
     Up,
 }
 
+/// Aspire's Pitch Preset: a standard thread's pitch, ISO metric coarse or Unified (UNC),
+/// else the pitch typed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PitchPreset {
+    #[default]
+    Custom,
+    #[schemars(title = "ISO M2 × 0.4")]
+    IsoM2,
+    #[schemars(title = "ISO M3 × 0.5")]
+    IsoM3,
+    #[schemars(title = "ISO M4 × 0.7")]
+    IsoM4,
+    #[schemars(title = "ISO M5 × 0.8")]
+    IsoM5,
+    #[schemars(title = "ISO M6 × 1.0")]
+    IsoM6,
+    #[schemars(title = "ISO M8 × 1.25")]
+    IsoM8,
+    #[schemars(title = "ISO M10 × 1.5")]
+    IsoM10,
+    #[schemars(title = "ISO M12 × 1.75")]
+    IsoM12,
+    #[schemars(title = "ISO M14 × 2.0")]
+    IsoM14,
+    #[schemars(title = "ISO M16 × 2.0")]
+    IsoM16,
+    #[schemars(title = "ISO M20 × 2.5")]
+    IsoM20,
+    #[schemars(title = "ISO M24 × 3.0")]
+    IsoM24,
+    #[schemars(title = "#4-40 UNC")]
+    Uts4x40,
+    #[schemars(title = "#6-32 UNC")]
+    Uts6x32,
+    #[schemars(title = "#8-32 UNC")]
+    Uts8x32,
+    #[schemars(title = "#10-24 UNC")]
+    Uts10x24,
+    #[schemars(title = "#10-32 UNF")]
+    Uts10x32,
+    #[schemars(title = "1/4-20 UNC")]
+    UtsQuarterX20,
+    #[schemars(title = "1/4-28 UNF")]
+    UtsQuarterX28,
+    #[schemars(title = "5/16-18 UNC")]
+    UtsFiveSixteenthsX18,
+    #[schemars(title = "3/8-16 UNC")]
+    UtsThreeEighthsX16,
+    #[schemars(title = "7/16-14 UNC")]
+    UtsSevenSixteenthsX14,
+    #[schemars(title = "1/2-13 UNC")]
+    UtsHalfX13,
+    #[schemars(title = "9/16-12 UNC")]
+    UtsNineSixteenthsX12,
+    #[schemars(title = "5/8-11 UNC")]
+    UtsFiveEighthsX11,
+    #[schemars(title = "3/4-10 UNC")]
+    UtsThreeQuartersX10,
+    #[schemars(title = "1-8 UNC")]
+    UtsOneX8,
+}
+
+impl PitchPreset {
+    /// The standard's pitch in millimetres; none for Custom.
+    #[must_use]
+    pub fn pitch(self) -> Option<f64> {
+        let per_inch = |threads: f64| 25.4 / threads;
+        Some(match self {
+            Self::Custom => return None,
+            Self::IsoM2 => 0.4,
+            Self::IsoM3 => 0.5,
+            Self::IsoM4 => 0.7,
+            Self::IsoM5 => 0.8,
+            Self::IsoM6 => 1.0,
+            Self::IsoM8 => 1.25,
+            Self::IsoM10 => 1.5,
+            Self::IsoM12 => 1.75,
+            Self::IsoM14 | Self::IsoM16 => 2.0,
+            Self::IsoM20 => 2.5,
+            Self::IsoM24 => 3.0,
+            Self::Uts4x40 => per_inch(40.0),
+            Self::Uts6x32 | Self::Uts8x32 | Self::Uts10x32 => per_inch(32.0),
+            Self::Uts10x24 => per_inch(24.0),
+            Self::UtsQuarterX20 => per_inch(20.0),
+            Self::UtsQuarterX28 => per_inch(28.0),
+            Self::UtsFiveSixteenthsX18 => per_inch(18.0),
+            Self::UtsThreeEighthsX16 => per_inch(16.0),
+            Self::UtsSevenSixteenthsX14 => per_inch(14.0),
+            Self::UtsHalfX13 => per_inch(13.0),
+            Self::UtsNineSixteenthsX12 => per_inch(12.0),
+            Self::UtsFiveEighthsX11 => per_inch(11.0),
+            Self::UtsThreeQuartersX10 => per_inch(10.0),
+            Self::UtsOneX8 => per_inch(8.0),
+        })
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
@@ -52,9 +150,14 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     pub max_depth: f64,
+    /// A standard thread's pitch, else the pitch typed below
+    #[serde(default)]
+    #[schemars(title = "Pitch preset", extend("x-widget" = "drop-down"))]
+    #[schemars(extend("x-group" = "Thread"))]
+    pub pitch_preset: PitchPreset,
     /// Between the ridges of the thread
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Thread"))]
+    #[schemars(extend("x-group" = "Thread"), extend("x-show-when" = {"pitch_preset": "custom"}))]
     pub pitch: f64,
     /// The thread's major (largest) diameter
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -70,6 +173,17 @@ pub struct Params {
     pub thread_direction: Hand,
     #[schemars(extend("x-group" = "Thread"))]
     pub cut_direction: CutDirection,
+    /// Internal threads: also draws a circle of the thread's minor diameter at each centre,
+    /// on the current layer, for a Pocket toolpath to clear the hole first
+    #[serde(default)]
+    #[schemars(title = "Create Circles for Internal Threads")]
+    #[schemars(extend("x-group" = "Thread"))]
+    pub create_circles: bool,
+    /// Thread the vectors in the order they were selected, else in the order that cuts
+    /// quickest
+    #[serde(default)]
+    #[schemars(title = "Use Vector Selection Order")]
+    pub use_selection_order: bool,
     /// From the bottom of the thread mill up to the tip of its tooth, for a tool that is not
     /// a thread mill (a thread mill gives its own)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -85,12 +199,15 @@ impl Default for Params {
             name: "Thread Milling".into(),
             start_depth: 0.0,
             max_depth: 12.0,
+            pitch_preset: PitchPreset::Custom,
             pitch: 1.5,
             diameter: 20.0,
             fit_tolerance: 0.0,
             thread_type: ThreadType::Internal,
             thread_direction: Hand::RightHanded,
             cut_direction: CutDirection::Down,
+            create_circles: false,
+            use_selection_order: false,
             tooth_offset: 2.0,
             tool: ToolDatabase::starter()
                 .tools
@@ -114,6 +231,12 @@ impl Params {
         }
     }
 
+    /// The pitch: the preset's, else the one typed.
+    #[must_use]
+    pub fn pitch(&self) -> f64 {
+        self.pitch_preset.pitch().unwrap_or(self.pitch)
+    }
+
     /// How far the threads go down: from the start to the tooth at the deepest.
     pub fn thread_length(&self) -> f64 {
         self.max_depth - self.tooth_offset()
@@ -127,7 +250,7 @@ impl Params {
             ThreadType::Internal => self.diameter / 2.0 + self.fit_tolerance - r,
             // the tooth reaches in to an ISO external thread's minor diameter (d - 1.22687 P)
             ThreadType::External => {
-                self.diameter / 2.0 - 0.613_435 * self.pitch - self.fit_tolerance + r
+                self.diameter / 2.0 - 0.613_435 * self.pitch() - self.fit_tolerance + r
             }
         }
     }
@@ -136,7 +259,7 @@ impl Params {
         let radius = self.centre_radius();
         let top = -(self.start_depth + self.tooth_offset());
         let bottom = -(self.start_depth + self.max_depth);
-        let turns = (top - bottom) / self.pitch;
+        let turns = (top - bottom) / self.pitch();
         // a right-handed thread climbs anticlockwise
         let climb = if self.thread_direction == Hand::RightHanded {
             1.0
@@ -199,6 +322,23 @@ impl Params {
     }
 }
 
+/// `points` from the first, each the nearest to the one before: the order that cuts quickest.
+fn nearest_first(mut points: Vec<Point>) -> Vec<Point> {
+    let mut ordered = Vec::with_capacity(points.len());
+    while !points.is_empty() {
+        let from = ordered.last().copied();
+        let next = from.map_or(0, |from: Point| {
+            points
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.distance(from).total_cmp(&b.distance(from)))
+                .map_or(0, |(i, _)| i)
+        });
+        ordered.push(points.remove(next));
+    }
+    ordered
+}
+
 impl Command for ThreadMillingToolpath {
     const ID: &'static str = "thread_milling_toolpath";
     type Params = Params;
@@ -213,7 +353,7 @@ impl Command for ThreadMillingToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        ensure_positive("pitch", p.pitch)?;
+        ensure_positive("pitch", p.pitch())?;
         ensure_positive("diameter", p.diameter)?;
         ensure_positive("tool diameter", p.tool.diameter)?;
         ensure_positive("tooth offset", p.tooth_offset())?;
@@ -223,7 +363,7 @@ impl Command for ThreadMillingToolpath {
                 "the thread mill's tooth offset must be at least half the tooth size".into(),
             ));
         }
-        if p.thread_length() < p.pitch {
+        if p.thread_length() < p.pitch() {
             return Err(CommandError::InvalidParams(
                 "the max depth must reach at least a pitch below the tooth offset".into(),
             ));
@@ -240,11 +380,19 @@ impl Command for ThreadMillingToolpath {
             ));
         }
         let safe = doc.job.clearance;
-        let moves = paths
-            .iter()
-            .flat_map(|path| p.helix(path.bounds().center(), safe))
-            .collect();
+        let mut centres: Vec<Point> = paths.iter().map(|path| path.bounds().center()).collect();
+        if !p.use_selection_order {
+            centres = nearest_first(centres);
+        }
+        let moves = centres.iter().flat_map(|&at| p.helix(at, safe)).collect();
         let mut c = Change::builder(doc);
+        // the hole to pocket out before an internal thread: ISO's minor diameter
+        let minor = p.diameter - 1.082_532 * p.pitch();
+        if p.create_circles && p.thread_type == ThreadType::Internal && minor > 0.0 {
+            for &at in &centres {
+                c.add(Path::circle(at, minor / 2.0));
+            }
+        }
         c.add_toolpath(made_by::<Self>(
             p,
             p.name.clone(),
@@ -395,5 +543,78 @@ mod tests {
         let why = made_toolpath::<ThreadMillingToolpath>(vec![Path::circle(Point::ZERO, 4.0)], &p)
             .unwrap_err();
         assert!(why.contains("too big"), "{why}");
+    }
+
+    #[test]
+    fn a_pitch_preset_sets_the_pitch_and_internal_threads_can_draw_their_circles() {
+        assert!((PitchPreset::UtsQuarterX20.pitch().unwrap() - 1.27).abs() < 1e-12);
+        assert_eq!(PitchPreset::Custom.pitch(), None);
+        let p = Params {
+            pitch_preset: PitchPreset::IsoM20,
+            pitch: 9.0,
+            create_circles: true,
+            ..Params::default()
+        };
+        assert!(
+            (p.pitch() - 2.5).abs() < 1e-12,
+            "the preset, not the 9 typed"
+        );
+        let h = helix(&thread(&p));
+        let per_turn = h[0].z - h[TURN_STEPS as usize].z;
+        assert!((per_turn - 2.5).abs() < 1e-6, "{per_turn}");
+        // the circle to pocket first: the minor diameter, 1.0825 pitches under the major
+        let mut doc = cut_craft_core::testing::document_with(vec![Path::circle(
+            Point::new(50.0, 50.0),
+            10.0,
+        )]);
+        let change = ThreadMillingToolpath::run(&doc, &p).unwrap();
+        doc.apply(&change).unwrap();
+        assert_eq!(
+            doc.vectors.len(),
+            2,
+            "the circle beside the vector threaded"
+        );
+        let drawn = doc
+            .vectors
+            .values()
+            .map(|v| v.bounds().size().x)
+            .fold(f64::INFINITY, f64::min);
+        assert!((drawn - (20.0 - 1.082_532 * 2.5)).abs() < 1e-6, "{drawn}");
+        let external = Params {
+            thread_type: ThreadType::External,
+            ..p
+        };
+        let change = ThreadMillingToolpath::run(&doc, &external).unwrap();
+        assert!(
+            change.added().next().is_none(),
+            "no circle for an external thread"
+        );
+    }
+
+    #[test]
+    fn threads_are_cut_nearest_first_unless_the_selection_order_is_kept() {
+        let circles = |xs: &[f64]| {
+            xs.iter()
+                .map(|&x| Path::circle(Point::new(x, 50.0), 10.0))
+                .collect::<Vec<_>>()
+        };
+        let starts = |p: &Params| -> Vec<f64> {
+            let t =
+                made_toolpath::<ThreadMillingToolpath>(circles(&[0.0, 100.0, 10.0]), p).unwrap();
+            let mut xs: Vec<f64> = t
+                .moves
+                .iter()
+                .filter(|m| m.kind == MoveKind::Rapid)
+                .map(|m| m.to.x)
+                .collect();
+            xs.dedup();
+            xs
+        };
+        assert_eq!(starts(&Params::default()), [0.0, 10.0, 100.0]);
+        let kept = Params {
+            use_selection_order: true,
+            ..Params::default()
+        };
+        assert_eq!(starts(&kept), [0.0, 100.0, 10.0]);
     }
 }

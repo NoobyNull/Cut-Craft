@@ -18,6 +18,8 @@ pub enum Slicing {
     SliceThickness,
     /// The model's thickness shared between this many slices
     NumberOfSlices,
+    /// Each slice its own thickness, from the list; what is left over is one more slice
+    CustomSliceList,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -32,6 +34,18 @@ pub struct Params {
     pub number_of_slices: u32,
     /// A closed vector round each slice
     pub create_boundary_vectors: bool,
+    /// Custom Slice List: each slice's thickness, in order (from the top when slicing from
+    /// the top)
+    #[serde(default = "two_slices")]
+    #[schemars(
+        title = "Slice thicknesses",
+        extend("x-unit" = "mm", "x-show-when" = {"slicing": "custom_slice_list"})
+    )]
+    pub thicknesses: Vec<f64>,
+}
+
+fn two_slices() -> Vec<f64> {
+    vec![10.0, 10.0]
 }
 
 impl Default for Params {
@@ -43,6 +57,7 @@ impl Default for Params {
             from_top: true,
             number_of_slices: 2,
             create_boundary_vectors: false,
+            thicknesses: two_slices(),
         }
     }
 }
@@ -96,6 +111,12 @@ impl Command for Slice {
                 ensure_positive("slice thickness", p.slice_thickness)?;
                 bands(top, p.slice_thickness, p.from_top)
             }
+            Slicing::CustomSliceList => {
+                for &t in &p.thicknesses {
+                    ensure_positive("slice thickness", t)?;
+                }
+                listed(top, &p.thicknesses, p.from_top)
+            }
         };
         let mut c = Change::builder(doc);
         for (k, band) in cuts.windows(2).enumerate() {
@@ -117,6 +138,26 @@ impl Command for Slice {
     }
 }
 
+/// Cut heights from 0 to `top`, slices of the `thicknesses` listed from the bottom (from the
+/// top when `from_top`); what the list leaves is one more slice, and a list reaching past
+/// the top stops there.
+fn listed(top: f64, thicknesses: &[f64], from_top: bool) -> Vec<f64> {
+    let mut cuts = vec![0.0];
+    let mut z = 0.0;
+    for &t in thicknesses {
+        z += t;
+        if z >= top - 1e-9 {
+            break;
+        }
+        cuts.push(z);
+    }
+    cuts.push(top);
+    if from_top {
+        cuts = cuts.iter().rev().map(|z| top - z).collect();
+    }
+    cuts
+}
+
 /// Cut heights from 0 to `top`, `step` apart, the odd slice at the bottom when `from_top`.
 fn bands(top: f64, step: f64, from_top: bool) -> Vec<f64> {
     let mut cuts = vec![];
@@ -135,6 +176,17 @@ fn bands(top: f64, step: f64, from_top: bool) -> Vec<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_custom_list_gives_each_slice_its_own_thickness() {
+        assert_eq!(listed(30.0, &[5.0, 10.0], false), [0.0, 5.0, 15.0, 30.0]);
+        assert_eq!(listed(30.0, &[5.0, 10.0], true), [0.0, 15.0, 25.0, 30.0]);
+        assert_eq!(
+            listed(12.0, &[5.0, 10.0], false),
+            [0.0, 5.0, 12.0],
+            "stops at the top"
+        );
+    }
     use cut_craft_core::geometry::Point;
     use cut_craft_core::testing::{domed, run_on};
 

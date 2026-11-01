@@ -8,6 +8,8 @@ edition.workspace = true
 cut-craft-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
+cmd-job-setup = { path = "../job-setup" }
+cmd-scale-model-z-height = { path = "../scale-model-z-height" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

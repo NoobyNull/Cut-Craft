@@ -24,6 +24,10 @@ pub enum Order {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub order: Order,
+    /// Spread them inside the last vector picked, which stays put
+    #[serde(default)]
+    #[schemars(title = "Inside last vector")]
+    pub inside_last_vector: bool,
 }
 
 impl Command for SpaceVertically {
@@ -45,7 +49,7 @@ impl Command for SpaceVertically {
             Order::BottomToTop => Sequence::PickedFromLow,
             Order::TopToBottom => Sequence::PickedFromHigh,
         };
-        Change::space_selected(doc, true, sequence)
+        Change::space_selected(doc, true, sequence, p.inside_last_vector)
     }
 }
 
@@ -95,7 +99,14 @@ mod tests {
 
     fn picked_starts(order: Order, picked: [f64; 3]) -> Vec<f64> {
         let mut doc = document_with(picked.map(at).to_vec());
-        let change = SpaceVertically::run(&doc, &Params { order }).unwrap();
+        let change = SpaceVertically::run(
+            &doc,
+            &Params {
+                order,
+                inside_last_vector: false,
+            },
+        )
+        .unwrap();
         doc.apply(&change).unwrap();
         doc.selection
             .iter()

@@ -4,6 +4,12 @@
 + Rotary: Y wrapped onto A, for a cylinder along X; feeds in units a minute. Needs an A axis.
 + Made by scripts/make_posts.py: edit its template and run it again.
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-27 First version: arcs, tool change by hand (M0)
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft GRBL Wrap Y to A (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"
@@ -23,6 +29,7 @@ VAR Z_HOME_POSITION = [ZH|A|Z|1.3]
 VAR SAFE_Z_HEIGHT = [SAFEZ|A|Z|1.3]
 VAR TOOL_NUMBER = [T|A|T|1.0]
 VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]
+VAR DWELL_TIME = [DWELL|A|P|1.2]
 
 begin HEADER
 "([TP_FILENAME])"

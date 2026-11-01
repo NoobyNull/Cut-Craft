@@ -50,7 +50,7 @@ impl Compute for Cpu {
         let mut heights = std::mem::take(&mut material.heights);
         by_rows(&mut heights, material.columns, |first, band| {
             for pair in moves.windows(2) {
-                material.sweep_band(pair[0].to, pair[1].to, tool, first, band);
+                material.sweep_band(pair[0].to, pair[1].to, tool, first, band, None);
             }
         });
         material.heights = heights;

@@ -6,6 +6,7 @@ use crate::tree;
 use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
+use std::collections::BTreeMap;
 
 /// The window's share of the screen when it first opens.
 /// The window's own id (its title's hashing is egui's).
@@ -50,6 +51,8 @@ pub enum Outcome {
 pub struct Look<'a> {
     /// The picture at an icon path (`tool_database/end_mill.png`), if there is one.
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
+    /// The job's selected open vector, which a form tool can take its shape from.
+    pub profile: Option<&'a cut_craft_core::geometry::Path>,
 }
 
 /// The open window: the database being edited and what is picked in it.
@@ -60,6 +63,14 @@ pub struct Manager {
     pub changer: Option<Changer>,
     /// The name typed for a new material.
     pub new_material: String,
+    /// Duplicate Material copies every tool's cutting data for the material too.
+    pub copy_cutting_data: bool,
+    /// The tree leaves out the tools with no cutting data for the active material (else
+    /// they are greyed); the tree's right-click Hide Unset Tools.
+    pub hide_unset: bool,
+    /// What is typed in the search box over the tree: tools are found by name.
+    pub search: String,
+    index: crate::search::SearchIndex,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -117,17 +128,19 @@ pub fn picture_path(shape: ToolShape) -> &'static str {
         ToolShape::BallNose => "tool_database/ball_nose.png",
         ToolShape::VBit => "tool_database/v_bit.png",
         ToolShape::RadiusedEndMill => "tool_database/radiused_end_mill.png",
-        // ponytail: no thread mill picture is drawn yet, so none shows
+        // ponytail: no thread mill or form tool picture is drawn yet, so none shows
         ToolShape::ThreadMill => "tool_database/thread_mill.png",
+        ToolShape::FormTool => "tool_database/form_tool.png",
     }
 }
 
-const SHAPES: [(ToolShape, &str); 5] = [
+const SHAPES: [(ToolShape, &str); 6] = [
     (ToolShape::EndMill, "End Mill"),
     (ToolShape::BallNose, "Ball Nose"),
     (ToolShape::VBit, "V-Bit"),
     (ToolShape::RadiusedEndMill, "Radiused End Mill"),
     (ToolShape::ThreadMill, "Thread Mill"),
+    (ToolShape::FormTool, "Form Tool"),
 ];
 
 fn shape_name(shape: ToolShape) -> &'static str {
@@ -156,7 +169,24 @@ impl Manager {
             pick: None,
             changer: None,
             new_material: String::new(),
+            copy_cutting_data: true,
+            hide_unset: false,
+            search: String::new(),
+            index: crate::search::SearchIndex::default(),
         }
+    }
+
+    /// Aspire's Duplicate Material: the active material copied under the typed name, or
+    /// its own with " copy", with every tool's cutting data for it when asked, and made
+    /// active.
+    pub fn duplicate_material(&mut self) {
+        let from = self.draft.material.clone();
+        if from.is_empty() {
+            return;
+        }
+        let name = std::mem::take(&mut self.new_material);
+        self.draft
+            .duplicate_material(&from, &name, self.copy_cutting_data);
     }
 
     /// Aspire's Add Material: the typed name joins the list and becomes active (the one
@@ -243,8 +273,44 @@ impl Manager {
     fn tree(&mut self, ui: &mut egui::Ui, look: &Look) {
         cut_craft_bug_report::mark(ui, "Tool Database tree");
         self.changer_list(ui);
-        let all = tree::groups(&self.draft);
-        self.branch(ui, look, &all, "");
+        ui.add(
+            egui::TextEdit::singleline(&mut self.search)
+                .hint_text("Search tool names")
+                .desired_width(f32::INFINITY),
+        );
+        if self.search.trim().is_empty() {
+            let all = tree::groups(&self.draft);
+            self.branch(ui, look, &all, "");
+        } else {
+            self.found(ui, look);
+        }
+    }
+
+    /// The tools the search finds, each with its group, instead of the tree; a click picks one.
+    fn found(&mut self, ui: &mut egui::Ui, look: &Look) {
+        if self.index.is_stale(&self.draft) {
+            self.index = crate::search::SearchIndex::new(&self.draft);
+        }
+        let found = self.index.find(&self.search);
+        if found.is_empty() {
+            ui.weak("No tool has that name");
+        }
+        let row = ui.spacing().interact_size.y;
+        for i in found {
+            let tool = &self.draft.tools[i];
+            ui.horizontal(|ui| {
+                if let Some(image) = (look.picture)(picture_path(tool.shape)) {
+                    ui.add(image.fit_to_exact_size(egui::vec2(row * PICTURE_ASPECT, row)));
+                }
+                let picked = self.pick == Some(Pick::Tool(i));
+                if ui.selectable_label(picked, &tool.name).clicked() {
+                    self.pick = Some(Pick::Tool(i));
+                }
+                if !tool.group.is_empty() {
+                    ui.weak(&tool.group);
+                }
+            });
+        }
     }
 
     /// The tool changer's slots above the tree; a click picks the tool in it.
@@ -282,7 +348,11 @@ impl Manager {
                     }
                     let picked = self.pick == Some(Pick::Group(sub.clone()));
                     let label = egui::RichText::new(tree::leaf(sub)).strong();
-                    if ui.selectable_label(picked, label).clicked() {
+                    let label = ui.selectable_label(picked, label);
+                    label.context_menu(|ui| {
+                        ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
+                    });
+                    if label.clicked() {
                         self.pick = Some(Pick::Group(sub.clone()));
                     }
                 })
@@ -290,12 +360,30 @@ impl Manager {
         }
         for i in tree::tools_in(&self.draft, group) {
             let tool = &self.draft.tools[i];
+            let unset = !tool.has_data_for(&self.draft.material);
+            if unset && self.hide_unset {
+                continue;
+            }
             ui.horizontal(|ui| {
                 if let Some(image) = (look.picture)(picture_path(tool.shape)) {
                     ui.add(image.fit_to_exact_size(egui::vec2(row * PICTURE_ASPECT, row)));
                 }
                 let picked = self.pick == Some(Pick::Tool(i));
-                if ui.selectable_label(picked, &tool.name).clicked() {
+                let mut name = egui::RichText::new(&tool.name);
+                if unset {
+                    name = name.color(ui.visuals().weak_text_color());
+                }
+                let label = ui.selectable_label(picked, name);
+                if unset {
+                    label.clone().on_hover_text(format!(
+                        "No cutting data for {}: it cuts with its default data",
+                        self.draft.material
+                    ));
+                }
+                label.context_menu(|ui| {
+                    ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
+                });
+                if label.clicked() {
                     self.pick = Some(Pick::Tool(i));
                 }
                 if let Some(n) = self.changer.as_ref().and_then(|c| c.slot_of(&tool.name)) {
@@ -422,7 +510,12 @@ impl Manager {
                 let groups = tree::groups(&self.draft);
                 let before = self.draft.tools[i].name.clone();
                 let material = self.draft.material.clone();
-                tool_details(ui, &mut self.draft.tools[i], &groups, look, &material);
+                let ToolDatabase {
+                    tools,
+                    name_formats,
+                    ..
+                } = &mut self.draft;
+                tool_details(ui, &mut tools[i], (&groups, name_formats), look, &material);
                 let name = self.draft.tools[i].name.clone();
                 if let Some(changer) = &mut self.changer {
                     changer.rename(&before, &name);
@@ -438,8 +531,7 @@ impl Manager {
     /// Aspire's Material combo and Material Management in one row: the active material,
     /// whose cutting data tools show and toolpaths get; adding one, and deleting the active
     /// one with every tool's data for it.
-    // ponytail: no renaming or duplicating materials, and no machine combo (the data is per
-    // material only)
+    // ponytail: no renaming materials, and no machine combo (the data is per material only)
     fn materials(&mut self, ui: &mut egui::Ui) {
         const DEFAULT: &str = "(default)";
         ui.horizontal_wrapped(|ui| {
@@ -477,6 +569,18 @@ impl Manager {
                 let gone = self.draft.material.clone();
                 self.draft.delete_material(&gone);
             }
+            if ui
+                .add_enabled(
+                    !self.draft.material.is_empty(),
+                    egui::Button::new("Duplicate Material"),
+                )
+                .on_hover_text("A copy of the active material, named as typed (or \"… copy\")")
+                .clicked()
+            {
+                self.duplicate_material();
+            }
+            ui.checkbox(&mut self.copy_cutting_data, "with cutting data")
+                .on_hover_text("The copy gets every tool's cutting data for the material");
         });
     }
 
@@ -588,7 +692,7 @@ fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
 fn tool_details(
     ui: &mut egui::Ui,
     tool: &mut Tool,
-    groups: &[String],
+    (groups, formats): (&[String], &mut BTreeMap<String, String>),
     look: &Look,
     material: &str,
 ) {
@@ -604,10 +708,41 @@ fn tool_details(
              keeps it as {material}'s own"
         ));
     }
+    copy_settings_from(ui, tool, material);
     let mut shown = tool.for_material(material);
     section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown));
     section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown));
     keep_cutting(tool, &shown, material);
+    // folded away at the end, as Aspire keeps it in a dialog of its own
+    egui::CollapsingHeader::new("Name Format")
+        .id_salt("name_format")
+        .show(ui, |ui| name_format(ui, tool, formats));
+    tool.renamed(material);
+}
+
+/// Aspire's Copy Settings From: the tool's cutting data for another material (or its
+/// default) copied as its data for `material`, where it has any to copy.
+fn copy_settings_from(ui: &mut egui::Ui, tool: &mut Tool, material: &str) {
+    let others: Vec<String> = std::iter::once(String::new())
+        .chain(tool.materials.iter().map(|m| m.material.clone()))
+        .filter(|m| !m.eq_ignore_ascii_case(material))
+        .collect();
+    if others.is_empty() {
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.label("Copy settings from");
+        egui::ComboBox::from_id_salt("copy_cutting_from")
+            .selected_text("another material…")
+            .show_ui(ui, |ui| {
+                for from in &others {
+                    let label = if from.is_empty() { "(default)" } else { from };
+                    if ui.selectable_label(false, label).clicked() {
+                        tool.copy_cutting(from, material);
+                    }
+                }
+            });
+    });
 }
 
 /// Keeps what was edited in `shown` (the tool as it cuts `material`) as the tool's data for
@@ -623,11 +758,93 @@ fn keep_cutting(tool: &mut Tool, shown: &Tool, material: &str) {
     }
 }
 
+/// The tool's name format (Aspire's Name Format): `{Variable|Modifier}` filled in from the
+/// tool, a variable picked from the list put on the end; Set as Default makes it its type's
+/// for new tools, Restore puts the type's back. A tool with a format is named by it.
+fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String, String>) {
+    use cut_craft_core::tool_names::{VARIABLES, type_key};
+    let key = type_key(tool.shape);
+    ui.horizontal(|ui| {
+        ui.label("Name format");
+        ui.add(
+            egui::TextEdit::singleline(&mut tool.name_format)
+                .hint_text("{Tool Type} {Diameter|F}")
+                .desired_width(f32::INFINITY),
+        )
+        .on_hover_text(
+            "Leave empty to type the name. Modifiers: |U upper case, |L lower case, \
+             |0.00 decimals, |F inches as a fraction",
+        );
+    });
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt("name_variable")
+            .selected_text("Add variable")
+            .show_ui(ui, |ui| {
+                for v in VARIABLES {
+                    if ui.selectable_label(false, v).clicked() {
+                        tool.name_format.extend(["{", v, "}"]);
+                    }
+                }
+            });
+        if ui
+            .button("Set as Default")
+            .on_hover_text("New tools of this type are named by this format")
+            .clicked()
+        {
+            formats.insert(key.clone(), tool.name_format.clone());
+        }
+        if let Some(default) = formats.get(&key).filter(|d| **d != tool.name_format)
+            && ui
+                .button("Restore")
+                .on_hover_text(format!("Back to this type's default: {default}"))
+                .clicked()
+        {
+            tool.name_format.clone_from(default);
+        }
+    });
+}
+
+/// A form tool's row in Tool Info: Use Selected Vector takes its shape from the job's
+/// selected open vector, and how many points its profile has.
+fn form_row(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
+    if tool.shape != ToolShape::FormTool {
+        return;
+    }
+    ui.label("Form");
+    ui.horizontal(|ui| {
+        let use_it = ui
+            .add_enabled(
+                look.profile.is_some(),
+                egui::Button::new("Use Selected Vector"),
+            )
+            .on_hover_text(
+                "Half the tool's section, drawn upright: the axis at its left, the \
+                 tip at its lowest point",
+            )
+            .on_disabled_hover_text("Select one open vector in the job first");
+        if use_it.clicked()
+            && let Some(path) = look.profile
+        {
+            tool.set_form(path);
+        }
+        ui.weak(if tool.form.is_empty() {
+            "no profile yet".to_owned()
+        } else {
+            format!("{} points", tool.form.len())
+        });
+    });
+    ui.end_row();
+}
+
 /// Name, type, group and notes, then the geometry beside the tool's picture.
 fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look) {
     egui::Grid::new("tool_info").num_columns(2).show(ui, |ui| {
         ui.label("Name");
-        ui.add(egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY));
+        // a name made from its name format is not typed
+        ui.add_enabled(
+            tool.name_format.is_empty(),
+            egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY),
+        );
         ui.end_row();
         ui.label("Tool Type");
         ui.horizontal(|ui| {
@@ -669,6 +886,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                 }
             });
         ui.end_row();
+        form_row(ui, tool, look);
         ui.label("Notes");
         ui.add(
             egui::TextEdit::multiline(&mut tool.notes)
@@ -803,7 +1021,10 @@ mod tests {
     use super::*;
 
     fn frame(manager: &mut Manager, ctx: &egui::Context) -> Option<Outcome> {
-        let look = Look { picture: &|_| None };
+        let look = Look {
+            picture: &|_| None,
+            profile: None,
+        };
         let mut outcome = None;
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
@@ -862,6 +1083,116 @@ mod tests {
             m.draft.tools[thread_mill].materials.is_empty(),
             "only drawing it makes no data"
         );
+    }
+
+    #[test]
+    fn a_material_is_duplicated_with_its_cutting_data_and_settings_copy_between_materials() {
+        let mut m = Manager::new(&ToolDatabase::starter());
+        m.draft.add_material("Oak");
+        m.draft.material = "Oak".into();
+        let mut oak = m.draft.tools[0].cutting("");
+        oak.material = "Oak".into();
+        oak.feed_rate = 777.0;
+        m.draft.tools[0].set_cutting(oak);
+        m.new_material = " Ash ".into();
+        m.duplicate_material();
+        assert_eq!(m.draft.materials, ["Oak", "Ash"]);
+        assert_eq!(
+            (m.draft.material.as_str(), m.new_material.as_str()),
+            ("Ash", "")
+        );
+        assert!((m.draft.tools[0].cutting("Ash").feed_rate - 777.0).abs() < 1e-9);
+        assert!(
+            !m.draft.tools[1].has_data_for("Ash"),
+            "no Oak data, none copied"
+        );
+        // without the data, named after the original, and made unique
+        m.draft.material = "Oak".into();
+        m.copy_cutting_data = false;
+        m.duplicate_material();
+        assert_eq!(m.draft.materials, ["Oak", "Ash", "Oak copy"]);
+        assert!(!m.draft.tools[0].has_data_for("Oak copy"));
+        m.draft.material = "Oak".into();
+        m.duplicate_material();
+        assert_eq!(m.draft.material, "Oak copy 2");
+        // Copy Settings From another material, or from the default
+        let tool = &mut m.draft.tools[0];
+        tool.copy_cutting("Oak", "Oak copy");
+        assert!((tool.cutting("Oak copy").feed_rate - 777.0).abs() < 1e-9);
+        tool.copy_cutting("", "Oak");
+        assert!((tool.cutting("Oak").feed_rate - tool.feed_rate).abs() < 1e-9);
+    }
+
+    /// Every piece of text one frame draws.
+    fn drawn(manager: &mut Manager, ctx: &egui::Context) -> Vec<String> {
+        let look = Look {
+            picture: &|_| None,
+            profile: None,
+        };
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1200.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let mut output = ctx.run_pass(input, |ctx| {
+            manager.show(ctx, &look);
+        });
+        output.textures_delta.clear();
+        output
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_search_box_lists_the_tools_it_finds_by_name() {
+        let ctx = egui::Context::default();
+        let mut m = Manager::new(&ToolDatabase::starter());
+        let all: Vec<String> = m.draft.tools.iter().map(|t| t.name.clone()).collect();
+        let ball: Vec<&String> = all.iter().filter(|n| n.contains("Ball")).collect();
+        assert!(!ball.is_empty() && ball.len() < all.len());
+        m.search = "ball".into();
+        drawn(&mut m, &ctx);
+        let shown = drawn(&mut m, &ctx);
+        for name in &all {
+            assert_eq!(shown.contains(name), name.contains("Ball"), "{name}");
+        }
+        // a renamed tool is found by its new name
+        m.draft.tools[0].name = "Zebra Cutter".into();
+        m.search = "zeb".into();
+        assert!(drawn(&mut m, &ctx).contains(&"Zebra Cutter".to_owned()));
+    }
+
+    #[test]
+    fn tools_without_data_for_the_material_are_greyed_or_hidden() {
+        let ctx = egui::Context::default();
+        let mut m = Manager::new(&ToolDatabase::starter());
+        m.draft.add_material("Oak");
+        m.draft.material = "Oak".into();
+        let mut oak = m.draft.tools[0].cutting("");
+        oak.material = "Oak".into();
+        m.draft.tools[0].set_cutting(oak);
+        let (set, unset) = (m.draft.tools[0].name.clone(), m.draft.tools[1].name.clone());
+        assert!(m.draft.tools[0].has_data_for("Oak") && !m.draft.tools[1].has_data_for("oak"));
+        assert!(
+            m.draft.tools[1].has_data_for(""),
+            "the default always has data"
+        );
+        drawn(&mut m, &ctx);
+        let shown = drawn(&mut m, &ctx);
+        assert!(
+            shown.contains(&set) && shown.contains(&unset),
+            "greyed, still listed"
+        );
+        m.hide_unset = true;
+        let shown = drawn(&mut m, &ctx);
+        assert!(shown.contains(&set) && !shown.contains(&unset), "hidden");
     }
 
     #[test]

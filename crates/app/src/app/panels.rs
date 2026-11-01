@@ -9,7 +9,7 @@ use super::{
     file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
     wrap_for,
 };
-use cut_craft_core::document::Units;
+use cut_craft_core::document::{MachinedArea, Units};
 
 impl CutCraftApp {
     /// The Tool Database manager; its edits are kept on Apply or OK.
@@ -20,7 +20,15 @@ impl CutCraftApp {
         };
         let icons = &self.icons;
         let picture = |path: &str| icons.find(path, "").map(|p| icons.image(p));
-        let look = cut_craft_tool_database::Look { picture: &picture };
+        // a form tool takes its shape from the one open vector selected
+        let profile = match self.doc.selection.iter().collect::<Vec<_>>()[..] {
+            [id] => self.doc.vectors.get(id).filter(|p| !p.closed),
+            _ => None,
+        };
+        let look = cut_craft_tool_database::Look {
+            picture: &picture,
+            profile,
+        };
         let Some(outcome) = manager.show(ctx, &look) else {
             return;
         };
@@ -207,13 +215,52 @@ impl CutCraftApp {
 
     /// Layers, top first: visibility and lock toggles, the current layer highlighted, and
     /// Aspire's layer menu on a right-click.
+    /// The arrows over the Layers List: the active layer one place up or down the list.
+    fn layer_order_arrows(&mut self, ui: &mut egui::Ui) {
+        use cmd_reorder_layer::{Direction, moved_to};
+        let layer = self.doc.current_layer;
+        let mut moved = None;
+        ui.horizontal(|ui| {
+            for (direction, arrow, tip) in [
+                (Direction::Up, "⏶", "Move the active layer up the list"),
+                (Direction::Down, "⏷", "Move the active layer down the list"),
+            ] {
+                let can = moved_to(&self.doc, layer, direction).is_some();
+                if ui
+                    .add_enabled(can, egui::Button::new(arrow))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    moved = Some(direction);
+                }
+            }
+        });
+        ui.checkbox(
+            &mut self.layers_on_sheet,
+            "Show only layers used on this sheet",
+        )
+        .on_hover_text("Leave out the layers with nothing on the active sheet");
+        if let Some(direction) = moved {
+            let params = serde_json::json!({ "layer": layer, "direction": direction });
+            if let Err(e) = self.apply("reorder_layer", &params) {
+                self.status.set_message(&e);
+            }
+        }
+    }
+
     pub(super) fn layers_panel(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Layers tab");
+        self.layer_order_arrows(ui);
         let edge = ui.spacing().interact_size.y;
         let label = |id: &str| self.registry.get(id).map_or("", |c| c.meta().label);
         let mut clicked: Option<(LayerId, &str)> = None;
         let mut chosen = None;
-        for layer in self.doc.layers.iter().rev() {
+        let shown = |l: &&cut_craft_core::document::Layer| {
+            !self.layers_on_sheet
+                || l.id == self.doc.current_layer
+                || self.doc.vectors_on(l.id).next().is_some()
+        };
+        for layer in self.doc.layers.iter().rev().filter(shown) {
             ui.horizontal(|ui| {
                 let (eye, eye_tip) = if layer.visible {
                     ("layers/visible.png", "Hide")
@@ -283,23 +330,90 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Clipart tab");
         let registry = &self.registry;
         let importable = |ext: &str| registry.importer_for(ext).is_some();
-        match crate::clipart::panel(ui, &mut self.clipart, &importable) {
+        let levels: Vec<(u64, String)> = (self.doc.levels.iter())
+            .map(|(&id, l)| (id, l.name.clone()))
+            .collect();
+        match crate::clipart::panel(ui, &mut self.clipart, &importable, &levels) {
             Some(crate::clipart::Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
             Some(crate::clipart::Picked::OpenFolder) => {
                 self.invoke(ui.ctx(), "open_clipart_folder");
             }
             Some(crate::clipart::Picked::Import(path)) => self.import_file(&path),
+            Some(crate::clipart::Picked::ImportToLevel(path, level)) => {
+                self.import_clipart(&path, None, Some(level));
+            }
             None => {}
         }
+    }
+
+    /// Brings clipart `path` into the job as a double-click does, then (dropped on a view)
+    /// centred on `at`, and (Import to Level) on `level`: one of the job's, or a new level
+    /// named after the file. A model goes through Orientate 3D Model, placed and
+    /// levelled as it is made.
+    pub(super) fn import_clipart(
+        &mut self,
+        path: &std::path::Path,
+        at: Option<cut_craft_core::geometry::Point>,
+        level: Option<crate::clipart::ToLevel>,
+    ) {
+        let name = path
+            .file_stem()
+            .map_or_else(|| "Clipart".into(), |s| s.to_string_lossy().into_owned());
+        // a new level first, as its own step: the import goes onto it
+        let level = level.map(|level| match level {
+            crate::clipart::ToLevel::Existing(id) => id,
+            crate::clipart::ToLevel::New => {
+                let id = self
+                    .doc
+                    .levels
+                    .keys()
+                    .next_back()
+                    .map_or(0, |last| last + 1);
+                let mut c = Change::builder(&self.doc);
+                c.set_level(
+                    id,
+                    Some(cut_craft_core::component::Level {
+                        name: name.clone(),
+                        ..Default::default()
+                    }),
+                );
+                self.record(Ok(c.finish()), &format!("Inserted level {name}"));
+                id
+            }
+        });
+        if is_model(path) {
+            self.import_file(path);
+            self.import_level = level;
+            if let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") {
+                if let Some(at) = at {
+                    let size = |k: &str| form.params["size"][k].as_f64().unwrap_or(0.0);
+                    let corner = serde_json::json!({
+                        "x": at.x - size("x") / 2.0, "y": at.y - size("y") / 2.0
+                    });
+                    form.params["placing"]["center"] = Value::from(false);
+                    form.params["placing"]["position"] = corner;
+                }
+                self.apply_live();
+            }
+            return;
+        }
+        let change = files::import(&self.registry, &self.doc, path)
+            .map(|c| match level {
+                Some(level) => crate::clipart::onto_level(c, level),
+                None => c,
+            })
+            .map(|c| match at {
+                Some(at) => centred_on(c, at),
+                None => c,
+            })
+            .map_err(cut_craft_core::CommandError::Failed);
+        self.record(change, &format!("Imported {}", path.display()));
     }
 
     /// Brings `path` into the job: meshes through Orientate 3D Model, as Aspire's import
     /// does; anything else through its importer.
     pub(super) fn import_file(&mut self, path: &std::path::Path) {
-        let stl = path
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
-        if stl {
+        if is_model(path) {
             self.start_command("orientate_3d_model");
             // the model is placed in 3D, so it is shown there
             self.view = View::ThreeD;
@@ -420,40 +534,94 @@ impl CutCraftApp {
         }
     }
 
-    /// Cuts the toolpath from the previewed material (uncut material if there is none yet).
-    /// The cascade: start again from uncut material, then preview each visible toolpath.
-    pub(super) fn preview_all(&mut self) {
-        self.finish_playback();
-        self.simulation = None;
+    /// Preview All (or, `visible_only`, Preview Visible): start again from uncut material,
+    /// then preview each toolpath (each shown one) in list order.
+    pub(super) fn preview_all(&mut self, visible_only: bool) {
         let visible: Vec<EntityId> = self
             .doc
             .toolpaths
             .iter()
-            .filter(|(_, t)| t.visible)
+            .filter(|(_, t)| t.visible || !visible_only)
             .map(|(&id, _)| id)
             .collect();
+        self.preview_ids(&visible);
+        self.preview_other_side(visible_only);
+    }
+
+    /// Previews `ids` in order on fresh material, as one preview to undo.
+    pub(super) fn preview_ids(&mut self, ids: &[EntityId]) {
+        self.finish_playback();
+        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
         if self.display.animate_preview {
-            self.play(&visible);
+            self.play(ids);
             return;
         }
-        for id in visible {
+        let before = self.before_preview.take();
+        for &id in ids {
             self.preview_toolpath(id);
+        }
+        // the cascade is one preview to undo
+        self.before_preview = before;
+    }
+
+    /// A double-sided job's other side previewed too (its shown toolpaths, or all), cut
+    /// into the material's other side, which the 3D view shows as its underside.
+    fn preview_other_side(&mut self, visible_only: bool) {
+        if self.doc.job.double_sided.is_none() || self.doc.other_side.toolpaths.is_empty() {
+            return;
+        }
+        let (job, cells) = (self.doc.job, self.display.preview_cells());
+        let mut other = Material::new(&job, cells);
+        for t in self.doc.other_side.toolpaths.values() {
+            if t.visible || !visible_only {
+                other.cut(t);
+            }
+        }
+        let other = Some(std::sync::Arc::new(other));
+        if let Some(playback) = self.playback.as_mut() {
+            playback.set_other_side(other);
+        } else {
+            let material = self
+                .simulation
+                .get_or_insert_with(|| Material::new(&job, cells));
+            material.other_side = other;
+        }
+        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        if self.display.auto_open_3d {
+            self.view = View::ThreeD;
+        }
+    }
+
+    /// What a preview cuts: the job's toolpaths, or (Toolpath Tiling with a tile active)
+    /// only the active tile's moves, at the machine's corner or in their original place.
+    fn preview_source(&self) -> Cow<'_, cut_craft_core::document::Document> {
+        match self.doc.tiling.and_then(|t| t.preview(&self.doc)) {
+            Some(tiled) => Cow::Owned(tiled),
+            None => Cow::Borrowed(&self.doc),
         }
     }
 
     /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet).
     pub(super) fn play(&mut self, toolpaths: &[EntityId]) {
         self.finish_playback();
+        let source = self.preview_source();
+        let (list, marks): (Vec<cut_craft_core::toolpath::Toolpath>, Vec<u32>) = toolpaths
+            .iter()
+            .filter_map(|&id| Some((source.toolpaths.get(&id)?.clone(), super::preview_mark(id))))
+            .unzip();
+        drop(source);
         let start = self
             .simulation
             .take()
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
-        let list: Vec<&cut_craft_core::toolpath::Toolpath> = toolpaths
-            .iter()
-            .filter_map(|id| self.doc.toolpaths.get(id))
-            .collect();
-        self.playback = Some(cut_craft_core::playback::Playback::new(start, &list));
-        (self.playing, self.simulation_coarse, self.fine_3d) = (true, None, None);
+        let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
+        self.playback = Some(cut_craft_core::playback::Playback::new(start, &list).marked(&marks));
+        (
+            self.playing,
+            self.simulation_coarse,
+            self.fine_3d,
+            self.surface_gpu,
+        ) = (true, None, None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
         }
@@ -463,23 +631,33 @@ impl CutCraftApp {
     pub(super) fn finish_playback(&mut self) {
         if let Some(playback) = self.playback.take() {
             self.simulation = Some(playback.material().clone());
-            (self.playing, self.simulation_coarse, self.fine_3d) = (false, None, None);
+            (
+                self.playing,
+                self.simulation_coarse,
+                self.fine_3d,
+                self.surface_gpu,
+            ) = (false, None, None, None);
         }
     }
 
     pub(super) fn preview_toolpath(&mut self, id: EntityId) {
         if self.display.animate_preview {
+            self.finish_playback();
+            self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
             self.play(&[id]);
             return;
         }
         self.finish_playback();
-        let Some(toolpath) = self.doc.toolpaths.get(&id) else {
+        let Some(toolpath) = self.preview_source().toolpaths.get(&id).cloned() else {
             return;
         };
-        self.simulation
-            .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()))
-            .cut(toolpath);
-        (self.simulation_coarse, self.fine_3d) = (None, None);
+        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        let material = self
+            .simulation
+            .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()));
+        material.cutting = super::preview_mark(id);
+        material.cut(&toolpath);
+        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
         if self.display.auto_open_3d {
             self.view = View::ThreeD;
         }
@@ -730,16 +908,57 @@ impl CutCraftApp {
     // the history revision if that grows
     pub(super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
         if let Some(playback) = &self.playback {
-            return Some(Cow::Owned(view3d::coarse(playback.material(), MESH_CELLS)));
+            let coarse = view3d::coarse(playback.material(), MESH_CELLS);
+            return Some(Cow::Owned(self.painted(coarse)));
         }
         if let Some(material) = &self.simulation {
-            return Some(Cow::Borrowed(
-                self.simulation_coarse
-                    .get_or_insert_with(|| view3d::coarse(material, MESH_CELLS)),
-            ));
+            if self.simulation_coarse.is_none() {
+                self.simulation_coarse = Some(view3d::coarse(material, MESH_CELLS));
+            }
+            let coarse = self.simulation_coarse.as_ref().expect("made above");
+            if self.doc.job.machined_area == MachinedArea::MaterialColor
+                && coarse.other_side.is_none()
+            {
+                return Some(Cow::Borrowed(coarse));
+            }
+            return Some(Cow::Owned(self.painted(coarse.clone())));
         }
         // before a preview, the model alone: nothing where no component is
         (!self.doc.components.is_empty()).then(|| Cow::Owned(self.model_shape(MESH_CELLS)))
+    }
+
+    /// The preview's `material` painted as the job's Machined Area Color has it: in the
+    /// material's colour, one fill colour, or each toolpath's own.
+    fn painted(&self, material: Material) -> Material {
+        let job = &self.doc.job;
+        // a double-sided preview's other side, on the underside
+        let material = match job.double_sided {
+            Some(sides) => {
+                let turn = sides.flip.mirror(job.area());
+                material.with_underside(|p| turn.transform_point2(p))
+            }
+            None => material,
+        };
+        let rgb = |[r, g, b]: [u8; 3]| egui::Color32::from_rgb(r, g, b);
+        match job.machined_area {
+            MachinedArea::MaterialColor => material,
+            MachinedArea::GlobalFillColor => {
+                view3d::painted(material, |_| Some(rgb(job.fill_colour)))
+            }
+            MachinedArea::ToolpathColor => {
+                let fills: std::collections::HashMap<u32, Option<[u8; 3]>> = self
+                    .doc
+                    .toolpaths
+                    .iter()
+                    .enumerate()
+                    .map(|(place, (&id, t))| (super::preview_mark(id), t.preview_colour(place)))
+                    .collect();
+                view3d::painted(material, |id| fills.get(&id).copied().flatten().map(rgb))
+            }
+            MachinedArea::Lithophane => {
+                view3d::lit_through(material, rgb(job.colour), job.lithophane_light)
+            }
+        }
     }
 
     /// The model's shape, `cells` across; while Orientate 3D Model shows its model whole,
@@ -844,18 +1063,71 @@ impl CutCraftApp {
     /// The preview or model as a block, with Aspire's 3D mouse controls: left- or right-drag
     /// rotates, middle-drag (or Ctrl+right, or left and right together) pans, the wheel zooms
     /// about the cursor, and a double-click or F fits it again.
+    /// A drag in the 3D view while Orientate 3D Model is open: with Drag turns on the model,
+    /// a turning drag adds to its fine turn (the view's height is half a turn); with Drag
+    /// moves the axis on, a pan drag moves the model off the axis (the view's height is
+    /// about two diameters). Whether the drag was taken.
+    pub(super) fn import_drag(
+        &mut self,
+        mode: Option<view3d::DragMode>,
+        delta: egui::Vec2,
+        size: egui::Vec2,
+    ) -> bool {
+        let diameter = self.doc.job.rotary.map(|r| r.diameter);
+        let Some(form) = self.form.as_mut().filter(|f| f.id == "orientate_3d_model") else {
+            return false;
+        };
+        let add = |value: &mut Value, by: f64| {
+            *value = Value::from(value.as_f64().unwrap_or(0.0) + by);
+        };
+        let (dx, dy) = (f64::from(delta.x / size.x), f64::from(delta.y / size.y));
+        match mode {
+            Some(view3d::DragMode::Rotate) => {
+                let turn = &mut form.params["turn"];
+                let (about_x, about_z) = (dy * 180.0, dx * 180.0);
+                match turn["mode"].as_str() {
+                    Some("x") => add(&mut turn["x"], about_x),
+                    Some("y") => add(&mut turn["y"], about_z),
+                    Some("z") => add(&mut turn["z"], about_z),
+                    Some("xyz") => {
+                        add(&mut turn["x"], about_x);
+                        add(&mut turn["z"], about_z);
+                    }
+                    _ => return false,
+                }
+            }
+            Some(view3d::DragMode::Pan) => {
+                let Some(diameter) = diameter.filter(|_| form.params["axis"]["drag"] == true)
+                else {
+                    return false;
+                };
+                let per_view = 2.0 * diameter;
+                add(&mut form.params["axis"]["across"], dx * per_view);
+                add(&mut form.params["axis"]["up"], -dy * per_view);
+            }
+            None => return false,
+        }
+        form.dirty = true;
+        true
+    }
+
     pub(super) fn view_3d(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "3D view");
         self.playback_bar(ui);
         if self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty() {
-            ui.centered_and_justified(|ui| {
+            let empty = ui.centered_and_justified(|ui| {
                 ui.weak("Nothing in 3D yet: create a shape or preview the toolpaths")
             });
+            // clipart dropped on the empty view goes in the middle of the job
+            if let Some(path) = empty.response.dnd_release_payload::<std::path::PathBuf>() {
+                self.import_clipart(&path, None, None);
+            }
             return;
         }
         ui.horizontal(|ui| self.view_3d_buttons(ui));
         let (area, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+        self.view_3d_area = Some(area);
         // the ViewCube over the view's corner, so the view does not see its clicks
         let font = egui::TextStyle::Small.resolve(ui.style());
         let cube = view3d::ViewCube::new(area, ui.painter(), &font, ui.spacing().item_spacing.x);
@@ -878,14 +1150,22 @@ impl CutCraftApp {
             (self.orbit, self.framing),
             self.options.view_3d.rotation.view(),
         );
+        // while sculpting the left button sculpts; the right turns the view, the middle pans
+        let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
+        let left = left && !sculpting;
         let delta = response.drag_delta();
         if response.dragged() && delta != egui::Vec2::ZERO {
-            match view3d::drag_mode([left, right, middle], ctrl) {
-                Some(view3d::DragMode::Rotate) => {
-                    self.orbit = self.orbit.dragged_by(delta, area.size(), rotation);
+            let mode = view3d::drag_mode([left, right, middle], ctrl);
+            // Orientate 3D Model's Interactive Rotation and Rotation Axis Movement take the
+            // drag for the model when they are on
+            if !self.import_drag(mode, delta, area.size()) {
+                match mode {
+                    Some(view3d::DragMode::Rotate) => {
+                        self.orbit = self.orbit.dragged_by(delta, area.size(), rotation);
+                    }
+                    Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
+                    None => {}
                 }
-                Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
-                None => {}
             }
         }
         // the ViewCube: a drag turns the view, a click looks from the face, edge or corner
@@ -915,18 +1195,16 @@ impl CutCraftApp {
             .double_clicked()
             .then(|| response.interact_pointer_pos())
             .flatten();
-        let picked = double.and_then(|at| self.component_at_3d(fit, at));
-        if let Some(id) = picked {
-            if ui.input(|i| i.modifiers.shift) {
-                if !self.doc.selected_components.remove(&id) {
-                    self.doc.selected_components.insert(id);
-                }
-            } else if self.doc.selected_components.contains(&id) {
-                // again on a selected component: its editing handles, as in Aspire
-                self.invoke(ui.ctx(), "transform");
-            } else {
-                self.doc.selected_components = [id].into();
-            }
+        // while a preview shows, a double-click takes away the piece cut free under it
+        let removed = double
+            .filter(|_| self.playback.is_none() && self.simulation.is_some())
+            .is_some_and(|at| self.remove_preview_piece(fit, at));
+        let picked = double
+            .filter(|_| !removed)
+            .and_then(|at| self.component_at_3d(fit, at));
+        if removed {
+        } else if let Some(id) = picked {
+            self.pick_3d(ui, id);
         } else if double.is_some() || (response.hovered() && fit_key) {
             self.framing = self.framing.fitted();
         }
@@ -940,6 +1218,20 @@ impl CutCraftApp {
         self.handles_3d(ui, area, fit);
         self.anchors_3d(ui, &response, area, fit);
         self.view_3d_menu(ui, &response, fit);
+    }
+
+    /// A double-click on component `id`: Shift adds or takes it away; again on a selected
+    /// one, its editing handles, as in Aspire; else it alone is selected.
+    fn pick_3d(&mut self, ui: &egui::Ui, id: EntityId) {
+        if ui.input(|i| i.modifiers.shift) {
+            if !self.doc.selected_components.remove(&id) {
+                self.doc.selected_components.insert(id);
+            }
+        } else if self.doc.selected_components.contains(&id) {
+            self.invoke(ui.ctx(), "transform");
+        } else {
+            self.doc.selected_components = [id].into();
+        }
     }
 
     /// A right-click picks the topmost component under it (keeping a selection it is part
@@ -1017,7 +1309,7 @@ impl CutCraftApp {
     /// [`FINE_MESH_CELLS`].
     fn fine_surface(&mut self) -> Material {
         if let Some(material) = &self.simulation {
-            return view3d::coarse(material, FINE_MESH_CELLS);
+            return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
         }
         let job = &self.doc.job;
         #[expect(
@@ -1047,9 +1339,8 @@ impl CutCraftApp {
                 .is_some_and(|f| f.model.is_some() && f.model_whole),
         };
         if let Some(playback) = &self.playback {
-            let surface = view3d::coarse(playback.material(), MESH_CELLS);
-            let plain = |_, _| None;
-            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides, plain));
+            let surface = self.painted(view3d::coarse(playback.material(), MESH_CELLS));
+            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
         }
         if let Some((kept, geometry)) = &self.surface_gpu
             && *kept == key
@@ -1059,19 +1350,27 @@ impl CutCraftApp {
         // while a handle drags the model about, the quick surface, made again each frame
         // and not kept, so the fine one is made once the drag ends
         let dragging = self.drag_base.is_some();
-        let surface = if dragging {
+        let mut surface = if dragging {
             self.model_shape(MESH_CELLS)
         } else {
             self.fine_surface()
         };
-        // the components' own colours, where the model is theirs (a preview has none)
-        let (doc, modelled) = (&self.doc, self.simulation.is_none());
-        let tint = |c, r| {
-            modelled
-                .then(|| cut_craft_core::component::colour_at(doc, surface.centre(c, r)))
-                .flatten()
-        };
-        let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides, tint));
+        // the components' own colours (Solid Color), where the model is theirs: painted as a
+        // preview paints the toolpaths' colours
+        if self.simulation.is_none() {
+            let doc = &self.doc;
+            let paint: Vec<u32> = (0..surface.rows)
+                .flat_map(|r| (0..surface.columns).map(move |c| (c, r)))
+                .map(|(c, r)| {
+                    cut_craft_core::component::colour_at(doc, surface.centre(c, r))
+                        .map_or(0, |[r, g, b]| u32::from_be_bytes([1, r, g, b]))
+                })
+                .collect();
+            if paint.iter().any(|&p| p != 0) {
+                surface.paint = paint;
+            }
+        }
+        let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
         if !dragging {
             self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
         }
@@ -1466,6 +1765,136 @@ impl CutCraftApp {
                 self.status.set_message(&e);
             }
         }
+    }
+
+    /// Takes away the previewed material's piece under `at` in the 3D view's picture `fit`
+    /// (Aspire's double-click on waste); false when the click is off the material or on
+    /// material cut right through.
+    /// The 3D view's drops, sculpting and saved image: clipart dropped on it goes where it
+    /// was dropped on the material, while sculpting a left drag is a stroke (true then), and
+    /// Save Shaded Image asks for the window's picture once the view is drawn.
+    fn view_3d_drop_and_sculpt(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        area: egui::Rect,
+    ) -> bool {
+        self.ask_for_shaded_image(ui.ctx());
+        if let Some(path) = response.dnd_release_payload::<std::path::PathBuf>() {
+            let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
+            let at = ui
+                .ctx()
+                .pointer_latest_pos()
+                .and_then(|at| self.point_on_surface(fit, at));
+            self.import_clipart(&path, at, None);
+        }
+        let sculpting = self.form.as_ref().is_some_and(|f| f.id == "sculpt");
+        if sculpting {
+            self.sculpt_3d(response, area.shrink(ui.spacing().item_spacing.x * 2.0));
+        }
+        sculpting
+    }
+
+    /// View ▸ Save Shaded Image to `path`: the 3D view is shown, its window's picture asked
+    /// for once it has been drawn, and the 3D view's part saved when it comes.
+    pub(super) fn save_shaded_image(&mut self, path: std::path::PathBuf) {
+        self.view = View::ThreeD;
+        self.shaded_image = Some(path);
+    }
+
+    /// Asks for the window's picture once the 3D view has been drawn for Save Shaded Image;
+    /// the 3D view's part of it is saved when it comes.
+    fn ask_for_shaded_image(&mut self, ctx: &egui::Context) {
+        let (Some(path), Some(area)) = (self.shaded_image.take(), self.view_3d_area) else {
+            return;
+        };
+        let (saved, ctx2) = (std::sync::Arc::clone(&self.shaded_saved), ctx.clone());
+        let pixels = area * ctx.pixels_per_point();
+        let callback = egui::ScreenshotCallback::new(move |picture| {
+            let said = save_part(&picture, pixels, &path).map_or_else(
+                |e| e,
+                |()| format!("Saved the shaded image as {}", path.display()),
+            );
+            if let Ok(mut slot) = saved.lock() {
+                *slot = Some(said);
+            }
+            ctx2.request_repaint();
+        });
+        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(callback));
+    }
+
+    /// What saving the shaded image said, once it has.
+    pub(super) fn shaded_image_arrived(&mut self) {
+        let said = self
+            .shaded_saved
+            .lock()
+            .ok()
+            .and_then(|mut slot| slot.take());
+        if let Some(said) = said {
+            self.status.set_message(&said);
+        }
+    }
+
+    /// Sculpting in the 3D view: a left drag over the model is a stroke, its points where
+    /// the pointer met the surface, sculpted as one change when the button comes up.
+    fn sculpt_3d(&mut self, response: &egui::Response, fit: egui::Rect) {
+        if response.drag_started_by(egui::PointerButton::Primary) {
+            self.stroke.clear();
+        }
+        if response.dragged_by(egui::PointerButton::Primary)
+            && let Some(at) = response
+                .interact_pointer_pos()
+                .and_then(|at| self.point_on_surface(fit, at))
+            && self.stroke.last() != Some(&at)
+        {
+            self.stroke.push(at);
+        }
+        if response.drag_stopped_by(egui::PointerButton::Primary)
+            && let (Some(&start), Some(&end)) = (self.stroke.first(), self.stroke.last())
+        {
+            let drag = cut_craft_core::Drag {
+                start,
+                end,
+                from_center: false,
+                constrain: false,
+            };
+            self.draw("sculpt", drag);
+        }
+    }
+
+    /// The job point of the 3D view's surface under `at` on the picture `fit`, if any.
+    fn point_on_surface(
+        &mut self,
+        fit: egui::Rect,
+        at: egui::Pos2,
+    ) -> Option<cut_craft_core::geometry::Point> {
+        let job = self.shown_job();
+        let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
+        let surface = self.surface_3d().map(Cow::into_owned)?;
+        let wrap = wrap_for(&job, on, true, &surface);
+        let (column, row) = view3d::pick(&surface, orbit, framing, fit, wrap, at)?;
+        Some(surface.centre(column, row))
+    }
+
+    pub(super) fn remove_preview_piece(&mut self, fit: egui::Rect, at: egui::Pos2) -> bool {
+        let job = self.shown_job();
+        let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return false;
+        };
+        let wrap = wrap_for(&job, on, true, &surface);
+        let Some((column, row)) = view3d::pick(&surface, orbit, framing, fit, wrap, at) else {
+            return false;
+        };
+        let p = surface.centre(column, row);
+        let before = self.simulation.clone();
+        let removed = self.simulation.as_mut().map_or(0, |m| m.remove_piece(p));
+        if removed > 0 {
+            self.before_preview = Some(super::BeforePreview(before));
+            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+            self.status.set_message("Removed the piece cut free");
+        }
+        removed > 0
     }
 
     /// The topmost shown component at the point of the 3D view's picture `fit` under `at`.
@@ -1921,6 +2350,121 @@ impl CutCraftApp {
 
     /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
     /// a right-click on one opening its menu.
+    /// The up and down arrows over the toolpath list: the selected toolpath moves through the
+    /// cut order and stays selected.
+    fn toolpath_order_arrows(&mut self, ui: &mut egui::Ui) {
+        let mut moved = None;
+        let mut new_group = false;
+        ui.horizontal(|ui| {
+            use cmd_reorder_toolpath::{Direction, neighbour};
+            for (direction, arrow, tip) in [
+                (Direction::Up, "⏶", "Move Toolpath Up (cut it sooner)"),
+                (Direction::Down, "⏷", "Move Toolpath Down (cut it later)"),
+            ] {
+                let can = self
+                    .selected_toolpath
+                    .is_some_and(|id| neighbour(&self.doc, id, direction).is_some());
+                if ui
+                    .add_enabled(can, egui::Button::new(arrow))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    moved = Some(direction);
+                }
+            }
+            new_group = ui
+                .button("New Group")
+                .on_hover_text("Create Empty Group: toolpaths made while it is picked join it")
+                .clicked();
+        });
+        if new_group {
+            let params = serde_json::json!({
+                "toolpaths": [],
+                "group": self.doc.next_toolpath_group_name(),
+            });
+            if let Err(e) = self.apply("group_toolpaths", &params) {
+                self.status.set_message(&e);
+            }
+        }
+        if let (Some(direction), Some(id)) = (moved, self.selected_toolpath) {
+            let to = cmd_reorder_toolpath::neighbour(&self.doc, id, direction);
+            let params = serde_json::json!({ "toolpath": id, "direction": direction });
+            match self.apply("reorder_toolpath", &params) {
+                Ok(()) => self.selected_toolpath = to,
+                Err(e) => self.status.set_message(&e),
+            }
+        }
+    }
+
+    /// The toolpath list's tick showing or hiding a toolpath, or its swatch colouring its
+    /// preview, as a Toolpath Properties edit.
+    fn list_properties(
+        &mut self,
+        shown: Option<(EntityId, bool)>,
+        coloured: Option<(EntityId, [u8; 3])>,
+    ) {
+        // a tick shows or hides a toolpath, a swatch colours its preview
+        let properties = shown
+            .and_then(|(id, visible)| Some((id, self.doc.toolpaths.get(&id)?, visible, None)))
+            .or_else(|| {
+                let (id, rgb) = coloured?;
+                let t = self.doc.toolpaths.get(&id)?;
+                Some((id, t, t.visible, Some(serde_json::json!({ "colour": rgb }))))
+            })
+            .map(|(id, t, visible, preview)| {
+                let mut params =
+                    serde_json::json!({ "toolpath": id, "name": t.name, "visible": visible });
+                if let Some(preview) = preview {
+                    params["preview"] = preview;
+                }
+                params
+            });
+        if let Some(params) = properties
+            && let Err(e) = self.apply("toolpath_properties", &params)
+        {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// The toolpath list's rows: each group, its toolpaths under it (named with it), then
+    /// the toolpaths in no group; and each toolpath's place in the cut order.
+    fn toolpath_rows(&self) -> (Vec<(Option<EntityId>, String)>, Places) {
+        let mut rows = vec![];
+        for group in self.doc.toolpath_groups_in_use() {
+            rows.push((None, group.clone()));
+            let members = self.doc.toolpaths_in_group(&group);
+            rows.extend(members.into_iter().map(|id| (Some(id), group.clone())));
+        }
+        let ungrouped = self.doc.toolpaths.iter().filter(|(_, t)| t.group.is_none());
+        rows.extend(ungrouped.map(|(&id, _)| (Some(id), String::new())));
+        let places = self
+            .doc
+            .toolpaths
+            .keys()
+            .enumerate()
+            .map(|(n, &id)| (id, n))
+            .collect();
+        (rows, places)
+    }
+
+    /// A group's row in the toolpath list: a click picks it (again: unpicks), a right-click
+    /// picks it and opens its menu. Whether it was picked, and the menu action chosen.
+    fn group_row(&self, ui: &mut egui::Ui, group: &str) -> (Option<bool>, Option<String>) {
+        let picked = self.selected_group.as_deref() == Some(group);
+        let name = egui::RichText::new(format!("📁 {group}")).strong();
+        let label = ui
+            .selectable_label(picked, name)
+            .on_hover_text("A toolpath group: toolpaths made while it is picked join it");
+        let pick = if label.clicked() {
+            Some(!picked)
+        } else if label.secondary_clicked() {
+            Some(true)
+        } else {
+            None
+        };
+        (pick, self.popup(&label, || gui::toolpath_group_menu(group)))
+    }
+
     pub(super) fn toolpath_list(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath list");
         ui.strong("Toolpath List");
@@ -1933,6 +2477,8 @@ impl CutCraftApp {
                 "delete_toolpath",
                 "preview_toolpath",
                 "preview_all_toolpaths",
+                "preview_visible_toolpaths",
+                "undo_last_preview",
                 "reset_preview",
             ],
         }];
@@ -1940,34 +2486,75 @@ impl CutCraftApp {
         if self.doc.toolpaths.is_empty() {
             ui.weak("No toolpaths yet");
         }
+        self.toolpath_order_arrows(ui);
         let mut chosen = None;
+        let mut shown = None;
+        let mut edit = None;
+        let mut coloured = None;
+        let (rows, places) = self.toolpath_rows();
+        let mut group_picked = None;
+        // each toolpath's colour in the preview, when the machined areas take them
+        let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (&id, toolpath) in &self.doc.toolpaths {
-                let selected = self.selected_toolpath == Some(id);
-                let label = if toolpath.stale {
-                    let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
-                        .color(ui.visuals().warn_fg_color);
-                    ui.selectable_label(selected, name).on_hover_text(format!(
-                        "{}\nOut of date: what it was made from has changed since. \
-                         Recalculate it.",
-                        toolpath.tool.name
-                    ))
-                } else {
-                    ui.selectable_label(selected, &toolpath.name)
-                        .on_hover_text(&toolpath.tool.name)
+            for (id, group) in &rows {
+                let Some(id) = *id else {
+                    let (picked, action) = self.group_row(ui, group);
+                    if let Some(on) = picked {
+                        group_picked = Some((group.clone(), on));
+                    }
+                    if action.is_some() {
+                        chosen = action;
+                    }
+                    continue;
                 };
+                let toolpath = &self.doc.toolpaths[&id];
+                let selected = self.selected_toolpath == Some(id);
+                let swatch = swatches.then_some((places[&id], self.doc.job.colour));
+                let (label, ticked, rgb) =
+                    toolpath_row(ui, toolpath, selected, swatch, !group.is_empty());
+                if let Some(visible) = ticked {
+                    shown = Some((id, visible));
+                }
+                if let Some(rgb) = rgb {
+                    coloured = Some((id, rgb));
+                }
                 if label.clicked() {
                     self.selected_toolpath = if selected { None } else { Some(id) };
+                    self.selected_group = None;
+                }
+                // a double-click opens the toolpath's form, as Aspire's list does
+                if label.double_clicked() {
+                    edit = Some(id);
                 }
                 // Aspire's toolpath menu acts on the row right-clicked, so it selects it
                 if label.secondary_clicked() {
                     self.selected_toolpath = Some(id);
+                    self.selected_group = None;
                 }
-                if let Some(action) = self.popup(&label, || gui::toolpath_menu(id, toolpath)) {
+                if let Some(action) =
+                    self.popup(&label, || gui::toolpath_menu(&self.doc, id, toolpath))
+                {
                     chosen = Some(action);
                 }
             }
         });
+        if let Some((group, on)) = group_picked {
+            self.selected_group = on.then_some(group);
+            self.selected_toolpath = None;
+        }
+        if let Some((id, visible)) = shown
+            && let Some(t) = self.doc.toolpaths.get(&id)
+        {
+            let params = serde_json::json!({ "toolpath": id, "name": t.name, "visible": visible });
+            if let Err(e) = self.apply("toolpath_properties", &params) {
+                self.status.set_message(&e);
+            }
+        }
+        self.list_properties(shown, coloured);
+        if let Some(id) = edit {
+            self.selected_toolpath = Some(id);
+            self.invoke(ui.ctx(), "edit_toolpath");
+        }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
         }
@@ -1979,6 +2566,10 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             ui.label(&self.status.message);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                // the version, at the far right, as Help ▸ About gives it
+                ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
+                    .on_hover_text("Cut Craft's version (Help ▸ About)");
+                ui.separator();
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
                     let (unit, other) = match self.doc.job.units {
@@ -2005,6 +2596,148 @@ impl CutCraftApp {
             self.set_units(to);
         }
     }
+}
+
+/// Each toolpath's place in the cut order.
+type Places = std::collections::BTreeMap<EntityId, usize>;
+
+/// A toolpath's row in the list: its tick, its preview swatch (given its place and the
+/// material's colour, when the preview takes toolpath colours) and its name, indented in a
+/// group. The name's response, the tick's new state if changed, and the colour picked if any.
+fn toolpath_row(
+    ui: &mut egui::Ui,
+    toolpath: &cut_craft_core::toolpath::Toolpath,
+    selected: bool,
+    swatch: Option<(usize, [u8; 3])>,
+    indented: bool,
+) -> (egui::Response, Option<bool>, Option<[u8; 3]>) {
+    let (mut ticked, mut rgb) = (None, None);
+    let label = ui
+        .horizontal(|ui| {
+            if indented {
+                ui.add_space(ui.spacing().indent);
+            }
+            let mut visible = toolpath.visible;
+            if ui
+                .checkbox(&mut visible, "")
+                .on_hover_text("Show or hide this toolpath")
+                .changed()
+            {
+                ticked = Some(visible);
+            }
+            if let Some((place, material)) = swatch {
+                rgb = preview_swatch(ui, toolpath, place, material);
+            }
+            if toolpath.stale {
+                let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
+                    .color(ui.visuals().warn_fg_color);
+                ui.selectable_label(selected, name).on_hover_text(format!(
+                    "{}\nOut of date: what it was made from has changed since. Recalculate it.",
+                    toolpath.tool.name
+                ))
+            } else {
+                ui.selectable_label(selected, &toolpath.name)
+                    .on_hover_text(&toolpath.tool.name)
+            }
+        })
+        .inner;
+    (label, ticked, rgb)
+}
+
+/// The part of `picture` inside `area` (in its pixels) saved as a PNG at `path`.
+fn save_part(
+    picture: &egui::ColorImage,
+    area: egui::Rect,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let [width, height] = picture.size;
+    let clamp = |v: f32, most: usize| {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "pixels"
+        )]
+        let v = v.round().max(0.0) as usize;
+        v.min(most)
+    };
+    let (x0, y0) = (clamp(area.min.x, width), clamp(area.min.y, height));
+    let (x1, y1) = (clamp(area.max.x, width), clamp(area.max.y, height));
+    if x1 <= x0 || y1 <= y0 {
+        return Err("the 3D view was not on screen to save".into());
+    }
+    let mut out = image::RgbaImage::new(
+        u32::try_from(x1 - x0).map_err(|e| e.to_string())?,
+        u32::try_from(y1 - y0).map_err(|e| e.to_string())?,
+    );
+    for (y, row) in (y0..y1).enumerate() {
+        for (x, column) in (x0..x1).enumerate() {
+            let c = picture.pixels[row * width + column];
+            let (x, y) = (u32::try_from(x).unwrap_or(0), u32::try_from(y).unwrap_or(0));
+            out.put_pixel(x, y, image::Rgba(c.to_srgba_unmultiplied()));
+        }
+    }
+    out.save(path)
+        .map_err(|e| format!("could not save {}: {e}", path.display()))
+}
+
+/// Whether `path` is a mesh, imported through Orientate 3D Model.
+fn is_model(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("stl") || e.eq_ignore_ascii_case("obj"))
+}
+
+/// `change` (an import) with what it adds moved to be centred on `at`.
+fn centred_on(mut change: Change, at: cut_craft_core::geometry::Point) -> Change {
+    use cut_craft_core::Edit;
+    use cut_craft_core::geometry::Rect;
+    let boxes = change.edits.iter().filter_map(|e| match e {
+        Edit::Add { path, .. } => Some(path.bounds()),
+        Edit::AddComponent { component, .. } => Some(component.extent()),
+        Edit::AddBitmap { bitmap, .. } => Some(bitmap.rect),
+        _ => None,
+    });
+    let Some(all) = boxes.reduce(Rect::union) else {
+        return change;
+    };
+    let by = at - all.center();
+    let t = cut_craft_core::glam::DAffine2::from_translation(by);
+    for edit in &mut change.edits {
+        match edit {
+            Edit::Add { path, .. } => *path = path.transformed(&t),
+            Edit::AddComponent { component, .. } => **component = component.transformed(&t),
+            Edit::AddBitmap { bitmap, .. } => {
+                bitmap.rect = Rect {
+                    min: bitmap.rect.min + by,
+                    max: bitmap.rect.max + by,
+                };
+            }
+            _ => {}
+        }
+    }
+    change
+}
+
+/// A toolpath's colour in a Toolpath Color preview, as a swatch beside it in the toolpath
+/// list (the material's `colour` when it has no fill); the colour picked, if one was.
+fn preview_swatch(
+    ui: &mut egui::Ui,
+    toolpath: &cut_craft_core::toolpath::Toolpath,
+    place: usize,
+    colour: [u8; 3],
+) -> Option<[u8; 3]> {
+    let given = toolpath.preview_colour(place);
+    let mut rgb = given.unwrap_or(colour);
+    let tip = if given.is_some() {
+        "Its colour in the preview (right-click it for No Fill)"
+    } else {
+        "No Fill: previewed in the material's colour"
+    };
+    // ponytail: a drag in the picker is an edit a frame; coalesce them if the undo list
+    // gets long
+    ui.color_edit_button_srgb(&mut rgb)
+        .on_hover_text(tip)
+        .changed()
+        .then_some(rgb)
 }
 
 /// The modeling plane as a sheet of light blue (the zero plane a model is placed on), a

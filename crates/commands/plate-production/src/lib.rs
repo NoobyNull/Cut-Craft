@@ -2,19 +2,31 @@
 //! Plate Production). The template is the selected vectors; text in it written with Draw
 //! Text may hold variables, `!!name!!`, each filled from a column of the data file or from a
 //! counter. Plates fill the material inside the margins, one per row of data; when they need
-//! more than one sheet of material each sheet's plates go on a layer of their own.
+//! more than one sheet of material each sheet's plates go on a layer of their own. The
+//! template's toolpaths are made again for each sheet, shifted onto its plates.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
-use cut_craft_core::glam::DAffine2;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::glam::{DAffine2, DVec3};
+use cut_craft_core::toolpath::{Move, Toolpath};
+use cut_craft_core::{Change, Command, CommandError, Edit, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub struct PlateProduction;
 
-/// One step of laying out the plates, run on the document as the steps before left it.
-type PlateStep = Box<dyn Fn(&Document) -> Result<Change, CommandError>>;
+/// One step of laying out the plates, run on the document as the steps before left it:
+/// which plate it lays, and the template vectors its copies stand for, in order.
+struct PlateStep {
+    plate: usize,
+    template: Vec<EntityId>,
+    run: StepFn,
+}
+
+type StepFn = Box<dyn Fn(&Document) -> Result<Change, CommandError>>;
+
+/// Each plate's copy of each template vector: (plate, template vector) to the copy.
+type Copies = std::collections::HashMap<(usize, EntityId), EntityId>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -98,11 +110,21 @@ pub struct Params {
     pub data: Data,
     #[schemars(title = "Number Format", extend("x-section" = true))]
     pub counter: Counter,
+    /// The template's toolpaths made again for each sheet of plates, each named "S1 - …"
+    /// after its sheet and the template's toolpath
+    #[serde(default = "yes")]
+    #[schemars(title = "Create Toolpaths")]
+    pub create_toolpaths: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Default for Params {
     fn default() -> Self {
         Self {
+            create_toolpaths: true,
             layout: Layout {
                 top_margin: 5.0,
                 bottom_margin: 5.0,
@@ -214,33 +236,108 @@ impl Command for PlateProduction {
         let mut steps: Vec<PlateStep> = vec![];
         for (k, &(sheet, at)) in spots.iter().enumerate() {
             let shift = DAffine2::from_translation(at - bounds.min);
-            let plain = plain.clone();
+            let copied = plain.clone();
             let new_layer = sheets > 1 && (k == 0 || spots[k - 1].0 != sheet);
-            steps.push(Box::new(move |d: &Document| {
-                let mut c = Change::builder(d);
-                if new_layer {
-                    let layer = c.add_layer(&format!("Sheet {}", sheet + 1));
-                    c.set_current_layer(layer);
-                }
-                for id in &plain {
-                    c.add(d.vectors[id].transformed(&shift));
-                }
-                Ok(c.finish())
-            }));
-            for (_, spec) in &texts {
+            steps.push(PlateStep {
+                plate: k,
+                template: plain.clone(),
+                run: Box::new(move |d: &Document| {
+                    let mut c = Change::builder(d);
+                    if new_layer {
+                        let layer = c.add_layer(&format!("Sheet {}", sheet + 1));
+                        c.set_current_layer(layer);
+                    }
+                    for id in &copied {
+                        c.add(d.vectors[id].transformed(&shift));
+                    }
+                    Ok(c.finish())
+                }),
+            });
+            for (group, spec) in &texts {
                 let mut params: cmd_draw_text::Params = serde_json::from_value((*spec).clone())
                     .map_err(|e| CommandError::Failed(format!("a template text: {e}")))?;
                 params.text = fill(&params.text, &p.data.variables, &rows[k], &p.counter, k);
                 params.anchor.x += at.x - bounds.min.x;
                 params.anchor.y += at.y - bounds.min.y;
                 params.replaces = None;
-                steps.push(Box::new(move |d: &Document| {
-                    <cmd_draw_text::DrawText as Command>::run(d, &params)
-                }));
+                steps.push(PlateStep {
+                    plate: k,
+                    template: doc.group_members_of(*group),
+                    run: Box::new(move |d: &Document| {
+                        <cmd_draw_text::DrawText as Command>::run(d, &params)
+                    }),
+                });
             }
         }
-        Change::chain_over(doc, &steps, |d, step| step(d))
+        // each plate's copy of each template vector, as the steps make them
+        let copies: std::cell::RefCell<Copies> = std::cell::RefCell::new(Copies::new());
+        let laid = Change::chain_over(doc, &steps, |d, step| {
+            let change = (step.run)(d)?;
+            let made = change.edits.iter().filter_map(|e| match e {
+                Edit::Add { id, .. } => Some(*id),
+                _ => None,
+            });
+            let mut copies = copies.borrow_mut();
+            for (template, copy) in step.template.iter().zip(made) {
+                copies.insert((step.plate, *template), copy);
+            }
+            Ok(change)
+        })?;
+        if !p.create_toolpaths {
+            return Ok(laid);
+        }
+        let mut after = doc.clone();
+        after
+            .apply(&laid)
+            .map_err(|e| CommandError::Failed(e.to_string()))?;
+        let toolpaths =
+            sheet_toolpaths(doc, &after, &template, &spots, bounds, &copies.into_inner());
+        Ok(laid.then(toolpaths))
     }
+}
+
+/// The template's toolpaths once per sheet of plates: each toolpath whose vectors are in
+/// `template`, its moves shifted onto every plate of the sheet (`spots`: each plate's sheet
+/// and place, `bounds` the template's box), its vectors the plates' `copies`, named after
+/// the sheet and the toolpath.
+fn sheet_toolpaths(
+    doc: &Document,
+    after: &Document,
+    template: &[EntityId],
+    spots: &[(usize, Point)],
+    bounds: Rect,
+    copies: &Copies,
+) -> Change {
+    let sheets = spots.iter().map(|s| s.0).max().map_or(1, |s| s + 1);
+    let mut c = Change::builder(after);
+    let of_template = |t: &&Toolpath| t.vectors.iter().any(|v| template.contains(v));
+    for t in doc.toolpaths.values().filter(of_template) {
+        for sheet in 0..sheets {
+            let (mut moves, mut power, mut vectors) = (vec![], vec![], vec![]);
+            for (k, &(_, at)) in spots.iter().enumerate().filter(|(_, s)| s.0 == sheet) {
+                let shift = at - bounds.min;
+                moves.extend(t.moves.iter().map(|m| Move {
+                    kind: m.kind,
+                    to: m.to + DVec3::new(shift.x, shift.y, 0.0),
+                }));
+                power.extend(t.power.iter().copied());
+                vectors.extend(
+                    t.vectors
+                        .iter()
+                        .filter_map(|v| copies.get(&(k, *v)).copied()),
+                );
+            }
+            c.add_toolpath(Toolpath {
+                name: format!("S{} - {}", sheet + 1, t.name),
+                vectors,
+                moves,
+                power,
+                stale: false,
+                ..t.clone()
+            });
+        }
+    }
+    c.finish()
 }
 
 /// The data's rows; with no file, one empty row per plate asked for.
@@ -440,5 +537,73 @@ mod tests {
         assert_eq!(spots[2].0, 1, "a second sheet");
         let big = Rect::new(Point::ZERO, Point::new(200.0, 200.0));
         assert!(layout(material, big, &l, 1).is_err());
+    }
+
+    #[test]
+    fn the_templates_toolpaths_are_made_again_for_each_sheet_of_plates() {
+        use cut_craft_core::toolpath::{MoveKind, Tool};
+        let mut doc = template();
+        let border = *doc.selection.iter().last().unwrap();
+        let at = |x, y, z| DVec3::new(x, y, z);
+        let moves = vec![
+            Move {
+                kind: MoveKind::Rapid,
+                to: at(5.0, 5.0, 5.0),
+            },
+            Move {
+                kind: MoveKind::Plunge,
+                to: at(5.0, 5.0, -2.0),
+            },
+            Move {
+                kind: MoveKind::Cut,
+                to: at(45.0, 5.0, -2.0),
+            },
+        ];
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(Toolpath {
+            name: "Profile".into(),
+            strategy: "profile_toolpath".into(),
+            params: serde_json::Value::Null,
+            tool: Tool::default(),
+            vectors: vec![border],
+            moves: moves.clone(),
+            visible: true,
+            power: vec![],
+            stale: false,
+            group: None,
+        });
+        doc.apply(&c.finish()).unwrap();
+        let without = doc.clone();
+        let mut p = PlateProduction::initial_params(&doc);
+        p.data.file = data_file("toolpaths", "name\nI\nH\n");
+        run_on::<PlateProduction>(&mut doc, &p);
+        let made: Vec<&Toolpath> = doc
+            .toolpaths
+            .values()
+            .filter(|t| t.name.starts_with("S1 - "))
+            .collect();
+        assert_eq!(made.len(), 1, "one per template toolpath per sheet");
+        let t = made[0];
+        assert_eq!(
+            (t.name.as_str(), t.strategy.as_str()),
+            ("S1 - Profile", "profile_toolpath")
+        );
+        assert_eq!(
+            t.moves.len(),
+            2 * moves.len(),
+            "the template's moves on each plate"
+        );
+        assert_eq!(t.vectors.len(), 2, "the two plates' borders");
+        assert!(t.vectors.iter().all(|v| doc.vectors.contains_key(v)));
+        // each plate's cut is the template's, shifted where the plate went
+        let shift = t.moves[1].to - moves[1].to;
+        assert!(shift.z.abs() < 1e-9 && (t.moves[2].to - moves[2].to - shift).length() < 1e-9);
+        let second = t.moves[moves.len() + 1].to - moves[1].to;
+        assert!(second != shift && second.z.abs() < 1e-9);
+        // without the option, only the vectors
+        let mut doc = without;
+        p.create_toolpaths = false;
+        run_on::<PlateProduction>(&mut doc, &p);
+        assert!(doc.toolpaths.values().all(|t| !t.name.starts_with("S1 - ")));
     }
 }

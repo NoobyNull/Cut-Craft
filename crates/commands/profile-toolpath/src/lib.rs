@@ -785,6 +785,15 @@ mod tests {
     /// The tabs a profile round a `w` x `h` rectangle leaves, cut `depth` deep with a 1/4"
     /// bit in 1/4" passes: (how many, their thickness, lifted length on the centre line).
     fn tabs_on(w: f64, h: f64, depth: f64) -> (usize, f64, f64) {
+        tabs_with(w, h, depth, cut_craft_core::entry::TabSettings::default())
+    }
+
+    fn tabs_with(
+        w: f64,
+        h: f64,
+        depth: f64,
+        tab: cut_craft_core::entry::TabSettings,
+    ) -> (usize, f64, f64) {
         let quarter = 6.35;
         let tool = Tool {
             diameter: quarter,
@@ -800,6 +809,7 @@ mod tests {
                 depth,
                 tool,
                 tabs: Tabs::Flat,
+                tab,
                 ..Params::default()
             },
         )
@@ -849,6 +859,23 @@ mod tests {
         assert!((thickness - 3.0).abs() < 1e-6, "half the cut: {thickness}");
         // a tiny one is not all tab
         assert_eq!(tabs_on(15.0, 15.0, 19.05).0, 1);
+    }
+
+    #[test]
+    fn tabs_by_distance_keep_between_the_minimum_and_maximum_number() {
+        use cut_craft_core::entry::{TabSettings, TabSpacing};
+        let by = |distance: f64, minimum: u32, maximum: u32| TabSettings {
+            spacing: TabSpacing::ConstantDistance,
+            distance,
+            minimum,
+            maximum,
+            ..TabSettings::default()
+        };
+        // 2,440 mm round at one every 100 mm wants 24
+        assert_eq!(tabs_with(400.0, 800.0, 19.05, by(100.0, 1, 100)).0, 24);
+        assert_eq!(tabs_with(400.0, 800.0, 19.05, by(100.0, 2, 8)).0, 8);
+        // a small part wanting one gets the minimum
+        assert_eq!(tabs_with(60.0, 60.0, 19.05, by(500.0, 2, 8)).0, 2);
     }
 
     /// The cutting moves of each path, in the order the paths are cut: each starts where the

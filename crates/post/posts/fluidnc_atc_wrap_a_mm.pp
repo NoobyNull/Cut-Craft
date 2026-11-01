@@ -3,6 +3,13 @@
 + Cut Craft wraps Y for a cylinder along X and X for one along Y.
 + Written for Cut Craft from the documented .pp format (re/SPEC.md).
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-24 First version: wrapped onto A, inverse time
++ Cut Craft  2026-10-27 A as the machine's 4th axis
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"
@@ -22,6 +29,7 @@ VAR Y_HOME_POSITION = [YH|A|Y|1.3]
 VAR Z_HOME_POSITION = [ZH|A|Z|1.3]
 VAR SAFE_Z_HEIGHT = [SAFEZ|A|Z|1.3]
 VAR TOOL_NUMBER = [T|A|T|1.0]
+VAR DWELL_TIME = [DWELL|A|P|1.2]
 VAR WRAP_DIAMETER = [WRAP_DIA|A||1.3]
 
 begin HEADER
@@ -53,6 +61,9 @@ begin FIRST_FEED_MOVE
 
 begin FEED_MOVE
 "G1 [X] [Y] [Z] [FI]"
+
+begin DWELL_MOVE
+"G4 [DWELL]"
 
 begin TOOLCHANGE
 "G94"

@@ -1,4 +1,6 @@
-//! Array Copy: a grid of copies of the selected vectors, above and to the right of them.
+//! Array Copy: a grid of copies of the selected vectors, above and to the right of them,
+//! each mirrored or turned in a repeating block (symmetry), every other row or column moved
+//! along (displacement), and if asked all grouped.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
@@ -19,6 +21,38 @@ pub enum Spacing {
     Offset,
 }
 
+/// How the copies in each 2 × 2 block of the grid are turned: the original's corner as it
+/// is, the others mirrored or turned about their own centres.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Symmetry {
+    /// Every copy as the original
+    #[default]
+    None,
+    /// Every other column mirrored left to right
+    MirrorColumns,
+    /// Every other row mirrored top to bottom
+    MirrorRows,
+    /// Both: a four-way mirrored block
+    MirrorBoth,
+    /// Every other copy, chequered, turned half round
+    Rotate,
+}
+
+impl Symmetry {
+    /// The turn of the copy in `column`, `row` about the origin: (mirror X, mirror Y).
+    fn flips(self, column: u32, row: u32) -> (bool, bool) {
+        let (odd_column, odd_row) = (column % 2 == 1, row % 2 == 1);
+        match self {
+            Self::None => (false, false),
+            Self::MirrorColumns => (odd_column, false),
+            Self::MirrorRows => (false, odd_row),
+            Self::MirrorBoth => (odd_column, odd_row),
+            Self::Rotate => (odd_column != odd_row, odd_column != odd_row),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// Copies up the job, the original's row included
@@ -32,6 +66,19 @@ pub struct Params {
     pub x: f64,
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
+    #[serde(default)]
+    pub symmetry: Symmetry,
+    /// Every other row moved along X by this
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"))]
+    pub row_displacement: f64,
+    /// Every other column moved along Y by this
+    #[serde(default)]
+    #[schemars(extend("x-unit" = "mm"))]
+    pub column_displacement: f64,
+    /// The original and its copies made one group
+    #[serde(default)]
+    pub group_copies: bool,
 }
 
 impl Default for Params {
@@ -42,6 +89,10 @@ impl Default for Params {
             spacing: Spacing::Gap,
             x: 5.0,
             y: 5.0,
+            symmetry: Symmetry::None,
+            row_displacement: 0.0,
+            column_displacement: 0.0,
+            group_copies: false,
         }
     }
 }
@@ -77,16 +128,28 @@ impl Command for ArrayCopy {
             Spacing::Offset => Point::new(p.x, p.y),
             Spacing::Gap => bounds.size() + Point::new(p.x, p.y),
         };
+        let centre = bounds.center();
         let mut transforms = vec![];
         for row in 0..p.rows {
             for column in 0..p.columns {
                 if row > 0 || column > 0 {
-                    let at = Point::new(f64::from(column), f64::from(row)) * step;
-                    transforms.push(DAffine2::from_translation(at));
+                    let mut at = Point::new(f64::from(column), f64::from(row)) * step;
+                    at.x += f64::from(row % 2) * p.row_displacement;
+                    at.y += f64::from(column % 2) * p.column_displacement;
+                    let (x, y) = p.symmetry.flips(column, row);
+                    let sign = |flip| if flip { -1.0 } else { 1.0 };
+                    let turn = DAffine2::from_translation(centre)
+                        * DAffine2::from_scale(Point::new(sign(x), sign(y)))
+                        * DAffine2::from_translation(-centre);
+                    transforms.push(DAffine2::from_translation(at) * turn);
                 }
             }
         }
-        Ok(Change::copy_selected(doc, &transforms))
+        Ok(if p.group_copies {
+            Change::copy_selected_grouped(doc, &transforms)
+        } else {
+            Change::copy_selected(doc, &transforms)
+        })
     }
 }
 
@@ -96,6 +159,80 @@ mod tests {
     use cut_craft_core::testing::{document_with, square, two_layers};
 
     cut_craft_core::contract_tests!(ArrayCopy);
+
+    /// An L shape, so a mirror shows: its foot points to +X.
+    fn ell() -> cut_craft_core::geometry::Path {
+        cut_craft_core::geometry::Path::polyline(
+            &[
+                Point::new(0.0, 0.0),
+                Point::new(10.0, 0.0),
+                Point::new(10.0, 2.0),
+                Point::new(2.0, 2.0),
+                Point::new(2.0, 10.0),
+                Point::new(0.0, 10.0),
+            ],
+            true,
+        )
+    }
+
+    /// Each copy's start point, relative to its bounds' lower left.
+    fn starts(p: &Params) -> Vec<(f64, f64)> {
+        let mut doc = document_with(vec![ell()]);
+        doc.apply(&ArrayCopy::run(&doc, p).unwrap()).unwrap();
+        let mut at: Vec<(f64, f64, f64, f64)> = doc
+            .vectors
+            .values()
+            .map(|v| {
+                let b = v.bounds();
+                (b.min.x, b.min.y, v.start.x - b.min.x, v.start.y - b.min.y)
+            })
+            .collect();
+        at.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.total_cmp(&b.0)));
+        at.iter().map(|a| (a.2.round(), a.3.round())).collect()
+    }
+
+    #[test]
+    fn symmetry_mirrors_or_turns_copies_in_a_repeating_block() {
+        let grid = |symmetry| Params {
+            symmetry,
+            ..Params::default()
+        };
+        // the L starts in its lower left corner; a mirror moves the corner
+        assert_eq!(starts(&grid(Symmetry::None)), [(0.0, 0.0); 4]);
+        assert_eq!(
+            starts(&grid(Symmetry::MirrorColumns)),
+            [(0.0, 0.0), (10.0, 0.0), (0.0, 0.0), (10.0, 0.0)]
+        );
+        assert_eq!(
+            starts(&grid(Symmetry::MirrorBoth)),
+            [(0.0, 0.0), (10.0, 0.0), (0.0, 10.0), (10.0, 10.0)]
+        );
+        assert_eq!(
+            starts(&grid(Symmetry::Rotate)),
+            [(0.0, 0.0), (10.0, 10.0), (10.0, 10.0), (0.0, 0.0)]
+        );
+    }
+
+    #[test]
+    fn displacement_moves_every_other_row_and_column_and_copies_can_be_grouped() {
+        let doc = copied(&Params {
+            row_displacement: 3.0,
+            column_displacement: 4.0,
+            group_copies: true,
+            ..Params::default()
+        });
+        assert_eq!(
+            corners(&doc),
+            [(0.0, 0.0), (3.0, 15.0), (15.0, 4.0), (18.0, 19.0)]
+        );
+        let groups: std::collections::BTreeSet<_> = doc
+            .vectors
+            .keys()
+            .map(|id| doc.vector_groups.get(id).copied())
+            .collect();
+        assert_eq!(groups.len(), 1, "one group: {groups:?}");
+        assert!(groups.iter().all(Option::is_some));
+    }
 
     fn corners(doc: &Document) -> Vec<(f64, f64)> {
         let mut at: Vec<(f64, f64)> = doc
@@ -121,6 +258,7 @@ mod tests {
             spacing: Spacing::Offset,
             x: 20.0,
             y: 15.0,
+            ..Params::default()
         });
         assert_eq!(
             corners(&doc),

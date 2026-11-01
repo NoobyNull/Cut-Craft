@@ -3,6 +3,7 @@
 
 pub mod fusion;
 pub mod manager;
+pub mod search;
 pub mod tree;
 
 pub use manager::{Changer, Look, Manager, Outcome, Pick};

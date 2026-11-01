@@ -421,7 +421,12 @@ fn node_editing_drags_a_corner_and_offers_its_menu() {
         .app
         .node_target(Point::new(10.0, 10.0), 1.0)
         .expect("a node there");
-    let menu = gui::node_menu(&target);
+    let menu = gui::node_menu(&h.app.doc, &target);
+    // Smooth Point turns the corner's spans into Béziers; Node Position opens Move Node there
+    let smooth = leaf(&menu, &["Smooth Point"]);
+    assert!(smooth.action.contains("smooth_point"), "{}", smooth.action);
+    let position = leaf(&menu, &["Node Position..."]);
+    assert!(position.action.contains("move_node"), "{}", position.action);
     let delete = leaf(&menu, &["Delete Point"]);
     h.app.invoke(&h.ctx, &delete.action);
     assert_eq!(
@@ -459,6 +464,34 @@ fn measuring_reports_distances_and_spans() {
         i,
         "Line, length 10.000 mm; vector perimeter 40.000 mm, area 100.000 mm²"
     );
+    // the form's rows: the points, and the span's ends and the vector's span count
+    let rows = measured_rows(Point::ZERO, Point::new(3.0, 4.0), Units::Mm);
+    assert!(rows.contains(&("Second point".into(), "3.000 mm, 4.000 mm".into())));
+    let rows = inspected_rows(&square, Point::new(5.0, 0.0), 0.5, Units::Mm);
+    assert!(
+        rows.contains(&("End".into(), "10.000 mm, 0.000 mm".into())),
+        "{rows:?}"
+    );
+    assert!(rows.contains(&("Number of spans".into(), "4".into())));
+    let circle = Path::circle(Point::new(5.0, 5.0), 2.0);
+    let rows = inspected_rows(&circle, Point::new(7.0, 5.0), 0.5, Units::Mm);
+    assert!(
+        rows.contains(&("Radius".into(), "2.000 mm".into())),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn the_measure_tool_shows_its_results_in_a_form() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "measure_inspect");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Measure / Inspect").is_some());
+    h.drag(h.at(10.0, 10.0), h.at(40.0, 50.0));
+    h.frame(vec![]);
+    assert!(h.text_at("Distance").is_some());
+    assert!(h.text_at("50.000 mm").is_some(), "3-4-5 times 10");
 }
 
 #[test]
@@ -516,6 +549,7 @@ fn clicking_a_picture_selects_it_and_delete_removes_it() {
         grey: vec![0],
         rect,
         depth: Vec::new(),
+        rgb: Vec::new(),
     });
     h.app.record(Ok(c.finish()), "added");
     h.frame(vec![]);
@@ -582,6 +616,8 @@ struct Harness {
     shapes: Vec<egui::epaint::ClippedShape>,
     /// What the last frame put on the system clipboard.
     copied: String,
+    /// The last frame's request for the window's picture, if it made one.
+    screenshot: Option<egui::ScreenshotCallback>,
 }
 
 impl Harness {
@@ -593,6 +629,7 @@ impl Harness {
             time: 0.0,
             shapes: vec![],
             copied: String::new(),
+            screenshot: None,
         };
         // previews appear cut at once unless a test plays one
         h.app.display.animate_preview = false;
@@ -675,6 +712,14 @@ impl Harness {
                 _ => None,
             })
             .unwrap_or_default();
+        self.screenshot = out
+            .viewport_output
+            .values()
+            .flat_map(|v| &v.commands)
+            .find_map(|c| match c {
+                egui::ViewportCommand::Screenshot(callback) => Some(callback.clone()),
+                _ => None,
+            });
     }
 
     /// Every place the last frame drew `text`.
@@ -1057,7 +1102,7 @@ fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
     let toolpath = |i: usize| {
         move |app: &CutCraftApp| {
             let (&id, t) = app.doc.toolpaths.iter().nth(i).unwrap();
-            gui::toolpath_menu(id, t)
+            gui::toolpath_menu(&app.doc, id, t)
         }
     };
     let min_x = |app: &CutCraftApp| -> Vec<f64> {
@@ -1254,7 +1299,7 @@ fn toolpath_forms_take_their_tool_from_the_database_and_follow_its_edits() {
         "the tool's settings are not edited in the form"
     );
     assert_eq!(h.app.form.as_ref().unwrap().params["tool"]["diameter"], 3.0);
-    h.app.edit_form_tool(&h.ctx);
+    h.app.edit_tool(&h.ctx, Some("3 mm End Mill".into()));
     let manager = h
         .app
         .tool_manager
@@ -1507,7 +1552,16 @@ fn the_tool_database_window_keeps_edits_only_on_ok() {
 fn rest_machining_takes_its_tools_from_the_database() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "3d_finishing_toolpath");
-    h.app.add_earlier_tool("6 mm Ball Nose");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the list's last menu adds a tool, as the form's own tool is picked
+    let add = *h.texts_at("Add a tool…").last().expect("an Add menu");
+    h.click(add, Modifiers::NONE);
+    h.frame(vec![]);
+    let ball = *h.texts_at("6 mm Ball Nose").last().expect("in the menu");
+    h.click(ball, Modifiers::NONE);
+    h.frame(vec![]);
     let form = h.app.form.as_ref().unwrap();
     // after the ball nose the form starts with
     assert_eq!(form.params["tools"][1]["name"], "6 mm Ball Nose");
@@ -2454,14 +2508,14 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     let mut section = serde_json::json!({});
     let out = headless(ctx.run_ui(RawInput::default(), |ui| {
         egui::CentralPanel::default()
-            .show(ui, |ui| rest_section(ui, &mut section, &h.app.tools.tools));
+            .show(ui, |ui| rest_section(ui, &mut section, &h.app.tools, &[]));
     }));
     let drawn = |text: &str| {
         out.shapes
             .iter()
             .any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == text))
     };
-    assert!(drawn("Rest Machining") && drawn("Add an earlier tool"));
+    assert!(drawn("Rest Machining") && drawn("Add a tool…"));
     let mut params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("pocket_toolpath", &params).unwrap();
     let whole = h.app.doc.toolpaths.values().last().unwrap().moves.len();
@@ -2497,9 +2551,12 @@ fn the_arrow_keys_nudge_the_selection() {
     );
     h.frame(vec![key(Key::ArrowLeft), key(Key::ArrowDown)]);
     assert!((at(&h) - before).length() < 1e-9, "back where it was");
+    // Ctrl alone: Snapping Options' Fixed Nudge Distance
+    h.app.snap.fixed_nudge = 0.25;
     for (modifiers, share) in [
         (Modifiers::SHIFT, 0.5),
         (Modifiers::SHIFT | Modifiers::COMMAND, 0.1),
+        (Modifiers::COMMAND, 0.25 / square),
     ] {
         let from = at(&h);
         let press = Event::Key {
@@ -2623,6 +2680,18 @@ fn the_clipart_tab_shows_a_library_folder_and_imports_what_is_double_clicked() {
         .expect("the picture is in the browser");
     h.double_click(at);
     assert_eq!(h.app.doc.bitmaps.len(), 1, "double-clicking imports it");
+    // dragged onto the 2D view, it goes where it is dropped
+    let to = h.at(120.0, 90.0);
+    h.drag(at, to);
+    assert_eq!(h.app.doc.bitmaps.len(), 2, "dropping imports another");
+    let dropped = h.app.doc.bitmaps.values().last().unwrap().rect;
+    assert!(
+        dropped
+            .center()
+            .distance(h.app.view_transform.unwrap().to_job(to))
+            < 1e-6,
+        "centred where dropped: {dropped:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -2990,11 +3059,18 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
         h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
         Some(3)
     );
-    // the toolpath form offers it first
+    // the toolpath form shows the magazine first: 0 by hand, then each holder
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
-    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    assert!(h.text_at("0  Manual").is_some() && h.text_at("1  (empty)").is_some());
+    let holder = h
+        .text_at("3  3 mm End Mill")
+        .expect("holder 3 and its tool");
+    h.click(holder, Modifiers::NONE);
+    h.frame(vec![]);
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("profile_toolpath", &params).unwrap();
     // the G-code calls slot 3
@@ -3003,10 +3079,15 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
     files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap();
     let gcode = std::fs::read_to_string(&out).unwrap();
     assert!(gcode.contains("M6 T3"), "{gcode}");
-    // a tool not loaded is refused
+    assert_eq!(
+        params["tool"]["name"], "3 mm End Mill",
+        "picked by its holder"
+    );
+    // a tool not in the magazine is changed by hand: T0
     h.app.machines.active_mut().unwrap().slots[2] = None;
-    let why = files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap_err();
-    assert!(why.contains("3 mm End Mill"), "{why}");
+    files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap();
+    let gcode = std::fs::read_to_string(&out).unwrap();
+    assert!(gcode.contains("M6 T0"), "{gcode}");
     let _ = std::fs::remove_file(out);
 }
 
@@ -3030,6 +3111,7 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
     const ASKS: [&str; 28] = [
+        "save_shaded_image",
         "add_clipart_folder",
         "segment_3d_model_file",
         "new",
@@ -3052,7 +3134,6 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "install_offline_package",
         // opens the browser
         "search_for_machine_online",
-        "save_toolpaths",
         "exit",
         "recent_files",
         "import_vectors",
@@ -3060,7 +3141,11 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "open_folder",
         "open_clipart_folder",
     ];
-    ASKS.contains(&id) || app.registry.exporter(id).is_some() || id.starts_with(EXPORT_LEVEL)
+    ASKS.contains(&id)
+        || app.registry.exporter(id).is_some()
+        || id.starts_with(EXPORT_LEVEL)
+        // a file dialog for the brush
+        || id.starts_with(gui::SAVE_BRUSH)
 }
 
 /// Every enabled menu item and tool button, run through the app as a click would be on a
@@ -3103,7 +3188,7 @@ fn every_enabled_control_works() {
         popups.extend(gui::layer_menu(doc, layer));
     }
     for (&id, toolpath) in &doc.toolpaths {
-        popups.extend(gui::toolpath_menu(id, toolpath));
+        popups.extend(gui::toolpath_menu(doc, id, toolpath));
     }
     for (&id, component) in &doc.components {
         popups.extend(gui::component_menu(doc, id, component));
@@ -3145,7 +3230,7 @@ fn every_enabled_control_works() {
 }
 
 #[test]
-fn preview_all_leaves_hidden_toolpaths_out() {
+fn preview_visible_leaves_hidden_toolpaths_out() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for id in ["drilling_toolpath", "profile_toolpath"] {
@@ -3158,7 +3243,7 @@ fn preview_all_leaves_hidden_toolpaths_out() {
     let only_profile = h.app.simulation.clone();
     let drilling = *h.app.doc.toolpaths.keys().next().unwrap();
     h.app.doc.toolpaths.get_mut(&drilling).unwrap().visible = false;
-    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    h.app.invoke(&h.ctx, "preview_visible_toolpaths");
     assert_eq!(h.app.simulation, only_profile);
 }
 
@@ -3304,10 +3389,16 @@ fn tabs_are_placed_and_removed_by_clicking_the_vector() {
         1,
         "the click placed a tab, not a selection"
     );
+    // a drag from the tab moves it along the vector
+    h.app.snap.smart_snapping = false;
+    h.drag(h.at(60.0, 30.0), h.at(60.5, 45.0));
+    let moved = tabs(&h);
+    assert_eq!(moved.len(), 1, "{}", h.app.status.message);
+    assert!(near(moved[0], Point::new(60.0, 45.0)), "{moved:?}");
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("profile_toolpath", &params).unwrap();
     assert_eq!(h.app.doc.toolpaths.len(), 1);
-    h.click(h.at(60.0, 30.0), Modifiers::NONE);
+    h.click(h.at(60.0, 45.0), Modifiers::NONE);
     assert!(tabs(&h).is_empty(), "a second click takes it off");
 }
 
@@ -3575,7 +3666,7 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
 
 #[test]
 #[expect(clippy::cast_precision_loss)]
-fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged() {
+fn a_model_imports_again_from_its_own_file_while_it_is_there_a_changed_one_with_a_warning() {
     let mut h = Harness::new();
     let file = pyramid_stl("again");
     h.app.import_file(&file);
@@ -3610,12 +3701,18 @@ fn a_model_imports_again_from_its_own_file_only_while_it_is_there_and_unchanged(
     let k = h.app.doc.components.values().next().unwrap();
     assert!((width(k) - 25.0).abs() <= k.cell, "{}", width(k));
     h.app.form = None;
-    // changed, it is refused
+    // changed, it is imported again as it is now, with a warning
     let mut changed = std::fs::read(&file).unwrap();
     changed.extend(b"\n");
     std::fs::write(&file, changed).unwrap();
     h.app.invoke(&h.ctx, &again);
-    assert!(h.app.form.is_none(), "not from a changed file");
+    assert!(h.app.form.is_some(), "from the changed file");
+    assert!(
+        h.app.status.message.contains("has changed"),
+        "{}",
+        h.app.status.message
+    );
+    h.app.form = None;
     // gone, it is not offered
     std::fs::remove_file(&file).unwrap();
     assert!(!h.app.available(&again));
@@ -4057,4 +4154,1399 @@ fn a_side_panel_never_takes_more_than_its_share_of_the_window() {
         "{width} of {}",
         window.width()
     );
+}
+
+#[test]
+fn save_toolpaths_opens_its_form_and_saves_each_shown_toolpath_to_a_file_of_its_own() {
+    use crate::files::SaveMode;
+    let mut h = Harness::new();
+    for (x, name) in [(10.0, "First"), (80.0, "Second")] {
+        h.rectangle(x, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        h.frame(vec![]);
+        let mut params = h.app.form.as_ref().unwrap().params.clone();
+        params["name"] = name.into();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+    }
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.save_form.is_some());
+    assert!(h.text_at("Visible toolpaths to multiple files").is_some());
+    assert!(h.text_at("Save Toolpaths...").is_some());
+    let dir = std::env::temp_dir().join(format!("cut-craft-save-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let form = SaveForm {
+        mode: SaveMode::VisibleToMultipleFiles,
+        group: false,
+        post: None,
+        add_side: false,
+    };
+    let post = h.app.output_post().unwrap();
+    let done = h
+        .app
+        .save_toolpaths_to(&form, &post, &dir.join("job.nc"))
+        .unwrap();
+    assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
+    for name in ["job_1_First.nc", "job_2_Second.nc"] {
+        let gcode = std::fs::read_to_string(dir.join(name)).unwrap();
+        assert!(gcode.contains(&name[6..name.len() - 3]), "{gcode}");
+    }
+    // hidden toolpaths stay out of a one-file save
+    let first = *h.app.doc.toolpaths.keys().next().unwrap();
+    h.app.doc.toolpaths.get_mut(&first).unwrap().visible = false;
+    let one = SaveForm {
+        mode: SaveMode::VisibleToOneFile,
+        ..form
+    };
+    h.app
+        .save_toolpaths_to(&one, &post, &dir.join("one.nc"))
+        .unwrap();
+    let gcode = std::fs::read_to_string(dir.join("one.nc")).unwrap();
+    assert!(
+        gcode.contains("Second") && !gcode.contains("First"),
+        "{gcode}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_toolpath_list_shows_hides_edits_and_reorders_its_rows() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::three_toolpaths();
+    let mut c = Change::builder(&h.app.doc);
+    for (id, name) in [(1, "Pocket"), (2, "Drill"), (3, "Cut Out")] {
+        let mut t = h.app.doc.toolpaths[&EntityId(id)].clone();
+        t.name = name.into();
+        c.replace_toolpath(EntityId(id), t);
+    }
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let names = |h: &Harness| -> Vec<String> {
+        h.app
+            .doc
+            .toolpaths
+            .values()
+            .map(|t| t.name.clone())
+            .collect()
+    };
+    // the tick left of a name hides it
+    let drill = h.text_at("Drill").unwrap();
+    h.click(drill - egui::vec2(24.0, 0.0), Modifiers::NONE);
+    assert!(!h.app.doc.toolpaths[&EntityId(2)].visible);
+    // a click selects, the down arrow moves it below the next one
+    h.click(drill, Modifiers::NONE);
+    assert_eq!(h.app.selected_toolpath, Some(EntityId(2)));
+    let down = h.text_at("⏷").unwrap();
+    h.click(down, Modifiers::NONE);
+    assert_eq!(names(&h), ["Pocket", "Cut Out", "Drill"]);
+    assert_eq!(
+        h.app.selected_toolpath,
+        Some(EntityId(3)),
+        "it stays selected"
+    );
+    assert!(
+        !h.app.doc.toolpaths[&EntityId(3)].visible,
+        "hidden moves with it"
+    );
+    // a double-click opens its form
+    h.frame(vec![]);
+    let pocket = h.text_at("Pocket").unwrap();
+    h.double_click(pocket);
+    h.frame(vec![]);
+    assert_eq!(h.app.selected_toolpath, Some(EntityId(1)));
+    assert!(h.app.form.is_some(), "the toolpath's form is open");
+}
+
+#[test]
+fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::toolpath::{Move, MoveKind, Tool, Toolpath};
+    let mut h = Harness::new();
+    h.app.doc.job.width = 100.0;
+    h.app.doc.job.height = 100.0;
+    let job = h.app.doc.job;
+    let mut m = cut_craft_core::simulation::Material::new(&job, 200);
+    // a ring cut right through round the middle
+    let ring = [
+        (30.0, 30.0),
+        (70.0, 30.0),
+        (70.0, 70.0),
+        (30.0, 70.0),
+        (30.0, 30.0),
+    ];
+    m.cut(&Toolpath {
+        name: "cut out".into(),
+        strategy: "test".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![],
+        moves: ring
+            .iter()
+            .map(|&(x, y)| Move {
+                kind: MoveKind::Cut,
+                to: DVec3::new(x, y, -job.thickness - 1.0),
+            })
+            .collect(),
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+    });
+    h.app.simulation = Some(m);
+    h.app.orbit = view3d::Orbit::TOP;
+    let fit = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 400.0));
+    // the middle of the view is the part: it goes, the waste round it stays
+    assert!(h.app.remove_preview_piece(fit, fit.center()));
+    let sim = h.app.simulation.as_ref().unwrap();
+    let at = |x, y| sim.at(cut_craft_core::geometry::Point::new(x, y)).unwrap();
+    assert!(at(50.0, 50.0).is_nan());
+    assert_eq!(at(5.0, 5.0), 0.0);
+    assert!(
+        !h.app.remove_preview_piece(fit, fit.center()),
+        "already gone"
+    );
+}
+
+#[test]
+fn preview_visible_leaves_hidden_toolpaths_out_and_undo_last_steps_back_one_preview() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for id in ["drilling_toolpath", "profile_toolpath"] {
+        h.app.invoke(&h.ctx, id);
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply(id, &params).unwrap();
+    }
+    let ids: Vec<EntityId> = h.app.doc.toolpaths.keys().copied().collect();
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let all = h.app.simulation.clone().unwrap();
+    // hide the profile: Preview Visible cuts the drilling only, Preview All both
+    h.app.doc.toolpaths.get_mut(&ids[1]).unwrap().visible = false;
+    h.app.invoke(&h.ctx, "preview_visible_toolpaths");
+    let visible = h.app.simulation.clone().unwrap();
+    assert_ne!(visible, all);
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    assert_eq!(h.app.simulation.as_ref(), Some(&all));
+    // undo goes back to before the last preview, once
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    assert_eq!(h.app.simulation.as_ref(), Some(&visible));
+    assert!(!h.app.available("undo_last_preview"));
+    h.app.selected_toolpath = Some(ids[1]);
+    h.app.invoke(&h.ctx, "preview_toolpath");
+    assert_eq!(h.app.simulation.as_ref(), Some(&all));
+    h.app.invoke(&h.ctx, "undo_last_preview");
+    assert_eq!(h.app.simulation.as_ref(), Some(&visible));
+}
+
+#[test]
+fn node_editing_picks_nodes_with_a_box_and_a_drag_moves_them_together() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let id = *h.app.doc.selection.iter().next().unwrap();
+    h.app.invoke(&h.ctx, "node_edit");
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    // a box round the two right-hand corners picks them
+    h.drag(h.at(25.0, 5.0), h.at(35.0, 25.0));
+    assert_eq!(h.app.picked_nodes.len(), 2);
+    assert_eq!(h.app.doc.selection.len(), 1, "the vector stays selected");
+    // dragging one of them moves both 5 mm right
+    h.drag(h.at(30.0, 10.0), h.at(35.0, 10.0));
+    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    for corner in [Point::new(35.0, 10.0), Point::new(35.0, 20.0)] {
+        assert!(
+            corners.iter().any(|q| q.distance(corner) < 0.5),
+            "{corner} in {corners:?}"
+        );
+    }
+    assert!(
+        corners
+            .iter()
+            .any(|q| q.distance(Point::new(10.0, 10.0)) < 0.5)
+    );
+    // a box with no nodes in it goes back to selecting vectors
+    h.drag(h.at(100.0, 100.0), h.at(120.0, 120.0));
+    assert!(h.app.picked_nodes.is_empty());
+}
+
+#[test]
+fn a_toolpath_with_a_vector_selector_takes_the_vectors_on_its_layers_each_time() {
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    let cut = c.add_layer("Cut");
+    c.set_current_layer(cut);
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    // the section, drawn on its own (it is below the fold of the profile form): ticking its
+    // box associates a selector
+    let ctx = egui::Context::default();
+    let mut section = serde_json::json!({});
+    let out = headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            selector_section(ui, &mut section, &["Cut".to_owned()]);
+        });
+    }));
+    assert!(out.shapes.iter().any(|c| matches!(&c.shape,
+        egui::Shape::Text(t) if t.galley.text() == "Associate a Vector Selector with this toolpath")));
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["selector"] = serde_json::to_value(cut_craft_core::selector::Selector {
+        layers: cut_craft_core::selector::Layers::SelectedLayers,
+        layer_names: vec!["Cut".into()],
+        ..Default::default()
+    })
+    .unwrap();
+    // nothing selected: the selector finds the rectangle on Cut
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    assert_eq!(h.app.doc.toolpaths[&id].vectors.len(), 1);
+    // a new rectangle on Cut joins it when the toolpath is recalculated
+    h.app.form = None;
+    h.rectangle(80.0, 10.0, 30.0, 30.0);
+    h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
+    assert_eq!(
+        h.app.doc.toolpaths[&id].vectors.len(),
+        2,
+        "{}",
+        h.app.status.message
+    );
+    // and keeps its selector for the next time
+    h.rectangle(130.0, 10.0, 30.0, 30.0);
+    h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
+    assert_eq!(h.app.doc.toolpaths[&id].vectors.len(), 3);
+}
+
+#[test]
+fn the_preview_paints_machined_areas_in_the_materials_a_fill_or_each_toolpaths_colour() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for id in ["drilling_toolpath", "profile_toolpath"] {
+        h.app.invoke(&h.ctx, id);
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply(id, &params).unwrap();
+    }
+    let ids: Vec<EntityId> = h.app.doc.toolpaths.keys().copied().collect();
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let paints = |h: &mut Harness| -> std::collections::BTreeSet<u32> {
+        h.app.surface_3d().unwrap().paint.iter().copied().collect()
+    };
+    let packed = |[r, g, b]: [u8; 3]| u32::from_be_bytes([1, r, g, b]);
+    assert!(
+        paints(&mut h).is_empty(),
+        "the material's colour paints nothing"
+    );
+    // Toolpaths ▸ Materials: one fill colour over every machined area
+    let mut p = h
+        .app
+        .registry
+        .get("materials")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    p["machined_area"] = "global_fill_color".into();
+    p["fill_colour"] = serde_json::json!([0, 0, 255]);
+    h.app.apply("materials", &p).unwrap();
+    assert_eq!(paints(&mut h), [0, packed([0, 0, 255])].into());
+    // each toolpath's own colour: the drilling given red, the profile with no fill
+    p["machined_area"] = "toolpath_color".into();
+    h.app.apply("materials", &p).unwrap();
+    h.frame(vec![]);
+    let colour = |id: EntityId, preview: serde_json::Value| serde_json::json!({ "toolpath": id, "name": "t", "visible": true, "preview": preview });
+    h.app
+        .apply(
+            "toolpath_properties",
+            &colour(ids[0], serde_json::json!({ "colour": [255, 0, 0] })),
+        )
+        .unwrap();
+    h.app
+        .apply("toolpath_properties", &colour(ids[1], "no_fill".into()))
+        .unwrap();
+    assert_eq!(paints(&mut h), [0, packed([255, 0, 0])].into());
+    assert!(
+        h.app.doc.toolpaths[&ids[1]].preview_colour(1).is_none(),
+        "no fill: the profile shows the material"
+    );
+}
+
+#[test]
+fn clipart_dropped_on_a_view_goes_there_and_import_to_level_puts_it_on_a_level() {
+    use crate::clipart::ToLevel;
+    use cut_craft_core::geometry::Point;
+    let mut h = Harness::new();
+    // a 20 mm square drawn as SVG, dropped on the 2D view at (100, 80)
+    let svg = std::env::temp_dir().join(format!("cut-craft-drop-{}.svg", std::process::id()));
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20"><rect x="0" y="0" width="20" height="20"/></svg>"#,
+    )
+    .unwrap();
+    h.app
+        .import_clipart(&svg, Some(Point::new(100.0, 80.0)), None);
+    let bounds = h
+        .app
+        .doc
+        .vectors
+        .values()
+        .map(cut_craft_core::geometry::Path::bounds)
+        .reduce(cut_craft_core::geometry::Rect::union)
+        .expect("the square came in");
+    assert!(
+        bounds.center().distance(Point::new(100.0, 80.0)) < 1e-6,
+        "centred where dropped: {bounds:?}"
+    );
+    h.app.history.undo(&mut h.app.doc);
+    assert!(h.app.doc.vectors.is_empty(), "one undo takes the drop away");
+    let _ = std::fs::remove_file(svg);
+    // a model to a new level named after it, placed where dropped as it is made
+    let file = pyramid_stl("to-level");
+    let levels = h.app.doc.levels.len();
+    h.app
+        .import_clipart(&file, Some(Point::new(150.0, 100.0)), Some(ToLevel::New));
+    assert_eq!(h.app.doc.levels.len(), levels + 1);
+    let (&new, level) = h.app.doc.levels.iter().next_back().unwrap();
+    assert!(
+        level.name.starts_with("cut-craft-to-level"),
+        "{}",
+        level.name
+    );
+    let k = h
+        .app
+        .doc
+        .components
+        .values()
+        .next()
+        .expect("the model is in");
+    assert_eq!(k.level, new, "on the new level");
+    assert!(
+        k.extent().center().distance(Point::new(150.0, 100.0)) < 1.0,
+        "centred where dropped: {:?}",
+        k.extent()
+    );
+    // moving it in the form keeps it on the level
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["position"] = serde_json::json!({ "x": 50.0, "y": 60.0 });
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.values().next().unwrap().level, new);
+    // and to an existing level
+    h.app.form = None;
+    h.app
+        .import_clipart(&file, None, Some(ToLevel::Existing(0)));
+    assert_ne!(new, 0, "the job starts with level 0");
+    assert_eq!(h.app.doc.level_components(0).len(), 1, "the second model");
+    assert_eq!(h.app.doc.level_components(new).len(), 1, "the first stays");
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_polyline_is_drawn_point_by_point_with_curves_and_its_keys() {
+    use cut_craft_core::geometry::Segment;
+    let mut h = Harness::new();
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    // clicks make straight spans, a drag a curved one
+    let click = |h: &mut Harness, x, y| {
+        let at = h.at(x, y);
+        h.click(at, Modifiers::NONE);
+    };
+    click(&mut h, 10.0, 10.0);
+    click(&mut h, 60.0, 10.0);
+    let (from, to) = (h.at(60.0, 50.0), h.at(70.0, 50.0));
+    h.drag(from, to);
+    // a length typed and Enter: 20 along the pointer, here straight left
+    let left = h.at(0.0, 50.0);
+    h.frame(vec![Event::PointerMoved(left), Event::Text("20".into())]);
+    h.frame(vec![key(Key::Enter)]);
+    assert_eq!(h.app.polyline.points.len(), 4);
+    assert!(
+        h.app.polyline.points[3].distance(Point::new(40.0, 50.0)) < 1e-3,
+        "{:?}",
+        h.app.polyline.points[3]
+    );
+    // Backspace takes it back, Tab closes and makes the polyline
+    h.frame(vec![key(Key::Backspace)]);
+    assert_eq!(h.app.polyline.points.len(), 3);
+    h.frame(vec![key(Key::Tab)]);
+    let path = h.app.doc.vectors.values().last().expect("drawn");
+    assert!(path.closed);
+    assert_eq!(path.segments.len(), 3);
+    assert!(
+        matches!(path.segments[1], Segment::Cubic { .. }),
+        "the dragged span"
+    );
+    assert!(matches!(path.segments[0], Segment::Line { .. }));
+    assert!(h.app.polyline.is_empty(), "ready for the next");
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_polyline"));
+    // S: curve mode, Space finishes an open one
+    h.frame(vec![key(Key::S)]);
+    assert!(h.app.polyline.curved);
+    click(&mut h, 100.0, 100.0);
+    click(&mut h, 150.0, 120.0);
+    click(&mut h, 200.0, 100.0);
+    h.frame(vec![key(Key::Space)]);
+    let path = h.app.doc.vectors.values().last().unwrap();
+    assert!(!path.closed);
+    assert!(
+        path.segments
+            .iter()
+            .all(|s| matches!(s, Segment::Cubic { .. }))
+    );
+    assert!(h.app.polyline.curved, "the mode is kept");
+}
+
+#[test]
+fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
+    use cut_craft_core::nodes::NodeAt;
+    use cut_craft_core::params::Xy;
+    let mut h = Harness::new();
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    let line = serde_json::json!({
+        "points": [{ "x": 10.0, "y": 10.0 }, { "x": 50.0, "y": 10.0 }], "closed": false
+    });
+    h.app.apply("draw_polyline", &line).unwrap();
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    // the node menu offers it at either end, not in the middle of a closed shape
+    let at = |x, y| NodeAt {
+        vector: id,
+        at: Xy::new(x, y),
+        reach: 1.0,
+    };
+    let offered = |h: &Harness, x, y| {
+        gui::node_menu(&h.app.doc, &at(x, y))
+            .iter()
+            .find(|i| i.name == "Edit Polyline")
+            .map(|i| i.action.clone())
+    };
+    let action = offered(&h, 50.0, 10.0).expect("at the end");
+    assert!(offered(&h, 10.0, 10.0).is_some_and(|a| a.ends_with(":start")));
+    h.app.invoke(&h.ctx, &action);
+    h.frame(vec![]);
+    let to = h.at(50.0, 40.0);
+    h.click(to, Modifiers::NONE);
+    h.frame(vec![key(Key::Space)]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "extended, not a new vector");
+    let path = &h.app.doc.vectors[&id];
+    assert_eq!(path.segments.len(), 2);
+    assert!(path.segments[1].end().distance(Point::new(50.0, 40.0)) < 1e-3);
+    // undo takes the extension back
+    h.app.history.undo(&mut h.app.doc);
+    assert_eq!(h.app.doc.vectors[&id].segments.len(), 1);
+}
+
+#[test]
+fn sculpting_works_in_the_3d_view_with_its_keys_and_wheel() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    let total = |h: &Harness| -> f64 {
+        let k = h.app.doc.components.values().next().unwrap();
+        k.heights.iter().filter(|z| !z.is_nan()).sum()
+    };
+    let before = total(&h);
+    h.app.invoke(&h.ctx, "sculpt");
+    h.frame(vec![]);
+    // 3 picks Deposit; the wheel grows the brush, Shift and the wheel its strength
+    let mid = h.app.view_3d_area.expect("the 3D view is drawn").center();
+    let wheel = |modifiers| Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, 1.0),
+        modifiers,
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    h.frame(vec![
+        Event::PointerMoved(mid),
+        key(Key::Num3),
+        wheel(Modifiers::NONE),
+    ]);
+    let params = &h.app.form.as_ref().unwrap().params;
+    assert_eq!(params["tool"], "deposit");
+    assert!(
+        (params["diameter"].as_f64().unwrap() - 11.0).abs() < 1e-9,
+        "{params}"
+    );
+    h.frame_holding(Modifiers::SHIFT, vec![wheel(Modifiers::SHIFT)]);
+    let strength = h.app.form.as_ref().unwrap().params["strength"]
+        .as_f64()
+        .unwrap();
+    assert!((strength - 22.0).abs() < 1e-9, "{strength}");
+    let orbit = h.app.orbit;
+    // a left drag over the model sculpts it, and does not turn the view
+    h.press(mid, true, Modifiers::NONE);
+    for dx in [5.0, 10.0, 15.0, 20.0] {
+        h.frame(vec![Event::PointerMoved(mid + egui::vec2(dx, 0.0))]);
+    }
+    h.press(mid + egui::vec2(20.0, 0.0), false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(total(&h) > before, "the stroke deposited");
+    assert_eq!(h.app.orbit, orbit, "the view stayed put");
+}
+
+#[test]
+fn a_double_sided_preview_cuts_both_sides_and_turns_over_with_the_job() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    // a pocket on this side, a pocket on the other
+    let pocket = |h: &mut Harness| {
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.app.invoke(&h.ctx, "pocket_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("pocket_toolpath", &params).unwrap();
+        h.app.form = None;
+    };
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    assert_eq!(h.app.doc.other_side.toolpaths.len(), 1);
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let preview = h.app.simulation.as_ref().expect("previewed");
+    assert!(
+        preview.other_side.is_some(),
+        "the other side is previewed too"
+    );
+    // the 3D view's surface has the other side's pocket on its underside
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let bottom = surface.bottom;
+    assert!(
+        surface.under.iter().any(|&z| z > bottom + 1e-6),
+        "the underside is cut"
+    );
+    // turned over, the other side's cuts are on top and this side's underneath
+    let before = h.app.simulation.clone().unwrap();
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    let after = h.app.simulation.as_ref().expect("still previewed");
+    assert_eq!(
+        after.other_side.as_deref().map(|m| &m.heights),
+        Some(&before.heights),
+        "the side that was up is now underneath"
+    );
+    h.frame(vec![]);
+}
+
+#[test]
+fn save_shaded_image_saves_the_3d_view_s_part_of_the_window() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    assert!(h.app.available("save_shaded_image"));
+    let path = std::env::temp_dir().join(format!("cut-craft-shaded-{}.png", std::process::id()));
+    h.app.save_shaded_image(path.clone());
+    h.frame(vec![]);
+    assert_eq!(h.app.view, View::ThreeD, "the 3D view is shown");
+    let asked = h
+        .screenshot
+        .take()
+        .expect("the window's picture is asked for");
+    // the window's picture, 1280 x 800, red inside the 3D view and blue outside it
+    let area = h.app.view_3d_area.unwrap();
+    let mut picture = egui::ColorImage::filled([1280, 800], egui::Color32::BLUE);
+    for y in 0..800 {
+        for x in 0..1280 {
+            #[expect(clippy::cast_precision_loss, reason = "pixel coordinates")]
+            if area.contains(egui::pos2(x as f32 + 0.5, y as f32 + 0.5)) {
+                picture.pixels[y * 1280 + x] = egui::Color32::RED;
+            }
+        }
+    }
+    asked.complete(std::sync::Arc::new(picture));
+    h.frame(vec![]);
+    assert!(
+        h.app.status.message.starts_with("Saved the shaded image"),
+        "{}",
+        h.app.status.message
+    );
+    let saved = image::open(&path).unwrap().to_rgba8();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "pixels"
+    )]
+    let size = (area.width().round() as u32, area.height().round() as u32);
+    assert_eq!(saved.dimensions(), size);
+    assert!(
+        saved.pixels().all(|p| p.0 == [255, 0, 0, 255]),
+        "only the 3D view"
+    );
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn the_toolpath_summary_keeps_notes_per_toolpath_and_shows_the_rapid_rate_in_its_units() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    let id = *h.app.doc.toolpaths.keys().next().unwrap();
+    h.app.invoke(&h.ctx, "toolpath_summary");
+    h.frame(vec![]);
+    // the rapid rate is kept in mm/min, shown in the units picked
+    h.app.summary.units = cut_craft_core::toolpath::RateUnits::InchPerMin;
+    h.frame(vec![]);
+    assert!(
+        (h.app.summary.rapid - 5000.0).abs() < 1e-9,
+        "the rate itself is unchanged"
+    );
+    // a toolpath's notes, written under the summary and applied
+    let name = h.app.doc.toolpaths[&id].name.clone();
+    // the summary's row (the toolpath list has the name too, further down)
+    let row = *h.texts_at(&name).first().expect("the toolpath is listed");
+    h.click(row, Modifiers::NONE);
+    assert_eq!(h.app.summary.picked, Some(id));
+    h.app.summary.notes = "Use the 1/4 in downcut".into();
+    h.frame(vec![]);
+    let apply = *h.texts_at("Apply").last().expect("the notes have Apply");
+    h.click(apply, Modifiers::NONE);
+    assert_eq!(
+        h.app.doc.toolpaths[&id].summary_notes(),
+        "Use the 1/4 in downcut"
+    );
+    // recalculating keeps them
+    let change = h.app.registry.edit(&h.app.doc, id, None).unwrap();
+    h.app.doc.apply(&change).unwrap();
+    assert_eq!(
+        h.app.doc.toolpaths[&id].summary_notes(),
+        "Use the 1/4 in downcut"
+    );
+}
+
+#[test]
+fn a_double_clicked_tile_is_previewed_alone() {
+    let mut h = Harness::new();
+    h.app.display.animate_preview = false;
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    let area = h.app.doc.job.area();
+    // a long thin rectangle right across the job
+    let y = area.center().y;
+    h.rectangle(area.min.x + 10.0, y - 5.0, area.size().x - 20.0, 10.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["cut_depth"] = serde_json::json!(2.0);
+    h.app.apply("profile_toolpath", &params).unwrap();
+    // two tiles side by side, then the right-hand one double-clicked
+    h.app.invoke(&h.ctx, "toolpath_tiling");
+    let form = h.app.form.as_mut().unwrap();
+    form.params["tiling"]["width"] = serde_json::json!(area.size().x / 2.0);
+    form.params["tiling"]["height"] = serde_json::json!(area.size().y);
+    form.params["tiling"]["overlap"] = serde_json::json!(0.0);
+    let params = form.params.clone();
+    h.app.apply("toolpath_tiling", &params).unwrap();
+    // the Toolpaths page docked beside the view, not flown out over it
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let right = h.at(
+        area.max.x - area.size().x / 4.0,
+        area.min.y + area.size().y / 4.0,
+    );
+    h.double_click(right);
+    assert_eq!(h.app.doc.tiling.map(|t| t.active), Some(2));
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    let m = h.app.simulation.as_ref().expect("previewed");
+    let cut_beyond = |from_x: f64| {
+        (0..m.rows).any(|r| {
+            (0..m.columns).any(|c| m.centre(c, r).x > from_x && m.heights[r * m.columns + c] < -0.5)
+        })
+    };
+    // the right-hand tile's cut, moved to the machine's corner: nothing on the right half
+    assert!(
+        !cut_beyond(area.center().x + 5.0),
+        "the tile is cut at the corner"
+    );
+    assert!(cut_beyond(area.min.x), "it is cut");
+}
+
+#[test]
+fn the_status_bar_shows_the_version() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+    let at = h
+        .text_at(version)
+        .expect("the version is in the status bar");
+    assert!(at.y > 700.0, "at the bottom: {at:?}");
+}
+
+#[test]
+fn a_form_tool_takes_its_shape_from_the_selected_vector() {
+    let mut h = Harness::new();
+    let profile = serde_json::json!({ "points": [
+        { "x": 10.0, "y": 10.0 }, { "x": 14.0, "y": 10.0 }, { "x": 16.0, "y": 13.0 }
+    ], "closed": false });
+    h.app.apply("draw_polyline", &profile).unwrap();
+    h.app.form = None;
+    h.app.tools = ToolDatabase {
+        tools: vec![Tool {
+            shape: cut_craft_core::toolpath::ToolShape::FormTool,
+            ..Tool::default()
+        }],
+        ..ToolDatabase::default()
+    };
+    h.app.invoke(&h.ctx, "tool_database");
+    h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(0));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let button = h
+        .text_at("Use Selected Vector")
+        .expect("a form tool offers it");
+    h.click(button, Modifiers::NONE);
+    let tool = &h.app.tool_manager.as_ref().unwrap().draft.tools[0];
+    assert_eq!(tool.form.len(), 3);
+    assert!((tool.diameter - 12.0).abs() < 1e-9);
+}
+
+#[test]
+fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
+    let mut h = Harness::new();
+    h.app.snap.smart_snapping = false;
+    h.app.snap.geometry_snapping = false;
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    let rect = *h.app.doc.selection.iter().next().unwrap();
+    assert!(h.app.available("edit_object"));
+    // E opens Draw Rectangle on it; a change to the form changes that rectangle
+    h.frame(vec![key(Key::E)]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_rectangle"));
+    let form = h.app.form.as_mut().unwrap();
+    assert_eq!(form.params["width"], 20.0);
+    form.params["width"] = serde_json::json!(40.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 1, "changed, not drawn again");
+    assert!((h.app.doc.vectors[&rect].bounds().size().x - 40.0).abs() < 1e-9);
+    // a second rectangle drawn elsewhere, then Shift-click edits the first one
+    let second = serde_json::json!({ "x": 100.0, "y": 100.0, "width": 10.0, "height": 10.0,
+        "corners": "rounded", "radius": 2.0 });
+    h.app.form = None;
+    h.app.apply("draw_rectangle", &second).unwrap();
+    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.frame(vec![]);
+    let edge = h.at(10.0, 20.0);
+    h.click(edge, Modifiers::SHIFT);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["width"], 40.0, "the first rectangle's settings");
+    assert_eq!(
+        h.app.doc.selection.iter().copied().collect::<Vec<_>>(),
+        [rect]
+    );
+    // a circle is not Draw Rectangle's
+    h.app.form = None;
+    h.app
+        .apply(
+            "draw_circle",
+            &serde_json::json!({ "center": { "x": 200.0, "y": 50.0 }, "radius": 5.0 }),
+        )
+        .unwrap();
+    h.frame(vec![key(Key::E)]);
+    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_circle"));
+}
+
+#[test]
+fn sheets_take_selected_vectors_and_toolpaths_from_their_menus() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::two_sheets();
+    let menu = gui::sheet_menu(&h.app.doc, 1);
+    let item = |name: &str| menu.iter().find(|m| m.name == name).unwrap();
+    assert!(item("Copy Selected Vectors Here").is_enabled);
+    let selected = h.app.doc.selection.len();
+    let action = item("Move Selected Vectors Here").action.clone();
+    h.app.invoke(&h.ctx, &action);
+    assert_eq!(h.app.doc.sheets[1].objects.vectors.len(), selected);
+    // the active sheet's own menu cannot send to itself
+    let own = gui::sheet_menu(&h.app.doc, 0);
+    assert!(
+        !own.iter()
+            .find(|m| m.name == "Copy Selected Vectors Here")
+            .unwrap()
+            .is_enabled
+    );
+    // a toolpath's menu offers the other sheet
+    let mut doc = cut_craft_core::testing::with_toolpath();
+    doc.sheets = cut_craft_core::testing::two_sheets().sheets;
+    let (&id, t) = doc.toolpaths.iter().next().unwrap();
+    let menu = gui::toolpath_menu(&doc, id, t);
+    let copy = menu.iter().find(|m| m.name == "Copy to Sheet").unwrap();
+    let names: Vec<&str> = copy.children.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(names, ["Sheet 2"]);
+}
+
+#[test]
+fn export_as_stl_opens_its_form_and_keeps_its_settings() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "export_as_stl");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.stl_window);
+    for text in [
+        "Export Model as STL",
+        "Triangulate",
+        "Back face of triangulation",
+    ] {
+        assert!(h.text_at(text).is_some(), "{text}");
+    }
+    assert_eq!(h.app.options.stl, fmt_export_as_stl::Settings::default());
+}
+
+#[test]
+fn job_sheets_take_the_editor_s_style_and_name_their_side() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "job_sheet_editor");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.job_sheet_window);
+    assert!(
+        h.text_at("Job Setup Sheet Editor").is_some(),
+        "the editor is open"
+    );
+    h.app.options.job_sheet.title = "Shop Sheet".into();
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    let dir = std::env::temp_dir().join(format!("cut-craft-sheets-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    h.app.write_job_sheets(&dir.join("sign.html"));
+    let page = std::fs::read_to_string(dir.join("sign_Top.html")).expect("the top side's sheet");
+    assert!(page.contains("<h1>Shop Sheet</h1>"));
+    assert_eq!(h.app.status.message, "Saved 1 job sheet");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_layers_list_arrows_move_the_active_layer_and_merge_visible_is_offered() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::two_layers();
+    let first = h.app.doc.layers[0].id;
+    h.app.doc.current_layer = first;
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.design_tab = DESIGN_TABS.iter().position(|&t| t == "Layers").unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let up = *h
+        .texts_at("⏶")
+        .first()
+        .expect("the arrows are over the list");
+    h.click(up, Modifiers::NONE);
+    assert_eq!(
+        h.app.doc.layers.last().map(|l| l.id),
+        Some(first),
+        "now at the top"
+    );
+    let menu = gui::layer_menu(&h.app.doc, &h.app.doc.layers[0]);
+    let merge = leaf(&menu, &["Merge Visible"]);
+    assert!(merge.is_enabled, "another layer is visible");
+    // layers with nothing on this sheet can be left out of the list
+    let empty = h
+        .app
+        .doc
+        .layers
+        .iter()
+        .find(|l| h.app.doc.vectors_on(l.id).next().is_none() && l.id != first)
+        .map(|l| l.name.clone());
+    if let Some(name) = empty {
+        h.app.layers_on_sheet = true;
+        h.frame(vec![]);
+        assert!(h.text_at(&name).is_none(), "{name} is left out");
+    }
+}
+
+#[test]
+fn a_texture_toolpaths_texture_saves_to_a_file_and_loads_into_another_form() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-texture-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("scallops.vtexture");
+    let mut h = Harness::new();
+    assert_eq!(
+        h.app.save_texture(&path).unwrap_err(),
+        "no Texture Toolpath form is open"
+    );
+    h.app.invoke(&h.ctx, "texture_toolpath");
+    h.app.form.as_mut().unwrap().params["stepover"] = Value::from(7.5);
+    h.app.save_texture(&path).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("\r\nStepover: 7.50000 0\r\n"), "{text}");
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "texture_toolpath");
+    h.app.form.as_mut().unwrap().params["name"] = Value::from("Lid");
+    h.app.load_texture(&path).unwrap();
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["stepover"], 7.5);
+    assert_eq!(form.params["name"], "Lid", "the form keeps its own name");
+    assert!(h.app.status.message.contains("Loaded texture"));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn toolpath_groups_are_listed_picked_previewed_saved_as_one_and_joined_by_new_toolpaths() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::three_toolpaths();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    // Group Visible, with the third toolpath hidden
+    let hide = serde_json::json!({ "toolpath": 3, "name": "Profile", "visible": false });
+    h.app.apply("toolpath_properties", &hide).unwrap();
+    let shown: Vec<u64> = h
+        .app
+        .doc
+        .toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible)
+        .map(|(id, _)| id.0)
+        .collect();
+    let group =
+        serde_json::json!({ "toolpaths": shown, "group": h.app.doc.next_toolpath_group_name() });
+    h.app.apply("group_toolpaths", &group).unwrap();
+    assert_eq!(h.app.doc.toolpath_groups, ["Group 1"]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the group's row is drawn; a click picks the group instead of a toolpath
+    h.app.selected_toolpath = Some(EntityId(3));
+    let row = h.text_at("📁 Group 1").unwrap();
+    h.click(row, Modifiers::NONE);
+    assert_eq!(h.app.selected_group.as_deref(), Some("Group 1"));
+    assert_eq!(h.app.selected_toolpath, None);
+    // Save Toolpaths' Selected mode saves the group as one file
+    let plan = files::save_plan(
+        &h.app.doc,
+        files::SaveMode::Selected,
+        None,
+        Some("Group 1"),
+        false,
+    );
+    assert_eq!(plan.unwrap(), [vec![EntityId(1), EntityId(2)]]);
+    // a toolpath made while the group is picked joins it
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "drilling_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("drilling_toolpath", &params).unwrap();
+    let newest = h.app.doc.toolpaths.values().last().unwrap();
+    assert_eq!(newest.group.as_deref(), Some("Group 1"));
+    // Preview with the group picked previews its toolpaths
+    h.app.display.animate_preview = false;
+    assert!(h.app.available("preview_toolpath"));
+    h.app.invoke(&h.ctx, "preview_toolpath");
+    assert!(h.app.simulation.is_some());
+    // ungrouping keeps the toolpaths
+    let ungroup = serde_json::json!({ "group": "Group 1", "delete_toolpaths": false });
+    h.app.apply("ungroup_toolpaths", &ungroup).unwrap();
+    assert_eq!(h.app.doc.toolpath_groups, Vec::<String>::new());
+    assert!(h.app.doc.toolpaths.values().all(|t| t.group.is_none()));
+}
+
+#[test]
+fn with_create_fillets_open_a_click_rounds_a_corner_and_a_click_on_the_fillet_takes_it_out() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 30.0);
+    h.app.invoke(&h.ctx, "create_fillets");
+    assert!(h.app.filleting());
+    h.frame(vec![]);
+    let shape = |h: &Harness| {
+        let path = h.app.doc.vectors.values().next().unwrap();
+        let arcs = path
+            .segments
+            .iter()
+            .filter(|s| matches!(s, cut_craft_core::geometry::Segment::Arc { .. }))
+            .count();
+        (path.segments.len(), arcs)
+    };
+    h.click(h.at(10.0, 10.0), Modifiers::NONE);
+    assert_eq!(shape(&h), (5, 1), "one corner rounded");
+    assert!(h.app.filleting(), "the form stays open");
+    // the fillet's middle: a click there takes it out
+    let mid = 10.0 + 3.0 - 3.0 * std::f64::consts::FRAC_1_SQRT_2;
+    h.frame(vec![]);
+    h.click(h.at(mid, mid), Modifiers::NONE);
+    assert_eq!(shape(&h), (4, 0), "the sharp corner is back");
+}
+
+#[test]
+fn freehands_stabilizing_circle_is_drawn_round_the_paths_end_while_dragging() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_freehand");
+    h.app.form.as_mut().unwrap().params["stabilize"] = Value::from(2.0);
+    h.app.stroke = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)];
+    let drag = cut_craft_core::Drag {
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        from_center: false,
+        constrain: false,
+    };
+    let paths = h.app.preview("draw_freehand", drag);
+    assert_eq!(paths.len(), 2, "the path and the circle");
+    let b = paths[1].bounds();
+    assert!((b.center() - Point::new(8.0, 0.0)).length() < 1e-6, "{b:?}");
+    assert!((b.size().x - 4.0).abs() < 1e-6, "{b:?}");
+}
+
+#[test]
+fn quick_engraves_immediate_output_saves_the_toolpath_calculated_last() {
+    use crate::files::SaveMode;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    assert_eq!(h.app.immediate_output_toolpath(), None);
+    h.app.invoke(&h.ctx, "quick_engrave_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("quick_engrave_toolpath", &params).unwrap();
+    let id = h.app.immediate_output_toolpath().unwrap();
+    assert_eq!(h.app.doc.toolpaths[&id].strategy, "quick_engrave_toolpath");
+    // what Save Toolpath Now does, short of its file dialog
+    let dir = std::env::temp_dir().join(format!("cut-craft-engrave-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    h.app.selected_toolpath = Some(id);
+    let form = SaveForm {
+        mode: SaveMode::Selected,
+        group: false,
+        post: None,
+        add_side: false,
+    };
+    let post = h.app.output_post().unwrap();
+    let done = h
+        .app
+        .save_toolpaths_to(&form, &post, &dir.join("engrave.nc"))
+        .unwrap();
+    assert!(done.starts_with("Saved"), "{done}");
+    let gcode = std::fs::read_to_string(dir.join("engrave.nc")).unwrap();
+    assert!(gcode.contains("Quick Engrave"), "{gcode}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn orientate_3d_models_drags_turn_the_model_or_move_it_off_the_rotary_axis_when_asked() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 30.0, Along::X);
+    h.app.invoke(&h.ctx, "orientate_3d_model");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["rotary"], true,
+        "the form knows the job is rotary"
+    );
+    assert_eq!(form.params["turn"]["mode"], "view");
+    let (size, down, right) = (
+        egui::vec2(400.0, 200.0),
+        egui::vec2(0.0, 100.0),
+        egui::vec2(100.0, 0.0),
+    );
+    // dragging the view turns the view, not the model
+    assert!(
+        !h.app
+            .import_drag(Some(view3d::DragMode::Rotate), down, size)
+    );
+    h.app.form.as_mut().unwrap().params["turn"]["mode"] = Value::from("x");
+    assert!(
+        h.app
+            .import_drag(Some(view3d::DragMode::Rotate), down, size)
+    );
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["turn"]["x"], 90.0,
+        "half the view's height: a quarter turn"
+    );
+    assert!(form.dirty, "the model follows");
+    // a pan moves the view unless Drag moves the axis is on
+    assert!(!h.app.import_drag(Some(view3d::DragMode::Pan), right, size));
+    h.app.form.as_mut().unwrap().params["axis"]["drag"] = Value::from(true);
+    assert!(h.app.import_drag(Some(view3d::DragMode::Pan), right, size));
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["axis"]["across"], 15.0,
+        "a quarter of the view: half a diameter"
+    );
+    assert_eq!(form.params["axis"]["up"], 0.0);
+}
+
+#[test]
+fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_text");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["text"] = "HI".into();
+    params["font"] = "Test Boxes".into();
+    params["height"] = 10.0.into();
+    params["anchor"] = serde_json::json!({ "x": 10.0, "y": 10.0 });
+    h.app.form.as_mut().unwrap().params = params.clone();
+    h.app.apply_form("draw_text", &params).unwrap();
+    let width = |h: &Harness| {
+        h.app
+            .doc
+            .vectors
+            .values()
+            .map(cut_craft_core::geometry::Path::bounds)
+            .reduce(cut_craft_core::geometry::Rect::union)
+            .unwrap()
+            .size()
+            .x
+    };
+    let before = width(&h);
+    h.frame(vec![]);
+    // between the H and the I, at the gap's middle
+    h.app
+        .text_click(Point::new(19.0, 15.0), 1.0, Modifiers::NONE);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["spacing"]["kerning"][0],
+        serde_json::json!([0, 0, -0.5])
+    );
+    assert!(
+        (width(&h) - (before - 0.5)).abs() < 1e-6,
+        "the letters followed at once: {}",
+        width(&h)
+    );
+    // Shift and Ctrl push them apart by four steps; a click off the text places the anchor
+    h.app.text_click(
+        Point::new(18.5, 15.0),
+        1.0,
+        Modifiers::SHIFT | Modifiers::CTRL,
+    );
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["spacing"]["kerning"][0],
+        serde_json::json!([0, 0, 1.5])
+    );
+    h.app
+        .text_click(Point::new(80.0, 80.0), 1.0, Modifiers::NONE);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["anchor"],
+        serde_json::json!({ "x": 80.0, "y": 80.0 })
+    );
+}
+
+#[test]
+fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
+    use cut_craft_core::geometry::Rect as JobRect;
+    use cut_craft_core::nodes::nodes;
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.app.invoke(&h.ctx, "node_edit");
+    assert_eq!(h.app.view_tool, Some(ViewTool::NodeEdit));
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    // the two top nodes picked, as a box round them picks them
+    let top = JobRect::new(Point::new(5.0, 25.0), Point::new(35.0, 35.0));
+    h.app.picked_nodes = h.app.nodes_in(top);
+    assert_eq!(h.app.picked_nodes.len(), 2);
+    h.frame(vec![key(Key::H)]);
+    assert_eq!(
+        h.app.node_mirror,
+        [true, false],
+        "H: a mirror line, not Mirror"
+    );
+    let step = h.app.snap.grid_spacing;
+    // the arrows move the two sides opposite ways: Left takes the left node left and the
+    // right node right
+    h.frame(vec![key(Key::ArrowLeft)]);
+    let path = &h.app.doc.vectors[&id];
+    let xs_above = |y: f64| -> Vec<f64> {
+        nodes(path)
+            .iter()
+            .filter(|p| if y > 0.0 { p.y > 20.0 } else { p.y < 20.0 })
+            .map(|p| p.x)
+            .collect()
+    };
+    let mut top = xs_above(1.0);
+    top.sort_by(f64::total_cmp);
+    // the top widened by a step each way
+    assert!(
+        (top[0] - (10.0 - step)).abs() < 1e-9 && (top[1] - (30.0 + step)).abs() < 1e-9,
+        "{top:?}"
+    );
+    let mut bottom = xs_above(-1.0);
+    bottom.sort_by(f64::total_cmp);
+    assert_eq!(bottom, [10.0, 30.0], "the rest of the shape stayed");
+    assert!(
+        h.app
+            .picked_nodes
+            .iter()
+            .all(|n| (n.at.x - 10.0 + step).abs() < 1e-9 || (n.at.x - 30.0 - step).abs() < 1e-9),
+        "the picks follow"
+    );
+    // V adds the other line, H again takes its line off; the overlay draws what is on
+    h.frame(vec![key(Key::V)]);
+    h.frame(vec![key(Key::H)]);
+    assert_eq!(h.app.node_mirror, [false, true]);
+    match h.app.node_overlay(None, 1.0) {
+        crate::view2d::Overlay::Nodes { moving, .. } => assert_eq!(moving.len(), 1, "one line"),
+        _ => panic!("the node overlay"),
+    }
+    // leaving node editing takes the lines away
+    h.app.invoke(&h.ctx, "node_edit");
+    assert_eq!(h.app.node_mirror, [false, false]);
+}
+
+#[test]
+fn the_summary_allows_for_the_active_machines_acceleration_when_asked() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    let t = h.app.doc.toolpaths.values().next().unwrap().clone();
+    let plain = h.app.estimated_minutes(&t);
+    h.app.summary.acceleration = true;
+    assert!(
+        (h.app.estimated_minutes(&t) - plain).abs() < 1e-12,
+        "no machine: no allowance"
+    );
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Slow".into(),
+        acceleration: [20.0, 20.0, 20.0],
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    let allowing = h.app.estimated_minutes(&t);
+    assert!(allowing > plain, "{allowing} vs {plain}");
+    h.app.summary.scale = 2.0;
+    assert!((h.app.estimated_minutes(&t) - 2.0 * allowing).abs() < 1e-9);
+}
+
+#[test]
+fn a_shift_click_on_a_dimension_with_its_form_open_edits_it() {
+    let mut h = Harness::new();
+    let mut params = serde_json::to_value(cmd_dimensions::Params::default()).unwrap();
+    params["font"] = "Test Boxes".into();
+    params["custom_text"] = "W".into();
+    h.app.apply("dimensions", &params).unwrap();
+    let group = *h.app.doc.texts.keys().next().unwrap();
+    h.app.invoke(&h.ctx, "dimensions");
+    // the dimension line runs from (10, 20) to (60, 20): a Shift-click on it
+    h.app
+        .shift_click_shape("dimensions", Point::new(35.0, 20.0), 1.0);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["replaces"], serde_json::json!(group));
+    assert_eq!(form.params["custom_text"], "W");
+    assert!(form.drawn.is_some(), "the shape it edits");
+}
+
+#[test]
+fn guides_are_inserted_from_the_menu_and_their_properties_turn_lock_and_add_parallels() {
+    let mut h = Harness::new();
+    h.app.menu_at = Some(Point::new(40.0, 30.0));
+    for insert in ["guide:insert:v", "guide:insert:h", "guide:insert:a"] {
+        assert!(h.app.available(insert));
+        h.app.invoke(&h.ctx, insert);
+    }
+    let guides = h.app.doc.guides.clone();
+    assert_eq!(guides.len(), 3);
+    assert!(guides[0].vertical && (guides[0].at - 40.0).abs() < 1e-9);
+    assert!(!guides[1].vertical && (guides[1].at - 30.0).abs() < 1e-9);
+    let angled = guides[2];
+    assert!((angled.angle() - 45.0).abs() < 1e-9, "{angled:?}");
+    assert!(
+        angled.distance(Point::new(40.0, 30.0)) < 1e-9,
+        "through where the menu opened"
+    );
+    assert_eq!(
+        h.app.guide_props.as_ref().map(|p| p.index),
+        Some(2),
+        "its properties open"
+    );
+    // Guide Properties on the first: a new position and angle, locked
+    h.app.guide_props = Some(GuideProps {
+        index: 0,
+        position: 50.0,
+        angle: 60.0,
+        locked: true,
+        new_at: 10.0,
+        relative: true,
+        count: 2,
+    });
+    h.app.guide_props_apply();
+    let g = h.app.doc.guides[0];
+    assert!(
+        g.locked && (g.at - 50.0).abs() < 1e-9 && (g.angle() - 60.0).abs() < 1e-9,
+        "{g:?}"
+    );
+    // two parallels, 10 and 20 to its left
+    h.app.guide_props_create();
+    assert_eq!(h.app.doc.guides.len(), 5);
+    for (k, i) in [(1.0, 3), (2.0, 4)] {
+        let made = h.app.doc.guides[i];
+        let want = g.parallel(10.0 * k);
+        assert!((made.at - want.at).abs() < 1e-9 && (made.angle() - want.angle()).abs() < 1e-9);
+        assert!(!made.locked);
+    }
+    h.app.guide_props_delete();
+    assert_eq!(h.app.doc.guides.len(), 4);
+    assert!(h.app.guide_props.is_none(), "the window closed");
+    // the menu's lock toggles
+    assert!(!h.app.doc.guides[0].locked);
+    h.app.invoke(&h.ctx, "guide:lock:0");
+    assert!(h.app.doc.guides[0].locked);
+    let menu = gui::guide_menu(0, true);
+    assert_eq!(menu[1].name, "Unlock Guide");
+}
+
+#[test]
+fn a_component_saved_as_a_sculpting_brush_is_pressed_into_the_model() {
+    let dir = std::env::temp_dir().join(format!("cut-craft-brush-app-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("dome.ccclip");
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    let id = EntityId(1);
+    let action = format!("{}{}", gui::SAVE_BRUSH, id.0);
+    let menu = gui::component_menu(&h.app.doc, id, &h.app.doc.components[&id]);
+    assert!(
+        menu.iter().any(|m| m.action == action),
+        "on the component's menu"
+    );
+    assert!(h.app.available(&action));
+    h.app.save_brush_to(id, &path).unwrap();
+    let top = |h: &Harness| {
+        h.app.doc.components[&id]
+            .height_at(Point::new(20.0, 20.0))
+            .unwrap()
+    };
+    let before = top(&h);
+    h.app.invoke(&h.ctx, "sculpt");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["tool"] = "deposit".into();
+    params["strength"] = 100.0.into();
+    params["brush"] = path.display().to_string().into();
+    params["points"] = serde_json::json!([{ "x": 20.0, "y": 20.0 }, { "x": 20.0, "y": 20.0 }]);
+    h.app.apply("sculpt", &params).unwrap();
+    // the dome's top is the brush's highest: pressed in its full depth, a fifth of 10 mm
+    assert!(
+        (top(&h) - before - 2.0).abs() < 0.2,
+        "{} from {before}",
+        top(&h)
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn draw_text_lists_words_spelt_wrong_with_suggestions_and_keeps_added_words() {
+    let mut h = Harness::new();
+    let aff = "TRY esianrtolcdugmphbyfvkwz\nSFX S Y 1\nSFX S 0 s .\n";
+    h.app.speller = Some(cut_craft_core::spell::Speller::from_hunspell(
+        aff,
+        "2\nwood/S\nsign\n",
+    ));
+    h.app.speller_looked = true;
+    h.app.invoke(&h.ctx, "draw_text");
+    h.app.form.as_mut().unwrap().params["text"] = "Woood sign Zed".into();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Design, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Spelling").is_some(), "the spelling section");
+    assert!(h.text_at("Woood").is_some(), "the word spelt wrong");
+    assert!(h.text_at("Wood").is_some(), "its suggestion");
+    h.app.fix_spelling("Woood", "Wood");
+    assert_eq!(h.app.form.as_ref().unwrap().params["text"], "Wood sign Zed");
+    h.app.user_word("Zed", true);
+    let s = h.app.speller.as_ref().unwrap();
+    assert_eq!(s.misspelled("Wood sign Zed"), Vec::<String>::new());
+    h.app.user_word("Zed", false);
+    assert_eq!(h.app.speller.as_ref().unwrap().misspelled("Zed"), ["Zed"]);
 }

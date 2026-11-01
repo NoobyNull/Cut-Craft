@@ -1,8 +1,9 @@
 //! Toolpaths ▸ Materials: a library of materials to show the job in. Picking one sets the
 //! material's colour in the 3D view (Job Setup's Material Settings colour), and the 3D view
-//! draws a wood's grain over it; Custom keeps the colour Job Setup has.
+//! draws a wood's grain over it; Custom is a solid colour of one's own. As Aspire's Material
+//! Appearance, it also sets how the preview colours the areas the toolpaths cut.
 
-use cut_craft_core::document::{Document, Job};
+use cut_craft_core::document::{Document, Job, MachinedArea};
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ pub struct Materials;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Material {
-    /// Job Setup's own colour
+    /// A solid colour of one's own
     #[default]
     Custom,
     Pine,
@@ -78,11 +79,64 @@ impl Material {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     /// What the job is cut from, as the 3D view shows it
     #[schemars(extend("x-widget" = "drop-down"))]
     pub material: Material,
+    /// Custom's solid colour
+    #[schemars(
+        title = "Solid color",
+        extend("x-kind" = "colour"),
+        extend("x-show-when" = {"material": "custom"})
+    )]
+    #[serde(default = "pine")]
+    pub colour: [u8; 3],
+    /// How the preview colours what the toolpaths cut; each toolpath's colour is the swatch
+    /// beside it in the toolpath list
+    #[schemars(title = "Machined Area Color", extend("x-widget" = "drop-down"))]
+    #[serde(default)]
+    pub machined_area: MachinedArea,
+    #[schemars(
+        title = "Fill color",
+        extend("x-kind" = "colour"),
+        extend("x-show-when" = {"machined_area": "global_fill_color"})
+    )]
+    #[serde(default = "fill")]
+    pub fill_colour: [u8; 3],
+    /// How a lithophane is lit: to the left high contrast, to the right lighter, as with no
+    /// light behind it
+    #[schemars(
+        title = "Lithophane light",
+        range(min = 0, max = 1),
+        extend("x-show-when" = {"machined_area": "lithophane"})
+    )]
+    #[serde(default = "half_light")]
+    pub lithophane_light: f64,
+}
+
+fn half_light() -> f64 {
+    0.5
+}
+
+fn pine() -> [u8; 3] {
+    Job::default().colour
+}
+
+fn fill() -> [u8; 3] {
+    Job::default().fill_colour
+}
+
+impl Default for Params {
+    fn default() -> Self {
+        Self {
+            material: Material::Custom,
+            colour: pine(),
+            machined_area: MachinedArea::default(),
+            fill_colour: fill(),
+            lithophane_light: half_light(),
+        }
+    }
 }
 
 impl Command for Materials {
@@ -101,13 +155,23 @@ impl Command for Materials {
     fn initial_params(doc: &Document) -> Params {
         Params {
             material: Material::of(doc.job.colour),
+            colour: doc.job.colour,
+            machined_area: doc.job.machined_area,
+            fill_colour: doc.job.fill_colour,
+            lithophane_light: doc.job.lithophane_light,
         }
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let colour = p.material.colour().unwrap_or(doc.job.colour);
+        let colour = p.material.colour().unwrap_or(p.colour);
         let mut c = Change::builder(doc);
-        c.set_job(Job { colour, ..doc.job });
+        c.set_job(Job {
+            colour,
+            machined_area: p.machined_area,
+            fill_colour: p.fill_colour,
+            lithophane_light: p.lithophane_light.clamp(0.0, 1.0),
+            ..doc.job
+        });
         Ok(c.finish())
     }
 }
@@ -123,14 +187,36 @@ mod tests {
     fn a_material_colours_the_job_and_custom_keeps_its_colour() {
         let doc = after::<Materials>(&Params {
             material: Material::Walnut,
+            ..Params::default()
         });
         assert_eq!(doc.job.colour, Material::Walnut.colour().unwrap());
         assert_eq!(Materials::initial_params(&doc).material, Material::Walnut);
         let mut doc = sample_document();
         doc.job.colour = [1, 2, 3];
-        run_on::<Materials>(&mut doc, &Params::default());
+        let custom = Materials::initial_params(&doc);
+        run_on::<Materials>(&mut doc, &custom);
         assert_eq!(doc.job.colour, [1, 2, 3]);
         assert_eq!(Materials::initial_params(&doc).material, Material::Custom);
+        // a solid colour of one's own, and the machined areas in a fill colour
+        let p = Params {
+            colour: [9, 9, 9],
+            machined_area: MachinedArea::GlobalFillColor,
+            fill_colour: [0, 0, 255],
+            ..Materials::initial_params(&doc)
+        };
+        run_on::<Materials>(&mut doc, &p);
+        assert_eq!(doc.job.colour, [9, 9, 9]);
+        assert_eq!(doc.job.machined_area, MachinedArea::GlobalFillColor);
+        assert_eq!(doc.job.fill_colour, [0, 0, 255]);
+        // the lithophane preview and its light, kept within 0 to 1
+        let p = Params {
+            machined_area: MachinedArea::Lithophane,
+            lithophane_light: 1.5,
+            ..Materials::initial_params(&doc)
+        };
+        run_on::<Materials>(&mut doc, &p);
+        assert_eq!(doc.job.machined_area, MachinedArea::Lithophane);
+        assert!((doc.job.lithophane_light - 1.0).abs() < 1e-12);
     }
 
     #[test]

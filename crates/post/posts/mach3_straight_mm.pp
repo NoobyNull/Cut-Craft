@@ -2,6 +2,12 @@
 + Straight: lines only, for controllers without arcs.
 + Made by scripts/make_posts.py: edit its template and run it again.
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-27 First version: arcs, tool change with T M6
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft Mach3 Straight (mm) (*.tap)"
 FILE_EXTENSION = "tap"
 UNITS = "MM"
@@ -19,6 +25,7 @@ VAR Y_HOME_POSITION = [YH|A|Y|1.3]
 VAR Z_HOME_POSITION = [ZH|A|Z|1.3]
 VAR SAFE_Z_HEIGHT = [SAFEZ|A|Z|1.3]
 VAR TOOL_NUMBER = [T|A|T|1.0]
+VAR DWELL_TIME = [DWELL|A|P|1.2]
 
 begin HEADER
 "([TP_FILENAME])"

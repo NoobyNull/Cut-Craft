@@ -28,6 +28,10 @@ pub enum ToolShape {
     /// for the Thread Milling toolpath
     #[schemars(title = "Thread Mill")]
     ThreadMill,
+    /// Cuts the profile it was given: half its section, drawn as a vector (a moulding or
+    /// router bit's shape)
+    #[schemars(title = "Form Tool")]
+    FormTool,
 }
 
 /// The units a tool's feed and plunge rates are shown in, as Aspire's list. Rates are kept
@@ -95,6 +99,11 @@ pub struct CuttingData {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Tool {
     pub name: String,
+    /// The Tool Database's name format its name is made from (`{Tool Type} {Diameter|F}`,
+    /// see [`crate::tool_names`]); empty for a name typed as it is (added with name formats)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub name_format: String,
     #[serde(default)]
     pub shape: ToolShape,
     /// Radius of a radiused end mill's rounded corners
@@ -170,6 +179,21 @@ pub struct Tool {
     #[serde(default = "default_tooth_offset")]
     #[schemars(skip)]
     pub tooth_offset: f64,
+    /// A form tool's cutting edge: (distance from the axis, height above the tip) pairs,
+    /// outward (added with form tools)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub form: Vec<[f64; 2]>,
+}
+
+/// A form tool's edge height at `r` out, between the profile's points (flat past its ends).
+fn form_height(form: &[[f64; 2]], r: f64) -> f64 {
+    let i = form.partition_point(|p| p[0] < r);
+    match (i.checked_sub(1).map(|k| form[k]), form.get(i).copied()) {
+        (Some(a), Some(b)) if b[0] > a[0] => a[1] + (b[1] - a[1]) * (r - a[0]) / (b[0] - a[0]),
+        (_, Some(p)) | (Some(p), None) => p[1],
+        (None, None) => 0.0,
+    }
 }
 
 fn default_angle() -> f64 {
@@ -236,7 +260,18 @@ impl Tool {
         }
     }
 
+    /// Copy Settings From: the data this tool cuts `from` with (its default for none) kept
+    /// as its data for `to` (its default for none).
+    pub fn copy_cutting(&mut self, from: &str, to: &str) {
+        let data = self.cutting(from);
+        self.set_cutting(CuttingData {
+            material: to.to_owned(),
+            ..data
+        });
+    }
+
     /// A copy that cuts with `material`'s data where it has some: what a toolpath takes.
+    /// A name made from a format is made again, for the material.
     #[must_use]
     pub fn for_material(&self, material: &str) -> Tool {
         let mut tool = self.clone();
@@ -246,7 +281,21 @@ impl Tool {
                 ..set.clone()
             });
         }
+        tool.renamed(material);
         tool
+    }
+
+    /// Its name made again from its name format, if it has one, for `material`.
+    pub fn renamed(&mut self, material: &str) {
+        if !self.name_format.is_empty() {
+            self.name = crate::tool_names::expand(&self.name_format, self, material, "");
+        }
+    }
+
+    /// Whether it keeps cutting data for `material` (always, for the default): Aspire greys
+    /// the tools that do not.
+    pub fn has_data_for(&self, material: &str) -> bool {
+        material.is_empty() || self.material_data(material).is_some()
     }
 
     /// `material`'s own set, matched whatever the case; none for the default.
@@ -305,6 +354,27 @@ impl Tool {
         r.min(self.reach())
     }
 
+    /// Makes it a form tool cutting the shape of `path`: half its section, drawn upright
+    /// with the axis on the left (the leftmost point) and the tip at the lowest point. Its
+    /// diameter is twice the profile's width. False when the path has no width.
+    pub fn set_form(&mut self, path: &crate::geometry::Path) -> bool {
+        let pts = path.flatten(crate::polygon::TOLERANCE);
+        let left = pts.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let low = pts.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        let mut form: Vec<[f64; 2]> = pts.iter().map(|p| [p.x - left, p.y - low]).collect();
+        form.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+        // the edge is what the tool cuts: the lowest point at each distance out
+        form.dedup_by(|b, a| (b[0] - a[0]).abs() < 1e-9);
+        let width = form.last().map_or(0.0, |p| p[0]);
+        if width <= 0.0 {
+            return false;
+        }
+        self.shape = ToolShape::FormTool;
+        self.diameter = 2.0 * width;
+        self.form = form;
+        true
+    }
+
     /// How far above its tip the cutting edge is at `r` from the axis; `None` beyond the tool.
     /// A tapered tool's taper counts as edge, out to its shank.
     pub fn profile(&self, r: f64) -> Option<f64> {
@@ -334,6 +404,7 @@ impl Tool {
             // the core under the tooth is flat to the bottom; the tooth's lower flank
             // rises to its tip
             // ponytail: the core is taken to reach the bottom, as most single-point mills do
+            ToolShape::FormTool => form_height(&self.form, r),
             ToolShape::ThreadMill => {
                 let core = radius - self.tooth_size.clamp(0.0, radius);
                 if r <= core {
@@ -351,6 +422,7 @@ impl Default for Tool {
     fn default() -> Self {
         Self {
             name: "6 mm End Mill".into(),
+            name_format: String::new(),
             shape: ToolShape::EndMill,
             tip_radius: default_tip_radius(),
             angle: default_angle(),
@@ -371,6 +443,7 @@ impl Default for Tool {
             materials: vec![],
             tooth_size: default_tooth_size(),
             tooth_offset: default_tooth_offset(),
+            form: vec![],
         }
     }
 }
@@ -393,6 +466,10 @@ pub struct ToolDatabase {
     // ponytail: active for the whole database, as Aspire's; not kept per job
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub material: String,
+    /// Each tool type's default name format, by type (`end_mill`), for tools made new
+    /// (added with name formats)
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub name_formats: std::collections::BTreeMap<String, String>,
 }
 
 /// A Tool Database group: `/` between levels, as [`Tool::group`].
@@ -502,6 +579,33 @@ impl ToolDatabase {
         }
     }
 
+    /// Aspire's Duplicate Material: `from` copied as `name` (its own name and " copy" when
+    /// none is given; a number added while the name is taken), with every tool's cutting
+    /// data for it when `with_data`. The copy becomes the active material; its name.
+    pub fn duplicate_material(&mut self, from: &str, name: &str, with_data: bool) -> String {
+        let base = if name.trim().is_empty() {
+            format!("{from} copy")
+        } else {
+            name.trim().to_owned()
+        };
+        let mut copy = base.clone();
+        let mut next = 2;
+        while self.materials.iter().any(|m| m.eq_ignore_ascii_case(&copy)) {
+            copy = format!("{base} {next}");
+            next += 1;
+        }
+        self.materials.push(copy.clone());
+        if with_data {
+            for tool in &mut self.tools {
+                if tool.material_data(from).is_some() {
+                    tool.copy_cutting(from, &copy);
+                }
+            }
+        }
+        self.material.clone_from(&copy);
+        copy
+    }
+
     /// Takes `name` off the material list with every tool's data for it, as Aspire's Delete
     /// Material does; the default is active again if it was.
     pub fn delete_material(&mut self, name: &str) {
@@ -540,6 +644,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::VBit => "V-Bits",
         ToolShape::RadiusedEndMill => "Radiused End Mills",
         ToolShape::ThreadMill => "Thread Mills",
+        ToolShape::FormTool => "Form Tools",
     }
 }
 
@@ -584,6 +689,9 @@ pub struct Toolpath {
     /// recalculating makes it fresh again.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub stale: bool,
+    /// The toolpath group it is listed under, if any (added with toolpath groups).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
@@ -593,11 +701,52 @@ const MODEL_STRATEGIES: [&str; 3] = [
     "sketch_carving_toolpath",
 ];
 
+/// The key a toolpath's own preview colour is kept under in its params: `[r, g, b]`, or
+/// null for no fill (the material's colour).
+pub const PREVIEW_COLOUR: &str = "preview_colour";
+
+/// The key a toolpath's notes for the Toolpath Summary are kept under in its params.
+pub const SUMMARY_NOTES: &str = "summary_notes";
+
+/// What a toolpath keeps in its params that is its own, not one of its settings: kept when
+/// it is recalculated.
+pub const OWN_PARAMS: [&str; 2] = [PREVIEW_COLOUR, SUMMARY_NOTES];
+
+/// The colours toolpaths take in a Toolpath Color preview until given their own, in list
+/// order.
+const PREVIEW_PALETTE: [[u8; 3]; 8] = [
+    [220, 60, 60],
+    [60, 140, 220],
+    [70, 170, 80],
+    [230, 170, 40],
+    [150, 80, 200],
+    [40, 180, 180],
+    [230, 110, 170],
+    [130, 130, 130],
+];
+
 fn shown() -> bool {
     true
 }
 
 impl Toolpath {
+    /// Its notes for the Toolpath Summary.
+    pub fn summary_notes(&self) -> &str {
+        self.params
+            .get(SUMMARY_NOTES)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+    }
+
+    /// Its colour in a Toolpath Color preview, `place` being where it is in the list: the
+    /// one it was given, none if it was given no fill, else the palette's for its place.
+    pub fn preview_colour(&self, place: usize) -> Option<[u8; 3]> {
+        match self.params.get(PREVIEW_COLOUR) {
+            Some(given) => serde_json::from_value(given.clone()).ok(),
+            None => Some(PREVIEW_PALETTE[place % PREVIEW_PALETTE.len()]),
+        }
+    }
+
     /// Whether the 3D model is what it cuts, so changing the model changes it.
     pub fn reads_model(&self) -> bool {
         MODEL_STRATEGIES.contains(&self.strategy.as_str())
@@ -621,6 +770,140 @@ impl Toolpath {
             })
             .sum()
     }
+
+    /// [`Self::machining_minutes`] allowing for the machine's `acceleration` (X, Y, Z,
+    /// mm/s²; 0 for an axis places no limit, all 0 is no allowance): the machine stops at
+    /// every corner where the direction changes, and speeds up and slows down along each
+    /// move as fast as the slowest axis it uses allows.
+    // ponytail: corners within 5° run through at the slower of the two feeds [inf]
+    pub fn machining_minutes_accelerating(&self, rapid_rate: f64, acceleration: [f64; 3]) -> f64 {
+        const STRAIGHT: f64 = 0.996; // cos 5°
+        if acceleration.iter().all(|a| *a <= 0.0) {
+            return self.machining_minutes(rapid_rate);
+        }
+        // each move's direction, length and speed (mm/s)
+        let legs: Vec<Option<(DVec3, f64, f64)>> = (1..self.moves.len())
+            .map(|i| {
+                let d = self.moves[i].to - self.moves[i - 1].to;
+                let rate = match self.moves[i].kind {
+                    MoveKind::Rapid => rapid_rate,
+                    MoveKind::Plunge => self.tool.plunge_rate,
+                    MoveKind::Cut => self.tool.feed_rate,
+                } / 60.0;
+                let length = d.length();
+                (length > 0.0 && rate > 0.0).then(|| (d / length, length, rate))
+            })
+            .collect();
+        // the speed through the joint between two legs: on through a near-straight one
+        let joint = |a: Option<(DVec3, f64, f64)>, b: Option<(DVec3, f64, f64)>| match (a, b) {
+            (Some((da, _, va)), Some((db, _, vb))) if da.dot(db) > STRAIGHT => va.min(vb),
+            _ => 0.0,
+        };
+        let mut seconds = 0.0;
+        for (i, leg) in legs.iter().enumerate() {
+            let Some((dir, length, v)) = *leg else {
+                continue;
+            };
+            let limit = (0..3)
+                .filter(|&k| dir[k].abs() > 1e-9 && acceleration[k] > 0.0)
+                .map(|k| acceleration[k] / dir[k].abs())
+                .fold(f64::INFINITY, f64::min);
+            if !limit.is_finite() {
+                seconds += length / v;
+                continue;
+            }
+            let (vs, ve) = (
+                joint(
+                    i.checked_sub(1).and_then(|j| legs[j]),
+                    Some((dir, length, v)),
+                ),
+                joint(Some((dir, length, v)), legs.get(i + 1).copied().flatten()),
+            );
+            let (up, down) = (
+                (v * v - vs * vs) / (2.0 * limit),
+                (v * v - ve * ve) / (2.0 * limit),
+            );
+            seconds += if up + down <= length {
+                (v - vs) / limit + (v - ve) / limit + (length - up - down) / v
+            } else {
+                // too short to reach the feed: up to a peak and straight down again
+                let peak = ((2.0 * limit * length + vs * vs + ve * ve) / 2.0).sqrt();
+                (peak - vs) / limit + (peak - ve) / limit
+            };
+        }
+        seconds / 60.0
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn machining_time_allowing_for_acceleration_stops_at_corners_and_runs_through_straights() {
+    let at = |kind, x, y| Move {
+        kind,
+        to: DVec3::new(x, y, -1.0),
+    };
+    let tool = Tool {
+        feed_rate: 1000.0,
+        plunge_rate: 100.0,
+        ..Tool::default()
+    };
+    let make = |moves| Toolpath {
+        name: "t".into(),
+        strategy: String::new(),
+        params: serde_json::Value::Null,
+        tool: tool.clone(),
+        vectors: vec![],
+        moves,
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+    };
+    // one 500 mm cut at 1000 mm/min (16.67 mm/s): 30 s flat out; with 10 mm/s² the machine
+    // spends 1.67 s speeding up and the same slowing down, 13.9 mm each
+    let one = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 500.0, 0.0),
+    ]);
+    let v = 1000.0 / 60.0;
+    let expected = ((500.0 - 2.0 * v * v / 20.0) / v + 2.0 * v / 10.0) / 60.0;
+    assert!(
+        (one.machining_minutes_accelerating(5000.0, [10.0, 10.0, 10.0]) - expected).abs() < 1e-9
+    );
+    assert!(
+        (one.machining_minutes_accelerating(5000.0, [0.0; 3]) - 0.5).abs() < 1e-12,
+        "no allowance"
+    );
+    // a corner stops the machine; a straight joint does not
+    let bent = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 250.0, 0.0),
+        at(MoveKind::Cut, 250.0, 250.0),
+    ]);
+    let straight = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 250.0, 0.0),
+        at(MoveKind::Cut, 500.0, 0.0),
+    ]);
+    let a = [10.0, 10.0, 10.0];
+    assert!(
+        bent.machining_minutes_accelerating(5000.0, a)
+            > straight.machining_minutes_accelerating(5000.0, a)
+    );
+    assert!(
+        (straight.machining_minutes_accelerating(5000.0, a) - expected).abs() < 1e-9,
+        "as one leg"
+    );
+    // too short to reach the feed: a 1 mm move takes a peak-and-down 0.63 s, not 0.06 s
+    let short = make(vec![
+        at(MoveKind::Cut, 0.0, 0.0),
+        at(MoveKind::Cut, 1.0, 0.0),
+    ]);
+    let minutes = short.machining_minutes_accelerating(5000.0, a);
+    assert!(
+        (minutes * 60.0 - 2.0 * (1.0_f64 / 10.0).sqrt()).abs() < 1e-9,
+        "{minutes}"
+    );
 }
 
 #[cfg(test)]
@@ -649,6 +932,7 @@ fn machining_time_is_each_move_at_its_rate() {
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     };
     // 10 mm plunge at 100, 500 mm cut at 1000, 10 mm rapid at 5000
     assert!((tp.machining_minutes(5000.0) - (0.1 + 0.5 + 0.002)).abs() < 1e-12);
@@ -744,6 +1028,7 @@ pub fn made_by<C: Command>(
         visible: true,
         power: vec![],
         stale: false,
+        group: None,
     }
 }
 

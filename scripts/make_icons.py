@@ -445,6 +445,9 @@ I[eo + "set_size.svg"] = lambda: [rect(6, 14, 26, 26, 1.5, INK, 2.5, LIGHT), dar
 I[eo + "job_size_and_position.svg"] = lambda: [material(6, 10, 36, 30), dot(6, 40, 4, ACC), darrow(6, 5, 42, 5, INK), darrow(46, 10, 46, 40, INK)]
 I[eo + "interactive_vector_trim.svg"] = lambda: [line(6, 14, 42, 14, INK, SW), line(24, 6, 24, 42, INK, SW), line(24, 14, 42, 14, RED, 4, "3 3"),
                                                  group(scissors(), "translate(20.9 21) scale(0.58) rotate(-60 24 22)")]
+I[eo + "trim_objects.svg"] = lambda: [circ(24, 24, 13, ACC, 2.5, LIGHT), line(11, 19, 37, 19, INK, SW), line(11, 29, 37, 29, INK, SW),
+                                      line(2, 19, 11, 19, RED, 3, "3 3"), line(37, 19, 46, 19, RED, 3, "3 3"), line(2, 29, 11, 29, RED, 3, "3 3"), line(37, 29, 46, 29, RED, 3, "3 3"),
+                                      group(scissors(), "translate(28 28) scale(0.4)")]
 I[eo + "weld_cross.svg"] = lambda: [pl([(18, 6), (30, 6), (30, 18), (42, 18), (42, 30), (30, 30), (30, 42), (18, 42), (18, 30), (6, 30), (6, 18), (18, 18)], INK, SW, LIGHT, True)]
 I[eo + "crop_bitmap.svg"] = lambda: [picture(8, 8, 32, 26), pl([(4, 12), (12, 12), (12, 38), (38, 38)], ACC, 4), pl([(10, 4), (36, 4), (36, 30), (44, 30)], ACC, 4)][::1]
 I[eo + "edit_picture.svg"] = lambda: [picture(4, 4, 34, 28), line(8, 41, 42, 41, GREY, 2.5), circ(26, 41, 4, ACC, 2.5, WHITE)]

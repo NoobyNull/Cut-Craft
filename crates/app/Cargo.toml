@@ -39,6 +39,14 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-copy-toolpath-to-sheet = { path = "../commands/copy-toolpath-to-sheet" }
+cmd-send-to-sheet = { path = "../commands/send-to-sheet" }
+cmd-merge-visible-layers = { path = "../commands/merge-visible-layers" }
+cmd-reorder-layer = { path = "../commands/reorder-layer" }
+cmd-trim-objects = { path = "../commands/trim-objects" }
+cmd-move-nodes = { path = "../commands/move-nodes" }
+cmd-smooth-point = { path = "../commands/smooth-point" }
+cmd-reorder-toolpath = { path = "../commands/reorder-toolpath" }
 cmd-auto-layout-text = { path = "../commands/auto-layout-text" }
 cmd-align = { path = "../commands/align" }
 cmd-select = { path = "../commands/select" }
@@ -154,6 +162,7 @@ cmd-delete-component = { path = "../commands/delete-component" }
 cmd-delete-toolpath = { path = "../commands/delete-toolpath" }
 cmd-component-properties = { path = "../commands/component-properties" }
 cmd-toolpath-properties = { path = "../commands/toolpath-properties" }
+cmd-toolpath-group = { path = "../commands/toolpath-group" }
 cmd-3d-roughing-toolpath = { path = "../commands/3d-roughing-toolpath" }
 cmd-3d-finishing-toolpath = { path = "../commands/3d-finishing-toolpath" }
 cmd-vcarve-engrave-toolpath = { path = "../commands/vcarve-engrave-toolpath" }
@@ -188,6 +197,8 @@ cmd-set-size = { path = "../commands/set-size" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }
+# checks the 3D view's shader as the card would (the version wgpu uses)
+naga = { version = "30", features = ["wgsl-in"] }
 
 [lints]
 workspace = true

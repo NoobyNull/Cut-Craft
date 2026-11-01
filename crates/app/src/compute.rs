@@ -8,7 +8,7 @@
 // long moves (a roughing preview, 2.7k of them) give a dispatch little to run in parallel,
 // so it comes out behind the CPU's 6 ms; a thread a row of each move if that ever matters.
 
-use cut_craft_core::compute::Compute;
+use cut_craft_core::compute::{Compute, Cpu};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::simulation::Material;
@@ -187,6 +187,7 @@ fn params(grid: &Material, tool: &Tool, count: usize, centres: bool) -> Vec<u8> 
         ToolShape::VBit => 2,
         ToolShape::RadiusedEndMill => 3,
         ToolShape::ThreadMill => 4,
+        ToolShape::FormTool => unreachable!("a form tool's profile runs on the CPU"),
     };
     let flat_end = tool.shape == ToolShape::EndMill && tool.reach() <= radius;
     let mut bytes = Vec::with_capacity(PARAMS_BYTES);
@@ -243,6 +244,10 @@ fn move_records(grid: &Material, tool: &Tool, moves: &[(DVec3, DVec3)]) -> Vec<u
 impl Compute for GpuCompute {
     #[expect(clippy::cast_possible_truncation, reason = "the GPU takes f32")]
     fn drop_at(&self, grid: &Material, tool: &Tool, points: &[Point]) -> Vec<f64> {
+        // ponytail: a form tool's profile is the CPU's; the shader knows the fixed shapes
+        if tool.shape == ToolShape::FormTool {
+            return Cpu.drop_at(grid, tool, points);
+        }
         if points.is_empty() {
             return vec![];
         }
@@ -269,6 +274,10 @@ impl Compute for GpuCompute {
     }
 
     fn drop_everywhere(&self, grid: &Material, tool: &Tool) -> Vec<f64> {
+        // ponytail: a form tool's profile is the CPU's; the shader knows the fixed shapes
+        if tool.shape == ToolShape::FormTool {
+            return Cpu.drop_everywhere(grid, tool);
+        }
         let n = grid.columns * grid.rows;
         if n == 0 {
             return vec![];
@@ -287,6 +296,10 @@ impl Compute for GpuCompute {
     }
 
     fn overcut_along(&self, grid: &Material, tool: &Tool, moves: &[(DVec3, DVec3)]) -> Vec<f64> {
+        // ponytail: a form tool's profile is the CPU's; the shader knows the fixed shapes
+        if tool.shape == ToolShape::FormTool {
+            return Cpu.overcut_along(grid, tool, moves);
+        }
         if moves.is_empty() {
             return vec![];
         }
@@ -311,6 +324,10 @@ impl Compute for GpuCompute {
     }
 
     fn cut_along(&self, material: &mut Material, tool: &Tool, moves: &[Move]) {
+        // ponytail: a form tool's profile is the CPU's; the shader knows the fixed shapes
+        if tool.shape == ToolShape::FormTool {
+            return Cpu.cut_along(material, tool, moves);
+        }
         let pairs: Vec<(DVec3, DVec3)> = moves.windows(2).map(|w| (w[0].to, w[1].to)).collect();
         if pairs.is_empty() || material.heights.is_empty() {
             return;
@@ -330,7 +347,7 @@ impl Compute for GpuCompute {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cut_craft_core::compute::{Compute, Cpu};
+    use cut_craft_core::compute::Compute;
     use cut_craft_core::geometry::Point;
     use cut_craft_core::glam::DVec3;
     use cut_craft_core::simulation::Material;
@@ -372,6 +389,11 @@ mod tests {
             cell,
             bottom: -12.0,
             heights: vec![0.0; columns * rows],
+            cut_by: vec![0; columns * rows],
+            cutting: 0,
+            paint: vec![],
+            other_side: None,
+            under: vec![],
         };
         for row in 0..rows {
             for column in 0..columns {

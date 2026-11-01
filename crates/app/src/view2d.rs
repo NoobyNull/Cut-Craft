@@ -74,6 +74,33 @@ impl ViewTransform {
 
 /// The spacing of ruler labels: the smallest 1, 2 or 5 times a power of ten that puts them at
 /// least `min_gap` pixels apart at `pixels_per_unit`.
+/// How many of their own sizes apart grid points must be on screen to be drawn.
+const GRID_GAP: f32 = 4.0;
+
+/// The distance between grid points drawn: the spacing, or the least multiple of it at
+/// least `min_gap` screen points apart at `scale` points a millimetre; none for no spacing.
+pub fn grid_step(spacing: f64, scale: f64, min_gap: f64) -> Option<f64> {
+    if spacing <= 0.0 || scale <= 0.0 {
+        return None;
+    }
+    let every = (min_gap / (spacing * scale)).ceil().max(1.0);
+    Some(spacing * every)
+}
+
+/// The grid points `step` apart from the job's zero (whole multiples) inside `job`.
+#[expect(clippy::cast_possible_truncation, reason = "counts of grid points")]
+pub fn grid_points(job: cut_craft_core::geometry::Rect, step: f64) -> Vec<Point> {
+    let range = |lo: f64, hi: f64| (lo / step).ceil() as i64..=(hi / step).floor() as i64;
+    let mut points = vec![];
+    for row in range(job.min.y, job.max.y) {
+        for column in range(job.min.x, job.max.x) {
+            #[expect(clippy::cast_precision_loss, reason = "small counts")]
+            points.push(Point::new(column as f64 * step, row as f64 * step));
+        }
+    }
+    points
+}
+
 pub fn ruler_step(pixels_per_unit: f64, min_gap: f64) -> f64 {
     let raw = min_gap / pixels_per_unit;
     let power = 10f64.powf(raw.log10().floor());
@@ -116,6 +143,8 @@ pub enum Overlay {
     /// Node editing: handles on the selected vectors' nodes, and a node's drag in progress.
     Nodes {
         at: Vec<Point>,
+        /// Nodes picked with a box, drawn filled: a drag of one moves them all.
+        picked: Vec<Point>,
         moving: Vec<Path>,
     },
     /// A selection box in job coordinates; crossing boxes are drawn dashed.
@@ -214,6 +243,24 @@ impl Canvas {
 
     /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the
     /// selection colour) and `overlay`.
+    /// Where a guide's line crosses the view, on screen: from edge to edge for one along an
+    /// axis, far past the view either way for an angled one.
+    pub fn guide_ends(&self, g: &cut_craft_core::document::Guide) -> [Pos2; 2] {
+        let t = self.transform;
+        if !g.tilted() {
+            let at = t.to_screen(Point::new(g.at, g.at));
+            return if g.vertical {
+                [pos2(at.x, self.area.top()), pos2(at.x, self.area.bottom())]
+            } else {
+                [pos2(self.area.left(), at.y), pos2(self.area.right(), at.y)]
+            };
+        }
+        let middle = g.nearest(t.to_job(self.area.center()));
+        let far = f64::from(self.area.size().max_elem() / t.scale) * 2.0;
+        let d = g.direction();
+        [t.to_screen(middle - d * far), t.to_screen(middle + d * far)]
+    }
+
     /// Whether `at` is on a ruler: `Some(true)` the left one (it gives vertical guides),
     /// `Some(false)` the top one; the corner where they meet is neither.
     pub fn ruler_at(&self, ui: &egui::Ui, at: Pos2) -> Option<bool> {
@@ -500,25 +547,30 @@ impl Canvas {
         if display.guides {
             let guide = Stroke::new(datum.width, visuals.selection.bg_fill);
             for g in &doc.guides {
-                let at = t.to_screen(Point::new(g.at, g.at));
-                let line = if g.vertical {
-                    [pos2(at.x, self.area.top()), pos2(at.x, self.area.bottom())]
-                } else {
-                    [pos2(self.area.left(), at.y), pos2(self.area.right(), at.y)]
-                };
-                painter.extend(Shape::dashed_line(&line, guide, dash, gap));
+                painter.extend(Shape::dashed_line(&self.guide_ends(g), guide, dash, gap));
             }
         }
         // toolpath tiles: their edges, and their overlap faintly
         if let Some(tiling) = doc.tiling {
             let edge = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
             let overlap = Stroke::new(datum.width, visuals.error_fg_color);
+            let active = tiling.active_tile(doc.job.area());
             for tile in tiling.tiles(doc.job.area()) {
                 let reach = tiling.reach(tile);
                 for (r, stroke) in [(reach, overlap), (tile, edge)] {
                     let screen_rect =
                         egui::Rect::from_two_pos(t.to_screen(r.min), t.to_screen(r.max));
                     painter.rect_stroke(screen_rect, 0, stroke, egui::StrokeKind::Middle);
+                }
+                // the active tile, shaded
+                if active == Some(tile) {
+                    let screen_rect =
+                        egui::Rect::from_two_pos(t.to_screen(tile.min), t.to_screen(tile.max));
+                    painter.rect_filled(
+                        screen_rect,
+                        0,
+                        visuals.warn_fg_color.gamma_multiply(ACTIVE_TILE_SHADE),
+                    );
                 }
             }
         }
@@ -534,6 +586,23 @@ impl Canvas {
         let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
         for path in &doc.keep_out {
             painter.add(Shape::line(screen(path), zone));
+        }
+    }
+
+    /// The snap grid's points over the job, `spacing` apart, coloured and sized as asked;
+    /// when they would crowd closer than a few of their own size, only every so many.
+    pub fn paint_grid(&self, ui: &egui::Ui, spacing: f64, colour: [u8; 3], size: f32) {
+        let t = self.transform;
+        let Some(step) = grid_step(spacing, f64::from(t.scale), f64::from(GRID_GAP * size)) else {
+            return;
+        };
+        let painter = ui.painter_at(self.area);
+        let colour = egui::Color32::from_rgb(colour[0], colour[1], colour[2]);
+        for p in grid_points(self.job, step) {
+            let at = t.to_screen(p);
+            if self.area.contains(at) {
+                painter.circle_filled(at, size / 2.0, colour);
+            }
         }
     }
 
@@ -616,11 +685,16 @@ impl Canvas {
                     painter.add(Shape::line(screen(path), selected));
                 }
             }
-            Overlay::Nodes { at, moving } => {
+            Overlay::Nodes { at, picked, moving } => {
                 let half = ui.spacing().interact_size.y * NODE_HANDLE_SHARE / 2.0;
                 for q in at {
                     let r = Rect::from_center_size(t.to_screen(*q), egui::vec2(half, half) * 2.0);
-                    painter.rect_filled(r, 0.0, ui.visuals().extreme_bg_color);
+                    let fill = if picked.iter().any(|p| p.distance(*q) < 1e-9) {
+                        selected.color
+                    } else {
+                        ui.visuals().extreme_bg_color
+                    };
+                    painter.rect_filled(r, 0.0, fill);
                     painter.rect_stroke(r, 0, selected, egui::StrokeKind::Middle);
                 }
                 for path in moving {
@@ -659,8 +733,26 @@ fn to_f32(v: f64) -> f32 {
     v as f32
 }
 
+/// How strongly the active toolpath tile is shaded in the 2D view.
+const ACTIVE_TILE_SHADE: f32 = 0.15;
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_grid_thins_out_when_its_points_would_crowd() {
+        // 10 mm apart at 2 points a mm is 20 points: drawn as it is
+        assert_eq!(grid_step(10.0, 2.0, 8.0), Some(10.0));
+        // at 0.3 points a mm only every third is 8 or more points apart
+        assert_eq!(grid_step(10.0, 0.3, 8.0), Some(30.0));
+        assert_eq!(grid_step(0.0, 1.0, 8.0), None);
+        let job =
+            cut_craft_core::geometry::Rect::new(Point::new(-5.0, 0.0), Point::new(20.0, 10.0));
+        let points = grid_points(job, 10.0);
+        assert_eq!(points.len(), 3 * 2, "x 0, 10, 20 by y 0, 10");
+        assert!(points.contains(&Point::new(20.0, 10.0)));
+    }
+
     use super::*;
     use eframe::egui::{pos2, vec2};
 

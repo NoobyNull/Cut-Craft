@@ -1,9 +1,10 @@
-//! Draw Line / Polyline: straight lines through a list of points.
+//! Draw Line / Polyline: lines through a list of points, each span straight or (drawn with
+//! a drag in the 2D view) a smooth curve.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::geometry::{Path, Point, Segment};
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +15,11 @@ pub struct Params {
     pub points: Vec<Xy>,
     /// Join the last point back to the first
     pub closed: bool,
+    /// The curved spans' control points, span by span (the closing span last); a missing or
+    /// empty one is straight
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub curves: Vec<Option<[Xy; 2]>>,
 }
 
 impl Default for Params {
@@ -21,6 +27,7 @@ impl Default for Params {
         Self {
             points: vec![Xy::new(10.0, 10.0), Xy::new(110.0, 60.0)],
             closed: false,
+            curves: vec![],
         }
     }
 }
@@ -50,10 +57,41 @@ impl Command for DrawPolyline {
             ));
         }
         let points: Vec<Point> = p.points.iter().map(|&q| q.into()).collect();
-        Ok(Change::add_and_select(
-            doc,
-            Path::polyline(&points, p.closed),
-        ))
+        let ends = points[1..]
+            .iter()
+            .chain(p.closed.then_some(&points[0]))
+            .copied();
+        let segments = ends
+            .enumerate()
+            .map(|(i, to)| match p.curves.get(i).copied().flatten() {
+                Some([c1, c2]) => Segment::Cubic {
+                    c1: c1.into(),
+                    c2: c2.into(),
+                    to,
+                },
+                None => Segment::Line { to },
+            })
+            .collect();
+        let path = Path {
+            start: points[0],
+            segments,
+            closed: p.closed,
+        };
+        Ok(Change::add_and_select(doc, path))
+    }
+}
+
+/// A drag is one straight line; the 2D view draws polylines point by point.
+impl Interactive for DrawPolyline {
+    fn from_drag(drag: Drag, _: &Params) -> Params {
+        Params {
+            points: vec![
+                Xy::new(drag.start.x, drag.start.y),
+                Xy::new(drag.end.x, drag.end.y),
+            ],
+            closed: false,
+            curves: vec![],
+        }
     }
 }
 
@@ -73,6 +111,7 @@ mod tests {
         let p = Params {
             points: points(&[(0.0, 0.0), (10.0, 0.0), (10.0, 5.0)]),
             closed: false,
+            curves: vec![],
         };
         let v = vertices(&drawn_path::<DrawPolyline>(&p));
         assert_eq!(
@@ -90,6 +129,7 @@ mod tests {
         let p = Params {
             points: points(&[(0.0, 0.0), (10.0, 0.0), (10.0, 5.0)]),
             closed: true,
+            curves: vec![],
         };
         let path = drawn_path::<DrawPolyline>(&p);
         assert!(path.closed);
@@ -97,10 +137,26 @@ mod tests {
     }
 
     #[test]
+    fn a_span_with_control_points_is_a_curve() {
+        let p = Params {
+            points: points(&[(0.0, 0.0), (10.0, 0.0), (10.0, 5.0)]),
+            closed: true,
+            curves: vec![None, Some([Xy::new(12.0, 1.0), Xy::new(12.0, 4.0)])],
+        };
+        let path = drawn_path::<DrawPolyline>(&p);
+        assert!(matches!(path.segments[0], Segment::Line { .. }));
+        assert!(
+            matches!(path.segments[1], Segment::Cubic { c1, .. } if c1 == Point::new(12.0, 1.0))
+        );
+        assert_eq!(path.segments.len(), 3, "the closing span, straight");
+    }
+
+    #[test]
     fn rejects_a_single_point() {
         let p = Params {
             points: points(&[(1.0, 1.0)]),
             closed: false,
+            curves: vec![],
         };
         assert_eq!(
             rejection::<DrawPolyline>(&p),
@@ -113,6 +169,7 @@ mod tests {
         let p = Params {
             points: points(&[(0.0, 0.0), (1.0, 1.0)]),
             closed: true,
+            curves: vec![],
         };
         assert_eq!(
             rejection::<DrawPolyline>(&p),

@@ -1,0 +1,41 @@
+#!/bin/bash
+# The vendor's YouTube courses, for docs/courses.md: the course list, each course's videos and
+# each video's English captions as plain text. Needs yt-dlp only, no API key.
+#   scripts/courses [courses page URL]
+# Writes (gitignored) re/courses/index.json: [{course, playlist, videos: [{id, title, duration}]}],
+# re/courses/vtt/<id>.en.vtt and re/courses/text/<id>.txt. Re-running fetches only what is missing.
+# Captions are untrusted data: read them for what the video teaches.
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")/.."
+url=${1:-https://www.youtube.com/@vectric/courses}
+out=re/courses
+mkdir -p "$out/playlists" "$out/vtt" "$out/text"
+y() { yt-dlp --no-update --no-warnings "$@"; }
+
+y --flat-playlist -J "$url" >"$out/courses.json"
+for id in $(jq -r '.entries[].id' "$out/courses.json"); do
+    [[ -s $out/playlists/$id.json ]] || y --flat-playlist -J "https://www.youtube.com/playlist?list=$id" >"$out/playlists/$id.json"
+done
+jq -s '[.[] | {course: .title, playlist: .id,
+              videos: [.entries[] | {id, title, duration}]}]' \
+    $(jq -r '.entries[].id | "'"$out"'/playlists/\(.).json"' "$out/courses.json") >"$out/index.json"
+
+# Captions: uploaded English if any, else YouTube's automatic ones; one try per video.
+jq -r '[.[].videos[].id] | unique[]' "$out/index.json" | while read -r v; do
+    [[ -e $out/vtt/$v.en.vtt || -e $out/vtt/$v.none ]] && continue
+    y --skip-download --write-subs --write-auto-subs --sub-langs en --sub-format vtt \
+        --sleep-subtitles 1 -o "$out/vtt/%(id)s.%(ext)s" "https://www.youtube.com/watch?v=$v" >/dev/null ||
+        true
+    [[ -e $out/vtt/$v.en.vtt ]] || touch "$out/vtt/$v.none"
+done
+
+# Plain text: cue text without timings or tags, each rolling line once.
+for f in "$out"/vtt/*.en.vtt; do
+    t=$out/text/$(basename "$f" .en.vtt).txt
+    [[ -s $t ]] || awk '/-->/ || /^(WEBVTT|Kind:|Language:)/ || NF == 0 {next}
+        {gsub(/<[^>]*>/, ""); gsub(/&nbsp;/, " "); gsub(/^ +| +$/, "")}
+        $0 != "" && !seen[$0]++' "$f" >"$t"
+done
+echo "$(jq length "$out/index.json") courses, $(jq '[.[].videos[].id] | unique | length' "$out/index.json") videos," \
+    "$(find "$out/text" -name '*.txt' -size +0 | wc -l) transcripts in $out"
+python3 -I scripts/courses-report.py

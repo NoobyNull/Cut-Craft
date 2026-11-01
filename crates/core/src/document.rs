@@ -347,6 +347,16 @@ pub struct Job {
     /// The material's colour in the 3D view.
     #[serde(default = "default_colour")]
     pub colour: [u8; 3],
+    /// How the preview colours what the toolpaths cut (added with preview colours).
+    #[serde(default)]
+    pub machined_area: MachinedArea,
+    /// Global Fill Color's colour.
+    #[serde(default = "default_fill")]
+    pub fill_colour: [u8; 3],
+    /// The lithophane preview's light, 0 (high contrast) to 1 (light, as with no light
+    /// behind it).
+    #[serde(default = "half_light")]
+    pub lithophane_light: f64,
     /// Set for a rotary job (added with rotary jobs; flat jobs leave it out).
     /// Double-sided jobs: how the material is turned over between sides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -367,6 +377,33 @@ pub struct Job {
 
 fn default_clearance() -> f64 {
     Job::default().clearance
+}
+
+/// How the toolpath preview colours the areas it cuts (Aspire's Material Appearance ▸
+/// Machined Area Color).
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MachinedArea {
+    /// The material's own colour, as the uncut surface
+    #[default]
+    MaterialColor,
+    /// Every machined area in the one fill colour
+    GlobalFillColor,
+    /// Each toolpath's areas in its own colour (none: the material's)
+    ToolpathColor,
+    /// Lit from behind: white where nothing is left, the material's colour at full
+    /// thickness, between by what is left (added with the lithophane preview)
+    Lithophane,
+}
+
+fn half_light() -> f64 {
+    0.5
+}
+
+fn default_fill() -> [u8; 3] {
+    Job::default().fill_colour
 }
 
 fn default_colour() -> [u8; 3] {
@@ -449,6 +486,9 @@ impl Default for Job {
             resolution: Resolution::Standard,
             // pine, as Toolpaths ▸ Materials has it
             colour: [214, 160, 102],
+            machined_area: MachinedArea::MaterialColor,
+            lithophane_light: 0.5,
+            fill_colour: [70, 130, 180],
             rotary: None,
             double_sided: None,
             model_position: ModelPosition::default(),
@@ -527,6 +567,10 @@ pub struct Document {
     /// Guide lines dragged out of the 2D view's rulers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
+    /// The toolpath list's groups in order (added with toolpath groups). A group made empty
+    /// is only here; each toolpath names its own group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub toolpath_groups: Vec<String>,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -537,6 +581,10 @@ pub struct Guide {
     pub at: f64,
     #[serde(default)]
     pub locked: bool,
+    /// Turned from its own direction (up for a vertical guide, across for a horizontal one)
+    /// in degrees anticlockwise, about where it crosses its axis (added with angled guides).
+    #[serde(default)]
+    pub tilt: f64,
 }
 
 impl Guide {
@@ -545,6 +593,7 @@ impl Guide {
             vertical: true,
             at: x,
             locked: false,
+            tilt: 0.0,
         }
     }
 
@@ -553,7 +602,84 @@ impl Guide {
             vertical: false,
             at: y,
             locked: false,
+            tilt: 0.0,
         }
+    }
+
+    /// Its direction in degrees anticlockwise from the X axis: 0 across, 90 up, plus its
+    /// tilt (Aspire's guide angle).
+    #[must_use]
+    pub fn angle(&self) -> f64 {
+        let own = if self.vertical { 90.0 } else { 0.0 };
+        own + self.tilt
+    }
+
+    /// Whether it is turned off its axis.
+    #[must_use]
+    pub fn tilted(&self) -> bool {
+        self.tilt.abs() > 1e-9
+    }
+
+    /// The guide at `degrees` from the X axis.
+    #[must_use]
+    pub fn with_angle(self, degrees: f64) -> Self {
+        Self {
+            tilt: degrees - if self.vertical { 90.0 } else { 0.0 },
+            ..self
+        }
+    }
+
+    /// Where it crosses its axis: (`at`, 0) for a vertical guide, (0, `at`) for a horizontal.
+    #[must_use]
+    pub fn anchor(&self) -> Point {
+        if self.vertical {
+            Point::new(self.at, 0.0)
+        } else {
+            Point::new(0.0, self.at)
+        }
+    }
+
+    #[must_use]
+    pub fn direction(&self) -> Point {
+        Point::from_angle(self.angle().to_radians())
+    }
+
+    /// The point of the guide nearest `p`.
+    #[must_use]
+    pub fn nearest(&self, p: Point) -> Point {
+        let (anchor, d) = (self.anchor(), self.direction());
+        anchor + d * (p - anchor).dot(d)
+    }
+
+    #[must_use]
+    pub fn distance(&self, p: Point) -> f64 {
+        self.nearest(p).distance(p)
+    }
+
+    /// The guide moved to pass through `p`, keeping its direction.
+    #[must_use]
+    pub fn through(self, p: Point) -> Self {
+        let d = self.direction();
+        let at = if self.vertical {
+            if d.y.abs() < 1e-12 {
+                p.x
+            } else {
+                p.x - p.y * d.x / d.y
+            }
+        } else if d.x.abs() < 1e-12 {
+            p.y
+        } else {
+            p.y - p.x * d.y / d.x
+        };
+        Self { at, ..self }
+    }
+
+    /// A guide parallel to this one, `offset` to its left (across its direction).
+    #[must_use]
+    pub fn parallel(self, offset: f64) -> Self {
+        let left = self.direction().perp();
+        let anchor = self.anchor();
+        self.through(anchor + left * offset)
     }
 }
 
@@ -580,6 +706,7 @@ impl Default for Document {
             variables: BTreeMap::new(),
             keep_out: vec![],
             guides: vec![],
+            toolpath_groups: vec![],
             tiling: None,
             bottom_side: false,
             other_side: SheetObjects::default(),
@@ -826,4 +953,59 @@ impl Document {
             .map(|(&id, _)| id)
             .collect()
     }
+}
+
+impl Document {
+    /// The toolpath groups in list order, then any a toolpath names that the list lacks (a
+    /// template brings its toolpaths' groups in).
+    #[must_use]
+    pub fn toolpath_groups_in_use(&self) -> Vec<String> {
+        let mut groups = self.toolpath_groups.clone();
+        for name in self.toolpaths.values().filter_map(|t| t.group.as_ref()) {
+            if !groups.contains(name) {
+                groups.push(name.clone());
+            }
+        }
+        groups
+    }
+
+    /// The toolpaths in `group`, in list order.
+    #[must_use]
+    pub fn toolpaths_in_group(&self, group: &str) -> Vec<EntityId> {
+        self.toolpaths
+            .iter()
+            .filter(|(_, t)| t.group.as_deref() == Some(group))
+            .map(|(&id, _)| id)
+            .collect()
+    }
+
+    /// A name no toolpath group has yet: Group 1, Group 2…
+    #[must_use]
+    pub fn next_toolpath_group_name(&self) -> String {
+        let groups = self.toolpath_groups_in_use();
+        // among one more name than there are groups, one is free
+        (1..=groups.len() + 1)
+            .map(|n| format!("Group {n}"))
+            .find(|name| !groups.contains(name))
+            .expect("one more name than groups")
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn an_angled_guide_is_a_line_through_where_it_crosses_its_axis() {
+    let g = Guide::horizontal(10.0).with_angle(45.0);
+    assert!((g.angle() - 45.0).abs() < 1e-9 && g.tilted());
+    assert!(!Guide::vertical(3.0).tilted());
+    assert_eq!(Guide::vertical(3.0).angle(), 90.0);
+    // y = x + 10: the point (10, 10) is 10 / sqrt 2 off it
+    assert!((g.distance(Point::new(10.0, 10.0)) - 10.0 / 2f64.sqrt()).abs() < 1e-9);
+    assert!(g.distance(Point::new(5.0, 15.0)) < 1e-9);
+    // moved through (40, 30): y = x - 10
+    let moved = g.through(Point::new(40.0, 30.0));
+    assert!((moved.at + 10.0).abs() < 1e-9 && moved.distance(Point::new(40.0, 30.0)) < 1e-9);
+    // a parallel 10 to its left is 10 away everywhere
+    let beside = g.parallel(10.0);
+    assert!((beside.distance(Point::new(5.0, 15.0)) - 10.0).abs() < 1e-9);
+    assert!((beside.angle() - 45.0).abs() < 1e-9);
 }

@@ -7,8 +7,6 @@ edition.workspace = true
 [dependencies]
 chrono.workspace = true
 cut-craft-core.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true
 
 [lints]

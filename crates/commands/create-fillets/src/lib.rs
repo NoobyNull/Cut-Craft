@@ -2,8 +2,8 @@
 //! relief into them so a round cutter can clear the corner fully, or loops a plasma or drag
 //! knife round the outside of them.
 
-use cut_craft_core::document::Document;
-use cut_craft_core::geometry::{Path, Point, Segment, winding};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::{Path, Point, Segment, polyline_distance, winding};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,14 @@ pub struct Params {
     pub radius: f64,
     /// Open vectors have no inside, so they get every corner
     pub corners: Corners,
+    /// A click in the 2D view instead of the selection's corners: the nearest sharp corner
+    /// within `within` of it is filleted, or the fillet there is taken out
+    #[serde(default)]
+    #[schemars(skip)]
+    pub at: Option<Point>,
+    #[serde(default)]
+    #[schemars(skip)]
+    pub within: f64,
 }
 
 impl Default for Params {
@@ -53,6 +61,8 @@ impl Default for Params {
             kind: Kind::Normal,
             radius: 3.0,
             corners: Corners::All,
+            at: None,
+            within: 0.0,
         }
     }
 }
@@ -72,6 +82,15 @@ impl Command for CreateFillets {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("radius", p.radius)?;
+        if let Some(at) = p.at {
+            let (id, path, note) = at_click(doc, p, at)?;
+            let mut c = Change::builder(doc);
+            c.replace(id, path);
+            if let Some(note) = note {
+                c.note(note);
+            }
+            return Ok(c.finish());
+        }
         let (ids, paths) = doc.selected_paths(|_| true);
         if ids.is_empty() {
             return Err(CommandError::Failed(
@@ -135,6 +154,16 @@ struct Corner {
     center: Point,
     /// A point the fillet passes through, which fixes which way round it goes.
     through: Point,
+    /// Clicked: whether the click was nearer the side in than the side out, which is the
+    /// side a T-bone notches; `None` notches the longer side.
+    click_side: Option<bool>,
+}
+
+impl Corner {
+    /// Whether a T-bone notches the side in (else the side out).
+    fn notches_side_in(&self) -> bool {
+        self.click_side.unwrap_or(self.len_in >= self.len_out)
+    }
 }
 
 /// The sharp line-to-line corners of `path` that `which` asks for: (index of the segment
@@ -184,6 +213,7 @@ fn sharp_corners(path: &Path, which: Corners) -> Vec<(usize, Corner)> {
                 trim_out: 0.0,
                 center: at,
                 through: at,
+                click_side: None,
             };
             found.push((k, corner));
         }
@@ -207,7 +237,7 @@ fn plan(mut corner: Corner, p: &Params, left: (f64, f64)) -> Option<Corner> {
         Kind::Normal => len_in.min(len_out) * half.tan(),
         Kind::DogBone => len_in.min(len_out) / (2.0 * half.cos()),
         Kind::TBone => {
-            let (notched, other) = if corner.len_in >= corner.len_out {
+            let (notched, other) = if corner.notches_side_in() {
                 (len_in, len_out)
             } else {
                 (len_out, len_in)
@@ -240,7 +270,7 @@ fn plan(mut corner: Corner, p: &Params, left: (f64, f64)) -> Option<Corner> {
         }
         Kind::TBone => {
             let other = (2.0 * r * cos).max(0.0);
-            if corner.len_in >= corner.len_out {
+            if corner.notches_side_in() {
                 (2.0 * r, other, corner.at + back * r)
             } else {
                 (other, 2.0 * r, corner.at + on * r)
@@ -297,6 +327,122 @@ fn rebuilt(path: &Path, plans: &[(usize, Corner)]) -> Path {
     }
 }
 
+/// What a click at `at` does with Create Fillets open: the nearest sharp corner within
+/// `p.within` of it gets a fillet (a T-bone notching the side the click is nearer); else the
+/// nearest fillet arc within reach is taken out, its sides meeting sharp again. The vector
+/// as it becomes, and a note when the radius had to be cut down to fit.
+pub fn at_click(
+    doc: &Document,
+    p: &Params,
+    at: Point,
+) -> Result<(EntityId, Path, Option<String>), CommandError> {
+    let mut corner: Option<(f64, EntityId, usize, Corner)> = None;
+    let mut arc: Option<(f64, EntityId, usize)> = None;
+    for (&id, path) in &doc.vectors {
+        for (seg, sharp) in sharp_corners(path, Corners::All) {
+            let dist = sharp.at.distance(at);
+            if dist <= p.within && corner.is_none_or(|best| dist < best.0) {
+                corner = Some((dist, id, seg, sharp));
+            }
+        }
+        for (seg, segment) in path.segments.iter().enumerate() {
+            if !matches!(segment, Segment::Arc { .. }) {
+                continue;
+            }
+            let dist = polyline_distance(&segment_points(path, seg), at);
+            if dist <= p.within && arc.is_none_or(|best| dist < best.0) {
+                arc = Some((dist, id, seg));
+            }
+        }
+    }
+    match (corner, arc) {
+        (Some((dist, id, seg, mut sharp)), arc) if arc.is_none_or(|nearest| dist <= nearest.0) => {
+            let off = at - sharp.at;
+            sharp.click_side = Some(off.dot(sharp.back) >= off.dot(sharp.on));
+            let planned = plan(sharp, p, (sharp.len_in, sharp.len_out))
+                .ok_or_else(|| CommandError::Failed("no fillet fits that corner".into()))?;
+            let radius = (planned.center - planned.through).length();
+            let note = (radius < p.radius - STRAIGHT)
+                .then(|| format!("the radius was cut to {radius:.2} mm, the largest that fits"));
+            Ok((id, rebuilt(&doc.vectors[&id], &[(seg, planned)]), note))
+        }
+        (_, Some((_, id, seg))) => {
+            let path = unfilleted(&doc.vectors[&id], seg).ok_or_else(|| {
+                CommandError::Failed(
+                    "only a fillet between two straight sides can be taken out".into(),
+                )
+            })?;
+            Ok((id, path, None))
+        }
+        _ => Err(CommandError::Failed(
+            "click on a sharp corner to fillet it, or on a fillet to take it out".into(),
+        )),
+    }
+}
+
+/// The points along segment `k` of `path`.
+fn segment_points(path: &Path, k: usize) -> Vec<Point> {
+    let start = if k == 0 {
+        path.start
+    } else {
+        path.segments[k - 1].end()
+    };
+    Path {
+        start,
+        segments: vec![path.segments[k]],
+        closed: false,
+    }
+    .flatten(0.01)
+}
+
+/// `path` with the fillet at segment `k` taken out: the straight sides either side of it run
+/// on to meet at the sharp corner again. `None` when a side is not straight (or missing).
+fn unfilleted(path: &Path, k: usize) -> Option<Path> {
+    let n = path.segments.len();
+    let (prev, next) = if path.closed {
+        (n >= 3).then_some(((k + n - 1) % n, (k + 1) % n))?
+    } else {
+        (k.checked_sub(1)?, (k + 1 < n).then_some(k + 1)?)
+    };
+    let start_of = |i: usize| {
+        if i == 0 {
+            path.start
+        } else {
+            path.segments[i - 1].end()
+        }
+    };
+    let (Segment::Line { to: a1 }, Segment::Line { to: b1 }) =
+        (path.segments[prev], path.segments[next])
+    else {
+        return None;
+    };
+    let x = meet(start_of(prev), a1, path.segments[k].end(), b1)?;
+    let mut segments = path.segments.clone();
+    segments[prev] = Segment::Line { to: x };
+    segments.remove(k);
+    // a path that began at the fillet now begins at the corner
+    let start = if k == 0 || (path.closed && k == n - 1) {
+        x
+    } else {
+        path.start
+    };
+    Some(Path {
+        start,
+        segments,
+        closed: path.closed,
+    })
+}
+
+/// Where the line through `a0` and `a1` meets the line through `b0` and `b1`.
+fn meet(a0: Point, a1: Point, b0: Point, b1: Point) -> Option<Point> {
+    let (da, db) = (a1 - a0, b1 - b0);
+    let denominator = da.perp_dot(db);
+    if denominator.abs() < STRAIGHT {
+        return None;
+    }
+    Some(a0 + da * ((b0 - a0).perp_dot(db) / denominator))
+}
+
 /// Whether the arc around `center` from `from` to `to` that passes `through` runs
 /// counter-clockwise.
 fn ccw_through(from: Point, through: Point, to: Point, center: Point) -> bool {
@@ -327,6 +473,7 @@ mod tests {
             kind,
             radius,
             corners,
+            ..Params::default()
         }
     }
 
@@ -553,5 +700,70 @@ mod tests {
         );
         let doc = Document::default();
         assert!(CreateFillets::run(&doc, &Params::default()).is_err());
+    }
+
+    #[test]
+    fn a_clicked_corner_alone_is_filleted_and_a_click_on_the_fillet_takes_it_out() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 10.0)]);
+        let id = *doc.vectors.keys().next().unwrap();
+        let click = |at: Point| Params {
+            at: Some(at),
+            within: 1.0,
+            ..Params::default()
+        };
+        let change = CreateFillets::run(&doc, &click(Point::new(0.3, -0.2))).unwrap();
+        doc.apply(&change).unwrap();
+        let path = &doc.vectors[&id];
+        assert_eq!((path.segments.len(), arcs(path).len()), (5, 1), "{path:?}");
+        assert!((arcs(path)[0] - Point::new(3.0, 3.0)).length() < EPS);
+        // the fillet's middle, where a click takes it out
+        let mid = Point::splat(3.0 - 3.0 * std::f64::consts::FRAC_1_SQRT_2);
+        let change = CreateFillets::run(&doc, &click(mid)).unwrap();
+        doc.apply(&change).unwrap();
+        let path = &doc.vectors[&id];
+        assert_eq!((path.segments.len(), arcs(path).len()), (4, 0), "{path:?}");
+        assert!(
+            polyline_distance(&path.flatten(0.01), Point::ZERO) < EPS,
+            "the corner is back"
+        );
+        let far = CreateFillets::run(&doc, &click(Point::new(5.0, 5.0))).unwrap_err();
+        assert!(far.to_string().contains("click on a sharp corner"), "{far}");
+    }
+
+    #[test]
+    fn a_clicked_t_bone_notches_the_side_the_click_is_nearer_and_an_oversize_radius_is_noted() {
+        let p = Point::new;
+        let wide = Path::polyline(
+            &[p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0), p(0.0, 10.0)],
+            true,
+        );
+        let doc = document_with(vec![wide]);
+        // just up the short left side from the corner at the origin
+        let at = p(0.1, 0.6);
+        let params = Params {
+            kind: Kind::TBone,
+            radius: 1.0,
+            at: Some(at),
+            within: 1.0,
+            ..Params::default()
+        };
+        let (_, path, note) = at_click(&doc, &params, at).unwrap();
+        let b = path.bounds();
+        assert!(
+            b.min.x < -0.5 && b.min.y > -EPS,
+            "notched into the left side: {b:?}"
+        );
+        assert!(note.is_none());
+        let big = Params {
+            radius: 50.0,
+            at: Some(Point::ZERO),
+            within: 1.0,
+            ..Params::default()
+        };
+        let (_, _, note) = at_click(&doc, &big, Point::ZERO).unwrap();
+        assert!(
+            note.as_ref().is_some_and(|n| n.contains("cut to")),
+            "{note:?}"
+        );
     }
 }

@@ -309,29 +309,105 @@ fn shaded(colour: Color32, brightness: f64) -> Color32 {
 }
 
 /// `material` with at most `most` cells along its longer side, each the deepest of the
-/// cells it covers so narrow cuts stay visible.
+/// cells it covers so narrow cuts stay visible, and marked and painted as that cell is.
 #[expect(clippy::cast_precision_loss, reason = "a small step")]
 pub fn coarse(material: &Material, most: usize) -> Material {
     let m = material;
     let step = m.columns.max(m.rows).div_ceil(most.max(1)).max(1);
     let (columns, rows) = (m.columns.div_ceil(step), m.rows.div_ceil(step));
     let span = |block: usize, count: usize| block * step..((block + 1) * step).min(count);
-    let heights = (0..rows)
+    // each block's deepest cell; a block of cells all taken away (NaN) has none
+    let deepest: Vec<Option<usize>> = (0..rows)
         .flat_map(|row| (0..columns).map(move |column| (column, row)))
         .map(|(column, row)| {
             span(row, m.rows)
-                .flat_map(|r| span(column, m.columns).map(move |c| m.heights[r * m.columns + c]))
-                .fold(f64::INFINITY, f64::min)
+                .flat_map(|r| span(column, m.columns).map(move |c| r * m.columns + c))
+                .filter(|&i| !m.heights[i].is_nan())
+                .min_by(|&a, &b| m.heights[a].total_cmp(&m.heights[b]))
         })
         .collect();
+    let of = |cells: &[u32]| -> Vec<u32> {
+        if cells.is_empty() {
+            return vec![];
+        }
+        deepest.iter().map(|d| d.map_or(0, |i| cells[i])).collect()
+    };
     Material {
         origin: m.origin,
         columns,
         rows,
         cell: m.cell * step as f64,
         bottom: m.bottom,
-        heights,
+        heights: deepest
+            .iter()
+            .map(|d| d.map_or(f64::NAN, |i| m.heights[i]))
+            .collect(),
+        cut_by: of(&m.cut_by),
+        cutting: m.cutting,
+        paint: of(&m.paint),
+        other_side: m.other_side.clone(),
+        // the underside under each block's deepest cell, as its top
+        under: if m.under.is_empty() {
+            vec![]
+        } else {
+            deepest
+                .iter()
+                .map(|d| d.map_or(f64::NAN, |i| m.under[i]))
+                .collect()
+        },
     }
+}
+
+/// `material` painted for the preview: each cell cut by a toolpath in the colour `fill`
+/// gives that toolpath's id, if it gives one.
+pub fn painted(mut material: Material, fill: impl Fn(u32) -> Option<Color32>) -> Material {
+    let paint: Vec<u32> = material
+        .cut_by
+        .iter()
+        .map(|&id| {
+            (id != 0)
+                .then(|| fill(id))
+                .flatten()
+                .map_or(0, |c| u32::from_be_bytes([1, c.r(), c.g(), c.b()]))
+        })
+        .collect();
+    material.paint = if paint.iter().any(|&p| p != 0) {
+        paint
+    } else {
+        vec![]
+    };
+    material
+}
+
+/// `material` painted as a lithophane lit from behind: white where nothing is left, `colour`
+/// (the material's) at full thickness, and between by the share left, raised to a power the
+/// `light` sets: 0 is high contrast (the colour soon), 1 light (white long) [inf].
+#[expect(clippy::cast_possible_truncation, reason = "a share of the thickness")]
+pub fn lit_through(mut material: Material, colour: Color32, light: f64) -> Material {
+    let power = 4f64.powf(2.0 * light.clamp(0.0, 1.0) - 1.0);
+    let thickness = -material.bottom;
+    let (white, base) = (Rgba::WHITE, Rgba::from(colour));
+    material.paint = material
+        .heights
+        .iter()
+        .map(|&height| {
+            if height.is_nan() || thickness <= 0.0 {
+                return 0;
+            }
+            let left = ((height - material.bottom) / thickness)
+                .clamp(0.0, 1.0)
+                .powf(power);
+            let c = Color32::from(white * (1.0 - left as f32) + base * left as f32);
+            u32::from_be_bytes([1, c.r(), c.g(), c.b()])
+        })
+        .collect();
+    material
+}
+
+/// A cell's preview colour, if it is painted.
+fn paint_of(material: &Material, cell: usize) -> Option<Color32> {
+    let [flag, red, green, blue] = material.paint.get(cell)?.to_be_bytes();
+    (flag != 0).then(|| Color32::from_rgb(red, green, blue))
 }
 
 /// How the block is drawn.
@@ -788,9 +864,16 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
                 continue;
             }
             let grain = |c, r| look.grain.map_or(1.0, |g| g.on_cells(m.cell).at(top(c, r)));
+            let colour = |c: usize, r: usize| {
+                let b = brightness(m, c, r, look.light);
+                match paint_of(m, r * m.columns + c) {
+                    Some(paint) => shaded(paint, b),
+                    None => shade(b * grain(c, r)),
+                }
+            };
             quads.push((
                 corners.map(|(c, r)| top(c, r)),
-                corners.map(|(c, r)| shade(brightness(m, c, r, look.light) * grain(c, r))),
+                corners.map(|(c, r)| colour(c, r)),
             ));
         }
     }
@@ -805,41 +888,8 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
     projected.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut quads: Vec<_> = projected.into_iter().map(|(_, q, c)| (q, c)).collect();
     let camera = Camera::new(m, orbit, framing, area, look.wrap);
-    // then the block's sides that face the viewer, from the surface down to the bottom, and
-    // its bottom seen from below: the block is all behind them, so they go last
-    let (last_column, last_row) = (m.columns - 1, m.rows - 1);
-    let sides: [(DVec3, Vec<(usize, usize)>); 4] = [
-        (DVec3::NEG_Y, (0..m.columns).map(|c| (c, 0)).collect()),
-        (DVec3::Y, (0..m.columns).map(|c| (c, last_row)).collect()),
-        (DVec3::NEG_X, (0..m.rows).map(|r| (0, r)).collect()),
-        (DVec3::X, (0..m.rows).map(|r| (last_column, r)).collect()),
-    ];
-    let down = |p: DVec3| DVec3::new(p.x, p.y, m.bottom);
-    for (outward, edge) in sides
-        .into_iter()
-        .filter(|_| look.sides && look.wrap.is_none())
-    {
-        if !camera.faces(down(top(edge[0].0, edge[0].1)), outward) {
-            continue;
-        }
-        let colour = shade(lit(outward, look.light));
-        for pair in edge.windows(2) {
-            let (a, b) = (top(pair[0].0, pair[0].1), top(pair[1].0, pair[1].1));
-            if a.z.is_nan() || b.z.is_nan() {
-                continue;
-            }
-            quads.push(([a, b, down(b), down(a)], [colour; 4]));
-        }
-    }
-    let bottom = [
-        (0, 0),
-        (last_column, 0),
-        (last_column, last_row),
-        (0, last_row),
-    ]
-    .map(|(c, r)| down(top(c, r)));
-    if look.sides && look.wrap.is_none() && camera.faces(bottom[0], DVec3::NEG_Z) {
-        quads.push((bottom, [shade(lit(DVec3::NEG_Z, look.light)); 4]));
+    if look.sides && look.wrap.is_none() {
+        quads.extend(block_faces(m, &top, &camera, orbit, &shade, look.light));
     }
     let mut mesh = Mesh::default();
     for (corners, colours) in quads {
@@ -851,6 +901,102 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         mesh.add_triangle(first, first + 2, first + 3);
     }
     mesh
+}
+
+/// The block's sides that face the viewer, from the surface down to its underside, and the
+/// underside seen from below: flat, or (a double-sided preview) cut from below. The block
+/// is all behind them, so they go after the top.
+fn block_faces(
+    m: &Material,
+    top: &dyn Fn(usize, usize) -> DVec3,
+    camera: &Camera,
+    orbit: Orbit,
+    shade: &dyn Fn(f64) -> Color32,
+    light: DVec3,
+) -> Vec<([DVec3; 4], [Color32; 4])> {
+    let mut quads = vec![];
+    let (last_column, last_row) = (m.columns - 1, m.rows - 1);
+    let sides: [(DVec3, Vec<(usize, usize)>); 4] = [
+        (DVec3::NEG_Y, (0..m.columns).map(|c| (c, 0)).collect()),
+        (DVec3::Y, (0..m.columns).map(|c| (c, last_row)).collect()),
+        (DVec3::NEG_X, (0..m.rows).map(|r| (0, r)).collect()),
+        (DVec3::X, (0..m.rows).map(|r| (last_column, r)).collect()),
+    ];
+    // the underside: flat at the bottom, or (a double-sided preview) cut from below
+    let floor = |c: usize, r: usize| {
+        let p = top(c, r);
+        let z = m.under.get(r * m.columns + c).copied().unwrap_or(m.bottom);
+        DVec3::new(p.x, p.y, z)
+    };
+    for (outward, edge) in sides {
+        if !camera.faces(floor(edge[0].0, edge[0].1), outward) {
+            continue;
+        }
+        let colour = shade(lit(outward, light));
+        for pair in edge.windows(2) {
+            let (a, b) = (top(pair[0].0, pair[0].1), top(pair[1].0, pair[1].1));
+            let (fa, fb) = (floor(pair[0].0, pair[0].1), floor(pair[1].0, pair[1].1));
+            if a.z.is_nan() || b.z.is_nan() || fa.z.is_nan() || fb.z.is_nan() {
+                continue;
+            }
+            quads.push(([a, b, fb, fa], [colour; 4]));
+        }
+    }
+    if m.under.is_empty() {
+        let bottom = [
+            (0, 0),
+            (last_column, 0),
+            (last_column, last_row),
+            (0, last_row),
+        ]
+        .map(|(c, r)| floor(c, r));
+        if camera.faces(bottom[0], DVec3::NEG_Z) {
+            quads.push((bottom, [shade(lit(DVec3::NEG_Z, light)); 4]));
+        }
+    } else if camera.faces(floor(0, 0), DVec3::NEG_Z) {
+        quads.extend(underside(m, &floor, camera, orbit, shade, light));
+    }
+    quads
+}
+
+/// The underside's quads cut from below, seen from below (it faces the viewer), lit as
+/// they face and far to near.
+fn underside(
+    m: &Material,
+    floor: &dyn Fn(usize, usize) -> DVec3,
+    camera: &Camera,
+    orbit: Orbit,
+    shade: &dyn Fn(f64) -> Color32,
+    light: DVec3,
+) -> Vec<([DVec3; 4], [Color32; 4])> {
+    let mut quads = vec![];
+    for row in 1..m.rows {
+        for column in 1..m.columns {
+            // wound the other way round from the top, as seen from below
+            let corners = [
+                (column - 1, row - 1),
+                (column - 1, row),
+                (column, row),
+                (column, row - 1),
+            ]
+            .map(|(c, r)| floor(c, r));
+            if corners.iter().any(|p| p.z.is_nan()) {
+                continue;
+            }
+            let normal = (corners[1] - corners[0]).cross(corners[3] - corners[0]);
+            let normal = if normal.z > 0.0 { -normal } else { normal };
+            if !camera.faces(corners[0], normal) {
+                continue;
+            }
+            quads.push((corners, [shade(lit(normal, light)); 4]));
+        }
+    }
+    // far first
+    quads.sort_by(|a, b| {
+        let depth = |q: &[DVec3; 4]| q.iter().map(|&c| orbit.project(c).1).sum::<f64>();
+        depth(&a.0).total_cmp(&depth(&b.0))
+    });
+    quads
 }
 
 /// Triangles in the material's coordinates (as [`screen_of`] takes them), lit as the
@@ -1185,6 +1331,61 @@ fn wrapped_quads(m: &Material, wrap: Wrap, light: DVec3) -> Vec<([DVec3; 4], f64
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_lithophane_is_white_where_nothing_is_left_and_the_material_where_it_is_whole() {
+        use cut_craft_core::document::Job;
+        let job = Job {
+            thickness: 10.0,
+            ..Job::default()
+        };
+        let mut m = cut_craft_core::simulation::Material::new(&job, 4);
+        m.heights[0] = 0.0;
+        m.heights[1] = m.bottom;
+        m.heights[2] = m.bottom / 2.0;
+        let colour = Color32::from_rgb(200, 100, 0);
+        let lit = lit_through(m.clone(), colour, 0.5);
+        assert_eq!(paint_of(&lit, 0), Some(colour));
+        assert_eq!(paint_of(&lit, 1), Some(Color32::WHITE));
+        let mid = paint_of(&lit, 2).unwrap();
+        assert!(
+            mid.g() > 100 && mid.b() > 0 && mid.b() < 255,
+            "between: {mid:?}"
+        );
+        // more light: the half-thick cell is lighter still
+        let lighter = paint_of(&lit_through(m, colour, 1.0), 2).unwrap();
+        assert!(lighter.b() > mid.b(), "{lighter:?} vs {mid:?}");
+    }
+
+    #[test]
+    fn a_preview_is_painted_by_who_cut_each_cell_and_coarse_keeps_the_deepest_cells_paint() {
+        let mut m = Material::new(
+            &cut_craft_core::document::Job {
+                width: 4.0,
+                height: 4.0,
+                ..cut_craft_core::document::Job::default()
+            },
+            4,
+        );
+        // cell 0 cut deepest by toolpath 3, cell 1 by toolpath 9 (unpainted)
+        (m.heights[0], m.cut_by[0]) = (-2.0, 3);
+        (m.heights[1], m.cut_by[1]) = (-1.0, 9);
+        let red = Color32::from_rgb(255, 0, 0);
+        let p = painted(m.clone(), |id| (id == 3).then_some(red));
+        assert_eq!(paint_of(&p, 0), Some(red));
+        assert_eq!(paint_of(&p, 1), None, "no fill");
+        assert_eq!(paint_of(&p, 5), None, "uncut");
+        assert!(
+            painted(m.clone(), |_| None).paint.is_empty(),
+            "nothing to paint"
+        );
+        let c = coarse(&p, 2);
+        assert_eq!(
+            (c.cut_by[0], paint_of(&c, 0)),
+            (3, Some(red)),
+            "the deepest cell's"
+        );
+    }
     use cut_craft_core::document::Job;
     use cut_craft_core::geometry::Point;
     use eframe::egui::pos2;
@@ -1451,6 +1652,19 @@ mod tests {
     }
 
     #[test]
+    fn coarse_cells_of_taken_away_material_stay_empty() {
+        let mut m = slotted();
+        m.heights
+            .iter_mut()
+            .take(m.columns * 8)
+            .for_each(|h| *h = f64::NAN);
+        let c = coarse(&m, 30);
+        assert!(c.heights[0].is_nan(), "a block all gone is gone");
+        assert!(c.heights[c.columns].is_nan(), "rows 0..8 are 2 coarse rows");
+        assert!(c.heights[2 * c.columns].is_finite(), "the rest stays");
+    }
+
+    #[test]
     fn coarse_cells_keep_the_deepest_point() {
         let mut m = slotted();
         m.heights[5 * m.columns + 7] = -9.0;
@@ -1523,6 +1737,30 @@ mod tests {
             centre_y(&mesh.indices[mesh.indices.len() - 3..]),
         );
         assert!(first < last, "far (higher on screen) first, near last");
+    }
+
+    #[test]
+    fn seen_from_below_a_cut_underside_is_drawn_cell_by_cell() {
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let below = Orbit::facing(DVec3::NEG_Z);
+        let flat = mesh(&slotted(), below, Framing::default(), &plain(), area);
+        let mut cut = slotted();
+        cut.under = vec![cut.bottom; cut.heights.len()];
+        cut.under[0] = cut.bottom + 2.0;
+        let shown = mesh(&cut, below, Framing::default(), &plain(), area);
+        assert!(
+            shown.indices.len() > flat.indices.len() * 3 / 2,
+            "the underside's own grid: {} {}",
+            shown.indices.len(),
+            flat.indices.len()
+        );
+        let above = mesh(&cut, Orbit::TOP, Framing::default(), &plain(), area);
+        let plain_above = mesh(&slotted(), Orbit::TOP, Framing::default(), &plain(), area);
+        assert_eq!(
+            above.indices.len(),
+            plain_above.indices.len(),
+            "hidden from above"
+        );
     }
 
     #[test]

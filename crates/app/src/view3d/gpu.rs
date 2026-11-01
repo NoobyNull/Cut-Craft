@@ -45,14 +45,15 @@ struct Grid {
 #[derive(Default)]
 pub struct Geometry {
     data: Vec<u8>,
-    /// A surface's cells' own colours (a component's Solid Color), RGBA a cell, 0 where
-    /// the material's colour shows; at least one word, since a binding cannot be empty.
-    tints: Vec<u8>,
     /// The surface's triangles; a model's faces are drawn in order.
     indices: Vec<u8>,
     /// Vertices the shader makes: the grid's cells and its sides', or three a face.
     vertices: u32,
     grid: Option<Grid>,
+    /// The surface's heights are followed by each cell's preview paint (`Material::paint`).
+    painted: bool,
+    /// Then by its underside's heights (`Material::under`), drawn as a grid of its own.
+    undersided: bool,
 }
 
 impl Geometry {
@@ -74,14 +75,7 @@ impl Geometry {
     /// Bytes on the card.
     #[cfg(test)]
     pub fn bytes(&self) -> usize {
-        self.data.len() + self.indices.len() + self.tints.len()
-    }
-
-    /// Cell `i`'s own colour, as uploaded.
-    #[cfg(test)]
-    pub fn tint(&self, i: usize) -> Option<[u8; 3]> {
-        let word = &self.tints[4 * i..4 * i + 4];
-        (word[3] != 0).then(|| [word[0], word[1], word[2]])
+        self.data.len() + self.indices.len()
     }
 
     /// What a draw counts: indices, or vertices in order.
@@ -96,15 +90,9 @@ impl Geometry {
 
 /// The material's surface: its heights, and a quad over each four neighbouring cells that
 /// have a model; with `sides` the block's sides and bottom; round the axis when `wrap`, the
-/// way round closed on itself; each cell in the colour `tint` gives it (column, row), else
-/// the material's. The shader places and lights the vertices.
+/// way round closed on itself. The shader places and lights the vertices.
 #[expect(clippy::cast_possible_truncation, reason = "millimetres fit f32")]
-pub fn surface(
-    m: &Material,
-    wrap: Option<super::Wrap>,
-    sides: bool,
-    tint: impl Fn(usize, usize) -> Option<[u8; 3]>,
-) -> Geometry {
+pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry {
     let height = |c: usize, r: usize| m.heights[r * m.columns + c];
     let mut g = Geometry {
         grid: Some(Grid {
@@ -119,12 +107,16 @@ pub fn surface(
         let h = if h.is_nan() { EMPTY } else { h as f32 };
         g.data.extend_from_slice(&h.to_ne_bytes());
     }
-    for r in 0..m.rows {
-        for c in 0..m.columns {
-            let [red, green, blue, alpha] = tint(c, r).map_or([0; 4], |[r, g, b]| [r, g, b, 255]);
-            g.tints.extend_from_slice(&[red, green, blue, alpha]);
-        }
+    g.painted = !m.paint.is_empty();
+    for &p in &m.paint {
+        g.data.extend_from_slice(&p.to_ne_bytes());
     }
+    g.undersided = !m.under.is_empty() && sides && wrap.is_none();
+    for &h in m.under.iter().filter(|_| g.undersided) {
+        let h = if h.is_nan() { EMPTY } else { h as f32 };
+        g.data.extend_from_slice(&h.to_ne_bytes());
+    }
+    let floor = |c: usize, r: usize| m.under.get(r * m.columns + c).copied().unwrap_or(m.bottom);
     let index = |c: usize, r: usize| u32::try_from(r * m.columns + c).expect("fits u32");
     let (columns, rows) = match wrap {
         Some(w) if w.along_x => (m.columns.saturating_sub(1), m.rows),
@@ -155,7 +147,10 @@ pub fn surface(
         let mut start = cells;
         for edge in edges {
             for (k, pair) in edge.windows(2).enumerate() {
-                if pair.iter().any(|&(c, r)| height(c, r).is_nan()) {
+                if pair
+                    .iter()
+                    .any(|&(c, r)| height(c, r).is_nan() || floor(c, r).is_nan())
+                {
                     continue;
                 }
                 let top = u32::try_from(start + 2 * k).expect("fits u32");
@@ -164,8 +159,22 @@ pub fn surface(
             start += 2 * edge.len();
         }
         let bottom = u32::try_from(start).expect("fits u32");
-        g.quad([bottom, bottom + 1, bottom + 2, bottom + 3]);
-        g.vertices = bottom + 4;
+        if g.undersided {
+            // the underside's grid, wound the other way round to face down
+            for r in 0..m.rows.saturating_sub(1) {
+                for c in 0..m.columns.saturating_sub(1) {
+                    let corners = [(c, r), (c, r + 1), (c + 1, r + 1), (c + 1, r)];
+                    if corners.iter().any(|&(c, r)| floor(c, r).is_nan()) {
+                        continue;
+                    }
+                    g.quad(corners.map(|(c, r)| bottom + index(c, r)));
+                }
+            }
+            g.vertices = bottom + u32::try_from(cells).expect("fits u32");
+        } else {
+            g.quad([bottom, bottom + 1, bottom + 2, bottom + 3]);
+            g.vertices = bottom + 4;
+        }
     }
     g
 }
@@ -173,10 +182,7 @@ pub fn surface(
 /// An imported model's faces: three corners and whether the face is marked, each.
 #[expect(clippy::cast_possible_truncation, reason = "millimetres fit f32")]
 pub fn model(faces: &[cmd_orientate_3d_model::Seen]) -> Geometry {
-    let mut g = Geometry {
-        tints: vec![0; 4],
-        ..Geometry::default()
-    };
+    let mut g = Geometry::default();
     g.data.reserve(faces.len() * FACE_WORDS * 4);
     for (t, marked) in faces {
         for v in t.iter().flat_map(DVec3::to_array) {
@@ -266,7 +272,15 @@ impl Draw {
                 grain.map_or(0.0, |grain| f64::from(grain.depth)),
             ],
         );
-        words(&mut uniform, &[u32::from(grid.is_none()), 0, 0, 0]);
+        words(
+            &mut uniform,
+            &[
+                u32::from(grid.is_none()),
+                u32::from(geometry.painted),
+                u32::from(geometry.undersided),
+                0,
+            ],
+        );
         debug_assert_eq!(uniform.len(), UNIFORM_BYTES);
         Self { geometry, uniform }
     }
@@ -301,7 +315,6 @@ impl Piece {
             &geometry.data,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         );
-        let tints = buffer("view3d tints", &geometry.tints, wgpu::BufferUsages::STORAGE);
         let indices = (!geometry.indices.is_empty()).then(|| {
             buffer(
                 "view3d indices",
@@ -325,10 +338,6 @@ impl Piece {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: data.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: tints.as_entire_binding(),
                 },
             ],
         });
@@ -416,11 +425,6 @@ impl Gpu {
                 ),
                 buffer(
                     1,
-                    wgpu::ShaderStages::VERTEX,
-                    wgpu::BufferBindingType::Storage { read_only: true },
-                ),
-                buffer(
-                    2,
                     wgpu::ShaderStages::VERTEX,
                     wgpu::BufferBindingType::Storage { read_only: true },
                 ),
@@ -538,11 +542,6 @@ mod tests {
     use cut_craft_core::glam::DVec4;
     use eframe::egui::pos2;
 
-    /// No cell with a colour of its own.
-    fn plain(_: usize, _: usize) -> Option<[u8; 3]> {
-        None
-    }
-
     fn look() -> Look {
         Look {
             colour: Color32::WHITE,
@@ -561,16 +560,6 @@ mod tests {
         Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|e| panic!("{e}"));
-    }
-
-    #[test]
-    fn a_cells_own_colour_goes_up_with_the_surface_and_the_rest_are_unset() {
-        let m = slotted();
-        let g = surface(&m, None, false, |c, _| (c < 50).then_some([200, 30, 30]));
-        assert_eq!(g.tint(0), Some([200, 30, 30]));
-        assert_eq!(g.tint(50), None);
-        assert_eq!(g.tints.len(), 4 * m.columns * m.rows);
-        assert_eq!(model(&[]).tints.len(), 4, "never an empty binding");
     }
 
     /// 100 x 100 mm in 1 mm cells, with a 5 mm deep slot from x = 40 to 60 running along y.
@@ -604,9 +593,36 @@ mod tests {
     }
 
     #[test]
+    fn the_shader_is_valid_wgsl() {
+        let module = naga::front::wgsl::parse_str(include_str!("surface.wgsl"))
+            .unwrap_or_else(|e| panic!("{e}"));
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    }
+
+    #[test]
+    fn a_painted_surface_uploads_its_paint_after_its_heights() {
+        let mut m = slotted();
+        let cells = m.columns * m.rows;
+        assert!(!surface(&m, None, false).painted);
+        m.paint = vec![0x0100_00ff; cells];
+        let g = surface(&m, None, false);
+        assert!(g.painted);
+        assert_eq!(g.data.len(), cells * 8, "a height and a paint a cell");
+        assert_eq!(
+            u32::from_ne_bytes(g.data[cells * 4..cells * 4 + 4].try_into().unwrap()),
+            0x0100_00ff
+        );
+    }
+
+    #[test]
     fn the_surface_uploads_its_heights_and_a_quad_over_each_cell() {
         let m = slotted();
-        let g = surface(&m, None, false, plain);
+        let g = surface(&m, None, false);
         let heights = f32s(&g.data);
         assert_eq!(heights.len(), m.columns * m.rows);
         assert_eq!(heights[50 * m.columns + 50], -5.0);
@@ -618,6 +634,29 @@ mod tests {
     }
 
     #[test]
+    fn a_cut_underside_is_a_grid_of_its_own_after_the_sides() {
+        let mut m = slotted();
+        let bottom = m.bottom;
+        m.under = vec![bottom; m.heights.len()];
+        m.under[5_050] = bottom + 3.0;
+        let flat = surface(&slotted(), None, true);
+        let g = surface(&m, None, true);
+        assert!(g.undersided);
+        assert_eq!(g.vertices as usize, 100 * 100 + 2 * 400 + 100 * 100);
+        assert_eq!(
+            g.data.len(),
+            2 * 100 * 100 * 4,
+            "heights, then the underside"
+        );
+        // the flat bottom's one quad becomes 99 x 99
+        assert_eq!(g.triangles(), flat.triangles() - 2 + 2 * 99 * 99);
+        assert!(
+            !surface(&m, None, false).undersided,
+            "no sides, no underside"
+        );
+    }
+
+    #[test]
     fn empty_cells_are_marked_and_left_out_and_sides_add_their_vertices() {
         let mut half = slotted();
         let columns = half.columns;
@@ -626,11 +665,11 @@ mod tests {
                 *h = f64::NAN;
             }
         }
-        let full = surface(&slotted(), None, false, plain).triangles();
-        let shown = surface(&half, None, false, plain);
+        let full = surface(&slotted(), None, false).triangles();
+        let shown = surface(&half, None, false);
         assert!(f32s(&shown.data)[..50].iter().all(|&h| h == EMPTY));
         assert!(shown.triangles() < full * 2 / 3 && shown.triangles() > 0);
-        let sided = surface(&slotted(), None, true, plain);
+        let sided = surface(&slotted(), None, true);
         // four sides of 99 quads each and the bottom
         assert_eq!(sided.triangles(), full + 2 * (4 * 99 + 1));
         // a top and bottom vertex for each of the 400 edge cells, and the bottom's corners
@@ -652,7 +691,7 @@ mod tests {
             radius: 20.0,
             surface: 0.0,
         };
-        let g = surface(&m, Some(wrap), true, plain);
+        let g = surface(&m, Some(wrap), true);
         // along the axis the quads stop; round it they meet themselves; no sides
         assert_eq!(g.triangles(), 2 * (m.columns - 1) * m.rows);
         let indices = u32s(&g.indices);
@@ -788,7 +827,7 @@ mod tests {
             }),
             ..look()
         };
-        let g = Arc::new(surface(&m, None, true, plain));
+        let g = Arc::new(surface(&m, None, true));
         let draw = Draw::new(g, &camera, area, DVec3::ZERO, &look, Color32::RED);
         assert_eq!(draw.uniform.len(), UNIFORM_BYTES);
         let words = u32s(&draw.uniform);
@@ -859,7 +898,7 @@ mod tests {
             mesh.indices.len() / 3
         );
         let started = Instant::now();
-        let geometry = Arc::new(surface(&shape, None, false, plain));
+        let geometry = Arc::new(surface(&shape, None, false));
         let built = started.elapsed();
         let started = Instant::now();
         let draw = Draw::new(

@@ -1,4 +1,5 @@
-//! Add New Sheet: another material sheet, sized as the active one, which stays active.
+//! Add New Sheet: another material sheet, sized as the one it was asked from (the sheet
+//! right-clicked) or else as the active one, which stays active.
 
 use cut_craft_core::document::{Document, Sheet};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
@@ -10,12 +11,17 @@ pub struct AddSheet;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub name: String,
+    /// The sheet whose size it takes, from 0 (the active one if none)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub like: Option<usize>,
 }
 
 impl Default for Params {
     fn default() -> Self {
         Self {
             name: "New Sheet".into(),
+            like: None,
         }
     }
 }
@@ -41,13 +47,14 @@ impl Command for AddSheet {
             .map(|n| format!("Sheet {n}"))
             .find(|name| doc.sheets.iter().all(|s| &s.name != name))
             .expect("some number is free");
-        Params { name }
+        Params { name, like: None }
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let name = ensure_named(&p.name)?;
         let mut sheets = doc.sheets.clone();
-        sheets.push(Sheet::new(&name, doc.job));
+        let job = p.like.and_then(|i| doc.sheet_job(i)).unwrap_or(doc.job);
+        sheets.push(Sheet::new(&name, job));
         let mut c = Change::builder(doc);
         c.set_sheets(sheets, doc.active_sheet);
         Ok(c.finish())
@@ -65,6 +72,7 @@ mod tests {
     fn adds_a_sheet_sized_as_the_active_one() {
         let doc = after::<AddSheet>(&Params {
             name: " Offcuts ".into(),
+            like: None,
         });
         assert_eq!(doc.sheets.len(), 2);
         assert_eq!(doc.sheets[1].name, "Offcuts");
@@ -75,6 +83,24 @@ mod tests {
     #[test]
     fn suggests_the_next_free_number_and_needs_a_name() {
         assert_eq!(AddSheet::initial_params(&two_sheets()).name, "Sheet 3");
-        assert!(rejection::<AddSheet>(&Params { name: " ".into() }).contains("name is empty"));
+        assert!(
+            rejection::<AddSheet>(&Params {
+                name: " ".into(),
+                like: None
+            })
+            .contains("name is empty")
+        );
+    }
+
+    #[test]
+    fn asked_from_a_sheet_it_takes_that_sheets_size() {
+        let mut doc = two_sheets();
+        let p = Params {
+            name: "Like 2".into(),
+            like: Some(1),
+        };
+        doc.apply(&AddSheet::run(&doc, &p).unwrap()).unwrap();
+        assert_eq!(doc.sheet_job(2), doc.sheet_job(1));
+        assert_ne!(doc.sheet_job(2), Some(doc.job));
     }
 }

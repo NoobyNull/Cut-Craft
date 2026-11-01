@@ -52,8 +52,13 @@ struct FineKey {
     importing: bool,
 }
 
+/// The mark a toolpath's cells take in the preview (`Material::cut_by`): its id.
+fn preview_mark(id: EntityId) -> u32 {
+    u32::try_from(id.0).unwrap_or(u32::MAX)
+}
+
 /// What the 3D view's surface on the GPU was built from: the model as at this revision,
-/// wrapped and sided so (colour and light are the shader's, so not these).
+/// wrapped and sided so (light is the shader's, so not these).
 #[derive(Clone, Debug, PartialEq)]
 struct GeometryKey {
     revision: u64,
@@ -127,7 +132,7 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 85] = [
+const BUILT_INS: [&str; 90] = [
     "find_tool",
     "activate_layer_of_selection",
     "machine_configuration",
@@ -212,6 +217,11 @@ const BUILT_INS: [&str; 85] = [
     "tool_database",
     "preview_toolpath",
     "preview_all_toolpaths",
+    "preview_visible_toolpaths",
+    "undo_last_preview",
+    "save_shaded_image",
+    "edit_object",
+    "job_sheet_editor",
     "reset_preview",
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
@@ -229,9 +239,72 @@ enum Info {
     Help(&'static str),
 }
 
-/// Toolpath Summary's rapid rate (mm/min) and scale factor until the user changes them.
-// ponytail: session-only like the other display settings [inf]; Aspire keeps them per machine
-const SUMMARY_DEFAULTS: (f64, f64) = (5000.0, 1.0);
+/// The previewed material before a preview: `None` was uncut material.
+#[derive(Clone, Debug)]
+pub(super) struct BeforePreview(Option<Material>);
+
+/// Save Toolpaths' choices (Aspire's Save Toolpaths form), while its window is open.
+#[derive(Clone, Debug)]
+pub(super) struct SaveForm {
+    /// Which toolpaths go in which file.
+    mode: files::SaveMode,
+    /// Visible to multiple files: toolpaths in a row using one tool share a file.
+    group: bool,
+    /// The post, by name in the library; `None` is the machine's default (Cut Craft's own
+    /// without a machine).
+    post: Option<String>,
+    /// Double-sided jobs: Top or Bottom on the end of each file name.
+    add_side: bool,
+}
+
+/// Toolpath Summary's settings: the rapid rate (mm/min) and the units it is shown in, the
+/// scale factor, and the toolpath picked to write notes for, with the notes being written.
+#[derive(Clone, Debug)]
+struct Summary {
+    rapid: f64,
+    units: cut_craft_core::toolpath::RateUnits,
+    scale: f64,
+    /// Aspire's Machine Acceleration: the times allow for the active machine's accelerations.
+    acceleration: bool,
+    picked: Option<EntityId>,
+    notes: String,
+}
+
+impl Default for Summary {
+    fn default() -> Self {
+        Self {
+            rapid: 5000.0,
+            units: cut_craft_core::toolpath::RateUnits::MmPerMin,
+            scale: 1.0,
+            acceleration: false,
+            picked: None,
+            notes: String::new(),
+        }
+    }
+}
+
+/// Guide Properties: which guide, and what is typed: its position and angle, whether it is
+/// locked, and a new guide's position or offset and how many.
+#[derive(Clone, Debug)]
+struct GuideProps {
+    index: usize,
+    position: f64,
+    angle: f64,
+    locked: bool,
+    new_at: f64,
+    relative: bool,
+    count: u32,
+}
+
+/// A toolpath's row in the Toolpath Summary: its id, name, time, whether it is shown, and
+/// its notes.
+struct SummaryRow {
+    id: EntityId,
+    name: String,
+    minutes: f64,
+    visible: bool,
+    notes: String,
+}
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
@@ -292,7 +365,12 @@ const SETTLE_SECONDS: f64 = 0.25;
 /// How often unsaved work is copied for recovery after a crash, seconds.
 const AUTOSAVE_SECONDS: f64 = 30.0;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
-const STROKE_TOOLS: [&str; 2] = ["draw_freehand", "sculpt"];
+const STROKE_TOOLS: [&str; 3] = ["draw_freehand", "sculpt", "interactive_vector_trim"];
+/// How far one notch of a mouse wheel scrolls, in points, as egui reports a line.
+const SCROLL_NOTCH: f32 = 50.0;
+/// How much a wheel notch grows the sculpting brush, or its strength; with Ctrl, finer.
+const BRUSH_STEP: f64 = 0.1;
+const BRUSH_FINE_STEP: f64 = 0.02;
 /// Importers that make components; Import Component / 3D Model offers these, Import
 /// Vectors / Bitmap the rest.
 const MODEL_IMPORTERS: [&str; 2] = ["import_stl", "import_3d_clipart"];
@@ -618,6 +696,12 @@ struct CutCraftApp {
     view_transform: Option<ViewTransform>,
     /// Where the 2D view was on screen last frame.
     view_area: Option<egui::Rect>,
+    /// Where the 3D view was last drawn, for the sculpting brush's wheel.
+    view_3d_area: Option<egui::Rect>,
+    /// View ▸ Save Shaded Image: the file the 3D view's picture goes to, until the window's
+    /// picture it is cut from is asked for; then what saving it said, for the status bar.
+    shaded_image: Option<std::path::PathBuf>,
+    shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
     view_tool: Option<ViewTool>,
@@ -635,9 +719,19 @@ struct CutCraftApp {
     ribbon_tab: usize,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
+    /// The user's own spelling words, one a line; none in tests.
+    words_path: Option<std::path::PathBuf>,
+    /// Draw Text's dictionary, looked for once when spelling is first wanted.
+    speller: Option<cut_craft_core::spell::Speller>,
+    speller_looked: bool,
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
+    /// The toolpath group picked in the list instead of a toolpath: previewed and saved as
+    /// one, and joined by the toolpaths made while it is picked.
+    selected_group: Option<String>,
+    /// Quick Engrave's Immediate Output: the post and side name it saves with.
+    immediate_output: SaveForm,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,
@@ -679,19 +773,48 @@ struct CutCraftApp {
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
     help_cache: egui_commonmark::CommonMarkCache,
-    /// Toolpath Summary's rapid rate (mm/min) and scale factor.
-    summary: (f64, f64),
+    /// Toolpath Summary's settings.
+    summary: Summary,
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
+    /// The previewed material before the last preview, for Undo Last Preview.
+    before_preview: Option<BeforePreview>,
+    /// Node editing: the nodes picked with a box, which a drag of one moves together.
+    picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
+    /// Node editing's mirror lines, H and V: with the first, nodes either side of the
+    /// selection's middle move opposite ways across; with the second, up and down.
+    node_mirror: [bool; 2],
+    /// Where the 2D view's right-click menu last opened, in job coordinates: guides inserted
+    /// from it go there.
+    menu_at: Option<Point>,
+    /// Guide Properties, open on a guide.
+    guide_props: Option<GuideProps>,
+    /// Measure / Inspect's last result, shown in its form while the tool is on.
+    measure_rows: Vec<(String, String)>,
+    /// Save Toolpaths' form, while it is open.
+    save_form: Option<SaveForm>,
     /// Snapping Options (F4) and whether their window is open.
     snap: cut_craft_core::snap::SnapOptions,
     snap_window: bool,
+    /// Gadgets ▸ Job Setup Sheet Editor is open.
+    job_sheet_window: bool,
+    /// Export as STL's form is open.
+    stl_window: bool,
+    /// The triangle count and largest error of its last Triangulate.
+    stl_result: Option<(usize, f64)>,
+    /// The Layers List leaves out the layers with nothing on the active sheet.
+    layers_on_sheet: bool,
     /// What the views draw.
     display: crate::display::Display,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
     simulation: Option<Material>,
     /// `simulation` at the 3D view's mesh resolution.
     simulation_coarse: Option<Material>,
+    /// The level clipart imported through Orientate 3D Model goes on (Import to Level),
+    /// until another command starts.
+    import_level: Option<u64>,
+    /// Draw Line / Polyline's polyline being drawn in the 2D view.
+    polyline: crate::polyline::Draft,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The imported model's triangles as last drawn, kept while nothing about the view or
@@ -762,22 +885,47 @@ fn length(mm: f64, units: cut_craft_core::document::Units) -> String {
     }
 }
 
-/// Measure between two points: distance, angle from horizontal, and the X and Y distances.
-fn measured(from: Point, to: Point, units: cut_craft_core::document::Units) -> String {
+/// Measure between two points, as rows of the Measure / Inspect form: the distance, the angle
+/// from horizontal, the X and Y distances and the two points.
+fn measured_rows(
+    from: Point,
+    to: Point,
+    units: cut_craft_core::document::Units,
+) -> Vec<(String, String)> {
     let d = to - from;
+    let point = |p: Point| format!("{}, {}", length(p.x, units), length(p.y, units));
+    vec![
+        ("Distance".into(), length(d.length(), units)),
+        (
+            "Angle".into(),
+            format!("{:.2}°", d.y.atan2(d.x).to_degrees()),
+        ),
+        ("X distance".into(), length(d.x.abs(), units)),
+        ("Y distance".into(), length(d.y.abs(), units)),
+        ("First point".into(), point(from)),
+        ("Second point".into(), point(to)),
+    ]
+}
+
+/// The first four rows of [`measured_rows`] on one line, for the status bar.
+fn measured(from: Point, to: Point, units: cut_craft_core::document::Units) -> String {
+    let rows = measured_rows(from, to, units);
     format!(
-        "Distance {}, angle {:.2}°, X {}, Y {}",
-        length(d.length(), units),
-        d.y.atan2(d.x).to_degrees(),
-        length(d.x.abs(), units),
-        length(d.y.abs(), units)
+        "Distance {}, angle {}, X {}, Y {}",
+        rows[0].1, rows[1].1, rows[2].1, rows[3].1
     )
 }
 
-/// The clicked span's type and length, and its vector's perimeter and area.
-fn inspected(path: &Path, at: Point, reach: f64, units: cut_craft_core::document::Units) -> String {
+/// The clicked span's type, length, ends (and an arc's centre and radius), and its vector's
+/// perimeter, area and span count, as rows of the Measure / Inspect form.
+fn inspected_rows(
+    path: &Path,
+    at: Point,
+    reach: f64,
+    units: cut_craft_core::document::Units,
+) -> Vec<(String, String)> {
     use cut_craft_core::geometry::Segment;
-    use std::fmt::Write as _;
+    let point = |p: Point| format!("{}, {}", length(p.x, units), length(p.y, units));
     let span = |k: usize| {
         let from = if k == 0 {
             path.start
@@ -796,26 +944,49 @@ fn inspected(path: &Path, at: Point, reach: f64, units: cut_craft_core::document
             .map(|w| w[0].distance(w[1]))
             .sum::<f64>()
     };
-    let mut text =
-        cut_craft_core::nodes::span_near(path, at, reach).map_or_else(String::new, |k| {
-            let kind = match path.segments[k] {
-                Segment::Line { .. } => "Line",
-                Segment::Arc { .. } => "Arc",
-                Segment::Cubic { .. } => "Bezier Curve",
-            };
-            format!("{kind}, length {}; ", length(measure(&span(k)), units))
-        });
-    let _ = write!(text, "vector perimeter {}", length(measure(path), units));
+    let mut rows = vec![];
+    if let Some(k) = cut_craft_core::nodes::span_near(path, at, reach) {
+        let one = span(k);
+        let kind = match path.segments[k] {
+            Segment::Line { .. } => "Line",
+            Segment::Arc { .. } => "Arc",
+            Segment::Cubic { .. } => "Bezier Curve",
+        };
+        rows.push(("Span".into(), kind.into()));
+        rows.push(("Span length".into(), length(measure(&one), units)));
+        rows.push(("Start".into(), point(one.start)));
+        rows.push(("End".into(), point(path.segments[k].end())));
+        if let Segment::Arc { center, .. } = path.segments[k] {
+            rows.push(("Centre".into(), point(center)));
+            rows.push(("Radius".into(), length(center.distance(one.start), units)));
+        }
+    }
+    rows.push(("Vector perimeter".into(), length(measure(path), units)));
     if path.closed {
         let area = cut_craft_core::polygon::area(path);
-        let _ = match units {
-            cut_craft_core::document::Units::Mm => write!(text, ", area {area:.3} mm²"),
-            cut_craft_core::document::Units::Inch => {
-                write!(text, ", area {:.4} in²", area / 645.16)
-            }
-        };
+        rows.push((
+            "Vector area".into(),
+            match units {
+                cut_craft_core::document::Units::Mm => format!("{area:.3} mm²"),
+                cut_craft_core::document::Units::Inch => format!("{:.4} in²", area / 645.16),
+            },
+        ));
     }
-    text
+    rows.push(("Number of spans".into(), path.segments.len().to_string()));
+    rows
+}
+
+/// [`inspected_rows`] on one line, for the status bar.
+fn inspected(path: &Path, at: Point, reach: f64, units: cut_craft_core::document::Units) -> String {
+    let rows = inspected_rows(path, at, reach, units);
+    let get = |name: &str| rows.iter().find(|r| r.0 == name).map(|r| r.1.as_str());
+    let span = match (get("Span"), get("Span length")) {
+        (Some(kind), Some(len)) => format!("{kind}, length {len}; "),
+        _ => String::new(),
+    };
+    let area = get("Vector area").map_or_else(String::new, |a| format!(", area {a}"));
+    let perimeter = get("Vector perimeter").unwrap_or("");
+    format!("{span}vector perimeter {perimeter}{area}")
 }
 
 /// Hours, minutes and seconds.
@@ -829,33 +1000,69 @@ fn hms(minutes: f64) -> String {
     format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
 }
 
-/// Each toolpath's estimated time, the visible ones' total, and the rate and scale they use.
+/// Each toolpath's estimated time, the visible ones' total, and the rate (in the units
+/// picked) and scale they use; a toolpath clicked has its notes written below, and Apply
+/// gives back the notes to keep with it.
+/// Aspire's Machine Acceleration: the summary's times allow for the active `machine`'s
+/// accelerations (its name and X, Y, Z from Machine Configuration), while there is one.
+fn acceleration_tick(
+    ui: &mut egui::Ui,
+    summary: &mut Summary,
+    machine: Option<(String, [f64; 3])>,
+) {
+    let (name, acceleration) = machine.unzip();
+    let tip = match acceleration {
+        Some([x, y, z]) => format!(
+            "Stops at corners and speeds up and slows down along each move as {} allows: \
+             {x:.0}, {y:.0}, {z:.0} mm/s² (Machine Configuration)",
+            name.unwrap_or_default()
+        ),
+        None => "Needs an active machine with its accelerations in Machine Configuration".into(),
+    };
+    ui.add_enabled(
+        acceleration.is_some(),
+        egui::Checkbox::new(&mut summary.acceleration, "Machine acceleration"),
+    )
+    .on_hover_text(&tip)
+    .on_disabled_hover_text(&tip);
+}
+
 fn summary_table(
     ui: &mut egui::Ui,
-    times: &[(String, f64, bool)],
-    (rapid, scale): &mut (f64, f64),
+    rows: &[SummaryRow],
+    summary: &mut Summary,
     units: cut_craft_core::document::Units,
-) {
-    let total: f64 = times.iter().filter(|t| t.2).map(|t| t.1).sum();
+    machine: Option<(String, [f64; 3])>,
+) -> Option<(EntityId, String)> {
+    let total: f64 = rows.iter().filter(|r| r.visible).map(|r| r.minutes).sum();
     ui.strong(format!("Total machining time: {}", hms(total)));
     ui.separator();
     egui::Grid::new("summary").striped(true).show(ui, |ui| {
-        for (name, minutes, visible) in times {
-            ui.add_enabled(*visible, egui::Label::new(name));
-            ui.label(hms(*minutes));
+        for row in rows {
+            let picked = summary.picked == Some(row.id);
+            let name = ui
+                .add_enabled(row.visible, egui::Button::selectable(picked, &row.name))
+                .on_hover_text("Click to write its notes");
+            if name.clicked() {
+                summary.picked = Some(row.id);
+                summary.notes.clone_from(&row.notes);
+            }
+            ui.label(hms(row.minutes));
+            ui.weak(row.notes.lines().next().unwrap_or_default());
             ui.end_row();
         }
     });
     ui.separator();
     ui.weak("Time estimates based on the tools' feed rates");
+    let per = summary.units.mm_per_min();
     let fields = [
         crate::form::Field {
             key: "rapid_rate".into(),
             label: "Rapid rate".into(),
             help: Some("The machine's G0 speed".into()),
             kind: crate::form::Kind::Number {
-                unit: Some("mm/min".into()),
-                min: Some(1.0),
+                unit: None,
+                min: Some(0.001),
                 max: None,
                 integer: false,
                 steps: vec![],
@@ -890,7 +1097,10 @@ fn summary_table(
             page: 1,
         },
     ];
-    let mut values = serde_json::json!({ "rapid_rate": *rapid, "scale_factor": *scale });
+    let mut values = serde_json::json!({
+        "rapid_rate": summary.rapid / per,
+        "scale_factor": summary.scale,
+    });
     let picture = |_: &str| None;
     let look = crate::form::Look {
         units,
@@ -899,30 +1109,65 @@ fn summary_table(
         tool: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
-        *rapid = values["rapid_rate"].as_f64().unwrap_or(*rapid);
-        *scale = values["scale_factor"].as_f64().unwrap_or(*scale);
+        summary.rapid = values["rapid_rate"]
+            .as_f64()
+            .map_or(summary.rapid, |v| v * per);
+        summary.scale = values["scale_factor"].as_f64().unwrap_or(summary.scale);
     }
+    egui::ComboBox::from_label("Rapid rate units")
+        .selected_text(summary.units.label())
+        .show_ui(ui, |ui| {
+            for u in cut_craft_core::toolpath::RateUnits::ALL {
+                ui.selectable_value(&mut summary.units, u, u.label());
+            }
+        });
+    acceleration_tick(ui, summary, machine);
+    let picked = rows.iter().find(|r| Some(r.id) == summary.picked)?;
+    ui.separator();
+    ui.label(format!("Notes for {}", picked.name));
+    ui.add(egui::TextEdit::multiline(&mut summary.notes).desired_rows(3));
+    ui.button("Apply")
+        .clicked()
+        .then(|| (picked.id, summary.notes.clone()))
 }
 
 use cut_craft_core::file::TEMPLATE_EXTENSION as TEMPLATE;
 
 /// Job templates, starting in Cut Craft's `templates` folder.
-fn template_dialog() -> rfd::FileDialog {
-    let dialog = file_dialog().add_filter("Cut Craft job template", &[TEMPLATE]);
-    match files::config_dir().map(|d| d.join("templates")) {
+/// A file dialog opening in one of the user's settings folders (made if need be).
+fn settings_dialog(filter: &str, extension: &str, folder: &str) -> rfd::FileDialog {
+    let dialog = file_dialog().add_filter(filter, &[extension]);
+    match files::config_dir().map(|d| d.join(folder)) {
         Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
         _ => dialog,
     }
 }
 
+fn template_dialog() -> rfd::FileDialog {
+    settings_dialog("Cut Craft job template", TEMPLATE, "templates")
+}
+
+/// Sculpting brushes, kept in the brushes folder.
+fn brush_dialog() -> rfd::FileDialog {
+    settings_dialog("Sculpting brush", "ccclip", "brushes")
+}
+
+/// Texture Toolpath's textures, kept in the textures folder.
+fn texture_dialog() -> rfd::FileDialog {
+    settings_dialog(
+        "Texture settings",
+        cmd_texture_toolpath::TEXTURE_EXTENSION,
+        "textures",
+    )
+}
+
 /// Toolpath templates, in the same `templates` folder.
 fn toolpath_template_dialog() -> rfd::FileDialog {
-    let dialog =
-        file_dialog().add_filter("Toolpath template", &[files::TOOLPATH_TEMPLATE_EXTENSION]);
-    match files::config_dir().map(|d| d.join("templates")) {
-        Some(dir) if std::fs::create_dir_all(&dir).is_ok() => dialog.set_directory(dir),
-        _ => dialog,
-    }
+    settings_dialog(
+        "Toolpath template",
+        files::TOOLPATH_TEMPLATE_EXTENSION,
+        "templates",
+    )
 }
 
 fn job_dialog() -> rfd::FileDialog {
@@ -1105,39 +1350,13 @@ fn tool_picker(
     slots: &[Option<String>],
 ) -> (Option<String>, bool) {
     let current = tool["name"].as_str().unwrap_or_default();
-    let mut chosen = None;
+    let mut chosen = holders(ui, "form_tool", current, tools, slots);
     let edit = ui
         .horizontal(|ui| {
-            let loaded: Vec<(usize, &str)> = slots
-                .iter()
-                .enumerate()
-                .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
-                .filter(|(_, t)| tools.get(t).is_some())
-                .collect();
-            egui::ComboBox::from_label("Tool database")
-                .selected_text(current)
-                .show_ui(ui, |ui| {
-                    for &(n, name) in &loaded {
-                        let label = format!("T{n}  {name}");
-                        if ui.selectable_label(name == current, label).clicked() {
-                            chosen = Some(name.to_owned());
-                        }
-                    }
-                    if !loaded.is_empty() {
-                        ui.separator();
-                    }
-                    for tool in &tools.tools {
-                        if loaded.iter().any(|&(_, t)| t == tool.name) {
-                            continue;
-                        }
-                        if ui
-                            .selectable_label(tool.name == current, &tool.name)
-                            .clicked()
-                        {
-                            chosen = Some(tool.name.clone());
-                        }
-                    }
-                });
+            if let Some(name) = tool_menu(ui, "form_tool", current, tools, slots) {
+                chosen = Some(name);
+            }
+            ui.label("Tool database");
             ui.button("Edit…")
                 .on_hover_text("Change this tool in the Tool Database")
                 .clicked()
@@ -1159,6 +1378,156 @@ fn tool_picker(
     (chosen, edit)
 }
 
+/// The tool changer's magazine, when the machine has one: 0 for a bit changed by hand (the
+/// Tool Database menu below picks it), then each holder with the tool in it. The holder
+/// holding `current` is ticked; the tool of a holder clicked, if any.
+fn holders(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    current: &str,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+) -> Option<String> {
+    if slots.is_empty() {
+        return None;
+    }
+    let held = slots.iter().position(|s| s.as_deref() == Some(current));
+    let mut chosen = None;
+    ui.push_id(id, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("ATC");
+            ui.selectable_label(held.is_none(), "0  Manual")
+                .on_hover_text("A bit changed by hand: pick it from the Tool Database below");
+            for (i, slot) in slots.iter().enumerate() {
+                let name = slot.as_deref().filter(|t| tools.get(t).is_some());
+                let text = format!("{}  {}", i + 1, name.unwrap_or("(empty)"));
+                let button = ui.add_enabled(
+                    name.is_some(),
+                    egui::Button::selectable(held == Some(i), text),
+                );
+                if button.clicked() {
+                    chosen = name.map(str::to_owned);
+                }
+            }
+        });
+    });
+    chosen
+}
+
+/// The Tool Database's tools to pick from, the tool changer's loaded ones first (as `T1
+/// name`, by slot): the one picked now, if any.
+fn tool_menu(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    current: &str,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+) -> Option<String> {
+    let loaded: Vec<(usize, &str)> = slots
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
+        .filter(|(_, t)| tools.get(t).is_some())
+        .collect();
+    let mut chosen = None;
+    let shown = if current.is_empty() {
+        "Add a tool…"
+    } else {
+        current
+    };
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            for &(n, name) in &loaded {
+                let label = format!("T{n}  {name}");
+                if ui.selectable_label(name == current, label).clicked() {
+                    chosen = Some(name.to_owned());
+                }
+            }
+            if !loaded.is_empty() {
+                ui.separator();
+            }
+            for tool in &tools.tools {
+                if loaded.iter().any(|&(_, t)| t == tool.name) {
+                    continue;
+                }
+                if ui
+                    .selectable_label(tool.name == current, &tool.name)
+                    .clicked()
+                {
+                    chosen = Some(tool.name.clone());
+                }
+            }
+        });
+    chosen
+}
+
+/// A list of tools (clearance tools, a set of finishing tools, rest machining's earlier
+/// tools), each with the form tool's picker, Edit… and summary, and Remove; the last menu
+/// adds one. `largest_first` keeps them in that order. Whether it changed, and the tool
+/// whose Edit… was clicked.
+fn tool_list(
+    ui: &mut egui::Ui,
+    key: &str,
+    list: &mut Value,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+    largest_first: bool,
+) -> (bool, Option<String>) {
+    if !list.is_array() {
+        *list = Value::Array(vec![]);
+    }
+    let items = list.as_array_mut().expect("made a list");
+    let (mut changed, mut edit, mut remove) = (false, None, None);
+    for (i, item) in items.iter_mut().enumerate() {
+        let current = item["name"].as_str().unwrap_or_default().to_owned();
+        if let Some(name) = holders(ui, (key, i, "atc"), &current, tools, slots)
+            && let Some(tool) = tools.pick(&name)
+        {
+            *item = serde_json::to_value(tool).expect("tools serialize");
+            changed = true;
+        }
+        ui.horizontal(|ui| {
+            if let Some(name) = tool_menu(ui, (key, i), &current, tools, slots)
+                && let Some(tool) = tools.pick(&name)
+            {
+                *item = serde_json::to_value(tool).expect("tools serialize");
+                changed = true;
+            }
+            if ui
+                .button("Edit…")
+                .on_hover_text("Change this tool in the Tool Database")
+                .clicked()
+            {
+                edit = Some(current.clone());
+            }
+            if ui.small_button("✕").on_hover_text("Remove").clicked() {
+                remove = Some(i);
+            }
+        });
+        if let Ok(tool) = serde_json::from_value::<Tool>(item.clone()) {
+            ui.push_id((key, i), |ui| {
+                tool_summary(ui, &tool, None, tools.get(&tool.name).is_some());
+            });
+        }
+    }
+    if let Some(i) = remove {
+        items.remove(i);
+        changed = true;
+    }
+    if let Some(name) = tool_menu(ui, (key, "add"), "", tools, slots)
+        && let Some(tool) = tools.pick(&name)
+    {
+        items.push(serde_json::to_value(tool).expect("tools serialize"));
+        changed = true;
+    }
+    if largest_first && changed {
+        let across = |t: &Value| t["diameter"].as_f64().unwrap_or(0.0);
+        items.sort_by(|a, b| across(b).total_cmp(&across(a)));
+    }
+    (changed, edit)
+}
+
 /// A toolpath form's tool as the Tool Database has it, read-only: what its shape uses, then
 /// its cutting data for the active material, lengths in the tool's own units.
 fn tool_summary(ui: &mut egui::Ui, tool: &Tool, passes: Option<f64>, in_database: bool) {
@@ -1175,7 +1544,7 @@ fn tool_summary(ui: &mut egui::Ui, tool: &Tool, passes: Option<f64>, in_database
             rows.push(("Angle", format!("{}°", trimmed(tool.angle))));
         }
         ToolShape::RadiusedEndMill => rows.push(("Tip radius", length(tool.tip_radius))),
-        ToolShape::EndMill | ToolShape::BallNose => {}
+        ToolShape::EndMill | ToolShape::BallNose | ToolShape::FormTool => {}
     }
     if tool.taper > 0.0 {
         rows.push(("Taper angle", format!("{}°", trimmed(tool.taper))));
@@ -1218,38 +1587,81 @@ fn trimmed(value: f64) -> String {
 /// The Rest Machining section of a toolpath form: the tools that cut before this one
 /// (picked from the database, each removable), and, once there are any, the minimum
 /// detail and overlap. Kept as `rest` in the form's settings.
-fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
+/// A toolpath form's Vector Selector: associated, the toolpath takes the vectors that pass
+/// it (open, closed, on which layers) each time it is calculated, as templates need.
+fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String]) {
+    use cut_craft_core::selector::{Layers, Selector};
+    let before = Selector::of(params);
+    let mut on = before.is_some();
+    let mut selector = before.clone().unwrap_or_default();
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.checkbox(&mut on, "Associate a Vector Selector with this toolpath")
+            .on_hover_text("Take the vectors that pass it each time the toolpath is calculated");
+        if !on {
+            return;
+        }
+        ui.checkbox(&mut selector.open_vectors, "Open vectors");
+        ui.checkbox(&mut selector.closed_vectors, "Closed vectors");
+        for (layers, label) in [
+            (Layers::AllVisibleLayers, "All visible layers"),
+            (Layers::CurrentLayerOnly, "Current layer only"),
+            (Layers::SelectedLayers, "Selected layers"),
+        ] {
+            ui.radio_value(&mut selector.layers, layers, label);
+        }
+        if selector.layers == Layers::SelectedLayers {
+            for name in layer_names {
+                let mut ticked = selector.layer_names.contains(name);
+                if ui.checkbox(&mut ticked, name).changed() {
+                    if ticked {
+                        selector.layer_names.push(name.clone());
+                    } else {
+                        selector.layer_names.retain(|n| n != name);
+                    }
+                }
+            }
+        }
+    });
+    let after = on.then_some(selector);
+    if after != before {
+        match after {
+            Some(selector) => {
+                params["selector"] =
+                    serde_json::to_value(&selector).expect("selector settings serialise");
+            }
+            None => {
+                if let Some(map) = params.as_object_mut() {
+                    map.remove("selector");
+                }
+            }
+        }
+    }
+}
+
+fn rest_section(
+    ui: &mut egui::Ui,
+    params: &mut Value,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+) -> Option<String> {
     use cut_craft_core::rest::Rest;
     let mut rest: Rest = params
         .get("rest")
         .and_then(|r| serde_json::from_value(r.clone()).ok())
         .unwrap_or_default();
     let before = rest.clone();
+    let mut edit = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         ui.strong("Rest Machining")
             .on_hover_text("Cut only what the tools that ran before this one could not reach");
-        let mut remove = None;
-        for (i, tool) in rest.after.iter().enumerate() {
-            ui.horizontal(|ui| {
-                ui.label(&tool.name);
-                if ui.small_button("✕").on_hover_text("Remove").clicked() {
-                    remove = Some(i);
-                }
-            });
+        let mut after = serde_json::to_value(&rest.after).expect("tools serialize");
+        let (changed, edited) = tool_list(ui, "rest_after", &mut after, tools, slots, false);
+        edit = edited;
+        if changed && let Ok(list) = serde_json::from_value(after) {
+            rest.after = list;
         }
-        if let Some(i) = remove {
-            rest.after.remove(i);
-        }
-        egui::ComboBox::from_label("Add an earlier tool")
-            .selected_text("")
-            .show_ui(ui, |ui| {
-                for tool in database {
-                    if ui.selectable_label(false, &tool.name).clicked() {
-                        rest.after.push(tool.clone());
-                    }
-                }
-            });
         if !rest.after.is_empty() {
             egui::Grid::new("rest_settings")
                 .num_columns(2)
@@ -1276,6 +1688,7 @@ fn rest_section(ui: &mut egui::Ui, params: &mut Value, database: &[Tool]) {
     if rest != before {
         params["rest"] = serde_json::to_value(&rest).expect("rest settings serialise");
     }
+    edit
 }
 
 /// A category of a drop-down in a border filling its width, as menus draw theirs.
@@ -1467,6 +1880,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.load_machines();
             app.options = crate::options::Options::load();
             app.options_path = crate::options::Options::path();
+            app.words_path = files::config_dir().map(|d| d.join("words.txt"));
             app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();

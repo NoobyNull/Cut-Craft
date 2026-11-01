@@ -6,6 +6,8 @@ edition.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

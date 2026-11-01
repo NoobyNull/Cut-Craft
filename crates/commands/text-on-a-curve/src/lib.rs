@@ -1,5 +1,7 @@
 //! Text on a Curve: one line of selected text (made with Draw Text) and a selected curve;
 //! the letters are laid along the curve, above, on or below it, turned with it or upright.
+//! The text stays editable: it keeps the curve and these settings, so selecting it alone
+//! and running this again lays it out anew (the form opens with its settings).
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::font;
@@ -94,6 +96,14 @@ impl Command for TextOnACurve {
         }
     }
 
+    fn initial_params(doc: &Document) -> Params {
+        doc.selection
+            .iter()
+            .find_map(|id| doc.texts.get(doc.vector_groups.get(id)?))
+            .and_then(|spec| Params::deserialize(&spec["on_curve"]["params"]).ok())
+            .unwrap_or_default()
+    }
+
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let refuse = || {
             CommandError::Failed(
@@ -111,13 +121,15 @@ impl Command for TextOnACurve {
             .copied()
             .ok_or_else(refuse)?;
         let letters: Vec<EntityId> = doc.group_members_of(group);
+        let spec = &doc.texts[&group];
+        // a selected curve, or the one curved text was laid on before
         let curve = doc
             .selection
             .iter()
             .find(|id| !letters.contains(id))
-            .map(|id| &doc.vectors[id])
+            .map(|id| doc.vectors[id].clone())
+            .or_else(|| Path::deserialize(&spec["on_curve"]["curve"]).ok())
             .ok_or_else(refuse)?;
-        let spec = &doc.texts[&group];
         let text = spec["text"].as_str().unwrap_or_default();
         if text.lines().count() != 1 {
             return Err(refuse());
@@ -130,7 +142,9 @@ impl Command for TextOnACurve {
         )
         .map_err(CommandError::Failed)?;
         let height = spec["height"].as_f64().unwrap_or(10.0);
-        let mut curve = curve.clone();
+        let mut kept = spec.clone();
+        kept["on_curve"] = serde_json::json!({ "curve": curve, "params": p });
+        let mut curve = curve;
         if p.text_on_other_side {
             curve = curve.reversed();
         }
@@ -180,8 +194,7 @@ impl Command for TextOnACurve {
             c.set_group(id, None);
             c.remove(id);
         }
-        // ponytail: the curved text becomes plain curves; Aspire keeps it editable
-        c.set_text(group, None);
+        c.set_text(group, Some(kept));
         let ids: Vec<_> = placed.into_iter().map(|q| c.add(q)).collect();
         for &id in &ids {
             c.set_group(id, Some(group));
@@ -290,7 +303,32 @@ mod tests {
             b.min.y.abs() < 1e-6 && (b.max.y - 18.0).abs() < 1e-6,
             "{b:?}"
         );
-        assert!(doc.texts.is_empty(), "the curved text is curves now");
+    }
+
+    #[test]
+    fn curved_text_stays_editable_with_its_curve_and_settings() {
+        let mut doc = text_and_line();
+        run_on::<TextOnACurve>(&mut doc, &Params::default());
+        // the line is gone; only the curved letters are selected
+        let line = *doc
+            .vectors
+            .keys()
+            .find(|id| !doc.selection.contains(id))
+            .unwrap();
+        let mut c = Change::builder(&doc);
+        c.remove(line);
+        doc.apply(&c.finish()).unwrap();
+        assert_eq!(TextOnACurve::initial_params(&doc).alignment, Along::Left);
+        let right = Params {
+            alignment: Along::Right,
+            ..Params::default()
+        };
+        run_on::<TextOnACurve>(&mut doc, &right);
+        let b = letters(&doc);
+        assert!(b.min.y > 75.0, "now at the line's end: {b:?}");
+        assert_eq!(doc.vectors.len(), 2, "the letters replaced, not added");
+        assert_eq!(TextOnACurve::initial_params(&doc).alignment, Along::Right);
+        assert_eq!(doc.texts.values().next().unwrap()["text"], "HI");
     }
 
     #[test]

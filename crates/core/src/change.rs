@@ -112,6 +112,11 @@ pub enum Edit {
         before: Layer,
         after: Layer,
     },
+    /// The layer at `from` in the list moved to `to` (the order they are listed and drawn).
+    MoveLayer {
+        from: usize,
+        to: usize,
+    },
     SetCurrentLayer {
         before: LayerId,
         after: LayerId,
@@ -142,6 +147,11 @@ pub enum Edit {
         before: Vec<Guide>,
         after: Vec<Guide>,
     },
+    /// Replaces the toolpath group list.
+    SetToolpathGroups {
+        before: Vec<String>,
+        after: Vec<String>,
+    },
     /// Replaces the keep-out zones.
     SetKeepOut {
         before: Vec<Path>,
@@ -166,6 +176,7 @@ pub enum Edit {
 
 impl Edit {
     #[must_use]
+    #[expect(clippy::too_many_lines, reason = "one arm for each kind of edit")]
     pub fn inverse(&self) -> Self {
         match self.clone() {
             Self::Add { id, path } => Self::Remove { id, path },
@@ -220,6 +231,7 @@ impl Edit {
                 before: after,
                 after: before,
             },
+            Self::MoveLayer { from, to } => Self::MoveLayer { from: to, to: from },
             Self::SetCurrentLayer { before, after } => Self::SetCurrentLayer {
                 before: after,
                 after: before,
@@ -229,6 +241,10 @@ impl Edit {
                 after: before,
             },
             Self::SetGuides { before, after } => Self::SetGuides {
+                before: after,
+                after: before,
+            },
+            Self::SetToolpathGroups { before, after } => Self::SetToolpathGroups {
                 before: after,
                 after: before,
             },
@@ -279,6 +295,8 @@ pub enum ApplyError {
     Conflict(EntityId),
     JobConflict,
     MissingLayer(LayerId),
+    /// A layer move from or to a place past the end of the list.
+    LayerOrder,
     LayerExists(LayerId),
     LayerConflict(LayerId),
     /// Vectors are still on it, or it is the last layer.
@@ -303,6 +321,7 @@ impl fmt::Display for ApplyError {
                 id.0
             ),
             Self::LevelConflict(id) => write!(f, "level {id} was changed by something else"),
+            Self::LayerOrder => f.write_str("a layer was moved past the end of the list"),
         }
     }
 }
@@ -379,7 +398,11 @@ impl Change {
             let component = &doc.components[&id];
             let t = f(component.extent());
             if t != DAffine2::IDENTITY {
-                c.replace_component(id, component.transformed(&t));
+                let moved = component.transformed(&t);
+                // a texture area's tiles keep their size: its new box is tiled again
+                let seed_of = |seed| doc.components.get(&seed).cloned();
+                let again = crate::texture_area::retiled(&moved, seed_of);
+                c.replace_component(id, again.unwrap_or(moved));
             }
         }
         Ok(c.finish())
@@ -402,10 +425,14 @@ impl Change {
     /// Spaces the selected paths evenly along x (`vertical` false) or y: the first and last
     /// stay put and the others move so the gaps between their extents are equal, keeping
     /// their order and their other coordinate.
+    /// Spaces the selected objects evenly along x (or y when `vertical`) in `sequence`: the
+    /// outermost stay put; or with `inside_last`, the last one picked stays and the others
+    /// are spread inside it, the same gap at its edges as between them.
     pub fn space_selected(
         doc: &Document,
         vertical: bool,
         sequence: Sequence,
+        inside_last: bool,
     ) -> Result<Self, CommandError> {
         let along = |r: Rect| {
             if vertical {
@@ -422,7 +449,13 @@ impl Change {
                 (id, lo, hi)
             })
             .collect();
-        if items.len() < 3 {
+        let frame = if inside_last { items.pop() } else { None };
+        if frame.is_some() && items.is_empty() {
+            return Err(CommandError::Failed(
+                "select the objects to space, then the vector to space them inside".into(),
+            ));
+        }
+        if frame.is_none() && items.len() < 3 {
             return Err(CommandError::Failed(
                 "select at least three objects to space".into(),
             ));
@@ -434,12 +467,17 @@ impl Change {
             Sequence::PickedFromLow => {}
             Sequence::PickedFromHigh => items.reverse(),
         }
-        let span = end - start;
         let sizes: f64 = items.iter().map(|(_, lo, hi)| hi - lo).sum();
         #[expect(clippy::cast_precision_loss, reason = "a few objects")]
-        let gap = (span - sizes) / (items.len() - 1) as f64;
+        let (gap, mut at) = match frame {
+            // a gap at each edge of the frame as well as between them
+            Some((_, lo, hi)) => {
+                let gap = (hi - lo - sizes) / (items.len() + 1) as f64;
+                (gap, lo + gap)
+            }
+            None => ((end - start - sizes) / (items.len() - 1) as f64, start),
+        };
         let mut c = Self::builder(doc);
-        let mut at = start;
         for &(id, lo, hi) in &items {
             let by = at - lo;
             if by.abs() > 1e-12 {
@@ -465,18 +503,24 @@ impl Change {
         Self::copy_vectors(doc, &originals, transforms)
     }
 
+    /// [`Self::copy_selected`], with the originals and all the copies made one new group.
+    pub fn copy_selected_grouped(doc: &Document, transforms: &[DAffine2]) -> Self {
+        let originals: Vec<EntityId> = doc.selection.iter().copied().collect();
+        let mut c = Self::builder(doc);
+        let all = c.copies(doc, &originals, transforms);
+        let group = doc.next_group();
+        for &id in &all {
+            c.set_group(id, Some(group));
+        }
+        c.select(all);
+        c.finish()
+    }
+
     /// Adds a copy of each of `originals` under each of `transforms`, on the same layer as
     /// its original, and selects the originals and all the copies.
     pub fn copy_vectors(doc: &Document, originals: &[EntityId], transforms: &[DAffine2]) -> Self {
         let mut c = Self::builder(doc);
-        let mut selected = originals.to_vec();
-        for t in transforms {
-            for &id in originals {
-                let copy = c.add(doc.vectors[&id].transformed(t));
-                c.move_to_layer(copy, doc.layer_of(id));
-                selected.push(copy);
-            }
-        }
+        let selected = c.copies(doc, originals, transforms);
         c.select(selected);
         c.finish()
     }
@@ -507,6 +551,17 @@ impl Change {
 
     pub fn is_empty(&self) -> bool {
         self.edits.is_empty()
+    }
+
+    /// This change with the toolpaths it adds put in `group` (the group picked in the list).
+    #[must_use]
+    pub fn into_toolpath_group(mut self, group: &str) -> Self {
+        for edit in &mut self.edits {
+            if let Edit::AddToolpath { toolpath, .. } = edit {
+                toolpath.group = Some(group.to_owned());
+            }
+        }
+        self
     }
 
     /// The toolpaths this change adds or replaces.
@@ -745,6 +800,7 @@ impl Document {
             Edit::SetVariables { after, .. } => self.variables.clone_from(after),
             Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
+            Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
             Edit::SetTiling { after, .. } => self.tiling = *after,
             _ => unreachable!("only settings come here"),
         }
@@ -887,6 +943,13 @@ impl Document {
                     Some(current) => current.clone_from(after),
                 }
             }
+            Edit::MoveLayer { from, to } => {
+                if *from >= self.layers.len() || *to >= self.layers.len() {
+                    return Err(ApplyError::LayerOrder);
+                }
+                let layer = self.layers.remove(*from);
+                self.layers.insert(*to, layer);
+            }
             // Like the selection, the current layer is view state: `before` is not checked.
             Edit::SetCurrentLayer { after, .. } => {
                 if self.layer(*after).is_none() {
@@ -898,6 +961,7 @@ impl Document {
             | Edit::SetVariables { .. }
             | Edit::SetKeepOut { .. }
             | Edit::SetGuides { .. }
+            | Edit::SetToolpathGroups { .. }
             | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
             Edit::SetLevel { id, before, after } => {
@@ -995,6 +1059,25 @@ pub struct ChangeBuilder<'a> {
 }
 
 impl ChangeBuilder<'_> {
+    /// Adds a copy of each of `originals` under each of `transforms`, on its original's
+    /// layer: the originals then the copies, in order.
+    pub fn copies(
+        &mut self,
+        doc: &Document,
+        originals: &[EntityId],
+        transforms: &[DAffine2],
+    ) -> Vec<EntityId> {
+        let mut all = originals.to_vec();
+        for t in transforms {
+            for &id in originals {
+                let copy = self.add(doc.vectors[&id].transformed(t));
+                self.move_to_layer(copy, doc.layer_of(id));
+                all.push(copy);
+            }
+        }
+        all
+    }
+
     /// Current path of `id` as seen by this change so far.
     pub fn path(&self, id: EntityId) -> Option<&Path> {
         shadowed(&self.pending, &self.doc.vectors, id)
@@ -1208,6 +1291,19 @@ impl ChangeBuilder<'_> {
     }
 
     /// A new layer on top of the others.
+    /// Moves layer `id` to place `to` in the list.
+    pub fn move_layer(&mut self, id: LayerId, to: usize) {
+        let Some(from) = self.layers.iter().position(|l| l.id == id) else {
+            return;
+        };
+        let to = to.min(self.layers.len() - 1);
+        if from != to {
+            let layer = self.layers.remove(from);
+            self.layers.insert(to, layer);
+            self.edits.push(Edit::MoveLayer { from, to });
+        }
+    }
+
     pub fn add_layer(&mut self, name: &str) -> LayerId {
         let id = LayerId(self.layers.iter().map(|l| l.id.0).max().unwrap_or(0) + 1);
         let layer = Layer::new(id, name);
@@ -1297,6 +1393,16 @@ impl ChangeBuilder<'_> {
             self.edits.push(Edit::SetNotes {
                 before: self.doc.notes.clone(),
                 after: after.into(),
+            });
+        }
+    }
+
+    /// Replaces the toolpath group list.
+    pub fn set_toolpath_groups(&mut self, after: Vec<String>) {
+        if self.doc.toolpath_groups != after {
+            self.edits.push(Edit::SetToolpathGroups {
+                before: self.doc.toolpath_groups.clone(),
+                after,
             });
         }
     }

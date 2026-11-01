@@ -337,6 +337,54 @@ fn replace_span(path: &Path, k: usize, s: Segment) -> Path {
     out
 }
 
+/// `path` with node `k` made smooth (Aspire's Smooth Point): the spans either side become
+/// Béziers whose handles at the node lie on one straight line through it, each keeping its
+/// length. `None` at the end of an open path, where there is nothing to smooth against.
+#[must_use]
+pub fn smooth_node(path: &Path, k: usize) -> Option<Path> {
+    let n = path.segments.len();
+    let node = *nodes(path).get(k)?;
+    let arriving = if k == 0 {
+        path.closed.then(|| n - 1)?
+    } else {
+        k - 1
+    };
+    if k >= n {
+        return None;
+    }
+    // the later span first, so converting it does not move the earlier one
+    let (first, second) = if arriving > k {
+        (arriving, k)
+    } else {
+        (k, arriving)
+    };
+    let out = span_to_bezier(&span_to_bezier(path, first), second);
+    // after the conversions, the spans meeting at the node
+    let count = out.segments.len();
+    let leaving = (0..count)
+        .find(|&i| span_start(&out, i).distance(node) < 1e-9 && (i > 0 || k == 0 || !out.closed))?;
+    let arriving = if leaving == 0 { count - 1 } else { leaving - 1 };
+    let (Segment::Cubic { c2: c_in, .. }, Segment::Cubic { c1: c_out, .. }) =
+        (out.segments[arriving], out.segments[leaving])
+    else {
+        return None;
+    };
+    let (len_in, len_out) = (c_in.distance(node), c_out.distance(node));
+    let along = ((c_out - node).normalize_or_zero() - (c_in - node).normalize_or_zero())
+        .normalize_or_zero();
+    if along == Point::ZERO {
+        return Some(out);
+    }
+    let mut out = out;
+    if let Segment::Cubic { c2, .. } = &mut out.segments[arriving] {
+        *c2 = node - along * len_in;
+    }
+    if let Segment::Cubic { c1, .. } = &mut out.segments[leaving] {
+        *c1 = node + along * len_out;
+    }
+    Some(out)
+}
+
 /// The circle through three points, and whether a to c via b runs counter-clockwise.
 fn circle_through(a: Point, b: Point, c: Point) -> Option<(Point, bool)> {
     let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
@@ -365,6 +413,38 @@ mod tests {
             ],
             true,
         )
+    }
+
+    #[test]
+    fn smoothing_a_corner_lines_its_handles_up_through_it() {
+        let s = square();
+        for k in 0..4 {
+            let smooth = smooth_node(&s, k).unwrap();
+            let node = nodes(&s)[k];
+            assert_eq!(nodes(&smooth), nodes(&s), "the nodes stay put");
+            let n = smooth.segments.len();
+            let (arriving, leaving) = (smooth.segments[(k + n - 1) % n], smooth.segments[k]);
+            let (Segment::Cubic { c2, .. }, Segment::Cubic { c1, .. }) = (arriving, leaving) else {
+                panic!("both spans are Béziers at node {k}");
+            };
+            let (a, b) = ((c2 - node).normalize(), (c1 - node).normalize());
+            assert!(
+                (a + b).length() < 1e-9,
+                "opposite ways at node {k}: {a} {b}"
+            );
+            assert!(
+                (c2.distance(node) - 10.0 / 3.0).abs() < 1e-9,
+                "lengths kept"
+            );
+        }
+        // an open path's ends have nothing to smooth against
+        let open = Path {
+            closed: false,
+            ..square()
+        };
+        assert!(smooth_node(&open, 0).is_none());
+        assert!(smooth_node(&open, nodes(&open).len() - 1).is_none());
+        assert!(smooth_node(&open, 1).is_some());
     }
 
     #[test]

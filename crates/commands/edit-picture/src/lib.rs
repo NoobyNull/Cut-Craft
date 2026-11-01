@@ -195,6 +195,7 @@ mod tests {
             grey,
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
             depth: Vec::new(),
+            rgb: Vec::new(),
         });
         doc.apply(&c.finish()).unwrap();
         doc

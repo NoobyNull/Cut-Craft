@@ -41,15 +41,13 @@ fn dialog_size(ctx: &egui::Context) -> egui::Vec2 {
     ctx.content_rect().size() * egui::vec2(WINDOW_SHARE, cut_craft_bug_report::DIALOG_HEIGHT_SHARE)
 }
 
-/// A post's instructions, read-only, as Aspire's Post-Processor Content.
+/// Read-only text about a post, under its title: its instructions (Post-Processor Content)
+/// or its change log.
 fn viewer(ctx: &egui::Context, viewing: &mut Option<(String, String)>) {
-    let Some((name, text)) = viewing else { return };
+    let Some((title, text)) = viewing else { return };
     let mut open = true;
-    let (id, title) = (
-        egui::Id::unique("post_processor_content"),
-        format!("Post-Processor Content: {name}"),
-    );
-    cut_craft_bug_report::dialog(ctx, id, &title, dialog_size(ctx), &mut open, |ui| {
+    let id = egui::Id::unique("post_processor_content");
+    cut_craft_bug_report::dialog(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
         if ui.button("Copy").clicked() {
             ui.ctx().copy_text(text.clone());
         }
@@ -68,7 +66,19 @@ fn viewer(ctx: &egui::Context, viewing: &mut Option<(String, String)>) {
 }
 
 fn view(entry: &Entry) -> Option<(String, String)> {
-    Some((entry.name.clone(), Library::text(entry).ok()?))
+    let title = format!("Post-Processor Content: {}", entry.name);
+    Some((title, Library::text(entry).ok()?))
+}
+
+/// The post's change log, as Aspire's Post-Processor Change Log.
+fn change_log(entry: &Entry) -> Option<(String, String)> {
+    let log = Library::change_log(&Library::text(entry).ok()?);
+    let text = if log.is_empty() {
+        "This post-processor keeps no change log (a \"+ History\" comment).".to_owned()
+    } else {
+        log.join("\n")
+    };
+    Some((format!("Post-Processor Change Log: {}", entry.name), text))
 }
 
 /// What Machine Configuration Management asks of the app.
@@ -675,6 +685,10 @@ impl PostManager {
             if label.clicked() {
                 self.picked = Some(entry.name.clone());
             }
+            if let Some(version) = Library::text(entry).ok().and_then(|t| Library::version(&t)) {
+                ui.weak(version)
+                    .on_hover_text("Version: the date of its last change");
+            }
             if let Some(why) = &entry.broken {
                 ui.colored_label(ui.visuals().error_fg_color, "⚠")
                     .on_hover_text(why);
@@ -693,8 +707,8 @@ impl PostManager {
         asked
     }
 
-    /// Inspect: View and Customize (which opens the copy in Edit) for Cut Craft's posts;
-    /// View, Edit, Open File Location and Delete for custom ones.
+    /// Inspect: View, Changelog and Customize (which opens the copy in Edit) for Cut Craft's posts;
+    /// View, Changelog, Edit, Open File Location and Delete for custom ones.
     fn inspect(
         &mut self,
         ui: &mut egui::Ui,
@@ -704,6 +718,10 @@ impl PostManager {
         let mut asked = None;
         if ui.button("View").clicked() {
             self.viewing = view(entry);
+            ui.close();
+        }
+        if ui.button("Changelog").clicked() {
+            self.viewing = change_log(entry);
             ui.close();
         }
         match &entry.source {
@@ -809,6 +827,14 @@ mod tests {
             window.height() < ctx.content_rect().height() - 2.0 * window.top(),
             "fits its contents, not the screen: {window:?}"
         );
+    }
+
+    #[test]
+    fn changelog_shows_a_posts_history_under_its_name() {
+        let entry = Library::new(None).entries()[0].clone();
+        let (title, text) = change_log(&entry).unwrap();
+        assert_eq!(title, format!("Post-Processor Change Log: {}", entry.name));
+        assert!(text.contains("2026-10-31"), "{text}");
     }
 
     #[test]

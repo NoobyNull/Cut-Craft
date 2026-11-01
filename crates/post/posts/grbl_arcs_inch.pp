@@ -4,6 +4,12 @@
 + Arcs: G2 / G3 with I J from the arc's start.
 + Made by scripts/make_posts.py: edit its template and run it again.
 
++ History
++ Who        When       What
++ ========== ========== ==========================================
++ Cut Craft  2026-10-27 First version: arcs, tool change by hand (M0)
++ Cut Craft  2026-10-31 Dwell written as G4
+
 POST_NAME = "Cut Craft GRBL Arcs (inch) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "INCHES"
@@ -23,6 +29,7 @@ VAR Y_HOME_POSITION = [YH|A|Y|1.4]
 VAR Z_HOME_POSITION = [ZH|A|Z|1.4]
 VAR SAFE_Z_HEIGHT = [SAFEZ|A|Z|1.4]
 VAR TOOL_NUMBER = [T|A|T|1.0]
+VAR DWELL_TIME = [DWELL|A|P|1.2]
 
 begin HEADER
 "([TP_FILENAME])"
@@ -77,6 +84,9 @@ begin FIRST_CCW_HELICAL_ARC_MOVE
 
 begin CCW_HELICAL_ARC_MOVE
 "G3 [X] [Y] [Z] [I] [J]"
+
+begin DWELL_MOVE
+"G4 [DWELL]"
 
 begin TOOLCHANGE
 "G0 [SAFEZ]"

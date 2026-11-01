@@ -82,6 +82,20 @@ pub struct Material {
     pub bottom: f64,
     /// Row by row from y = 0.
     pub heights: Vec<f64>,
+    /// The id of the toolpath that last cut each cell lower, row by row (0: uncut).
+    pub cut_by: Vec<u32>,
+    /// The id `sweep` marks the cells it cuts with: the toolpath being previewed.
+    pub cutting: u32,
+    /// Each cell's preview colour, `0x01RRGGBB` (0: the material's own); the 3D view
+    /// paints it from `cut_by` just before drawing, empty when it is all material colour.
+    pub paint: Vec<u32>,
+    /// A double-sided job's other side as its toolpaths cut it, seen from that side (its
+    /// own top at 0); none until they are previewed.
+    pub other_side: Option<std::sync::Arc<Material>>,
+    /// The underside's height over each cell, row by row (`bottom` where uncut, NaN where
+    /// nothing is left); the 3D view fills it in from `other_side` just before drawing,
+    /// empty for a flat underside.
+    pub under: Vec<f64>,
 }
 
 #[expect(
@@ -103,7 +117,41 @@ impl Material {
             cell,
             bottom: -job.thickness,
             heights: vec![0.0; columns * rows],
+            cut_by: vec![0; columns * rows],
+            cutting: 0,
+            paint: vec![],
+            other_side: None,
+            under: vec![],
         }
+    }
+
+    /// The material with its other side's cuts on its underside, the other side's point
+    /// for each of this side's being where `turn` takes it; a cell cut through from both
+    /// sides is left empty (NaN, top and underside). Unchanged without an other side.
+    #[must_use]
+    pub fn with_underside(mut self, turn: impl Fn(Point) -> Point) -> Self {
+        let Some(other) = self.other_side.clone() else {
+            return self;
+        };
+        let mut under = vec![self.bottom; self.heights.len()];
+        for row in 0..self.rows {
+            for column in 0..self.columns {
+                let i = row * self.columns + column;
+                // the other side's depth below its top is height above this side's bottom
+                let depth = other.at(turn(self.centre(column, row))).unwrap_or(0.0);
+                let depth = if depth.is_nan() {
+                    f64::NEG_INFINITY
+                } else {
+                    depth
+                };
+                under[i] = self.bottom - depth;
+                if under[i] >= self.heights[i] || self.heights[i].is_nan() {
+                    (self.heights[i], under[i]) = (f64::NAN, f64::NAN);
+                }
+            }
+        }
+        self.under = under;
+        self
     }
 
     /// Middle of a cell, job mm.
@@ -276,6 +324,49 @@ impl Material {
         left
     }
 
+    /// Takes away the piece of material at `p`: every cell joined to it, side to side,
+    /// without a cut right through between (the preview's double-click on a part or the
+    /// waste cut free of it). Taken cells hold NaN, which the views leave out. Returns how
+    /// many cells went; none when `p` is off the material, cut through or already gone.
+    pub fn remove_piece(&mut self, p: Point) -> usize {
+        let (column, row) = (
+            ((p.x - self.origin.x) / self.cell).floor(),
+            ((p.y - self.origin.y) / self.cell).floor(),
+        );
+        if column < 0.0 || row < 0.0 {
+            return 0;
+        }
+        let (column, row) = (column as usize, row as usize);
+        if column >= self.columns || row >= self.rows {
+            return 0;
+        }
+        // through means at the underside, to within a hair
+        let solid = |h: f64| !h.is_nan() && h > self.bottom + 1e-9;
+        let mut stack = vec![(column, row)];
+        let mut removed = 0;
+        while let Some((c, r)) = stack.pop() {
+            let height = &mut self.heights[r * self.columns + c];
+            if !solid(*height) {
+                continue;
+            }
+            *height = f64::NAN;
+            removed += 1;
+            if c > 0 {
+                stack.push((c - 1, r));
+            }
+            if r > 0 {
+                stack.push((c, r - 1));
+            }
+            if c + 1 < self.columns {
+                stack.push((c + 1, r));
+            }
+            if r + 1 < self.rows {
+                stack.push((c, r + 1));
+            }
+        }
+        removed
+    }
+
     /// Removes what the tool following `toolpath` cuts away.
     pub fn cut(&mut self, toolpath: &Toolpath) {
         self.cut_along(&toolpath.moves, &toolpath.tool);
@@ -285,18 +376,34 @@ impl Material {
     /// band of rows per core: a cell ends at the lowest any move reaches there, whichever
     /// order the moves come in.
     pub fn cut_along(&mut self, moves: &[Move], tool: &Tool) {
+        let before = self.heights.clone();
         crate::compute::compute().cut_along(self, tool, moves);
+        self.mark_cut(&before);
+    }
+
+    /// Each cell lower than in `before` was cut by the toolpath `cutting` names; a piece
+    /// already taken away (NaN) stays away, whatever ran the cut.
+    fn mark_cut(&mut self, before: &[f64]) {
+        for ((height, was), by) in self.heights.iter_mut().zip(before).zip(&mut self.cut_by) {
+            if was.is_nan() {
+                *height = f64::NAN;
+            } else if *height < *was {
+                *by = self.cutting;
+            }
+        }
     }
 
     /// Lowers each cell the tool passes over from `a` to `b` to the lowest its cutting edge
     /// reaches there, at the cell centre.
     pub fn sweep(&mut self, a: DVec3, b: DVec3, tool: &Tool) {
         let mut heights = std::mem::take(&mut self.heights);
-        self.sweep_band(a, b, tool, 0, &mut heights);
-        self.heights = heights;
+        let mut cut_by = std::mem::take(&mut self.cut_by);
+        self.sweep_band(a, b, tool, 0, &mut heights, Some(&mut cut_by));
+        (self.heights, self.cut_by) = (heights, cut_by);
     }
 
-    /// [`Self::sweep`] over `band`, the grid's rows from `first`.
+    /// [`Self::sweep`] over `band`, the grid's rows from `first`, marking the cells it
+    /// lowers in `cut_by` (the same rows) when given.
     pub(crate) fn sweep_band(
         &self,
         a: DVec3,
@@ -304,6 +411,7 @@ impl Material {
         tool: &Tool,
         first: usize,
         band: &mut [f64],
+        mut cut_by: Option<&mut [u32]>,
     ) {
         if a.z >= 0.0 && b.z >= 0.0 {
             return;
@@ -314,8 +422,15 @@ impl Material {
         for row in rows.start.max(first)..rows.end.min(last) {
             for column in columns.clone() {
                 if let Some(z) = lowest_edge(tool, a, b, self.centre(column, row)) {
-                    let height = &mut band[(row - first) * self.columns + column];
-                    *height = height.min(z.max(self.bottom));
+                    let i = (row - first) * self.columns + column;
+                    let (height, z) = (&mut band[i], z.max(self.bottom));
+                    // a piece already taken away (NaN) stays away
+                    if !height.is_nan() && z < *height {
+                        *height = z;
+                        if let Some(by) = cut_by.as_deref_mut() {
+                            by[i] = self.cutting;
+                        }
+                    }
                 }
             }
         }

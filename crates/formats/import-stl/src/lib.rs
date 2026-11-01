@@ -1,4 +1,4 @@
-//! Import an STL model (binary or ASCII) as a component: seen from above, its top surface
+//! Import an STL model (binary or ASCII) or a Wavefront OBJ model as a component: seen from above, its top surface
 //! becomes a height grid at the job's modeling resolution, centred on the job with its lowest
 //! point on the zero plane, shrunk to fit the job if it is bigger.
 
@@ -13,8 +13,8 @@ pub struct ImportStl;
 impl Importer for ImportStl {
     const ID: &'static str = "import_stl";
     const FORMAT: FileFormat = FileFormat {
-        label: "STL model",
-        extensions: &["stl"],
+        label: "STL or OBJ model",
+        extensions: &["stl", "obj"],
     };
 
     fn import(doc: &Document, bytes: &[u8]) -> Result<Change, CommandError> {
@@ -142,8 +142,11 @@ pub fn top_down(k: &mut Component, triangles: &[[DVec3; 3]]) {
     });
 }
 
-/// The triangles of a binary or ASCII STL file.
+/// The triangles of a binary or ASCII STL file, or of a Wavefront OBJ file.
 pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
+    if let Some(obj) = obj_triangles(bytes) {
+        return obj;
+    }
     let binary_count = bytes
         .get(80..84)
         .map(|c| u32::from_le_bytes(c.try_into().expect("4 bytes")) as usize);
@@ -186,9 +189,80 @@ pub fn triangles(bytes: &[u8]) -> Result<Vec<[DVec3; 3]>, String> {
     Ok(vertices.as_chunks::<3>().0.to_vec())
 }
 
+/// The triangles of an OBJ file (`v` vertices, `f` faces, each face fanned from its first
+/// corner; `v/t/n` and negative, from-the-end indices read); `None` when it is not one.
+fn obj_triangles(bytes: &[u8]) -> Option<Result<Vec<[DVec3; 3]>, String>> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let is_obj = text
+        .lines()
+        .map(str::trim_start)
+        .any(|l| l.starts_with("v ") || l.starts_with("f "));
+    if text.trim_start().starts_with("solid") || !is_obj {
+        return None;
+    }
+    let read = || -> Result<Vec<[DVec3; 3]>, String> {
+        let mut vertices: Vec<DVec3> = vec![];
+        let mut out = vec![];
+        for line in text.lines() {
+            let mut words = line.split_whitespace();
+            match words.next() {
+                Some("v") => {
+                    let mut xyz = [0.0; 3];
+                    for v in &mut xyz {
+                        *v = words
+                            .next()
+                            .and_then(|w| w.parse().ok())
+                            .ok_or("a vertex in the OBJ file is not three numbers")?;
+                    }
+                    vertices.push(DVec3::from(xyz));
+                }
+                Some("f") => {
+                    let corners = words
+                        .map(|w| {
+                            let index: i64 = w
+                                .split('/')
+                                .next()
+                                .and_then(|i| i.parse().ok())
+                                .ok_or("a face in the OBJ file has a bad corner")?;
+                            let at = if index < 0 {
+                                i64::try_from(vertices.len()).unwrap_or(i64::MAX) + index
+                            } else {
+                                index - 1
+                            };
+                            usize::try_from(at)
+                                .ok()
+                                .and_then(|i| vertices.get(i).copied())
+                                .ok_or_else(|| "a face in the OBJ file names no vertex".to_owned())
+                        })
+                        .collect::<Result<Vec<DVec3>, String>>()?;
+                    for k in 1..corners.len().saturating_sub(1) {
+                        out.push([corners[0], corners[k], corners[k + 1]]);
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(out)
+    };
+    Some(read())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_obj_reads_its_faces_as_triangles() {
+        let square = "# a unit square, as one quad\nv 0 0 0\nv 1 0 0\nv 1 1 1\nv 0 1 1\n\
+                      vn 0 0 1\nf 1//1 2//1 3//1 -1//1\n";
+        let t = triangles(square.as_bytes()).unwrap();
+        assert_eq!(t.len(), 2, "a quad fans into two triangles");
+        assert_eq!(t[1][2], DVec3::new(0.0, 1.0, 1.0), "-1 is the last vertex");
+        assert!(
+            triangles(b"v 0 0 0\nf 1 2 3\n").is_err(),
+            "faces must name vertices"
+        );
+    }
 
     #[test]
     #[expect(clippy::cast_precision_loss, reason = "a test grid's columns")]

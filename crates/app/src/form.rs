@@ -93,7 +93,11 @@ impl When {
 }
 
 /// Draws a form's tool block given the parameters holding the tool (see [`Look::tool`]).
-pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &mut Value) + 'a;
+pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) + 'a;
+
+/// The fields that are lists of Tool Database tools, drawn by [`Look::tool`] as the form's
+/// own tool is.
+pub const TOOL_LISTS: [&str; 2] = ["tools", "clearance_tools"];
 
 /// How a form looks: the units lengths are shown in, and the pictures sections show.
 pub struct Look<'a> {
@@ -102,9 +106,18 @@ pub struct Look<'a> {
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
     /// The material's size in the units shown, for sums typed into number fields (W, H, T).
     pub material: cut_craft_core::calc::Values,
-    /// Draws a `tool` field in its place (the Tool Database's tool, which the form does not
-    /// edit), given the parameters holding it; `None` leaves it out.
+    /// Draws a `tool` field, or a list of tools ([`TOOL_LISTS`]), in its place (the Tool
+    /// Database's tools, which the form does not edit), given the field's key and the
+    /// parameters holding it; `None` leaves them out.
     pub tool: Option<&'a DrawTool<'a>>,
+}
+
+/// Millimetres in one of `units`.
+pub fn unit_mm(units: Units) -> f64 {
+    match units {
+        Units::Inch => 25.4,
+        Units::Mm => 1.0,
+    }
 }
 
 /// The job's material, in `units`, and its document variables, for [`Look::material`].
@@ -112,10 +125,7 @@ pub fn material(
     doc: &cut_craft_core::document::Document,
     units: Units,
 ) -> cut_craft_core::calc::Values {
-    let factor = match units {
-        Units::Inch => 25.4,
-        Units::Mm => 1.0,
-    };
+    let factor = unit_mm(units);
     let job = &doc.job;
     cut_craft_core::calc::Values {
         width: job.width / factor,
@@ -286,7 +296,8 @@ fn plain(
     top: &Value,
 ) -> bool {
     let mut changed = false;
-    let own_block = |f: &&Field| f.section || f.key == "tool";
+    let own_block =
+        |f: &&Field| f.section || f.key == "tool" || TOOL_LISTS.contains(&f.key.as_str());
     let mut rest = fields;
     while !rest.is_empty() {
         let run = rest.iter().position(own_block).unwrap_or(rest.len());
@@ -298,9 +309,10 @@ fn plain(
             break;
         };
         rest = after;
-        if section.key == "tool" && !section.section {
+        if (section.key == "tool" || TOOL_LISTS.contains(&section.key.as_str())) && !section.section
+        {
             if let Some(tool) = look.tool {
-                tool(ui, params);
+                tool(ui, &section.key, params);
             }
             continue;
         }
@@ -1206,7 +1218,9 @@ mod tests {
             [
                 "Initial Orientation",
                 "Model Size",
-                "Position relative to Modeling Plane"
+                "Position relative to Modeling Plane",
+                "Interactive Rotation",
+                "Rotation Axis Movement"
             ]
         );
         let Kind::Group(orientation) = &field(&f, "orientation").kind else {

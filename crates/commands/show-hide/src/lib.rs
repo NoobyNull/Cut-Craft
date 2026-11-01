@@ -110,6 +110,8 @@ fn set_visible(
                     toolpath,
                     name: t.name.clone(),
                     visible,
+                    preview: cmd_toolpath_properties::PreviewFill::Unchanged,
+                    notes: None,
                 },
             )
         }

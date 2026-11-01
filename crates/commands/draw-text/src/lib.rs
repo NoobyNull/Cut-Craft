@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::font::{self, Align};
-use cut_craft_core::geometry::Rect;
+use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::params::Xy;
 use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
@@ -68,6 +68,11 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Margin size", extend("x-widget" = "row"))]
     pub margin: Margin,
+    /// Kerning and line spacing changed in the 2D view: a click between two letters or two
+    /// lines while the form is open
+    #[schemars(skip)]
+    #[serde(default)]
+    pub spacing: font::Spacing,
     /// The text group being edited: its vectors are replaced. Set when the form opens on
     /// selected text.
     #[schemars(skip)]
@@ -97,6 +102,7 @@ impl Default for Params {
             mode: Mode::Text,
             box_size: default_box(),
             margin: Margin::Normal,
+            spacing: font::Spacing::default(),
             replaces: None,
         }
     }
@@ -117,15 +123,11 @@ impl Command for DrawText {
 
     /// On selected text, its own settings, so the form edits it.
     fn initial_params(doc: &Document) -> Params {
-        // the first selected group that is text (plain groups may come before it)
-        doc.selection
-            .iter()
-            .filter_map(|id| doc.vector_groups.get(id))
-            .find_map(|group| {
-                let spec = doc.texts.get(group)?;
-                let p: Params = serde_json::from_value(spec.clone()).ok()?;
+        selected_text_group(doc)
+            .and_then(|group| {
+                let p: Params = serde_json::from_value(doc.texts[&group].clone()).ok()?;
                 Some(Params {
-                    replaces: Some(*group),
+                    replaces: Some(group),
                     ..p
                 })
             })
@@ -136,7 +138,9 @@ impl Command for DrawText {
         ensure_positive("text height", p.height)?;
         let font = font::load(&p.font, p.bold, p.italic, &p.text).map_err(CommandError::Failed)?;
         let paths = match p.mode {
-            Mode::Text => font.layout(&p.text, p.height, p.align, p.anchor.into()),
+            Mode::Text => {
+                font.layout_spaced(&p.text, p.height, p.align, p.anchor.into(), &p.spacing)
+            }
             Mode::TextInABox => boxed(&font, p)?,
         };
         if paths.is_empty() {
@@ -198,6 +202,186 @@ fn boxed(
         * DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(scale))
         * DAffine2::from_translation(-b.center());
     Ok(natural.iter().map(|q| q.transformed(&place)).collect())
+}
+
+/// The first selected group that is text (plain groups may come before it).
+#[must_use]
+pub fn selected_text_group(doc: &Document) -> Option<u64> {
+    doc.selection
+        .iter()
+        .filter_map(|id| doc.vector_groups.get(id))
+        .find(|group| {
+            doc.texts
+                .get(group)
+                .is_some_and(|t| t.get("text").is_some())
+        })
+        .copied()
+}
+
+/// What a click in a laid-out block falls between.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gap {
+    /// Two letters of a line: the line, and the index of the letter before the gap.
+    Letters { line: usize, index: usize },
+    /// Two lines.
+    Lines,
+}
+
+/// Where the glyphs of the text `p` lays out sit.
+fn glyph_places(p: &Params) -> Result<Vec<font::Placed>, String> {
+    let face = font::load(&p.font, p.bold, p.italic, &p.text)?;
+    let placed = face.placed(&p.text, p.height, p.align, p.anchor.into(), &p.spacing);
+    Ok(placed.into_iter().map(|(at, _)| at).collect())
+}
+
+/// What a click at `at`, within `reach`, falls between in the text `p` lays out: two letters
+/// (nearest the middle of the room between them, within the line's height), or two lines
+/// (between the lower line's capitals and the upper line's baseline).
+pub fn gap_at(p: &Params, at: Point, reach: f64) -> Result<Option<Gap>, String> {
+    let placed = glyph_places(p)?;
+    for pair in placed.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if a.line != b.line {
+            continue;
+        }
+        let middle = f64::midpoint(a.right, b.left);
+        let half = ((b.left - a.right) / 2.0).abs() + reach;
+        let band = a.baseline - reach..=a.baseline + p.height + reach;
+        if (at.x - middle).abs() <= half && band.contains(&at.y) {
+            return Ok(Some(Gap::Letters {
+                line: a.line,
+                index: a.index,
+            }));
+        }
+    }
+    let (mut left, mut right) = (f64::INFINITY, f64::NEG_INFINITY);
+    let mut baselines: Vec<f64> = vec![];
+    for g in &placed {
+        left = left.min(g.left);
+        right = right.max(g.right);
+        if !baselines.iter().any(|b| (b - g.baseline).abs() < 1e-9) {
+            baselines.push(g.baseline);
+        }
+    }
+    baselines.sort_by(f64::total_cmp);
+    for pair in baselines.windows(2) {
+        let (lower, upper) = (pair[0] + p.height, pair[1]);
+        let (lo, hi) = (lower.min(upper), lower.max(upper));
+        if (lo - reach..=hi + reach).contains(&at.y)
+            && (left - reach..=right + reach).contains(&at.x)
+        {
+            return Ok(Some(Gap::Lines));
+        }
+    }
+    Ok(None)
+}
+
+/// Every gap between two letters of a line in the text `p` lays out: (line, index of the
+/// letter before it).
+pub fn letter_gaps(p: &Params) -> Result<Vec<(usize, usize)>, String> {
+    let placed = glyph_places(p)?;
+    Ok(placed
+        .windows(2)
+        .filter(|pair| pair[0].line == pair[1].line)
+        .map(|pair| (pair[0].line, pair[0].index))
+        .collect())
+}
+
+/// Text ▸ Break Block into Lines: a block of several lines becomes a text of its own per
+/// line, each where its line was, editable on its own.
+pub struct BreakTextIntoLines;
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BreakParams {
+    /// The text group
+    pub group: u64,
+}
+
+impl Default for BreakParams {
+    /// The first group a document gives out.
+    fn default() -> Self {
+        Self { group: 1 }
+    }
+}
+
+impl Command for BreakTextIntoLines {
+    const ID: &'static str = "break_text_into_lines";
+    type Params = BreakParams;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Break Block into Lines",
+            group: "Create Vectors",
+            icon: "",
+            shortcut: "",
+        }
+    }
+
+    fn initial_params(doc: &Document) -> BreakParams {
+        BreakParams {
+            group: selected_text_group(doc).unwrap_or(0),
+        }
+    }
+
+    #[expect(clippy::cast_precision_loss, reason = "line counts are small")]
+    fn run(doc: &Document, p: &BreakParams) -> Result<Change, CommandError> {
+        let spec = doc.texts.get(&p.group).ok_or_else(|| {
+            CommandError::Failed("select a block of text to break into lines".into())
+        })?;
+        let text: Params = serde_json::from_value(spec.clone())
+            .map_err(|e| CommandError::Failed(e.to_string()))?;
+        if matches!(text.mode, Mode::TextInABox) {
+            return Err(CommandError::Failed(
+                "Text in a Box is one block: it has no lines of its own".into(),
+            ));
+        }
+        let lines: Vec<&str> = text.text.lines().collect();
+        if lines.len() < 2 {
+            return Err(CommandError::Failed("the text is one line already".into()));
+        }
+        let face = font::load(&text.font, text.bold, text.italic, &text.text)
+            .map_err(CommandError::Failed)?;
+        let pitch = face.line_pitch * text.spacing.line_pitch * text.height / face.cap_height;
+        let mut c = Change::builder(doc);
+        for id in doc.group_members_of(p.group) {
+            c.remove(id);
+        }
+        c.set_text(p.group, None);
+        let mut selected = vec![];
+        for (group, (row, line)) in (doc.next_group()..).zip(lines.iter().enumerate()) {
+            let anchor =
+                Point::from(text.anchor) + Point::new(0.0, (lines.len() - 1 - row) as f64 * pitch);
+            let kerning = text
+                .spacing
+                .kerning
+                .iter()
+                .filter(|k| k.0 == row)
+                .map(|k| (0, k.1, k.2))
+                .collect();
+            let one = Params {
+                text: (*line).to_owned(),
+                anchor: Xy::new(anchor.x, anchor.y),
+                spacing: font::Spacing {
+                    kerning,
+                    line_pitch: text.spacing.line_pitch,
+                },
+                replaces: None,
+                ..text.clone()
+            };
+            let paths = face.layout_spaced(line, one.height, one.align, anchor, &one.spacing);
+            let ids: Vec<_> = paths.into_iter().map(|path| c.add(path)).collect();
+            for &id in &ids {
+                c.set_group(id, Some(group));
+            }
+            c.set_text(
+                group,
+                Some(serde_json::to_value(one).expect("params serialise")),
+            );
+            selected.extend(ids);
+        }
+        c.select(selected);
+        Ok(c.finish())
+    }
 }
 
 impl Interactive for DrawText {
@@ -331,5 +515,84 @@ mod tests {
         let p = DrawText::from_drag(drag, &boxes("H"));
         assert_eq!((p.anchor.x, p.anchor.y), (30.0, 40.0));
         assert_eq!(p.text, "H");
+    }
+
+    fn two_lines() -> Document {
+        after::<DrawText>(&boxes("HI\nHI"))
+    }
+
+    mod break_block {
+        use super::*;
+        cut_craft_core::contract_tests!(BreakTextIntoLines, two_lines);
+    }
+
+    #[test]
+    fn a_click_falls_between_two_letters_or_two_lines_and_kerning_moves_the_letter_after() {
+        let p = boxes("HI\nHI");
+        // the boxes font: each letter 8 wide, advanced 9, so the gap sits at x = 19 from
+        // the anchor at 10
+        let letters = gap_at(&p, Point::new(19.0, 15.0), 1.0).unwrap();
+        assert_eq!(letters, Some(Gap::Letters { line: 1, index: 0 }));
+        let lines = gap_at(&p, Point::new(15.0, 22.0), 1.0).unwrap();
+        assert_eq!(lines, Some(Gap::Lines));
+        assert_eq!(gap_at(&p, Point::new(60.0, 60.0), 1.0).unwrap(), None);
+        assert_eq!(letter_gaps(&p).unwrap(), [(0, 0), (1, 0)]);
+        let mut kerned = p.clone();
+        kerned.spacing.kern(1, 0, 4.0);
+        let plain = after::<DrawText>(&p);
+        let wide = after::<DrawText>(&kerned);
+        let width = |doc: &Document| {
+            doc.selection
+                .iter()
+                .map(|id| doc.vectors[id].bounds())
+                .reduce(Rect::union)
+                .unwrap()
+                .size()
+                .x
+        };
+        assert!((width(&wide) - width(&plain) - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn breaking_a_block_into_lines_leaves_a_text_per_line_where_each_line_was() {
+        let mut doc = two_lines();
+        let group = selected_text_group(&doc).unwrap();
+        let was: Vec<Rect> = doc
+            .selection
+            .iter()
+            .map(|id| doc.vectors[id].bounds())
+            .collect();
+        let p = BreakTextIntoLines::initial_params(&doc);
+        assert_eq!(p.group, group);
+        cut_craft_core::testing::run_on::<BreakTextIntoLines>(&mut doc, &p);
+        assert!(!doc.texts.contains_key(&group), "the block is gone");
+        assert_eq!(doc.texts.len(), 2, "a text per line");
+        let mut now: Vec<Rect> = doc
+            .selection
+            .iter()
+            .map(|id| doc.vectors[id].bounds())
+            .collect();
+        let mut was = was;
+        let key = |r: &Rect| (r.min.y, r.min.x);
+        was.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap());
+        now.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap());
+        assert_eq!(now.len(), was.len());
+        for (a, b) in now.iter().zip(&was) {
+            assert!((a.min - b.min).length() < 1e-9, "{a:?} vs {b:?}");
+        }
+        let texts: Vec<&str> = doc
+            .texts
+            .values()
+            .filter_map(|t| t["text"].as_str())
+            .collect();
+        assert_eq!(texts, ["HI", "HI"]);
+        let one_line = after::<DrawText>(&boxes("HI"));
+        let p = BreakTextIntoLines::initial_params(&one_line);
+        assert!(
+            BreakTextIntoLines::run(&one_line, &p)
+                .unwrap_err()
+                .to_string()
+                .contains("one line")
+        );
     }
 }

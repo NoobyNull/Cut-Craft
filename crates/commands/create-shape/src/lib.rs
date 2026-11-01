@@ -1,5 +1,7 @@
 //! Create Shape: a 3D component raised over the selected closed vectors, rising from their
-//! edges as a round dome, an angled slope or a flat top.
+//! edges as a round dome, an angled slope, an S, a flat top, or (Custom) the profile of an
+//! open vector selected with them. A ring between two vectors rises from both edges. Scale
+//! sizes the profile to a height, Total Height the whole shape with its base.
 
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
@@ -22,6 +24,9 @@ pub enum Profile {
     Smooth,
     /// One height all over
     Flat,
+    /// The open vector selected with the closed ones, drawn upright: its left end at the
+    /// edge, its right end at the middle
+    Custom,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -41,6 +46,14 @@ pub struct Params {
     /// Added everywhere inside the shape
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub base: f64,
+    /// The profile scaled up or down to this height, its shape kept (0: as it rises)
+    #[serde(default)]
+    #[schemars(title = "Scale", extend("x-unit" = "mm"), range(min = 0))]
+    pub scale: f64,
+    /// The whole shape, base and all, scaled to this height (0: as made)
+    #[serde(default)]
+    #[schemars(title = "Total height", extend("x-unit" = "mm"), range(min = 0))]
+    pub total_height: f64,
     pub combine: Combine,
 }
 
@@ -57,8 +70,31 @@ impl Default for Params {
             height: 0.0,
             smoothing: 0.5,
             base: 0.0,
+            scale: 0.0,
+            total_height: 0.0,
             combine: Combine::Add,
         }
+    }
+}
+
+/// `component`'s profile scaled as `p` asks (Scale sizes the profile, Total Height the
+/// profile and base together), then the base added under it.
+fn scaled(component: &mut Component, p: &Params) {
+    let top = component
+        .heights
+        .iter()
+        .copied()
+        .filter(|h| !h.is_nan())
+        .fold(0.0, f64::max);
+    let factor = if p.total_height > 0.0 && top > 0.0 {
+        ((p.total_height - p.base) / top).max(0.0)
+    } else if p.scale > 0.0 && top > 0.0 {
+        p.scale / top
+    } else {
+        1.0
+    };
+    for height in component.heights.iter_mut().filter(|h| !h.is_nan()) {
+        *height = *height * factor + p.base;
     }
 }
 
@@ -82,12 +118,23 @@ impl Command for CreateShape {
                 "the angle must be between 1 and 89 degrees".into(),
             ));
         }
-        if p.profile == Profile::Flat && p.height + p.base <= 0.0 {
+        if p.profile == Profile::Flat && p.height + p.base + p.total_height <= 0.0 {
             return Err(CommandError::InvalidParams(
                 "a flat shape needs a height".into(),
             ));
         }
         let (_, paths) = doc.selected_paths(|path| path.closed);
+        let custom = if p.profile == Profile::Custom {
+            let (_, open) = doc.selected_paths(|path| !path.closed);
+            let section = open.first().and_then(cmd_two_rail_sweep::Section::new);
+            Some(section.ok_or_else(|| {
+                CommandError::Failed(
+                    "select an open vector for the custom profile with the closed ones".into(),
+                )
+            })?)
+        } else {
+            None
+        };
         let Some(bounds) = paths
             .iter()
             .map(cut_craft_core::geometry::Path::bounds)
@@ -131,6 +178,17 @@ impl Command for CreateShape {
                 deepest * tan * share
             }
             Profile::Flat => p.height,
+            Profile::Custom => {
+                let along = if deepest > 0.0 { d / deepest } else { 0.0 };
+                custom.as_ref().map_or(0.0, |section| {
+                    cmd_two_rail_sweep::height(
+                        &[(0.0, section.clone())],
+                        0.0,
+                        along,
+                        (1.0, false, false),
+                    )
+                })
+            }
         };
         let limit = if p.height > 0.0 {
             p.height
@@ -138,8 +196,9 @@ impl Command for CreateShape {
             f64::INFINITY
         };
         for height in component.heights.iter_mut().filter(|h| !h.is_nan()) {
-            *height = rise(*height).min(limit) + p.base;
+            *height = rise(*height).min(limit);
         }
+        scaled(&mut component, p);
         let mut c = Change::builder(doc);
         c.add_component(component);
         Ok(c.finish())
@@ -153,6 +212,74 @@ mod tests {
     use cut_craft_core::testing::{document_with, square};
 
     cut_craft_core::contract_tests!(CreateShape);
+
+    #[test]
+    fn a_custom_profile_scale_and_total_height() {
+        // a ramp rising 6 from the edge to the middle
+        let ramp = Path::polyline(&[Point::new(0.0, 200.0), Point::new(10.0, 206.0)], false);
+        let p = Params {
+            profile: Profile::Custom,
+            ..Params::default()
+        };
+        let c = shape(vec![square(0.0, 0.0, 40.0), ramp.clone()], &p).unwrap();
+        assert!(
+            near(height(&c, 20.0, 20.0), 6.0, 0.3),
+            "the middle: {}",
+            height(&c, 20.0, 20.0)
+        );
+        assert!(
+            near(height(&c, 10.0, 20.0), 3.0, 0.4),
+            "half way in: {}",
+            height(&c, 10.0, 20.0)
+        );
+        let scaled = shape(
+            vec![square(0.0, 0.0, 40.0), ramp.clone()],
+            &Params {
+                scale: 12.0,
+                ..p.clone()
+            },
+        )
+        .unwrap();
+        assert!(near(height(&scaled, 20.0, 20.0), 12.0, 0.3));
+        let total = shape(
+            vec![square(0.0, 0.0, 40.0), ramp],
+            &Params {
+                total_height: 10.0,
+                base: 4.0,
+                ..p.clone()
+            },
+        )
+        .unwrap();
+        assert!(
+            near(height(&total, 20.0, 20.0), 10.0, 0.3),
+            "base and profile: 10"
+        );
+        assert!(
+            near(height(&total, 0.5, 20.0), 4.0, 0.5),
+            "the base at the edge"
+        );
+        assert!(
+            shape(vec![square(0.0, 0.0, 40.0)], &p).is_err(),
+            "needs its profile"
+        );
+    }
+
+    #[test]
+    fn a_ring_between_two_vectors_rises_from_both_edges() {
+        let p = Params {
+            profile: Profile::Angular,
+            ..Params::default()
+        };
+        let ring = shape(vec![square(0.0, 0.0, 40.0), square(10.0, 10.0, 20.0)], &p).unwrap();
+        assert!(
+            ring.height_at(Point::new(20.0, 20.0))
+                .is_none_or(f64::is_nan),
+            "the hole"
+        );
+        // 5 in from both the outer and the inner edge: the ridge
+        let ridge = height(&ring, 5.0, 20.0);
+        assert!(ridge > height(&ring, 2.0, 20.0) && ridge > height(&ring, 8.0, 20.0));
+    }
 
     /// The component made over `paths` with `params`, or the error.
     fn shape(paths: Vec<Path>, params: &Params) -> Result<Component, String> {

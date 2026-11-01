@@ -45,6 +45,11 @@ pub struct Params {
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     pub depth: f64,
     pub tool: Tool,
+    /// Bigger tools that clear the pocket first, largest first: each makes a toolpath of its
+    /// own and each tool after it cuts only what the ones before it left (rest machining)
+    #[serde(default)]
+    #[schemars(title = "Clearance Tools")]
+    pub clearance_tools: Vec<Tool>,
     #[serde(default)]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub strategy: Strategy,
@@ -97,6 +102,7 @@ impl Default for Params {
             name: "Pocket".into(),
             depth: 3.0,
             tool: Tool::default(),
+            clearance_tools: vec![],
             strategy: Strategy::Offset,
             direction: Direction::Climb,
             allowance: 0.0,
@@ -123,6 +129,41 @@ impl Command for PocketToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        let mut c = Change::builder(doc);
+        if p.clearance_tools.is_empty() {
+            c.add_toolpath(pocket(doc, p)?);
+            return Ok(c.finish());
+        }
+        // each tool, largest first, then the pocket's own; a raster only for the first
+        let tools: Vec<&Tool> = p.clearance_tools.iter().chain([&p.tool]).collect();
+        for (i, &tool) in tools.iter().enumerate() {
+            let own = Params {
+                name: format!("{} [{}]", p.name, i + 1),
+                tool: tool.clone(),
+                clearance_tools: vec![],
+                strategy: if i == 0 { p.strategy } else { Strategy::Offset },
+                ..p.clone()
+            };
+            let mut toolpath = pocket(doc, &own)?;
+            if i > 0 {
+                let rest = cut_craft_core::rest::Rest {
+                    after: tools[..i].iter().map(|&t| t.clone()).collect(),
+                    ..Default::default()
+                };
+                toolpath.params["rest"] =
+                    serde_json::to_value(&rest).expect("rest settings serialise");
+                let params = toolpath.params.clone();
+                cut_craft_core::rest::apply(&doc.job, &mut toolpath, &params)?;
+            }
+            c.add_toolpath(toolpath);
+        }
+        Ok(c.finish())
+    }
+}
+
+/// The pocket for `p`'s own tool.
+fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
+    {
         ensure_positive("depth", p.depth)?;
         ensure_positive("tool diameter", p.tool.diameter)?;
         ensure_positive("pass depth", p.tool.pass_depth)?;
@@ -208,15 +249,13 @@ impl Command for PocketToolpath {
         if p.project_onto_model {
             moves = project_onto_model(doc, &p.tool, &moves)?;
         }
-        let mut c = Change::builder(doc);
-        c.add_toolpath(made_by::<Self>(
+        Ok(made_by::<PocketToolpath>(
             p,
             p.name.clone(),
             p.tool.clone(),
             ids,
             moves,
-        ));
-        Ok(c.finish())
+        ))
     }
 }
 
@@ -304,6 +343,46 @@ mod tests {
         );
         assert_eq!(depths.first(), Some(&-3.0));
         assert_eq!(depths.last(), Some(&-6.0));
+    }
+
+    #[test]
+    fn clearance_tools_clear_first_and_the_pocket_tool_cuts_only_what_they_left() {
+        use cut_craft_core::testing::document_with;
+        let mill = |d: f64| Tool {
+            name: format!("{d} mm End Mill"),
+            diameter: d,
+            ..Tool::default()
+        };
+        let p = Params {
+            tool: mill(2.0),
+            clearance_tools: vec![mill(12.0)],
+            ..Params::default()
+        };
+        let mut doc = document_with(vec![square(0.0, 0.0, 40.0)]);
+        doc.apply(&PocketToolpath::run(&doc, &p).unwrap()).unwrap();
+        let made: Vec<&Toolpath> = doc.toolpaths.values().collect();
+        assert_eq!(made.len(), 2);
+        assert_eq!(made[0].name, "Pocket [1]");
+        assert_eq!(made[0].tool.diameter, 12.0);
+        assert_eq!(made[1].name, "Pocket [2]");
+        assert_eq!(made[1].tool.diameter, 2.0);
+        // the small tool only goes where the big one could not: far less than a full pocket
+        let alone = pocket(
+            40.0,
+            &Params {
+                tool: mill(2.0),
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            made[1].moves.len() * 2 < alone.moves.len(),
+            "{} vs {}",
+            made[1].moves.len(),
+            alone.moves.len()
+        );
+        // and it keeps its rest settings, so recalculating it does the same
+        assert!(cut_craft_core::rest::Rest::of(&made[1].params).is_some());
     }
 
     #[test]

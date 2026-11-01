@@ -21,7 +21,7 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_draw_circle::DrawCircle>();
     r.add_interactive::<cmd_draw_ellipse::DrawEllipse>();
     r.add_interactive::<cmd_draw_polygon::DrawPolygon>();
-    r.add::<cmd_draw_polyline::DrawPolyline>();
+    r.add_interactive::<cmd_draw_polyline::DrawPolyline>();
     r.add_interactive::<cmd_draw_rectangle::DrawRectangle>();
     r.add_interactive::<cmd_draw_star::DrawStar>();
     r.add::<cmd_mirror::Mirror>();
@@ -59,6 +59,9 @@ pub fn registry() -> Registry {
     r.add::<cmd_vcarve_inlay_toolpath::VcarveInlayToolpath>();
     r.add::<cmd_prism_toolpath::PrismToolpath>();
     r.add::<cmd_texture_toolpath::TextureToolpath>();
+    r.add::<cmd_toolpath_group::GroupToolpaths>();
+    r.add::<cmd_toolpath_group::RenameToolpathGroup>();
+    r.add::<cmd_toolpath_group::UngroupToolpaths>();
     r.add::<cmd_quick_engrave_toolpath::QuickEngraveToolpath>();
     r.add::<cmd_keyhole_toolpath::KeyholeToolpath>();
     r.add::<cmd_drag_knife_toolpath::DragKnifeToolpath>();
@@ -72,6 +75,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_laser_picture_toolpath::LaserPictureToolpath>();
     r.add::<cmd_array_copy_toolpath::ArrayCopyToolpath>();
     r.add::<cmd_merged_toolpath::MergedToolpath>();
+    r.add::<cmd_merged_toolpath::UngroupMergedToolpath>();
     r.add::<cmd_inlay_toolpath::InlayToolpath>();
     r.add::<cmd_space_horizontally::SpaceHorizontally>();
     r.add::<cmd_space_vertically::SpaceVertically>();
@@ -88,7 +92,9 @@ pub fn registry() -> Registry {
     r.add::<cmd_bitmap_properties::BitmapProperties>();
     r.add::<cmd_group::Group>();
     r.add::<cmd_ungroup::Ungroup>();
+    r.add::<cmd_ungroup::UngroupOntoCurrentLayer>();
     r.add_interactive::<cmd_draw_text::DrawText>();
+    r.add::<cmd_draw_text::BreakTextIntoLines>();
     r.add::<cmd_fit_curves_to_vectors::FitCurvesToVectors>();
     r.add::<cmd_component_boundary::ComponentBoundary>();
     r.add::<cmd_trace_bitmap::TraceBitmap>();
@@ -166,6 +172,14 @@ pub fn registry() -> Registry {
     r.add::<cmd_convert_text_to_curves::ConvertTextToCurves>();
     r.add::<cmd_vector_boundary::VectorBoundary>();
     r.add::<cmd_auto_layout_text::AutoLayoutText>();
+    r.add::<cmd_reorder_toolpath::ReorderToolpath>();
+    r.add::<cmd_smooth_point::SmoothPoint>();
+    r.add::<cmd_move_nodes::MoveNodes>();
+    r.add::<cmd_trim_objects::TrimObjects>();
+    r.add::<cmd_reorder_layer::ReorderLayer>();
+    r.add::<cmd_merge_visible_layers::MergeVisibleLayers>();
+    r.add::<cmd_send_to_sheet::SendToSheet>();
+    r.add::<cmd_copy_toolpath_to_sheet::CopyToolpathToSheet>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();

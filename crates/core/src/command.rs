@@ -96,6 +96,12 @@ pub trait Command: 'static {
         Self::Params::default()
     }
 
+    /// The settings that draw `path` again, for a command that draws shapes like it (so its
+    /// form can edit a shape drawn earlier); `current` gives what the shape does not say.
+    fn params_from(_path: &crate::geometry::Path, _current: &Self::Params) -> Option<Self::Params> {
+        None
+    }
+
     fn run(doc: &Document, params: &Self::Params) -> Result<Change, CommandError>;
 }
 
@@ -144,6 +150,8 @@ pub trait DynCommand {
     fn schema(&self) -> Value;
     fn default_params(&self) -> Value;
     fn initial_params(&self, doc: &Document) -> Value;
+    /// [`Command::params_from`], as JSON; `current` is the form's settings.
+    fn params_from(&self, path: &crate::geometry::Path, current: &Value) -> Option<Value>;
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError>;
     /// Whether the command can be drawn with the mouse.
     fn interactive(&self) -> bool;
@@ -184,6 +192,12 @@ impl<C: Command> DynCommand for Erased<C> {
 
     fn initial_params(&self, doc: &Document) -> Value {
         serde_json::to_value(C::initial_params(doc)).expect("command params must serialize")
+    }
+
+    fn params_from(&self, path: &crate::geometry::Path, current: &Value) -> Option<Value> {
+        let current = C::Params::deserialize(current).unwrap_or_default();
+        let p = C::params_from(path, &current)?;
+        Some(serde_json::to_value(p).expect("command params must serialize"))
     }
 
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError> {
@@ -236,6 +250,19 @@ impl Registry {
         );
         self.commands.push(Box::new(command));
         self
+    }
+
+    /// The drawing command that draws `path`, with the settings that draw it again (E, and
+    /// Shift-click in a drawing form).
+    pub fn drawn_by(
+        &self,
+        doc: &Document,
+        path: &crate::geometry::Path,
+    ) -> Option<(&'static str, Value)> {
+        self.commands.iter().find_map(|c| {
+            let p = c.params_from(path, &c.initial_params(doc))?;
+            Some((c.id(), p))
+        })
     }
 
     pub fn get(&self, id: &str) -> Option<&dyn DynCommand> {
@@ -319,18 +346,30 @@ impl Registry {
             ))
         })?;
         let mut sources = doc.clone();
-        sources.selection = toolpath
-            .vectors
-            .iter()
-            .copied()
-            .filter(|v| doc.vectors.contains_key(v))
-            .collect();
-        // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
-        if sources.selection.is_empty() && !toolpath.vectors.is_empty() {
-            return Err(CommandError::Failed(format!(
-                "the vectors {} was made from have been deleted",
-                toolpath.name
-            )));
+        let settings = params.unwrap_or(&toolpath.params);
+        // a toolpath with a Vector Selector takes whatever vectors pass it now
+        if let Some(selector) = crate::selector::Selector::of(settings) {
+            sources.selection = selector.picked(doc).into_iter().collect();
+            if sources.selection.is_empty() {
+                return Err(CommandError::Failed(format!(
+                    "no vectors pass {}'s Vector Selector",
+                    toolpath.name
+                )));
+            }
+        } else {
+            sources.selection = toolpath
+                .vectors
+                .iter()
+                .copied()
+                .filter(|v| doc.vectors.contains_key(v))
+                .collect();
+            // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
+            if sources.selection.is_empty() && !toolpath.vectors.is_empty() {
+                return Err(CommandError::Failed(format!(
+                    "the vectors {} was made from have been deleted",
+                    toolpath.name
+                )));
+            }
         }
         let fresh = strategy
             .run_json(&sources, params.unwrap_or(&toolpath.params))?
@@ -345,6 +384,15 @@ impl Registry {
             })?;
         let mut fresh = fresh;
         crate::rest::apply(&doc.job, &mut fresh, params.unwrap_or(&toolpath.params))?;
+        if let Some(selector) = settings.get("selector") {
+            fresh.params["selector"] = selector.clone();
+        }
+        // its preview colour and notes are the toolpath's own, not its settings
+        for key in crate::toolpath::OWN_PARAMS {
+            if let Some(kept) = toolpath.params.get(key) {
+                fresh.params[key] = kept.clone();
+            }
+        }
         let mut c = Change::builder(doc);
         if &fresh != toolpath {
             c.replace_toolpath(id, fresh);

@@ -147,6 +147,7 @@ mod tests {
             grey: vec![0; 100],
             rect: Rect::new(Point::ZERO, Point::new(10.0, 10.0)),
             depth: Vec::new(),
+            rgb: Vec::new(),
         });
         let frame = c.add(square(2.0, 2.0, 4.0));
         c.select([frame]);

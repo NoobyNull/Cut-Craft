@@ -108,6 +108,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "subtract_vectors",
                 "overlap_intersect",
                 "interactive_vector_trim",
+                "trim_objects",
                 "close_extend_vector",
                 "fit_curves_to_vectors",
                 "vector_validator",
@@ -285,10 +286,28 @@ pub struct MenuSystem {
 }
 
 /// The node-editing popup for the node or span at `at` (Aspire's popup menus 142, 317, 635).
-pub fn node_menu(at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
-    vec![
+/// Edit Polyline's action: drawing on from an open vector's end node, `edit_polyline:` then
+/// the vector's id and `start` or `end`.
+pub const EDIT_POLYLINE: &str = "edit_polyline:";
+
+pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
+    // Node Position starts at the node itself, not at the click near it
+    let node = at
+        .path(doc)
+        .ok()
+        .and_then(|path| Some(cut_craft_core::nodes::nodes(path)[at.node(path).ok()?]))
+        .map_or(at.at, |p| cut_craft_core::params::Xy::new(p.x, p.y));
+    let mut items = vec![
         MenuItem::run::<cmd_insert_point::InsertPoint>("Insert Point", at),
         MenuItem::run::<cmd_delete_point::DeletePoint>("Delete Point", at),
+        MenuItem::run::<cmd_smooth_point::SmoothPoint>("Smooth Point", at),
+        MenuItem::form::<cmd_move_node::MoveNode>(
+            "Node Position...",
+            &cmd_move_node::Params {
+                from: at.clone(),
+                to: node,
+            },
+        ),
         MenuItem::separator(),
         MenuItem::run::<cmd_convert_span::SpanToLine>("Convert Span to Line", at),
         MenuItem::run::<cmd_convert_span::SpanToBezier>("Convert Span to Bezier", at),
@@ -298,9 +317,27 @@ pub fn node_menu(at: &cut_craft_core::nodes::NodeAt) -> Vec<MenuItem> {
         MenuItem::run::<cmd_make_start_point::MakeStartPoint>("Make Start Point", at),
         MenuItem::run::<cmd_reverse_direction::ReverseDirection>("Reverse Direction", at),
         MenuItem::run::<cmd_close_with_line::CloseWithLine>("Close With a Line", at),
+    ];
+    // an open vector's end node draws on from there
+    let end = at.path(doc).ok().filter(|p| !p.closed).and_then(|path| {
+        let last = cut_craft_core::nodes::nodes(path).len().checked_sub(1)?;
+        match at.node(path).ok()? {
+            0 => Some("start"),
+            n if n == last => Some("end"),
+            _ => None,
+        }
+    });
+    if let Some(end) = end {
+        items.push(MenuItem::with_action(
+            "Edit Polyline",
+            &format!("{EDIT_POLYLINE}{}:{end}", at.vector.0),
+        ));
+    }
+    items.extend([
         MenuItem::separator(),
         MenuItem::with_action("Exit Node Editing", "node_edit"),
-    ]
+    ]);
+    items
 }
 
 impl MenuSystem {
@@ -441,15 +478,27 @@ impl MenuSystem {
             MenuItem::with_action("Overlap", "overlap_intersect"),
             edit("Join Vectors"),
             MenuItem::with_action("Group", "group"),
-            MenuItem::with_action("Ungroup", "ungroup"),
+            MenuItem::submenu(
+                "Ungroup",
+                vec![
+                    MenuItem::with_action("Ungroup onto Original Object Layers", "ungroup"),
+                    MenuItem::with_action(
+                        "Ungroup onto Current Layer",
+                        "ungroup_onto_current_layer",
+                    ),
+                ],
+            ),
             MenuItem {
                 name: "Align".into(),
                 ..edit("Align Selected Objects")
             },
+            MenuItem::submenu("Text", text_items(doc)),
             MenuItem::separator(),
             MenuItem::with_action("Object Properties", "object_properties"),
             MenuItem::with_action("Bitmap Properties", "bitmap_properties")
                 .enabled(!doc.selected_bitmaps.is_empty()),
+            MenuItem::separator(),
+            guides_submenu(),
         ]
     }
 
@@ -457,6 +506,50 @@ impl MenuSystem {
     pub fn items(&self) -> Vec<&MenuItem> {
         self.menus.iter().flat_map(|m| leaves(&m.items)).collect()
     }
+}
+
+/// The 2D view's menu on a guide: its properties, locking it, deleting it.
+pub fn guide_menu(index: usize, locked: bool) -> Vec<MenuItem> {
+    vec![
+        MenuItem::with_action("Guide Properties…", &format!("{GUIDE}props:{index}")),
+        MenuItem::with_action(
+            if locked { "Unlock Guide" } else { "Lock Guide" },
+            &format!("{GUIDE}lock:{index}"),
+        ),
+        MenuItem::with_action("Delete Guide", &format!("{GUIDE}delete:{index}")),
+    ]
+}
+
+/// The 2D view's Guidelines submenu: a guide inserted where the menu opened.
+pub fn guides_submenu() -> MenuItem {
+    MenuItem::submenu(
+        "Guidelines",
+        vec![
+            MenuItem::with_action("Insert Horizontal Guide", &format!("{GUIDE}insert:h")),
+            MenuItem::with_action("Insert Vertical Guide", &format!("{GUIDE}insert:v")),
+            MenuItem::with_action("Insert Angled Guide…", &format!("{GUIDE}insert:a")),
+        ],
+    )
+}
+
+/// The selection's Text submenu: editing the selected text, and breaking a block of lines
+/// into a text per line.
+fn text_items(doc: &Document) -> Vec<MenuItem> {
+    let group = cmd_draw_text::selected_text_group(doc);
+    let lines = group
+        .and_then(|g| doc.texts.get(&g))
+        .and_then(|t| t["text"].as_str())
+        .map_or(0, |t| t.lines().count());
+    vec![
+        MenuItem::with_action("Edit Text", "edit_text"),
+        MenuItem::run::<cmd_draw_text::BreakTextIntoLines>(
+            "Break Block into Lines",
+            &cmd_draw_text::BreakParams {
+                group: group.unwrap_or(0),
+            },
+        )
+        .enabled(lines > 1),
+    ]
 }
 
 /// Every command item of `items`, submenus flattened.
@@ -620,22 +713,38 @@ fn delete(items: Items, item: u64, which: &[(&str, cmd_delete_items::Which)]) ->
 
 /// Aspire's toolpath menu (MENU 968) for toolpath `id`. Right-clicking a toolpath selects it,
 /// so Recalculate ▸ This and Preview act on it.
-pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
+pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
     use cmd_delete_items::Which;
     let [show, hide] = show_hide(Items::Toolpaths, id.0);
     let properties = cmd_toolpath_properties::Params {
         toolpath: id,
         name: toolpath.name.clone(),
         visible: toolpath.visible,
+        preview: cmd_toolpath_properties::PreviewFill::Unchanged,
+        notes: None,
+    };
+    let no_fill = cmd_toolpath_properties::Params {
+        preview: cmd_toolpath_properties::PreviewFill::NoFill,
+        ..properties.clone()
     };
     vec![
         show,
         hide,
         MenuItem::form::<cmd_toolpath_properties::ToolpathProperties>("Rename", &properties),
+        MenuItem::run::<cmd_toolpath_properties::ToolpathProperties>(
+            "Preview Color: No Fill",
+            &no_fill,
+        ),
         MenuItem::run::<cmd_duplicate_toolpath::DuplicateToolpath>(
             "Duplicate",
             &cmd_duplicate_toolpath::Params { toolpath: id },
         ),
+        MenuItem::submenu("Group", group_items(doc, id, toolpath)),
+        MenuItem::run::<cmd_merged_toolpath::UngroupMergedToolpath>(
+            "Ungroup",
+            &cmd_merged_toolpath::UngroupParams { toolpath: id },
+        )
+        .enabled(toolpath.strategy == "merged_toolpath"),
         MenuItem::separator(),
         MenuItem::submenu(
             "Recalculate",
@@ -646,6 +755,19 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
             ],
         ),
         MenuItem::with_action("Preview", "preview_toolpath"),
+        MenuItem::submenu(
+            "Copy to Sheet",
+            other_sheets(doc, |sheet| {
+                MenuItem::run::<cmd_copy_toolpath_to_sheet::CopyToolpathToSheet>(
+                    &doc.sheets[sheet].name,
+                    &cmd_copy_toolpath_to_sheet::Params {
+                        toolpath: id,
+                        sheet,
+                    },
+                )
+            }),
+        )
+        .enabled(doc.sheets.len() > 1),
         delete(
             Items::Toolpaths,
             id.0,
@@ -657,6 +779,68 @@ pub fn toolpath_menu(id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
             ],
         ),
     ]
+}
+
+/// A toolpath's Group submenu: this toolpath or the shown ones into a new group, a new empty
+/// group, this toolpath into another group, or out of its group.
+fn group_items(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<MenuItem> {
+    use cmd_toolpath_group::{GroupParams, GroupToolpaths};
+    let into = |name: &str, toolpaths: Vec<EntityId>, group: &str| {
+        MenuItem::run::<GroupToolpaths>(
+            name,
+            &GroupParams {
+                toolpaths,
+                group: group.to_owned(),
+            },
+        )
+    };
+    let new = doc.next_toolpath_group_name();
+    let shown = doc
+        .toolpaths
+        .iter()
+        .filter(|(_, t)| t.visible)
+        .map(|(&id, _)| id)
+        .collect();
+    let others: Vec<MenuItem> = doc
+        .toolpath_groups_in_use()
+        .iter()
+        .filter(|g| toolpath.group.as_ref() != Some(g))
+        .map(|g| into(g, vec![id], g))
+        .collect();
+    vec![
+        into("Group This", vec![id], &new),
+        into("Group Visible", shown, &new),
+        into("Create Empty Group", vec![], &new),
+        MenuItem::submenu("Move to Group", others.clone()).enabled(!others.is_empty()),
+        into("Remove from Group", vec![id], "").enabled(toolpath.group.is_some()),
+    ]
+}
+
+/// The toolpath list's menu on a group: rename it, take it apart, or delete it with its
+/// toolpaths.
+pub fn toolpath_group_menu(group: &str) -> Vec<MenuItem> {
+    use cmd_toolpath_group::{RenameParams, RenameToolpathGroup, UngroupParams, UngroupToolpaths};
+    let rename = RenameParams {
+        group: group.to_owned(),
+        name: group.to_owned(),
+    };
+    let ungroup = |delete_toolpaths| UngroupParams {
+        group: group.to_owned(),
+        delete_toolpaths,
+    };
+    vec![
+        MenuItem::form::<RenameToolpathGroup>("Rename", &rename),
+        MenuItem::run::<UngroupToolpaths>("Ungroup", &ungroup(false)),
+        MenuItem::run::<UngroupToolpaths>("Delete Group and Its Toolpaths", &ungroup(true)),
+    ]
+}
+
+/// One item for each sheet but the active one.
+fn other_sheets(doc: &Document, item: impl Fn(usize) -> MenuItem) -> Vec<MenuItem> {
+    (0..doc.sheets.len())
+        .filter(|&i| i != doc.active_sheet)
+        .map(item)
+        .collect()
 }
 
 /// Aspire's level menu (MENU 1046) for level `id`: combine mode ticked, clipping, mirror mode
@@ -721,6 +905,11 @@ pub fn favourites_menu(page: crate::pages::Page, only: bool) -> Vec<MenuItem> {
 pub const REIMPORT_MODEL: &str = "reimport_model:";
 /// `select_component:<id>`: the 3D view's menu lists the components under the click.
 pub const SELECT_COMPONENT: &str = "select_component:";
+/// A guide action: then `props:<index>`, `lock:<index>`, `delete:<index>`, or `insert:h`,
+/// `insert:v` or `insert:a` (a horizontal, vertical or angled guide where the menu opened).
+pub const GUIDE: &str = "guide:";
+/// Save as Sculpting Brush on a component: then its id.
+pub const SAVE_BRUSH: &str = "save_brush:";
 
 /// The combine modes in Aspire's order, each with its icon.
 pub const COMBINE_MODES: [(&str, Combine, &str); 5] = [
@@ -981,6 +1170,7 @@ pub fn component_menu(doc: &Document, id: EntityId, component: &Component) -> Ve
             "Delete",
             &cmd_delete_component::Params { component: id },
         ),
+        MenuItem::with_action("Save as Sculpting Brush…", &format!("{SAVE_BRUSH}{}", id.0)),
         move_to_level(doc, component),
         MenuItem::form::<cmd_group_components::GroupComponents>(
             "Group",
@@ -1041,6 +1231,14 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
         };
         MenuItem::run::<SheetProperties>(name, &params).enabled(s.visible != visible)
     };
+    let send = |name: &str, move_vectors: bool| {
+        let params = cmd_send_to_sheet::Params {
+            sheet,
+            move_vectors,
+        };
+        MenuItem::run::<cmd_send_to_sheet::SendToSheet>(name, &params)
+            .enabled(sheet != doc.active_sheet && !doc.selection.is_empty())
+    };
     vec![
         MenuItem::run::<cmd_activate_sheet::ActivateSheet>(
             "Activate",
@@ -1050,7 +1248,16 @@ pub fn sheet_menu(doc: &Document, sheet: usize) -> Vec<MenuItem> {
         shown("Show", true),
         shown("Hide", false),
         MenuItem::separator(),
-        MenuItem::with_action("Insert New Sheet", "add_sheet"),
+        send("Copy Selected Vectors Here", false),
+        send("Move Selected Vectors Here", true),
+        MenuItem::separator(),
+        MenuItem::form::<cmd_add_sheet::AddSheet>(
+            "Insert New Sheet",
+            &cmd_add_sheet::Params {
+                like: Some(sheet),
+                ..cmd_add_sheet::AddSheet::initial_params(doc)
+            },
+        ),
         // ponytail: a sheet is edited while active, in Job Setup; Aspire's Sheet Editor is that form
         MenuItem::with_action("Edit Sheet...", "job_setup").enabled(sheet == doc.active_sheet),
         MenuItem::form::<SheetProperties>("Rename", &props),
@@ -1096,7 +1303,11 @@ pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
             ],
         ),
         MenuItem::form::<LayerProperties>("Rename", &layer.clone().into()),
-        MenuItem::with_action("Merge Visible", "merge_visible_layers").enabled(false),
+        MenuItem::run::<cmd_merge_visible_layers::MergeVisibleLayers>(
+            "Merge Visible",
+            &cmd_merge_visible_layers::Params { layer: id },
+        )
+        .enabled(doc.layers.iter().any(|l| l.visible && l.id != id)),
         MenuItem::separator(),
         MenuItem::run::<cmd_select_layer_vectors::SelectLayerVectors>(
             "Select Layer Vectors",
@@ -1131,16 +1342,22 @@ impl MenuSystem {
         let sub = MenuItem::submenu;
         let sep = MenuItem::separator;
         let a = MenuItem::with_action;
-        let space_h = |name: &str, order| {
+        let space_h = |name: &str, order, inside_last_vector| {
             MenuItem::run::<cmd_space_horizontally::SpaceHorizontally>(
                 name,
-                &cmd_space_horizontally::Params { order },
+                &cmd_space_horizontally::Params {
+                    order,
+                    inside_last_vector,
+                },
             )
         };
-        let space_v = |name: &str, order| {
+        let space_v = |name: &str, order, inside_last_vector| {
             MenuItem::run::<cmd_space_vertically::SpaceVertically>(
                 name,
-                &cmd_space_vertically::Params { order },
+                &cmd_space_vertically::Params {
+                    order,
+                    inside_last_vector,
+                },
             )
         };
         let menu = |name: &str, items: Vec<MenuItem>| Menu {
@@ -1204,6 +1421,7 @@ impl MenuSystem {
                         k("Paste", "Ctrl+V"),
                         k("Paste in Place", "Ctrl+Shift+V"),
                         k("Delete", "Del"),
+                        k("Edit Object", "E"),
                         sep(),
                         k("Find Tool...", "Ctrl+K"),
                         sep(),
@@ -1233,10 +1451,12 @@ impl MenuSystem {
                                 i("Center Horizontally"),
                                 i("Center Vertically"),
                                 sep(),
-                                space_h("Left To Right", SpaceH::LeftToRight),
-                                space_h("Right To Left", SpaceH::RightToLeft),
-                                space_v("Top To Bottom", SpaceV::TopToBottom),
-                                space_v("Bottom To Top", SpaceV::BottomToTop),
+                                space_h("Left To Right", SpaceH::LeftToRight, false),
+                                space_h("Right To Left", SpaceH::RightToLeft, false),
+                                space_v("Top To Bottom", SpaceV::TopToBottom, false),
+                                space_v("Bottom To Top", SpaceV::BottomToTop, false),
+                                space_h("Horizontally Inside Last Vector", SpaceH::AsPlaced, true),
+                                space_v("Vertically Inside Last Vector", SpaceV::AsPlaced, true),
                             ],
                         ),
                         k("Join Vectors", "J"),
@@ -1439,6 +1659,7 @@ impl MenuSystem {
                         MenuItem::with_action("Wrapped Fluting Layout", "wrapped_fluting_layout"),
                         MenuItem::with_action("Wrapped Spiral Layout", "wrapped_spiral_layout"),
                         MenuItem::with_action("Celtic Weave Creator", "celtic_weave"),
+                        MenuItem::with_action("Job Setup Sheet Editor...", "job_sheet_editor"),
                     ],
                 ),
                 menu(
@@ -1555,7 +1776,8 @@ mod menu_tests {
         for item in align
             .children
             .iter()
-            .filter(|i| !i.is_separator() && !i.name.contains(" To "))
+            // the spacing items run their command with its settings
+            .filter(|i| !i.is_separator() && !i.action.starts_with("run:"))
         {
             assert!(
                 registry.get(&item.action).is_some(),

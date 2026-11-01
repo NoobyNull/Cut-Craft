@@ -40,35 +40,144 @@ pub enum Align {
     Right,
 }
 
+/// A block's spacing changed in place (Aspire's kerning and line spacing in the 2D view):
+/// extra room after given letters, and the line pitch as a factor of the font's.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Spacing {
+    /// Extra room after letter `index` of line `line`, in the text's units: (line, index, extra)
+    #[serde(default)]
+    pub kerning: Vec<(usize, usize, f64)>,
+    /// Baseline to baseline, as a factor of the font's own pitch
+    #[serde(default = "one")]
+    pub line_pitch: f64,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+impl Default for Spacing {
+    fn default() -> Self {
+        Self {
+            kerning: vec![],
+            line_pitch: 1.0,
+        }
+    }
+}
+
+impl Spacing {
+    /// The extra room after letter `index` of `line`.
+    #[must_use]
+    pub fn extra(&self, line: usize, index: usize) -> f64 {
+        self.kerning
+            .iter()
+            .filter(|k| k.0 == line && k.1 == index)
+            .map(|k| k.2)
+            .sum()
+    }
+
+    /// All the extra room in `line`.
+    #[must_use]
+    pub fn extra_in_line(&self, line: usize) -> f64 {
+        self.kerning
+            .iter()
+            .filter(|k| k.0 == line)
+            .map(|k| k.2)
+            .sum()
+    }
+
+    /// Adds `by` to the room after letter `index` of `line`.
+    pub fn kern(&mut self, line: usize, index: usize, by: f64) {
+        match self
+            .kerning
+            .iter_mut()
+            .find(|k| k.0 == line && k.1 == index)
+        {
+            Some(k) => k.2 += by,
+            None => self.kerning.push((line, index, by)),
+        }
+    }
+}
+
+/// A glyph as a block lays it out: its line, its index among the line's characters, its left
+/// and right along the baseline and the baseline's height, in the text's units.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placed {
+    pub line: usize,
+    pub index: usize,
+    pub left: f64,
+    pub right: f64,
+    pub baseline: f64,
+}
+
 impl Font {
     /// The text as paths, `height` tall per capital letter. The anchor is where the last line's
     /// baseline meets the block's left edge, centre or right edge, following `align`.
     // ponytail: anchor on the last baseline [inf]; Aspire's own anchor rule is not in its help
     pub fn layout(&self, text: &str, height: f64, align: Align, anchor: Point) -> Vec<Path> {
+        self.layout_spaced(text, height, align, anchor, &Spacing::default())
+    }
+
+    /// [`Font::layout`] with the block's spacing changed in place: `spacing`'s extra room
+    /// after given letters, and its line pitch.
+    pub fn layout_spaced(
+        &self,
+        text: &str,
+        height: f64,
+        align: Align,
+        anchor: Point,
+        spacing: &Spacing,
+    ) -> Vec<Path> {
         let scale = height / self.cap_height;
+        self.placed(text, height, align, anchor, spacing)
+            .into_iter()
+            .flat_map(|(at, glyph)| {
+                let place = DAffine2::from_translation(Point::new(at.left, at.baseline))
+                    * DAffine2::from_scale(glam::DVec2::splat(scale));
+                glyph.paths.iter().map(move |p| p.transformed(&place))
+            })
+            .collect()
+    }
+
+    /// Where each glyph of the block sits, laid out as [`Font::layout_spaced`] lays it, with
+    /// the glyph: for finding what a click in the text falls between.
+    pub fn placed(
+        &self,
+        text: &str,
+        height: f64,
+        align: Align,
+        anchor: Point,
+        spacing: &Spacing,
+    ) -> Vec<(Placed, &Glyph)> {
+        let scale = height / self.cap_height;
+        let pitch = self.line_pitch * spacing.line_pitch;
         let lines: Vec<&str> = text.lines().collect();
         let mut out = Vec::new();
         for (row, line) in lines.iter().enumerate() {
-            let width = self.width(line);
+            let width = self.width(line) + spacing.extra_in_line(row) / scale;
             let x0 = match align {
                 Align::Left => 0.0,
                 Align::Center => -width / 2.0,
                 Align::Right => -width,
             };
             #[expect(clippy::cast_precision_loss, reason = "line counts are small")]
-            let y = (lines.len() - 1 - row) as f64 * self.line_pitch;
+            let y = (lines.len() - 1 - row) as f64 * pitch;
             let mut x = x0;
             let mut prev = None;
-            for ch in line.chars() {
+            for (index, ch) in line.chars().enumerate() {
                 let Some(glyph) = self.glyph(ch) else {
                     continue;
                 };
                 x += prev.map_or(0.0, |before| self.kern(before, ch));
-                let place = DAffine2::from_translation(anchor)
-                    * DAffine2::from_scale(glam::DVec2::splat(scale))
-                    * DAffine2::from_translation(glam::DVec2::new(x, y));
-                out.extend(glyph.paths.iter().map(|p| p.transformed(&place)));
-                x += glyph.advance;
+                let at = Placed {
+                    line: row,
+                    index,
+                    left: anchor.x + x * scale,
+                    right: anchor.x + (x + glyph.advance) * scale,
+                    baseline: anchor.y + y * scale,
+                };
+                out.push((at, glyph));
+                x += glyph.advance + spacing.extra(row, index) / scale;
                 prev = Some(ch);
             }
         }
@@ -472,4 +581,34 @@ fn a_system_true_type_font_gives_capitals_of_the_asked_height() {
         "bold falls back to the nearest face"
     );
     assert!(load("No Such Font Anywhere", false, false, "H").is_err());
+}
+
+#[cfg(test)]
+#[test]
+fn spacing_adds_room_after_a_letter_and_changes_the_line_pitch() {
+    let font = load("Test Boxes", false, false, "HI").unwrap();
+    let plain = font.placed(
+        "HI\nHI",
+        10.0,
+        Align::Left,
+        Point::ZERO,
+        &Spacing::default(),
+    );
+    let mut spacing = Spacing::default();
+    spacing.kern(0, 0, 3.0);
+    spacing.kern(0, 0, -1.0);
+    spacing.line_pitch = 2.0;
+    let spaced = font.placed("HI\nHI", 10.0, Align::Left, Point::ZERO, &spacing);
+    assert_eq!(spacing.extra(0, 0), 2.0);
+    // the top line's second letter moves 2 along; the bottom line is as it was
+    assert!((spaced[1].0.left - plain[1].0.left - 2.0).abs() < 1e-9);
+    assert!((spaced[3].0.left - plain[3].0.left).abs() < 1e-9);
+    // the top line sits twice as high over the bottom one
+    assert!((spaced[0].0.baseline - 2.0 * plain[0].0.baseline).abs() < 1e-9);
+    assert_eq!(spaced[2].0.baseline, 0.0);
+    let paths = font.layout_spaced("HI", 10.0, Align::Left, Point::ZERO, &spacing);
+    assert_eq!(
+        paths.len(),
+        font.layout("HI", 10.0, Align::Left, Point::ZERO).len()
+    );
 }

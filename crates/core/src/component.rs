@@ -97,6 +97,10 @@ pub struct Component {
     /// parent's, the job's (added with the 3D view's component settings).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colour: Option<[u8; 3]>,
+    /// A texture area: the hidden seed it repeats and how, so it is edited again from the
+    /// form and tiled again when its box changes (added with live texture areas).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub texture: Option<crate::texture_area::Texture>,
 }
 
 /// Where an imported model came from: it can be imported again, its settings changed, only
@@ -153,18 +157,28 @@ impl Source {
 
     /// The file found, read and checked to be the one imported.
     pub fn verified(&self, folder: Option<&std::path::Path>) -> Result<std::path::PathBuf, String> {
+        match self.located(folder)? {
+            (path, false) => Ok(path),
+            (path, true) => Err(format!(
+                "{} has changed since it was imported",
+                path.display()
+            )),
+        }
+    }
+
+    /// The file found and read: where it is, and whether it has changed since it was
+    /// imported (a re-import then takes it as it is now).
+    pub fn located(
+        &self,
+        folder: Option<&std::path::Path>,
+    ) -> Result<(std::path::PathBuf, bool), String> {
         let name = self.path.display();
         let path = self
             .find(folder)
             .ok_or_else(|| format!("{name} is no longer where it was imported from"))?;
         let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        if Self::md5(&bytes) != self.md5 {
-            return Err(format!(
-                "{} has changed since it was imported",
-                path.display()
-            ));
-        }
-        Ok(path)
+        let changed = Self::md5(&bytes) != self.md5;
+        Ok((path, changed))
     }
 }
 
@@ -437,6 +451,7 @@ impl Component {
             group: None,
             source: None,
             colour: None,
+            texture: None,
         }
     }
 
@@ -487,6 +502,7 @@ impl Component {
             group: None,
             source: None,
             colour: None,
+            texture: None,
         }
     }
 
@@ -588,6 +604,7 @@ impl Component {
         out.shaping = self.shaping.transformed(t);
         out.level = self.level;
         out.group.clone_from(&self.group);
+        out.texture.clone_from(&self.texture);
         out
     }
 

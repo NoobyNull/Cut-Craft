@@ -23,12 +23,16 @@ pub mod polygon;
 pub mod random;
 pub mod rest;
 pub mod selection;
+pub mod selector;
 pub mod simplify;
 pub mod simulation;
 pub mod snap;
+pub mod spell;
 #[cfg(feature = "testing")]
 pub mod testing;
+pub mod texture_area;
 pub mod tiling;
+pub mod tool_names;
 pub mod toolpath;
 pub mod trace;
 pub mod vfont;

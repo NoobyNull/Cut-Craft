@@ -91,6 +91,7 @@ mod tests {
             visible: true,
             power: vec![],
             stale: false,
+            group: None,
         }
     }
 

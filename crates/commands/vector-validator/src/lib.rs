@@ -23,6 +23,12 @@ pub struct Params {
     pub open: bool,
     /// Instead of selecting problems, remove the zero-length spans from the vectors checked
     pub fix_zero_length_spans: bool,
+    /// Checks as V-carving needs them: crossings and overlaps within one text are let be (a
+    /// font's letters often overlap, and V-carving cuts them fine), and open vectors are
+    /// found, since V-carving needs closed ones
+    #[serde(default)]
+    #[schemars(title = "V-Carving Mode")]
+    pub v_carving_mode: bool,
     /// How close counts as the same point
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance: f64,
@@ -36,6 +42,7 @@ impl Default for Params {
             zero_length_spans: true,
             open: false,
             fix_zero_length_spans: false,
+            v_carving_mode: false,
             tolerance: 0.01,
         }
     }
@@ -73,21 +80,38 @@ impl Command for VectorValidator {
             .iter()
             .map(|id| doc.vectors[id].flatten(p.tolerance))
             .collect();
+        // the text each vector is a letter of, if any: in V-Carving Mode letters of one text
+        // may cross and overlap each other
+        let text_of: Vec<Option<u64>> = checked
+            .iter()
+            .map(|id| {
+                doc.vector_groups
+                    .get(id)
+                    .filter(|g| doc.texts.contains_key(g))
+                    .copied()
+            })
+            .collect();
+        let same_text = |i: usize, j: usize| {
+            p.v_carving_mode && text_of[i].is_some() && text_of[i] == text_of[j]
+        };
         let mut bad = vec![false; checked.len()];
         if p.intersections {
             let closed: Vec<bool> = checked.iter().map(|id| doc.vectors[id].closed).collect();
-            for owner in crossing(&flat, &closed) {
-                bad[owner] = true;
+            for (i, j) in crossing_pairs(&flat, &closed) {
+                if !same_text(i, j) {
+                    bad[i] = true;
+                    bad[j] = true;
+                }
             }
         }
         for (i, id) in checked.iter().enumerate() {
             let path = &doc.vectors[id];
-            bad[i] |= (p.open && !path.closed)
+            bad[i] |= ((p.open || p.v_carving_mode) && !path.closed)
                 || (p.zero_length_spans && has_zero_length_span(path, p.tolerance))
                 || (p.overlapping
-                    && flat[..i]
-                        .iter()
-                        .any(|other| same_points(&flat[i], other, p.tolerance)));
+                    && flat[..i].iter().enumerate().any(|(j, other)| {
+                        !same_text(i, j) && same_points(&flat[i], other, p.tolerance)
+                    }));
         }
         let problems: Vec<EntityId> = checked
             .iter()
@@ -182,10 +206,22 @@ struct Edge {
     b: Point,
 }
 
-/// Which of the polylines `flat` cross themselves or another: two of their edges meet that
-/// are not neighbours along one polyline. Edges are swept left to right so only ones that
-/// overlap in x are compared.
+/// Which of the polylines `flat` cross themselves or another.
+#[cfg(test)]
 fn crossing(flat: &[Vec<Point>], closed: &[bool]) -> Vec<usize> {
+    let mut owners: Vec<usize> = crossing_pairs(flat, closed)
+        .into_iter()
+        .flat_map(|(a, b)| [a, b])
+        .collect();
+    owners.sort_unstable();
+    owners.dedup();
+    owners
+}
+
+/// Which pairs of the polylines `flat` cross (a polyline with itself: the same index
+/// twice): two of their edges meet that are not neighbours along one polyline. Edges are
+/// swept left to right so only ones that overlap in x are compared.
+fn crossing_pairs(flat: &[Vec<Point>], closed: &[bool]) -> Vec<(usize, usize)> {
     let mut edges = vec![];
     let mut count = vec![0; flat.len()];
     for (owner, points) in flat.iter().enumerate() {
@@ -208,7 +244,7 @@ fn crossing(flat: &[Vec<Point>], closed: &[bool]) -> Vec<usize> {
     let left = |e: &Edge| e.a.x.min(e.b.x);
     let right = |e: &Edge| e.a.x.max(e.b.x);
     edges.sort_by(|e, f| left(e).total_cmp(&left(f)));
-    let mut found = vec![false; flat.len()];
+    let mut found: Vec<(usize, usize)> = vec![];
     for (k, e) in edges.iter().enumerate() {
         for f in &edges[k + 1..] {
             if left(f) > right(e) {
@@ -222,12 +258,13 @@ fn crossing(flat: &[Vec<Point>], closed: &[bool]) -> Vec<usize> {
                 }
             }
             if edges_cross((e.a, e.b), (f.a, f.b)) {
-                found[e.owner] = true;
-                found[f.owner] = true;
+                found.push((e.owner.min(f.owner), e.owner.max(f.owner)));
             }
         }
     }
-    (0..flat.len()).filter(|&i| found[i]).collect()
+    found.sort_unstable();
+    found.dedup();
+    found
 }
 
 fn edges_cross((a, b): (Point, Point), (c, d): (Point, Point)) -> bool {
@@ -401,6 +438,39 @@ mod tests {
         assert_eq!(
             crossing(&[circle.flatten(0.01)], &[true]),
             Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn v_carving_mode_lets_the_letters_of_one_text_cross_and_finds_open_vectors() {
+        // two letters of one text that cross each other, and an open stroke
+        let mut doc = unselected(vec![
+            square(0.0, 0.0, 10.0),
+            square(5.0, 5.0, 10.0),
+            Path::polyline(&[p(30.0, 0.0), p(40.0, 0.0)], false),
+        ]);
+        let ids: Vec<EntityId> = doc.vectors.keys().copied().collect();
+        let mut c = Change::builder(&doc);
+        c.set_group(ids[0], Some(7));
+        c.set_group(ids[1], Some(7));
+        c.set_text(7, Some(serde_json::json!({ "text": "ab" })));
+        let change = c.finish();
+        doc.apply(&change).unwrap();
+        let plain = VectorValidator::run(&doc, &Params::default()).unwrap();
+        let mut after = doc.clone();
+        after.apply(&plain).unwrap();
+        assert_eq!(after.selection.len(), 2, "the crossing letters");
+        let carving = Params {
+            v_carving_mode: true,
+            ..Params::default()
+        };
+        let change = VectorValidator::run(&doc, &carving).unwrap();
+        doc.apply(&change).unwrap();
+        let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
+        assert_eq!(
+            picked,
+            [ids[2]],
+            "the letters are let be, the open stroke is not"
         );
     }
 }

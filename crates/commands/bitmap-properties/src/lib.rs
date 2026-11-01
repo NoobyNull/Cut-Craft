@@ -111,6 +111,7 @@ mod tests {
             grey: vec![0, 255],
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
             depth: Vec::new(),
+            rgb: Vec::new(),
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

@@ -89,6 +89,7 @@ mod tests {
             grey: vec![0, 255],
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
             depth: Vec::new(),
+            rgb: Vec::new(),
         });
         let change = c.finish();
         doc.apply(&change).unwrap();
@@ -109,6 +110,7 @@ mod tests {
             rect: Rect::new(Point::ZERO, Point::new(20.0, 10.0)),
             // two 16-bit levels apart, one grey level on screen
             depth: vec![0.5, 0.5 + 1.0 / 65_535.0],
+            rgb: Vec::new(),
         });
         doc.apply(&c.finish()).unwrap();
         let params = Params {

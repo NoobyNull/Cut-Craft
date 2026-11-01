@@ -25,6 +25,32 @@ pub enum Picked {
     /// Show the chosen folder in the desktop's file manager.
     OpenFolder,
     Import(PathBuf),
+    /// Import to Level: onto one of the job's levels, or a new one.
+    ImportToLevel(PathBuf, ToLevel),
+}
+
+/// Which level Import to Level puts clipart on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToLevel {
+    /// One of the job's levels, by id
+    Existing(u64),
+    /// A new level, named after the clipart
+    New,
+}
+
+/// `change` with the components it adds or remakes on `level`.
+pub fn onto_level(mut change: cut_craft_core::Change, level: u64) -> cut_craft_core::Change {
+    use cut_craft_core::Edit;
+    for edit in &mut change.edits {
+        if let Edit::AddComponent { component, .. }
+        | Edit::ReplaceComponent {
+            after: component, ..
+        } = edit
+        {
+            component.level = level;
+        }
+    }
+    change
 }
 
 impl Clipart {
@@ -92,11 +118,14 @@ fn name(path: &Path) -> String {
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
 }
 
-/// Draws the tab; what was asked for, if anything.
+/// Draws the tab; what was asked for, if anything. `levels` are the job's, by id and name,
+/// for a thumbnail's Import to Level menu. A thumbnail dragged out carries its file, for the
+/// views to import where it is dropped.
 pub fn panel(
     ui: &mut egui::Ui,
     clipart: &mut Clipart,
     importable: &dyn Fn(&str) -> bool,
+    levels: &[(u64, String)],
 ) -> Option<Picked> {
     let mut picked = None;
     ui.strong("Library");
@@ -150,12 +179,30 @@ pub fn panel(
                     ui.add(egui::Button::image(image))
                 } else {
                     ui.add_sized(egui::vec2(edge, edge), egui::Button::new("3D"))
-                };
+                }
+                .interact(egui::Sense::click_and_drag());
+                thumbnail.dnd_set_drag_payload(file.clone());
+                thumbnail.context_menu(|ui| {
+                    ui.menu_button("Import to Level", |ui| {
+                        for (id, level) in levels {
+                            if ui.button(level).clicked() {
+                                picked = Some(Picked::ImportToLevel(
+                                    file.clone(),
+                                    ToLevel::Existing(*id),
+                                ));
+                            }
+                        }
+                        if ui.button("New Level").clicked() {
+                            picked = Some(Picked::ImportToLevel(file.clone(), ToLevel::New));
+                        }
+                    });
+                });
                 let caption = ui.add(
                     egui::Label::new(egui::RichText::new(&label).small())
                         .truncate()
-                        .sense(egui::Sense::click()),
+                        .sense(egui::Sense::click_and_drag()),
                 );
+                caption.dnd_set_drag_payload(file.clone());
                 if thumbnail.double_clicked() || caption.double_clicked() {
                     picked = Some(Picked::Import(file.clone()));
                 }
@@ -195,7 +242,7 @@ mod tests {
         let mut used = egui::Rect::NOTHING;
         let mut out = ctx.run_ui(input, |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
-                panel(ui, &mut clipart, &|e| e == "stl");
+                panel(ui, &mut clipart, &|e| e == "stl", &[]);
                 used = ui.min_rect();
             });
         });

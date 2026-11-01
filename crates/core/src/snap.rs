@@ -1,7 +1,8 @@
 //! Snapping: points the pointer jumps to while drawing or moving nodes, as Aspire's Snapping
 //! Options (F4) choose them: geometry (span ends and middles, arc centres, object centres),
 //! the job's centre and corners, and a grid. Smart snapping lines the pointer up with those
-//! points across or up and down when none is near.
+//! points across or up and down when none is near, and puts it on the tangent of a span
+//! where the span ends, or square to that tangent.
 
 use crate::document::Document;
 use crate::geometry::{Point, Segment};
@@ -31,6 +32,14 @@ pub struct SnapOptions {
     /// How near, in screen pixels, the pointer must come to a point to snap to it
     #[schemars(range(min = 1, max = 50))]
     pub snapping_radius: f64,
+    /// How far Ctrl and an arrow key move the selection
+    #[serde(default = "nudge")]
+    #[schemars(title = "Fixed nudge distance", extend("x-unit" = "mm"), range(min = 0))]
+    pub fixed_nudge: f64,
+}
+
+fn nudge() -> f64 {
+    1.0
 }
 
 fn on() -> bool {
@@ -51,6 +60,7 @@ impl Default for SnapOptions {
             smart_snapping: true,
             // ponytail: Aspire's slider runs Small to Large; 8 px is our middle [inf]
             snapping_radius: 8.0,
+            fixed_nudge: nudge(),
         }
     }
 }
@@ -70,9 +80,18 @@ impl SnapOptions {
             // smart snapping, lines through every snap point across and up and down
             // ponytail: Aspire's smart lines go only through the nodes hovered
             let (mut xs, mut ys) = (vec![], vec![]);
+            // angled guides: the point on them nearest the pointer
+            let mut tilted: Vec<Point> = vec![];
             if self.geometry_snapping {
                 for g in &doc.guides {
-                    if g.vertical { &mut xs } else { &mut ys }.push(g.at);
+                    if g.tilted() {
+                        let q = g.nearest(at);
+                        if q.distance(at) <= reach {
+                            tilted.push(q);
+                        }
+                    } else {
+                        if g.vertical { &mut xs } else { &mut ys }.push(g.at);
+                    }
                 }
             }
             if self.smart_snapping {
@@ -89,8 +108,24 @@ impl SnapOptions {
                     .min_by(|a, b| (a - v).abs().total_cmp(&(b - v).abs()))
             };
             let (x, y) = (nearest(&xs, at.x), nearest(&ys, at.y));
-            if x.is_some() || y.is_some() {
-                return Point::new(x.unwrap_or(at.x), y.unwrap_or(at.y));
+            let lined = (x.is_some() || y.is_some())
+                .then(|| Point::new(x.unwrap_or(at.x), y.unwrap_or(at.y)));
+            let lined = tilted
+                .into_iter()
+                .chain(lined)
+                .min_by(|a, b| a.distance(at).total_cmp(&b.distance(at)));
+            // a span's tangent where it ends, or the line square to it, when nearer
+            let along = self
+                .smart_snapping
+                .then(|| self.tangent_snap(doc, at, reach))
+                .flatten();
+            let best = match (lined, along) {
+                (Some(l), Some(t)) if t.distance(at) < l.distance(at) => Some(t),
+                (Some(l), _) => Some(l),
+                (None, t) => t,
+            };
+            if let Some(p) = best {
+                return p;
             }
         }
         match near {
@@ -102,6 +137,44 @@ impl SnapOptions {
             }
             None => at,
         }
+    }
+
+    /// The nearest point within `reach` of `at` on a line through a span's end along the
+    /// span's direction there (its tangent), or square to it.
+    fn tangent_snap(&self, doc: &Document, at: Point, reach: f64) -> Option<Point> {
+        let mut best: Option<(Point, f64)> = None;
+        for (id, path) in &doc.vectors {
+            if !doc.shown(*id) || !self.geometry_snapping {
+                continue;
+            }
+            let mut from = path.start;
+            for s in &path.segments {
+                let to = s.end();
+                // the span's direction leaving its start and arriving at its end
+                let (out_dir, in_dir) = match *s {
+                    Segment::Line { .. } => (to - from, to - from),
+                    Segment::Cubic { c1, c2, .. } => (c1 - from, to - c2),
+                    Segment::Arc { center, ccw, .. } => {
+                        let turn = |r: Point| if ccw { r.perp() } else { -r.perp() };
+                        (turn(from - center), turn(to - center))
+                    }
+                };
+                for (origin, dir) in [(from, out_dir), (to, in_dir)] {
+                    let Some(dir) = dir.try_normalize() else {
+                        continue;
+                    };
+                    for d in [dir, dir.perp()] {
+                        let foot = origin + d * (at - origin).dot(d);
+                        let gap = foot.distance(at);
+                        if gap <= reach && best.is_none_or(|b| gap < b.1) {
+                            best = Some((foot, gap));
+                        }
+                    }
+                }
+                from = to;
+            }
+        }
+        best.map(|b| b.0)
     }
 
     fn points(&self, doc: &Document) -> Vec<Point> {
@@ -200,6 +273,36 @@ mod tests {
         assert_eq!(
             none.snap(&doc, Point::new(29.6, 30.3), 1.0),
             Point::new(29.6, 30.3)
+        );
+    }
+
+    #[test]
+    fn smart_snapping_runs_on_along_a_span_and_square_to_it() {
+        let doc = document_with(vec![crate::geometry::Path::polyline(
+            &[Point::new(0.0, 0.0), Point::new(10.0, 10.0)],
+            false,
+        )]);
+        let s = SnapOptions {
+            job_center_and_corners: false,
+            ..SnapOptions::default()
+        };
+        let on = s.snap(&doc, Point::new(20.3, 19.8), 1.0);
+        assert!(
+            on.distance(Point::new(20.05, 20.05)) < 1e-9,
+            "on along it: {on}"
+        );
+        let square = s.snap(&doc, Point::new(16.1, 3.8), 1.0);
+        assert!(
+            square.distance(Point::new(16.15, 3.85)) < 1e-9,
+            "square to it: {square}"
+        );
+        let off = SnapOptions {
+            smart_snapping: false,
+            ..s
+        };
+        assert_eq!(
+            off.snap(&doc, Point::new(20.3, 19.8), 1.0),
+            Point::new(20.3, 19.8)
         );
     }
 

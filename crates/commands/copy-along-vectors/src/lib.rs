@@ -1,9 +1,9 @@
 //! Copy Along Vectors: copies of an object spaced along vectors. The first object picked
 //! (with its group) is the one copied; every other selected vector is a path to copy it
-//! along.
+//! along. Or circles of a diameter, along every selected vector.
 
 use cut_craft_core::document::{Document, EntityId};
-use cut_craft_core::geometry::{Point, Rect};
+use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use glam::DAffine2;
 use schemars::JsonSchema;
@@ -24,6 +24,14 @@ pub enum Spacing {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[expect(clippy::struct_excessive_bools, reason = "one tick box per option")]
 pub struct Params {
+    /// The first object picked, or circles
+    #[serde(default)]
+    #[schemars(extend("x-widget" = "row"))]
+    pub copy: Copy,
+    /// Copy Circles: their diameter
+    #[serde(default = "default_diameter")]
+    #[schemars(extend("x-unit" = "mm"), range(min = 0), extend("x-show-when" = {"copy": "circles"}))]
+    pub circle_diameter: f64,
     pub spacing: Spacing,
     /// How many copies on each vector, when spacing by count
     #[schemars(range(min = 1))]
@@ -41,9 +49,28 @@ pub struct Params {
     pub create_copies_on_new_layer: bool,
 }
 
+/// What goes along the vectors.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Copy {
+    /// The first object picked, with its group
+    #[default]
+    #[schemars(title = "Copy Object")]
+    Object,
+    /// Circles of a diameter: every selected vector is one to copy them along
+    #[schemars(title = "Copy Circles")]
+    Circles,
+}
+
+fn default_diameter() -> f64 {
+    5.0
+}
+
 impl Default for Params {
     fn default() -> Self {
         Self {
+            copy: Copy::Object,
+            circle_diameter: default_diameter(),
             spacing: Spacing::Count,
             copies: 5,
             distance: 20.0,
@@ -74,8 +101,13 @@ impl Command for CopyAlongVectors {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let picked: Vec<EntityId> = doc.selection.iter().copied().collect();
+        let circles = p.copy == Copy::Circles;
+        if circles {
+            ensure_positive("circle diameter", p.circle_diameter)?;
+        }
         let object = picked
             .first()
+            .filter(|_| !circles)
             .map(|&first| doc.group_members(first))
             .unwrap_or_default();
         let paths: Vec<EntityId> = picked
@@ -83,7 +115,12 @@ impl Command for CopyAlongVectors {
             .copied()
             .filter(|id| !object.contains(id))
             .collect();
-        if object.is_empty() || paths.is_empty() {
+        if paths.is_empty() && circles {
+            return Err(CommandError::Failed(
+                "select the vectors to copy circles along".into(),
+            ));
+        }
+        if (object.is_empty() && !circles) || paths.is_empty() {
             return Err(CommandError::Failed(
                 "select the object to copy first, then the vectors to copy it along".into(),
             ));
@@ -92,8 +129,7 @@ impl Command for CopyAlongVectors {
             .iter()
             .map(|id| doc.vectors[id].bounds())
             .reduce(Rect::union)
-            .expect("at least one object")
-            .center();
+            .map_or(Point::ZERO, Rect::center);
         let mut transforms = vec![];
         for id in &paths {
             let guide = &doc.vectors[id];
@@ -121,6 +157,25 @@ impl Command for CopyAlongVectors {
                     DAffine2::from_translation(point) * turn * DAffine2::from_translation(-middle),
                 );
             }
+        }
+        if circles {
+            let mut c = Change::builder(doc);
+            let layer = p
+                .create_copies_on_new_layer
+                .then(|| c.add_layer("Copy Along Vectors"));
+            let made: Vec<EntityId> = transforms
+                .iter()
+                .map(|t| {
+                    let at = t.transform_point2(Point::ZERO);
+                    let id = c.add(Path::circle(at, p.circle_diameter / 2.0));
+                    if let Some(layer) = layer {
+                        c.move_to_layer(id, layer);
+                    }
+                    id
+                })
+                .collect();
+            c.select(made);
+            return Ok(c.finish());
         }
         if !p.create_copies_on_new_layer {
             return Ok(Change::copy_vectors(doc, &object, &transforms));
@@ -413,5 +468,39 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("no length"), "{err}");
+    }
+
+    #[test]
+    fn copy_circles_puts_circles_of_the_diameter_along_every_selected_vector() {
+        let line = Path::polyline(&[p(10.0, 0.0), p(50.0, 0.0)], false);
+        let other = Path::polyline(&[p(10.0, 20.0), p(50.0, 20.0)], false);
+        let mut doc = document_with(vec![line, other]);
+        let params = Params {
+            copy: Copy::Circles,
+            circle_diameter: 4.0,
+            copies: 2,
+            ..Params::default()
+        };
+        doc.apply(&CopyAlongVectors::run(&doc, &params).unwrap())
+            .unwrap();
+        let circles: Vec<_> = doc
+            .vectors
+            .values()
+            .skip(2)
+            .map(|c| (c.bounds().center(), c.bounds().size()))
+            .collect();
+        assert_eq!(circles.len(), 4, "two on each line");
+        assert!(
+            circles
+                .iter()
+                .all(|(_, s)| (s.x - 4.0).abs() < 1e-9 && (s.y - 4.0).abs() < 1e-9)
+        );
+        assert!(
+            circles
+                .iter()
+                .any(|(c, _)| (*c - p(50.0, 20.0)).length() < 1e-9)
+        );
+        let nothing = document_with(vec![]);
+        assert!(CopyAlongVectors::run(&nothing, &params).is_err());
     }
 }
