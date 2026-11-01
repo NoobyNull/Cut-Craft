@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::font::{self, Align};
-use cut_craft_core::geometry::{Point, Rect};
+use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::params::Xy;
 use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
@@ -33,6 +33,34 @@ pub enum Margin {
     Normal,
     /// 20 % each side
     Wide,
+}
+
+/// How Text in a Box fills the box's width when the height limits the text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HorizontalStretch {
+    /// Keep the letters' proportions
+    #[default]
+    None,
+    /// Widen the spaces between words
+    Spaces,
+    /// Widen the gaps between letters
+    Kerning,
+    /// Stretch the letters
+    Characters,
+}
+
+/// How Text in a Box fills the box's height when the width limits the text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VerticalStretch {
+    /// Keep the letters' proportions
+    #[default]
+    None,
+    /// Spread the lines apart
+    SpaceLines,
+    /// Stretch the letters
+    Characters,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -68,6 +96,14 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Margin size", extend("x-widget" = "row"))]
     pub margin: Margin,
+    /// Text in a Box: how the text fills the box's width
+    #[serde(default)]
+    #[schemars(extend("x-widget" = "row"))]
+    pub horizontal_stretch: HorizontalStretch,
+    /// Text in a Box: how the text fills the box's height
+    #[serde(default)]
+    #[schemars(extend("x-widget" = "row"))]
+    pub vertical_stretch: VerticalStretch,
     /// Kerning and line spacing changed in the 2D view: a click between two letters or two
     /// lines while the form is open
     #[schemars(skip)]
@@ -102,6 +138,8 @@ impl Default for Params {
             mode: Mode::Text,
             box_size: default_box(),
             margin: Margin::Normal,
+            horizontal_stretch: HorizontalStretch::None,
+            vertical_stretch: VerticalStretch::None,
             spacing: font::Spacing::default(),
             replaces: None,
         }
@@ -173,35 +211,105 @@ impl Command for DrawText {
     }
 }
 
-/// The text scaled to fit the box (less the margin's share of its width), centred in it.
-// ponytail: no vertical or horizontal stretch options yet [obs: dialog 279 has both]
-fn boxed(
-    font: &font::Font,
-    p: &Params,
-) -> Result<Vec<cut_craft_core::geometry::Path>, CommandError> {
-    let (w, h) = (p.box_size.x, p.box_size.y);
-    ensure_positive("box width", w)?;
-    ensure_positive("box height", h)?;
-    let natural = font.layout(&p.text, 1.0, p.align, cut_craft_core::geometry::Point::ZERO);
-    let Some(b) = natural
-        .iter()
-        .map(cut_craft_core::geometry::Path::bounds)
-        .reduce(Rect::union)
-    else {
-        return Ok(vec![]);
-    };
+/// The text scaled to fit the box (less the margin's share of its width), centred in it,
+/// then stretched to fill the way the box's stretch options ask.
+#[expect(clippy::cast_precision_loss, reason = "line and gap counts are small")]
+fn boxed(font: &font::Font, p: &Params) -> Result<Vec<Path>, CommandError> {
+    ensure_positive("box width", p.box_size.x)?;
+    ensure_positive("box height", p.box_size.y)?;
     let share = match p.margin {
         Margin::None => 1.0,
         Margin::Normal => 0.8,
         Margin::Wide => 0.6,
     };
-    let scale = (w * share / b.size().x).min(h / b.size().y);
-    let anchor: cut_craft_core::geometry::Point = p.anchor.into();
-    let centre = anchor + cut_craft_core::geometry::Point::new(w, h) / 2.0;
+    let (w, h) = (p.box_size.x * share, p.box_size.y);
+    let lay =
+        |spacing: &font::Spacing| font.layout_spaced(&p.text, 1.0, p.align, Point::ZERO, spacing);
+    let Some(b) = bounds(&lay(&font::Spacing::default())) else {
+        return Ok(vec![]);
+    };
+    let scale = (w / b.size().x).min(h / b.size().y);
+    let mut spacing = font::Spacing::default();
+    let lines: Vec<&str> = p.text.lines().collect();
+    if p.vertical_stretch == VerticalStretch::SpaceLines && lines.len() > 1 {
+        // each baseline gap grows by the pitch's growth times the font's pitch at height 1
+        let room = h / scale - b.size().y;
+        spacing.line_pitch += room / ((lines.len() - 1) as f64 * font.line_pitch / font.cap_height);
+    }
+    if matches!(
+        p.horizontal_stretch,
+        HorizontalStretch::Spaces | HorizontalStretch::Kerning
+    ) {
+        let at_one =
+            DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(1.0 / font.cap_height));
+        let placed = font.placed(
+            &p.text,
+            1.0,
+            p.align,
+            Point::ZERO,
+            &font::Spacing::default(),
+        );
+        for (row, line) in lines.iter().enumerate() {
+            // the line's inked letters: from the first to the last, and how wide they reach
+            let inked: Vec<(usize, Rect)> = placed
+                .iter()
+                .filter(|(at, _)| at.line == row)
+                .filter_map(|(at, glyph)| {
+                    let place =
+                        DAffine2::from_translation(Point::new(at.left, at.baseline)) * at_one;
+                    let shown: Vec<Path> =
+                        glyph.paths.iter().map(|q| q.transformed(&place)).collect();
+                    Some((at.index, bounds(&shown)?))
+                })
+                .collect();
+            let (Some(first), Some(last)) = (inked.first(), inked.last()) else {
+                continue;
+            };
+            let reach = inked.iter().map(|g| g.1.max.x).fold(f64::MIN, f64::max)
+                - inked.iter().map(|g| g.1.min.x).fold(f64::MAX, f64::min);
+            let gaps: Vec<usize> = match p.horizontal_stretch {
+                HorizontalStretch::Spaces => line
+                    .chars()
+                    .enumerate()
+                    .filter(|&(i, c)| c == ' ' && first.0 < i && i < last.0)
+                    .map(|(i, _)| i)
+                    .collect(),
+                _ => placed
+                    .iter()
+                    .filter(|(at, _)| at.line == row && first.0 <= at.index && at.index < last.0)
+                    .map(|(at, _)| at.index)
+                    .collect(),
+            };
+            if gaps.is_empty() {
+                continue;
+            }
+            let each = (w / scale - reach) / gaps.len() as f64;
+            for index in gaps {
+                spacing.kern(row, index, each);
+            }
+        }
+    }
+    let natural = lay(&spacing);
+    let Some(b) = bounds(&natural) else {
+        return Ok(vec![]);
+    };
+    let sx = match p.horizontal_stretch {
+        HorizontalStretch::Characters => w / b.size().x,
+        _ => scale,
+    };
+    let sy = match p.vertical_stretch {
+        VerticalStretch::Characters => h / b.size().y,
+        _ => scale,
+    };
+    let centre = Point::from(p.anchor) + Point::new(p.box_size.x, p.box_size.y) / 2.0;
     let place = DAffine2::from_translation(centre)
-        * DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(scale))
+        * DAffine2::from_scale(cut_craft_core::glam::DVec2::new(sx, sy))
         * DAffine2::from_translation(-b.center());
     Ok(natural.iter().map(|q| q.transformed(&place)).collect())
+}
+
+fn bounds(paths: &[Path]) -> Option<Rect> {
+    paths.iter().map(Path::bounds).reduce(Rect::union)
 }
 
 /// The first selected group that is text (plain groups may come before it).
@@ -486,6 +594,72 @@ mod tests {
         // "HI" is 18 wide by 10 tall: the width fills 80 % of 100, centred in the box
         assert!((b.size().x - 80.0).abs() < 1e-6, "{b:?}");
         assert!((b.center() - cut_craft_core::geometry::Point::new(50.0, 25.0)).length() < 1e-6);
+    }
+
+    #[test]
+    fn text_in_a_box_stretches_its_spaces_gaps_letters_or_lines_to_fill_the_box() {
+        use HorizontalStretch as H;
+        use VerticalStretch as V;
+        let fit = |text: &str, size: (f64, f64), h: HorizontalStretch, v: VerticalStretch| {
+            let p = Params {
+                mode: Mode::TextInABox,
+                box_size: Xy::new(size.0, size.1),
+                anchor: Xy::new(0.0, 0.0),
+                margin: Margin::None,
+                horizontal_stretch: h,
+                vertical_stretch: v,
+                ..boxes(text)
+            };
+            let doc = after::<DrawText>(&p);
+            let mut letters: Vec<Rect> = doc
+                .selection
+                .iter()
+                .map(|id| doc.vectors[id].bounds())
+                .collect();
+            letters.sort_by(|a, b| (a.min.y, a.min.x).partial_cmp(&(b.min.y, b.min.x)).unwrap());
+            letters
+        };
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+        // "HI" is 1.8 by 1 at height 1: the box's height limits it to 50, 90 wide
+        let plain = fit("HI", (100.0, 50.0), H::None, V::None);
+        assert!(near(plain[1].max.x - plain[0].min.x, 90.0), "{plain:?}");
+        let gaps = fit("HI", (100.0, 50.0), H::Kerning, V::None);
+        assert!(
+            near(gaps[0].min.x, 0.0) && near(gaps[1].max.x, 100.0),
+            "{gaps:?}"
+        );
+        assert!(
+            near(gaps[0].size().x, 40.0) && near(gaps[0].size().y, 50.0),
+            "letters keep their shape"
+        );
+        let wide = fit("HI", (100.0, 50.0), H::Characters, V::None);
+        assert!(
+            near(wide[0].min.x, 0.0) && near(wide[1].max.x, 100.0) && near(wide[0].size().y, 50.0)
+        );
+        assert!(wide[0].size().x > 40.0 + 1e-3, "the letters stretch");
+        // "H I" is 2.3 wide: only the space widens
+        let spaced = fit("H I", (300.0, 100.0), H::Spaces, V::None);
+        assert!(
+            near(spaced[0].min.x, 0.0) && near(spaced[1].max.x, 300.0),
+            "{spaced:?}"
+        );
+        assert!(near(spaced[0].size().x, 80.0) && near(spaced[1].size().x, 80.0));
+        // the width limits "HI" in a tall box: the letters or the lines fill its height
+        let tall = fit("HI", (100.0, 100.0), H::None, V::Characters);
+        assert!(
+            near(tall[0].min.y, 0.0)
+                && near(tall[0].max.y, 100.0)
+                && near(tall[1].max.x - tall[0].min.x, 100.0)
+        );
+        let lines = fit("HI\nHI", (100.0, 200.0), H::None, V::SpaceLines);
+        assert!(
+            near(lines[0].min.y, 0.0) && near(lines[3].max.y, 200.0),
+            "{lines:?}"
+        );
+        assert!(
+            near(lines[0].size().y, 100.0 / 1.8),
+            "letters keep their height"
+        );
     }
 
     #[test]

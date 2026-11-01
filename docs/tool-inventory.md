@@ -356,8 +356,8 @@ say "not implemented yet".
     and a drag of one moves them all (Move Nodes). Dragging control points or spans and
     Keep Bezier Tangency are not done.
   - Text in a Box (Draw Text's other mode): the text scaled to fit a box at the anchor,
-    inside a None / Normal / Wide margin, centred (dialog 279; its stretch options are not
-    done).
+    inside a None / Normal / Wide margin, centred, stretched to fill the box by its spaces,
+    letter gaps or letters across and its line spacing or letters up (dialog 279).
   - Text on a Curve: one line of text laid along a selected curve, kept or scaled to fill
     it, with spacing, above / on / below, other side, offset, alignment, turned or upright
     (dialog 426). The text stays editable: selected alone, the form opens with its settings
