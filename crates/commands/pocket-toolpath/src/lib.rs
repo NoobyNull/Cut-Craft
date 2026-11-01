@@ -1,10 +1,11 @@
 //! Pocket Toolpath: clears the inside of the selected closed vectors at each depth, with
 //! rings that step in from the outline (worked from the middle outwards) or with raster
-//! lines and a profile pass round the edge.
+//! lines and a profile pass round the edge, or trochoidally: the tool circling in small loops
+//! as it moves on, so it never cuts with more than a sliver of its edge.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{Direction, Entry, Ramp, Ramping, path_moves};
-use cut_craft_core::geometry::Path;
+use cut_craft_core::geometry::{Path, Point};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{
     Move, Tool, cut_points, hatch_lines, made_by, pass_depths, project_onto_model,
@@ -23,6 +24,9 @@ pub enum Strategy {
     Offset,
     /// Straight lines across, at the raster angle
     Raster,
+    /// Small loops moving on round bands from the outline in, then a pass round the edge:
+    /// a light cut at full depth, for hard material or a small machine
+    Trochoidal,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -74,6 +78,25 @@ pub struct Params {
     #[schemars(extend("x-show-when" = {"strategy": "raster"}))]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub profile_pass: ProfilePass,
+    /// How wide each loop is, as a share of the tool's diameter
+    #[serde(default = "loop_width")]
+    #[schemars(
+        title = "Loop Width",
+        extend("x-unit" = "%", "x-show-when" = {"strategy": "trochoidal"}),
+        range(min = 10, max = 400)
+    )]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
+    pub loop_width: f64,
+    /// How far each loop moves on from the last, as a share of the tool's diameter: less is
+    /// a lighter cut and a longer toolpath
+    #[serde(default = "loop_step")]
+    #[schemars(
+        title = "Loop Step",
+        extend("x-unit" = "%", "x-show-when" = {"strategy": "trochoidal"}),
+        range(min = 1, max = 100)
+    )]
+    #[schemars(extend("x-group" = "Clear Pocket"))]
+    pub loop_step: f64,
     /// Zig zag down over the ramp distance instead of plunging straight down
     #[serde(default)]
     #[schemars(extend("x-group" = "Ramp Plunge Moves"))]
@@ -92,6 +115,14 @@ pub struct Params {
     pub project_onto_model: bool,
 }
 
+fn loop_width() -> f64 {
+    100.0
+}
+
+fn loop_step() -> f64 {
+    10.0
+}
+
 fn ramp_distance() -> f64 {
     Ramping::default().distance
 }
@@ -108,6 +139,8 @@ impl Default for Params {
             allowance: 0.0,
             raster_angle: 0.0,
             profile_pass: ProfilePass::Last,
+            loop_width: loop_width(),
+            loop_step: loop_step(),
             ramp_plunge_moves: false,
             ramp_distance: ramp_distance(),
             project_onto_model: false,
@@ -199,6 +232,13 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             ring = next;
         }
         rings.reverse(); // from the middle outwards
+        let mut loops = vec![];
+        if p.strategy == Strategy::Trochoidal {
+            loops = trochoidal(&edge, p);
+            if loops.is_empty() {
+                loops.clone_from(&rings); // too narrow for loops: rings
+            }
+        }
         let safe = doc.job.clearance;
         let entry = Entry {
             ramp: if p.ramp_plunge_moves {
@@ -233,6 +273,10 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         for z in pass_depths(p.depth, p.tool.pass_depth) {
             match p.strategy {
                 Strategy::Offset => moves.extend(cut(&rings, z, above)),
+                Strategy::Trochoidal => {
+                    moves.extend(cut(&loops, z, above));
+                    moves.extend(cut(&edge, z, above));
+                }
                 Strategy::Raster => {
                     if p.profile_pass == ProfilePass::First {
                         moves.extend(cut(&edge, z, above));
@@ -259,6 +303,74 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
     }
 }
 
+/// The trochoidal clearing of the region inside `edge` (where the tool's middle may go):
+/// looping bands from the outline in, each band's loops reaching from the one outside it to
+/// the one inside, then plain rings for a middle too small for a band.
+fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
+    let d = p.tool.diameter;
+    let radius = d * p.loop_width / 200.0;
+    let advance = (d * p.loop_step / 100.0).max(0.01);
+    let step = p.tool.stepover * d;
+    let mut out = vec![];
+    let mut band = polygon::offset(edge, -radius, Corners::Round);
+    let mut last = vec![];
+    while !band.is_empty() {
+        for ring in &band {
+            let ring = p.direction.orient(cut_points(ring), true);
+            let points = looped(&ring, radius, advance, p.direction == Direction::Climb);
+            out.push(Path::polyline(&points, false));
+        }
+        last = band;
+        band = polygon::offset(&last, -(2.0 * radius + step), Corners::Round);
+    }
+    // the last band cleared to a loop and a tool radius inside it; rings for the rest
+    let mut ring = polygon::offset(&last, -(radius + step), Corners::Round);
+    while !ring.is_empty() {
+        let next = polygon::offset(&ring, -step, Corners::Round);
+        out.extend(ring);
+        ring = next;
+    }
+    out
+}
+
+/// Loops `radius` round the closed `ring`, each a whole turn at most `advance` on from the
+/// last, anticlockwise (climb, as round a hole) or clockwise. They end where they began.
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn looped(ring: &[Point], radius: f64, advance: f64, anticlockwise: bool) -> Vec<Point> {
+    const PER_LOOP: u32 = 24;
+    let mut points = ring.to_vec();
+    points.extend(ring.first());
+    let mut along = vec![0.0];
+    for w in points.windows(2) {
+        along.push(along[along.len() - 1] + w[0].distance(w[1]));
+    }
+    let length = along[along.len() - 1];
+    if points.len() < 2 || length <= 0.0 {
+        return vec![];
+    }
+    let at = |s: f64| {
+        let s = s.rem_euclid(length);
+        let i = along
+            .partition_point(|&a| a <= s)
+            .clamp(1, points.len() - 1);
+        let t = (s - along[i - 1]) / (along[i] - along[i - 1]).max(1e-12);
+        points[i - 1].lerp(points[i], t)
+    };
+    let side = if anticlockwise { 1.0 } else { -1.0 };
+    let samples = (length / advance).ceil().max(1.0) as u32 * PER_LOOP;
+    (0..=samples)
+        .map(|k| {
+            let s = length * f64::from(k) / f64::from(samples);
+            // the way on, over a loop's width, so a corner in the ring turns the loops smoothly
+            let ahead = (at(s + radius) - at(s - radius))
+                .try_normalize()
+                .unwrap_or(Point::X);
+            let a = std::f64::consts::TAU * f64::from(k % PER_LOOP) / f64::from(PER_LOOP);
+            at(s) + radius * (a.sin() * ahead - side * a.cos() * ahead.perp())
+        })
+        .collect()
+}
+
 /// Raster lines `step` apart at `angle` across the region inside `edge`, every other one
 /// back the other way.
 fn raster(edge: &[Path], step: f64, angle: f64) -> Vec<Path> {
@@ -282,7 +394,7 @@ fn raster(edge: &[Path], step: f64, angle: f64) -> Vec<Path> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cut_craft_core::geometry::{Point, polyline_distance};
+    use cut_craft_core::geometry::polyline_distance;
     use cut_craft_core::testing::{cut_bounds, made_toolpath, square};
     use cut_craft_core::toolpath::{MoveKind, Toolpath};
 
@@ -318,6 +430,56 @@ mod tests {
         assert!(
             closest <= Tool::default().diameter / 2.0,
             "the middle is {closest} mm from the nearest cut"
+        );
+    }
+
+    /// The nearest a cutting move comes to `at`.
+    fn nearest_cut(tp: &Toolpath, at: Point) -> f64 {
+        tp.moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Cut)
+            .map(|w| polyline_distance(&[w[0].to.truncate(), w[1].to.truncate()], at))
+            .fold(f64::MAX, f64::min)
+    }
+
+    #[test]
+    fn trochoidal_loops_clear_the_whole_pocket_and_stay_inside_it() {
+        let p = Params {
+            strategy: Strategy::Trochoidal,
+            ..Params::default()
+        };
+        let tp = pocket(40.0, &p).unwrap();
+        let r = Tool::default().diameter / 2.0;
+        let b = cut_bounds(&tp);
+        assert!(
+            b.min.x >= r - 0.02 && b.max.x <= 40.0 - r + 0.02,
+            "inside the walls: {b:?}"
+        );
+        assert!(b.min.y >= r - 0.02 && b.max.y <= 40.0 - r + 0.02, "{b:?}");
+        // every place the tool's middle may go is cut
+        for i in 0..=20 {
+            for j in 0..=20 {
+                let at = Point::new(
+                    r + (40.0 - 2.0 * r) * f64::from(i) / 20.0,
+                    r + (40.0 - 2.0 * r) * f64::from(j) / 20.0,
+                );
+                let gap = nearest_cut(&tp, at);
+                assert!(gap <= r + 0.05, "{at:?} is {gap} mm from the nearest cut");
+            }
+        }
+        // it loops: within a dozen moves the tool heads back the way it came, again and again
+        let offset = pocket(40.0, &Params::default()).unwrap();
+        let turns = |tp: &Toolpath| {
+            tp.moves
+                .windows(13)
+                .filter(|w| w.iter().all(|m| m.kind == MoveKind::Cut))
+                .filter(|w| (w[1].to - w[0].to).dot(w[12].to - w[11].to) < 0.0)
+                .count()
+        };
+        assert!(
+            turns(&tp) > 10 * turns(&offset).max(1),
+            "{} turns",
+            turns(&tp)
         );
     }
 
