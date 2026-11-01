@@ -886,6 +886,10 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                 }
             });
         ui.end_row();
+        ui.label("Tool Number")
+            .on_hover_text("The post's [T] for this tool without a tool changer, and its holder for Load by Tool Number; 0 for none");
+        ui.add(egui::DragValue::new(&mut tool.number).range(0..=999));
+        ui.end_row();
         form_row(ui, tool, look);
         ui.label("Notes");
         ui.add(
@@ -897,42 +901,67 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
     });
     ui.separator();
     ui.horizontal(|ui| {
-        egui::Grid::new("tool_geometry")
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui.label("Diameter (D)");
-                length(ui, &mut tool.diameter, tool.units);
-                ui.end_row();
-                if matches!(tool.shape, ToolShape::VBit | ToolShape::ThreadMill) {
-                    ui.label(if tool.shape == ToolShape::VBit {
-                        "Included Angle (A)"
-                    } else {
-                        "Angle (A)"
-                    });
-                    ui.add(
-                        egui::DragValue::new(&mut tool.angle)
-                            .range(1.0..=179.0)
-                            .suffix("°"),
-                    );
-                    ui.end_row();
-                }
-                if tool.shape == ToolShape::RadiusedEndMill {
-                    ui.label("Tip Radius (R)");
-                    length(ui, &mut tool.tip_radius, tool.units);
-                    ui.end_row();
-                }
-                if tool.shape == ToolShape::ThreadMill {
-                    thread_mill(ui, tool);
-                }
-                ui.label("Number of Flutes");
-                ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
-                ui.end_row();
-            });
+        geometry(ui, tool);
         if let Some(image) = (look.picture)(picture_path(tool.shape)) {
             let height = ui.spacing().interact_size.y * PICTURE_ROWS;
             ui.add(image.fit_to_exact_size(egui::vec2(height * PICTURE_ASPECT, height)));
         }
     });
+}
+
+/// The tool's shape: diameter, angle, tip radius, taper, flute length and flutes.
+fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
+    egui::Grid::new("tool_geometry")
+        .num_columns(2)
+        .show(ui, |ui| {
+            ui.label("Diameter (D)");
+            length(ui, &mut tool.diameter, tool.units);
+            ui.end_row();
+            if matches!(tool.shape, ToolShape::VBit | ToolShape::ThreadMill) {
+                ui.label(if tool.shape == ToolShape::VBit {
+                    "Included Angle (A)"
+                } else {
+                    "Angle (A)"
+                });
+                ui.add(
+                    egui::DragValue::new(&mut tool.angle)
+                        .range(1.0..=179.0)
+                        .suffix("°"),
+                );
+                ui.end_row();
+            }
+            if tool.shape == ToolShape::RadiusedEndMill {
+                ui.label("Tip Radius (R)");
+                length(ui, &mut tool.tip_radius, tool.units);
+                ui.end_row();
+            }
+            if tool.shape == ToolShape::ThreadMill {
+                thread_mill(ui, tool);
+            }
+            if matches!(tool.shape, ToolShape::BallNose | ToolShape::EndMill) {
+                ui.label("Taper Angle")
+                    .on_hover_text("Each side of the axis, for a tapered tool; 0 for straight");
+                ui.add(
+                    egui::DragValue::new(&mut tool.taper)
+                        .range(0.0..=45.0)
+                        .suffix("°"),
+                );
+                ui.end_row();
+                if tool.taper > 0.0 {
+                    ui.label("Shank Diameter");
+                    length(ui, &mut tool.shank_diameter, tool.units);
+                    ui.end_row();
+                }
+            }
+            ui.label("Flute Length").on_hover_text(
+                "How deep the tool can cut: toolpaths deeper than this are flagged; 0 for not set",
+            );
+            length(ui, &mut tool.flute_length, tool.units);
+            ui.end_row();
+            ui.label("Number of Flutes");
+            ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
+            ui.end_row();
+        });
 }
 
 /// A single-point thread mill's tooth: size, height (which changes the size, the angle

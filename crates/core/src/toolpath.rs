@@ -147,6 +147,11 @@ pub struct Tool {
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
     pub flutes: u32,
+    /// Its tool number, for the post's `[T]` on a machine without a tool changer, and the
+    /// holder Load by Tool Number puts it in; 0 for none (added with tool numbers)
+    #[serde(default, skip_serializing_if = "is_zero")]
+    #[schemars(skip)]
+    pub number: u32,
     /// The Tool Database group it sits in, `/` between levels (`Metric Tools/End Mills`);
     /// empty at the top (added with tool groups)
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -210,6 +215,14 @@ fn default_tooth_offset() -> f64 {
 
 fn default_flutes() -> u32 {
     2
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if"
+)]
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 fn default_tip_radius() -> f64 {
@@ -436,6 +449,7 @@ impl Default for Tool {
             shank_diameter: 0.0,
             flute_length: 0.0,
             flutes: default_flutes(),
+            number: 0,
             group: String::new(),
             notes: String::new(),
             rate_units: RateUnits::default(),

@@ -104,6 +104,7 @@ impl CutCraftApp {
             node_mirror: [false, false],
             menu_at: None,
             guide_props: None,
+            tool_changer_window: false,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
             simulation: None,
@@ -330,6 +331,7 @@ impl CutCraftApp {
             "machine_configuration" => {
                 self.machine_window = Some(cut_craft_machines::MachineManager::new(&self.machines));
             }
+            "tool_changer" => self.tool_changer_window = true,
             "add_machine" => {
                 self.machine_window =
                     Some(cut_craft_machines::MachineManager::adding(&self.machines));

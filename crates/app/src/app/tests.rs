@@ -1732,6 +1732,21 @@ fn the_tool_database_window_shows_the_chip_load() {
     h.app.tool_manager.as_mut().unwrap().pick = Some(cut_craft_tool_database::Pick::Tool(0));
     h.frame(vec![]);
     h.frame(vec![]);
+    // the details scroll: down to the feeds
+    let details = h.text_at("Tool Info").expect("the tool's details");
+    for _ in 0..3 {
+        h.frame(vec![
+            Event::PointerMoved(details),
+            Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0.0, -400.0),
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Wheel,
+                modifiers: Modifiers::NONE,
+            },
+        ]);
+    }
+    h.frame(vec![]);
     // 1000 mm/min over 18000 rpm x 2 flutes
     assert!(
         h.text_at("Chip load: 0.028 mm").is_some(),
@@ -5833,4 +5848,23 @@ fn draw_text_lists_words_spelt_wrong_with_suggestions_and_keeps_added_words() {
     assert_eq!(s.misspelled("Wood sign Zed"), Vec::<String>::new());
     h.app.user_word("Zed", false);
     assert_eq!(h.app.speller.as_ref().unwrap().misspelled("Zed"), ["Zed"]);
+}
+
+#[test]
+fn the_tool_changer_window_loads_holders_and_tools_carry_their_own_numbers() {
+    let mut h = Harness::new();
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Router".into(),
+        slots: vec![None; 4],
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    assert!(h.app.available("tool_changer"));
+    h.app.invoke(&h.ctx, "tool_changer");
+    assert!(h.app.tool_changer_window);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Tool Changer").is_some(), "the window");
+    assert!(h.text_at("Load by Tool Number").is_some());
+    assert!(h.text_at("T4").is_some(), "a row per holder");
 }

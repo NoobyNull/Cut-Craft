@@ -1437,3 +1437,53 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[test]
+#[ignore = "prints the form blocks for the picture audit"]
+fn print_form_blocks() {
+    use std::fmt::Write as _;
+    let registry = crate::commands::registry();
+    let mut out = String::new();
+    for c in registry.iter() {
+        let fields = fields(&c.schema());
+        let fields = if fields.iter().any(|f| f.key == "tool") {
+            arrange(fields)
+        } else {
+            fields
+        };
+        let mut seen: Vec<String> = vec![];
+        let mut row = |kind: &str, name: &str, icon: Option<&String>| {
+            let key = format!("{kind}:{name}");
+            if !seen.contains(&key) {
+                seen.push(key);
+                let _ = writeln!(
+                    out,
+                    "{}\t{}\t{}\t{}\t{}",
+                    c.meta().group,
+                    c.meta().label,
+                    kind,
+                    name,
+                    icon.map_or("-", |s| s.as_str())
+                );
+            }
+        };
+        if fields.is_empty() {
+            continue;
+        }
+        for f in &fields {
+            if f.section {
+                row("section", &f.label, f.icon.as_ref());
+            } else if let Some(g) = &f.group {
+                row("group", g, None);
+            } else if let Some(t) = &f.tab {
+                row("tab", t, None);
+            } else if f.key == "tool" {
+                row("tool", "Tool", None);
+            } else {
+                row("loose", "(fields outside a block)", None);
+            }
+        }
+    }
+    std::fs::write(std::env::var("BLOCKS_OUT").unwrap(), out).unwrap();
+}

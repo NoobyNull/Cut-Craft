@@ -1552,6 +1552,7 @@ impl MenuSystem {
                     "Machine",
                     vec![
                         i("Machine Configuration..."),
+                        i("Tool Changer..."),
                         sep(),
                         i("Add Machine..."),
                         i("Install Offline Package..."),

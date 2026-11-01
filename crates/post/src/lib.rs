@@ -524,8 +524,10 @@ impl Post {
         };
         let wrapped = |label: &str, flat: f64| self.wrapped(&doc.job, label, flat);
         let mut v = self.job_values(doc, file);
-        v.lists
-            .insert("TOOLS_USED", tools.iter().map(|&t| t.to_owned()).collect());
+        v.lists.insert(
+            "TOOLS_USED",
+            tools.iter().map(|&(t, _)| t.to_owned()).collect(),
+        );
         v.lists.insert(
             "TOOLPATHS_OUTPUT",
             toolpaths.iter().map(|t| t.name.clone()).collect(),
@@ -886,16 +888,22 @@ enum Step {
 
 /// Each tool's name once, in the order the toolpaths use them.
 /// Each tool's `[T]`: on a machine with a tool changer its holder, or 0 for a bit not in
-/// the magazine (changed by hand); without one, the order it is first used.
-fn tool_numbers<'a>(tools: &[&str], slots: &'a [Option<String>]) -> impl Fn(&str) -> u32 + 'a {
-    let order: Vec<String> = tools.iter().map(|&t| t.to_owned()).collect();
+/// the magazine (changed by hand); without one, its own tool number, else the order it is
+/// first used.
+fn tool_numbers<'a>(
+    tools: &[(&str, u32)],
+    slots: &'a [Option<String>],
+) -> impl Fn(&str) -> u32 + 'a {
+    let order: Vec<(String, u32)> = tools.iter().map(|&(t, n)| (t.to_owned(), n)).collect();
     move |name: &str| {
         if slots.is_empty() {
             return order
                 .iter()
-                .position(|t| t == name)
-                .and_then(|i| u32::try_from(i + 1).ok())
-                .unwrap_or(1);
+                .position(|(t, _)| t == name)
+                .map_or(1, |i| match order[i].1 {
+                    0 => u32::try_from(i + 1).unwrap_or(1),
+                    own => own,
+                });
         }
         slots
             .iter()
@@ -905,11 +913,11 @@ fn tool_numbers<'a>(tools: &[&str], slots: &'a [Option<String>]) -> impl Fn(&str
     }
 }
 
-fn tools_used<'a>(toolpaths: &[&'a cut_craft_core::toolpath::Toolpath]) -> Vec<&'a str> {
-    let mut tools: Vec<&str> = vec![];
+fn tools_used<'a>(toolpaths: &[&'a cut_craft_core::toolpath::Toolpath]) -> Vec<(&'a str, u32)> {
+    let mut tools: Vec<(&str, u32)> = vec![];
     for t in toolpaths {
-        if !tools.contains(&t.tool.name.as_str()) {
-            tools.push(&t.tool.name);
+        if !tools.iter().any(|(name, _)| *name == t.tool.name) {
+            tools.push((&t.tool.name, t.tool.number));
         }
     }
     tools
@@ -1908,4 +1916,16 @@ begin FOOTER
             "the post has no FEED_MOVE block"
         );
     }
+}
+
+#[cfg(test)]
+#[test]
+fn without_a_tool_changer_a_tool_writes_its_own_number_else_its_order() {
+    let tools = [("6 mm End Mill", 7), ("V-Bit", 0)];
+    let number = tool_numbers(&tools, &[]);
+    assert_eq!((number("6 mm End Mill"), number("V-Bit")), (7, 2));
+    // with a changer the holder wins, and a tool not in it is changed by hand: 0
+    let slots = [None, Some("V-Bit".to_owned())];
+    let number = tool_numbers(&tools, &slots);
+    assert_eq!((number("6 mm End Mill"), number("V-Bit")), (0, 2));
 }

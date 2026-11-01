@@ -262,6 +262,7 @@ impl CutCraftApp {
         self.settings_3d_window(ctx);
         self.tool_search(ctx);
         self.guide_window(ctx);
+        self.tool_changer_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
@@ -1297,6 +1298,39 @@ impl CutCraftApp {
         }
         self.set_guides(guides);
         true
+    }
+
+    /// Machine ▸ Tool Changer…: the active machine's tool changer, each holder loaded with a
+    /// tool from the Tool Database, or all at once by their tool numbers.
+    pub(super) fn tool_changer_window(&mut self, ctx: &egui::Context) {
+        if !self.tool_changer_window {
+            return;
+        }
+        let tools: Vec<(String, u32)> = self
+            .tools
+            .tools
+            .iter()
+            .map(|t| (t.name.clone(), t.number))
+            .collect();
+        let mut open = true;
+        let mut changed = false;
+        egui::Window::new("Tool Changer")
+            .id(egui::Id::unique("tool_changer"))
+            .collapsible(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                cut_craft_bug_report::mark(ui, "Tool Changer");
+                let Some(machine) = self.machines.active_mut() else {
+                    ui.weak("No machine yet: add one in Machine ▸ Machine Configuration");
+                    return;
+                };
+                ui.strong(&machine.name);
+                changed = cut_craft_machines::tool_changer(ui, machine, Some(&tools));
+            });
+        self.tool_changer_window = open;
+        if changed {
+            self.machines_changed("Tool changer changed");
+        }
     }
 
     /// Guide Properties, on a right-clicked guide: its position (where it crosses its axis)

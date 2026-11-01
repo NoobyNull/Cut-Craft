@@ -8,4 +8,4 @@ pub mod manager;
 
 pub use library::{Entry, Library};
 pub use machine::{Machine, Machines};
-pub use manager::{Look, MachineManager, MachineOutcome, PostManager, PostOutcome};
+pub use manager::{Look, MachineManager, MachineOutcome, PostManager, PostOutcome, tool_changer};

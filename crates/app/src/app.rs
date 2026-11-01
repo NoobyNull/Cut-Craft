@@ -136,7 +136,8 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 90] = [
+const BUILT_INS: [&str; 91] = [
+    "tool_changer",
     "find_tool",
     "activate_layer_of_selection",
     "machine_configuration",
@@ -817,6 +818,8 @@ struct CutCraftApp {
     menu_at: Option<Point>,
     /// Guide Properties, open on a guide.
     guide_props: Option<GuideProps>,
+    /// Machine ▸ Tool Changer…: the active machine's holders loaded from the tools.
+    tool_changer_window: bool,
     /// Measure / Inspect's last result, shown in its form while the tool is on.
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.
