@@ -703,6 +703,64 @@ I[tp + "save_all_as_template.svg"] = lambda: [page(4, 2, 22, 30, 6, TPL, TP), pa
 I[tp + "save_toolpaths.svg"] = lambda: [floppy(), path("M12,32 Q20,26 24,32 T36,32", TP, 2.5)]
 I[tp + "tool_database.svg"] = I["common/tool_database.svg"]
 
+# how a toolpath cuts: a closed vector and the tool's way round it (green, clockwise or
+# anticlockwise as seen from above); climb is clockwise round a part, anticlockwise in a hole
+def cut_way(cw, inside):
+    if inside:
+        shape = [rect(3, 3, 42, 42, 3, WOODD, 2, WOOD), rect(7, 7, 34, 34, 5, INK, SW, LIGHT)]
+        r = 11
+    else:
+        shape = [rect(16, 16, 16, 16, 3, INK, SW, WOOD)]
+        r = 17
+    a0, a1 = (-40, 220) if cw else (220, -40)
+    return shape + [curved_arrow(24, 24, r, a0, a1, TP, SW, 8)]
+
+
+for way, cw_outside in (("climb", True), ("conventional", False)):
+    for side in ("outside", "on", "inside"):
+        cw = cw_outside if side != "inside" else not cw_outside
+        I[tp + f"cut_{way}_{side}.svg"] = (lambda cw=cw, inside=(side == "inside"): cut_way(cw, inside))
+# passes: each pass the same way, or every other one back
+I[tp + "passes_one.svg"] = lambda: [material(4, 30, 40, 14), arrow(6, 12, 42, 12, TP), arrow(6, 23, 42, 23, TP)]
+I[tp + "passes_both.svg"] = lambda: [material(4, 30, 40, 14), arrow(6, 12, 42, 12, TP), arrow(42, 23, 6, 23, TP), path("M42,12 Q47,17.5 42,23", TP, 2, dash="2 2")]
+# motion: straight along the vector, or in small loops moving on along it
+def trochoid_d(x0=6, x1=38, y=24, r=7, loops=4, n=96, cw=True):
+    """Loops moving on to the right from the top of the first, clockwise on screen or not."""
+    turn = 1 if cw else -1
+    pts = []
+    for k in range(n + 1):
+        t = k / n
+        a = 2 * math.pi * loops * t
+        pts.append((x0 + (x1 - x0) * t + turn * r * math.sin(a), y - r * math.cos(a) + r))
+    return "M" + " L".join(f"{x:.2f},{y_:.2f}" for x, y_ in pts)
+
+
+I[tp + "motion_straight.svg"] = lambda: [line(4, 34, 44, 34, INK, 2), arrow(6, 24, 42, 24, TP)]
+I[tp + "motion_trochoidal.svg"] = lambda: [line(4, 38, 44, 38, INK, 2), path(trochoid_d(6, 36, 16, 8, 4), TP, 2.5), arrow(36, 31, 44, 31, TP, 2.5, 6)]
+# which way trochoidal loops turn: the loops, and an arrow round the last showing the turn
+def loops_turn(cw):
+    a0, a1 = (-150, 120) if cw else (-30, -300)
+    return [line(4, 42, 44, 42, INK, 2), path(trochoid_d(6, 28, 14, 9, 3, cw=cw), TP, 2.5),
+            curved_arrow(32, 23, 12, a0, a1, ACC, 2.5, 6)]
+
+
+I[tp + "loops_clockwise.svg"] = lambda: loops_turn(True)
+I[tp + "loops_anticlockwise.svg"] = lambda: loops_turn(False)
+# rings: an offset pocket's rings stepping from the middle out, from the outline in, or by turns
+def rings_pic(out, back):
+    els = [rect(4, 4, 40, 40, 4, INK, SW, LIGHT)] + [rect(4 + d, 4 + d, 40 - 2 * d, 40 - 2 * d, 4, TP, 2) for d in (6, 12)]
+    if out:
+        els.append(arrow(24, 24, 24 + 15, 24, ACC, SW, 6))
+    if back:
+        # in from the outline: down from the top when it shares the picture with "out"
+        els.append(arrow(24, 6, 24, 21, ACC, SW, 6) if out else arrow(6, 24, 21, 24, ACC, SW, 6))
+    return els
+
+
+I[tp + "rings_middle_out.svg"] = lambda: rings_pic(True, False)
+I[tp + "rings_outline_in.svg"] = lambda: rings_pic(False, True)
+I[tp + "rings_alternate.svg"] = lambda: rings_pic(True, True)
+
 # view
 vw = "view/"
 I[vw + "2d_view.svg"] = lambda: [rect(4, 8, 40, 32, 2, INK, 2.5, LIGHT), text("2D", 11, 16, 16, INK, 3.5)]

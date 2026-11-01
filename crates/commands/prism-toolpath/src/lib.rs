@@ -36,11 +36,22 @@ pub struct Params {
     /// Instead, use the least depth that brings the widest shape to a point
     #[schemars(extend("x-group" = "Cutting Depths"))]
     pub depth_for_full_prism: bool,
-    #[schemars(extend("x-group" = "Cut Direction"))]
+    #[schemars(extend(
+        "x-group" = "Cut Direction",
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/cut_{}_outside.png"
+    ))]
     pub cut_direction: CutDirection,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
-    #[schemars(title = "Passes", extend("x-group" = "Cut Direction", "x-widget" = "row"))]
+    #[schemars(
+        title = "Passes",
+        extend(
+            "x-group" = "Cut Direction",
+            "x-widget" = "named-icons",
+            "x-icon" = "toolpaths/passes_{}.png"
+        )
+    )]
     pub ways: Ways,
     /// A V-bit
     pub tool: Tool,

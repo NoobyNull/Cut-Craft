@@ -47,7 +47,21 @@ pub enum Motion {
     Trochoidal,
 }
 
-/// The loops a trochoidal toolpath makes, as shares of the tool's diameter.
+/// Which way a trochoidal toolpath's loops turn, seen from above. With the spindle turning
+/// clockwise, anticlockwise loops cut climb and clockwise ones conventional, whichever way
+/// the tool travels along its path.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Turn {
+    /// Each loop cuts climb
+    #[default]
+    Anticlockwise,
+    /// Each loop cuts conventional
+    Clockwise,
+}
+
+/// The loops a trochoidal toolpath makes, as shares of the tool's diameter, and which way
+/// they turn.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Loops {
     /// How wide each loop is
@@ -56,6 +70,13 @@ pub struct Loops {
     /// How far each loop moves on from the last: less is a lighter cut and a longer toolpath
     #[schemars(title = "Loop Step", extend("x-unit" = "%"), range(min = 1, max = 100))]
     pub step: f64,
+    /// Apart from the cut direction, which sets the way along the path (added with loop turn)
+    #[serde(default)]
+    #[schemars(
+        title = "Loops Turn",
+        extend("x-widget" = "named-icons", "x-icon" = "toolpaths/loops_{}.png")
+    )]
+    pub turn: Turn,
 }
 
 impl Default for Loops {
@@ -63,11 +84,17 @@ impl Default for Loops {
         Self {
             width: 100.0,
             step: 10.0,
+            turn: Turn::Anticlockwise,
         }
     }
 }
 
 impl Loops {
+    /// Whether the loops turn anticlockwise.
+    pub fn anticlockwise(self) -> bool {
+        self.turn == Turn::Anticlockwise
+    }
+
     /// Each loop's radius and how far it moves on, in mm, for a tool `diameter` across.
     pub fn sized(self, diameter: f64) -> (f64, f64) {
         (

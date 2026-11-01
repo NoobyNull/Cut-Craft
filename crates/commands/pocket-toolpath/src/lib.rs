@@ -86,7 +86,11 @@ pub struct Params {
     pub strategy: Strategy,
     /// Which way round the rings and the profile pass run
     #[serde(default)]
-    #[schemars(extend("x-group" = "Clear Pocket"))]
+    #[schemars(extend(
+        "x-group" = "Clear Pocket",
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/cut_{}_inside.png"
+    ))]
     pub direction: Direction,
     /// Left on the walls; negative cuts past the vectors
     #[serde(default)]
@@ -107,17 +111,33 @@ pub struct Params {
     pub profile_pass: ProfilePass,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
-    #[schemars(title = "Passes", extend("x-group" = "Clear Pocket", "x-widget" = "row"))]
+    #[schemars(
+        title = "Passes",
+        extend(
+            "x-group" = "Clear Pocket",
+            "x-widget" = "named-icons",
+            "x-icon" = "toolpaths/passes_{}.png"
+        )
+    )]
     pub ways: Ways,
     /// Which way the offset rings step; trochoidal bands always step from the outline in
     /// (added with ring order)
     #[serde(default)]
-    #[schemars(extend("x-group" = "Clear Pocket", "x-show-when" = {"strategy": "offset"}))]
+    #[schemars(extend(
+        "x-group" = "Clear Pocket",
+        "x-show-when" = {"strategy": "offset"},
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/rings_{}.png"
+    ))]
     pub rings: RingOrder,
     /// Straight, or in small loops: trochoidal clears in looped bands from the outline in,
     /// then cuts once round the edge
     #[serde(default)]
-    #[schemars(extend("x-group" = "Clear Pocket", "x-widget" = "row"))]
+    #[schemars(extend(
+        "x-group" = "Clear Pocket",
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/motion_{}.png"
+    ))]
     pub motion: Motion,
     #[serde(default)]
     #[schemars(extend(
@@ -363,13 +383,7 @@ fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
     while !band.is_empty() {
         for ring in &band {
             let ring = p.direction.orient(cut_points(ring), true);
-            let points = trochoid(
-                &ring,
-                true,
-                radius,
-                advance,
-                p.direction == Direction::Climb,
-            );
+            let points = trochoid(&ring, true, radius, advance, p.loops.anticlockwise());
             out.push(Path::polyline(&points, false));
         }
         last = band;
@@ -522,6 +536,36 @@ mod tests {
                 ways[0] > 0.0 && ways[1] < 0.0 && ways[2] > 0.0,
                 "{motion:?}: climb, conventional, climb: {ways:?}"
             );
+        }
+    }
+
+    #[test]
+    fn the_loops_turn_their_own_way_whichever_the_cut_direction() {
+        use cut_craft_core::entry::Turn;
+        // twice the area the first pass's loops go round: positive anticlockwise
+        let turning = |direction, turn| -> f64 {
+            let p = Params {
+                motion: Motion::Trochoidal,
+                direction,
+                loops: Loops {
+                    turn,
+                    ..Loops::default()
+                },
+                ..Params::default()
+            };
+            let tp = pocket(30.0, &p).unwrap();
+            tp.moves
+                .windows(2)
+                .filter(|w| w.iter().all(|m| m.kind == MoveKind::Cut))
+                .map(|w| w[0].to.truncate().perp_dot(w[1].to.truncate()))
+                .sum()
+        };
+        for direction in [Direction::Climb, Direction::Conventional] {
+            assert!(
+                turning(direction, Turn::Anticlockwise) > 0.0,
+                "{direction:?}"
+            );
+            assert!(turning(direction, Turn::Clockwise) < 0.0, "{direction:?}");
         }
     }
 

@@ -69,7 +69,10 @@ please report them (see [Reporting bugs](#reporting-bugs)).
     Pocket, Chamfer, Prism).
   - **Motion**: Straight, or Trochoidal, where the tool circles in small loops as it moves
     along, so only a sliver of its edge cuts at a time. Loop Width and Loop Step set the
-    loops. A trochoidal pocket clears in looped bands from the outline in, then cuts once
+    loops, and Loops Turn sets which way they turn, apart from the direction: anticlockwise
+    loops cut climb and clockwise ones conventional (the spindle always turns clockwise),
+    so Climb or Conventional with Straight, Trochoidal anticlockwise or Trochoidal clockwise
+    gives six ways to cut. A trochoidal pocket clears in looped bands from the outline in, then cuts once
     round the edge; a trochoidal profile loops in the waste beside the line, then cuts the
     line straight (with tabs, the loops stop at the tabs' tops) (Profile, Pocket).
   - **Machine**: Inside, Outside or On the vector (Profile, Chamfer).

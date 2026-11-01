@@ -66,11 +66,22 @@ pub struct Params {
     pub side: Side,
     #[schemars(extend("x-group" = "Chamfer"))]
     pub slope: Slope,
-    #[schemars(extend("x-group" = "Chamfer"))]
+    #[schemars(extend(
+        "x-group" = "Chamfer",
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/cut_{}_outside.png"
+    ))]
     pub cut_direction: CutDirection,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
-    #[schemars(title = "Passes", extend("x-group" = "Chamfer", "x-widget" = "row"))]
+    #[schemars(
+        title = "Passes",
+        extend(
+            "x-group" = "Chamfer",
+            "x-widget" = "named-icons",
+            "x-icon" = "toolpaths/passes_{}.png"
+        )
+    )]
     pub ways: Ways,
     /// A V-bit or a ball nose
     pub tool: Tool,

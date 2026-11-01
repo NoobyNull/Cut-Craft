@@ -95,17 +95,33 @@ pub struct Params {
     pub tool: Tool,
     #[schemars(title = "Machine", extend("x-group" = "Machine Vectors…"))]
     pub side: Side,
-    /// Which way round closed shapes are cut
+    /// Which way round closed shapes are cut: climb is clockwise round a part, anticlockwise
+    /// round a hole
     #[serde(default)]
-    #[schemars(extend("x-group" = "Machine Vectors…", "x-widget" = "row"))]
+    #[schemars(extend(
+        "x-group" = "Machine Vectors…",
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/cut_{}_{side}.png"
+    ))]
     pub direction: Direction,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
-    #[schemars(title = "Passes", extend("x-group" = "Machine Vectors…", "x-widget" = "row"))]
+    #[schemars(
+        title = "Passes",
+        extend(
+            "x-group" = "Machine Vectors…",
+            "x-widget" = "named-icons",
+            "x-icon" = "toolpaths/passes_{}.png"
+        )
+    )]
     pub ways: Ways,
     /// Straight, or in small loops in the waste beside the line, then once along it straight
     #[serde(default)]
-    #[schemars(extend("x-group" = "Machine Vectors…", "x-widget" = "row"))]
+    #[schemars(extend(
+        "x-group" = "Machine Vectors…",
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/motion_{}.png"
+    ))]
     pub motion: Motion,
     #[serde(default)]
     #[schemars(extend(
@@ -378,11 +394,10 @@ fn trochoidal(
         tabs: Tabs::None,
         ..entry.clone()
     };
-    let climb = p.direction == Direction::Climb;
     let mut moves: Vec<_> = rings
         .iter()
         .flat_map(|(ring, closed)| {
-            let loops = trochoid(ring, *closed, radius, advance, climb);
+            let loops = trochoid(ring, *closed, radius, advance, p.loops.anticlockwise());
             directed_moves(p.ways, &loops, false, &loop_depths, 0.0, safe, &looping)
         })
         .collect();

@@ -350,7 +350,7 @@ fn plain(
                                 let inner: Vec<&Field> = inner.iter().collect();
                                 show_within(ui, &inner, value, look, top)
                             }
-                            kind => edit(ui, kind, value, look),
+                            kind => edit(ui, kind, value, &Value::Null, look),
                         })
                         .inner
                     })
@@ -395,8 +395,20 @@ fn grid(
                         hover(ui.label(&f.label), f.help.as_ref());
                     });
                 });
+                // a picture named by the fields beside it reads them as they were this frame
+                let around = match &f.kind {
+                    Kind::Choice(
+                        _,
+                        Widget::Icons {
+                            picture: Some(t), ..
+                        },
+                    ) if t.replace("{}", "").contains('{') => params.clone(),
+                    _ => Value::Null,
+                };
                 changed |= ui
-                    .add_enabled_ui(enabled, |ui| edit(ui, &f.kind, &mut params[&f.key], look))
+                    .add_enabled_ui(enabled, |ui| {
+                        edit(ui, &f.kind, &mut params[&f.key], &around, look)
+                    })
                     .inner;
                 ui.end_row();
             }
@@ -421,8 +433,17 @@ pub fn shown_in(unit: &str, units: Units) -> Option<(f64, &'static str)> {
 
 /// A section's picture for its value: `{}` stands for the value, `{name}` for its field `name`.
 pub fn icon_path(template: &str, value: &Value) -> String {
-    let mut path = template.replace("{}", value.as_str().unwrap_or_default());
-    if let Some(fields) = value.as_object() {
+    named(
+        &template.replace("{}", value.as_str().unwrap_or_default()),
+        value,
+    )
+}
+
+/// `template` with each `{name}` the text of `fields`' field `name` (a choice's picture that
+/// follows another choice: Profile's cut direction drawn for the side it machines).
+fn named(template: &str, fields: &Value) -> String {
+    let mut path = template.to_owned();
+    if let Some(fields) = fields.as_object() {
         for (name, v) in fields {
             if let Some(v) = v.as_str() {
                 path = path.replace(&format!("{{{name}}}"), v);
@@ -443,7 +464,8 @@ pub fn units_chosen(params: &Value) -> Option<Units> {
     }
 }
 
-fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool {
+/// Edits `value`; `around` holds the fields beside it, for pictures named by them.
+fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look: &Look) -> bool {
     match kind {
         Kind::Number {
             unit,
@@ -506,7 +528,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, look: &Look) -> bool 
             }
             changed
         }
-        Kind::Choice(options, widget) => choose(ui, options, widget, value, look),
+        Kind::Choice(options, widget) => choose(ui, options, widget, value, around, look),
         Kind::Group(inner) => ui.vertical(|ui| show(ui, inner, value, look)).inner,
         Kind::List(item) => ui.vertical(|ui| edit_list(ui, item, value, look)).inner,
         Kind::Colour => {
@@ -534,6 +556,7 @@ fn choose(
     options: &[Choice],
     widget: &Widget,
     value: &mut Value,
+    around: &Value,
     look: &Look,
 ) -> bool {
     let current = value.as_str().unwrap_or_default().to_owned();
@@ -564,8 +587,19 @@ fn choose(
             let picture = picture.as_deref().and_then(look.picture);
             faces(ui, options, &current, picture)
         }
-        Widget::Icons { picture, named } => {
-            icon_row(ui, options, &current, look, picture.as_deref(), *named)
+        Widget::Icons {
+            picture,
+            named: with_names,
+        } => {
+            let template = picture.as_deref().map(|t| named(t, around));
+            icon_row(
+                ui,
+                options,
+                &current,
+                look,
+                template.as_deref(),
+                *with_names,
+            )
         }
     };
     match picked {
@@ -841,7 +875,7 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     let mut remove = None;
     for (i, it) in items.iter_mut().enumerate() {
         ui.horizontal(|ui| {
-            changed |= edit(ui, item, it, look);
+            changed |= edit(ui, item, it, &Value::Null, look);
             if ui.small_button("✕").on_hover_text("Remove").clicked() {
                 remove = Some(i);
             }
@@ -1554,4 +1588,75 @@ fn interactive_rotation_offers_a_named_picture_for_each_turn() {
             .join(&path);
         assert!(file.is_file(), "{path}");
     }
+}
+
+#[test]
+fn every_way_of_cutting_has_a_picture_for_each_choice() {
+    let registry = crate::commands::registry();
+    let icons = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icons");
+    let wanted = [
+        ("profile_toolpath", &["direction", "ways", "motion"][..]),
+        ("pocket_toolpath", &["direction", "ways", "motion", "rings"]),
+        ("chamfer_toolpath", &["cut_direction", "ways"]),
+        ("prism_toolpath", &["cut_direction", "ways"]),
+    ];
+    for (id, keys) in wanted {
+        let f = fields(&registry.get(id).unwrap().schema());
+        for key in keys {
+            let field = f.iter().find(|f| f.key == *key).expect(key);
+            let Kind::Choice(
+                options,
+                Widget::Icons {
+                    picture: Some(p),
+                    named: true,
+                },
+            ) = &field.kind
+            else {
+                panic!("{id} {key}: {:?}", field.kind)
+            };
+            // every side a profile machines
+            for side in ["outside", "inside", "on"] {
+                let around = serde_json::json!({ "side": side });
+                for o in options {
+                    let path = icon_path(&named(p, &around), &Value::String(o.value.clone()));
+                    assert!(icons.join(&path).is_file(), "{id} {key}: no {path}");
+                }
+            }
+        }
+    }
+    // the trochoidal loops' turn, in the Loops section
+    let f = fields(&registry.get("pocket_toolpath").unwrap().schema());
+    let Kind::Group(loops) = &f.iter().find(|f| f.key == "loops").unwrap().kind else {
+        panic!("a section")
+    };
+    let turn = loops.iter().find(|f| f.key == "turn").unwrap();
+    let Kind::Choice(
+        options,
+        Widget::Icons {
+            picture: Some(p),
+            named: true,
+        },
+    ) = &turn.kind
+    else {
+        panic!("{:?}", turn.kind)
+    };
+    for o in options {
+        let path = icon_path(p, &Value::String(o.value.clone()));
+        assert!(icons.join(&path).is_file(), "no {path}");
+    }
+    // a profile's climb turns clockwise round a part and anticlockwise in a hole
+    let path = |side: &str| {
+        named(
+            "toolpaths/cut_{}_{side}.png",
+            &serde_json::json!({ "side": side }),
+        )
+    };
+    assert_eq!(
+        icon_path(&path("inside"), &"climb".into()),
+        "toolpaths/cut_climb_inside.png"
+    );
+    assert_eq!(
+        icon_path(&path("outside"), &"climb".into()),
+        "toolpaths/cut_climb_outside.png"
+    );
 }
