@@ -128,6 +128,8 @@ const DROP_SHADE: f32 = 0.8;
 /// share of the material's longer side, and how see-through it is.
 const MODELING_PLANE_MARGIN: f64 = 0.1;
 const MODELING_PLANE_ALPHA: f32 = 0.35;
+/// How strongly Sketch Carving's green shows the areas it would carve over the picture.
+const SKETCH_AREA_ALPHA: f32 = 0.45;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 const RING_SHARE: f64 = 0.6;
 
@@ -682,6 +684,14 @@ struct OpenForm {
     step: u64,
 }
 
+/// See [`CutCraftApp::sketch_areas`].
+struct SketchAreas {
+    params: serde_json::Value,
+    revision: u64,
+    selection: cut_craft_core::selection::Selection,
+    areas: Vec<cut_craft_core::geometry::Rect>,
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "the windows and modes it shows"
@@ -788,6 +798,9 @@ struct CutCraftApp {
     info: Option<Info>,
     /// Help Contents' rendered pages and the `help:` links it watches.
     help_cache: egui_commonmark::CommonMarkCache,
+    /// Sketch Carving's green areas, with the form settings, revision and selection they
+    /// were found for.
+    sketch_areas: Option<SketchAreas>,
     /// Toolpath Summary's settings.
     summary: Summary,
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.

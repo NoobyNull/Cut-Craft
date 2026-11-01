@@ -567,6 +567,39 @@ fn clicking_a_picture_selects_it_and_delete_removes_it() {
 }
 
 #[test]
+fn sketch_carving_shows_the_areas_it_would_carve_while_its_form_is_open() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    // a white picture with a dark stripe down its middle column
+    let grey = (0..9 * 9)
+        .map(|i| if i % 9 == 4 { 0 } else { 255 })
+        .collect();
+    c.add_bitmap(Bitmap {
+        name: "b".into(),
+        columns: 9,
+        rows: 9,
+        grey,
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(45.0, 45.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "sketch_carving_toolpath");
+    h.frame(vec![]);
+    let areas = &h.app.sketch_areas.as_ref().expect("found").areas;
+    assert!(!areas.is_empty(), "the stripe shows");
+    assert!(
+        areas.iter().all(|r| r.min.x >= 15.0 && r.max.x <= 30.0),
+        "{areas:?}"
+    );
+    h.app.form = None;
+    h.frame(vec![]);
+    assert!(h.app.sketch_areas.is_none(), "gone with the form");
+}
+
+#[test]
 fn clicking_one_of_a_group_picks_the_group() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);

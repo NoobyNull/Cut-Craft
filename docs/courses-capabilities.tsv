@@ -105,7 +105,7 @@ texture-toolpath	Texture toolpath: depths, lengths, overlap, variation, vectors 
 prism	Prism carving	yes	prism-toolpath command	prism	prism
 moulding	Moulding toolpath: rail and section, vary stepover, clearance tool, allowance, sharp corners, boundary offset	yes	moulding-toolpath: rails and section, sharp corners, boundary offset, vary stepover, clearance tool [Clear] with allowance, machine / skip flat regions	moulding|molding	mou?lding tool ?path	98
 chamfer	Chamfer toolpath: width / depth, inside / outside, slope, V-bit or ball nose, overcut	yes	chamfer-toolpath command	chamfer	chamfer
-sketch-carving	Sketch Carving: bitmap or model, boundary, line thickness	partly	sketch-carving-toolpath; no live green preview of the areas	sketch carv	sketch carv	127
+sketch-carving	Sketch Carving: bitmap or model, boundary, line thickness	yes	Sketch Carving Toolpath: a picture or the 3D model, start and cut depth, picture edges or selected vectors (with an offset) as the boundary, line thickness; while the form is open the areas it would carve show in green over the 2D view and follow the settings. No Selected Level boundary	sketch carv	sketch carv	127
 roughing-3d	3D Roughing: Z level / raster, allowance, boundary (model, material, vectors, level)	yes	3d-roughing-toolpath command	3d toolpath|roughing	roughing
 finishing-3d	3D Finishing: raster / offset, stepover, boundary, raster angle	yes	3d-finishing-toolpath command	3d toolpath|finishing	finishing
 project-onto-model	Project 2D toolpaths onto the 3D model	yes	Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve	projected onto	project(ed|ing)? (the |this |your |our )?tool ?paths? onto

@@ -239,6 +239,40 @@ impl Command for SketchCarvingToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        let sketch = Sketch::new(doc, p)?;
+        let inside = |q: Point| sketch.inside(q);
+        // ponytail: each row's runs of line cells are cut flat; offsetting round the lines
+        // would give smoother edges
+        let z = -(p.start_depth + p.cut_depth);
+        let moves = cut_rows(&sketch.grid, &sketch.line, inside, z, doc.job.clearance);
+        if moves.is_empty() {
+            return Err(CommandError::Failed(
+                "the sketch has no lines: try a thicker line".into(),
+            ));
+        }
+        let mut c = Change::builder(doc);
+        c.add_toolpath(made_by::<Self>(
+            p,
+            p.name.clone(),
+            p.tool.clone(),
+            sketch.ids,
+            moves,
+        ));
+        Ok(c.finish())
+    }
+}
+
+/// What the settings sketch: the grid of the source, which of its cells are line, and the
+/// boundary vectors (with their rings, grown by the offset) that limit it.
+struct Sketch {
+    grid: Grid,
+    line: Vec<bool>,
+    ids: Vec<cut_craft_core::document::EntityId>,
+    boundary: Option<Vec<Vec<Point>>>,
+}
+
+impl Sketch {
+    fn new(doc: &Document, p: &Params) -> Result<Self, CommandError> {
         ensure_positive("cut depth", p.cut_depth)?;
         ensure_positive("tool diameter", p.tool.diameter)?;
         if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
@@ -246,8 +280,7 @@ impl Command for SketchCarvingToolpath {
                 "stepover must be more than 0 and at most 1".into(),
             ));
         }
-        let step = p.tool.stepover * p.tool.diameter;
-        let cell = step;
+        let cell = p.tool.stepover * p.tool.diameter;
         let grid = p.darkness(doc, cell)?;
         #[expect(
             clippy::cast_possible_truncation,
@@ -279,30 +312,47 @@ impl Command for SketchCarvingToolpath {
                 (ids, Some(rings))
             }
         };
-        let inside = |q: Point| {
-            boundary
-                .as_ref()
-                .is_none_or(|rings| cut_craft_core::geometry::inside(rings, q))
-        };
-        // ponytail: each row's runs of line cells are cut flat; offsetting round the lines
-        // would give smoother edges
-        let z = -(p.start_depth + p.cut_depth);
-        let moves = cut_rows(&grid, &line, inside, z, doc.job.clearance);
-        if moves.is_empty() {
-            return Err(CommandError::Failed(
-                "the sketch has no lines: try a thicker line".into(),
-            ));
-        }
-        let mut c = Change::builder(doc);
-        c.add_toolpath(made_by::<Self>(
-            p,
-            p.name.clone(),
-            p.tool.clone(),
+        Ok(Self {
+            grid,
+            line,
             ids,
-            moves,
-        ));
-        Ok(c.finish())
+            boundary,
+        })
     }
+
+    fn inside(&self, q: Point) -> bool {
+        self.boundary
+            .as_ref()
+            .is_none_or(|rings| cut_craft_core::geometry::inside(rings, q))
+    }
+}
+
+/// The areas the settings `p` would carve, as Aspire's green highlight shows them while its
+/// form is open: each row's runs of line cells inside the boundary, a rectangle each.
+pub fn areas(doc: &Document, p: &Params) -> Result<Vec<Rect>, CommandError> {
+    let sketch = Sketch::new(doc, p)?;
+    let g = &sketch.grid;
+    #[expect(clippy::cast_precision_loss, reason = "cell counts")]
+    let corner = |c: usize, r: usize| g.area.min + Point::new(c as f64, r as f64) * g.cell;
+    let half = Point::splat(g.cell / 2.0);
+    let line =
+        |c: usize, r: usize| sketch.line[r * g.columns + c] && sketch.inside(corner(c, r) + half);
+    let mut out = vec![];
+    for r in 0..g.rows {
+        let mut c = 0;
+        while c < g.columns {
+            if !line(c, r) {
+                c += 1;
+                continue;
+            }
+            let first = c;
+            while c < g.columns && line(c, r) {
+                c += 1;
+            }
+            out.push(Rect::new(corner(first, r), corner(c, r + 1)));
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -401,5 +451,27 @@ mod tests {
         .unwrap_err()
         .to_string();
         assert!(why.contains("3D model"), "{why}");
+    }
+
+    #[test]
+    fn the_areas_shown_are_where_it_carves() {
+        let doc = with_picture();
+        let p = Params::default();
+        let areas = areas(&doc, &p).unwrap();
+        assert!(!areas.is_empty(), "the stripe shows");
+        for m in sketch(&doc, &p).iter().filter(|m| m.to.z < 0.0) {
+            let q = Point::new(m.to.x, m.to.y);
+            assert!(
+                areas.iter().any(|a| a.contains(q)),
+                "{q:?} carved, not shown"
+            );
+        }
+        // thicker lines show more
+        let thick = Params {
+            line_thickness: 100.0,
+            ..Params::default()
+        };
+        let total = |a: &[Rect]| a.iter().map(|r| r.size().x * r.size().y).sum::<f64>();
+        assert!(total(&super::areas(&doc, &thick).unwrap()) >= total(&areas));
     }
 }

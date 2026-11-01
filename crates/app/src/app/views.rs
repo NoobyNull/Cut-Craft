@@ -767,6 +767,48 @@ impl CutCraftApp {
         }
     }
 
+    /// While Sketch Carving's form is open, the areas it would carve in translucent green,
+    /// as Aspire highlights them; found again only when the settings or the job change.
+    fn paint_sketch_areas(&mut self, ui: &egui::Ui, canvas: &Canvas) {
+        let Some(form) = self
+            .form
+            .as_ref()
+            .filter(|f| f.id == "sketch_carving_toolpath")
+        else {
+            self.sketch_areas = None;
+            return;
+        };
+        let fresh = self.sketch_areas.as_ref().is_some_and(|s| {
+            s.params == form.params
+                && s.revision == self.history.revision()
+                && s.selection == self.doc.selection
+        });
+        if !fresh {
+            let areas = serde_json::from_value(form.params.clone())
+                .ok()
+                .and_then(|p| cmd_sketch_carving_toolpath::areas(&self.doc, &p).ok())
+                .unwrap_or_default();
+            self.sketch_areas = Some(super::SketchAreas {
+                params: form.params.clone(),
+                revision: self.history.revision(),
+                selection: self.doc.selection.clone(),
+                areas,
+            });
+        }
+        let Some(sketch) = &self.sketch_areas else {
+            return;
+        };
+        let painter = ui.painter_at(canvas.area);
+        let green = egui::Color32::GREEN.gamma_multiply(super::SKETCH_AREA_ALPHA);
+        for r in &sketch.areas {
+            let rect = egui::Rect::from_two_pos(
+                canvas.transform.to_screen(r.min),
+                canvas.transform.to_screen(r.max),
+            );
+            painter.rect_filled(rect, 0.0, green);
+        }
+    }
+
     /// Aspire's two green handles over text Draw Text is editing: drag them to bend it.
     fn paint_arc_handles(&self, ui: &egui::Ui, canvas: &Canvas) {
         let Some(handles) = self
@@ -1120,6 +1162,7 @@ impl CutCraftApp {
             self.paint_handles(ui, &canvas);
         }
         self.paint_arc_handles(ui, &canvas);
+        self.paint_sketch_areas(ui, &canvas);
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
         self.view_buttons(ui, area);

@@ -89,6 +89,7 @@ impl CutCraftApp {
             turn_ring: None,
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
+            sketch_areas: None,
             summary: super::Summary::default(),
             stroke: Vec::new(),
             snap: cut_craft_core::snap::SnapOptions::default(),
