@@ -350,6 +350,14 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   - **Edge handles:** scale along one axis. Shift keeps it proportional.
   - **Black corner handles:** rotate. Alt snaps to 15° steps.
   - **3D view differences:** the edge handles are black, and a rotation arrow sits on top.
+  - **Cut Craft differs, deliberately:** one rule for the keys on every handle, 2D and 3D:
+    Shift or Ctrl scales in proportion, moves along one axis, and snaps rotation (Shift to
+    5.625°, Ctrl to 1°); Alt scales about the centre. The status bar names the keys over
+    each handle. Aspire's Alt-for-15° and per-handle key meanings are harder to learn.
+  - **Cut Craft's 3D handles** sit level with the highest surface inside the selection (on
+    top of a raised component, not under it) inside a dashed box; they work on vectors
+    as well as components; Escape cancels a drag; letting go over the horizon changes
+    nothing. [inf: where Aspire draws them on a raised component is not confirmed.]
   - Grabbing any handle focuses an **edit box** where an exact value can be typed, then Enter.
 - **Node editing:** N toggles it on and off.
   - Drag nodes, Bezier control points or spans. Shift / box selection picks several nodes.

@@ -2520,6 +2520,14 @@ impl CutCraftApp {
                 self.invoke(ctx, &id);
             }
         }
+        // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
+        let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
+        if self.drag_3d.is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.cancel_drag_3d();
+        }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {

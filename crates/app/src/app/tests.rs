@@ -2175,6 +2175,161 @@ fn a_3d_transform_drag_let_go_above_the_horizon_changes_nothing_and_ends() {
     assert_eq!(h.app.doc.components[&EntityId(1)].extent(), before);
 }
 
+/// The 3D view in Transform mode over the domed fixture, its component selected.
+fn transform_3d(orbit: view3d::Orbit, perspective: bool) -> Harness {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = orbit;
+    h.app.framing.perspective = perspective;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h
+}
+
+/// Where the 3D view drew `which`.
+fn handle_3d_at(h: &Harness, which: Handle3d) -> Pos2 {
+    h.app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == which)
+        .map(|(_, at)| *at)
+        .expect("the handle is drawn")
+}
+
+fn escape() -> Event {
+    Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+#[test]
+fn escape_cancels_a_3d_handle_drag_and_stays_in_transform_mode() {
+    use cut_craft_core::handles::Handle;
+    let mut h = transform_3d(view3d::Orbit::TOP, false);
+    let extent = |h: &Harness| h.app.doc.components[&EntityId(1)].extent();
+    let before = extent(&h);
+    let depth = h.app.history.undo_depth();
+    // a move: Escape mid-drag, then the button let go
+    let from = handle_3d_at(&h, Handle3d::Transform(Handle::Move));
+    let to = from + vec2(60.0, 0.0);
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(to)]);
+    h.frame(vec![escape()]);
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(extent(&h), before, "nothing moved");
+    assert_eq!(h.app.history.undo_depth(), depth, "nothing to undo");
+    assert_eq!(
+        h.app.view_tool,
+        Some(ViewTool::Transform),
+        "still transforming"
+    );
+    assert!(h.app.drag_3d.is_none());
+    // a height: set as it is dragged, so Escape takes it back
+    let height = |h: &Harness| h.app.doc.components[&EntityId(1)].shaping.shape_height;
+    let start = height(&h);
+    let from = handle_3d_at(&h, Handle3d::Height);
+    let up = from - vec2(0.0, 80.0);
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(up)]);
+    h.frame(vec![Event::PointerMoved(up)]);
+    assert!(height(&h) > start * 1.2, "follows the drag");
+    h.frame(vec![escape()]);
+    h.press(up, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!((height(&h) - start).abs() < 1e-9, "back to {start}");
+    assert_eq!(h.app.history.undo_depth(), depth);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+}
+
+#[test]
+fn the_3d_views_transform_handles_move_a_selection_of_vectors_only() {
+    use cut_craft_core::handles::Handle;
+    let mut h = transform_3d(view3d::Orbit::TOP, false);
+    h.app.doc.selected_components.clear();
+    h.rectangle(2.0, 2.0, 6.0, 6.0);
+    let id = *h
+        .app
+        .doc
+        .selection
+        .iter()
+        .next()
+        .expect("the rectangle is selected");
+    h.app.view = View::ThreeD;
+    h.app.view_tool = Some(ViewTool::Transform);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        !h.app.handles_3d.iter().any(|(k, _)| *k == Handle3d::Height),
+        "a vector has no component icons"
+    );
+    let before = h.app.doc.vectors[&id].bounds();
+    let from = handle_3d_at(&h, Handle3d::Transform(Handle::Move));
+    let corner = handle_3d_at(&h, Handle3d::Transform(Handle::Scale { x: 1, y: 1 }));
+    h.drag(from, corner);
+    let after = h.app.doc.vectors[&id].bounds();
+    assert!((after.center() - before.max).length() < 0.5, "{after:?}");
+}
+
+#[test]
+fn with_nothing_selected_the_3d_transform_mode_says_how_to_start() {
+    let mut h = transform_3d(view3d::Orbit::TOP, false);
+    h.app.doc.selected_components.clear();
+    let middle = h.app.fit_3d.expect("the 3D view has been drawn").center();
+    h.frame(vec![Event::PointerMoved(middle)]);
+    h.frame(vec![]);
+    assert!(h.app.handles_3d.is_empty());
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(hint.contains("select it"), "{hint}");
+}
+
+#[test]
+fn the_3d_transform_handles_sit_on_top_of_a_raised_component() {
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::handles::Handle;
+    // nearly side on in perspective, where a box on the material's top would sit well
+    // below the dome
+    let low = view3d::Orbit {
+        pitch: 70f64.to_radians(),
+        ..view3d::Orbit::FRONT
+    };
+    let mut h = transform_3d(low, true);
+    let fit = h.app.fit_3d.unwrap();
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let top = surface.at(Point::new(20.0, 20.0)).unwrap();
+    assert!(top > 1.0, "the dome stands up: {top}");
+    let camera = view3d::Camera::new(&surface, h.app.orbit, h.app.framing, fit, None);
+    let at = |z: f64| {
+        camera.screen(DVec3::new(
+            20.0 - surface.origin.x,
+            20.0 - surface.origin.y,
+            z,
+        ))
+    };
+    let cross = handle_3d_at(&h, Handle3d::Transform(Handle::Move));
+    assert!(
+        (cross - at(top)).length() < 2.0,
+        "{cross:?} at the dome's top {:?}, not its foot {:?}",
+        at(top),
+        at(0.0)
+    );
+    // and a drag on that plane still moves by what the pointer moved over
+    let before = h.app.doc.components[&EntityId(1)].extent();
+    let corner = handle_3d_at(&h, Handle3d::Transform(Handle::Scale { x: 1, y: 1 }));
+    h.drag(cross, corner);
+    let moved = h.app.doc.components[&EntityId(1)].extent();
+    assert!((moved.center() - before.max).length() < 0.5, "{moved:?}");
+}
+
 #[test]
 fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     use cut_craft_core::component::Combine;

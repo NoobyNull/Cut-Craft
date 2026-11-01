@@ -594,10 +594,11 @@ impl Camera {
         )
     }
 
-    /// The point on the material's top plane (z = 0) under `at` on screen, `None` when the
-    /// plane is seen edge-on or, in perspective, `at` is above the horizon.
-    pub(crate) fn on_floor(&self, at: Pos2) -> Option<DVec2> {
-        // the point at the middle's depth under `at`, then along the line of sight to z = 0
+    /// The point on the level plane at height `z` (0 is the material's top) under `at` on
+    /// screen, `None` when the plane is seen edge-on or, in perspective, `at` is above its
+    /// horizon.
+    pub(crate) fn on_plane(&self, at: Pos2, z: f64) -> Option<DVec2> {
+        // the point at the middle's depth under `at`, then along the line of sight to z
         let off = at - self.centre;
         let seen = self.middle
             + self.orbit.to_world(DVec3::new(
@@ -615,11 +616,11 @@ impl Camera {
         // in perspective, a point above the horizon looks away from the plane: the line
         // of sight only meets it behind the eye
         if let Some(eye) = self.eye_at()
-            && -eye.z / along.z <= 0.0
+            && (z - eye.z) / along.z <= 0.0
         {
             return None;
         }
-        Some((seen - along * (seen.z / along.z)).truncate())
+        Some((seen - along * ((seen.z - z) / along.z)).truncate())
     }
 
     /// Material coordinates to clip space over `area` (x and y across it, -1 to 1), placing
@@ -1728,7 +1729,7 @@ mod tests {
             };
             let camera = Camera::new(&m, Orbit::default(), framing, area, None);
             let p = DVec3::new(30.0, 70.0, 0.0);
-            let back = camera.on_floor(camera.screen(p)).unwrap();
+            let back = camera.on_plane(camera.screen(p), 0.0).unwrap();
             // screen positions are f32
             assert!(
                 (back - p.truncate()).length() < 1e-3,
@@ -1737,7 +1738,7 @@ mod tests {
         }
         let edge_on = Camera::new(&m, Orbit::FRONT, Framing::default(), area, None);
         assert_eq!(
-            edge_on.on_floor(area.center()),
+            edge_on.on_plane(area.center(), 0.0),
             None,
             "the plane seen edge-on"
         );
@@ -1752,11 +1753,16 @@ mod tests {
         };
         let camera = Camera::new(&m, low, framing, area, None);
         assert_eq!(
-            camera.on_floor(area.center_top()),
+            camera.on_plane(area.center_top(), 0.0),
             None,
             "above the horizon, not a point behind the eye"
         );
-        assert!(camera.on_floor(area.center_bottom()).is_some());
+        assert!(camera.on_plane(area.center_bottom(), 0.0).is_some());
+        // a raised plane: the point drawn at that height goes back to it
+        let camera = Camera::new(&m, Orbit::default(), framing, area, None);
+        let p = DVec3::new(30.0, 70.0, 6.0);
+        let back = camera.on_plane(camera.screen(p), 6.0).unwrap();
+        assert!((back - p.truncate()).length() < 1e-3, "{back}");
     }
 
     #[test]
