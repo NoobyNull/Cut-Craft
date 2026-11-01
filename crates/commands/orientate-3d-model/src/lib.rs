@@ -17,7 +17,9 @@ pub struct Orientate3dModel;
 
 /// The last model file read, kept so the live form's changes do not read and parse it
 /// again: its path, its size and modified time (a file written again is read again), its
-/// MD5 and its triangles as drawn.
+/// MD5 and its triangles as drawn. Kept only when the file's last change is [`SETTLED`]
+/// older than the read: a file saved again within the clock's tick, the same size, keeps
+/// its date (Windows dates changes to a tick of about 16 ms, FAT to 2 s).
 // ponytail: one file kept; picking another file drops it
 struct ReadFile {
     path: String,
@@ -27,6 +29,9 @@ struct ReadFile {
 }
 
 static READ: Mutex<Option<ReadFile>> = Mutex::new(None);
+
+/// How much older than its read a file's last change must be for the read to be kept.
+const SETTLED: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// A file's triangles as drawn, shared with the cache, and its MD5.
 type Read = (Arc<Vec<[DVec3; 3]>>, String);
@@ -44,6 +49,7 @@ fn read_file(path: &str) -> Result<Read, CommandError> {
         return Ok((Arc::clone(&r.triangles), r.md5.clone()));
     }
     let started = Instant::now();
+    let read_at = std::time::SystemTime::now();
     let bytes = std::fs::read(path).map_err(|e| CommandError::Failed(format!("{path}: {e}")))?;
     let triangles = fmt_import_stl::triangles(&bytes).map_err(CommandError::Failed)?;
     let md5 = Source::md5(&bytes);
@@ -53,8 +59,9 @@ fn read_file(path: &str) -> Result<Read, CommandError> {
         started.elapsed().as_millis()
     );
     let triangles = Arc::new(triangles);
+    let settled = stamp.is_some_and(|(_, modified)| modified + SETTLED <= read_at);
     if let Ok(mut kept) = READ.lock() {
-        *kept = Some(ReadFile {
+        *kept = settled.then(|| ReadFile {
             path: path.to_owned(),
             stamp,
             md5: md5.clone(),
@@ -1332,9 +1339,22 @@ mod rotary {
         );
     }
 
+    /// Dates a file's last change `seconds` back, as one saved a while ago.
+    fn saved_ago(path: &str, seconds: u64) -> std::time::SystemTime {
+        let when = std::time::SystemTime::now() - std::time::Duration::from_secs(seconds);
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+        when
+    }
+
     #[test]
     fn a_file_is_read_once_until_it_changes() {
         let file = stl("read-once", &cuboid([0.0, 0.0, 0.0], [5.0, 5.0, 5.0]));
+        saved_ago(&file, 60);
         let (first, md5) = read_file(&file).unwrap();
         let (again, _) = read_file(&file).unwrap();
         assert!(
@@ -1351,6 +1371,29 @@ mod rotary {
         assert!(!Arc::ptr_eq(&first, &changed));
         assert_ne!(md5, md5_changed);
         assert!(read_file("/nonexistent/model.stl").is_err());
+    }
+
+    /// Windows dates a change to the clock's tick (about 16 ms), so a model saved again at
+    /// once, the same size, can keep its date: a file changed that recently is read again.
+    #[test]
+    fn a_file_saved_again_within_the_clock_tick_is_read_again() {
+        let file = stl("same-tick", &cuboid([0.0, 0.0, 0.0], [5.0, 5.0, 5.0]));
+        let (first, md5) = read_file(&file).unwrap();
+        let date = std::fs::metadata(&file).unwrap().modified().unwrap();
+        let taller = stl(
+            "same-tick-taller",
+            &cuboid([0.0, 0.0, 0.0], [5.0, 5.0, 9.0]),
+        );
+        std::fs::copy(&taller, &file).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(date)
+            .unwrap();
+        let (again, md5_again) = read_file(&file).unwrap();
+        assert!(!Arc::ptr_eq(&first, &again), "read again");
+        assert_ne!(md5, md5_again);
     }
 
     /// `cargo test -p cmd-orientate-3d-model -- --ignored --nocapture big_model`: how long
