@@ -121,9 +121,10 @@ impl Changer {
     }
 }
 
-/// The picture of a tool shape, Aspire's own.
-pub fn picture_path(shape: ToolShape) -> &'static str {
-    match shape {
+/// The picture of a tool's shape.
+pub fn picture_path(tool: &Tool) -> &'static str {
+    match tool.shape {
+        ToolShape::BallNose if tapered_ball(tool) => "tool_database/tapered_ball_nose.png",
         ToolShape::EndMill => "tool_database/end_mill.png",
         ToolShape::BallNose => "tool_database/ball_nose.png",
         ToolShape::VBit => "tool_database/v_bit.png",
@@ -142,6 +143,55 @@ const SHAPES: [(ToolShape, &str); 6] = [
     (ToolShape::ThreadMill, "Thread Mill"),
     (ToolShape::FormTool, "Form Tool"),
 ];
+
+/// A tapered ball nose (a TBN or cone ball nose): a ball nose whose sides open out to its
+/// shank at its taper angle. The editor lists it as a type of its own.
+fn tapered_ball(tool: &Tool) -> bool {
+    tool.shape == ToolShape::BallNose && tool.taper > 0.0
+}
+
+/// The Tool Type list: the shapes, with Tapered Ball Nose under Ball Nose.
+fn tool_type(ui: &mut egui::Ui, tool: &mut Tool) {
+    let tapered = tapered_ball(tool);
+    let shown = if tapered {
+        "Tapered Ball Nose"
+    } else {
+        shape_name(tool.shape)
+    };
+    egui::ComboBox::from_id_salt("tool_type")
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            for (shape, name) in SHAPES {
+                if ui
+                    .selectable_label(tool.shape == shape && !tapered, name)
+                    .clicked()
+                {
+                    tool.shape = shape;
+                    if shape == ToolShape::BallNose {
+                        tool.taper = 0.0;
+                    }
+                }
+                if shape == ToolShape::BallNose
+                    && ui.selectable_label(tapered, "Tapered Ball Nose").clicked()
+                    && !tapered
+                {
+                    make_tapered_ball(tool);
+                }
+            }
+        });
+}
+
+/// Makes the tool a tapered ball nose, keeping its taper and shank when it has them, else a
+/// usual one's: 3° a side on a shank twice its tip (1/8 in at the least).
+fn make_tapered_ball(tool: &mut Tool) {
+    tool.shape = ToolShape::BallNose;
+    if tool.taper <= 0.0 {
+        tool.taper = 3.0;
+    }
+    if tool.shank_diameter <= tool.diameter {
+        tool.shank_diameter = (tool.diameter * 2.0).max(3.175);
+    }
+}
 
 fn shape_name(shape: ToolShape) -> &'static str {
     SHAPES
@@ -299,7 +349,7 @@ impl Manager {
         for i in found {
             let tool = &self.draft.tools[i];
             ui.horizontal(|ui| {
-                if let Some(image) = (look.picture)(picture_path(tool.shape)) {
+                if let Some(image) = (look.picture)(picture_path(tool)) {
                     ui.add(image.fit_to_exact_size(egui::vec2(row * PICTURE_ASPECT, row)));
                 }
                 let picked = self.pick == Some(Pick::Tool(i));
@@ -365,7 +415,7 @@ impl Manager {
                 continue;
             }
             ui.horizontal(|ui| {
-                if let Some(image) = (look.picture)(picture_path(tool.shape)) {
+                if let Some(image) = (look.picture)(picture_path(tool)) {
                     ui.add(image.fit_to_exact_size(egui::vec2(row * PICTURE_ASPECT, row)));
                 }
                 let picked = self.pick == Some(Pick::Tool(i));
@@ -848,13 +898,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
         ui.end_row();
         ui.label("Tool Type");
         ui.horizontal(|ui| {
-            egui::ComboBox::from_id_salt("tool_type")
-                .selected_text(shape_name(tool.shape))
-                .show_ui(ui, |ui| {
-                    for (shape, name) in SHAPES {
-                        ui.selectable_value(&mut tool.shape, shape, name);
-                    }
-                });
+            tool_type(ui, tool);
             // the tool's own units beside it, whatever the job's: a 6 mm end mill reads
             // 0.2362 in
             egui::ComboBox::from_id_salt("tool_units")
@@ -902,7 +946,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
     ui.separator();
     ui.horizontal(|ui| {
         geometry(ui, tool);
-        if let Some(image) = (look.picture)(picture_path(tool.shape)) {
+        if let Some(image) = (look.picture)(picture_path(tool)) {
             let height = ui.spacing().interact_size.y * PICTURE_ROWS;
             ui.add(image.fit_to_exact_size(egui::vec2(height * PICTURE_ASPECT, height)));
         }
@@ -1067,6 +1111,25 @@ mod tests {
             .textures_delta
             .clear();
         outcome
+    }
+
+    #[test]
+    fn a_tapered_ball_nose_is_a_ball_nose_with_a_taper_and_a_wider_shank() {
+        let mut tool = Tool {
+            shape: ToolShape::EndMill,
+            diameter: 0.5,
+            ..Tool::default()
+        };
+        make_tapered_ball(&mut tool);
+        assert_eq!(tool.shape, ToolShape::BallNose);
+        assert!(tapered_ball(&tool));
+        assert!(tool.tapered().is_some(), "it cuts as a tapered tool");
+        assert_eq!(picture_path(&tool), "tool_database/tapered_ball_nose.png");
+        // its own taper and shank are kept
+        tool.taper = 4.7;
+        tool.shank_diameter = 6.0;
+        make_tapered_ball(&mut tool);
+        assert!((tool.taper - 4.7).abs() < 1e-9 && (tool.shank_diameter - 6.0).abs() < 1e-9);
     }
 
     #[test]

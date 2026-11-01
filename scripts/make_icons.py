@@ -246,6 +246,9 @@ def bit(kind, x=24, top=6, bottom=42, r=8, c=DARK):
         cut = path(f"M{x - r},{y0} H{x + r} V{bottom} H{x - r} Z", c, 2.5, "#aab3c2")
     elif kind == "ball_nose":
         cut = path(f"M{x - r},{y0} H{x + r} V{bottom - r} A{r},{r} 0 0 1 {x - r},{bottom - r} Z", c, 2.5, "#aab3c2")
+    elif kind == "tapered_ball_nose":
+        t = r * 0.35
+        cut = path(f"M{x - r},{y0} H{x + r} L{x + t},{bottom - t} A{t},{t} 0 0 1 {x - t},{bottom - t} Z", c, 2.5, "#aab3c2")
     elif kind == "radiused":
         k = r * 0.45
         cut = path(f"M{x - r},{y0} H{x + r} V{bottom - k} Q{x + r},{bottom} {x + r - k},{bottom} H{x - r + k} Q{x - r},{bottom} {x - r},{bottom - k} Z", c, 2.5, "#aab3c2")
@@ -653,9 +656,11 @@ for kind in ("grid", "geometry", "smart"):
 
 # tool database (dialog pictures): the cutter, its diameter in orange
 td = "tool_database/"
-for k in ("end_mill", "ball_nose", "radiused_end_mill", "v_bit"):
+for k in ("end_mill", "ball_nose", "tapered_ball_nose", "radiused_end_mill", "v_bit"):
     kind = {"radiused_end_mill": "radiused"}.get(k, k)
-    I[td + f"{k}.svg"] = (lambda kind=kind: [bit(kind, 24, 3, 40, 10), darrow(14, 45, 34, 45, ACC, 2, 4)])
+    # a tapered ball nose's diameter is its tip's
+    span = (19, 29) if k == "tapered_ball_nose" else (14, 34)
+    I[td + f"{k}.svg"] = (lambda kind=kind, span=span: [bit(kind, 24, 3, 40, 10), darrow(span[0], 45, span[1], 45, ACC, 2, 3 if kind == "tapered_ball_nose" else 4)])
 
 # toolpaths: green is the tool's path
 tp = "toolpaths/"
@@ -744,6 +749,8 @@ def main():
                "drawing/join/join_vectors.svg", "drawing/weld_and_offset/plate_production.svg",
                "modeling/vector_unwrapper.svg", "toolpaths/drag_knife_toolpath.svg", "toolpaths/inlay_toolpath.svg",
                "toolpaths/material_setup.svg", "toolpaths/materials.svg"}
+    # Interactive Rotation's turns, drawn as solids by scripts/make_3d_icons.py
+    wanted -= {f"import/turn_{k}.svg" for k in ("view", "xyz", "x", "y", "z")}
     missing = sorted(wanted - set(I))
     extra = sorted(set(I) - wanted)
     if missing:
