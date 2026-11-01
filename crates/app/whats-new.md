@@ -1,4 +1,4 @@
 - The 3D view shows the model solid down to the modeling plane, without spikes
 - Text bends into an arc with handles; Text in a Box stretches to fit
 - Create Shape: mitred inside corners, blend to inner vectors, E to edit
-- Trace Bitmap areas and colour picking, a Segment 3D Model tree, Nest Parts sheets
+- Trace Bitmap areas, Segment 3D Model tree; Draw Material Block hides the 3D outline
