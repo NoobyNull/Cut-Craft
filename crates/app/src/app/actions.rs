@@ -189,7 +189,7 @@ impl CutCraftApp {
                     || self.playback.is_some()
                     || !self.doc.components.is_empty()
             }
-            "edit_object" => self.object_to_edit().is_some(),
+            "edit_object" => self.object_to_edit().is_some() || self.shape_to_edit(),
             "job_sheet_editor" => true,
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
@@ -423,6 +423,10 @@ impl CutCraftApp {
             "edit_object" => {
                 if let Some((id, command, params)) = self.object_to_edit() {
                     self.edit_shape(id, command, params);
+                } else if self.shape_to_edit() {
+                    // the form opens on the selected shape's own settings
+                    self.form = None;
+                    self.start_command("create_shape");
                 }
             }
             "save_shaded_image" => {
@@ -2182,6 +2186,17 @@ impl CutCraftApp {
         let path = self.doc.vectors.get(&id)?;
         let (command, params) = self.registry.drawn_by(&self.doc, path)?;
         Some((id, command, params))
+    }
+
+    /// A component Create Shape made is picked (and no vector): E edits it in the form.
+    pub(super) fn shape_to_edit(&self) -> bool {
+        self.doc.selection.is_empty()
+            && self.doc.selected_components.iter().any(|id| {
+                self.doc
+                    .components
+                    .get(id)
+                    .is_some_and(|k| k.shape.is_some())
+            })
     }
 
     /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws

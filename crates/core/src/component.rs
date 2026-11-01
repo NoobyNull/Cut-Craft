@@ -101,6 +101,10 @@ pub struct Component {
     /// form and tiled again when its box changes (added with live texture areas).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub texture: Option<crate::texture_area::Texture>,
+    /// A shape Create Shape made: its settings and the outlines it rose over, so E opens the
+    /// form on it again and a change remakes it (added with editable shapes).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<serde_json::Value>,
 }
 
 /// Where an imported model came from: it can be imported again, its settings changed, only
@@ -452,6 +456,7 @@ impl Component {
             source: None,
             colour: None,
             texture: None,
+            shape: None,
         }
     }
 
@@ -503,6 +508,7 @@ impl Component {
             source: None,
             colour: None,
             texture: None,
+            shape: None,
         }
     }
 

@@ -5057,6 +5057,32 @@ fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
 }
 
 #[test]
+fn e_on_a_shape_component_opens_create_shape_on_it() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    let mut params = h.app.registry.get("create_shape").unwrap().default_params();
+    params["profile"] = "angular".into();
+    h.app.apply("create_shape", &params).unwrap();
+    let id = *h.app.doc.components.keys().next().unwrap();
+    h.app.doc.selection = cut_craft_core::selection::Selection::default();
+    h.app.doc.selected_components = [id].into();
+    assert!(h.app.available("edit_object"));
+    h.frame(vec![key(Key::E)]);
+    let form = h.app.form.as_mut().expect("Create Shape opened");
+    assert_eq!(form.id, "create_shape");
+    assert_eq!(form.params["profile"], "angular");
+    let mut edited = form.params.clone();
+    edited["profile"] = "flat".into();
+    edited["height"] = 3.0.into();
+    h.app.apply_form("create_shape", &edited).unwrap();
+    assert_eq!(h.app.doc.components.len(), 1, "remade, not added");
+    let top = h.app.doc.components[&id]
+        .height_at(Point::new(30.0, 30.0))
+        .unwrap();
+    assert!((top - 3.0).abs() < 1e-9, "{top}");
+}
+
+#[test]
 fn sheets_take_selected_vectors_and_toolpaths_from_their_menus() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::two_sheets();

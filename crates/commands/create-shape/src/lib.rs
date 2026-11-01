@@ -4,8 +4,8 @@
 //! sizes the profile to a height, Total Height the whole shape with its base.
 
 use cut_craft_core::component::{Combine, Component};
-use cut_craft_core::document::Document;
-use cut_craft_core::geometry::{Point, Rect, inside, polyline_distance};
+use cut_craft_core::document::{Document, EntityId};
+use cut_craft_core::geometry::{Path, Point, Rect, inside, polyline_distance};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,18 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Total height", extend("x-unit" = "mm"), range(min = 0))]
     pub total_height: f64,
+    /// Inside corners rise as straight, mitred slopes to a sharp crease, not curved in
+    #[serde(default)]
+    pub preserve_internal_corners: bool,
+    /// Vectors inside the outer ones are the top, not holes: the profile rises from the
+    /// outer edge to them
+    #[serde(default)]
+    pub blend_to_inner_vectors: bool,
     pub combine: Combine,
+    /// The shape being edited (E on it): it is made again from the outlines it keeps
+    #[schemars(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaces: Option<EntityId>,
 }
 
 fn half() -> f64 {
@@ -72,7 +83,10 @@ impl Default for Params {
             base: 0.0,
             scale: 0.0,
             total_height: 0.0,
+            preserve_internal_corners: false,
+            blend_to_inner_vectors: false,
             combine: Combine::Add,
+            replaces: None,
         }
     }
 }
@@ -98,6 +112,121 @@ fn scaled(component: &mut Component, p: &Params) {
     }
 }
 
+/// How far `at` is in from the closed `ring`, inside corners mitred: where its nearest
+/// point is a corner (inside the shape, only an inside corner can be), the distance to the
+/// farther of the two sides' lines, so the two slopes meet in a straight crease.
+fn mitred_distance(ring: &[Point], at: Point) -> f64 {
+    if ring.len() < 3 {
+        return polyline_distance(ring, at);
+    }
+    // the ring without a repeated closing point
+    let count = if ring[0].distance(ring[ring.len() - 1]) < 1e-12 {
+        ring.len() - 1
+    } else {
+        ring.len()
+    };
+    let corner = |k: usize| ring[k % count];
+    // the nearest distance, and the corner it is to (None: to the middle of a side)
+    let mut best = (f64::INFINITY, None);
+    for side in 0..count {
+        let (from, along) = (corner(side), corner(side + 1) - corner(side));
+        let share = if along.length_squared() > 0.0 {
+            ((at - from).dot(along) / along.length_squared()).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let far = (from + along * share).distance(at);
+        if far < best.0 {
+            let end = if share <= 0.0 {
+                Some(side)
+            } else if share >= 1.0 {
+                Some((side + 1) % count)
+            } else {
+                None
+            };
+            best = (far, end);
+        }
+    }
+    let Some(k) = best.1 else {
+        return best.0;
+    };
+    let to_line =
+        |from: Point, to: Point| (at - from).perp_dot((to - from).normalize_or_zero()).abs();
+    let (before, here, after) = (corner(k + count - 1), corner(k), corner(k + 1));
+    to_line(before, here).max(to_line(here, after))
+}
+
+/// The outlines the shape rises over: the shape's own when `p` edits one (with its id), else
+/// the selected closed vectors and the first open one (a custom profile).
+fn outlines(doc: &Document, p: &Params) -> (Option<EntityId>, Vec<Path>) {
+    let kept = p.replaces.and_then(|id| {
+        let shape = doc.components.get(&id)?.shape.as_ref()?;
+        Some((id, Vec::<Path>::deserialize(&shape["paths"]).ok()?))
+    });
+    if let Some((id, paths)) = kept {
+        return (Some(id), paths);
+    }
+    let (_, closed) = doc.selected_paths(|path| path.closed);
+    let (_, open) = doc.selected_paths(|path| !path.closed);
+    (
+        None,
+        closed.into_iter().chain(open.into_iter().take(1)).collect(),
+    )
+}
+
+/// Each cell's distance in from the edge of `rings` (`p` says whether inside corners are
+/// mitred). Blending to inner vectors, the rings inside another are the top: a cell's share
+/// of the way from the outer edge to them, times the widest gap between the two.
+fn inward(name: &str, p: &Params, rings: &[Vec<Point>], bounds: Rect, cell: f64) -> Component {
+    let edge = |ring: &[Point], at: Point| {
+        if p.preserve_internal_corners {
+            mitred_distance(ring, at)
+        } else {
+            polyline_distance(ring, at)
+        }
+    };
+    let nearest = |rings: &[Vec<Point>], at: Point| {
+        rings
+            .iter()
+            .map(|ring| edge(ring, at))
+            .fold(f64::INFINITY, f64::min)
+    };
+    let within_another = |i: usize| {
+        rings
+            .iter()
+            .enumerate()
+            .any(|(j, o)| j != i && inside(std::slice::from_ref(o), rings[i][0]))
+    };
+    let (mut outer, mut inner) = (vec![], vec![]);
+    for (i, ring) in rings.iter().enumerate() {
+        if p.blend_to_inner_vectors && within_another(i) {
+            inner.push(ring.clone());
+        } else {
+            outer.push(ring.clone());
+        }
+    }
+    if inner.is_empty() {
+        return Component::from_fn(name, p.combine, bounds, cell, |at| {
+            inside(rings, at).then(|| nearest(rings, at))
+        });
+    }
+    let gap = outer
+        .iter()
+        .flatten()
+        .map(|&q| nearest(&inner, q))
+        .fold(0.0, f64::max);
+    Component::from_fn(name, p.combine, bounds, cell, |at| {
+        if !inside(&outer, at) {
+            return None;
+        }
+        if inner.iter().any(|r| inside(std::slice::from_ref(r), at)) {
+            return Some(gap);
+        }
+        let (out, inn) = (nearest(&outer, at), nearest(&inner, at));
+        Some(gap * out / (out + inn).max(1e-12))
+    })
+}
+
 impl Command for CreateShape {
     const ID: &'static str = "create_shape";
     type Params = Params;
@@ -109,6 +238,22 @@ impl Command for CreateShape {
             icon: "",
             shortcut: "",
         }
+    }
+
+    /// On a selected shape Create Shape made, its own settings, so the form edits it.
+    fn initial_params(doc: &Document) -> Params {
+        doc.selected_components
+            .iter()
+            .rev()
+            .find_map(|&id| {
+                let kept = doc.components.get(&id)?.shape.as_ref()?;
+                let p = Params::deserialize(&kept["params"]).ok()?;
+                Some(Params {
+                    replaces: Some(id),
+                    ..p
+                })
+            })
+            .unwrap_or_default()
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
@@ -123,10 +268,13 @@ impl Command for CreateShape {
                 "a flat shape needs a height".into(),
             ));
         }
-        let (_, paths) = doc.selected_paths(|path| path.closed);
+        let (editing, all) = outlines(doc, p);
+        let paths: Vec<&Path> = all.iter().filter(|q| q.closed).collect();
         let custom = if p.profile == Profile::Custom {
-            let (_, open) = doc.selected_paths(|path| !path.closed);
-            let section = open.first().and_then(cmd_two_rail_sweep::Section::new);
+            let section = all
+                .iter()
+                .find(|q| !q.closed)
+                .and_then(cmd_two_rail_sweep::Section::new);
             Some(section.ok_or_else(|| {
                 CommandError::Failed(
                     "select an open vector for the custom profile with the closed ones".into(),
@@ -135,26 +283,14 @@ impl Command for CreateShape {
         } else {
             None
         };
-        let Some(bounds) = paths
-            .iter()
-            .map(cut_craft_core::geometry::Path::bounds)
-            .reduce(Rect::union)
-        else {
+        let Some(bounds) = paths.iter().map(|q| q.bounds()).reduce(Rect::union) else {
             return Err(CommandError::Failed(
                 "select the closed vectors to shape".into(),
             ));
         };
         let cell = doc.job.model_cell();
         let rings: Vec<Vec<Point>> = paths.iter().map(|path| path.flatten(cell / 4.0)).collect();
-        // first each cell's distance in from the edge, then the profile over it
-        let mut component = Component::from_fn(&name, p.combine, bounds, cell, |at| {
-            inside(&rings, at).then(|| {
-                rings
-                    .iter()
-                    .map(|ring| polyline_distance(ring, at))
-                    .fold(f64::INFINITY, f64::min)
-            })
-        });
+        let mut component = inward(&name, p, &rings, bounds, cell);
         let deepest = component.heights.iter().fold(0.0, |a: f64, &d| a.max(d));
         let (sin, tan) = (p.angle.to_radians().sin(), p.angle.to_radians().tan());
         let rise = |d: f64| match p.profile {
@@ -199,8 +335,26 @@ impl Command for CreateShape {
             *height = rise(*height).min(limit);
         }
         scaled(&mut component, p);
+        let kept = Params {
+            replaces: None,
+            ..p.clone()
+        };
+        component.shape = Some(serde_json::json!({ "params": kept, "paths": all }));
         let mut c = Change::builder(doc);
-        c.add_component(component);
+        match editing {
+            Some(id) => {
+                let old = &doc.components[&id];
+                component.level = old.level;
+                component.group.clone_from(&old.group);
+                component.visible = old.visible;
+                component.colour = old.colour;
+                component.shaping = old.shaping.clone();
+                c.replace_component(id, component);
+            }
+            None => {
+                c.add_component(component);
+            }
+        }
         Ok(c.finish())
     }
 }
@@ -417,5 +571,93 @@ mod tests {
         let open = Path::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false);
         let why = shape(vec![open], &Params::default()).unwrap_err();
         assert!(why.contains("closed"), "{why}");
+    }
+
+    /// An L: a 40 square with its top right quarter cut away, the inside corner at (20, 20).
+    fn ell() -> Path {
+        Path::polyline(
+            &[
+                Point::new(0.0, 0.0),
+                Point::new(40.0, 0.0),
+                Point::new(40.0, 20.0),
+                Point::new(20.0, 20.0),
+                Point::new(20.0, 40.0),
+                Point::new(0.0, 40.0),
+            ],
+            true,
+        )
+    }
+
+    #[test]
+    fn preserved_internal_corners_rise_straight_to_a_crease() {
+        let p = |preserve| Params {
+            profile: Profile::Angular,
+            preserve_internal_corners: preserve,
+            ..Params::default()
+        };
+        let round = shape(vec![ell()], &p(false)).unwrap();
+        let mitred = shape(vec![ell()], &p(true)).unwrap();
+        // 3 from both sides of the inside corner: round, 3 x root 2 from the corner; mitred, 3
+        let (r, m) = (height(&round, 17.0, 17.0), height(&mitred, 17.0, 17.0));
+        assert!(near(r, 18f64.sqrt(), 0.5), "round {r}");
+        assert!(near(m, 3.0, 0.5), "mitred {m}");
+        // away from the corner the two are the same
+        assert!(near(
+            height(&round, 5.0, 10.0),
+            height(&mitred, 5.0, 10.0),
+            1e-9
+        ));
+    }
+
+    #[test]
+    fn blending_to_inner_vectors_makes_them_the_top() {
+        let p = |blend| Params {
+            profile: Profile::Angular,
+            blend_to_inner_vectors: blend,
+            ..Params::default()
+        };
+        let both = || vec![square(0.0, 0.0, 40.0), square(15.0, 15.0, 10.0)];
+        let ring = shape(both(), &p(false)).unwrap();
+        assert!(
+            ring.height_at(Point::new(20.0, 20.0))
+                .is_none_or(f64::is_nan),
+            "a hole"
+        );
+        let blended = shape(both(), &p(true)).unwrap();
+        let top = height(&blended, 20.0, 20.0);
+        assert!(near(top, height(&blended, 16.0, 16.0), 1e-9), "flat on top");
+        let ups: Vec<f64> = [1.0, 5.0, 10.0, 14.0]
+            .iter()
+            .map(|&x| height(&blended, x, 20.0))
+            .collect();
+        assert!(ups.windows(2).all(|w| w[1] > w[0]), "rises inward: {ups:?}");
+        assert!(top > ups[3] - 1e-9);
+    }
+
+    #[test]
+    fn a_selected_shape_opens_its_settings_and_is_remade_in_place() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 100.0)]);
+        let angular = Params {
+            profile: Profile::Angular,
+            ..Params::default()
+        };
+        cut_craft_core::testing::run_on::<CreateShape>(&mut doc, &angular);
+        let id = *doc.components.keys().next().unwrap();
+        // nothing selected: the form opens on new settings
+        assert_eq!(CreateShape::initial_params(&doc).replaces, None);
+        doc.selected_components = [id].into();
+        doc.selection = cut_craft_core::selection::Selection::default();
+        let p = CreateShape::initial_params(&doc);
+        assert_eq!((p.replaces, p.profile), (Some(id), Profile::Angular));
+        // a lower angle, the vectors no longer selected: made again from its own outline
+        cut_craft_core::testing::run_on::<CreateShape>(&mut doc, &Params { angle: 20.0, ..p });
+        assert_eq!(doc.components.len(), 1);
+        let c = &doc.components[&id];
+        let want = 50.0 * 20f64.to_radians().tan();
+        assert!(
+            near(height(c, 50.0, 50.0), want, 0.5),
+            "{}",
+            height(c, 50.0, 50.0)
+        );
     }
 }
