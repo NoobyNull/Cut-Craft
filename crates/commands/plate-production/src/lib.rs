@@ -2,12 +2,14 @@
 //! Plate Production). The template is the selected vectors; text in it written with Draw
 //! Text may hold variables, `!!name!!`, each filled from a column of the data file or from a
 //! counter. Plates fill the material inside the margins, one per row of data; when they need
-//! more than one sheet of material each sheet's plates go on a layer of their own.
+//! more than one sheet of material each sheet's plates go on a layer of their own. The
+//! toolpaths made from the template are copied onto each plate.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::DAffine2;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::toolpath::{Move, Toolpath};
+use cut_craft_core::{Change, Command, CommandError, Edit, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +17,9 @@ pub struct PlateProduction;
 
 /// One step of laying out the plates, run on the document as the steps before left it.
 type PlateStep = Box<dyn Fn(&Document) -> Result<Change, CommandError>>;
+
+/// A template vector, what was made from it on a plate, and whether that is re-made text.
+type PlateCopy = (EntityId, Vec<EntityId>, bool);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -208,38 +213,114 @@ impl Command for PlateProduction {
                 .is_some_and(|g| texts.iter().any(|(t, _)| t == g))
         };
         let plain: Vec<EntityId> = template.iter().copied().filter(|id| !in_text(id)).collect();
+        // the toolpaths made from the template alone, copied onto each plate
+        let toolpaths: Vec<Toolpath> = doc
+            .toolpaths
+            .values()
+            .filter(|t| !t.vectors.is_empty() && t.vectors.iter().all(|v| template.contains(v)))
+            .cloned()
+            .collect();
         let sheets = spots.iter().map(|s| s.0).max().map_or(1, |s| s + 1);
-        // one step lays out a plate's plain vectors (and makes its sheet's layer), then one
-        // step per text re-makes that text with the plate's values
+        // one step per plate: its plain vectors (and its sheet's layer), each text re-made
+        // with the plate's values, then the template's toolpaths on what it made
         let mut steps: Vec<PlateStep> = vec![];
         for (k, &(sheet, at)) in spots.iter().enumerate() {
-            let shift = DAffine2::from_translation(at - bounds.min);
+            let offset = at - bounds.min;
+            let shift = DAffine2::from_translation(offset);
             let plain = plain.clone();
+            let template = template.clone();
+            let toolpaths = toolpaths.clone();
             let new_layer = sheets > 1 && (k == 0 || spots[k - 1].0 != sheet);
+            let mut text_params = vec![];
+            for &(group, spec) in &texts {
+                let mut params: cmd_draw_text::Params = serde_json::from_value(spec.clone())
+                    .map_err(|e| CommandError::Failed(format!("a template text: {e}")))?;
+                params.text = fill(&params.text, &p.data.variables, &rows[k], &p.counter, k);
+                params.anchor.x += offset.x;
+                params.anchor.y += offset.y;
+                params.replaces = None;
+                text_params.push((group, params));
+            }
             steps.push(Box::new(move |d: &Document| {
                 let mut c = Change::builder(d);
                 if new_layer {
                     let layer = c.add_layer(&format!("Sheet {}", sheet + 1));
                     c.set_current_layer(layer);
                 }
-                for id in &plain {
-                    c.add(d.vectors[id].transformed(&shift));
+                // each template vector's copies on this plate
+                let mut copies: Vec<PlateCopy> = plain
+                    .iter()
+                    .map(|id| (*id, vec![c.add(d.vectors[id].transformed(&shift))], false))
+                    .collect();
+                let mut total = c.finish();
+                let mut scratch = d.clone();
+                let failed = |e: cut_craft_core::ApplyError| CommandError::Failed(e.to_string());
+                scratch.apply(&total).map_err(failed)?;
+                let mut texts_made = vec![];
+                for (group, params) in &text_params {
+                    let made = <cmd_draw_text::DrawText as Command>::run(&scratch, params)?;
+                    scratch.apply(&made).map_err(failed)?;
+                    let ids = made.edits.iter().filter_map(|e| match e {
+                        Edit::Add { id, .. } => Some(*id),
+                        _ => None,
+                    });
+                    texts_made.push((*group, ids.collect::<Vec<_>>()));
+                    total = total.then(made);
                 }
-                Ok(c.finish())
+                for id in &template {
+                    if let Some((_, made)) = texts_made
+                        .iter()
+                        .find(|(g, _)| d.vector_groups.get(id) == Some(g))
+                    {
+                        copies.push((*id, made.clone(), true));
+                    }
+                }
+                let mut c = Change::builder(&scratch);
+                for t in &toolpaths {
+                    c.add_toolpath(on_plate(t, &copies, offset, k));
+                }
+                Ok(total.then(c.finish()))
             }));
-            for (_, spec) in &texts {
-                let mut params: cmd_draw_text::Params = serde_json::from_value((*spec).clone())
-                    .map_err(|e| CommandError::Failed(format!("a template text: {e}")))?;
-                params.text = fill(&params.text, &p.data.variables, &rows[k], &p.counter, k);
-                params.anchor.x += at.x - bounds.min.x;
-                params.anchor.y += at.y - bounds.min.y;
-                params.replaces = None;
-                steps.push(Box::new(move |d: &Document| {
-                    <cmd_draw_text::DrawText as Command>::run(d, &params)
-                }));
-            }
         }
         Change::chain_over(doc, &steps, |d, step| step(d))
+    }
+}
+
+/// Toolpath `t` on plate `index`: made from the plate's copies of its vectors and its cuts
+/// moved by `offset`. A text's copy says something else, and a model's surface is not
+/// moved, so a toolpath made from text or cutting the model is left stale, without cuts, to
+/// be recalculated.
+fn on_plate(t: &Toolpath, copies: &[PlateCopy], offset: Point, index: usize) -> Toolpath {
+    let mut vectors = vec![];
+    let mut from_text = false;
+    for v in &t.vectors {
+        if let Some((_, made, text)) = copies.iter().find(|(id, ..)| id == v) {
+            from_text |= text;
+            for m in made {
+                if !vectors.contains(m) {
+                    vectors.push(*m);
+                }
+            }
+        }
+    }
+    let stale = from_text || t.reads_model();
+    Toolpath {
+        name: format!("{} {}", t.name, index + 1),
+        vectors,
+        moves: if stale {
+            vec![]
+        } else {
+            t.moves
+                .iter()
+                .map(|m| Move {
+                    to: m.to + offset.extend(0.0),
+                    ..*m
+                })
+                .collect()
+        },
+        power: if stale { vec![] } else { t.power.clone() },
+        stale,
+        ..t.clone()
     }
 }
 
@@ -440,5 +521,65 @@ mod tests {
         assert_eq!(spots[2].0, 1, "a second sheet");
         let big = Rect::new(Point::ZERO, Point::new(200.0, 200.0));
         assert!(layout(material, big, &l, 1).is_err());
+    }
+
+    #[test]
+    fn template_toolpaths_are_copied_onto_each_plate() {
+        use cut_craft_core::toolpath::{MoveKind, Tool};
+        let mut doc = template();
+        let border = *doc
+            .selection
+            .iter()
+            .find(|id| !doc.vector_groups.contains_key(id))
+            .unwrap();
+        let letter = *doc
+            .selection
+            .iter()
+            .find(|id| doc.vector_groups.contains_key(id))
+            .unwrap();
+        let toolpath = |vectors| Toolpath {
+            name: "Profile".into(),
+            strategy: "profile_toolpath".into(),
+            params: serde_json::Value::Null,
+            tool: Tool::default(),
+            vectors,
+            moves: vec![Move {
+                kind: MoveKind::Cut,
+                to: Point::new(5.0, 5.0).extend(-1.0),
+            }],
+            visible: true,
+            power: vec![],
+            stale: false,
+        };
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(toolpath(vec![border]));
+        c.add_toolpath(toolpath(vec![letter]));
+        doc.apply(&c.finish()).unwrap();
+        let mut p = PlateProduction::initial_params(&doc);
+        p.data.file = data_file("toolpaths", "name\nI\nH\n");
+        run_on::<PlateProduction>(&mut doc, &p);
+        let copies: Vec<&Toolpath> = doc.toolpaths.values().skip(2).collect();
+        assert_eq!(copies.len(), 4, "both toolpaths on both plates");
+        // the border's cut moves with the border's copy, ready to cut
+        for copy in [copies[0], copies[2]] {
+            assert!(!copy.stale);
+            let made = copy.vectors[0];
+            assert_ne!(made, border);
+            let moved = doc.vectors[&made].bounds().min - doc.vectors[&border].bounds().min;
+            assert_eq!(copy.moves[0].to.truncate(), Point::new(5.0, 5.0) + moved);
+        }
+        assert_ne!(
+            copies[0].vectors, copies[2].vectors,
+            "each plate's own border"
+        );
+        // the text is new on each plate, so its toolpath waits to be recalculated
+        for copy in [copies[1], copies[3]] {
+            assert!(copy.stale && copy.moves.is_empty());
+            assert!(
+                copy.vectors
+                    .iter()
+                    .all(|v| *v != letter && doc.vector_groups.contains_key(v))
+            );
+        }
     }
 }

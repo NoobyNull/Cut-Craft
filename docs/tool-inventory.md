@@ -174,7 +174,8 @@ say "not implemented yet".
   is drawn faint and mirrored; the 2D right-click Copy to Other Side mirrors copies across.
 - Plate Production (Offset and Layout): a template's !!variables!! filled from a data file's
   columns or a counter, plates laid out inside margins, a layer per sheet of material when
-  they need more. Not done: copying the template's toolpaths onto each plate.
+  they need more; the template's toolpaths copied onto each plate (those made from text left
+  stale to recalculate).
 - Toolpath Tiling (Toolpaths menu): individual tiles or feed-through in X or Y, tile size,
   overlap, smallest tile first; tiles drawn in the 2D view; Save Toolpaths writes one file
   per tile (`name_tileN`), cuts clipped to the tile and its overlap and moved to the job's
