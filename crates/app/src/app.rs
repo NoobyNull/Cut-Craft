@@ -1629,8 +1629,8 @@ fn trimmed(value: f64) -> String {
 /// detail and overlap. Kept as `rest` in the form's settings.
 /// A toolpath form's Vector Selector: associated, the toolpath takes the vectors that pass
 /// it (open, closed, on which layers) each time it is calculated, as templates need.
-fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String]) {
-    use cut_craft_core::selector::{Layers, Selector};
+fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String], units: Units) {
+    use cut_craft_core::selector::{Circles, ClosedKind, Layers, Selector};
     let before = Selector::of(params);
     let mut on = before.is_some();
     let mut selector = before.clone().unwrap_or_default();
@@ -1643,6 +1643,51 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
         }
         ui.checkbox(&mut selector.open_vectors, "Open vectors");
         ui.checkbox(&mut selector.closed_vectors, "Closed vectors");
+        // which closed vectors: all, only circles, or only circles of a size
+        ui.add_enabled_ui(selector.closed_vectors, |ui| {
+            ui.indent("closed_kind", |ui| {
+                ui.radio_value(
+                    &mut selector.closed_kind,
+                    ClosedKind::AllClosedVectors,
+                    "All closed vectors",
+                );
+                ui.radio_value(
+                    &mut selector.closed_kind,
+                    ClosedKind::OnlyCircles,
+                    "Only circles",
+                )
+                .on_hover_text("For drilling: only the closed vectors that are circles");
+                if selector.closed_kind != ClosedKind::OnlyCircles {
+                    return;
+                }
+                ui.indent("circles", |ui| {
+                    ui.radio_value(
+                        &mut selector.circles,
+                        Circles::SelectAllCircles,
+                        "All circles",
+                    );
+                    ui.radio_value(
+                        &mut selector.circles,
+                        Circles::SelectCirclesMatching,
+                        "Circles of this diameter",
+                    );
+                    if selector.circles == Circles::SelectCirclesMatching {
+                        egui::Grid::new("circle_size")
+                            .num_columns(2)
+                            .show(ui, |ui| {
+                                ui.label("Diameter");
+                                tabs::length(ui, &mut selector.diameter, units);
+                                ui.end_row();
+                                ui.label("Tolerance").on_hover_text(
+                                    "How far a circle's diameter may be from it and still pass",
+                                );
+                                tabs::length(ui, &mut selector.tolerance, units);
+                                ui.end_row();
+                            });
+                    }
+                });
+            });
+        });
         for (layers, label) in [
             (Layers::AllVisibleLayers, "All visible layers"),
             (Layers::CurrentLayerOnly, "Current layer only"),

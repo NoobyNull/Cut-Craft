@@ -202,7 +202,7 @@ fn shown(mm: f64, units: Units) -> String {
 }
 
 /// A length edited in the job's units, kept in mm.
-fn length(ui: &mut egui::Ui, mm: &mut f64, units: Units) {
+pub(super) fn length(ui: &mut egui::Ui, mm: &mut f64, units: Units) {
     let (per, unit) = form::shown_in("mm", units).unwrap_or((1.0, "mm"));
     let mut value = *mm / per;
     if ui

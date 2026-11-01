@@ -3153,7 +3153,7 @@ impl CutCraftApp {
             {
                 *edit_listed.borrow_mut() = Some(edit);
             }
-            selector_section(ui, params, &layers);
+            selector_section(ui, params, &layers, units);
         };
         let look = form::Look {
             units,

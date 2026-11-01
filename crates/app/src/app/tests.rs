@@ -4589,7 +4589,7 @@ fn a_toolpath_with_a_vector_selector_takes_the_vectors_on_its_layers_each_time()
     let mut section = serde_json::json!({});
     let out = headless(ctx.run_ui(RawInput::default(), |ui| {
         egui::CentralPanel::default().show(ui, |ui| {
-            selector_section(ui, &mut section, &["Cut".to_owned()]);
+            selector_section(ui, &mut section, &["Cut".to_owned()], Units::Mm);
         });
     }));
     assert!(out.shapes.iter().any(|c| matches!(&c.shape,
@@ -4620,6 +4620,49 @@ fn a_toolpath_with_a_vector_selector_takes_the_vectors_on_its_layers_each_time()
     h.rectangle(130.0, 10.0, 30.0, 30.0);
     h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
     assert_eq!(h.app.doc.toolpaths[&id].vectors.len(), 3);
+}
+
+#[test]
+fn the_vector_selector_offers_only_circles_and_their_size() {
+    use cut_craft_core::selector::{Circles, ClosedKind, Selector};
+    let texts = |section: &mut Value| -> Vec<String> {
+        let ctx = egui::Context::default();
+        let out = headless(ctx.run_ui(RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                selector_section(ui, section, &[], Units::Inch);
+            });
+        }));
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    };
+    let mut section = serde_json::json!({ "selector": Selector::default() });
+    let shown = texts(&mut section);
+    assert!(shown.iter().any(|t| t == "Only circles"), "{shown:?}");
+    assert!(
+        !shown.iter().any(|t| t == "Tolerance"),
+        "no size until circles of one are asked for"
+    );
+    section["selector"] = serde_json::to_value(Selector {
+        closed_kind: ClosedKind::OnlyCircles,
+        circles: Circles::SelectCirclesMatching,
+        diameter: 25.4,
+        ..Selector::default()
+    })
+    .unwrap();
+    let shown = texts(&mut section);
+    assert!(
+        shown.iter().any(|t| t == "Circles of this diameter"),
+        "{shown:?}"
+    );
+    assert!(
+        shown.iter().any(|t| t == "1.000"),
+        "the diameter in the job's units: {shown:?}"
+    );
 }
 
 #[test]

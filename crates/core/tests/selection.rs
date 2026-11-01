@@ -91,3 +91,31 @@ fn crossing_does_not_select_a_shape_whose_hole_contains_the_box() {
         "a box inside the circle touches none of its edges"
     );
 }
+
+#[test]
+fn a_vector_selector_takes_only_circles_or_only_circles_of_a_size() {
+    use cut_craft_core::selector::{Circles, ClosedKind, Selector};
+    let mut doc = doc();
+    let mut c = Change::builder(&doc);
+    let small = c.add(Path::circle(p(80.0, 50.0), 3.0));
+    doc.apply(&c.finish()).unwrap();
+    let all = Selector::default().picked(&doc);
+    assert_eq!(all.len(), 4, "the square, both circles and the line");
+    let circles = Selector {
+        closed_kind: ClosedKind::OnlyCircles,
+        open_vectors: false,
+        ..Selector::default()
+    };
+    assert_eq!(
+        circles.picked(&doc).len(),
+        2,
+        "both circles, not the square"
+    );
+    let sized = Selector {
+        circles: Circles::SelectCirclesMatching,
+        diameter: 6.05,
+        tolerance: 0.1,
+        ..circles
+    };
+    assert_eq!(sized.picked(&doc), [small], "only the 6 mm circle");
+}
