@@ -5432,6 +5432,46 @@ fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
 }
 
 #[test]
+fn dragging_the_green_handle_over_edited_text_bends_it_into_an_arc() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_text");
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    params["text"] = "HIHIH".into();
+    params["font"] = "Test Boxes".into();
+    params["height"] = 10.0.into();
+    params["anchor"] = serde_json::json!({ "x": 10.0, "y": 10.0 });
+    h.app.form.as_mut().unwrap().params = params.clone();
+    h.app.apply_form("draw_text", &params).unwrap();
+    h.frame(vec![]);
+    let p: cmd_draw_text::Params =
+        serde_json::from_value(h.app.form.as_ref().unwrap().params.clone()).unwrap();
+    let [top, _] = cmd_draw_text::arc_handles(&p).expect("handles on the edited text");
+    let drag = Drag {
+        start: top,
+        end: top + Point::new(0.0, 5.0),
+        from_center: false,
+        constrain: false,
+    };
+    h.app.drawing_gesture(
+        "draw_text",
+        Some(view2d::Gesture::Dropped { drag, shift: false }),
+        1.0,
+        Modifiers::NONE,
+    );
+    let arc = h.app.form.as_ref().unwrap().params["arc"].as_f64().unwrap();
+    assert!(arc > 10.0, "bent up: {arc}");
+    let low = h
+        .app
+        .doc
+        .vectors
+        .values()
+        .map(|v| v.bounds().min.y)
+        .fold(f64::INFINITY, f64::min);
+    assert!(low < 9.0, "the ends dropped: {low}");
+    assert_eq!(h.app.doc.vectors.len(), 5, "the letters replaced");
+}
+
+#[test]
 fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
     use cut_craft_core::geometry::Rect as JobRect;
     use cut_craft_core::nodes::nodes;

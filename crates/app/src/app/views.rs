@@ -651,7 +651,7 @@ impl CutCraftApp {
 
     /// A gesture with drawing tool `id`: the polyline's own clicks and drags, a Shift-click
     /// editing a shape the tool drew, or a finished drag drawing one.
-    fn drawing_gesture(
+    pub(super) fn drawing_gesture(
         &mut self,
         id: &'static str,
         gesture: Option<Gesture>,
@@ -662,6 +662,13 @@ impl CutCraftApp {
             gesture if id == "draw_polyline" => self.polyline_gesture(gesture, reach),
             Some(Gesture::Click { at, .. }) if id == "draw_text" => {
                 self.text_click(at, reach, modifiers);
+            }
+            Some(Gesture::Dropped { drag, .. })
+                if id == "draw_text" && self.text_arc_drag(drag, reach).is_some() =>
+            {
+                if let Some(bent) = self.text_arc_drag(drag, reach) {
+                    self.set_text_params(&bent);
+                }
             }
             Some(Gesture::Click { at, shift: true }) => self.shift_click_shape(id, at, reach),
             Some(Gesture::Dropped { drag, .. }) => self.draw(id, drag),
@@ -712,6 +719,77 @@ impl CutCraftApp {
             && let Err(e) = self.apply_form("draw_text", &value)
         {
             self.status.set_message(&e);
+        }
+    }
+
+    /// Draw Text open on text made before: its settings, as the form has them.
+    fn edited_text(&self) -> Option<cmd_draw_text::Params> {
+        let form = self.form.as_ref().filter(|f| f.id == "draw_text")?;
+        let p: cmd_draw_text::Params = serde_json::from_value(form.params.clone()).ok()?;
+        p.replaces.is_some().then_some(p)
+    }
+
+    /// A drag from one of the green handles over text Draw Text is editing: the text's
+    /// settings with the arc the drag gives it (up bends it up, down bends it down).
+    pub(super) fn text_arc_drag(&self, drag: Drag, reach: f64) -> Option<cmd_draw_text::Params> {
+        let p = self.edited_text()?;
+        let handles = cmd_draw_text::arc_handles(&p)?;
+        handles
+            .iter()
+            .any(|h| h.distance(drag.start) <= reach)
+            .then(|| {
+                let rise = cmd_draw_text::arc_rise(&p) + drag.end.y - drag.start.y;
+                cmd_draw_text::Params {
+                    arc: cmd_draw_text::arc_from_rise(&p, rise),
+                    ..p
+                }
+            })
+    }
+
+    /// The vectors the text settings `p` make, without making them.
+    fn text_preview(&self, p: &cmd_draw_text::Params) -> Vec<Path> {
+        let value = serde_json::to_value(p).expect("text settings serialise");
+        self.registry
+            .get("draw_text")
+            .and_then(|cmd| cmd.run_json(&self.doc, &value).ok())
+            .map(|change| change.added().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// The text settings `p` into Draw Text's form, and the text made again with them.
+    fn set_text_params(&mut self, p: &cmd_draw_text::Params) {
+        let value = serde_json::to_value(p).expect("text settings serialise");
+        if let Some(form) = self.form.as_mut() {
+            form.params = value.clone();
+        }
+        if let Err(e) = self.apply_form("draw_text", &value) {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Aspire's two green handles over text Draw Text is editing: drag them to bend it.
+    fn paint_arc_handles(&self, ui: &egui::Ui, canvas: &Canvas) {
+        let Some(handles) = self
+            .edited_text()
+            .as_ref()
+            .and_then(cmd_draw_text::arc_handles)
+        else {
+            return;
+        };
+        let half = ui.spacing().interact_size.y * view2d::NODE_HANDLE_SHARE / 2.0;
+        let painter = ui.painter_at(canvas.area);
+        for h in handles {
+            let square = egui::Rect::from_center_size(
+                canvas.transform.to_screen(h),
+                egui::vec2(half, half) * 2.0,
+            );
+            painter.rect_filled(square, 0.0, egui::Color32::GREEN);
+            painter.rect_stroke(
+                square,
+                0,
+                ui.visuals().window_stroke,
+                egui::StrokeKind::Middle,
+            );
         }
     }
 
@@ -1028,7 +1106,10 @@ impl CutCraftApp {
             }
             (gesture, None, Some("draw_polyline")) => self.polyline_overlay(gesture, &canvas),
             (Some(Gesture::Dragging(drag)), _, Some(id)) => {
-                Overlay::Preview(self.preview(id, drag))
+                Overlay::Preview(match self.text_arc_drag(drag, reach) {
+                    Some(bent) => self.text_preview(&bent),
+                    None => self.preview(id, drag),
+                })
             }
             (Some(Gesture::Dragging(drag)), _, None) => self.select_drag_overlay(drag, reach),
             _ => Overlay::None,
@@ -1038,6 +1119,7 @@ impl CutCraftApp {
         if self.view_tool == Some(ViewTool::Transform) {
             self.paint_handles(ui, &canvas);
         }
+        self.paint_arc_handles(ui, &canvas);
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
         self.view_buttons(ui, area);

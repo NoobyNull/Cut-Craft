@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::font::{self, Align};
-use cut_craft_core::geometry::{Point, Rect};
+use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::params::Xy;
 use cut_craft_core::{Change, Command, CommandError, Drag, Interactive, Meta, ensure_positive};
@@ -20,6 +20,32 @@ pub enum Mode {
     Text,
     /// Text scaled to fit a box whose lower-left corner is the anchor point
     TextInABox,
+}
+
+/// Text in a Box: how text that fits the box's width fills the room above and below it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VerticalStretch {
+    #[default]
+    NoVerticalStretch,
+    /// The lines move apart to fill the height
+    StretchLineSpaceToFit,
+    /// The letters grow taller to fill the height
+    StretchCharactersToFit,
+}
+
+/// Text in a Box: how text that fits the box's height fills the room at its sides.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HorizontalStretch {
+    #[default]
+    NoHorizontalStretch,
+    /// The spaces between words grow
+    StretchSpacesBetweenWords,
+    /// The room between letters grows
+    StretchKerning,
+    /// The letters grow wider
+    StretchCharacterSize,
 }
 
 /// The border Text in a Box leaves at the box's left and right.
@@ -62,12 +88,40 @@ pub struct Params {
     pub anchor: Xy,
     /// Text in a Box: the box's width and height
     #[serde(default = "default_box")]
-    #[schemars(title = "Bounding box dimensions")]
+    #[schemars(
+        title = "Bounding box dimensions",
+        extend("x-show-when" = {"mode": "text_in_a_box"})
+    )]
     pub box_size: Xy,
     /// Text in a Box: the border left and right
     #[serde(default)]
-    #[schemars(title = "Margin size", extend("x-widget" = "row"))]
+    #[schemars(
+        title = "Margin size",
+        extend("x-widget" = "row", "x-show-when" = {"mode": "text_in_a_box"})
+    )]
     pub margin: Margin,
+    #[serde(default)]
+    #[schemars(extend("x-show-when" = {"mode": "text_in_a_box"}))]
+    pub vertical_stretch: VerticalStretch,
+    #[serde(default)]
+    #[schemars(extend("x-show-when" = {"mode": "text_in_a_box"}))]
+    pub horizontal_stretch: HorizontalStretch,
+    /// Text: the line bent into an arc, the angle the arc turns through; above zero it bends
+    /// up, below zero down. Drag the green handles above and below the text to set it
+    #[serde(default)]
+    #[schemars(
+        title = "Arc angle",
+        extend("x-unit" = "°", "x-show-when" = {"mode": "text"}),
+        range(min = -350, max = 350)
+    )]
+    pub arc: f64,
+    /// Text on an arc: the arc turned about its centre, anticlockwise
+    #[serde(default)]
+    #[schemars(
+        title = "Arc rotation",
+        extend("x-unit" = "°", "x-show-when" = {"mode": "text"})
+    )]
+    pub arc_rotation: f64,
     /// Kerning and line spacing changed in the 2D view: a click between two letters or two
     /// lines while the form is open
     #[schemars(skip)]
@@ -102,6 +156,10 @@ impl Default for Params {
             mode: Mode::Text,
             box_size: default_box(),
             margin: Margin::Normal,
+            vertical_stretch: VerticalStretch::NoVerticalStretch,
+            horizontal_stretch: HorizontalStretch::NoHorizontalStretch,
+            arc: 0.0,
+            arc_rotation: 0.0,
             spacing: font::Spacing::default(),
             replaces: None,
         }
@@ -138,6 +196,7 @@ impl Command for DrawText {
         ensure_positive("text height", p.height)?;
         let font = font::load(&p.font, p.bold, p.italic, &p.text).map_err(CommandError::Failed)?;
         let paths = match p.mode {
+            Mode::Text if p.arc != 0.0 => arched(&font, p),
             Mode::Text => {
                 font.layout_spaced(&p.text, p.height, p.align, p.anchor.into(), &p.spacing)
             }
@@ -173,8 +232,8 @@ impl Command for DrawText {
     }
 }
 
-/// The text scaled to fit the box (less the margin's share of its width), centred in it.
-// ponytail: no vertical or horizontal stretch options yet [obs: dialog 279 has both]
+/// The text scaled to fit the box (less the margin's share of its width), centred in it,
+/// then stretched into the room left over as the stretch settings ask.
 fn boxed(
     font: &font::Font,
     p: &Params,
@@ -182,26 +241,234 @@ fn boxed(
     let (w, h) = (p.box_size.x, p.box_size.y);
     ensure_positive("box width", w)?;
     ensure_positive("box height", h)?;
-    let natural = font.layout(&p.text, 1.0, p.align, cut_craft_core::geometry::Point::ZERO);
-    let Some(b) = natural
-        .iter()
-        .map(cut_craft_core::geometry::Path::bounds)
-        .reduce(Rect::union)
-    else {
-        return Ok(vec![]);
-    };
     let share = match p.margin {
         Margin::None => 1.0,
         Margin::Normal => 0.8,
         Margin::Wide => 0.6,
     };
-    let scale = (w * share / b.size().x).min(h / b.size().y);
-    let anchor: cut_craft_core::geometry::Point = p.anchor.into();
-    let centre = anchor + cut_craft_core::geometry::Point::new(w, h) / 2.0;
+    // laid out 1 unit tall, then scaled
+    let lay =
+        |spacing: &font::Spacing| font.layout_spaced(&p.text, 1.0, p.align, Point::ZERO, spacing);
+    let bounds = |paths: &[Path]| paths.iter().map(Path::bounds).reduce(Rect::union);
+    let mut spacing = font::Spacing::default();
+    let Some(b) = bounds(&lay(&spacing)) else {
+        return Ok(vec![]);
+    };
+    let room = Point::new(w * share, h);
+    let scale = (room.x / b.size().x).min(room.y / b.size().y);
+    // what the box has left over, in the 1-unit layout's units
+    let target = room / scale;
+    let mut stretch = Point::ONE;
+    let wide = room.x / b.size().x <= room.y / b.size().y;
+    if wide {
+        let lines = p.text.lines().count();
+        match p.vertical_stretch {
+            VerticalStretch::StretchLineSpaceToFit if lines > 1 => {
+                #[expect(clippy::cast_precision_loss, reason = "line counts are small")]
+                let gaps = (lines - 1) as f64 * font.line_pitch / font.cap_height;
+                spacing.line_pitch = 1.0 + (target.y - b.size().y) / gaps;
+            }
+            // one line has no line space to stretch
+            VerticalStretch::NoVerticalStretch | VerticalStretch::StretchLineSpaceToFit => {}
+            VerticalStretch::StretchCharactersToFit => stretch.y = target.y / b.size().y,
+        }
+    } else {
+        match p.horizontal_stretch {
+            HorizontalStretch::NoHorizontalStretch => {}
+            HorizontalStretch::StretchCharacterSize => stretch.x = target.x / b.size().x,
+            HorizontalStretch::StretchSpacesBetweenWords | HorizontalStretch::StretchKerning => {
+                let words = p.horizontal_stretch == HorizontalStretch::StretchSpacesBetweenWords;
+                spacing.kerning = widened(font, p, target.x, words);
+            }
+        }
+    }
+    let natural = lay(&spacing);
+    let Some(b) = bounds(&natural) else {
+        return Ok(vec![]);
+    };
+    let anchor: Point = p.anchor.into();
+    let centre = anchor + Point::new(w, h) / 2.0;
     let place = DAffine2::from_translation(centre)
-        * DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(scale))
+        * DAffine2::from_scale(stretch * scale)
         * DAffine2::from_translation(-b.center());
     Ok(natural.iter().map(|q| q.transformed(&place)).collect())
+}
+
+/// Extra room, 1-unit layout, that brings each line of `p`'s text to `width`: shared
+/// between the spaces of the line (`words`) or between all its letters.
+fn widened(font: &font::Font, p: &Params, width: f64, words: bool) -> Vec<(usize, usize, f64)> {
+    let placed = font.placed(
+        &p.text,
+        1.0,
+        Align::Left,
+        Point::ZERO,
+        &font::Spacing::default(),
+    );
+    let lines: Vec<&str> = p.text.lines().collect();
+    let mut out = vec![];
+    for (row, line) in lines.iter().enumerate() {
+        let glyphs: Vec<_> = placed.iter().filter(|(g, _)| g.line == row).collect();
+        let (Some(first), Some(last)) = (glyphs.first(), glyphs.last()) else {
+            continue;
+        };
+        let chars: Vec<char> = line.chars().collect();
+        // the gaps after these letters take the room (never after the last letter)
+        let gaps: Vec<usize> = glyphs[..glyphs.len() - 1]
+            .iter()
+            .map(|(g, _)| g.index)
+            .filter(|&i| !words || chars[i] == ' ')
+            .collect();
+        // the line's ink, not its advances, is what fills the width
+        let ink = |(at, glyph): &(font::Placed, &font::Glyph)| {
+            glyph
+                .paths
+                .iter()
+                .map(Path::bounds)
+                .reduce(Rect::union)
+                .map(|b| {
+                    (
+                        at.left + b.min.x / font.cap_height,
+                        at.left + b.max.x / font.cap_height,
+                    )
+                })
+        };
+        let (Some((left, _)), Some((_, right))) = (ink(first), ink(last)) else {
+            continue;
+        };
+        let short = width - (right - left);
+        if gaps.is_empty() || short <= 0.0 {
+            continue;
+        }
+        #[expect(clippy::cast_precision_loss, reason = "letter counts are small")]
+        let each = short / gaps.len() as f64;
+        out.extend(gaps.into_iter().map(|i| (row, i, each)));
+    }
+    out
+}
+
+/// Which way an arc bends the text: up (the ends drop) or down (the ends rise).
+fn bend_sign(arc: f64) -> f64 {
+    if arc < 0.0 { -1.0 } else { 1.0 }
+}
+
+/// The middle of the unbent text: the point that stays put as it bends, and the box it fills.
+fn unbent(font: &font::Font, p: &Params) -> Option<Rect> {
+    font.layout_spaced(&p.text, p.height, p.align, p.anchor.into(), &p.spacing)
+        .iter()
+        .map(Path::bounds)
+        .reduce(Rect::union)
+}
+
+/// The arc's centre and radius for the text `p` (arc not zero): the text's middle stays
+/// where it was, its width runs along the arc.
+fn arc_of(b: Rect, arc: f64) -> (Point, f64) {
+    let radius = b.size().x / arc.to_radians().abs();
+    let middle = b.center();
+    (middle - Point::new(0.0, bend_sign(arc) * radius), radius)
+}
+
+/// The text bent into an arc: each letter kept whole, its middle moved onto a circle round
+/// the arc's centre and turned to face out from it (bent down: in towards it), the text's
+/// middle staying put; then the whole turned about the centre by the arc's rotation.
+fn arched(font: &font::Font, p: &Params) -> Vec<Path> {
+    let Some(b) = unbent(font, p) else {
+        return vec![];
+    };
+    let (centre, radius) = arc_of(b, p.arc);
+    let sign = bend_sign(p.arc);
+    let middle = b.center();
+    let scale = p.height / font.cap_height;
+    let turn = DAffine2::from_translation(centre)
+        * DAffine2::from_angle(p.arc_rotation.to_radians())
+        * DAffine2::from_translation(-centre);
+    font.placed(&p.text, p.height, p.align, p.anchor.into(), &p.spacing)
+        .into_iter()
+        .flat_map(|(at, glyph)| {
+            let here = Point::new(f64::midpoint(at.left, at.right), at.baseline);
+            let angle = (here.x - middle.x) / radius;
+            let r = radius + sign * (here.y - middle.y);
+            let there = centre + Point::new(angle.sin(), sign * angle.cos()) * r;
+            let place = turn
+                * DAffine2::from_translation(there)
+                * DAffine2::from_angle(-sign * angle)
+                * DAffine2::from_translation(-here)
+                * DAffine2::from_translation(Point::new(at.left, at.baseline))
+                * DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(scale));
+            glyph
+                .paths
+                .iter()
+                .map(move |q| q.transformed(&place))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// The two green handles that bend the text `p` into an arc: above and below the middle of
+/// the text as it is before it bends, a quarter of the text height clear of it. None for
+/// Text in a Box or text the font cannot draw.
+#[must_use]
+pub fn arc_handles(p: &Params) -> Option<[Point; 2]> {
+    if p.mode != Mode::Text {
+        return None;
+    }
+    let face = font::load(&p.font, p.bold, p.italic, &p.text).ok()?;
+    let b = unbent(&face, p)?;
+    let clear = p.height / 4.0;
+    let x = b.center().x;
+    Some([
+        Point::new(x, b.max.y + clear),
+        Point::new(x, b.min.y - clear),
+    ])
+}
+
+/// How far the middle of the text `p` rises above a line through its ends: what
+/// [`arc_from_rise`] turns back into its arc.
+#[must_use]
+pub fn arc_rise(p: &Params) -> f64 {
+    let Some(width) = font::load(&p.font, p.bold, p.italic, &p.text)
+        .ok()
+        .and_then(|face| unbent(&face, p))
+        .map(|b| b.size().x)
+    else {
+        return 0.0;
+    };
+    let angle = p.arc.to_radians().abs();
+    if angle == 0.0 {
+        return 0.0;
+    }
+    width / angle * (1.0 - (angle / 2.0).cos()) * bend_sign(p.arc)
+}
+
+/// The arc angle a drag of a green handle by `rise` (up positive) gives the text `p`: the
+/// middle of the text then sits `rise` above (or below) a line through its ends, so the
+/// handle follows the pointer. At most a full circle less a little.
+#[must_use]
+pub fn arc_from_rise(p: &Params, rise: f64) -> f64 {
+    const MOST: f64 = 350.0;
+    let Some(width) = font::load(&p.font, p.bold, p.italic, &p.text)
+        .ok()
+        .and_then(|face| unbent(&face, p))
+        .map(|b| b.size().x)
+        .filter(|w| *w > 0.0)
+    else {
+        return 0.0;
+    };
+    // the rise of an arc of length `width` through `angle` (radians): r (1 - cos(a/2))
+    let rise_of = |angle: f64| width / angle * (1.0 - (angle / 2.0).cos());
+    let want = rise.abs();
+    let (mut lo, mut hi) = (1e-9, MOST.to_radians());
+    if want >= rise_of(hi) {
+        return MOST * rise.signum();
+    }
+    for _ in 0..60 {
+        let mid = f64::midpoint(lo, hi);
+        if rise_of(mid) < want {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    (lo.to_degrees() * rise.signum() * 100.0).round() / 100.0
 }
 
 /// The first selected group that is text (plain groups may come before it).
@@ -238,6 +505,10 @@ fn glyph_places(p: &Params) -> Result<Vec<font::Placed>, String> {
 /// (nearest the middle of the room between them, within the line's height), or two lines
 /// (between the lower line's capitals and the upper line's baseline).
 pub fn gap_at(p: &Params, at: Point, reach: f64) -> Result<Option<Gap>, String> {
+    // ponytail: no kerning clicks on arched text; flatten it, kern, bend it again
+    if p.arc != 0.0 {
+        return Ok(None);
+    }
     let placed = glyph_places(p)?;
     for pair in placed.windows(2) {
         let (a, b) = (pair[0], pair[1]);
@@ -594,5 +865,146 @@ mod tests {
                 .to_string()
                 .contains("one line")
         );
+    }
+
+    fn bounds_of(doc: &Document) -> Rect {
+        doc.selection
+            .iter()
+            .map(|id| doc.vectors[id].bounds())
+            .reduce(Rect::union)
+            .unwrap()
+    }
+
+    fn in_a_box(text: &str) -> Params {
+        Params {
+            mode: Mode::TextInABox,
+            box_size: Xy::new(100.0, 50.0),
+            margin: Margin::None,
+            ..boxes(text)
+        }
+    }
+
+    #[test]
+    fn stretching_characters_fills_the_box_height() {
+        // "HI" fits the width (18 by 10 into 100 by 80): 100 mm wide, 55.6 tall
+        let tall = |v| Params {
+            box_size: Xy::new(100.0, 80.0),
+            vertical_stretch: v,
+            ..in_a_box("HI")
+        };
+        let plain = bounds_of(&after::<DrawText>(&tall(
+            VerticalStretch::NoVerticalStretch,
+        )));
+        assert!((plain.size().x - 100.0).abs() < 1e-6, "{plain:?}");
+        assert!(plain.size().y < 79.0);
+        let b = bounds_of(&after::<DrawText>(&tall(
+            VerticalStretch::StretchCharactersToFit,
+        )));
+        assert!(
+            (b.size().x - 100.0).abs() < 1e-6 && (b.size().y - 80.0).abs() < 1e-6,
+            "{b:?}"
+        );
+        assert!((b.min.y - 10.0).abs() < 1e-6, "in the box: {b:?}");
+    }
+
+    #[test]
+    fn stretching_line_space_moves_the_lines_apart_to_the_box_height() {
+        let p = Params {
+            vertical_stretch: VerticalStretch::StretchLineSpaceToFit,
+            ..in_a_box("HI\nHI")
+        };
+        let doc = after::<DrawText>(&p);
+        let b = bounds_of(&doc);
+        assert!((b.size().y - 50.0).abs() < 1e-6, "{b:?}");
+        // the letters keep their shape: each box as wide as it is tall less 2/10
+        let one = doc.vectors[doc.selection.iter().next().unwrap()].bounds();
+        assert!((one.size().x / one.size().y - 0.8).abs() < 1e-6, "{one:?}");
+    }
+
+    #[test]
+    fn horizontal_stretch_fills_the_box_width_three_ways() {
+        // "H H" in a flat box fits its height: room at the sides
+        let flat = |h| Params {
+            box_size: Xy::new(200.0, 10.0),
+            horizontal_stretch: h,
+            ..in_a_box("H H")
+        };
+        let plain = bounds_of(&after::<DrawText>(&flat(
+            HorizontalStretch::NoHorizontalStretch,
+        )));
+        assert!(plain.size().x < 100.0, "{plain:?}");
+        for h in [
+            HorizontalStretch::StretchSpacesBetweenWords,
+            HorizontalStretch::StretchKerning,
+            HorizontalStretch::StretchCharacterSize,
+        ] {
+            let doc = after::<DrawText>(&flat(h));
+            let b = bounds_of(&doc);
+            assert!((b.size().x - 200.0).abs() < 1e-6, "{h:?}: {b:?}");
+            assert!((b.size().y - 10.0).abs() < 1e-6, "{h:?}: {b:?}");
+            let wide = doc
+                .selection
+                .iter()
+                .map(|id| doc.vectors[id].bounds().size().x)
+                .fold(0.0, f64::max);
+            // only the character size stretch widens the letters (8 wide at 10 tall)
+            assert_eq!(
+                wide > 8.5,
+                h == HorizontalStretch::StretchCharacterSize,
+                "{h:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn arched_text_bends_about_its_middle_and_back() {
+        let flat = boxes("HIHIH");
+        let up = Params {
+            arc: 90.0,
+            ..flat.clone()
+        };
+        let b0 = bounds_of(&after::<DrawText>(&flat));
+        let doc = after::<DrawText>(&up);
+        let b = bounds_of(&doc);
+        // the middle letter stays where it was; the ends drop
+        assert!((b.max.y - b0.max.y).abs() < 0.5, "{b0:?} {b:?}");
+        assert!(b.min.y < b0.min.y - 3.0, "{b:?}");
+        let down = bounds_of(&after::<DrawText>(&Params { arc: -90.0, ..flat }));
+        assert!(down.max.y > b0.max.y + 3.0 && (down.min.y - b0.min.y).abs() < 0.5);
+        // the arc is kept with the text: the form opens on it
+        assert!((DrawText::initial_params(&doc).arc - 90.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_handle_dragged_up_bends_the_text_so_its_middle_rises_that_far() {
+        let p = boxes("HIHIH");
+        assert_eq!(arc_from_rise(&p, 0.0), 0.0);
+        let arc = arc_from_rise(&p, 5.0);
+        assert!(arc > 0.0 && (arc_from_rise(&p, -5.0) + arc).abs() < 1e-9);
+        // the letters' middles: the middle one 5 above the ends'
+        let bent = Params { arc, ..p.clone() };
+        let face = font::load("Test Boxes", false, false, "HIHIH").unwrap();
+        let mids: Vec<Point> = arched(&face, &bent)
+            .iter()
+            .map(|q| q.bounds().center())
+            .collect();
+        let rise = mids[2].y - f64::midpoint(mids[0].y, mids[4].y);
+        // the ends' middles sit inside the arc's ends: a little less than the drag
+        assert!(rise > 3.0 && rise < 5.0, "{rise}");
+        assert!((arc_rise(&bent) - 5.0).abs() < 1e-3);
+        let [top, bottom] = arc_handles(&p).unwrap();
+        assert!(top.y > 20.0 && bottom.y < 10.0 && (top.x - bottom.x).abs() < 1e-9);
+        assert!(arc_handles(&in_a_box("H")).is_none());
+    }
+
+    #[test]
+    fn arc_rotation_turns_the_arched_text_about_the_arc_centre() {
+        let p = Params {
+            arc: 60.0,
+            arc_rotation: 180.0,
+            ..boxes("HIHIH")
+        };
+        let b = bounds_of(&after::<DrawText>(&p));
+        assert!(b.max.y < 10.0, "turned over below the centre: {b:?}");
     }
 }
