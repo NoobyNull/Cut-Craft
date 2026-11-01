@@ -1779,6 +1779,22 @@ fn the_position_page_lifts_aligns_and_follows_a_drag_as_it_goes() {
     assert_eq!(h.app.doc.components.len(), 1);
     assert!(h.app.history.undo(&mut h.app.doc));
     assert!((origin(&h.app) - x0).abs() < cell, "back where it was");
+    // every section's numbers so: Interactive Rotation turns it as the drag goes
+    let wide = |app: &CutCraftApp| {
+        let k = app.doc.components.values().next().unwrap();
+        k.cell * f64::from(u32::try_from(k.columns).unwrap())
+    };
+    assert!((wide(&h.app) - 20.0).abs() < 2.0 * cell);
+    h.press(held, true, Modifiers::NONE);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["turn"]["z"] = Value::from(90.0);
+    form.dirty = true;
+    h.frame(vec![]);
+    assert!(
+        (wide(&h.app) - 10.0).abs() < 2.0 * cell,
+        "turned while held"
+    );
+    h.press(held, false, Modifiers::NONE);
     let _ = std::fs::remove_file(file);
 }
 
@@ -2211,6 +2227,51 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     h.click(close, Modifiers::NONE);
     h.frame(vec![]);
     assert!(h.text_at("Fade").is_none(), "closed");
+}
+
+#[test]
+fn a_dragged_value_in_the_3d_settings_changes_the_component_as_it_goes() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let settings = h
+        .app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == Handle3d::Settings)
+        .map(|(_, at)| *at)
+        .expect("the editing icons");
+    h.click(settings, Modifiers::NONE);
+    h.frame(vec![]);
+    let tilt = h.text_at("Tilt").expect("the settings popup");
+    h.click(tilt, Modifiers::NONE);
+    h.frame(vec![]);
+    let angle = |h: &Harness| {
+        let k = &h.app.doc.components[&EntityId(1)];
+        k.shaping.tilt.map(|t| t.angle)
+    };
+    assert!(angle(&h).is_some(), "tilted");
+    let undo_from = h.app.history.undo_depth();
+    let held = h.text_at("Combine with other components ...").unwrap();
+    h.press(held, true, Modifiers::NONE);
+    for step in 1..=3 {
+        let to = 10.0 * f64::from(step);
+        let s = h.app.settings_3d.as_mut().unwrap();
+        s.params.tilt.angle = to;
+        s.dirty = true;
+        h.frame(vec![]);
+        assert_eq!(angle(&h), Some(to), "follows the drag: {step}");
+    }
+    h.press(held, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.history.undo_depth(), undo_from + 1, "one undo");
+    h.app.invoke(&h.ctx, "undo");
+    assert_ne!(angle(&h), Some(30.0), "the drag undone at once");
 }
 
 #[test]

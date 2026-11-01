@@ -606,11 +606,14 @@ impl Handle3d {
 }
 
 /// The popup the Settings handle opens: Component Properties' settings as being edited,
-/// applied through the command once the pointer is let go (a dragged value is one undo).
+/// applied through the command as they change (a dragged value as it goes, one undo).
 struct Settings3d {
     component: EntityId,
     params: cmd_component_properties::Params,
     dirty: bool,
+    /// While a value is dragged, the undo depth after its last step: the next step takes it
+    /// back first.
+    dragged: Option<usize>,
     /// Where it opened on screen.
     at: egui::Pos2,
     /// Its combine-mode radios, where they were drawn last frame.

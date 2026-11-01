@@ -1978,8 +1978,7 @@ impl CutCraftApp {
     }
 
     /// Once a frame: a form's shape or model made again with its settings once they have
-    /// changed and the pointer is let go (so a dragged value is not re-run every frame).
-    /// Orientate 3D Model's size and position follow a drag as it goes, the drag one undo.
+    /// changed, a dragged value as it goes (the drag one undo).
     pub(super) fn follow_form(&mut self, ctx: &egui::Context) {
         let pressed = ctx.input(|i| i.pointer.any_down());
         let Some(form) = self.form.as_mut() else {
@@ -1988,14 +1987,7 @@ impl CutCraftApp {
         if !pressed {
             form.dragged = None;
         }
-        let live = form.id == "orientate_3d_model"
-            && form.applied.as_ref().is_some_and(|applied| {
-                let mut moved = applied.clone();
-                moved["placing"] = form.params["placing"].clone();
-                moved["size"] = form.params["size"].clone();
-                moved == form.params
-            });
-        if !form.dirty || (pressed && !live) {
+        if !form.dirty {
             return;
         }
         form.dirty = false;

@@ -1519,6 +1519,7 @@ impl CutCraftApp {
                     component: id,
                     params,
                     dirty: false,
+                    dragged: None,
                     at: rect.left_bottom(),
                     radios: vec![],
                     anchors: None,
@@ -1718,7 +1719,8 @@ impl CutCraftApp {
 
     /// The Settings handle's popup (Aspire 12's): the combine mode, Fade and Tilt with
     /// their anchors' Set, Appearance and its colour, and Close; each change applied
-    /// through Component Properties once the pointer is let go.
+    /// through Component Properties as it is made, a dragged value as it goes (the drag
+    /// one undo).
     pub(super) fn settings_3d_window(&mut self, ctx: &egui::Context) {
         use cmd_component_properties::Appearance;
         let Some(s) = &mut self.settings_3d else {
@@ -1793,16 +1795,29 @@ impl CutCraftApp {
                 close = ui.button("Close").clicked();
             });
         let pressed = ctx.input(|i| i.pointer.any_down());
-        let apply = (s.dirty && !pressed).then(|| s.params.clone());
+        if !pressed {
+            s.dragged = None;
+        }
+        let apply = s.dirty.then(|| s.params.clone());
+        let dragged = apply.as_ref().and(s.dragged.take());
         if close {
             self.settings_3d = None;
         } else if apply.is_some() {
             s.dirty = false;
         }
         if let Some(p) = apply {
+            // the last frame's step of this drag taken back first, so the drag is one undo
+            if dragged == Some(self.history.undo_depth()) {
+                self.history.undo(&mut self.doc);
+            }
+            let before = self.history.undo_depth();
             let params = serde_json::to_value(&p).expect("component properties serialize");
             if let Err(e) = self.apply("component_properties", &params) {
                 self.status.set_message(&e);
+            }
+            let depth = self.history.undo_depth();
+            if let (true, Some(s)) = (pressed && depth > before, self.settings_3d.as_mut()) {
+                s.dragged = Some(depth);
             }
         }
     }
