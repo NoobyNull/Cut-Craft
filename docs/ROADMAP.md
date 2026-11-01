@@ -21,7 +21,7 @@ Sizes: **S** a day or less, **M** a few days, **L** a week or more.
 | Menu items that say "not implemented yet" | 10 (section 4) |
 | `ponytail:` stand-ins in the code | 171 (`grep -rn "ponytail:" crates`) |
 | Guessed behaviour in `re/SPEC.md` | 58 `[inf]`, 14 `[unk]` |
-| Pushes | **None until 2026-11-04** (Matthew, 2026-11-01). Commit locally until then. |
+| Pushes | `main` pushed to GitHub and Gitea when Matthew asks (the 2026-11-04 pause was lifted on 2026-11-01). |
 
 ## 2. Done
 

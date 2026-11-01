@@ -8,7 +8,7 @@ focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
 ## Update 2026-11-01 (version 0.4.2, `4659eb6`…`ec83b2b`, pushed with tag `v0.4.2`)
 
 - **State:** 2204 tests pass; no open GitHub issues; `docs/courses.md` has no course gaps
-  left. **No pushes until 2026-11-04** (Matthew): commit locally.
+  left. Push `main` to both remotes only when Matthew asks.
 - **Landed:** text on an arc (green handles), Text in a Box stretch options, Sketch
   Carving's green areas, Create Shape's mitred corners / blend to inner vectors / E to edit
   (`Component::shape` keeps its settings and outlines), Trace Bitmap's area box and colour
@@ -16,7 +16,7 @@ focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
   an empty object list (`form::blank`), the 3D model drawn solid down to the modeling plane
   (`view3d::solid`, GPU only), imported models without spikes under steep sides
   (`fmt_import_stl::top_down`), Draw Material Block hiding the import outline.
-- **Fixed after the release (local, not pushed):** six Model menu items named ids no command
+- **Fixed after the release (pushed, untagged):** six Model menu items named ids no command
   has, so they were greyed; they now run Texture Area, Add Draft, Offset Model, Slice,
   Split and Emboss. Found by a probe: run every menu item and list those that say "not
   implemented yet".
