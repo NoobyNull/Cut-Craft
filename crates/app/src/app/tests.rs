@@ -2660,6 +2660,13 @@ fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
         paused,
         "paused stays put"
     );
+    // the Progress slider, dragged right, moves the tool on
+    let progress = h.text_at("Progress").expect("a Progress slider");
+    let from = progress + egui::vec2(80.0, 0.0);
+    h.drag(from, from + egui::vec2(200.0, 0.0));
+    let on = h.app.playback.as_ref().unwrap().at();
+    assert!(on > paused, "dragged on: {paused} to {on}");
+    assert!(!h.app.playing, "a drag pauses it");
     h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
     assert!(
         h.app.playback.is_none() && h.app.simulation.is_some(),

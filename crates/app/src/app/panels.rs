@@ -705,26 +705,43 @@ impl CutCraftApp {
                 .button("Stop")
                 .on_hover_text("Keep what is cut so far")
                 .clicked();
-            let mut at = playback.at();
-            let length = playback.length();
-            if ui
-                .add(
-                    egui::Slider::new(&mut at, 0.0..=length)
-                        .suffix(" mm")
-                        .show_value(false),
-                )
-                .on_hover_text("Where the tool is along the toolpaths")
-                .changed()
-            {
-                self.playing = false;
-                playback.seek(at);
-            }
             ui.add(
                 egui::Slider::new(&mut self.playback_speed, PLAYBACK_SPEEDS)
                     .logarithmic(true)
                     .suffix(" mm/s")
                     .text("Speed"),
             );
+        });
+        // the progress across the view: drag it to move the tool on through the toolpaths, or
+        // back
+        ui.horizontal(|ui| {
+            ui.label("Progress");
+            let mut at = playback.at();
+            let length = playback.length();
+            let percent = move |d: f64| {
+                if length > 0.0 {
+                    d / length * 100.0
+                } else {
+                    100.0
+                }
+            };
+            ui.spacing_mut().slider_width =
+                ui.available_width() - ui.spacing().interact_size.x * 2.0;
+            if ui
+                .add(
+                    egui::Slider::new(&mut at, 0.0..=length)
+                        .custom_formatter(move |d, _| format!("{:.0}%", percent(d)))
+                        .custom_parser(move |text| {
+                            let p: f64 = text.trim().trim_end_matches('%').trim().parse().ok()?;
+                            Some(p / 100.0 * length)
+                        }),
+                )
+                .on_hover_text("Where the tool is along the toolpaths: drag to move it on or back")
+                .changed()
+            {
+                self.playing = false;
+                playback.seek(at);
+            }
         });
         if stop {
             self.finish_playback();
