@@ -480,10 +480,14 @@ mod tests {
         let path = Path::new("/out/widget.nc");
         let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
         let files = save_files(&changer, &doc, &plan, path, Some("Top")).unwrap();
-        let names: Vec<_> = files.iter().map(|(p, _)| p.to_str().unwrap()).collect();
+        // compared as paths: Windows joins the folder and name with a backslash
+        let names: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
         assert_eq!(
             names,
-            ["/out/widget_1_Pocket_Top.nc", "/out/widget_2_Text_Top.nc"]
+            [
+                path.with_file_name("widget_1_Pocket_Top.nc"),
+                path.with_file_name("widget_2_Text_Top.nc")
+            ]
         );
         assert_eq!(files[0].1.toolpaths.len(), 2);
         assert!(files[1].1.toolpaths.contains_key(&ids[2]));

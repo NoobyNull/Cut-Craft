@@ -510,6 +510,28 @@ mod tests {
             .fold(0.0, f64::max)
     }
 
+    /// Windows' DirectX shader compiler (FXC) refuses a function whose value comes back only
+    /// from inside a switch or an if/else ("not all control paths return a value"), even
+    /// when every branch returns, and the kernels then fail to build on the card. Every
+    /// function that gives a value ends in a plain return, so FXC sees one on every path.
+    #[test]
+    fn every_shader_function_ends_in_a_return_so_directx_builds_it() {
+        let module = naga::front::wgsl::parse_str(include_str!("compute.wgsl"))
+            .unwrap_or_else(|e| panic!("{e}"));
+        let unended: Vec<&str> = module
+            .functions
+            .iter()
+            .map(|(_, f)| f)
+            .filter(|f| f.result.is_some())
+            .filter(|f| !matches!(f.body.last(), Some(naga::Statement::Return { .. })))
+            .map(|f| f.name.as_deref().unwrap_or("?"))
+            .collect();
+        assert!(
+            unended.is_empty(),
+            "these end without a plain return: {unended:?}"
+        );
+    }
+
     #[test]
     fn the_gpu_drops_the_tool_where_the_cpu_does() {
         let Some(gpu) = gpu() else {
