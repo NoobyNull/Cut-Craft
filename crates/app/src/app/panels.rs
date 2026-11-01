@@ -2174,6 +2174,9 @@ impl CutCraftApp {
                 .collect();
             painter.add(view3d::triangles(&shown, screen, self.orbit, look, mark));
         }
+        if !self.display.material_block {
+            return;
+        }
         let job = self.shown_job().area().size();
         let length = if wrap.along_x { job.x } else { job.y };
         let stroke = egui::Stroke::new(ui.visuals().widgets.noninteractive.fg_stroke.width, mark);
@@ -2346,11 +2349,14 @@ impl CutCraftApp {
                 let view = (orbit, framing, fit, look);
                 painter.add(self.model_mesh(&model, view, mark, |p| screen(p + origin)));
             }
-            let job_area = job.area();
-            let (lo, hi) = (local(job_area.min, 0.0), local(job_area.max, job.thickness));
-            let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
-            for [a, b] in view3d::box_edges(lo, hi) {
-                painter.line_segment([screen(a), screen(b)], stroke);
+            // the material's outline, unless View ▸ Draw Material Block is off
+            if self.display.material_block {
+                let job_area = job.area();
+                let (lo, hi) = (local(job_area.min, 0.0), local(job_area.max, job.thickness));
+                let stroke = ui.visuals().widgets.noninteractive.fg_stroke;
+                for [a, b] in view3d::box_edges(lo, hi) {
+                    painter.line_segment([screen(a), screen(b)], stroke);
+                }
             }
         }
         // a playing preview's tool, an upright cylinder at the tip
