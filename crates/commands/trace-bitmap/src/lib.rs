@@ -5,8 +5,7 @@
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::Path;
-use cut_craft_core::geometry::Point;
+use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::trace::{self, Fit, Grid};
 use cut_craft_core::{Change, Command, CommandError, Meta};
 use schemars::JsonSchema;
@@ -66,6 +65,11 @@ pub struct Params {
     pub noise_filter: u8,
     /// Make the traced vectors one group
     pub group_vectors: bool,
+    /// Only this part of the picture is traced: drag a box over it in the 2D view, click
+    /// the picture to trace all of it again
+    #[schemars(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub area: Option<Rect>,
 }
 
 fn four() -> u8 {
@@ -84,6 +88,7 @@ impl Default for Params {
             corner_fit: 2,
             noise_filter: 2,
             group_vectors: true,
+            area: None,
         }
     }
 }
@@ -139,9 +144,16 @@ fn traced_paths(b: &Bitmap, p: &Params, on: impl Fn(usize) -> bool) -> Vec<Path>
         origin: Point::ZERO,
         cell: 1.0,
     };
-    // the grid counts rows from the bottom, the bitmap from the top
-    let rings = trace::outlines(grid, |c, r| on((b.rows - 1 - r) * b.columns + c));
     let pixel = b.rect.size() / Point::new(b.columns as f64, b.rows as f64);
+    // the grid counts rows from the bottom, the bitmap from the top
+    let in_area = |c: usize, r: usize| {
+        p.area.is_none_or(|area| {
+            area.contains(b.rect.min + Point::new(c as f64 + 0.5, r as f64 + 0.5) * pixel)
+        })
+    };
+    let rings = trace::outlines(grid, |c, r| {
+        in_area(c, r) && on((b.rows - 1 - r) * b.columns + c)
+    });
     let smallest = f64::from(p.noise_filter).powi(2);
     // ponytail: corner angle and tolerance from Corner Fit are our own scale [inf]
     let corner = (150.0 - 12.0 * f64::from(p.corner_fit.clamp(1, 10) - 1)).to_radians();
@@ -208,6 +220,43 @@ fn by_colour(doc: &Document, b: &Bitmap, p: &Params) -> Result<Change, CommandEr
     }
     c.select(made);
     Ok(c.finish())
+}
+
+/// The number (from the darkest, 1) of the colour colour mode cuts the chosen picture's
+/// pixel at `at` down to, for picking the colours to trace by clicking them.
+#[must_use]
+pub fn colour_at(doc: &Document, p: &Params, at: Point) -> Option<u8> {
+    let b = doc.chosen_bitmap()?;
+    if b.rgb.len() != b.columns * b.rows * 3 || !b.rect.contains(at) {
+        return None;
+    }
+    let size = b.rect.size();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "pixel counts"
+    )]
+    let (c, r) = (
+        (((at.x - b.rect.min.x) / size.x * b.columns as f64) as usize).min(b.columns - 1),
+        (((b.rect.max.y - at.y) / size.y * b.rows as f64) as usize).min(b.rows - 1),
+    );
+    let (_, labels) = palette(&b.rgb, usize::from(p.colors.clamp(2, 16)));
+    labels.get(r * b.columns + c).map(|k| k + 1)
+}
+
+/// The colours to trace with colour `n` (from 1) clicked: taken out if it was there, else
+/// added (none listed means all but the lightest, so a click starts a list of its own).
+#[must_use]
+pub fn toggled(colours: &[u8], n: u8) -> Vec<u8> {
+    if colours.contains(&n) {
+        colours.iter().copied().filter(|&k| k != n).collect()
+    } else {
+        let mut out = colours.to_vec();
+        out.push(n);
+        out.sort_unstable();
+        out
+    }
 }
 
 /// `rgb` (three bytes a pixel) cut down to `count` colours by k-means, numbered from the
@@ -285,7 +334,6 @@ fn palette(rgb: &[u8], count: usize) -> (Vec<[u8; 3]>, Vec<u8>) {
 mod tests {
     use super::*;
     use cut_craft_core::bitmap::Bitmap;
-    use cut_craft_core::geometry::Rect;
     use cut_craft_core::polygon;
     use cut_craft_core::testing::{rejection, run_on};
 
@@ -474,5 +522,65 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("nothing to trace"), "{err}");
+    }
+
+    #[test]
+    fn a_box_dragged_over_the_picture_traces_only_that_part() {
+        let mut doc = picture();
+        let right = Params {
+            area: Some(Rect::new(Point::new(40.0, 0.0), Point::new(80.0, 40.0))),
+            ..Params::default()
+        };
+        run_on::<TraceBitmap>(&mut doc, &right);
+        assert_eq!(doc.vectors.len(), 1, "the square, not the disc");
+        let square = doc.vectors.values().next().unwrap().bounds();
+        assert!(square.min.x > 40.0, "{square:?}");
+    }
+
+    #[test]
+    fn clicking_a_colour_picks_it_and_clicking_again_lets_it_go() {
+        // white, a red half-height band on the left, a blue one on the right
+        let (columns, rows) = (8, 4);
+        let mut rgb = vec![];
+        for row in 0..rows {
+            for col in 0..columns {
+                rgb.extend(match (row, col) {
+                    (1..3, 0..4) => [200, 20, 20],
+                    (1..3, _) => [20, 20, 200],
+                    _ => [250, 250, 250],
+                });
+            }
+        }
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_bitmap(Bitmap {
+            name: "colours".into(),
+            columns,
+            rows,
+            grey: vec![128; columns * rows],
+            rect: Rect::new(Point::ZERO, Point::new(8.0, 4.0)),
+            depth: Vec::new(),
+            rgb,
+        });
+        doc.apply(&c.finish()).unwrap();
+        let p = Params {
+            mode: Mode::Colors,
+            colors: 3,
+            ..Params::default()
+        };
+        let (red, blue) = (
+            colour_at(&doc, &p, Point::new(1.0, 2.0)).unwrap(),
+            colour_at(&doc, &p, Point::new(7.0, 2.0)).unwrap(),
+        );
+        let white = colour_at(&doc, &p, Point::new(1.0, 3.5)).unwrap();
+        assert_ne!(red, blue);
+        assert_eq!(white, 3, "the lightest is the last");
+        assert_eq!(
+            colour_at(&doc, &p, Point::new(9.0, 2.0)),
+            None,
+            "off the picture"
+        );
+        assert_eq!(toggled(&[], red), vec![red]);
+        assert_eq!(toggled(&[blue, red], red), vec![blue]);
     }
 }

@@ -600,6 +600,57 @@ fn sketch_carving_shows_the_areas_it_would_carve_while_its_form_is_open() {
 }
 
 #[test]
+fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    // a red left half and a blue right half on 100 x 50 mm
+    let rgb = (0..4 * 2)
+        .flat_map(|i| {
+            if i % 4 < 2 {
+                [200, 20, 20]
+            } else {
+                [20, 20, 200]
+            }
+        })
+        .collect();
+    c.add_bitmap(Bitmap {
+        name: "b".into(),
+        columns: 4,
+        rows: 2,
+        grey: vec![100; 8],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(100.0, 50.0)),
+        depth: Vec::new(),
+        rgb,
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "trace_bitmap");
+    h.frame(vec![]);
+    let (from, to) = (h.at(10.0, 10.0), h.at(40.0, 40.0));
+    h.drag(from, to);
+    let area: Rect =
+        serde_json::from_value(h.app.form.as_ref().unwrap().params["area"].clone()).unwrap();
+    assert!(
+        (area.min.x - 10.0).abs() < 1.0 && (area.max.y - 40.0).abs() < 1.0,
+        "{area:?}"
+    );
+    // a click lets the area go; in colour mode the next one picks the colour clicked
+    h.click(h.at(70.0, 25.0), Modifiers::NONE);
+    assert!(h.app.form.as_ref().unwrap().params["area"].is_null());
+    h.app.form.as_mut().unwrap().params["mode"] = "colors".into();
+    h.app.form.as_mut().unwrap().params["colors"] = 2.into();
+    h.click(h.at(70.0, 25.0), Modifiers::NONE);
+    let picked = h.app.form.as_ref().unwrap().params["trace_colors"].clone();
+    assert_eq!(picked.as_array().map(Vec::len), Some(1), "{picked}");
+    h.click(h.at(70.0, 25.0), Modifiers::NONE);
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["trace_colors"],
+        serde_json::json!([])
+    );
+}
+
+#[test]
 fn clicking_one_of_a_group_picks_the_group() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);

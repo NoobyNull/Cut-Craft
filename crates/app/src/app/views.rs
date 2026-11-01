@@ -1122,7 +1122,14 @@ impl CutCraftApp {
         self.track_stroke(gesture);
         let placing_tabs = self.placing_tabs();
         let filleting = self.filleting();
+        let tracing = self.tracing();
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
+            // Trace Bitmap: a box dragged over the picture is the part traced
+            (Some(Gesture::Dragging(drag)), None, None) if tracing => Overlay::Window {
+                start: drag.start,
+                end: drag.end,
+                crossing: true,
+            },
             // Create Fillets: the fillet the corner under the pointer would get, or the
             // fillet a click there would take out
             (None | Some(Gesture::Click { .. }), None, None) if filleting => {
@@ -1161,8 +1168,7 @@ impl CutCraftApp {
         if self.view_tool == Some(ViewTool::Transform) {
             self.paint_handles(ui, &canvas);
         }
-        self.paint_arc_handles(ui, &canvas);
-        self.paint_sketch_areas(ui, &canvas);
+        self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
         self.view_buttons(ui, area);
@@ -1171,17 +1177,7 @@ impl CutCraftApp {
         self.cursor = canvas.cursor();
         match (gesture, self.view_tool, self.drawing_tool()) {
             (Some(Gesture::Dropped { drag, .. }), Some(ViewTool::ZoomBox), _) => {
-                let size = drag.end - drag.start;
-                if size.x.abs() > 0.0 && size.y.abs() > 0.0 {
-                    let margin = ui.spacing().interact_size.y;
-                    self.camera = Some(ViewTransform::fit(
-                        area,
-                        margin,
-                        Rect::new(drag.start, drag.end),
-                    ));
-                }
-                self.view_tool = None;
-                "Select".clone_into(&mut self.status.current_tool);
+                self.zoom_box(ui, area, drag);
             }
             (Some(Gesture::Dropped { drag, shift }), Some(ViewTool::NodeEdit), _) => {
                 self.node_drop(drag, shift, reach);
@@ -1195,6 +1191,10 @@ impl CutCraftApp {
                 let modifiers = ui.input(|i| i.modifiers);
                 self.drawing_gesture(id, gesture, reach, modifiers);
             }
+            (Some(Gesture::Dropped { drag, .. }), None, None) if tracing => {
+                self.set_trace_area(Some(Rect::new(drag.start, drag.end)));
+            }
+            (Some(Gesture::Click { at, .. }), None, None) if tracing => self.trace_click(at),
             (Some(Gesture::Dropped { drag, shift }), None, None) => {
                 self.plain_drop(drag, shift, reach, placing_tabs);
             }
@@ -1209,6 +1209,29 @@ impl CutCraftApp {
             }
             _ => {}
         }
+    }
+
+    /// Zoom Box let go: the view zooms to the box dragged, and the tool ends.
+    fn zoom_box(&mut self, ui: &egui::Ui, area: egui::Rect, drag: Drag) {
+        let size = drag.end - drag.start;
+        if size.x.abs() > 0.0 && size.y.abs() > 0.0 {
+            let margin = ui.spacing().interact_size.y;
+            self.camera = Some(ViewTransform::fit(
+                area,
+                margin,
+                Rect::new(drag.start, drag.end),
+            ));
+        }
+        self.view_tool = None;
+        "Select".clone_into(&mut self.status.current_tool);
+    }
+
+    /// What open forms mark in the 2D view: Draw Text's arc handles, Sketch Carving's areas,
+    /// Trace Bitmap's area.
+    fn paint_form_marks(&mut self, ui: &egui::Ui, canvas: &Canvas) {
+        self.paint_arc_handles(ui, canvas);
+        self.paint_sketch_areas(ui, canvas);
+        self.paint_trace_area(ui, canvas);
     }
 
     /// While Job Setup is open a red square marks the datum, as in Aspire.
@@ -1682,6 +1705,73 @@ impl CutCraftApp {
     }
 
     /// Whether the open form is a profile toolpath placing its tabs by clicking.
+    /// Trace Bitmap's form is open: the 2D view picks its area and colours.
+    pub(super) fn tracing(&self) -> bool {
+        self.form.as_ref().is_some_and(|f| f.id == "trace_bitmap")
+    }
+
+    /// Trace Bitmap's area: only it is traced (`None`: the whole picture).
+    pub(super) fn set_trace_area(&mut self, area: Option<Rect>) {
+        if let Some(form) = self.form.as_mut() {
+            form.params["area"] = serde_json::to_value(area).expect("a box serialises");
+            if area.is_none() {
+                form.params.as_object_mut().map(|m| m.remove("area"));
+            }
+        }
+    }
+
+    /// A click with Trace Bitmap open: with an area picked, the whole picture again; else, in
+    /// colour mode, the colour under the click is picked to trace or let go.
+    pub(super) fn trace_click(&mut self, at: Point) {
+        let Some(form) = self.form.as_ref() else {
+            return;
+        };
+        if !form.params["area"].is_null() {
+            self.set_trace_area(None);
+            self.status.set_message("Tracing the whole picture");
+            return;
+        }
+        let Ok(p) = serde_json::from_value::<cmd_trace_bitmap::Params>(form.params.clone()) else {
+            return;
+        };
+        if p.mode != cmd_trace_bitmap::Mode::Colors {
+            return;
+        }
+        let Some(n) = cmd_trace_bitmap::colour_at(&self.doc, &p, at) else {
+            return;
+        };
+        let colours = cmd_trace_bitmap::toggled(&p.trace_colors, n);
+        self.status
+            .set_message(&format!("Colors to trace: {colours:?}"));
+        if let Some(form) = self.form.as_mut() {
+            form.params["trace_colors"] = serde_json::json!(colours);
+        }
+    }
+
+    /// Trace Bitmap's area, dashed, as Aspire marks it.
+    fn paint_trace_area(&self, ui: &egui::Ui, canvas: &Canvas) {
+        let Some(area) = self
+            .form
+            .as_ref()
+            .filter(|f| f.id == "trace_bitmap")
+            .and_then(|f| serde_json::from_value::<Rect>(f.params["area"].clone()).ok())
+        else {
+            return;
+        };
+        let (a, b) = (
+            canvas.transform.to_screen(area.min),
+            canvas.transform.to_screen(area.max),
+        );
+        let corners = [a, egui::pos2(b.x, a.y), b, egui::pos2(a.x, b.y), a];
+        let dash = ui.spacing().interact_size.y / 3.0;
+        ui.painter_at(canvas.area).extend(egui::Shape::dashed_line(
+            &corners,
+            egui::Stroke::new(1.0, ui.visuals().text_color()),
+            dash,
+            dash,
+        ));
+    }
+
     pub(super) fn placing_tabs(&self) -> bool {
         self.form.as_ref().is_some_and(|f| {
             f.id == "profile_toolpath"
