@@ -820,6 +820,8 @@ struct CutCraftApp {
     guide_props: Option<GuideProps>,
     /// Machine ▸ Tool Changer…: the active machine's holders loaded from the tools.
     tool_changer_window: bool,
+    /// The Toolpath List's height as its divider was last dragged; None for half the page.
+    list_height: Option<f32>,
     /// Measure / Inspect's last result, shown in its form while the tool is on.
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.

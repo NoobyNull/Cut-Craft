@@ -4434,7 +4434,7 @@ fn the_toolpath_list_shows_hides_edits_and_reorders_its_rows() {
     // a click selects, the down arrow moves it below the next one
     h.click(drill, Modifiers::NONE);
     assert_eq!(h.app.selected_toolpath, Some(EntityId(2)));
-    let down = h.text_at("⏷").unwrap();
+    let down = h.text_at("Move Down").unwrap();
     h.click(down, Modifiers::NONE);
     assert_eq!(names(&h), ["Pocket", "Cut Out", "Drill"]);
     assert_eq!(
@@ -5251,7 +5251,7 @@ fn the_layers_list_arrows_move_the_active_layer_and_merge_visible_is_offered() {
     h.frame(vec![]);
     h.frame(vec![]);
     let up = *h
-        .texts_at("⏶")
+        .texts_at("Move Up")
         .first()
         .expect("the arrows are over the list");
     h.click(up, Modifiers::NONE);
@@ -5329,7 +5329,7 @@ fn toolpath_groups_are_listed_picked_previewed_saved_as_one_and_joined_by_new_to
     h.frame(vec![]);
     // the group's row is drawn; a click picks the group instead of a toolpath
     h.app.selected_toolpath = Some(EntityId(3));
-    let row = h.text_at("📁 Group 1").unwrap();
+    let row = h.text_at("Group 1").unwrap();
     h.click(row, Modifiers::NONE);
     assert_eq!(h.app.selected_group.as_deref(), Some("Group 1"));
     assert_eq!(h.app.selected_toolpath, None);
@@ -5867,4 +5867,33 @@ fn the_tool_changer_window_loads_holders_and_tools_carry_their_own_numbers() {
     assert!(h.text_at("Tool Changer").is_some(), "the window");
     assert!(h.text_at("Load by Tool Number").is_some());
     assert!(h.text_at("T4").is_some(), "a row per holder");
+}
+
+#[test]
+fn the_toolpath_lists_divider_stays_where_it_is_dragged() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::three_toolpaths();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let before = h.text_at("Toolpath List").expect("the list's heading");
+    // the divider, a little over the heading, dragged up 150
+    let from = before - egui::vec2(0.0, 12.0);
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    for k in 1..=10_u8 {
+        h.frame(vec![Event::PointerMoved(
+            from - egui::vec2(0.0, 15.0 * f32::from(k)),
+        )]);
+    }
+    h.press(from - egui::vec2(0.0, 150.0), false, Modifiers::NONE);
+    for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    let after = h.text_at("Toolpath List").unwrap();
+    assert!(
+        (after.y - (before.y - 150.0)).abs() < 4.0,
+        "dragged up it stays: {before:?} then {after:?}"
+    );
 }

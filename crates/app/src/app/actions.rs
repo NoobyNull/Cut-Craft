@@ -105,6 +105,7 @@ impl CutCraftApp {
             menu_at: None,
             guide_props: None,
             tool_changer_window: false,
+            list_height: None,
             measure_rows: Vec::new(),
             display: crate::display::Display::default(),
             simulation: None,

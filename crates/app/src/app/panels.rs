@@ -223,8 +223,16 @@ impl CutCraftApp {
         let mut moved = None;
         ui.horizontal(|ui| {
             for (direction, arrow, tip) in [
-                (Direction::Up, "⏶", "Move the active layer up the list"),
-                (Direction::Down, "⏷", "Move the active layer down the list"),
+                (
+                    Direction::Up,
+                    "Move Up",
+                    "Move the active layer up the list",
+                ),
+                (
+                    Direction::Down,
+                    "Move Down",
+                    "Move the active layer down the list",
+                ),
             ] {
                 let can = moved_to(&self.doc, layer, direction).is_some();
                 if ui
@@ -2478,14 +2486,37 @@ impl CutCraftApp {
             egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
             return;
         }
-        // the toolpath list in its own bottom half, as Aspire's, so it never scrolls away
-        egui::Panel::bottom("toolpath_list")
-            .resizable(true)
-            .default_size(ui.available_height() / 2.0)
-            .show(ui, |ui| self.toolpath_list(ui));
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            self.tools_or_favourites(ui, &groups, Page::Toolpaths);
+        // the toolpath list in its own bottom half, as Aspire's, so it never scrolls away;
+        // the strip over it drags it taller or shorter
+        let row = ui.spacing().interact_size.y;
+        let room = ui.available_height();
+        let strip = ui.spacing().item_spacing.y * 2.0;
+        let list = self
+            .list_height
+            .unwrap_or(room / 2.0)
+            .clamp(row * 3.0, (room - row * 3.0).max(row * 3.0));
+        let width = ui.available_width();
+        ui.allocate_ui(egui::vec2(width, room - list - strip), |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    self.tools_or_favourites(ui, &groups, Page::Toolpaths);
+                });
         });
+        let (rect, divider) = ui.allocate_exact_size(egui::vec2(width, strip), egui::Sense::drag());
+        if divider.dragged() {
+            self.list_height = Some(list - divider.drag_delta().y);
+        }
+        if divider.hovered() || divider.dragged() {
+            ui.set_cursor_icon(egui::CursorIcon::ResizeVertical);
+        }
+        let line = if divider.hovered() || divider.dragged() {
+            ui.visuals().widgets.active.bg_stroke
+        } else {
+            ui.visuals().widgets.noninteractive.bg_stroke
+        };
+        ui.painter().hline(rect.x_range(), rect.center().y, line);
+        self.toolpath_list(ui);
     }
 
     /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
@@ -2498,8 +2529,12 @@ impl CutCraftApp {
         ui.horizontal(|ui| {
             use cmd_reorder_toolpath::{Direction, neighbour};
             for (direction, arrow, tip) in [
-                (Direction::Up, "⏶", "Move Toolpath Up (cut it sooner)"),
-                (Direction::Down, "⏷", "Move Toolpath Down (cut it later)"),
+                (Direction::Up, "Move Up", "Move Toolpath Up (cut it sooner)"),
+                (
+                    Direction::Down,
+                    "Move Down",
+                    "Move Toolpath Down (cut it later)",
+                ),
             ] {
                 let can = self
                     .selected_toolpath
@@ -2591,7 +2626,7 @@ impl CutCraftApp {
     /// picks it and opens its menu. Whether it was picked, and the menu action chosen.
     fn group_row(&self, ui: &mut egui::Ui, group: &str) -> (Option<bool>, Option<String>) {
         let picked = self.selected_group.as_deref() == Some(group);
-        let name = egui::RichText::new(format!("📁 {group}")).strong();
+        let name = egui::RichText::new(group).strong();
         let label = ui
             .selectable_label(picked, name)
             .on_hover_text("A toolpath group: toolpaths made while it is picked join it");
