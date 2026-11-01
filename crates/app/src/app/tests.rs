@@ -820,6 +820,28 @@ impl Harness {
         drawn.collect()
     }
 
+    /// The middle of `text` once the panel under `over` is wheeled down until it is in the
+    /// window; `None` if it never is.
+    fn scroll_to(&mut self, over: Pos2, text: &str) -> Option<Pos2> {
+        for _ in 0..40 {
+            if let Some(at) = self.text_at(text).filter(|at| at.y < 780.0) {
+                return Some(at);
+            }
+            self.frame(vec![
+                Event::PointerMoved(over),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: vec2(0.0, -100.0),
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Wheel,
+                    modifiers: Modifiers::NONE,
+                },
+            ]);
+            self.frame(vec![]);
+        }
+        None
+    }
+
     /// The middle of `text` where the last frame drew it.
     fn text_at(&self, text: &str) -> Option<Pos2> {
         self.shapes.iter().find_map(|clipped| match &clipped.shape {
@@ -1671,22 +1693,17 @@ fn an_imported_model_shows_at_once_and_follows_its_form() {
 }
 
 #[test]
-fn importing_a_model_goes_through_orientation_then_position() {
+fn importing_a_model_shows_orientation_and_position_on_one_page() {
     let mut h = Harness::new();
     let file = pyramid_stl("pages");
     h.app.import_file(&file);
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(h.text_at("Initial Orientation").is_some());
-    assert!(h.text_at("Depth Below Top").is_none(), "page 1 alone");
-    let next = h
-        .text_at(cmd_orientate_3d_model::POSITION_PAGE.1)
-        .expect("the way to the Position page");
-    h.click(next, Modifiers::NONE);
-    h.frame(vec![]);
-    assert!(h.text_at(cmd_orientate_3d_model::POSITION_PAGE.0).is_some());
-    assert!(h.text_at("Initial Orientation").is_none());
-    assert!(h.text_at("Update Undercuts").is_some());
+    let over = h.text_at("Initial Orientation").unwrap();
+    for text in ["Depth Below Top", "Update Undercuts", "Import"] {
+        assert!(h.scroll_to(over, text).is_some(), "{text}");
+    }
+    assert!(h.text_at("< Back").is_none(), "one page");
     let form = h.app.form.as_ref().unwrap();
     assert_eq!(
         form.params["placing"]["depth_below_top"], 5.0,
@@ -1705,14 +1722,7 @@ fn importing_a_model_goes_through_orientation_then_position() {
     form.dirty = true;
     h.frame(vec![]);
     assert!((tall(&h.app) - 2.5).abs() < 2.0 * cell, "{}", tall(&h.app));
-    let back = h.text_at("< Back").unwrap();
-    h.click(back, Modifiers::NONE);
-    h.frame(vec![]);
-    assert!(h.text_at("Initial Orientation").is_some(), "back on page 1");
-    let next = h.text_at(cmd_orientate_3d_model::POSITION_PAGE.1).unwrap();
-    h.click(next, Modifiers::NONE);
-    h.frame(vec![]);
-    let import = h.text_at("Import").unwrap();
+    let import = h.scroll_to(over, "Import").unwrap();
     h.click(import, Modifiers::NONE);
     assert!(h.app.form.is_none(), "Import closes the form");
     assert_eq!(h.app.doc.components.len(), 1, "keeping the model");
@@ -1720,14 +1730,11 @@ fn importing_a_model_goes_through_orientation_then_position() {
 }
 
 #[test]
-fn the_position_page_lifts_aligns_and_follows_a_drag_as_it_goes() {
+fn the_import_form_lifts_aligns_and_follows_a_drag_as_it_goes() {
     let mut h = Harness::new();
     let file = pyramid_stl("align");
     h.app.import_file(&file);
     h.frame(vec![]);
-    h.frame(vec![]);
-    let next = h.text_at(cmd_orientate_3d_model::POSITION_PAGE.1).unwrap();
-    h.click(next, Modifiers::NONE);
     h.frame(vec![]);
     // centred, the corner it gives is shown, for the numbers to move it from there
     let (area, thickness) = (h.app.doc.job.area(), h.app.doc.job.thickness);
@@ -1750,7 +1757,8 @@ fn the_position_page_lifts_aligns_and_follows_a_drag_as_it_goes() {
     assert_eq!(placing(&h.app)["depth_below_top"], 8.0, "not set back");
     assert!((top(&h.app) - 8.0).abs() < 2.0 * cell, "{}", top(&h.app));
     // Height ▸ Middle puts it half way up the material
-    let middle = h.text_at("Middle").expect("the height buttons");
+    let over = h.text_at("Orientate 3D Model").unwrap();
+    let middle = h.scroll_to(over, "Middle").expect("the height buttons");
     h.click(middle, Modifiers::NONE);
     h.frame(vec![]);
     let half = f64::midpoint(5.0, thickness);
@@ -4093,9 +4101,9 @@ fn an_imported_model_shows_whole_on_the_bed_sized_in_three_with_the_rotary_choic
     for label in ["Imported model type", "Offered"] {
         assert_eq!(h.text_at(label), None, "{label} is not shown");
     }
-    // the placing is on the Position page, as Aspire's
-    assert!(h.text_at("Depth Below Top").is_none());
-    assert!(h.text_at(cmd_orientate_3d_model::POSITION_PAGE.1).is_some());
+    // the placing is on the same page, Center model left to the alignment buttons
+    assert!(h.text_at("Depth Below Top").is_some());
+    assert!(h.text_at("Center model").is_none());
     let _ = std::fs::remove_file(file);
 }
 
@@ -4553,7 +4561,8 @@ fn cancel_takes_back_what_a_tool_did_and_closes_it() {
         1,
         "placed while the form is open"
     );
-    let cancel = h.text_at("Cancel").expect("a Cancel button");
+    let over = h.text_at("Initial Orientation").unwrap();
+    let cancel = h.scroll_to(over, "Cancel").expect("a Cancel button");
     h.click(cancel, Modifiers::NONE);
     h.frame(vec![]);
     assert!(h.app.form.is_none(), "closed");

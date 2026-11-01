@@ -1372,7 +1372,6 @@ impl CutCraftApp {
                 model_whole: true,
                 applied: None,
                 undo_from: self.history.undo_depth(),
-                step: 1,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
@@ -3001,9 +3000,8 @@ impl CutCraftApp {
     /// The open form's buttons: OK and Cancel for a new job's setup, else Apply and Close.
     pub(super) fn form_buttons(&mut self, ui: &mut egui::Ui) {
         let Some(open) = &self.form else { return };
-        let pages = form::pages(&open.fields);
-        if pages > 1 {
-            return self.page_buttons(ui, pages);
+        if open.id == "orientate_3d_model" {
+            return self.import_buttons(ui);
         }
         let new_job = open.new_job;
         let (apply_label, close_label) = if new_job {
@@ -3068,30 +3066,22 @@ impl CutCraftApp {
         }
     }
 
-    /// A form of several pages (Import 3D Model, as Aspire's): the next page; on the last,
-    /// < Back and Import, which keeps the model as placed and closes; Cancel takes back what
-    /// the form made and closes.
-    fn page_buttons(&mut self, ui: &mut egui::Ui, pages: u64) {
+    /// Import 3D Model's buttons: Import keeps the model as placed and closes; Cancel takes
+    /// back what the form made and closes.
+    fn import_buttons(&mut self, ui: &mut egui::Ui) {
         let Some(open) = &self.form else { return };
-        let (last, page) = (open.step == pages, open.page);
-        let (mut next, mut back, mut import, mut cancel) = (false, false, false, false);
+        let page = open.page;
+        let (mut import, mut cancel) = (false, false);
         ui.horizontal(|ui| {
-            if last {
-                back = ui.button("< Back").clicked();
-            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 cancel = ui
                     .button("Cancel")
                     .on_hover_hint("Close without importing the model")
                     .clicked();
-                if last {
-                    import = ui
-                        .button("Import")
-                        .on_hover_hint("Keep the model as placed")
-                        .clicked();
-                } else {
-                    next = ui.button(cmd_orientate_3d_model::POSITION_PAGE.1).clicked();
-                }
+                import = ui
+                    .button("Import")
+                    .on_hover_hint("Keep the model as placed")
+                    .clicked();
             });
         });
         if cancel {
@@ -3100,13 +3090,6 @@ impl CutCraftApp {
             self.form = None;
             self.pages.done_with(page);
             self.status.set_message("Model imported");
-        } else if let Some(open) = &mut self.form {
-            if next {
-                open.step += 1;
-            }
-            if back {
-                open.step -= 1;
-            }
         }
     }
 
@@ -3134,12 +3117,7 @@ impl CutCraftApp {
                         .fit_to_exact_size(egui::vec2(edge, edge)),
                 );
             }
-            // ponytail: Import 3D Model is the one form with a second page
-            ui.strong(if open.step > 1 {
-                cmd_orientate_3d_model::POSITION_PAGE.0
-            } else {
-                open.label
-            });
+            ui.strong(open.label);
         });
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
@@ -3607,8 +3585,8 @@ fn texture_buttons(ui: &mut egui::Ui) -> (bool, bool) {
     clicked
 }
 
-/// The open form's fields, the page shown of a form with several, and the Position page's
-/// Update Undercuts; true when anything changed.
+/// The open form's fields, and Import 3D Model's alignment and Update Undercuts; true when
+/// anything changed.
 fn show_form(
     ui: &mut egui::Ui,
     open: &mut OpenForm,
@@ -3616,15 +3594,11 @@ fn show_form(
     job: &cut_craft_core::document::Job,
     icon: &dyn Fn(&str) -> Option<egui::Image<'static>>,
 ) -> bool {
-    let changed = if form::pages(&open.fields) > 1 {
-        form::show_page(ui, &open.fields, open.step, &mut open.params, look)
-    } else {
-        form::show(ui, &open.fields, &mut open.params, look)
-    };
+    let changed = form::show(ui, &open.fields, &mut open.params, look);
     changed | align_in_material(ui, open, job, icon) | update_undercuts(ui, open)
 }
 
-/// The Position page's alignment, as Align Objects' in the material: the model against the
+/// Import 3D Model's alignment, as Align Objects' in the material: the model against the
 /// material's sides or centred on it, and in height on the zero plane, in the middle of the
 /// material or at its top. The position numbers are set to match; true when clicked.
 fn align_in_material(
@@ -3678,7 +3652,7 @@ fn align_in_material(
         ),
         ("Top", "The model's top at the material's top", 1.0),
     ];
-    if open.step < 2 || open.id != "orientate_3d_model" {
+    if open.id != "orientate_3d_model" {
         return false;
     }
     let size = |key: &str| open.params["size"][key].as_f64().unwrap_or(0.0);
@@ -3730,10 +3704,10 @@ fn align_in_material(
     clicked
 }
 
-/// The Position page's Update Undercuts: the model is judged again (it already follows every
+/// Import 3D Model's Update Undercuts: the model is judged again (it already follows every
 /// change, so this is the same judging once more); true when clicked.
 fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
-    if open.step < 2 || open.id != "orientate_3d_model" {
+    if open.id != "orientate_3d_model" {
         return false;
     }
     let on = open.params["show_undercuts"].as_bool().unwrap_or(false);

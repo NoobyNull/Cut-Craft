@@ -174,11 +174,14 @@ say "not implemented yet".
   colour, all applied through Component Properties. A component's Solid Color
   shows on the GPU-drawn surface [inf: the CPU path of the headless tests leaves it out].
   Not done: the 3D Transform Handles themselves (move, scale, rotate in the 3D view).
-- Import 3D Model is two pages as Aspire 12's: Orientate (Initial Orientation, Model Size,
-  the model type and Scale to fit), then Position & Import > to "Import 3D Model > Position"
-  (Position relative to Modeling Plane with Depth Below Top, Create both sides, Discard data
-  below zero plane; Highlight undercuts with Update Undercuts; < Back, Import, Cancel).
-  Depth Below Top reads the model's height until a depth is typed. [inf: Aspire's slider
+- Import 3D Model is one page (Aspire 12 has two; Matthew asked for one): Initial
+  Orientation, Model Size, the model type and Scale to fit, Position relative to Modeling
+  Plane (Position, Depth Below Top, Create both sides, Discard data below zero plane), Align
+  in Material (sides, centre, and Bottom / Middle / Top in the material), Highlight undercuts
+  with Update Undercuts, Import and Cancel. Center model is shown as the position it gives.
+  Depth Below Top reads the model's height until a depth is typed; past the height it lifts
+  the model off the plane, up to the material's top. Every dragged value moves the model as
+  it is dragged. [inf: Aspire's slider
   beside the picture is not drawn; Overcut Distance is not offered.]
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,

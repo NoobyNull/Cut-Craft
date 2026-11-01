@@ -128,11 +128,8 @@ pub struct ModelSize {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Placing {
     /// Centred on the material; the form shows it as the position it gives and clears it,
-    /// so it is never shown (the alignment buttons centre it)
-    #[schemars(
-        title = "Center model",
-        extend("x-hide-when" = {"center": ["true", "false"]})
-    )]
+    /// so it is not in the form (the alignment buttons centre it)
+    #[schemars(skip)]
     pub center: bool,
     /// Where the model's lower-left corner goes when not centred
     pub position: Xy,
@@ -150,9 +147,6 @@ pub struct Placing {
     pub discard_below_zero: bool,
 }
 
-/// The Position page's heading, and the button on the first page that goes to it, as
-/// Aspire 12 names them.
-pub const POSITION_PAGE: (&str, &str) = ("Import 3D Model > Position", "Position & Import >");
 /// Aspire's Interactive Rotation: fine turns about the job's axes after the initial
 /// orientation, which a drag in the 3D view adds to while the drag turns the model.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -222,13 +216,12 @@ pub struct Params {
     #[schemars(
         title = "Position relative to Modeling Plane",
         extend("x-section" = true),
-        extend("x-icon" = "import/position_relative_to_modeling_plane.png"),
-        extend("x-page" = 2)
+        extend("x-icon" = "import/position_relative_to_modeling_plane.png")
     )]
     pub placing: Placing,
     /// Colour the faces a cutter from above cannot reach (turned down, or under an
     /// overhang) in the 3D view while the form is open
-    #[schemars(title = "Highlight undercuts", extend("x-page" = 2))]
+    #[schemars(title = "Highlight undercuts")]
     #[serde(default = "yes")]
     pub show_undercuts: bool,
     /// A full 3D model is kept whole: in a double-sided job its underside goes to the other

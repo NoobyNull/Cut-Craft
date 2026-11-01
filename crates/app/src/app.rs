@@ -686,8 +686,6 @@ struct OpenForm {
     dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
     /// How many changes could be undone when it opened: Cancel undoes back to there.
     undo_from: usize,
-    /// The page shown, from 1, of a form with several (Import 3D Model's Position page).
-    step: u64,
 }
 
 /// See [`CutCraftApp::sketch_areas`].
@@ -1113,7 +1111,6 @@ fn summary_table(
             enabled: None,
             group: None,
             tab: None,
-            page: 1,
         },
         crate::form::Field {
             key: "scale_factor".into(),
@@ -1134,7 +1131,6 @@ fn summary_table(
             enabled: None,
             group: None,
             tab: None,
-            page: 1,
         },
     ];
     let mut values = serde_json::json!({
