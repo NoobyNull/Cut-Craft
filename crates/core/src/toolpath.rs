@@ -4,7 +4,7 @@
 use crate::component::placed_model;
 use crate::document::{Document, EntityId};
 use crate::geometry::{Path, Point};
-use crate::simulation::{Material, Tiles};
+use crate::simulation::Material;
 use crate::{Command, CommandError, polygon};
 use glam::DVec3;
 use schemars::JsonSchema;
@@ -275,7 +275,7 @@ impl Tool {
     }
 
     /// The side angle (radians) of a tool that tapers out to its shank, if it does.
-    fn tapered(&self) -> Option<f64> {
+    pub fn tapered(&self) -> Option<f64> {
         let tapers = matches!(self.shape, ToolShape::BallNose | ToolShape::EndMill)
             && self.taper > 0.0
             && self.taper < 90.0
@@ -782,14 +782,13 @@ pub fn zigzag_within(
     step: f64,
     tolerance: f64,
     floor: f64,
-    inside: &dyn Fn(Point) -> bool,
+    inside: &(dyn Fn(Point) -> bool + Sync),
 ) -> Vec<Vec<DVec3>> {
     let (first, last) = (
         grid.centre(0, 0),
         grid.centre(grid.columns - 1, grid.rows - 1),
     );
     let lines = ((last.y - first.y) / step).floor() as usize + 1;
-    let peaks = grid.peaks();
     let drop = Drop {
         grid,
         tool,
@@ -797,18 +796,18 @@ pub fn zigzag_within(
         floor,
         ceiling: f64::INFINITY,
         over_ceiling: false,
-        peaks: &peaks,
     };
-    let mut runs = vec![];
-    for line in 0..lines {
-        let y = first.y + line as f64 * step;
-        let mut ends = [Point::new(first.x, y), Point::new(last.x, y)];
-        if line % 2 == 1 {
-            ends.reverse();
-        }
-        runs.extend(drop.along(&ends, inside));
-    }
-    runs
+    let lines: Vec<Vec<Point>> = (0..lines)
+        .map(|line| {
+            let y = first.y + line as f64 * step;
+            let mut ends = vec![Point::new(first.x, y), Point::new(last.x, y)];
+            if line % 2 == 1 {
+                ends.reverse();
+            }
+            ends
+        })
+        .collect();
+    drop.along_all(&lines, inside)
 }
 
 /// How to drop a tool along lines over a grid: never below `floor`, every move checked to
@@ -824,36 +823,108 @@ pub struct Drop<'a> {
     /// Runs split at the ceiling keep the point just over it at each end, so the move up to
     /// it is still cut.
     pub over_ceiling: bool,
-    /// The grid's [`Material::peaks`].
-    pub peaks: &'a Tiles,
 }
 
 impl Drop<'_> {
     /// The tool along the polyline `line`, sampled about a cell apart, as low as it goes at
     /// each point; split into runs where `inside` says no or it would be above the ceiling.
     /// Points in the middle of level runs are left out.
+    pub fn along(
+        &self,
+        line: &[Point],
+        inside: &(dyn Fn(Point) -> bool + Sync),
+    ) -> Vec<Vec<DVec3>> {
+        self.along_all(&[line.to_vec()], inside)
+    }
+
+    /// [`Self::along`] each of `lines`, in order, the heavy work in batches over every line
+    /// at once (on the GPU when there is one): the drops at the samples, then each round of
+    /// refinement's gouge checks and midpoints.
+    pub fn along_all(
+        &self,
+        lines: &[Vec<Point>],
+        inside: &(dyn Fn(Point) -> bool + Sync),
+    ) -> Vec<Vec<DVec3>> {
+        let samples: Vec<Vec<(Point, bool)>> = lines
+            .iter()
+            .map(|line| {
+                self.samples(line)
+                    .into_iter()
+                    .map(|p| (p, inside(p)))
+                    .collect()
+            })
+            .collect();
+        let wanted: Vec<Point> = samples
+            .iter()
+            .flatten()
+            .filter_map(|&(p, inside)| inside.then_some(p))
+            .collect();
+        let dropped = crate::compute::compute().drop_at(self.grid, self.tool, &wanted);
+        let mut dropped = dropped.into_iter();
+        let mut gaps: Vec<(DVec3, DVec3)> = vec![];
+        let mut gap = |a, b, run: &mut Vec<Piece>| {
+            run.push(Piece::Gap(gaps.len()));
+            gaps.push((a, b));
+        };
+        let mut runs: Vec<Vec<Piece>> = vec![];
+        for line in &samples {
+            let mut run: Vec<Piece> = vec![];
+            // the last point passed over for being above the ceiling, while still inside
+            let mut over: Option<DVec3> = None;
+            for &(p, inside) in line {
+                let point = inside.then(|| {
+                    let z = dropped.next().expect("a drop for each sample inside");
+                    p.extend(z.max(self.floor))
+                });
+                let next = point.filter(|q| q.z <= self.ceiling + 1e-9);
+                let Some(next) = next else {
+                    if let (true, Some(up), Some(&Piece::Point(previous))) =
+                        (self.over_ceiling, point, run.last())
+                    {
+                        gap(previous, up, &mut run);
+                        run.push(Piece::Point(up));
+                    }
+                    if !run.is_empty() {
+                        runs.push(std::mem::take(&mut run));
+                    }
+                    over = point;
+                    continue;
+                };
+                if let (true, Some(up), true) = (self.over_ceiling, over, run.is_empty()) {
+                    run.push(Piece::Point(up));
+                }
+                over = None;
+                if let Some(&Piece::Point(previous)) = run.last() {
+                    gap(previous, next, &mut run);
+                }
+                run.push(Piece::Point(next));
+            }
+            if !run.is_empty() {
+                runs.push(run);
+            }
+        }
+        let fills = self.refine_all(&gaps, HALVINGS);
+        runs.into_iter()
+            .map(|run| {
+                tidy(
+                    run.into_iter()
+                        .flat_map(|piece| match piece {
+                            Piece::Point(p) => vec![p],
+                            Piece::Gap(i) => fills[i].clone(),
+                        })
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// The points along the polyline `line`, about a cell apart.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "a small positive count"
     )]
-    pub fn along(&self, line: &[Point], inside: &dyn Fn(Point) -> bool) -> Vec<Vec<DVec3>> {
-        let at = |p: Point| {
-            p.extend(
-                self.grid
-                    .drop_tool_on(self.tool, p, self.peaks)
-                    .max(self.floor),
-            )
-        };
-        let refine = Refine {
-            grid: self.grid,
-            tool: self.tool,
-            tolerance: self.tolerance,
-            peaks: self.peaks,
-            at: &at,
-        };
-        let mut runs: Vec<Vec<DVec3>> = vec![];
-        let mut run: Vec<DVec3> = vec![];
+    fn samples(&self, line: &[Point]) -> Vec<Point> {
         let mut samples = line.first().copied().into_iter().collect::<Vec<_>>();
         for w in line.windows(2) {
             let steps = (w[0].distance(w[1]) / self.grid.cell - 1e-9)
@@ -861,36 +932,75 @@ impl Drop<'_> {
                 .max(1.0) as u32;
             samples.extend((1..=steps).map(|i| w[0].lerp(w[1], f64::from(i) / f64::from(steps))));
         }
-        // the last point passed over for being above the ceiling, while still inside
-        let mut over: Option<DVec3> = None;
-        for p in samples {
-            let point = inside(p).then(|| at(p));
-            let next = point.filter(|q| q.z <= self.ceiling + 1e-9);
-            let Some(next) = next else {
-                if let (true, Some(up), Some(&previous)) = (self.over_ceiling, point, run.last()) {
-                    refine.between(previous, up, HALVINGS, &mut run);
-                    run.push(up);
-                }
-                if !run.is_empty() {
-                    runs.push(tidy(std::mem::take(&mut run)));
-                }
-                over = point;
-                continue;
-            };
-            if let (true, Some(up), true) = (self.over_ceiling, over, run.is_empty()) {
-                run.push(up);
-            }
-            over = None;
-            if let Some(&previous) = run.last() {
-                refine.between(previous, next, HALVINGS, &mut run);
-            }
-            run.push(next);
-        }
-        if !run.is_empty() {
-            runs.push(tidy(run));
-        }
-        runs
+        samples
     }
+
+    /// The points to put in each of `gaps` (a move from one dropped point to the next) so
+    /// the moves through them stay out of the grid: none where the move already does, else
+    /// the tool dropped at the middle and the two halves refined again, `halvings` deep,
+    /// then up, across level and down.
+    fn refine_all(&self, gaps: &[(DVec3, DVec3)], halvings: u32) -> Vec<Vec<DVec3>> {
+        let mut fills = vec![vec![]; gaps.len()];
+        if gaps.is_empty() {
+            return fills;
+        }
+        let compute = crate::compute::compute();
+        let over = compute.overcut_along(self.grid, self.tool, gaps);
+        let gouging: Vec<usize> = (0..gaps.len())
+            .filter(|&i| over[i] > self.tolerance)
+            .collect();
+        if gouging.is_empty() {
+            return fills;
+        }
+        let across = |i: usize, z: f64| {
+            (
+                gaps[i].0.truncate().extend(z),
+                gaps[i].1.truncate().extend(z),
+            )
+        };
+        if halvings == 0 {
+            // too short to halve again: up, across level, and down
+            let level = |i: usize| gaps[i].0.z.max(gaps[i].1.z);
+            let flats: Vec<(DVec3, DVec3)> = gouging.iter().map(|&i| across(i, level(i))).collect();
+            let lifted = compute.overcut_along(self.grid, self.tool, &flats);
+            for (&i, lift) in gouging.iter().zip(lifted) {
+                let (from, to) = across(i, level(i) + lift.max(0.0));
+                fills[i] = vec![from, to];
+            }
+            return fills;
+        }
+        let middles: Vec<Point> = gouging
+            .iter()
+            .map(|&i| (gaps[i].0.truncate() + gaps[i].1.truncate()) / 2.0)
+            .collect();
+        let middles: Vec<DVec3> = middles
+            .iter()
+            .zip(compute.drop_at(self.grid, self.tool, &middles))
+            .map(|(p, z)| p.extend(z.max(self.floor)))
+            .collect();
+        let halves: Vec<(DVec3, DVec3)> = gouging
+            .iter()
+            .zip(&middles)
+            .flat_map(|(&i, &middle)| [(gaps[i].0, middle), (middle, gaps[i].1)])
+            .collect();
+        let mut parts = self.refine_all(&halves, halvings - 1).into_iter();
+        for (&i, &middle) in gouging.iter().zip(&middles) {
+            let (first, second) = (
+                parts.next().expect("a fill per half"),
+                parts.next().expect("a fill per half"),
+            );
+            fills[i].extend(first);
+            fills[i].push(middle);
+            fills[i].extend(second);
+        }
+        fills
+    }
+}
+
+/// A run of a line being dropped: a point, or a gap between two still to be refined.
+enum Piece {
+    Point(DVec3),
+    Gap(usize),
 }
 
 /// Leaves out the middle points of straight level runs.
@@ -904,44 +1014,6 @@ fn tidy(run: Vec<DVec3>) -> Vec<DVec3> {
         points.push(point);
     }
     points
-}
-
-/// Keeps the moves along one line from cutting into the grid.
-struct Refine<'a, F> {
-    grid: &'a Material,
-    tool: &'a Tool,
-    tolerance: f64,
-    /// The grid's highest cell in each tile.
-    peaks: &'a Tiles,
-    /// The point on the line, as low as the tool goes there.
-    at: &'a F,
-}
-
-impl<F: Fn(Point) -> DVec3> Refine<'_, F> {
-    /// Points to put between `a` and `b` so the moves through them stay out of the grid.
-    fn between(&self, a: DVec3, b: DVec3, halvings: u32, out: &mut Vec<DVec3>) {
-        if self.grid.overcut_on(self.tool, a, b, self.peaks) <= self.tolerance {
-            return;
-        }
-        if halvings == 0 {
-            // too short to halve again: up, across level, and down
-            let level = a.z.max(b.z);
-            let across = |z: f64| (a.truncate().extend(z), b.truncate().extend(z));
-            let (from, to) = across(level);
-            let lifted = level
-                + self
-                    .grid
-                    .overcut_on(self.tool, from, to, self.peaks)
-                    .max(0.0);
-            let (from, to) = across(lifted);
-            out.extend([from, to]);
-            return;
-        }
-        let middle = (self.at)((a.truncate() + b.truncate()) / 2.0);
-        self.between(a, middle, halvings - 1, out);
-        out.push(middle);
-        self.between(middle, b, halvings - 1, out);
-    }
 }
 
 /// Three points along one straight line at one height.

@@ -1453,6 +1453,10 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                     rs.device.limits().max_storage_buffer_binding_size / 1_000_000
                 );
                 app.gpu_3d = Some(view3d::gpu::Gpu::new(rs, samples));
+                // the grid kernels (preview, 3D toolpaths) on the same card
+                cut_craft_core::compute::use_compute(Some(std::sync::Arc::new(
+                    crate::compute::GpuCompute::new(rs.device.clone(), rs.queue.clone()),
+                )));
             }
             if let Some(dir) = shots {
                 // what a fresh clone shows: its icons, the starter tools, nothing of the user's
