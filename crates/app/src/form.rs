@@ -95,6 +95,9 @@ impl When {
 /// Draws a form's tool block given the parameters holding the tool (see [`Look::tool`]).
 pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) + 'a;
 
+/// Draws more at the foot of a group, given its name: see [`Look::group_end`].
+pub type GroupEnd<'a> = dyn Fn(&mut egui::Ui, &str) + 'a;
+
 /// The fields that are lists of Tool Database tools, drawn by [`Look::tool`] as the form's
 /// own tool is.
 pub const TOOL_LISTS: [&str; 2] = ["tools", "clearance_tools"];
@@ -110,6 +113,9 @@ pub struct Look<'a> {
     /// Database's tools, which the form does not edit), given the field's key and the
     /// parameters holding it; `None` leaves them out.
     pub tool: Option<&'a DrawTool<'a>>,
+    /// Draws more at the foot of an `x-group` block, given its name (Profile's Edit Tabs…
+    /// under Tabs); `None` for nothing.
+    pub group_end: Option<&'a GroupEnd<'a>>,
 }
 
 /// Millimetres in one of `units`.
@@ -242,7 +248,11 @@ fn show_within(
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(group);
-                plain(ui, block, params, look, top)
+                let changed = plain(ui, block, params, look, top);
+                if let Some(end) = look.group_end {
+                    end(ui, group);
+                }
+                changed
             })
             .inner
         } else {

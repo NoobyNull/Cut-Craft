@@ -2,7 +2,7 @@
 
 use cut_craft_core::entry::{
     Entry, Lead, Leads, Ramp, RampBy, Ramping, TabPlacement, TabSettings, TabSpacing, Tabs,
-    path_moves,
+    path_moves, spread_tabs,
 };
 use cut_craft_core::geometry::Point;
 use cut_craft_core::toolpath::{Move, MoveKind};
@@ -327,4 +327,40 @@ fn tabs_can_start_at_the_start_point_or_keep_off_corners() {
     let kept = tab_middles(TabPlacement::AvoidCorners, 3);
     assert_eq!(kept.len(), 3);
     assert!(!kept.iter().any(near_corner), "{kept:?}");
+}
+
+#[test]
+fn add_tabs_spreads_them_on_the_path_to_move_by_hand_after() {
+    let mut entry = Entry {
+        tabs: Tabs::Flat,
+        tab: TabSettings {
+            size_from_tool: false,
+            length: 4.0,
+            spacing: TabSpacing::Placed,
+            number: 4,
+            placement: TabPlacement::Evenly,
+            ..TabSettings::default()
+        },
+        tool_diameter: 2.0,
+        ..Entry::default()
+    };
+    // four on the 160 mm square: one in the middle of each side
+    let tabs = spread_tabs(&square(), true, &entry);
+    let middles = [(20.0, 0.0), (40.0, 20.0), (20.0, 40.0), (0.0, 20.0)];
+    assert_eq!(tabs.len(), 4);
+    for (t, (x, y)) in tabs.iter().zip(middles) {
+        assert!(t.distance(Point::new(x, y)) < 1e-9, "{tabs:?}");
+    }
+    // kept off corners: none within a tab's reach of one
+    entry.tab.number = 3;
+    entry.tab.placement = TabPlacement::AvoidCorners;
+    let corners = [(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)];
+    for t in spread_tabs(&square(), true, &entry) {
+        assert!(
+            corners
+                .iter()
+                .all(|&(x, y)| t.distance(Point::new(x, y)) >= 3.0 - 1e-6),
+            "{t:?}"
+        );
+    }
 }

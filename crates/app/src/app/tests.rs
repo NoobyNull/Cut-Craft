@@ -5957,3 +5957,70 @@ fn edit_passes_shows_each_pass_and_a_click_adds_one() {
         "a 0.6 mm last pass: {set:?}"
     );
 }
+
+#[test]
+fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.click(h.at(60.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // down the form to its Tabs, the button at their foot
+    let over = h.text_at("Profile Toolpath").expect("the form");
+    for _ in 0..30 {
+        if h.text_at("Edit Tabs…").is_some_and(|b| b.y < 700.0) {
+            break;
+        }
+        h.frame(vec![Event::PointerMoved(over + egui::vec2(0.0, 200.0))]);
+        h.frame(vec![Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -60.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
+            modifiers: Modifiers::NONE,
+        }]);
+    }
+    // the scroll eases to a stop
+    for _ in 0..30 {
+        h.frame(vec![]);
+    }
+    h.click(
+        h.text_at("Edit Tabs…").expect("the button"),
+        Modifiers::NONE,
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.click(
+        h.text_at("Not on corners").expect("the window"),
+        Modifiers::NONE,
+    );
+    h.click(h.text_at("Add Tabs").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    let tabs: Vec<Point> = serde_json::from_value(params["tab_points"].clone()).unwrap();
+    assert_eq!(
+        tabs.len(),
+        4,
+        "the form's number, on the selected rectangle"
+    );
+    let corners = [(10.0, 10.0), (60.0, 10.0), (60.0, 60.0), (10.0, 60.0)];
+    for t in &tabs {
+        assert!(
+            corners
+                .iter()
+                .all(|&(x, y)| t.distance(Point::new(x, y)) > 5.0),
+            "{tabs:?}"
+        );
+    }
+    assert_eq!(params["tabs"], "flat");
+    assert_eq!(params["tab"]["spacing"], "placed", "to move by hand after");
+    assert!(h.text_at("4 tabs placed").is_some());
+    h.click(h.text_at("3D Tabs").unwrap(), Modifiers::NONE);
+    assert_eq!(h.app.form.as_ref().unwrap().params["tabs"], "triangular");
+    h.click(h.text_at("Delete All Tabs").unwrap(), Modifiers::NONE);
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["tab_points"],
+        serde_json::json!([])
+    );
+}

@@ -3160,6 +3160,7 @@ impl CutCraftApp {
             picture: &picture,
             material: form::material(&self.doc, units),
             tool: Some(&tool),
+            group_end: Some(&super::tabs::group_end),
         };
         open.dirty |= show_form(ui, open, &look);
         open.dirty |= listed.get();
@@ -3257,6 +3258,7 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
+            "profile_toolpath" => self.edit_tabs(ui),
             "sculpt" => {
                 let (load, round) = ui
                     .horizontal(|ui| {

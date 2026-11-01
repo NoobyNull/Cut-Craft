@@ -677,6 +677,23 @@ fn lead(entry: &Entry, at: Point, tangent: Point, side: f64, out: bool) -> Vec<P
     }
 }
 
+/// Where `entry`'s tab settings spread tabs on the path `points` (by number or distance, as
+/// placed by hand when set so), for Edit Tabs' Add Tabs to put them there to move by hand.
+pub fn spread_tabs(points: &[Point], closed: bool, entry: &Entry) -> Vec<Point> {
+    if points.len() < 2 {
+        return vec![];
+    }
+    let line = Line::new(points, closed);
+    let mut entry = entry.clone();
+    if entry.tab.spacing == TabSpacing::Placed {
+        entry.tab.spacing = TabSpacing::ConstantNumber;
+    }
+    tab_centres(&line, &entry)
+        .into_iter()
+        .map(|s| line.point(s))
+        .collect()
+}
+
 /// Where along the path each tab's middle goes.
 #[expect(
     clippy::cast_possible_truncation,

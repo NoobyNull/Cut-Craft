@@ -8,6 +8,7 @@ mod panels;
 mod passes;
 #[path = "screenshots.rs"]
 mod screenshots;
+mod tabs;
 #[cfg(test)]
 mod tests;
 mod title_bar;
@@ -1143,6 +1144,7 @@ fn summary_table(
         picture: &picture,
         material: cut_craft_core::calc::Values::default(),
         tool: None,
+        group_end: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
         summary.rapid = values["rapid_rate"]
