@@ -1,5 +1,4 @@
-- Importing a 3D model is fast again: the file is read once, rasterised across every core, and the drawn model is kept between frames
-- The modeling plane shows as a light-blue sheet under the model while it is imported; the model is in the material's colour, red only where a cutter cannot reach (Show undercuts turns that off)
-- Scale model to fit material in flat jobs: grown in proportion until the material stops it
-- Full 3D model by default; in a double-sided job the underside goes to the other side. Options ▸ Importing Models offers the flat import instead, or both
-- The import logs what it read and how long each step took, for bug reports
+- The 3D view edits like the 2D view: right-click menu, Aspire's transform handles, the height icons and component settings
+- Import 3D Model has Aspire's Position page: Depth Below Top, Create both sides, Highlight undercuts
+- Previews and 3D toolpaths run across every core, and on the GPU where there is one
+- Dozens of gaps from Aspire's training courses filled: sculpting in 3D, guides, dimensions, toolpath groups and more
