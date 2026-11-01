@@ -177,8 +177,12 @@ pub enum Widget {
     /// as Aspire's Initial Orientation.
     Faces { picture: Option<String> },
     /// A row of picture buttons, one an option, the chosen one pressed (`icons`, with
-    /// `x-icon` naming each picture by the value, `{}`), as Aspire's Combine Mode.
-    Icons { picture: Option<String> },
+    /// `x-icon` naming each picture by the value, `{}`), as Aspire's Combine Mode; with
+    /// `named-icons` larger, each with its name under it.
+    Icons {
+        picture: Option<String>,
+        named: bool,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -550,7 +554,9 @@ fn choose(
             let picture = picture.as_deref().and_then(look.picture);
             faces(ui, options, &current, picture)
         }
-        Widget::Icons { picture } => icon_row(ui, options, &current, look, picture.as_deref()),
+        Widget::Icons { picture, named } => {
+            icon_row(ui, options, &current, look, picture.as_deref(), *named)
+        }
     };
     match picked {
         Some(v) if v != current => {
@@ -569,10 +575,13 @@ fn icon_row(
     current: &str,
     look: &Look,
     template: Option<&str>,
+    named: bool,
 ) -> Option<String> {
-    let edge = egui::Vec2::splat(ui.spacing().interact_size.y);
+    // named pictures are the size of two rows, so what they show can be made out
+    let rows = if named { NAMED_ICON_ROWS } else { 1.0 };
+    let edge = egui::Vec2::splat(ui.spacing().interact_size.y * rows);
     let mut picked = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for o in options {
             let path = template.map(|t| icon_path(t, &Value::String(o.value.clone())));
             let chosen = o.value == current;
@@ -582,7 +591,20 @@ fn icon_row(
                     .min_size(edge),
                 None => egui::Button::selectable(chosen, &o.label),
             };
-            let response = ui.add(button).on_hover_text(&o.label);
+            let hover = o
+                .help
+                .as_deref()
+                .map_or_else(|| o.label.clone(), |h| format!("{}: {h}", o.label));
+            let response = if named {
+                ui.vertical(|ui| {
+                    let r = ui.add(button).on_hover_text(&hover);
+                    ui.small(&o.label);
+                    r
+                })
+                .inner
+            } else {
+                ui.add(button).on_hover_text(&hover)
+            };
             if response.clicked() {
                 picked = Some(o.value.clone());
             }
@@ -590,6 +612,9 @@ fn icon_row(
     });
     picked
 }
+
+/// How many rows tall a named icon's picture is.
+const NAMED_ICON_ROWS: f32 = 2.0;
 
 fn radios(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
     let mut picked = None;
@@ -956,8 +981,9 @@ fn kind(root: &Value, property: &Value) -> Kind {
             Some("faces") => Widget::Faces {
                 picture: marked("x-icon").and_then(Value::as_str).map(String::from),
             },
-            Some("icons") => Widget::Icons {
+            Some(w @ ("icons" | "named-icons")) => Widget::Icons {
                 picture: marked("x-icon").and_then(Value::as_str).map(String::from),
+                named: w == "named-icons",
             },
             _ => Widget::Auto,
         };
@@ -1220,7 +1246,7 @@ mod tests {
         let f = fields(&schema("component_properties"));
         assert!(matches!(
             &field(&f, "combine").kind,
-            Kind::Choice(modes, Widget::Icons { picture: Some(p) })
+            Kind::Choice(modes, Widget::Icons { picture: Some(p), .. })
                 if modes.len() == 5 && p == "modeling/combine_{}.png"
         ));
     }
@@ -1486,4 +1512,36 @@ fn print_form_blocks() {
         }
     }
     std::fs::write(std::env::var("BLOCKS_OUT").unwrap(), out).unwrap();
+}
+
+#[cfg(test)]
+#[test]
+fn interactive_rotation_offers_a_named_picture_for_each_turn() {
+    let schema = crate::commands::registry()
+        .get("orientate_3d_model")
+        .unwrap()
+        .schema();
+    let f = fields(&schema);
+    let turn = f.iter().find(|f| f.key == "turn").unwrap();
+    let Kind::Group(inner) = &turn.kind else {
+        panic!("a section")
+    };
+    let mode = inner.iter().find(|f| f.key == "mode").unwrap();
+    let Kind::Choice(
+        options,
+        Widget::Icons {
+            picture: Some(p),
+            named: true,
+        },
+    ) = &mode.kind
+    else {
+        panic!("{:?}", mode.kind)
+    };
+    for o in options {
+        let path = icon_path(p, &Value::String(o.value.clone()));
+        let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/icons")
+            .join(&path);
+        assert!(file.is_file(), "{path}");
+    }
 }

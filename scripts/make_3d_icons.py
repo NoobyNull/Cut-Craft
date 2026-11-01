@@ -564,6 +564,53 @@ I["modeling/combine_low"] = lambda: combined("low", lambda X, Y: np.minimum(LEFT
 I["modeling/combine_multiply"] = lambda: combined("multiply", lambda X, Y: WHOLE(X, Y) * np.clip((0.7 - X) / 1.4, 0, 1), [WHOLE])
 
 
+# ---- Orientate 3D Model's Interactive Rotation: what a drag in the 3D view turns ----
+
+AXIS_COLOURS = {"x": "#e04646", "y": "#3aa655", "z": "#2b63c6"}
+
+
+def turn_icon(which):
+    """A model on its base with the job's axes through it; the view orbiting round it (an
+    eye looking on), or the model turning about all three axes, or about one of them."""
+    ic = Icon(fit=(0.04, 0.04, 0.96, 0.96), bounds=((-0.95, -0.95, -0.4), (0.95, 0.95, 1.05)))
+    ic.add([(box(-0.42, -0.42, 0, 0.42, 0.42, 0.3), BODY),
+            (shift(shape(dome_fn(r=0.4, h=0.42), r=0.42), dz=0.3), BODY)])
+    centre = (0.0, 0.0, 0.33)
+    ends = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}
+
+    def axis(k, reach=0.95):
+        d = np.array(ends[k], float)
+        a, b = np.array(centre) - d * reach * 0.6, np.array(centre) + d * reach
+        return stroke3(ic, [a, b], AXIS_COLOURS[k], 1.6)
+
+    def ring_about(k, r=0.78, colour=None, w=2.4):
+        # a circle square to axis k round the centre, most of the way, with an arrowhead
+        d = np.array(ends[k], float)
+        u = np.array((0, 1, 0) if k == "x" else (1, 0, 0), float)
+        v = np.cross(d, u)
+        pts = [np.array(centre) + r * (math.cos(a) * u + math.sin(a) * v)
+               for a in np.linspace(math.radians(20), math.radians(320), 40)]
+        flat = [ic.p(*q) for q in pts]
+        c = colour or AXIS_COLOURS[k]
+        return pl(flat[:-1], c, w) + arrow(*flat[-4], *flat[-1], c, w, 5)
+
+    if which == "view":
+        ic.marks.append(ring_about("z", 0.95, ACC))
+        ic.marks.append(eye(34, 9, 0.62, INK))
+    elif which == "xyz":
+        # the three turns, without the axes, so the picture stays readable
+        for k, r in (("x", 0.7), ("y", 0.78), ("z", 0.92)):
+            ic.marks.append(ring_about(k, r, w=2.0))
+    else:
+        ic.marks.append(axis(which))
+        ic.marks.append(ring_about(which))
+    return ic
+
+
+for k in ("view", "xyz", "x", "y", "z"):
+    I[f"import/turn_{k}"] = (lambda k=k: turn_icon(k))
+
+
 def main():
     out = sys.argv[1]
     only = set(sys.argv[2:])

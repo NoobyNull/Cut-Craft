@@ -154,7 +154,11 @@ pub const POSITION_PAGE: (&str, &str) = ("Import 3D Model > Position", "Position
 pub struct Turn {
     /// What a left drag in the 3D view turns: the view, or the model about all three axes
     /// or about one (the view then looks along it)
-    #[schemars(title = "Drag turns", extend("x-widget" = "row"))]
+    #[schemars(
+        title = "Drag turns",
+        extend("x-widget" = "named-icons"),
+        extend("x-icon" = "import/turn_{}.png")
+    )]
     pub mode: TurnMode,
     #[schemars(title = "X", extend("x-unit" = "deg"))]
     pub x: f64,
