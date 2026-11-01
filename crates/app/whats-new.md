@@ -1,4 +1,4 @@
-- The 3D view edits like the 2D view: right-click menu, Aspire's transform handles, the height icons and component settings
-- Import 3D Model has Aspire's Position page: Depth Below Top, Create both sides, Highlight undercuts
-- Previews and 3D toolpaths run across every core, and on the GPU where there is one
-- Dozens of gaps from Aspire's training courses filled: sculpting in 3D, guides, dimensions, toolpath groups and more
+- The 3D view shows the model solid down to the modeling plane, without spikes
+- Text bends into an arc with handles; Text in a Box stretches to fit
+- Create Shape: mitred inside corners, blend to inner vectors, E to edit
+- Trace Bitmap areas and colour picking, a Segment 3D Model tree, Nest Parts sheets
