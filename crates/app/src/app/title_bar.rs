@@ -3,6 +3,7 @@
 //! it, and the window's edges resize it. Options ▸ Appearance gives back the desktop's.
 
 use super::egui;
+use cut_craft_bug_report::hint::HoverHint;
 use egui::{CursorIcon, Rect, ResizeDirection, Sense, StrokeKind, Vec2, ViewportCommand, vec2};
 
 /// A window button's width, in its heights: wider than tall, as desktops draw them.
@@ -112,7 +113,7 @@ fn window_button(ui: &mut egui::Ui, button: Button, maximised: bool) -> egui::Re
             painter.line_segment([glyph.right_top(), glyph.left_bottom()], stroke);
         }
     }
-    response.on_hover_text(label)
+    response.on_hover_hint(label)
 }
 
 /// With no desktop frame, the window's edges resize it: within a grab's reach of an edge or

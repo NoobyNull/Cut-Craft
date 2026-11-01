@@ -1,5 +1,7 @@
-//! Puts the commit Cut Craft is built from into bug reports (`CUT_CRAFT_COMMIT`), and lists
-//! every icon under `assets/icons` for `include_bytes!`, so the program carries its icons.
+//! Puts the commit Cut Craft is built from into bug reports (`CUT_CRAFT_COMMIT`), lists
+//! every icon under `assets/icons` for `include_bytes!`, so the program carries its icons, and
+//! gathers what each command does (the first sentence of its crate's docs) for the status
+//! bar.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -55,6 +57,52 @@ fn main() {
     table.push_str("];\n");
     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
     std::fs::write(out.join("icons.rs"), table).expect("the icon table is written");
+    std::fs::write(out.join("abouts.rs"), abouts()).expect("the command table is written");
+}
+
+/// Each command's id and the first sentence of its crate's `//!` docs, as a Rust table.
+fn abouts() -> String {
+    let commands = Path::new(env!("CARGO_MANIFEST_DIR")).join("../commands");
+    println!("cargo:rerun-if-changed={}", commands.display());
+    let mut crates: Vec<PathBuf> = std::fs::read_dir(&commands)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| e.path().join("src/lib.rs"))
+                .collect()
+        })
+        .unwrap_or_default();
+    crates.sort();
+    let mut table = String::from(
+        "/// What each command does, by id: its crate's first sentence.\n\
+         pub static ABOUTS: &[(&str, &str)] = &[\n",
+    );
+    for lib in crates {
+        let Ok(source) = std::fs::read_to_string(&lib) else {
+            continue;
+        };
+        println!("cargo:rerun-if-changed={}", lib.display());
+        let docs: Vec<&str> = source
+            .lines()
+            .map_while(|l| l.strip_prefix("//!"))
+            .map(str::trim)
+            .take_while(|l| !l.is_empty())
+            .collect();
+        let docs = docs.join(" ");
+        let sentence = docs.find(". ").map_or(docs.as_str(), |end| &docs[..=end]);
+        let sentence = sentence.trim_end_matches('.');
+        for line in source.lines() {
+            let id = line
+                .trim()
+                .strip_prefix("const ID: &'static str = \"")
+                .and_then(|rest| rest.strip_suffix("\";"));
+            if let Some(id) = id {
+                let _ = writeln!(table, "    ({id:?}, {sentence:?}),");
+            }
+        }
+    }
+    table.push_str("];\n");
+    table
 }
 
 /// `drawing/align/left.png` for that file under `icons`, whatever the platform's separator.

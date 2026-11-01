@@ -4,6 +4,7 @@
 
 use super::CutCraftApp;
 use crate::form;
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
 use cut_craft_core::entry::{Entry, TabPlacement, TabSettings, TabSpacing, Tabs, spread_tabs};
 use cut_craft_core::toolpath::Tool;
@@ -20,7 +21,7 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut serde_json:
     if group == "Tabs"
         && ui
             .button("Edit Tabs…")
-            .on_hover_text("Place the tabs: how many, where, their size, 2D or 3D")
+            .on_hover_hint("Place the tabs: how many, where, their size, 2D or 3D")
             .clicked()
     {
         ui.data_mut(|d| d.insert_temp(window_id(), true));
@@ -58,7 +59,7 @@ impl CutCraftApp {
                     ui.horizontal(|ui| {
                         add = ui
                             .button("Add Tabs")
-                            .on_hover_text("Put the tabs on the selected vectors, as set above")
+                            .on_hover_hint("Put the tabs on the selected vectors, as set above")
                             .clicked();
                         clear = ui
                             .add_enabled(placed > 0, egui::Button::new("Delete All Tabs"))
@@ -142,12 +143,12 @@ fn settings(
 ) {
     ui.horizontal(|ui| {
         ui.radio_value(tabs, Tabs::Flat, "2D Tabs")
-            .on_hover_text("Up at the start of each tab, across it flat, down at its end");
+            .on_hover_hint("Up at the start of each tab, across it flat, down at its end");
         ui.radio_value(tabs, Tabs::Triangular, "3D Tabs")
-            .on_hover_text("Up to the tab's thickness at its middle and down the other side");
+            .on_hover_hint("Up to the tab's thickness at its middle and down the other side");
     });
     ui.checkbox(&mut tab.size_from_tool, "Size from the tool")
-        .on_hover_text("As thick as the pass depth (at most half the cut), twice as long");
+        .on_hover_hint("As thick as the pass depth (at most half the cut), twice as long");
     let sized = tab.sized(tool.pass_depth, depth);
     egui::Grid::new("tab_size").num_columns(2).show(ui, |ui| {
         ui.label("Length (width along the path)");
@@ -191,7 +192,7 @@ fn settings(
             TabPlacement::AvoidCorners,
             "Not on corners",
         )
-        .on_hover_text("Moved along a little to keep them off corners and curves");
+        .on_hover_hint("Moved along a little to keep them off corners and curves");
     });
 }
 

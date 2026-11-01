@@ -3,6 +3,7 @@
 //! straight or trochoidal and its loops. A picture of what the choices make together is in the
 //! window and, smaller, in the form beside the Cutting… button.
 
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::entry::{Loops, Turn, trochoid};
 use cut_craft_core::geometry::Point;
 use eframe::egui::{self, Pos2, Vec2, pos2, vec2};
@@ -141,7 +142,7 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value) -> b
             }
             if ui
                 .button("Cutting…")
-                .on_hover_text("Direction, passes, motion and loops, with a picture of them")
+                .on_hover_hint("Direction, passes, motion and loops, with a picture of them")
                 .clicked()
             {
                 open = true;
@@ -289,7 +290,7 @@ fn choose(
         for &(value, name, help) in options {
             if ui
                 .radio(params[key] == value, name)
-                .on_hover_text(help)
+                .on_hover_hint(help)
                 .clicked()
             {
                 params[key] = value.into();
@@ -464,11 +465,11 @@ fn point_along(pts: &[Pos2], f: f32) -> Option<(Pos2, Vec2)> {
 fn loops_editor(ui: &mut egui::Ui, loops: &mut Loops, diameter: f64) {
     egui::Grid::new("loops").num_columns(2).show(ui, |ui| {
         ui.label("Loop Width")
-            .on_hover_text("How wide each loop is, of the tool's diameter");
+            .on_hover_hint("How wide each loop is, of the tool's diameter");
         ui.add(egui::Slider::new(&mut loops.width, 10.0..=400.0).suffix(" %"));
         ui.end_row();
         ui.label("Loop Step")
-            .on_hover_text("How far each loop moves on from the last, of the tool's diameter");
+            .on_hover_hint("How far each loop moves on from the last, of the tool's diameter");
         ui.add(
             egui::Slider::new(&mut loops.step, 1.0..=100.0)
                 .logarithmic(true)
@@ -478,9 +479,9 @@ fn loops_editor(ui: &mut egui::Ui, loops: &mut Loops, diameter: f64) {
         ui.label("Loops Turn");
         ui.horizontal(|ui| {
             ui.radio_value(&mut loops.turn, Turn::Anticlockwise, "Anticlockwise")
-                .on_hover_text("Each loop cuts climb");
+                .on_hover_hint("Each loop cuts climb");
             ui.radio_value(&mut loops.turn, Turn::Clockwise, "Clockwise")
-                .on_hover_text("Each loop cuts conventional");
+                .on_hover_hint("Each loop cuts conventional");
         });
         ui.end_row();
     });

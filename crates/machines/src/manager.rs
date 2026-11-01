@@ -4,6 +4,7 @@
 
 use crate::library::{Entry, Library, Source};
 use crate::machine::{Machine, Machines};
+use cut_craft_bug_report::hint::HoverHint;
 use eframe::egui;
 use std::path::PathBuf;
 
@@ -31,7 +32,7 @@ fn icon_button(ui: &mut egui::Ui, look: &Look, icon: &str, label: &str, enabled:
         None => egui::Button::new(label),
     };
     ui.add_enabled(enabled, button)
-        .on_hover_text(label)
+        .on_hover_hint(label)
         .on_disabled_hover_text(label)
         .clicked()
 }
@@ -255,7 +256,7 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
                 ui.label("4th axis");
                 let ticked = ui
                     .checkbox(&mut machine.rotary, "A, turning the material (rotary jobs)")
-                    .on_hover_text(
+                    .on_hover_hint(
                         "Rotary jobs are saved through the machine's post that wraps their side \
                          onto A; ticking this adds Cut Craft's for its posts",
                     )
@@ -294,7 +295,7 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
     };
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Limits").on_hover_text(
+        ui.strong("Limits").on_hover_hint(
             "From the controller's settings (GRBL $110-$112 and $120-$122); 0 is not given",
         );
         egui::Grid::new("machine_limits")
@@ -388,7 +389,7 @@ pub fn tool_changer(
         };
         if ui
             .button("Load by Tool Number")
-            .on_hover_text("Each tool with a tool number goes in that holder")
+            .on_hover_hint("Each tool with a tool number goes in that holder")
             .clicked()
         {
             for (name, number) in tools {
@@ -461,7 +462,7 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
     };
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Keep-Out Zones").on_hover_text(
+        ui.strong("Keep-Out Zones").on_hover_hint(
             "Clamps fixed to the bed: no toolpath of any job passes over them. X and Y are \
              from the job's XY origin, as the G-code is",
         );
@@ -529,7 +530,7 @@ fn posts_section(
             }
             let row = ui.selectable_label(*picked == Some(i), text);
             let row = if missing {
-                row.on_hover_text("Not in the post library")
+                row.on_hover_hint("Not in the post library")
             } else {
                 row
             };
@@ -765,7 +766,7 @@ impl PostManager {
                     let picked = self.picked.clone();
                     let select = ui
                         .add_enabled(picked.is_some(), egui::Button::new("Select"))
-                        .on_hover_text("Use it with the active machine");
+                        .on_hover_hint("Use it with the active machine");
                     if select.clicked()
                         && let Some(name) = picked
                     {
@@ -811,11 +812,11 @@ impl PostManager {
             }
             if let Some(version) = Library::text(entry).ok().and_then(|t| Library::version(&t)) {
                 ui.weak(version)
-                    .on_hover_text("Version: the date of its last change");
+                    .on_hover_hint("Version: the date of its last change");
             }
             if let Some(why) = &entry.broken {
                 ui.colored_label(ui.visuals().error_fg_color, "⚠")
-                    .on_hover_text(why);
+                    .on_hover_hint(why);
             }
             // Aspire's Inspect icon at the row's end, and the same menu on a right-click
             let button = ui.menu_button("Inspect ▾", |ui| self.inspect(ui, library, entry));

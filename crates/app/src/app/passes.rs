@@ -4,6 +4,7 @@
 
 use super::trimmed;
 use crate::form;
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::Tool;
 use eframe::egui;
@@ -23,7 +24,7 @@ pub(super) fn edit_passes(ui: &mut egui::Ui, params: &mut Value, units: Units) -
     let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     if ui
         .button("Edit Passes…")
-        .on_hover_text("See and set each pass down to the cut depth")
+        .on_hover_hint("See and set each pass down to the cut depth")
         .clicked()
     {
         open = true;
@@ -172,7 +173,7 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
     ui.data_mut(|d| d.insert_temp(id, wanted));
     if ui
         .button("Spread Evenly")
-        .on_hover_text("That many passes, each as deep as the next")
+        .on_hover_hint("That many passes, each as deep as the next")
         .clicked()
     {
         #[expect(clippy::cast_precision_loss, reason = "a small count")]
@@ -186,7 +187,7 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
     let mut thin = tool.last_pass > 0.0;
     if ui
         .checkbox(&mut thin, "Last Pass Thickness")
-        .on_hover_text("A thin last pass for a clean floor; the passes above it even")
+        .on_hover_hint("A thin last pass for a clean floor; the passes above it even")
         .changed()
     {
         tool.passes.clear();
@@ -217,7 +218,7 @@ fn controls(ui: &mut egui::Ui, tool: &mut Tool, depth: f64, count: usize, per: f
             !tool.passes.is_empty() || tool.last_pass > 0.0,
             egui::Button::new("From Pass Depth"),
         )
-        .on_hover_text("Even passes no deeper than the tool's pass depth, as before")
+        .on_hover_hint("Even passes no deeper than the tool's pass depth, as before")
         .clicked()
     {
         tool.passes.clear();

@@ -1,5 +1,6 @@
 //! Settings forms generated from a command's parameter schema, so no command writes UI.
 
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
 use eframe::egui;
 use serde_json::Value;
@@ -420,7 +421,7 @@ fn grid(
 
 fn hover(label: egui::Response, help: Option<&String>) {
     if let Some(help) = help {
-        label.on_hover_text(help);
+        label.on_hover_hint(help);
     }
 }
 
@@ -643,13 +644,13 @@ fn icon_row(
                 .map_or_else(|| o.label.clone(), |h| format!("{}: {h}", o.label));
             let response = if named {
                 ui.vertical(|ui| {
-                    let r = ui.add(button).on_hover_text(&hover);
+                    let r = ui.add(button).on_hover_hint(&hover);
                     ui.small(&o.label);
                     r
                 })
                 .inner
             } else {
-                ui.add(button).on_hover_text(&hover)
+                ui.add(button).on_hover_hint(&hover)
             };
             if response.clicked() {
                 picked = Some(o.value.clone());
@@ -730,7 +731,7 @@ fn corners(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<Strin
         .iter()
         .find(|o| o.value == current)
         .map(|o| o.label.as_str());
-    let response = response.on_hover_text(label.unwrap_or_default());
+    let response = response.on_hover_hint(label.unwrap_or_default());
     let at = response
         .interact_pointer_pos()
         .filter(|_| response.clicked())?;
@@ -878,7 +879,7 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     for (i, it) in items.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= edit(ui, item, it, &Value::Null, look);
-            if ui.small_button("✕").on_hover_text("Remove").clicked() {
+            if ui.small_button("✕").on_hover_hint("Remove").clicked() {
                 remove = Some(i);
             }
         });
@@ -888,7 +889,7 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
         changed = true;
     }
     // "+" copies the last item; the first is a blank one
-    if ui.small_button("+").on_hover_text("Add another").clicked() {
+    if ui.small_button("+").on_hover_hint("Add another").clicked() {
         items.push(items.last().cloned().unwrap_or_else(|| blank(item)));
         changed = true;
     }

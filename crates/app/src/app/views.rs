@@ -10,6 +10,7 @@ use super::{
     inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel, view2d,
 };
 use crate::options::WindowLayout;
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
 
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.
@@ -442,7 +443,7 @@ impl CutCraftApp {
             let state = if on { "on" } else { "off" };
             let path = format!("snapping/{icon}_snapping_{state}.png");
             let button = self.icon_button(&path, "", tip, edge).selected(on);
-            if ui.add(button).on_hover_text(tip).clicked() {
+            if ui.add(button).on_hover_hint(tip).clicked() {
                 *clicked = Some(id);
             }
         }
@@ -498,7 +499,7 @@ impl CutCraftApp {
                     let button = self
                         .icon_button(icon, "", tip, edge)
                         .selected(self.split == Some(split));
-                    if ui.add(button).on_hover_text(tip).clicked() {
+                    if ui.add(button).on_hover_hint(tip).clicked() {
                         clicked = Some(id);
                     }
                 }
@@ -523,7 +524,7 @@ impl CutCraftApp {
                         } else {
                             "Top Side"
                         };
-                        if ui.button(side).on_hover_text("Swap Sides").clicked() {
+                        if ui.button(side).on_hover_hint("Swap Sides").clicked() {
                             clicked = Some("swap_sides");
                         }
                     }
@@ -1196,13 +1197,17 @@ impl CutCraftApp {
         };
         self.paint_2d(ui, &canvas, &overlay);
         self.datum_mark(ui, &canvas, area, job.offset);
-        if handled || self.view_tool == Some(ViewTool::Transform) {
-            self.paint_handles(ui, &canvas);
-            // over a handle, the status bar says what it does and the keys that change it
-            if let Some(handle) = canvas.cursor().and_then(|at| self.handle_at(at, reach)) {
-                self.status.set_message(handle.hint());
-            }
-        }
+        self.handles_and_hints(
+            ui,
+            &canvas,
+            reach,
+            Modes {
+                handled,
+                tracing,
+                filleting,
+                placing_tabs,
+            },
+        );
         self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
@@ -1438,10 +1443,10 @@ impl CutCraftApp {
                 ui.horizontal(|ui| {
                     ui.label("Angle");
                     ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).suffix("°"))
-                        .on_hover_text("Degrees anticlockwise from the X axis");
+                        .on_hover_hint("Degrees anticlockwise from the X axis");
                 });
                 ui.checkbox(&mut props.locked, "Lock Guide")
-                    .on_hover_text("A locked guide cannot be dragged");
+                    .on_hover_hint("A locked guide cannot be dragged");
                 apply = ui.button("Apply").clicked();
                 ui.separator();
                 ui.strong("New guide");
@@ -1460,7 +1465,7 @@ impl CutCraftApp {
                 });
                 create = ui
                     .button("Create New Guide")
-                    .on_hover_text("Parallel to this guide; several are the same step apart")
+                    .on_hover_hint("Parallel to this guide; several are the same step apart")
                     .clicked();
                 delete = ui.button("Delete Guide").clicked();
             });
@@ -1695,6 +1700,131 @@ impl CutCraftApp {
         }
     }
 
+    /// The selection's handles when shown, and the status bar's hint: a handle's own under
+    /// the pointer, else what the tool in hand does next.
+    fn handles_and_hints(&self, ui: &egui::Ui, canvas: &Canvas, reach: f64, modes: Modes) {
+        let handled = modes.handled;
+        if handled || self.view_tool == Some(ViewTool::Transform) {
+            self.paint_handles(ui, canvas);
+            // over a handle, the status bar says what it does and the keys that change it
+            if let Some(handle) = canvas.cursor().and_then(|at| self.handle_at(at, reach)) {
+                cut_craft_bug_report::hint::hint(ui.ctx(), handle.hint());
+            }
+        }
+        // in the view, the status bar says what the tool in hand does next
+        let handles_shown = handled || self.view_tool == Some(ViewTool::Transform);
+        if canvas.hover().is_some()
+            && !(handles_shown && self.on_any_handle(canvas, reach))
+            && let Some(step) = self.step_hint(modes)
+        {
+            cut_craft_bug_report::hint::hint(ui.ctx(), &step);
+        }
+    }
+
+    /// Whether the pointer is over one of the selection's handles (which then says its own).
+    fn on_any_handle(&self, canvas: &Canvas, reach: f64) -> bool {
+        canvas
+            .cursor()
+            .and_then(|at| self.handle_at(at, reach))
+            .is_some()
+    }
+
+    /// What the tool in hand does next, for the status bar: a view tool's use, a drawing
+    /// tool's next click or drag (a polyline's by how far it has got), or selecting's.
+    fn step_hint(&self, modes: Modes) -> Option<String> {
+        const EDIT: &str = "; Shift-click one this tool drew to edit it";
+        let drag = |what: &str| Some(format!("{what}{EDIT}"));
+        match self.view_tool {
+            Some(ViewTool::Pan) => return Some("Pan: drag to move the view".into()),
+            Some(ViewTool::ZoomBox) => {
+                return Some("Zoom Box: drag a box round what to zoom in on".into());
+            }
+            Some(ViewTool::NodeEdit) => {
+                return Some(
+                    "Node Editing: click a node to pick it, or drag a box round nodes (Shift adds); \
+                     drag a picked node to move them; right-click for more"
+                        .into(),
+                );
+            }
+            Some(ViewTool::Measure) => {
+                return Some(
+                    "Measure: drag from one point to another to measure, or click a vector to \
+                     inspect it"
+                        .into(),
+                );
+            }
+            Some(ViewTool::Transform) => {
+                return Some(
+                    "Transform: drag a handle to scale or rotate, the middle to move; click the \
+                     middle for the rotation handles"
+                        .into(),
+                );
+            }
+            None => {}
+        }
+        if modes.tracing {
+            return Some(
+                "Trace Bitmap: drag a box over the picture to trace that part, or click a colour \
+                 to trace it"
+                    .into(),
+            );
+        }
+        if modes.filleting {
+            return Some(
+                "Create Fillets: click a sharp corner to round it, or a fillet to take it out"
+                    .into(),
+            );
+        }
+        if modes.placing_tabs {
+            return Some(
+                "Tabs: click a selected vector to add a tab, click a tab to take it off, drag a \
+                 tab to move it"
+                    .into(),
+            );
+        }
+        match self.drawing_tool() {
+            Some("draw_polyline") if self.polyline.is_empty() => Some(
+                "Draw Polyline: click the first point (drag for a curved span)".into(),
+            ),
+            Some("draw_polyline") => Some(
+                "Click the next point (drag for a curved span); click the first point to close it, \
+                 or right-click, Space or Escape to finish it open; Backspace takes a point back"
+                    .into(),
+            ),
+            Some("draw_rectangle") => drag("Draw Rectangle: drag from one corner to the opposite one"),
+            Some("draw_circle") => drag("Draw Circle: drag from the centre out to the radius"),
+            Some("draw_ellipse") => drag("Draw Ellipse: drag a box for it to fit"),
+            Some("draw_polygon") => drag("Draw Polygon: drag from the centre out to a corner"),
+            Some("draw_star") => drag("Draw Star: drag from the centre out to a point"),
+            Some("dimensions") => drag("Dimensions: drag from the first point to the second"),
+            Some("draw_freehand") => Some("Draw Freehand: drag to draw".into()),
+            Some("sculpt") => Some("Sculpting: drag over the model to work it with the brush".into()),
+            Some("cross_section") => Some("Cross Section: drag a line across the model".into()),
+            Some("interactive_vector_trim") => Some(
+                "Trim: click a piece of a vector to cut it away back to the crossings either \
+                 side, or drag across pieces to cut each one"
+                    .into(),
+            ),
+            Some("draw_text") => Some(
+                "Draw Text: click to place the text; click between two letters to bring them \
+                 together (Shift: apart, Ctrl: by more); Shift-click text to edit it"
+                    .into(),
+            ),
+            Some(id) => gui::about(id).map(|about| format!("{about}: drag in the view")),
+            None if !modes.handled => None,
+            None if self.doc.selection.is_empty() => Some(
+                "Click a vector to select it, Shift-click to add more, or drag a box round \
+                 several (right to left takes those it touches too)"
+                    .into(),
+            ),
+            None => Some(
+                "Drag the selection to move it, a handle to scale or rotate; Shift-click to add \
+                 or take away"
+                    .into(),
+            ),
+        }
+    }
+
     /// Whether `at` is on one of the selection's scale or rotate handles.
     fn on_handle(&self, at: Point, reach: f64) -> bool {
         self.handle_at(at, reach).is_some_and(|h| h != Handle::Move)
@@ -1832,7 +1962,7 @@ impl CutCraftApp {
                     ),
                 ] {
                     let button = self.icon_button(icon, "", tip, edge).selected(on);
-                    if ui.add(button).on_hover_text(tip).clicked() {
+                    if ui.add(button).on_hover_hint(tip).clicked() {
                         clicked = Some(id);
                     }
                 }
@@ -1847,7 +1977,7 @@ impl CutCraftApp {
                         .selected(in_hand(id));
                     let response = ui
                         .add_enabled(self.available(id), button)
-                        .on_hover_text(label)
+                        .on_hover_hint(label)
                         .on_disabled_hover_text(format!("{label}: select something first"));
                     if response.clicked() {
                         clicked = Some(id);
@@ -2495,7 +2625,7 @@ impl CutCraftApp {
                 form.mode == SaveMode::VisibleToMultipleFiles,
                 egui::Checkbox::new(&mut form.group, "Group where possible"),
             )
-            .on_hover_text("Toolpaths in a row that use the same tool go in one file");
+            .on_hover_hint("Toolpaths in a row that use the same tool go in one file");
             if self.doc.job.double_sided.is_some() {
                 ui.checkbox(&mut form.add_side, "Add side to toolpath name");
             }
@@ -2903,7 +3033,7 @@ pub(super) fn immediate_output(
         // ponytail: Aspire's Output Direct to Machine needs a transfer driver; none here
         save = ui
             .add_enabled(ready, egui::Button::new("Save Toolpath Now..."))
-            .on_hover_text(
+            .on_hover_hint(
                 "Save the toolpath calculated last through the post, keeping the form open",
             )
             .on_disabled_hover_text("Apply first: there is no quick engrave toolpath yet")

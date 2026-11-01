@@ -22,6 +22,7 @@ use crate::icons::Icons;
 use crate::pages::{Page, Pages, Shown};
 use crate::view2d::{self, Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{Document, EntityId, LayerId, Units};
 use cut_craft_core::file::{JOB_EXTENSION, OLD_JOB_EXTENSION};
 use cut_craft_core::geometry::{Path, Point, Rect};
@@ -1056,7 +1057,7 @@ fn acceleration_tick(
         acceleration.is_some(),
         egui::Checkbox::new(&mut summary.acceleration, "Machine acceleration"),
     )
-    .on_hover_text(&tip)
+    .on_hover_hint(&tip)
     .on_disabled_hover_text(&tip);
 }
 
@@ -1075,7 +1076,7 @@ fn summary_table(
             let picked = summary.picked == Some(row.id);
             let name = ui
                 .add_enabled(row.visible, egui::Button::selectable(picked, &row.name))
-                .on_hover_text("Click to write its notes");
+                .on_hover_hint("Click to write its notes");
             if name.clicked() {
                 summary.picked = Some(row.id);
                 summary.notes.clone_from(&row.notes);
@@ -1392,7 +1393,7 @@ fn tool_picker(
             }
             ui.label("Tool database");
             ui.button("Edit…")
-                .on_hover_text("Change this tool in the Tool Database")
+                .on_hover_hint("Change this tool in the Tool Database")
                 .clicked()
         })
         .inner;
@@ -1432,7 +1433,7 @@ fn holders(
         ui.horizontal_wrapped(|ui| {
             ui.label("ATC");
             ui.selectable_label(held.is_none(), "0  Manual")
-                .on_hover_text("A bit changed by hand: pick it from the Tool Database below");
+                .on_hover_hint("A bit changed by hand: pick it from the Tool Database below");
             for (i, slot) in slots.iter().enumerate() {
                 let name = slot.as_deref().filter(|t| tools.get(t).is_some());
                 let text = format!("{}  {}", i + 1, name.unwrap_or("(empty)"));
@@ -1531,12 +1532,12 @@ fn tool_list(
             }
             if ui
                 .button("Edit…")
-                .on_hover_text("Change this tool in the Tool Database")
+                .on_hover_hint("Change this tool in the Tool Database")
                 .clicked()
             {
                 edit = Some(current.clone());
             }
-            if ui.small_button("✕").on_hover_text("Remove").clicked() {
+            if ui.small_button("✕").on_hover_hint("Remove").clicked() {
                 remove = Some(i);
             }
         });
@@ -1632,7 +1633,7 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         ui.checkbox(&mut on, "Associate a Vector Selector with this toolpath")
-            .on_hover_text("Take the vectors that pass it each time the toolpath is calculated");
+            .on_hover_hint("Take the vectors that pass it each time the toolpath is calculated");
         if !on {
             return;
         }
@@ -1651,7 +1652,7 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
                     ClosedKind::OnlyCircles,
                     "Only circles",
                 )
-                .on_hover_text("For drilling: only the closed vectors that are circles");
+                .on_hover_hint("For drilling: only the closed vectors that are circles");
                 if selector.closed_kind != ClosedKind::OnlyCircles {
                     return;
                 }
@@ -1673,7 +1674,7 @@ fn selector_section(ui: &mut egui::Ui, params: &mut Value, layer_names: &[String
                                 ui.label("Diameter");
                                 tabs::length(ui, &mut selector.diameter, units);
                                 ui.end_row();
-                                ui.label("Tolerance").on_hover_text(
+                                ui.label("Tolerance").on_hover_hint(
                                     "How far a circle's diameter may be from it and still pass",
                                 );
                                 tabs::length(ui, &mut selector.tolerance, units);
@@ -1735,7 +1736,7 @@ fn rest_section(
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         ui.strong("Rest Machining")
-            .on_hover_text("Cut only what the tools that ran before this one could not reach");
+            .on_hover_hint("Cut only what the tools that ran before this one could not reach");
         let mut after = serde_json::to_value(&rest.after).expect("tools serialize");
         let (changed, edited) = tool_list(ui, "rest_after", &mut after, tools, slots, false);
         edit = edited;
@@ -1747,7 +1748,7 @@ fn rest_section(
                 .num_columns(2)
                 .show(ui, |ui| {
                     ui.label("Minimum detail")
-                        .on_hover_text("Leave alone unmachined areas narrower than this");
+                        .on_hover_hint("Leave alone unmachined areas narrower than this");
                     ui.add(
                         egui::DragValue::new(&mut rest.minimum_detail)
                             .suffix(" mm")
@@ -1755,7 +1756,7 @@ fn rest_section(
                     );
                     ui.end_row();
                     ui.label("Overlap")
-                        .on_hover_text("Grow each unmachined area by this");
+                        .on_hover_hint("Grow each unmachined area by this");
                     ui.add(
                         egui::DragValue::new(&mut rest.overlap)
                             .suffix(" mm")
@@ -1806,6 +1807,11 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
         .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
         let available = (menus.available)(&item.action);
         let mut response = ui.add_enabled(item.is_enabled && available, button);
+        if response.hovered()
+            && let Some(about) = gui::about(&item.action)
+        {
+            cut_craft_bug_report::hint::hint(ui.ctx(), about);
+        }
         if !available {
             response = response.on_disabled_hover_text("Not implemented yet");
         }

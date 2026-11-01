@@ -15,6 +15,7 @@ use super::{
     toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
+use cut_craft_bug_report::hint::HoverHint;
 
 impl CutCraftApp {
     #[expect(
@@ -1817,7 +1818,7 @@ impl CutCraftApp {
                 let button = self.icon_button(icon, "", tip, edge);
                 if ui
                     .add_enabled(available, button)
-                    .on_hover_text(tip)
+                    .on_hover_hint(tip)
                     .clicked()
                 {
                     clicked = Some(id);
@@ -2637,7 +2638,7 @@ impl CutCraftApp {
             .frame(false);
             if ui
                 .add(button)
-                .on_hover_text(path.display().to_string())
+                .on_hover_hint(path.display().to_string())
                 .clicked()
             {
                 clicked = Some(format!("open_recent:{i}"));
@@ -2737,7 +2738,7 @@ impl CutCraftApp {
                 let pinned = self.pages.pinned(page);
                 pin = ui
                     .selectable_label(pinned, "📌")
-                    .on_hover_text(if pinned {
+                    .on_hover_hint(if pinned {
                         "Unpin: hide this page to its side tab"
                     } else {
                         "Pin this page open"
@@ -2745,9 +2746,9 @@ impl CutCraftApp {
                     .clicked();
                 switch = ui
                     .add(self.icon_button("view/interface_layout.png", "", "Switch Layout", row))
-                    .on_hover_text("Switch Layout (F11 designing, F12 machining)")
+                    .on_hover_hint("Switch Layout (F11 designing, F12 machining)")
                     .clicked();
-                help = ui.button("?").on_hover_text("Help (F1)").clicked();
+                help = ui.button("?").on_hover_hint("Help (F1)").clicked();
             });
         });
         ui.separator();
@@ -2983,7 +2984,7 @@ impl CutCraftApp {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 close = ui
                     .button(close_label)
-                    .on_hover_text(if new_job {
+                    .on_hover_hint(if new_job {
                         "Leave the job as it was"
                     } else {
                         "Close, keeping what was applied"
@@ -2992,14 +2993,14 @@ impl CutCraftApp {
                 if !new_job {
                     cancel = ui
                         .add_enabled(done, egui::Button::new("Cancel"))
-                        .on_hover_text("Undo what this tool did since it opened, and close it")
+                        .on_hover_hint("Undo what this tool did since it opened, and close it")
                         .on_disabled_hover_text("Nothing applied to take back")
                         .clicked();
                 }
                 if job_setup {
                     default = ui
                         .button("Set as Default")
-                        .on_hover_text("Start every new job with these settings")
+                        .on_hover_hint("Start every new job with these settings")
                         .clicked();
                 }
             });
@@ -3045,12 +3046,12 @@ impl CutCraftApp {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 cancel = ui
                     .button("Cancel")
-                    .on_hover_text("Close without importing the model")
+                    .on_hover_hint("Close without importing the model")
                     .clicked();
                 if last {
                     import = ui
                         .button("Import")
-                        .on_hover_text("Keep the model as placed")
+                        .on_hover_hint("Keep the model as placed")
                         .clicked();
                 } else {
                     next = ui.button(cmd_orientate_3d_model::POSITION_PAGE.1).clicked();
@@ -3264,7 +3265,7 @@ impl CutCraftApp {
                     .horizontal(|ui| {
                         let load = ui
                             .button("Load Brush…")
-                            .on_hover_text(
+                            .on_hover_hint(
                                 "A component saved as a sculpting brush, for Deposit and Remove",
                             )
                             .clicked();
@@ -3559,11 +3560,11 @@ fn texture_buttons(ui: &mut egui::Ui) -> (bool, bool) {
     ui.horizontal(|ui| {
         clicked.0 = ui
             .button("Load Texture...")
-            .on_hover_text("A texture saved before, from the textures folder or anywhere")
+            .on_hover_hint("A texture saved before, from the textures folder or anywhere")
             .clicked();
         clicked.1 = ui
             .button("Save Texture...")
-            .on_hover_text("Keep these texture settings to use again")
+            .on_hover_hint("Keep these texture settings to use again")
             .clicked();
     });
     clicked
@@ -3588,7 +3589,7 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
     }
     let on = open.params["show_undercuts"].as_bool().unwrap_or(false);
     ui.add_enabled(on, egui::Button::new("Update Undercuts"))
-        .on_hover_text("Judge again what a cutter from above cannot reach")
+        .on_hover_hint("Judge again what a cutter from above cannot reach")
         .on_disabled_hover_text("Tick Highlight undercuts first")
         .clicked()
 }

@@ -6,6 +6,7 @@ use super::{
     side_panel,
 };
 use crate::options::WindowLayout;
+use cut_craft_bug_report::hint::HoverHint;
 
 /// View ▸ Window Layout's items and the layouts they pick.
 const LAYOUTS: [(&str, WindowLayout); 3] = [
@@ -219,7 +220,7 @@ impl CutCraftApp {
                                     .wrap_mode(egui::TextWrapMode::Truncate),
                             }
                             .selected(self.rail_group == Some(i));
-                            if ui.add(button).on_hover_text(group.name).clicked() {
+                            if ui.add(button).on_hover_hint(group.name).clicked() {
                                 self.rail_group = (self.rail_group != Some(i)).then_some(i);
                             }
                         }
@@ -232,7 +233,7 @@ impl CutCraftApp {
                     ui.strong(group.name);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.toggle_value(&mut self.rail_pinned, "📌")
-                            .on_hover_text("Keep this list open after picking a tool");
+                            .on_hover_hint("Keep this list open after picking a tool");
                     });
                 });
                 ui.separator();

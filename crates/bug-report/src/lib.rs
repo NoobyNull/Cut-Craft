@@ -8,6 +8,7 @@
 //! that cannot be sent is kept on disk instead.
 
 mod github;
+pub mod hint;
 pub mod logs;
 mod spot;
 

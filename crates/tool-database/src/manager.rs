@@ -3,6 +3,7 @@
 //! Edits are made to a copy; only Apply and OK hand it back.
 
 use crate::tree;
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
@@ -425,7 +426,7 @@ impl Manager {
                 }
                 let label = ui.selectable_label(picked, name);
                 if unset {
-                    label.clone().on_hover_text(format!(
+                    label.clone().on_hover_hint(format!(
                         "No cutting data for {}: it cuts with its default data",
                         self.draft.material
                     ));
@@ -438,7 +439,7 @@ impl Manager {
                 }
                 if let Some(n) = self.changer.as_ref().and_then(|c| c.slot_of(&tool.name)) {
                     ui.weak(format!("T{n}"))
-                        .on_hover_text("Loaded in the tool changer");
+                        .on_hover_hint("Loaded in the tool changer");
                 }
             });
         }
@@ -483,7 +484,7 @@ impl Manager {
                 };
                 if ui
                     .add_enabled(enabled, button)
-                    .on_hover_text(label)
+                    .on_hover_hint(label)
                     .clicked()
                 {
                     action = Some(asked);
@@ -613,7 +614,7 @@ impl Manager {
                     !self.draft.material.is_empty(),
                     egui::Button::new("Delete Material"),
                 )
-                .on_hover_text("Deletes every tool's cutting data for it")
+                .on_hover_hint("Deletes every tool's cutting data for it")
                 .clicked()
             {
                 let gone = self.draft.material.clone();
@@ -624,13 +625,13 @@ impl Manager {
                     !self.draft.material.is_empty(),
                     egui::Button::new("Duplicate Material"),
                 )
-                .on_hover_text("A copy of the active material, named as typed (or \"… copy\")")
+                .on_hover_hint("A copy of the active material, named as typed (or \"… copy\")")
                 .clicked()
             {
                 self.duplicate_material();
             }
             ui.checkbox(&mut self.copy_cutting_data, "with cutting data")
-                .on_hover_text("The copy gets every tool's cutting data for the material");
+                .on_hover_hint("The copy gets every tool's cutting data for the material");
         });
     }
 
@@ -821,7 +822,7 @@ fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String
                 .hint_text("{Tool Type} {Diameter|F}")
                 .desired_width(f32::INFINITY),
         )
-        .on_hover_text(
+        .on_hover_hint(
             "Leave empty to type the name. Modifiers: |U upper case, |L lower case, \
              |0.00 decimals, |F inches as a fraction",
         );
@@ -838,7 +839,7 @@ fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String
             });
         if ui
             .button("Set as Default")
-            .on_hover_text("New tools of this type are named by this format")
+            .on_hover_hint("New tools of this type are named by this format")
             .clicked()
         {
             formats.insert(key.clone(), tool.name_format.clone());
@@ -846,7 +847,7 @@ fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String
         if let Some(default) = formats.get(&key).filter(|d| **d != tool.name_format)
             && ui
                 .button("Restore")
-                .on_hover_text(format!("Back to this type's default: {default}"))
+                .on_hover_hint(format!("Back to this type's default: {default}"))
                 .clicked()
         {
             tool.name_format.clone_from(default);
@@ -867,7 +868,7 @@ fn form_row(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
                 look.profile.is_some(),
                 egui::Button::new("Use Selected Vector"),
             )
-            .on_hover_text(
+            .on_hover_hint(
                 "Half the tool's section, drawn upright: the axis at its left, the \
                  tip at its lowest point",
             )
@@ -912,7 +913,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
                     ui.selectable_value(&mut tool.units, Units::Inch, "inches");
                 })
                 .response
-                .on_hover_text("Units: how this tool's lengths read; the tool stays the same size");
+                .on_hover_hint("Units: how this tool's lengths read; the tool stays the same size");
         });
         ui.end_row();
         // stands in for dragging a tool between groups
@@ -931,7 +932,7 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
             });
         ui.end_row();
         ui.label("Tool Number")
-            .on_hover_text("The post's [T] for this tool without a tool changer, and its holder for Load by Tool Number; 0 for none");
+            .on_hover_hint("The post's [T] for this tool without a tool changer, and its holder for Load by Tool Number; 0 for none");
         ui.add(egui::DragValue::new(&mut tool.number).range(0..=999));
         ui.end_row();
         form_row(ui, tool, look);
@@ -984,7 +985,7 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
             }
             if matches!(tool.shape, ToolShape::BallNose | ToolShape::EndMill) {
                 ui.label("Taper Angle")
-                    .on_hover_text("Each side of the axis, for a tapered tool; 0 for straight");
+                    .on_hover_hint("Each side of the axis, for a tapered tool; 0 for straight");
                 ui.add(
                     egui::DragValue::new(&mut tool.taper)
                         .range(0.0..=45.0)
@@ -997,7 +998,7 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
                     ui.end_row();
                 }
             }
-            ui.label("Flute Length").on_hover_text(
+            ui.label("Flute Length").on_hover_hint(
                 "How deep the tool can cut: toolpaths deeper than this are flagged; 0 for not set",
             );
             length(ui, &mut tool.flute_length, tool.units);
@@ -1021,7 +1022,7 @@ fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
     }
     ui.end_row();
     ui.label("Tooth Offset (O)")
-        .on_hover_text("From the bottom of the tool up to the tip of the tooth");
+        .on_hover_hint("From the bottom of the tool up to the tip of the tooth");
     length(ui, &mut tool.tooth_offset, tool.units);
     ui.end_row();
 }
@@ -1071,7 +1072,7 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
                     }
                 })
                 .response
-                .on_hover_text("Rate Units");
+                .on_hover_hint("Rate Units");
         });
         ui.end_row();
         ui.label("Plunge Rate");

@@ -1114,13 +1114,10 @@ fn a_selection_always_has_its_handles_to_scale_and_rotate_by() {
     let centre = h.at(b.center().x, b.center().y);
     // over it, the status bar says the keys
     h.frame(vec![Event::PointerMoved(handle)]);
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
     assert!(
-        h.app
-            .status
-            .message
-            .contains("Hold Shift to snap to 5.625°, or Ctrl to 1°"),
-        "{}",
-        h.app.status.message
+        hint.contains("Hold Shift to snap to 5.625°, or Ctrl to 1°"),
+        "{hint}"
     );
     // a quarter turn about the middle
     let spun = centre + (handle - centre).rot90();
@@ -1129,6 +1126,59 @@ fn a_selection_always_has_its_handles_to_scale_and_rotate_by() {
     assert!(
         (turned.x - size.y).abs() < 0.5 && (turned.y - size.x).abs() < 0.5,
         "{size:?} turned to {turned:?}"
+    );
+}
+
+#[test]
+fn the_status_bar_says_what_the_tool_in_hand_does_next() {
+    let mut h = Harness::new();
+    let hint = |h: &mut Harness, at: egui::Pos2| {
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.frame(vec![]);
+        cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default()
+    };
+    let somewhere = h.at(100.0, 100.0);
+    // selecting, with nothing selected
+    let select = hint(&mut h, somewhere);
+    assert!(
+        select.starts_with("Click a vector to select it"),
+        "{select}"
+    );
+    // a polyline: its first point, then the next
+    h.app.invoke(&h.ctx, "draw_polyline");
+    let first = hint(&mut h, somewhere);
+    assert!(first.contains("click the first point"), "{first}");
+    h.click(h.at(10.0, 10.0), Modifiers::NONE);
+    let next = hint(&mut h, somewhere);
+    assert!(next.starts_with("Click the next point"), "{next}");
+    assert!(next.contains("click the first point to close it"), "{next}");
+    // a dragged shape, and Shift-click to edit one
+    h.app.form = None;
+    h.app.polyline = crate::polyline::Draft::default();
+    h.app.invoke(&h.ctx, "draw_circle");
+    let circle = hint(&mut h, somewhere);
+    assert!(
+        circle.starts_with("Draw Circle: drag from the centre"),
+        "{circle}"
+    );
+    assert!(
+        circle.contains("Shift-click one this tool drew to edit it"),
+        "{circle}"
+    );
+}
+
+#[test]
+fn every_command_has_a_line_saying_what_it_does() {
+    let missing: Vec<&str> = crate::commands::registry()
+        .iter()
+        .map(cut_craft_core::DynCommand::id)
+        .filter(|id| crate::gui::about(id).is_none_or(str::is_empty))
+        .collect();
+    assert!(missing.is_empty(), "no description for {missing:?}");
+    assert!(
+        crate::gui::about("pocket_toolpath")
+            .unwrap()
+            .starts_with("Pocket Toolpath: clears")
     );
 }
 

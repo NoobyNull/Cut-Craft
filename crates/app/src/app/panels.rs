@@ -10,6 +10,7 @@ use super::{
     file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
     wrap_for,
 };
+use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{MachinedArea, Units};
 
 impl CutCraftApp {
@@ -173,7 +174,7 @@ impl CutCraftApp {
                         .selected(self.status.current_tool == label);
                     let response = ui
                         .add_enabled(self.available(id), button)
-                        .on_hover_text(&label)
+                        .on_hover_hint(gui::about(id).unwrap_or(&label))
                         .on_disabled_hover_text(format!("{label}: not implemented yet"));
                     if response.clicked() {
                         clicked = Some(id);
@@ -237,7 +238,7 @@ impl CutCraftApp {
                 let can = moved_to(&self.doc, layer, direction).is_some();
                 if ui
                     .add_enabled(can, egui::Button::new(arrow))
-                    .on_hover_text(tip)
+                    .on_hover_hint(tip)
                     .clicked()
                 {
                     moved = Some(direction);
@@ -248,7 +249,7 @@ impl CutCraftApp {
             &mut self.layers_on_sheet,
             "Show only layers used on this sheet",
         )
-        .on_hover_text("Leave out the layers with nothing on the active sheet");
+        .on_hover_hint("Leave out the layers with nothing on the active sheet");
         if let Some(direction) = moved {
             let params = serde_json::json!({ "layer": layer, "direction": direction });
             if let Err(e) = self.apply("reorder_layer", &params) {
@@ -283,14 +284,14 @@ impl CutCraftApp {
                 };
                 if ui
                     .add(self.icon_button(eye, "", eye_tip, edge))
-                    .on_hover_text(eye_tip)
+                    .on_hover_hint(eye_tip)
                     .clicked()
                 {
                     clicked = Some((layer.id, "toggle_visible"));
                 }
                 if ui
                     .add(self.icon_button(lock, "", lock_tip, edge))
-                    .on_hover_text(lock_tip)
+                    .on_hover_hint(lock_tip)
                     .clicked()
                 {
                     clicked = Some((layer.id, "toggle_locked"));
@@ -298,7 +299,7 @@ impl CutCraftApp {
                 let count = self.doc.vectors_on(layer.id).count();
                 let row = ui
                     .selectable_label(self.doc.current_layer == layer.id, &layer.name)
-                    .on_hover_text(format!("{count} vectors"));
+                    .on_hover_hint(format!("{count} vectors"));
                 if row.clicked() {
                     clicked = Some((layer.id, "set_current_layer"));
                 }
@@ -703,7 +704,7 @@ impl CutCraftApp {
             }
             stop |= ui
                 .button("Stop")
-                .on_hover_text("Keep what is cut so far")
+                .on_hover_hint("Keep what is cut so far")
                 .clicked();
             ui.add(
                 egui::Slider::new(&mut self.playback_speed, PLAYBACK_SPEEDS)
@@ -736,7 +737,7 @@ impl CutCraftApp {
                             Some(p / 100.0 * length)
                         }),
                 )
-                .on_hover_text("Where the tool is along the toolpaths: drag to move it on or back")
+                .on_hover_hint("Where the tool is along the toolpaths: drag to move it on or back")
                 .changed()
             {
                 self.playing = false;
@@ -814,7 +815,7 @@ impl CutCraftApp {
             let edge = ui.spacing().interact_size.y;
             let toggled = ui
                 .add(self.icon_button(icon, "", tip, edge))
-                .on_hover_text(tip)
+                .on_hover_hint(tip)
                 .clicked();
             let name = format!("{}{shown} ({:?})", level.name, level.combine);
             (ui.label(egui::RichText::new(name).strong()), toggled)
@@ -1495,7 +1496,7 @@ impl CutCraftApp {
                     ui.scope_id().with(("handle_3d", i)),
                     egui::Sense::click_and_drag(),
                 )
-                .on_hover_text(handle.hint());
+                .on_hover_hint(handle.hint());
             let look = ui.style().interact(&response);
             let fill = if response.hovered() || response.dragged() {
                 look.bg_fill
@@ -1604,7 +1605,7 @@ impl CutCraftApp {
             );
             // the status bar says what it does and the keys that change it
             if response.hovered() || response.dragged() {
-                self.status.set_message(handle.hint());
+                cut_craft_bug_report::hint::hint(ui.ctx(), handle.hint());
             }
             self.handles_3d.push((Handle3d::Transform(handle), at));
             if response.drag_started()
@@ -1743,7 +1744,7 @@ impl CutCraftApp {
                     let set_fade = egui::Button::new("Set").selected(setting == Some(Anchor::Fade));
                     if ui
                         .add_enabled(p.fade.on, set_fade)
-                        .on_hover_text(Anchor::Fade.prompt(false))
+                        .on_hover_hint(Anchor::Fade.prompt(false))
                         .clicked()
                     {
                         s.anchors = Some((Anchor::Fade, None));
@@ -1757,7 +1758,7 @@ impl CutCraftApp {
                     let set_tilt = egui::Button::new("Set").selected(setting == Some(Anchor::Tilt));
                     if ui
                         .add_enabled(p.tilt.on, set_tilt)
-                        .on_hover_text(Anchor::Tilt.prompt(false))
+                        .on_hover_hint(Anchor::Tilt.prompt(false))
                         .clicked()
                     {
                         s.anchors = Some((Anchor::Tilt, None));
@@ -2561,7 +2562,7 @@ impl CutCraftApp {
                     .is_some_and(|id| neighbour(&self.doc, id, direction).is_some());
                 if ui
                     .add_enabled(can, egui::Button::new(arrow))
-                    .on_hover_text(tip)
+                    .on_hover_hint(tip)
                     .clicked()
                 {
                     moved = Some(direction);
@@ -2569,7 +2570,7 @@ impl CutCraftApp {
             }
             new_group = ui
                 .button("New Group")
-                .on_hover_text("Create Empty Group: toolpaths made while it is picked join it")
+                .on_hover_hint("Create Empty Group: toolpaths made while it is picked join it")
                 .clicked();
         });
         if new_group {
@@ -2649,7 +2650,7 @@ impl CutCraftApp {
         let name = egui::RichText::new(group).strong();
         let label = ui
             .selectable_label(picked, name)
-            .on_hover_text("A toolpath group: toolpaths made while it is picked join it");
+            .on_hover_hint("A toolpath group: toolpaths made while it is picked join it");
         let pick = if label.clicked() {
             Some(!picked)
         } else if label.secondary_clicked() {
@@ -2759,11 +2760,13 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Status bar");
         let mut swap = false;
         ui.horizontal(|ui| {
-            ui.label(&self.status.message);
+            // what the pointer is over or the next step, else the last message
+            let hint = cut_craft_bug_report::hint::current(ui.ctx());
+            ui.label(hint.as_deref().unwrap_or(&self.status.message));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // the version, at the far right, as Help ▸ About gives it
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
-                    .on_hover_text("Cut Craft's version (Help ▸ About)");
+                    .on_hover_hint("Cut Craft's version (Help ▸ About)");
                 ui.separator();
                 if self.screen == Screen::Job {
                     // the job's units, and the one-click way to swap them
@@ -2773,7 +2776,7 @@ impl CutCraftApp {
                     };
                     swap = ui
                         .small_button(unit)
-                        .on_hover_text(format!("Switch to {other} (Edit ▸ Units)"))
+                        .on_hover_hint(format!("Switch to {other} (Edit ▸ Units)"))
                         .clicked();
                     if let Some((figures, _)) = self.coordinates() {
                         ui.monospace(figures);
@@ -2815,7 +2818,7 @@ fn toolpath_row(
             let mut visible = toolpath.visible;
             if ui
                 .checkbox(&mut visible, "")
-                .on_hover_text("Show or hide this toolpath")
+                .on_hover_hint("Show or hide this toolpath")
                 .changed()
             {
                 ticked = Some(visible);
@@ -2826,13 +2829,13 @@ fn toolpath_row(
             if toolpath.stale {
                 let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
                     .color(ui.visuals().warn_fg_color);
-                ui.selectable_label(selected, name).on_hover_text(format!(
+                ui.selectable_label(selected, name).on_hover_hint(format!(
                     "{}\nOut of date: what it was made from has changed since. Recalculate it.",
                     toolpath.tool.name
                 ))
             } else {
                 ui.selectable_label(selected, &toolpath.name)
-                    .on_hover_text(&toolpath.tool.name)
+                    .on_hover_hint(&toolpath.tool.name)
             }
         })
         .inner;
@@ -2930,7 +2933,7 @@ fn preview_swatch(
     // ponytail: a drag in the picker is an edit a frame; coalesce them if the undo list
     // gets long
     ui.color_edit_button_srgb(&mut rgb)
-        .on_hover_text(tip)
+        .on_hover_hint(tip)
         .changed()
         .then_some(rgb)
 }
@@ -2976,7 +2979,7 @@ fn combine_radios_3d(ui: &mut egui::Ui, icons: &crate::icons::Icons, s: &mut Set
             let radio = egui::Button::image(image)
                 .selected(s.params.combine == mode)
                 .min_size(egui::Vec2::splat(edge));
-            let response = ui.add(radio).on_hover_text(name);
+            let response = ui.add(radio).on_hover_hint(name);
             if response.clicked() {
                 s.params.combine = mode;
                 s.dirty = true;

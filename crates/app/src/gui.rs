@@ -262,6 +262,18 @@ pub fn title_case(id: &str) -> String {
 }
 
 /// Status bar text
+mod abouts {
+    include!(concat!(env!("OUT_DIR"), "/abouts.rs"));
+}
+
+/// What command `id` does (its crate's first sentence), for its tooltip and the status bar.
+pub fn about(id: &str) -> Option<&'static str> {
+    abouts::ABOUTS
+        .iter()
+        .find(|(command, _)| *command == id)
+        .map(|(_, about)| *about)
+}
+
 pub struct StatusBar {
     pub message: String,
     pub current_tool: String,

@@ -1,6 +1,7 @@
 //! The Clipart tab: a library of folders, and what is in the chosen one as thumbnails
 //! (pictures) or names (other clipart). A double-click imports one into the job.
 
+use cut_craft_bug_report::hint::HoverHint;
 use eframe::egui;
 use std::path::{Path, PathBuf};
 
@@ -132,7 +133,7 @@ pub fn panel(
     for (i, folder) in clipart.folders.iter().enumerate() {
         let row = ui
             .selectable_label(clipart.chosen == Some(i), name(folder))
-            .on_hover_text(folder.display().to_string());
+            .on_hover_hint(folder.display().to_string());
         if row.clicked() {
             clipart.chosen = Some(i);
         }
@@ -206,7 +207,7 @@ pub fn panel(
                 if thumbnail.double_clicked() || caption.double_clicked() {
                     picked = Some(Picked::Import(file.clone()));
                 }
-                thumbnail.on_hover_text(&label);
+                thumbnail.on_hover_hint(&label);
             });
         }
     });
