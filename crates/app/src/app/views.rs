@@ -17,6 +17,8 @@ impl CutCraftApp {
     /// can drive it headlessly.
     pub(super) fn pass(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
+        // a job opened or made, or another machine chosen: the machine's zones on it
+        self.sync_machine_keep_out();
         self.draw_window(ui);
         self.dropped_files(ctx);
         self.follow_form(ctx);

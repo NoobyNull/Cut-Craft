@@ -35,6 +35,30 @@ pub struct Machine {
     /// A 4th axis (A) turning the material, for rotary jobs (2.5 axes + A): those are saved
     /// through the machine's post that wraps their side round onto A.
     pub rotary: bool,
+    /// Areas of the bed a tool must never pass over in any job (clamps fixed to the bed),
+    /// in the machine's millimetres from the job's XY origin, as its G-code is.
+    pub keep_out: Vec<Zone>,
+}
+
+/// A rectangle of the bed kept out of: its lower-left corner and its size, mm.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Zone {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+impl Zone {
+    /// The zone as a closed path.
+    pub fn path(self) -> cut_craft_core::geometry::Path {
+        use cut_craft_core::geometry::{Path, Point};
+        let (a, b) = (
+            Point::new(self.x, self.y),
+            Point::new(self.x + self.width, self.y + self.height),
+        );
+        Path::polyline(&[a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)], true)
+    }
 }
 
 impl Machine {

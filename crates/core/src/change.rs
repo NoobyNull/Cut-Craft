@@ -1139,7 +1139,18 @@ impl ChangeBuilder<'_> {
         }
     }
 
+    /// `toolpath` with its rapids routed round the keep-out zones (laser toolpaths, whose
+    /// power runs move for move, as they are).
+    fn kept_out(&self, mut toolpath: Toolpath) -> Toolpath {
+        let zones = self.doc.keep_out_zones();
+        if !zones.is_empty() && toolpath.power.is_empty() {
+            toolpath.moves = crate::keep_out::route(&zones, &toolpath.moves).0;
+        }
+        toolpath
+    }
+
     pub fn add_toolpath(&mut self, toolpath: Toolpath) -> EntityId {
+        let toolpath = self.kept_out(toolpath);
         let id = EntityId(self.next_id);
         self.next_id += 1;
         self.pending_toolpaths.insert(id, Some(toolpath.clone()));
@@ -1168,6 +1179,7 @@ impl ChangeBuilder<'_> {
     }
 
     pub fn replace_toolpath(&mut self, id: EntityId, after: Toolpath) {
+        let after = self.kept_out(after);
         let before = self
             .toolpath(id)
             .unwrap_or_else(|| panic!("replace_toolpath: {} does not exist", id.0))

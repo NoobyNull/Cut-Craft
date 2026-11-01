@@ -140,6 +140,7 @@ impl MachineManager {
             details(ui, machine, library);
             limits(ui, machine);
             tool_changer(ui, machine);
+            keep_out(ui, machine);
             if names_clash {
                 ui.colored_label(
                     ui.visuals().error_fg_color,
@@ -375,6 +376,57 @@ fn tool_changer(ui: &mut egui::Ui, machine: &mut Machine) {
             }
         });
         ui.weak("Load tools into the slots in the Tool Database");
+    });
+}
+
+/// Keep-Out Zones: rectangles of the bed no toolpath of any job may pass over, such as
+/// clamps fixed to it; rapids go round them and toolpaths that cannot are not saved.
+fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
+    let (per, length) = if machine.inches {
+        (INCH, "in")
+    } else {
+        (1.0, "mm")
+    };
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("Keep-Out Zones").on_hover_text(
+            "Clamps fixed to the bed: no toolpath of any job passes over them. X and Y are \
+             from the job's XY origin, as the G-code is",
+        );
+        let mut gone = None;
+        egui::Grid::new("machine_keep_out")
+            .num_columns(5)
+            .show(ui, |ui| {
+                for heading in ["X", "Y", "Width", "Height"] {
+                    ui.label(heading);
+                }
+                ui.end_row();
+                for (i, zone) in machine.keep_out.iter_mut().enumerate() {
+                    // the corner may be either side of the origin
+                    for value in [&mut zone.x, &mut zone.y] {
+                        let mut shown = *value / per;
+                        let drag = egui::DragValue::new(&mut shown)
+                            .max_decimals(3)
+                            .suffix(format!(" {length}"));
+                        if ui.add(drag).changed() {
+                            *value = shown * per;
+                        }
+                    }
+                    for value in [&mut zone.width, &mut zone.height] {
+                        measure(ui, value, per, &format!(" {length}"));
+                    }
+                    if ui.button("Remove").clicked() {
+                        gone = Some(i);
+                    }
+                    ui.end_row();
+                }
+            });
+        if let Some(i) = gone {
+            machine.keep_out.remove(i);
+        }
+        if ui.button("Add Zone").clicked() {
+            machine.keep_out.push(crate::machine::Zone::default());
+        }
     });
 }
 

@@ -584,7 +584,7 @@ impl Canvas {
         }
         // keep-out zones in the warning colour, heavier than vectors
         let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
-        for path in &doc.keep_out {
+        for path in &doc.keep_out_zones() {
             painter.add(Shape::line(screen(path), zone));
         }
     }

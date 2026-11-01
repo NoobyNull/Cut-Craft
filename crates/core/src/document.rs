@@ -555,6 +555,10 @@ pub struct Document {
     /// Areas a tool must not pass over (clamps), closed paths of their own.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keep_out: Vec<Path>,
+    /// The active machine's own keep-out zones (clamps fixed to its bed), in job
+    /// millimetres: set by the app from Machine Configuration, never saved with the job.
+    #[serde(skip)]
+    pub machine_keep_out: Vec<Path>,
     /// Double-sided jobs: the bottom side is being worked on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bottom_side: bool,
@@ -705,6 +709,7 @@ impl Default for Document {
             active_sheet: 0,
             variables: BTreeMap::new(),
             keep_out: vec![],
+            machine_keep_out: vec![],
             guides: vec![],
             toolpath_groups: vec![],
             tiling: None,
@@ -775,6 +780,15 @@ impl Document {
             .max(self.bitmaps.keys().next_back().copied())
             .max(stored);
         EntityId(last.map_or(1, |id| id.0 + 1))
+    }
+
+    /// Every keep-out zone a toolpath must abide by: the job's and the machine's.
+    pub fn keep_out_zones(&self) -> Vec<Path> {
+        self.keep_out
+            .iter()
+            .chain(&self.machine_keep_out)
+            .cloned()
+            .collect()
     }
 
     /// The component a "selected component" command works on: the last one picked, else the

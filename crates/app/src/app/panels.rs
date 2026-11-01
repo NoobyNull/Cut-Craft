@@ -2289,6 +2289,17 @@ impl CutCraftApp {
                 painter.add(egui::Shape::line(run, stroke));
             }
         }
+        // the keep-out zones in red, closed, over whatever they cover, as Aspire shows them
+        let danger = egui::Stroke::new(2.0 * stroke.width, ui.visuals().error_fg_color);
+        for zone in self.doc.keep_out_zones() {
+            let mut points = zone.flatten(cut_craft_core::polygon::TOLERANCE);
+            points.extend(points.first().copied());
+            let z = view3d::vector_plane(surface, &points);
+            let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
+            for run in in_sight(&line) {
+                painter.add(egui::Shape::line(run, danger));
+            }
+        }
         let size = view3d::plan_size(surface);
         // the plane's outline, and always while a model is imported onto it
         if shown.modeling_plane || self.form.as_ref().is_some_and(|f| f.model.is_some()) {

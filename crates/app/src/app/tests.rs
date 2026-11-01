@@ -1007,6 +1007,76 @@ fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
 }
 
 #[test]
+fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_cut_over_one() {
+    use cut_craft_core::keep_out::crossed;
+    use cut_craft_core::toolpath::MoveKind;
+    let mut h = Harness::new();
+    // two parts with a gap between them, cut by one profile toolpath
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.rectangle(110.0, 10.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    let moves = |app: &CutCraftApp| app.doc.toolpaths.values().next().unwrap().moves.clone();
+    let rapids = |app: &CutCraftApp| {
+        moves(app)
+            .iter()
+            .filter(|m| m.kind == MoveKind::Rapid)
+            .count()
+    };
+    let straight = rapids(&h.app);
+    // a clamp drawn across the gap, made a keep-out zone: the toolpath is made again round it
+    h.rectangle(70.0, 0.0, 20.0, 60.0);
+    let clamp = *h.app.doc.vectors.keys().next_back().unwrap();
+    h.app.doc.selection = [clamp].into();
+    let zone = serde_json::json!({ "action": "create", "clearance": 2.0 });
+    h.app.apply("keep_out_zones", &zone).unwrap();
+    assert!(!crossed(&h.app.doc.keep_out_zones(), &moves(&h.app)));
+    assert!(rapids(&h.app) > straight, "round the clamp");
+    // the same clamp fixed to the machine's bed instead: every job keeps out of it
+    h.app
+        .apply(
+            "keep_out_zones",
+            &serde_json::json!({ "action": "clear", "clearance": 0.0 }),
+        )
+        .unwrap();
+    assert_eq!(rapids(&h.app), straight, "straight across again");
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().keep_out = vec![cut_craft_machines::machine::Zone {
+        x: 70.0,
+        y: 0.0,
+        width: 20.0,
+        height: 60.0,
+    }];
+    assert!(h.app.sync_machine_keep_out());
+    h.app.keep_out_changed();
+    assert!(!crossed(&h.app.doc.keep_out_zones(), &moves(&h.app)));
+    assert!(rapids(&h.app) > straight, "round the machine's clamp");
+    // a clamp over a part: the toolpath cannot keep out, so it is not saved
+    h.app.machines.active_mut().unwrap().keep_out[0].x = 20.0;
+    h.app.sync_machine_keep_out();
+    h.app.keep_out_changed();
+    assert!(
+        h.app.status.message.contains("keep-out"),
+        "{}",
+        h.app.status.message
+    );
+    let post = h.app.output_post().unwrap();
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+    };
+    let path = std::env::temp_dir().join(format!("cut-craft-keep-out-{}.nc", std::process::id()));
+    let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
+    assert!(refused.contains("keep-out zones"), "{refused}");
+    assert!(!path.exists(), "nothing written");
+}
+
+#[test]
 fn toolpaths_follow_their_vectors_when_recalculated() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

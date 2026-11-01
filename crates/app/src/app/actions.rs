@@ -880,6 +880,44 @@ impl CutCraftApp {
         }
     }
 
+    /// The active machine's keep-out zones put on the job, as job millimetres (the G-code's,
+    /// which they are given in); true when they changed.
+    pub(super) fn sync_machine_keep_out(&mut self) -> bool {
+        let zones: Vec<_> = self
+            .machines
+            .active()
+            .map(|m| m.keep_out.as_slice())
+            .unwrap_or_default()
+            .iter()
+            .filter(|z| z.width > 0.0 && z.height > 0.0)
+            .map(|z| z.path())
+            .collect();
+        let changed = zones != self.doc.machine_keep_out;
+        self.doc.machine_keep_out = zones;
+        changed
+    }
+
+    /// The keep-out zones changed: every toolpath is made again round them, as Aspire's
+    /// are, and any that still cannot keep out is warned about.
+    pub(super) fn keep_out_changed(&mut self) {
+        if !self.doc.toolpaths.is_empty() {
+            self.toolpath_action("recalculate_all_toolpaths");
+            let ids: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
+            self.warn(&ids, &[]);
+        }
+    }
+
+    /// The toolpaths of `plan` that pass over a keep-out zone, by name.
+    pub(super) fn not_kept_out(&self, plan: &[Vec<EntityId>]) -> Vec<String> {
+        let zones = self.doc.keep_out_zones();
+        plan.iter()
+            .flatten()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .filter(|t| cut_craft_core::keep_out::crossed(&zones, &t.moves))
+            .map(|t| t.name.clone())
+            .collect()
+    }
+
     pub(super) fn toolpath_action(&mut self, id: &str) {
         match id {
             "recalculate_toolpath" => {
@@ -1009,6 +1047,15 @@ impl CutCraftApp {
             self.selected_group.as_deref(),
             form.group,
         )?;
+        // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
+        let crossing = self.not_kept_out(&plan);
+        if !crossing.is_empty() {
+            return Err(format!(
+                "Not saved: {} could not abide by the keep-out zones. Check the keep-out zones \
+                 and their clearance are right",
+                crossing.join(", ")
+            ));
+        }
         let thinned = self.options.toolpaths.thinned(&self.doc);
         let side = (form.add_side && self.doc.job.double_sided.is_some()).then_some(
             if self.doc.bottom_side {
@@ -1186,6 +1233,9 @@ impl CutCraftApp {
                         self.machine_window = None;
                     }
                     self.machines_changed("Machines saved");
+                    if self.sync_machine_keep_out() {
+                        self.keep_out_changed();
+                    }
                 }
                 MachineOutcome::Cancel => self.machine_window = None,
                 MachineOutcome::ManagePosts => {
@@ -1620,8 +1670,11 @@ impl CutCraftApp {
     pub(super) fn warn(&mut self, made: &[EntityId], notes: &[String]) {
         let mut warnings = notes.to_vec();
         for t in made.iter().filter_map(|id| self.doc.toolpaths.get(id)) {
-            if cut_craft_core::keep_out::crossed(&self.doc.keep_out, &t.moves) {
-                warnings.push(format!("{} passes over a keep-out zone", t.name));
+            if cut_craft_core::keep_out::crossed(&self.doc.keep_out_zones(), &t.moves) {
+                warnings.push(format!(
+                    "{} could not be made without passing over a keep-out zone",
+                    t.name
+                ));
             }
             warnings.extend(cut_craft_core::checks::problems(&self.doc, t));
         }
@@ -2213,6 +2266,10 @@ impl CutCraftApp {
         }
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
+        // new keep-out zones: the toolpaths are made again round them, as Aspire's are
+        if id == "keep_out_zones" {
+            self.keep_out_changed();
+        }
         // the spiral gadget says how many times round each strand goes, as Aspire's does
         if id == "wrapped_spiral_layout"
             && let Ok(p) = serde_json::from_value(params.clone())
