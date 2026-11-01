@@ -28,4 +28,5 @@ A number field takes a sum as well as a number, worked out when it is entered:
 - **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options
 - **F11** the designing layout, **F12** the machining layout
 - **Esc** closes the open form
+- **E** edits the selected shape (or Create Shape component) in the tool that made it
 - Help ▸ Keyboard Shortcuts lists the rest.

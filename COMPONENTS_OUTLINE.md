@@ -1,5 +1,9 @@
 # Cut Craft - Component Outline
 
+**Status 2026-11-01 (version 0.4.2):** everything below is built except the items marked
+*(not built)* or *(out of scope)*. The current list of work is `docs/ROADMAP.md`; the
+tool-by-tool state is `docs/tool-inventory.md`.
+
 ## Core Architecture
 - Application framework and lifecycle management
 - Configuration system
@@ -48,7 +52,7 @@
 
 ## Input Handling
 - Mouse and keyboard input
-- Touch gestures (for tablets)
+- Touch gestures (for tablets) *(not built)*
 - Hotkeys and shortcuts
 - Event processing
 
@@ -59,7 +63,7 @@
 - Machine-specific formats
 
 ## Advanced Features
-- Plugin architecture
-- Scripting support
+- Plugin architecture *(out of scope unless decided: see ROADMAP, Decisions)*
+- Scripting support *(out of scope unless decided: Aspire gadgets)*
 - Advanced modeling tools
 - Simulation and verification

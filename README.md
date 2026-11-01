@@ -25,10 +25,13 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 ### Design (2D)
 
 - Rectangles (square, rounded or notched corners), circles, ellipses, polygons, stars, arcs,
-  curves, polylines and freehand lines; text, text on a curve, auto layout text (words
-  wrapped and sized to fill a shape), dimensions.
+  curves, polylines and freehand lines; text, text bent into an arc with handles, text in a
+  box that stretches to fit, text on a curve, auto layout text (words wrapped and sized to
+  fill a shape), dimensions.
 - Node editing, joining and closing vectors, fillets, offsets, weld / subtract / overlap,
   trimming, mirroring, array and circular copies, nesting.
+- Trace pictures into vectors, in black and white or colour: drag a box to trace part of a
+  picture, click its colours to pick them.
 - Drag selected objects to move them; the arrow keys nudge by a grid square (Shift: half,
   Ctrl + Shift: a tenth). Transform mode with handles for scaling and rotating.
 - Geometry, smart and grid snapping; guide lines dragged out of the rulers.
@@ -37,13 +40,17 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 
 ### Models (3D)
 
-- Components built from shapes (round, angled, smooth, flat), extrusions, sweeps and turned
-  profiles, arranged in levels with combine modes, clipping and mirroring.
+- Components built from shapes (round, angled, smooth, flat or your own profile, with
+  sharp inside corners or blended to inner vectors; press E on a shape to change it),
+  extrusions, sweeps and turned profiles, arranged in levels with combine modes, clipping
+  and mirroring. The 3D view shows the model solid down to its modeling plane.
 - Import STL models: the model appears in the scene at once, and the import settings
   (which face is up, rotation, size, position, depth) move and resize it as you change them.
 - Reliefs from pictures. 16-bit PNG and TIFF, and 32-bit floating point TIFF depth maps, are
   read at full precision, so smooth reliefs don't come out stepped.
 - Sculpting, smoothing, slicing, offset models, draft, baking components together.
+- Segment a 3D model into pieces for a 3-axis machine: cut any piece again, and choose
+  which face of each piece is up.
 - **Model ▸ Model Resolution** (Standard / High / Highest) sets the level of detail models
   are made at.
 
@@ -51,7 +58,8 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 
 - Profile, pocket, drilling, V-carve / engrave, 3D roughing and finishing, chamfer, fluting,
   prism carving, inlays, keyholes, moulding, rounding, thread milling, texture, sketch
-  carving, photo V-carve, quick engrave, drag knife.
+  carving (its areas shown in green before it is made), photo V-carve, quick engrave, drag
+  knife.
 - **Rest machining** on any toolpath: only what earlier, larger tools left is cut.
 - An animated preview of the material being cut, toolpath by toolpath.
 - Toolpath tiling, templates, merging and array copies.

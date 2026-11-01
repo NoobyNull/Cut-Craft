@@ -23,6 +23,17 @@ The other x64 DLLs (OSG, OpenNURBS, SketchUp, pstill, at3dx) are third-party, so
 `analyze_function`, call graphs, `trace_feature` and the reconstruction-ledger tools have
 nothing to work on. Decrypting the exe stays declined.
 
+## Status 2026-11-01
+
+- Gap 1 (`.vfont`) is closed: the layout is in `re/SPEC.md` (Fonts) and `core::vfont`
+  reads the files; text is built.
+- Gap 2: `.crv3d` samples were saved under Wine and read (`re/SPEC.md`, Job files);
+  `.3dclip` is encrypted, so Cut Craft uses its own `.ccclip`.
+- Gaps 3, 6: dialogs and help were mined tool by tool as each was built.
+- Gaps 4, 5, 7 and recommendation 3 stay open: `Default.prf` meanings, the `.mo` catalogs,
+  and black-box calibration (`crates/calib` exists; few tools are calibrated). The guessed
+  behaviour this leaves is listed in `docs/ROADMAP.md`, section 6.
+
 ## Gaps against "Not built yet", by source that can fill them
 
 1. **`.vfont` format (blocks Text, Text on a Curve, Auto Layout Text).** SPEC open question 1

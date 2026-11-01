@@ -1,9 +1,26 @@
 ---
 status: read
 created: 2026-10-24
-updated: 2026-10-26
-focus: Keep building Cut Craft down docs/tool-inventory.md's "Not built yet"
+updated: 2026-11-01
+focus: Fix the six unwired Model menu items, hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
 ---
+
+## Update 2026-11-01 (version 0.4.2, `4659eb6`…`ec83b2b`, pushed with tag `v0.4.2`)
+
+- **State:** 2204 tests pass; no open GitHub issues; `docs/courses.md` has no course gaps
+  left. **No pushes until 2026-11-04** (Matthew): commit locally.
+- **Landed:** text on an arc (green handles), Text in a Box stretch options, Sketch
+  Carving's green areas, Create Shape's mitred corners / blend to inner vectors / E to edit
+  (`Component::shape` keeps its settings and outlines), Trace Bitmap's area box and colour
+  clicks, Segment 3D Model's tree and face-up list, generated forms adding the first row of
+  an empty object list (`form::blank`), the 3D model drawn solid down to the modeling plane
+  (`view3d::solid`, GPU only), imported models without spikes under steep sides
+  (`fmt_import_stl::top_down`), Draw Material Block hiding the import outline.
+- **Found, not fixed:** six Model menu items name ids no command has, so they are greyed
+  (`docs/ROADMAP.md`, section 3). The probe that found them: run every menu item and list
+  those that say "not implemented yet".
+- **Read first:** `docs/ROADMAP.md` (state, fixes pending, missing, decisions),
+  `docs/tool-inventory.md`, `docs/hand-test-3d.md`.
 
 ## Update 2026-10-26 (Windows PC "cad", `0ed6bf2`…`2f15811`, pushed to PR #1's branch)
 
@@ -53,13 +70,17 @@ focus: Keep building Cut Craft down docs/tool-inventory.md's "Not built yet"
 
 # Handoff: Cut Craft (Rust, Vectric Aspire-style CNC CAD/CAM)
 
+The sections below this heading are from 2026-10-24 and kept for their working notes; the
+"To do next" list there is done. The current list is `docs/ROADMAP.md`.
+
 ## Where things are
 
-- **Repo:** `/home/matthew/aspire-clone` (local folder still has the old name), also the private
-  GitHub repo https://github.com/NoobyNull/cut-craft (`origin`, branch `main` at `00de557`,
-  everything pushed, working tree clean). No Gitea remote.
-- **Health:** 643 tests pass; `.githooks/pre-commit` (fmt, clippy pedantic `-D warnings`,
-  nextest) is green.
+- **Repo:** `/home/matthew/aspire-clone` (local folder still has the old name), also the
+  public GitHub repo https://github.com/NoobyNull/cut-craft (`origin`) and Gitea
+  https://git.yax.family/matthew/cut-craft (`gitea`). Push `main` to both, only when asked.
+- **Health (2026-11-01):** 2204 tests pass; `.githooks/pre-commit` (fmt, clippy pedantic
+  `-D warnings`, nextest) is green. Releases: the tag `vX.Y.Z` starts the Release (Linux,
+  Windows) and Builds (macOS) workflows; steps in `BUILDING.md`.
 - **Read these instead of this doc for detail:**
   - `docs/tool-inventory.md` — every tool: what it's built from, what works, what's not built,
     the right-click "families" plan. **The main to-do list.**
@@ -150,10 +171,9 @@ focus: Keep building Cut Craft down docs/tool-inventory.md's "Not built yet"
 - **GUI code:** no hardcoded values. Derive from the theme; when unavoidable, use a named
   constant with a `ponytail:` comment.
 - **Clean room:** Vectric material never goes in git.
-  - `re/extracted/` and `assets/icons/` are gitignored. Icons are made locally from
-    `/home/matthew/Desktop/Aspire 12.0` by `re/make_icons.py`.
-  - **In the cloud the icons are missing**, so the app shows text buttons. Tests rely only on
-    the tracked manifest `re/icon_set.json`.
+  - `re/extracted/` is gitignored. Since 0.2.2 every icon is an original drawing made by
+    `scripts/build-icons`, kept in `assets/icons/` in git and built into the binary
+    (`crates/app/build.rs`); only the Icons8 GitHub / Thingiverse link PNGs are third-party.
 - **Tooling quirks:**
   - The shell is zsh: unquoted variables don't word-split; use `xargs -0` or arrays.
   - `cargo fmt` reflows code, so text patches must match the formatted source.

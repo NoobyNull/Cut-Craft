@@ -1,6 +1,6 @@
 # Tool inventory
 
-Date: 2026-10-24. What every tool is built from, what it is reused by, and whether it works.
+Date: 2026-10-24, updated 2026-11-01 (version 0.4.2). What every tool is built from, what it is reused by, and whether it works.
 "Works" is checked by `every_enabled_control_works` (crates/app): it builds a small job (two
 overlapping squares, a toolpath, a 3D shape) and runs every enabled menu item, tool button and
 right-click menu item through the app as a click would, failing on a panic or a dead end
@@ -329,7 +329,11 @@ say "not implemented yet".
   - Text: system TrueType fonts and Vectric single-line `.vfont` fonts (from
     `~/.config/cut-craft/fonts`), bold, italic, alignment, capital height, click to anchor.
     The text is a group that remembers its settings: Draw Text on selected text edits it;
-    Ungroup turns it into curves.
+    Ungroup turns it into curves. With the form open on selected text, two green handles
+    above and below it bend the line into an arc (the middle follows the pointer; drag back
+    to flatten); Arc angle and Arc rotation are typed too. Each letter stays whole. Not
+    done: the red / blue / white handles (rotate, radius, move) and kerning clicks on arched
+    text.
   - Draw Curve: a smooth Bézier curve (Catmull-Rom) through a list of points, open or
     closed; points are entered in the form (Aspire places them with clicks).
   - Draw Freehand: the whole drag path, smoothed into Béziers within a tolerance.
@@ -356,8 +360,9 @@ say "not implemented yet".
     and a drag of one moves them all (Move Nodes). Dragging control points or spans and
     Keep Bezier Tangency are not done.
   - Text in a Box (Draw Text's other mode): the text scaled to fit a box at the anchor,
-    inside a None / Normal / Wide margin, centred (dialog 279; its stretch options are not
-    done).
+    inside a None / Normal / Wide margin, centred (dialog 279). Vertical Stretch (line space
+    or characters to the box height) when the text fits the width, Horizontal Stretch (word
+    spaces, kerning or character size to the box width) when it fits the height.
   - Text on a Curve: one line of text laid along a selected curve, kept or scaled to fill
     it, with spacing, above / on / below, other side, offset, alignment, turned or upright
     (dialog 426). The text stays editable: selected alone, the form opens with its settings
@@ -394,7 +399,9 @@ say "not implemented yet".
     corner fit, noise filter and grouping (dialog 347); or in Colors mode, a colour picture
     (imported pictures keep their colours) cut down to 2 to 16 colours, numbered from the
     darkest, the ones listed (or all but the lightest) traced each onto a layer named after
-    it, the palette given in the status.
+    it, the palette given in the status. With the form open, a box dragged over the picture
+    is the part traced (drawn dashed) and a click on the picture lets it go; in Colors mode
+    a click picks the colour under it (again to let go). No colour swatches in the form.
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset. Mirror flips about
@@ -469,14 +476,21 @@ say "not implemented yet".
   equal slices; the first segment and the ones after it (turned over, if asked, so their
   far sides are machined) are laid out side by side across the job, a gap apart, tops at
   the surface, as components, and a segment that still has undercuts says so. Faces lying
-  in a plane go to neither. Aspire's segment tree (cutting one segment again), dragging
-  the plane and the layout mode's orientations are not done.
+  in a plane go to neither. Cut Segments Again is the segment tree: a named segment cut by
+  a plane of its own (2 gives 2.1 beyond the plane and 2.2), cut again in turn; Segment
+  Orientations turns a chosen face (top, bottom, front, back, left, right) up per segment.
+  Not done: the plane dragged with 3D view handles, merging segments by drag and drop,
+  undercuts painted pink, and the Import Options (backface caps, resize material,
+  boundary vectors).
 - Modeling tab: Create Shape, Zero Plane, from Bitmap, Smooth, Scale Z, Bake.
   - Create Shape: round, angular, smooth, flat, or Custom (the profile of an open vector
     selected with the closed ones, drawn upright, edge at its left) over closed vectors; a
     ring between nested vectors rises from both edges; limit, base, Scale (the profile to a
-    height) and Total Height (profile and base together). Not done: Preserve Internal
-    Corners, Blend to Inner Vectors, the 3D view's handles and E to edit.
+    height) and Total Height (profile and base together), Preserve Internal Corners (inside
+    corners mitred to a crease), Blend to Inner Vectors (vectors inside the outer ones are
+    the top). The shape keeps its settings and outlines: E on it opens the form and a
+    change remakes it in place. The 3D view's height handles work on it; it has no live
+    handles of its own.
   - Component Properties' dynamic properties (help: Component Properties): Shape Height
     (%), Base Height, Fade (kept at one point, lowered by a percentage toward another) and
     Tilt (pivot and raised point, angle), kept apart from the heights and applied as the
@@ -592,44 +606,51 @@ say "not implemented yet".
   form on a double-click; the up and down arrows move the selected toolpath through the cut
   and save order (Move Toolpath), Merged and Array Copy toolpaths keeping their sources.
 
-**Not built yet.**
-- File: Import Toolpaths.
-- Edit: Options' window layout, software renderer, shading, sheet and toolpath-list
-  settings, fonts, help and the folder kept for each kind of file;
-  document variables linked to fields (a sum is worked out once, when entered).
-- Machine: Update Post Database.
-- View: Guide Lines, Keep-Out Zones, Shadow Shading,
-  window tiling and cascade.
-- Gadgets beyond the rotary layouts and Celtic Weave; Help Contents.
-- Drawing tab: Transform, Trim Objects.
+**Not built yet.** (Probe 2026-11-01: every menu item run, those that say "not
+implemented yet" listed.)
+- Model menu items whose tools exist but are not wired (ids do not match the commands):
+  Create Textured Area Component (`texture_area`), Create Component with Draft from Visible
+  Model (`add_draft`), Create an Offset Model (`offset_model`), Slice Model (`slice`),
+  Split Selected Component (`split`), Emboss Component (`emboss`). The tools run from their
+  tab buttons.
+- Edit ▸ Object Properties; the component menu's Move to Group; the selection menu's Copy
+  to Sheet.
+- View: Draw Keep-Out Zones in 3D View, Use Shadow Shading; Window: Tile Horizontal / Vertical,
+  Cascade.
+- Toolpaths ▸ Import Toolpaths (format unknown); Machine ▸ Update Post Processor Database (a
+  vendor service).
+- Gadgets beyond the rotary layouts and Celtic Weave.
 - Feeds and speeds: cutting data per machine (it is per material now), Lua-scripted posts;
   toolpath forms still show feeds in mm/min or in/min, not the tool's own units.
 - Double-sided jobs: Zero off same side is kept but not yet used by the posts; an animated
   preview plays this side only (the other side is cut at once).
+- Sketch Carving's Selected Level boundary.
 
 **Known problems and stand-ins.**
 - Split Component takes closed vectors only (Aspire also extends open ones to the edges).
   Emboss's split into shape and detail is our own [inf].
-- Trace Bitmap has no traced-area selection, and its colours are picked by number, not by
-  clicking a palette; Corner Fit's scale is our own.
+- Trace Bitmap's Corner Fit scale is our own.
 - TrueType text has no kerning; line spacing is a guess (`re/SPEC.md`, Fonts).
 - Components show in the 2D view as greyscale depth maps (black lowest, white highest, per
   component) and a click on one selects it, as in Aspire; in the 3D view a double-click picks
   the topmost shown component under it (Shift adds or takes away; off the model it fits).
-- Left To Right spaces the same as Right To Left (the selection now keeps pick order, but the
-  spacing commands do not yet use it).
-- Groups hold vectors only and do not nest. Grouping leaves each member on its own layer;
-  the right-click Ungroup ▸ puts them back as they were (onto Original Object Layers) or all
-  onto the current layer (Aspire's onto Group's Layer, as Cut Craft's groups have no layer).
-- Display settings (Toolpath Drawing, quality, View toggles) last only for the session.
-- Lasers are not a tool type in the database: their power is on the toolpath forms. Cut Craft's own FluidNC posts are not laser posts.
+- Vector groups do not nest. Grouping leaves each member on its own layer; the right-click
+  Ungroup ▸ puts them back as they were (onto Original Object Layers) or all onto the
+  current layer (Aspire's onto Group's Layer, as Cut Craft's groups have no layer).
+- The Toolpath Drawing toggles (rapids, plunges, retracts, joins) last only for the session;
+  the 3D view's toggles are kept with Options.
+- The 3D view draws the model solid down to the modeling plane on the GPU only; the CPU
+  fallback (and the headless tests) draw its top alone. The modeling plane is always drawn
+  while a model is imported.
+- Imported models: a cell over only a near-vertical side takes the height of the top beside
+  it (up to 4 cells in), so steep sides leave no spikes; a wider steep band keeps its slope.
+- Lasers are not a tool type in the database (laser features are skipped by decision).
 - Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code
   reference to the fluting strings was found in Aspire.exe), prism and photo V-carve
-  geometry, texture scallop shape, sketch-line contrast rule.
-- Not done inside strategies: Fill Regionally, Merge By Part, the
-  extra clearance tools, laser passes lowering the focus.
-- The strategies and menu items added on 2026-10-24 have tests but have not been tried by
-  hand in the running app.
+  geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
+  (`docs/ROADMAP.md`, section 6).
+- Not tried by hand: the 2026-11-01 batch (`docs/ROADMAP.md`, section 5) and earlier work
+  listed in `docs/hand-test-3d.md`.
 
 ## Differences from Aspire 12 seen on screen
 

@@ -849,3 +849,34 @@ instead of half-cell steps.
 ### Space Selection inside the last vector [obs: help Alignment Tools]
 - Space Selection spreads the objects evenly, the outermost staying put; with Ctrl the order of selection counts; with Inside last vector the items are spread within the bounds of the last object selected.
 - **[inf]** Cut Craft: inside the last vector, the gaps at its two edges equal the gaps between the objects; the last vector does not move.
+
+### Text arching [obs: help Text Selection; courses R2nhSGOSaoU, XJ8fKNIIbTg]
+- With text selected for editing, two green handles sit in the middle of the text: drag the bottom one to arc the text down, the top one to arc it up; drag back to flatten. Arced text then shows red handles (rotate about the arc's centre, Ctrl in 15° steps), blue handles (change the radius, the centre kept) and white handles (move: one in the text's middle, one at the arc's centre). Text placed on a curve has no arc handles.
+- **[inf]** Cut Craft: Draw Text keeps Arc angle (degrees the line turns through; above zero bends up) and Arc rotation (about the arc's centre). The middle of the text stays put; each letter stays whole, its middle moved onto a circle round the centre and turned to face out (bent down: in). The handles sit a quarter of the text height above and below the unbent text's middle; a drag sets the angle so the text's middle rises (or falls) as far as the pointer moved, from what it rose before. Not built: the red, blue and white handles; kerning clicks on arched text.
+
+### Text in a Box stretch [obs: help Create Text]
+- Vertical Stretch (text that fits the width, room above and below): none, Stretch Line Space to fit, Stretch Characters to fit. Horizontal Stretch (text that fits the height, room at the sides): none, Stretch Spaces between words, Stretch Kerning, Stretch Character size.
+- **[inf]** Cut Craft: line space grows the line pitch until the block's ink fills the box height (one line: no change); characters scale the block in Y only; spaces and kerning share the room each line lacks equally among its spaces or among all its letter gaps (by ink, so each line reaches the box width); character size scales in X only. The margin still applies to the width.
+
+### Create Shape: Preserve Internal Corners, Blend To Inner Vectors [obs: help Create Round Shape, Create Custom Shape]
+- Preserve Internal Corners: inside corners rise as straight, mitred faces meeting in a sharp crease (as a roof's valley), not curving in to a point. Blend To Inner Vectors: the profile is applied from the outside vectors to the inner vectors.
+- **[inf]** Cut Craft: a cell whose nearest point on an outline is a corner (inside the shape only an inside corner can be) takes the distance to the farther of the two sides' lines, not to the corner. Blending, vectors inside another are the top (flat at the full rise); between, a cell's distance in is its share of the way from the outer edge to the inner vectors (outer / (outer + inner)) times the widest gap between them. The shape keeps its settings and outlines with the component, so E opens the form on it and a change remakes it in place, keeping its level, group, colour and component properties.
+
+### Trace Bitmap area and colour picking [obs: help Trace Bitmap]
+- Dragging over the selected bitmap defines a rectangle (dashed black) traced alone; clicking the bitmap again removes it. Colours can be selected directly from the image in the 2D view.
+- **[inf]** Cut Craft: a pixel is traced only when its centre is inside the box. A click, with a box, clears the box; without one, in Colors mode, the colour of the pixel clicked (its number in the cut-down palette) is added to Colors to trace, or taken out if it is there. Not built: the swatches with tick boxes and linked colours.
+
+### Sketch Carving highlight [obs: help Sketch Carving]
+- The green highlighted area shows what the toolpath will cut, before it is calculated.
+- **[inf]** Cut Craft: each row's run of line cells inside the boundary, filled translucent green while the form is open, found again when the settings, the job or the selection change.
+
+### Segment 3D Model: tree and layout [obs: help Segment 3D Model]
+- Each Segment makes two children of the current segment (above and below the plane); any segment can be picked and cut again; Delete children joins them back; segments dragged onto each other merge. Layout mode cycles each segment's orientation with arrows (O shows a rotation handle) and can highlight undercuts in pink. Import Options: Create Backface Caps, Resize Material To Fit Slices, Create boundary vectors.
+- **[inf]** Cut Craft: Cut Segments Again lists cuts by segment name: cutting segment N gives N.1 (beyond the plane, toward the axis's positive side) and N.2, each nameable by a later cut; the plane's position is a share of that segment's own size. Segment Orientations sets a face up per segment (top, bottom, front −Y, back +Y, left −X, right +X); segments not listed follow Turn the second segment over. Not built: the plane's 3D handles, merging, the O rotation handle, pink undercuts (a note names them), the Import Options.
+
+### Imported models: steep sides [inf]
+- Cut Craft: top-down rasterising, a cell whose highest face is near vertical (its area seen from above under a tenth of its own area) takes the height of the non-steep top next to it, spreading up to 4 cells in, so near-vertical sides leave no ring of low cells. A wider steep band keeps its slope.
+
+### 3D view: the model solid [obs: Matthew, 2026-11-01]
+- The model should look solid down to the modeling plane (to the axis on a rotary job), not a skin.
+- **[inf]** Cut Craft: walls hang from the edge of the drawn surface (a quad edge with a quad on one side only) down to z = 0, with a bottom there; wrapped, down to the axis with no bottom. GPU only.

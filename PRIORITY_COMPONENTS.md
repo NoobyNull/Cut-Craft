@@ -1,5 +1,10 @@
 # Priority Components - Largest Wind First
 
+**Status 2026-11-01 (version 0.4.2): all six done.** This was the first plan, kept for
+history. The 3D view and toolpath kernels run on wgpu; the UI is egui; SVG, DXF, STL and
+OBJ files load and save; jobs are `.ccjob` files. What is still to do is in
+`docs/ROADMAP.md`.
+
 ## 1. Core Architecture & Graphics Engine Integration (wgpu/WebGPU)
 **Impact:** Highest
 **Why:** This is the foundation that will enable all other functionality. Without proper graphics rendering, we can't visualize anything.

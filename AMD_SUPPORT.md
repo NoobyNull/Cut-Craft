@@ -46,6 +46,11 @@ If you encounter issues on AMD hardware:
 2. Verify Vulkan runtime is installed (`vulkan-tools`, `vulkan-validation-layers`)
 3. Check that your GPU is supported by the wgpu library
 
+## Tested on
+
+Matthew's machine: Radeon RX 9070 XT (Vulkan), 2026-10-31 to 2026-11-01: the 3D view and
+the compute kernels.
+
 ## Future Enhancements
 
 - Add explicit Vulkan backend selection for better AMD optimization

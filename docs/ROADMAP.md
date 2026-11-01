@@ -1,178 +1,150 @@
 # Cut Craft roadmap
 
-Where Cut Craft stands against Aspire 12 and the plan for the rest. Behaviour comes from the
-clean-room spec (`re/SPEC.md`, from Aspire's help, resources and strings); the detailed
-working / not-built list is `docs/tool-inventory.md`; how commands are built is
-`docs/superpowers/specs/2026-10-23-command-architecture-design.md`.
+Where Cut Craft stands against Aspire 12, what is still to do, and what is causing trouble.
+Updated **2026-11-01**, at version **0.4.2** (tag `v0.4.2`, commit `ec83b2b`).
 
-Sizes: **S** a day or less, **M** a few days, **L** a week or more. Updated 2026-10-24 (Phase A done).
+Behaviour comes from the clean-room spec (`re/SPEC.md`: Aspire's help, resources and
+strings, and black-box comparison under Wine). The tool-by-tool list is
+`docs/tool-inventory.md`. How commands are built is
+`docs/superpowers/specs/2026-10-23-command-architecture-design.md`. The training-course
+check is `docs/courses.md` (made by `scripts/courses-report.py`).
 
-## 1. Done
+Sizes: **S** a day or less, **M** a few days, **L** a week or more.
+
+## 1. State at a glance
+
+| Measure | Now |
+|---|---|
+| Tests | 2204 pass (`.githooks/pre-commit`: fmt, clippy pedantic `-D warnings`, nextest) |
+| GitHub issues | 0 open, 99 closed |
+| Course capabilities (`docs/courses.md`) | 139: 135 yes, 0 partly, 0 no, 4 out of scope |
+| Menu items that say "not implemented yet" | 15 (section 3); 6 of them are tools that exist but are not wired |
+| `ponytail:` stand-ins in the code | 171 (`grep -rn "ponytail:" crates`) |
+| Guessed behaviour in `re/SPEC.md` | 58 `[inf]`, 14 `[unk]` |
+| Pushes | **None until 2026-11-04** (Matthew, 2026-11-01). Commit locally until then. |
+
+## 2. Done
+
+Phases A to F of the 2026-10-24 plan are done, and most of G. In short:
 
 | Area | What works |
 |---|---|
-| Foundation | Command architecture (crate per command, generated forms, undo), layers, job files, SVG / DXF import and export, job setup (flat and rotary), tool database. |
-| Drawing | Rectangle, circle, ellipse, polygon, star, polyline, arc; select (click, window, crossing); move, rotate, set size, mirror, align (10) and space (4); weld, subtract, overlap, offset, join; cut / copy / paste; select all / open / duplicates / on layer. |
-| Modeling | Create Shape; height-grid components with add / subtract / merge / low / multiply; zero plane, scale Z, from bitmap, from visible model, from toolpath preview, bake, smooth, reset inside / outside vectors; STL and grayscale bitmap export. |
-| Toolpaths | Every strategy in the spec: profile, pocket, drilling, V-carve, V-carve inlay, inlay, quick engrave, chamfer, fluting, prism, thread milling, keyhole, drag knife, moulding, texture, photo V-carve, sketch carving, 3D roughing, 3D finishing (rest machining), rounding, laser cut / fill, laser picture, array copy, merged. Preview simulation, recalculation. |
-| Output | `.pp` post engine (Aspire's vocabulary, rotary wrapping, inverse time, laser blocks); default FluidNC tool-changer posts, flat and wrapped onto A. |
-| Views | 2D view (zoom, pan, rulers, toolpath drawing options); 3D view (rotate, pan, zoom, standard views, origin, modeling plane, vectors, lighting and shading toggles). |
-| Menus | All but 57 menu items (listed in `docs/tool-inventory.md`); Help (about, shortcuts, licences); increment and save. |
+| Foundation | Command crates (params in, change out), generated forms, undo, layers, sheets, double-sided and rotary jobs, levels, groups, document variables, packed job files, atomic saves and crash recovery, Options kept between runs, mm / inch switch. |
+| Design (2D) | Every drawing tool, text (TrueType and single-line, text in a box with stretch, text on a curve, text on an arc, spelling, kerning and line spacing by clicking), node editing, transform handles, trim, fillets, join / close, offsets, booleans, copies, nesting (true shape), trace bitmap (black and white, colour, area), guides, snapping, dimensions, measure, validator, keep-out zones. |
+| Models (3D) | Create Shape (all profiles, custom, limit, scale, total height, mitred corners, blend to inner vectors, E to edit), extrude and weave, two-rail sweep, turn and spin, sculpting, distort, texture areas, offset, emboss, slice, split, draft, replace below, bake, levels with clipping and mirroring, STL / OBJ import with orientation and re-import, segment 3D model (tree, face up), 3D clipart, the 3D view editing with handles, a solid model view. |
+| Toolpaths | Every strategy in `re/SPEC.md`, rest machining, tabs / ramps / leads, clearance tools, project onto 3D model, animated preview, tiling, templates, groups, merging, plate production. Grid kernels run across the cores and on the GPU. |
+| Machines and output | Tool database (`.vtdb` and Fusion 360 import, cutting data per material, tool changer slots), machine configuration, post-processor management, Cut Craft's own GRBL / FluidNC / Mach3 posts, machine limits, toolpath summary, job sheets. |
+| Releases | Linux, Windows and macOS packages from the tag workflows; AppImage and Flatpak. |
 
-## 2. Known issues
+## 3. Fixes pending
 
-These shape the plan: Phase A exists to fix the first three.
+Things that exist but do not behave as they should.
 
-1. ~~No component or bitmap selection~~ (Phase A). Components are picked in the Components
-   tab, by a double-click or right-click in the 3D view, and edited there by Aspire 12's
-   handles (2026-10-30).
-2. ~~The selection has no order~~ (Phase A). Align still aligns to the selection's extent,
-   not to the last-picked object: Aspire's help does not say what a window selection does.
-3. ~~No groups~~ (Phase A). Vector groups only; they do not nest, and components and
-   bitmaps cannot be grouped yet.
-4. **Not tried by hand.** The 2026-10-24 work has tests but has not been used in the
-   running app.
-5. **Settings are not saved.** Display options last for the session (needs Options, F2).
-6. **Guessed behaviour** (marked [inf] / [unk] in the spec): Fluting's Smooth curve, prism,
-   photo V-carve and texture geometry, sketch-line rule. Ghidra found no code reference to
-   the fluting strings; the decompile dump could still be searched by behaviour.
-7. **Tool types missing:** thread mills and lasers have their settings on toolpath forms.
-8. **Lasers** need a post with `LASER_SUPPORT`; Cut Craft's own FluidNC posts are not
-   laser posts, on purpose (`M4` would start the router on the tool-changer machine).
-9. **3D view** draws overlays over the surface (no depth test), has no ViewCube or
-   perspective, and cannot tilt past side-on.
+1. **Six Model menu items are greyed though their tools exist.** The menu names give ids
+   that do not match the commands, so they say "not implemented yet":
 
-## 3. Plan
+   | Menu item | Command it should run |
+   |---|---|
+   | Model ▸ Create Component ▸ Create Textured Area Component | `texture_area` |
+   | Model ▸ Create Component from ▸ Create Component with Draft from Visible Model | `add_draft` |
+   | Model ▸ Create Component from ▸ Create an Offset Model | `offset_model` |
+   | Model ▸ Create Component from ▸ Slice Model | `slice` |
+   | Model ▸ Split Selected Component | `split` |
+   | Model ▸ Emboss Component | `emboss` |
 
-Phases are in dependency order. Within a phase, items are independent.
+   Fix: give each `i(...)` in `crates/app/src/gui.rs` (Model menu) the command's action, as
+   the "Sculpt Visible Model" entry does. Size S.
+2. **The 3D view's CPU fallback draws the model as a skin.** With a GPU the model is solid
+   down to the modeling plane (`view3d::solid`); without one (and in the headless tests) the
+   walls are left off, because the painter draws in order and the walls would show through.
+3. **The modeling plane is always drawn while a model is imported**, even with View ▸ Draw
+   Modeling Plane off. Draw Material Block is in the View menu only, not in the 3D view's
+   right-click menu.
+4. **Double-sided jobs:** Zero off same side is kept but the posts do not use it yet. An
+   animated preview plays this side only.
+5. **Display settings:** the 3D view toggles are saved with Options; the Toolpath Drawing
+   toggles (rapids, plunges, retracts, joins) last only for the session.
 
-### Phase A — Selection foundations ✅ (2026-10-24)
+## 4. Missing: still to build
 
-Done: selection keeps pick order (`Selection`, `last()`), moulding takes the last-picked
-profile; components picked in the Components tab (`chosen_component`), outlined in 2D;
-bitmaps picked in the 2D view, outlined, deleted, moved and resized (Bitmap Properties),
-used by the picture tools (`chosen_bitmap`); Group / Ungroup with whole-group picking.
-Left for later: nested groups, grouping components. Picking components in the 3D view (a
-double-click or a right-click, which opens the view menu) and editing them there are done.
+### From Aspire's menus (greyed in Cut Craft)
 
-| Item | Approach | Size |
+| Item | Note | Size |
 |---|---|---|
-| Selection order | Keep the order things were picked (a `Vec` beside the set, or the set replaced by an ordered set) so "last selected" exists. Then: align to the last selected, space between first and last with Ctrl, moulding / sweeps take the last as profile. | S |
-| Component selection | Click a component in the Components tab or in the 3D view (pick by the topmost height under the cursor); selected components outlined in 2D and tinted in 3D. Selected-component commands default to it. | M |
-| Bitmap selection | Bitmaps join the pickable entities: select, move, scale, delete, layer, hide. Picture tools use the selected bitmap. | M |
-| Groups | Group / Ungroup (Ctrl+G / U) for vectors and components; picking a member picks the group. | M |
+| Edit ▸ Object Properties | the selection's own properties form | S |
+| Move to Group (component right-click) | move a component into a component group | S |
+| Copy to Sheet (selection right-click) | copy vectors to another sheet (Move / Copy toolpath to sheet exist) | S |
+| View ▸ Draw Keep-Out Zones in 3D View | the zones drawn over the 3D view | S |
+| View ▸ Use Shadow Shading | shadows in the 3D view | M |
+| Window ▸ Tile Horizontal / Vertical, Cascade | the 2D and 3D views side by side exists (split); these three do not | S |
+| Toolpaths ▸ Import Toolpaths | Aspire's PhotoVCarve / Machinist / Cut3D toolpath files; format unknown | ? |
+| Machine ▸ Update Post Processor Database | a vendor service; out of scope unless decided otherwise | — |
 
-### Phase B — Component tools on height grids
+### Inside tools that exist
 
-All work on the existing `Component` height grid; each is a command crate with tests.
-
-| Item | Aspire behaviour | Approach | Size |
-|---|---|---|---|
-| Replace Below | Trim or flatten the bottom off components; several are baked first. | Clamp heights below a level (to that level or to nothing). | S |
-| Offset Model | 3D offset of the composite model, optionally clipped to the zero plane. | Ball dilation / erosion of the height grid (max over a disc of h + sphere profile). | S |
-| Emboss | Lower a model's height keeping surface detail. | Split into smooth base and detail (blur); scale the base, keep the detail. | S |
-| Split Component | Cut a component into pieces with vectors (inside / outside each). | Like Reset Inside / Outside, but each part becomes a new component. | S |
-| Slice Model | Divide the model into Z slices, each a component, for parts thicker than the machine or tool allows. | Count or thickness; each slice is the model clamped to its band, shifted to zero. | S |
-| Add Draft / Component with Draft | Give steep walls a minimum draft angle (for moulds); bakes the visible model. | Limit the slope: iterative distance pass so no cell is more than tan(angle) × cell below a neighbour. | M |
-| Vector Boundary round components | Outline vectors round the selected components. | Marching squares on "has shape" cells, then curve fitting (shares Fit Curves). | M |
-| Cross Section Vector | An open vector of the model's profile along a drawn line. | Sample heights along the line into an open polyline drawn at the line's place. | S |
-| Create Texture Area | Tile one component over a region (spacing, overlap, symmetry, boundary). | Copy the grid at an array of offsets, merged, clipped to the vectors. | M |
-| Distort | Bend vectors or components with an editable envelope. | Needs node editing (Phase D); then a bilinear-patch map of the envelope. | L |
-
-### Phase C — Files, output and job data
-
-| Item | Approach | Size |
+| Tool | What is left | Size |
 |---|---|---|
-| Import Component / 3D Model | STL first (binary and ASCII): rasterise triangles top-down into a height grid at the job's model resolution; size and position form. OBJ next; Aspire's own formats are out of scope. | M |
-| Export PDF / EPS / AI | Write vectors as PDF and EPS ourselves (lines and Béziers map directly); AI as PDF-compatible. | S |
-| Print / Print Preview | Render the 2D view to PDF and hand it to the system (`xdg-open` / `lp`). | S |
-| Toolpath Summary | Machining time per toolpath from feeds and lengths plus a rapid rate. | S |
-| Notes | A job field and a text window; opens itself when the text starts with "."; `[FILE_NOTES]` in posts already exists. | S |
-| Job templates | New from Template / Save As Template: a `.ccjobt` that always saves as a new file. | S |
-| Toolpath templates | Save one or all visible toolpaths' strategies and settings; Load makes them uncalculated, creating missing layers if asked. | M |
-| Job Sheet | An HTML summary (job, material, toolpaths, tools, times) opened in the browser. | S |
-| Save Shaded Image | Capture the 3D view (egui screenshot) to PNG. | S |
-| Document Variables | Named values usable in form number fields (`=` expressions). Needs expression parsing in forms. | M |
-| Import Toolpaths | Aspire's PhotoVCarve / Machinist / Cut3D toolpath files. Formats unknown. | ? |
+| Draw Text, text on an arc | the red (rotate), blue (radius) and white (move) handles; kerning clicks on arched text | M |
+| Draw Text | TrueType kerning (`kern` / `GPOS` tables); line spacing is a guess | M |
+| Trace Bitmap | colour swatches with tick boxes in the form (colours are picked on the picture or by number) | S |
+| Segment 3D Model | the plane placed with handles in the 3D view; merging segments by drag and drop; undercuts painted pink (they are listed); Import Options (backface caps, resize material, boundary vectors) | L |
+| Sketch Carving | the Selected Level boundary | S |
+| Create Shape | its own live 3D handles (the 3D view's height handles work on it) | M |
+| Split Component | open vectors extended to the edges (closed vectors only now) | S |
+| Groups | nested groups; a group's own layer | M |
+| Cutting data | per machine (it is per material now); feeds on toolpath forms in the tool's own units | S |
+| Posts | Lua-scripted posts | out of scope |
+| Lasers | not planned: Matthew skips laser features (no laser tool type, Fill Regionally, focus passes) | — |
 
-### Phase D — Drawing tab vector tools
+## 5. Not tried by hand
 
-| Item | Approach | Size |
-|---|---|---|
-| Node editing (N) | Select, move, add, delete nodes; line ↔ curve; smooth; make start point; cut. The base for Distort, Trim, Fillet, Close / Extend. | L |
-| Transform (T) | Interactive move / scale / rotate handles on the selection. | M |
-| Trim, Close / Extend | Trim at intersections by clicking; close open vectors; extend to the nearest boundary. | M |
-| Fillets | Round, dog-bone and T-bone fillets at clicked corners. | M |
-| Fit Curves | Arcs, Béziers or lines fitted within a tolerance. | M |
-| Validator, Measure | Find open, overlapping and self-intersecting vectors; measure distances and angles. | S each |
-| Curve, Freehand | Bézier drawing with drag handles; freehand smoothed into curves. | M |
-| Text, Text on a Curve, Auto Layout | Fonts from the system (TrueType / OpenType outlines via a font parsing crate; no Vectric `.vfont` files). Text on a curve and auto layout build on it. | L |
-| Dimensions | Linear, angular and radius dimensions as vectors and text. | M |
-| Vector Texture | Wavy or random line patterns in a region (shares Texture's generator). | S |
-| Trace Bitmap | Threshold or colour regions, marching squares, Fit Curves. | M |
-| Copy Along Vectors, Circular Copy, Array Copy (vectors) | Copies along curves, round a centre, in a grid. | S each |
+The work below has tests but has not been used in the running app. `docs/hand-test-3d.md`
+has the checklists.
 
-### Phase E — Large modeling tools
+- 2026-11-01: text on an arc and its green handles; Text in a Box stretch; Sketch Carving's
+  green areas; Create Shape's mitred corners, blend to inner vectors and E to edit; Trace
+  Bitmap's area box and colour clicks; the segment tree and face-up list; the solid model
+  view and the steep-side spike fix (on a real relief); Draw Material Block in 3D.
+- Earlier batches are in `docs/hand-test-3d.md` and `docs/tool-inventory.md`.
 
-| Item | Approach | Size |
-|---|---|---|
-| Turn and Spin | Turn a profile about the line between its ends, or spin it round a centre: heights from the profile by distance. | M |
-| Extrude and Weave | A profile (or component) along one or more rails, with start / end shapes and weaving over / under at crossings. | L |
-| Two Rail Sweep | Cross sections between two rails, blended along them. | L |
-| Sculpting | Interactive brushes (smooth, smudge, deposit, remove, erase) on a baked component in the 3D view. | L |
+## 6. Guessed behaviour
 
-### Phase F — Machine, settings and sides
+Marked `[inf]` / `[unk]` in `re/SPEC.md`; each needs a black-box comparison with Aspire
+under Wine (`~/.wine-aspire`) before it can be called exact.
 
-| Item | Approach | Size |
-|---|---|---|
-| Snap Options and Guide Lines | Snap to grid, nodes, midpoints, centres, intersections, guides; guides dragged from the rulers; the View ▸ Guide Lines items. | M |
-| Options | Program options (units, view, confirmations), saved to `~/.config/cut-craft/`; display settings become saved. | M |
-| Materials | Material library for the 3D view's colour and texture; Toolpaths ▸ Materials. | S |
-| Machine Configuration | Machine definitions (size, post, tool database, A axis) and Add Machine; Post-Processor Management. | L |
-| Keep-out Zones | Closed vectors no toolpath may pass over; toolpaths refuse or detour; shown in 3D. | M |
-| Draw Join Moves | Needs toolpaths to mark join moves (feed moves linking cuts without a retract). | S |
-| Double-sided jobs and Swap Sides | A job with top and bottom sides, alignment, flipping. | L |
-| Sheets | Several sheets per job, sheet tabs, V-carve inlay's plug sheet, nesting onto sheets. | L |
-| Nesting | Fit parts onto sheets (true-shape, rotation steps, gaps, borders, priority). | L |
-| Auto-Wrapping View, Shadow Shading, Tile / Cascade | Rotary 3D shown wrapped round the cylinder; shadows; 2D and 3D side by side. | M, M, S |
-| 3D view: smooth ViewCube turns, toolpath lines in 3D, overlays on the wrapped rotary view | ViewCube, perspective, tilt and hidden overlays are done (rays through the height grid, no GPU callback). | M |
+- Fluting's Smooth curve; prism, photo V-carve and texture geometry; sketch-line contrast
+  rule; Emboss's split into shape and detail; Trace Bitmap's Corner Fit scale.
+- 2026-11-01 additions: the arc handle mapping (the middle of the text rises as far as the
+  drag), the box stretch arithmetic, mitred corners as the farther side's line, blend as the
+  share of the way from the outer to the inner vectors, the segment naming (2.1 beyond the
+  plane), the steep-face limit (a face whose area seen from above is under a tenth of its
+  own) and the 4-cell raise.
 
-### Phase G — Gaps inside built strategies
+## 7. Decisions needed
 
-| Item | Size |
-|---|---|
-| Project toolpath onto 3D model for the laser strategies (done for profile, pocket, fluting, texture, photo V-carve, V-carve) | S |
-| Clearance tools for V-carve inlay, inlay pocket and moulding | M |
-| Laser Fill Regionally; laser passes lowering the focus | S |
-| Merge By Part | M |
-| Laser tool type in the tool database (thread mills are done) | S |
-| Cutting data per machine (per material and rate units are done); feeds on toolpath forms in the tool's units | S |
-| Toolpath options still missing: tabs dragged along a vector; the V-bit sharp internal corner; reversing open paths to shorten links | S |
+1. **Gadgets:** leave them out, or design a Cut Craft scripting interface?
+2. **Import Toolpaths:** worth reverse engineering the formats, or leave out?
+3. **Segment 3D Model handles:** build Aspire's 3D plane handles and drag-and-drop tree, or
+   keep the form lists?
 
-### Out of scope unless decided otherwise
+Settled since 2026-10-24: system and single-line fonts both; double-sided jobs and sheets
+built; machine configuration built; no laser features.
 
-- **Gadgets:** Aspire runs Lua scripts against its own API. Copying that API means
-  recreating Vectric's scripting interface; a Cut Craft scripting interface could be
-  designed instead.
-- **Vendor services:** Search for Machine Online, Install Offline Package, Update
-  Post-Processor Database, licensing, clipart shop.
-- **Vectric file formats:** `.crv3d`, `.v3m` 3D clipart, `.vfont`; Export as 3D Clipart
-  would need a format of our own.
-- **Help Contents:** Aspire's help text cannot be copied; our own help would be written fresh.
+## 8. Out of scope unless decided otherwise
 
-## 4. Order of work
+- **Gadgets:** Aspire runs Lua scripts against its own API (the rotary layouts and Celtic
+  Weave are built as tools instead).
+- **Vendor services:** Search for Machine Online, Update Post-Processor Database,
+  licensing, the clipart shop.
+- **Vectric file formats:** `.crv3d`, `.v3m`, `.3dclip` (encrypted); Cut Craft uses `.ccjob`
+  and `.ccclip`.
+- **Lasers.**
 
-1. Phase A (selection order, component and bitmap selection, groups).
-2. Phase B, then STL import from Phase C (most use of the model tools comes with imported models).
-3. The small Phase C items (PDF / EPS, Toolpath Summary, Notes, templates, job sheet).
-4. Phase D's node editing, then the tools built on it; text when the font source is settled.
-5. Phases E and F by need; Phase G alongside, as each strategy is used.
+## 9. Order of work
 
-After each phase: try it in the running app, update this file and the inventory.
-
-## 5. Decisions needed
-
-1. **Gadgets:** leave out, or design a Cut Craft scripting interface?
-2. **Text fonts:** system fonts (OpenType outlines), or bundled open-licence fonts as well?
-3. **Double-sided jobs and sheets:** needed soon for your work, or later?
-4. **Machine configuration:** worth it for one machine, or keep the post plus job setup?
+1. The six menu wiring fixes (section 3, item 1).
+2. Hand test the 2026-11-01 batch; fix what it finds.
+3. The small missing items (Object Properties, Move to Group, Copy to Sheet, keep-out zones
+   in 3D, window tiling, Selected Level boundary, Trace Bitmap swatches).
+4. The larger in-tool gaps (arc handles, TrueType kerning, segment handles) by need.
+5. After each batch: update this file, `docs/tool-inventory.md` and `docs/courses-capabilities.tsv`.
