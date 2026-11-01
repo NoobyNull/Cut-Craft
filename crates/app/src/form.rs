@@ -816,13 +816,33 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
         items.remove(i);
         changed = true;
     }
-    // "+" copies the last item; an empty list of objects has nothing to copy
-    let copyable = !items.is_empty() || !matches!(item, Kind::Group(_));
-    if copyable && ui.small_button("+").on_hover_text("Add another").clicked() {
-        items.push(items.last().cloned().unwrap_or(Value::Null));
+    // "+" copies the last item; the first is a blank one
+    if ui.small_button("+").on_hover_text("Add another").clicked() {
+        items.push(items.last().cloned().unwrap_or_else(|| blank(item)));
         changed = true;
     }
     changed
+}
+
+/// A new item of `kind` with nothing set: numbers at their least, the first choice, every
+/// field of an object so.
+fn blank(kind: &Kind) -> Value {
+    match kind {
+        Kind::Number { min, .. } => Value::from(min.unwrap_or(0.0).max(0.0)),
+        Kind::Bool => Value::Bool(false),
+        Kind::Text { .. } => Value::from(""),
+        Kind::Choice(options, _) => options
+            .first()
+            .map_or(Value::Null, |c| Value::from(c.value.as_str())),
+        Kind::Group(fields) => Value::Object(
+            fields
+                .iter()
+                .map(|f| (f.key.clone(), blank(&f.kind)))
+                .collect(),
+        ),
+        Kind::List(_) => Value::Array(vec![]),
+        Kind::Colour | Kind::Other => Value::Null,
+    }
 }
 
 #[expect(
@@ -1403,5 +1423,17 @@ mod tests {
     fn labels_are_sentence_case() {
         let f = fields(&schema("draw_star"));
         assert_eq!(field(&f, "outer_radius").label, "Outer radius");
+    }
+
+    #[test]
+    fn a_list_of_objects_starts_with_a_blank_one() {
+        let f = fields(&schema("segment_3d_model"));
+        let Kind::List(item) = &field(&f, "further_cuts").kind else {
+            panic!("further cuts should be a list")
+        };
+        assert_eq!(
+            blank(item),
+            serde_json::json!({ "segment": "", "axis": "x", "position": 0.0 })
+        );
     }
 }

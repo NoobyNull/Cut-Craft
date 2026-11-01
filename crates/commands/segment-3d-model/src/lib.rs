@@ -55,6 +55,74 @@ pub struct Params {
     /// Space between the laid-out segments
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub gap: f64,
+    /// The segment tree: a segment cut again by a plane of its own gives two segments
+    /// named after it (cutting segment 2 gives 2.1 beyond the plane and 2.2 before it),
+    /// which can be cut again in turn
+    #[serde(default)]
+    #[schemars(title = "Cut segments again")]
+    pub further_cuts: Vec<FurtherCut>,
+    /// Which face of a segment is turned up in the layout; segments not listed follow
+    /// Turn the second segment over
+    #[serde(default)]
+    #[schemars(title = "Segment orientations")]
+    pub orientations: Vec<Placement>,
+}
+
+/// One more segmenting plane, through one segment.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct FurtherCut {
+    /// The segment's name, as its component is named: 2, or 2.1 for a part of segment 2
+    pub segment: String,
+    #[schemars(title = "Plane square to")]
+    pub axis: Axis,
+    /// Where the plane cuts, as a share of the segment's size along the axis
+    #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
+    pub position: f64,
+}
+
+/// The side of a segment that faces up when it is laid out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Face {
+    /// As in the model
+    #[default]
+    Top,
+    /// Turned over
+    Bottom,
+    /// The side facing -Y turned up
+    Front,
+    /// The side facing +Y turned up
+    Back,
+    /// The side facing -X turned up
+    Left,
+    /// The side facing +X turned up
+    Right,
+}
+
+/// A segment's orientation in the layout.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct Placement {
+    /// The segment's name, as its component is named
+    pub segment: String,
+    #[schemars(title = "Face up")]
+    pub face: Face,
+}
+
+impl Face {
+    /// The turn that brings this face up.
+    fn turn(self) -> DMat3 {
+        use std::f64::consts::{FRAC_PI_2, PI};
+        match self {
+            Face::Top => DMat3::IDENTITY,
+            Face::Bottom => DMat3::from_rotation_x(PI),
+            Face::Front => DMat3::from_rotation_x(-FRAC_PI_2),
+            Face::Back => DMat3::from_rotation_x(FRAC_PI_2),
+            Face::Left => DMat3::from_rotation_y(FRAC_PI_2),
+            Face::Right => DMat3::from_rotation_y(-FRAC_PI_2),
+        }
+    }
 }
 
 impl Default for Params {
@@ -68,6 +136,8 @@ impl Default for Params {
             turn_over: true,
             // ponytail: 5 mm between segments [inf]
             gap: 5.0,
+            further_cuts: vec![],
+            orientations: vec![],
         }
     }
 }
@@ -119,8 +189,7 @@ fn bounds(tris: &[[DVec3; 3]]) -> Option<(DVec3, DVec3)> {
 }
 
 /// The model cut by `p`'s planes square to `normal` (the model spanning `lo` to `hi`):
-/// the slices, the far one first, the ones after it turned over when asked; empty ones left
-/// out.
+/// the slices, the far one first, empty ones too.
 fn slices(
     tris: &[[DVec3; 3]],
     p: &Params,
@@ -141,32 +210,71 @@ fn slices(
     let mut edges: Vec<Option<f64>> = vec![None];
     edges.extend(shares.iter().map(|&s| Some(at(s))));
     edges.push(None);
-    let slices: Vec<Vec<[DVec3; 3]>> = edges
+    edges
         .windows(2)
         .rev()
         .map(|w| {
             let above = w[0].map_or_else(|| tris.to_vec(), |a| clip(tris, normal, a));
             w[1].map_or(above.clone(), |b| clip(&above, -normal, -b))
         })
-        .collect();
-    // turned over about the X axis (Y for an X plane, so the turn keeps the cut square)
-    let turn = if p.axis == Axis::X {
-        DMat3::from_rotation_y(std::f64::consts::PI)
-    } else {
-        DMat3::from_rotation_x(std::f64::consts::PI)
-    };
-    slices
-        .into_iter()
-        .enumerate()
-        .map(|(i, s)| {
-            if i > 0 && p.turn_over {
-                s.iter().map(|t| t.map(|v| turn * v)).collect()
-            } else {
-                s
-            }
-        })
-        .filter(|s: &Vec<[DVec3; 3]>| !s.is_empty())
         .collect()
+}
+
+fn axis_normal(axis: Axis) -> DVec3 {
+    match axis {
+        Axis::X => DVec3::X,
+        Axis::Y => DVec3::Y,
+        Axis::Z => DVec3::Z,
+    }
+}
+
+/// A segment of the tree: its name and its triangles, where they are in the model.
+struct Segment {
+    name: String,
+    tris: Vec<[DVec3; 3]>,
+    /// From the first cut's slices after the first: turned over when asked
+    beyond_first: bool,
+}
+
+/// `segments` with each further cut made in turn: the segment named is replaced by its
+/// two parts, beyond the plane first, named after it.
+fn cut_again(
+    mut segments: Vec<Segment>,
+    cuts: &[FurtherCut],
+) -> Result<Vec<Segment>, CommandError> {
+    for cut in cuts {
+        let name = cut.segment.trim();
+        let Some(i) = segments.iter().position(|s| s.name == name) else {
+            return Err(CommandError::InvalidParams(format!(
+                "there is no segment {name} to cut again"
+            )));
+        };
+        let whole = segments.remove(i);
+        let normal = axis_normal(cut.axis);
+        let parts = bounds(&whole.tris).map(|(lo, hi)| {
+            let at = normal.dot(lo) + normal.dot(hi - lo) * cut.position / 100.0;
+            [
+                clip(&whole.tris, normal, at),
+                clip(&whole.tris, -normal, -at),
+            ]
+        });
+        let Some([beyond, before]) = parts.filter(|[a, b]| !a.is_empty() && !b.is_empty()) else {
+            return Err(CommandError::Failed(format!(
+                "the plane misses segment {name}: move it inside"
+            )));
+        };
+        for (k, tris) in [(2, before), (1, beyond)] {
+            segments.insert(
+                i,
+                Segment {
+                    name: format!("{name}.{k}"),
+                    tris,
+                    beyond_first: whole.beyond_first,
+                },
+            );
+        }
+    }
+    Ok(segments)
 }
 
 impl Command for Segment3dModel {
@@ -204,17 +312,46 @@ impl Command for Segment3dModel {
             .collect();
         let (lo, hi) =
             bounds(&tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
-        let normal = match p.axis {
-            Axis::X => DVec3::X,
-            Axis::Y => DVec3::Y,
-            Axis::Z => DVec3::Z,
-        };
-        let segments = slices(&tris, p, normal, (lo, hi));
-        if segments.len() < 2 {
+        let first: Vec<(usize, Vec<[DVec3; 3]>)> = slices(&tris, p, axis_normal(p.axis), (lo, hi))
+            .into_iter()
+            .enumerate()
+            .filter(|(_, s)| !s.is_empty())
+            .collect();
+        if first.len() < 2 {
             return Err(CommandError::Failed(
                 "the plane misses the model: move it inside".into(),
             ));
         }
+        let tree = first
+            .into_iter()
+            .enumerate()
+            .map(|(n, (i, tris))| Segment {
+                name: (n + 1).to_string(),
+                tris,
+                beyond_first: i > 0,
+            })
+            .collect();
+        let tree = cut_again(tree, &p.further_cuts)?;
+        // turned over about the X axis (Y for an X plane, so the turn keeps the cut square),
+        // or with the face asked for up
+        let turn_over = if p.axis == Axis::X {
+            DMat3::from_rotation_y(std::f64::consts::PI)
+        } else {
+            DMat3::from_rotation_x(std::f64::consts::PI)
+        };
+        let names: Vec<String> = tree.iter().map(|s| s.name.clone()).collect();
+        let segments: Vec<Vec<[DVec3; 3]>> = tree
+            .into_iter()
+            .map(|s| {
+                let asked = p.orientations.iter().find(|o| o.segment.trim() == s.name);
+                let turn = match asked {
+                    Some(o) => o.face.turn(),
+                    None if s.beyond_first && p.turn_over => turn_over,
+                    None => DMat3::IDENTITY,
+                };
+                s.tris.iter().map(|t| t.map(|v| turn * v)).collect()
+            })
+            .collect();
         let boxes: Vec<(DVec3, DVec3)> = segments.iter().filter_map(|s| bounds(s)).collect();
         let width: f64 = boxes.iter().map(|(l, h)| h.x - l.x).sum::<f64>() + p.gap;
         let job = doc.job.area();
@@ -232,7 +369,7 @@ impl Command for Segment3dModel {
             let corner = Point::new(left, job.center().y - (h.y - l.y) / 2.0);
             let area = Rect::new(corner, corner + Point::new(h.x - l.x, h.y - l.y));
             let mut k = Component::from_fn(
-                &format!("Segment {}", n + 1),
+                &format!("Segment {}", names[n]),
                 Combine::Add,
                 area,
                 cell,
@@ -243,7 +380,7 @@ impl Command for Segment3dModel {
             if under > UNDERCUT_NOTE {
                 c.note(format!(
                     "Segment {} still has undercuts ({under:.0} mm² seen from above)",
-                    n + 1
+                    names[n]
                 ));
             }
             for z in &mut k.heights {
@@ -385,5 +522,80 @@ mod tests {
             ..Params::default()
         };
         assert!(Segment3dModel::run(&Document::default(), &p).is_err());
+    }
+
+    fn named<'a>(doc: &'a Document, name: &str) -> &'a cut_craft_core::component::Component {
+        doc.components
+            .values()
+            .find(|k| k.name == format!("Segment {name}"))
+            .unwrap_or_else(|| panic!("no segment {name}"))
+    }
+
+    #[test]
+    fn a_segment_cut_again_gives_two_named_after_it() {
+        // the L cut across its height, then the bottom slab cut across its length, then
+        // one half of that across its depth
+        let cut = |segment: &str, axis| FurtherCut {
+            segment: segment.into(),
+            axis,
+            position: 50.0,
+        };
+        let doc = segmented(
+            "tree",
+            &Params {
+                further_cuts: vec![cut("2", Axis::X), cut("2.1", Axis::Y)],
+                ..Params::default()
+            },
+        );
+        let mut names: Vec<&str> = doc.components.values().map(|k| k.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            ["Segment 1", "Segment 2.1.1", "Segment 2.1.2", "Segment 2.2"]
+        );
+        // 2.2 is the slab's half nearest X = 0: 10 long; 2.1.1 a quarter, 10 by 5
+        let size = |name| named(&doc, name).extent().size();
+        assert!((size("2.2").x - 10.0).abs() < 1.0, "{:?}", size("2.2"));
+        assert!((size("2.1.1").y - 5.0).abs() < 1.0, "{:?}", size("2.1.1"));
+        let p = Params {
+            file: l_shape("tree-missing"),
+            further_cuts: vec![cut("3", Axis::X)],
+            ..Params::default()
+        };
+        let why = Segment3dModel::run(&Document::default(), &p)
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("no segment 3"), "{why}");
+    }
+
+    #[test]
+    fn each_segment_can_have_its_own_face_up() {
+        // across the length at 3/4: segment 2 is the L's 15 mm with the cube on it
+        let p = |orientations| Params {
+            axis: Axis::X,
+            position: 75.0,
+            orientations,
+            ..Params::default()
+        };
+        let plain = segmented("faces", &p(vec![]));
+        let size = named(&plain, "2").extent().size();
+        assert!((size.y - 10.0).abs() < 1.0, "lying as modelled: {size:?}");
+        let front = segmented(
+            "faces-front",
+            &p(vec![Placement {
+                segment: "2".into(),
+                face: Face::Front,
+            }]),
+        );
+        let size = named(&front, "2").extent().size();
+        assert!(
+            (size.y - 20.0).abs() < 1.0,
+            "its 20 mm height now across Y: {size:?}"
+        );
+        let (low, high) = named(&front, "2").height_range().unwrap();
+        assert!(
+            (high - low).abs() < 1e-6,
+            "its flat front up, all of it 10 deep"
+        );
     }
 }
