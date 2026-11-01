@@ -2287,7 +2287,11 @@ fn with_nothing_selected_the_3d_transform_mode_says_how_to_start() {
     let middle = h.app.fit_3d.expect("the 3D view has been drawn").center();
     h.frame(vec![Event::PointerMoved(middle)]);
     h.frame(vec![]);
-    assert!(h.app.handles_3d.is_empty());
+    assert_eq!(
+        h.app.handles_3d,
+        Vec::<(Handle3d, Pos2)>::new(),
+        "no selection, no handles"
+    );
     let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
     assert!(hint.contains("select it"), "{hint}");
 }
