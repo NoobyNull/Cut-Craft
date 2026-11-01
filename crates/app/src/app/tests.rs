@@ -2134,6 +2134,48 @@ fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
 }
 
 #[test]
+fn a_3d_transform_drag_let_go_above_the_horizon_changes_nothing_and_ends() {
+    use cut_craft_core::handles::Handle;
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    // nearly side on in perspective: the top of the view is sky, not material
+    h.app.orbit = view3d::Orbit {
+        pitch: 80f64.to_radians(),
+        ..view3d::Orbit::FRONT
+    };
+    h.app.framing.perspective = true;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let middle = h
+        .app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == Handle3d::Transform(Handle::Move))
+        .map(|(_, at)| *at)
+        .expect("the move handle is drawn");
+    let sky = h
+        .app
+        .fit_3d
+        .expect("the 3D view has been drawn")
+        .center_top()
+        + vec2(0.0, 5.0);
+    let before = h.app.doc.components[&EntityId(1)].extent();
+    h.drag(middle, sky);
+    assert!(h.app.drag_3d.is_none(), "letting go ends the drag");
+    assert_eq!(
+        h.app.doc.components[&EntityId(1)].extent(),
+        before,
+        "let go over the sky, nothing moves"
+    );
+    // moving and clicking afterwards does not pick the abandoned drag back up
+    h.click(middle + vec2(0.0, 30.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.components[&EntityId(1)].extent(), before);
+}
+
+#[test]
 fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     use cut_craft_core::component::Combine;
     let mut h = Harness::new();

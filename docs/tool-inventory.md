@@ -173,7 +173,12 @@ say "not implemented yet".
   up, as the help says the 3D view does), Appearance (Same as Parent or Solid Color) and its
   colour, all applied through Component Properties. A component's Solid Color
   shows on the GPU-drawn surface [inf: the CPU path of the headless tests leaves it out].
-  Not done: the 3D Transform Handles themselves (move, scale, rotate in the 3D view).
+  The 3D Transform Handles sit over the selection's box on the material's top: a cross in
+  the middle moves, white corners and black edges scale, and a rotation arrow on a stem
+  above the far edge turns it, with the 2D view's keys; the drag shows the box as it will
+  be and is applied when let go (one undo). Let go off the material (over the horizon in
+  perspective) it changes nothing. [inf: the manual's edit box for an exact value and
+  moving the rotation centre are not offered; Move, Scale and Rotate take exact values.]
 - Import 3D Model is one page (Aspire 12 has two; Matthew asked for one): Initial
   Orientation, Model Size, the model type and Scale to fit, Position relative to Modeling
   Plane (Position, Depth Below Top, Create both sides, Discard data below zero plane), Align
@@ -504,8 +509,8 @@ say "not implemented yet".
   - Move, Rotate, Mirror, Set Size and the Align / Center tools also act on the selected
     components (picked in the 2D view or the Components tab): each is resampled onto cells
     of its own size where it lands (bilinear inside the shape), heights unchanged, fade
-    and tilt anchors carried along. Aspire's Transform handles and Set Size's Z scaling
-    are not done.
+    and tilt anchors carried along; the 3D view's Transform handles too. Set Size's Z
+    scaling is not done.
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the

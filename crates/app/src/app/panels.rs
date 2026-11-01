@@ -1615,9 +1615,25 @@ impl CutCraftApp {
                 self.drag_3d = Some((Handle3d::Transform(handle), from));
             }
         }
+        self.transform_drag_3d(ui, painter, camera, origin, bounds);
+    }
+
+    /// A transform handle's drag in the 3D view: the box as it will be while dragging, the
+    /// transform applied (one undo) when the pointer is let go over the material's plane.
+    fn transform_drag_3d(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        camera: &view3d::Camera,
+        origin: Point,
+        bounds: cut_craft_core::geometry::Rect,
+    ) {
+        use cut_craft_core::glam::DVec3;
         let Some((Handle3d::Transform(handle), from)) = self.drag_3d else {
             return;
         };
+        let floor = |p: Point| camera.screen(DVec3::new(p.x - origin.x, p.y - origin.y, 0.0));
+        let stroke = ui.visuals().selection.stroke;
         let (now, released, keys) = ui.input(|i| {
             (
                 i.pointer.latest_pos(),
@@ -1631,6 +1647,17 @@ impl CutCraftApp {
         });
         let on_floor = |at: egui::Pos2| camera.on_floor(at).map(|p| p + origin);
         let Some((start, end)) = on_floor(from).zip(now.and_then(on_floor)) else {
+            // off the material's plane (over the horizon in perspective, or the plane seen
+            // edge-on): nothing to show, and letting go there changes nothing
+            if released {
+                self.drag_3d = None;
+                self.status
+                    .set_message("Let go off the material: nothing was changed");
+            } else {
+                self.status.set_message(
+                    "The pointer is off the material: bring it back, or let go to cancel",
+                );
+            }
             return;
         };
         let t = handles::transform(bounds, handle, start, end, keys);

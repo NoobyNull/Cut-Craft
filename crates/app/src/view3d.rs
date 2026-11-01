@@ -595,7 +595,7 @@ impl Camera {
     }
 
     /// The point on the material's top plane (z = 0) under `at` on screen, `None` when the
-    /// plane is seen edge-on.
+    /// plane is seen edge-on or, in perspective, `at` is above the horizon.
     pub(crate) fn on_floor(&self, at: Pos2) -> Option<DVec2> {
         // the point at the middle's depth under `at`, then along the line of sight to z = 0
         let off = at - self.centre;
@@ -609,7 +609,17 @@ impl Camera {
             .eye_at()
             .map_or(-self.orbit.towards_viewer(), |eye| seen - eye)
             .normalize();
-        (along.z.abs() > EDGE_ON).then(|| (seen - along * (seen.z / along.z)).truncate())
+        if along.z.abs() <= EDGE_ON {
+            return None;
+        }
+        // in perspective, a point above the horizon looks away from the plane: the line
+        // of sight only meets it behind the eye
+        if let Some(eye) = self.eye_at()
+            && -eye.z / along.z <= 0.0
+        {
+            return None;
+        }
+        Some((seen - along * (seen.z / along.z)).truncate())
     }
 
     /// Material coordinates to clip space over `area` (x and y across it, -1 to 1), placing
@@ -1731,6 +1741,22 @@ mod tests {
             None,
             "the plane seen edge-on"
         );
+        // nearly side on in perspective, the top of the view looks over the horizon
+        let low = Orbit {
+            pitch: 80f64.to_radians(),
+            ..Orbit::FRONT
+        };
+        let framing = Framing {
+            perspective: true,
+            ..Framing::default()
+        };
+        let camera = Camera::new(&m, low, framing, area, None);
+        assert_eq!(
+            camera.on_floor(area.center_top()),
+            None,
+            "above the horizon, not a point behind the eye"
+        );
+        assert!(camera.on_floor(area.center_bottom()).is_some());
     }
 
     #[test]
