@@ -381,6 +381,8 @@ pub struct Gpu {
     layout: wgpu::BindGroupLayout,
     surface: Option<Piece>,
     model: Option<Piece>,
+    /// The model's body under its surface (walls down to the modeling plane).
+    body: Option<Piece>,
 }
 
 /// One draw of the frame: what the shader reads, and how many it draws.
@@ -476,14 +478,25 @@ impl Gpu {
             layout,
             surface: None,
             model: None,
+            body: None,
         }
     }
 
     /// This frame's picture over `rect`: uploads what changed, sets the cameras, and gives
     /// the shape that draws it. A geometry not drawn leaves the card.
-    pub fn paint(&mut self, rect: Rect, surface: Option<Draw>, model: Option<Draw>) -> Shape {
+    pub fn paint(
+        &mut self,
+        rect: Rect,
+        surface: Option<Draw>,
+        model: Option<Draw>,
+        body: Option<Draw>,
+    ) -> Shape {
         let mut calls = vec![];
-        for (slot, draw) in [(&mut self.surface, surface), (&mut self.model, model)] {
+        for (slot, draw) in [
+            (&mut self.surface, surface),
+            (&mut self.model, model),
+            (&mut self.body, body),
+        ] {
             let Some(draw) = draw.filter(|d| d.geometry.count() > 0) else {
                 *slot = None;
                 continue;

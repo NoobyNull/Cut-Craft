@@ -2303,15 +2303,17 @@ impl CutCraftApp {
         } else {
             self.paint_flat(ui, area, &surface, &camera, look, tool_at, gpu);
         }
-        // no model being imported: the model's body, under its surface
-        if slot.is_some() && model_draw.is_none() && self.simulation.is_none() {
-            model_draw = self.solid_gpu.clone().map(|geometry| {
+        // the model's body, under its surface: also while a model is imported, whose own
+        // faces (all of them, or past the face limit those out of reach) are drawn as well
+        let body_draw = (slot.is_some() && self.simulation.is_none())
+            .then(|| self.solid_gpu.clone())
+            .flatten()
+            .map(|geometry| {
                 let at = cut_craft_core::glam::DVec3::ZERO;
                 view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
             });
-        }
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
-            painter.set(slot, gpu.paint(area, surface_draw, model_draw));
+            painter.set(slot, gpu.paint(area, surface_draw, model_draw, body_draw));
         }
     }
 

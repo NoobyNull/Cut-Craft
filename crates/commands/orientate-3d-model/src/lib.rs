@@ -1598,3 +1598,87 @@ mod rotary {
         let _ = std::fs::remove_file(p.file);
     }
 }
+
+#[cfg(test)]
+#[test]
+#[ignore = "by hand: CUT_CRAFT_MODEL names an STL to measure"]
+fn measure_an_import() {
+    let Ok(file) = std::env::var("CUT_CRAFT_MODEL") else {
+        return;
+    };
+    let doc = Document::default();
+    let p = Params {
+        file,
+        ..Orientate3dModel::initial_params(&doc)
+    };
+    println!(
+        "job: {} x {} x {} mm",
+        doc.job.width, doc.job.height, doc.job.thickness
+    );
+    let seen = preview(&doc, &p).unwrap().unwrap();
+    let zs: Vec<f64> = seen
+        .iter()
+        .flat_map(|(t, _)| t.iter().map(|v| v.z))
+        .collect();
+    let (lo, hi) = zs
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &z| {
+            (a.min(z), b.max(z))
+        });
+    println!("preview triangles: {}, z {lo:.3} .. {hi:.3}", seen.len());
+    let change = Orientate3dModel::run(&doc, &p).unwrap();
+    let mut made = doc.clone();
+    made.apply(&change).unwrap();
+    let k = made.components.values().next().unwrap();
+    let hs: Vec<f64> = k.heights.iter().copied().filter(|h| !h.is_nan()).collect();
+    let (hlo, hhi) = hs
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &z| {
+            (a.min(z), b.max(z))
+        });
+    println!(
+        "component {} x {} cells of {:.3} mm, {} shaped, heights {hlo:.3} .. {hhi:.3}",
+        k.columns,
+        k.rows,
+        k.cell,
+        hs.len()
+    );
+    // cells much lower than the cells round them: needles
+    let at = |c: usize, r: usize| k.heights[r * k.columns + c];
+    let mut needles = 0;
+    for r in 1..k.rows - 1 {
+        for c in 1..k.columns - 1 {
+            let h = at(c, r);
+            if h.is_nan() {
+                continue;
+            }
+            let around = [at(c - 1, r), at(c + 1, r), at(c, r - 1), at(c, r + 1)];
+            if around
+                .iter()
+                .all(|a| !a.is_nan() && *a - h > 0.25 * (hhi - hlo))
+            {
+                needles += 1;
+            }
+        }
+    }
+    let edge_low = (0..k.columns)
+        .flat_map(|c| [0, k.rows - 1].map(|r| at(c, r)))
+        .filter(|h| !h.is_nan() && *h < hlo + 0.05 * (hhi - hlo))
+        .count();
+    println!(
+        "needles: {needles}; low cells on the top and bottom rows: {edge_low} of {}",
+        2 * k.columns
+    );
+    println!(
+        "settings: {}",
+        serde_json::to_string(&p.placing).unwrap_or_default()
+    );
+    // the heights up from the front edge, in the middle and a third across
+    for c in [k.columns / 2, k.columns / 3] {
+        let col: Vec<String> = (0..14).map(|r| format!("{:.2}", at(c, r))).collect();
+        println!("column {c} from the front: {}", col.join(" "));
+    }
+    let r = k.rows / 2;
+    let row: Vec<String> = (0..14).map(|c| format!("{:.2}", at(c, r))).collect();
+    println!("row {r} from the left: {}", row.join(" "));
+}
