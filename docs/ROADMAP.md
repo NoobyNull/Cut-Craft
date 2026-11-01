@@ -18,7 +18,7 @@ Sizes: **S** a day or less, **M** a few days, **L** a week or more.
 | Tests | 2204 pass (`.githooks/pre-commit`: fmt, clippy pedantic `-D warnings`, nextest) |
 | GitHub issues | 0 open, 99 closed |
 | Course capabilities (`docs/courses.md`) | 139: 135 yes, 0 partly, 0 no, 4 out of scope |
-| Menu items that say "not implemented yet" | 15 (section 3); 6 of them are tools that exist but are not wired |
+| Menu items that say "not implemented yet" | 10 (section 4) |
 | `ponytail:` stand-ins in the code | 171 (`grep -rn "ponytail:" crates`) |
 | Guessed behaviour in `re/SPEC.md` | 58 `[inf]`, 14 `[unk]` |
 | Pushes | **None until 2026-11-04** (Matthew, 2026-11-01). Commit locally until then. |
@@ -40,29 +40,15 @@ Phases A to F of the 2026-10-24 plan are done, and most of G. In short:
 
 Things that exist but do not behave as they should.
 
-1. **Six Model menu items are greyed though their tools exist.** The menu names give ids
-   that do not match the commands, so they say "not implemented yet":
-
-   | Menu item | Command it should run |
-   |---|---|
-   | Model ▸ Create Component ▸ Create Textured Area Component | `texture_area` |
-   | Model ▸ Create Component from ▸ Create Component with Draft from Visible Model | `add_draft` |
-   | Model ▸ Create Component from ▸ Create an Offset Model | `offset_model` |
-   | Model ▸ Create Component from ▸ Slice Model | `slice` |
-   | Model ▸ Split Selected Component | `split` |
-   | Model ▸ Emboss Component | `emboss` |
-
-   Fix: give each `i(...)` in `crates/app/src/gui.rs` (Model menu) the command's action, as
-   the "Sculpt Visible Model" entry does. Size S.
-2. **The 3D view's CPU fallback draws the model as a skin.** With a GPU the model is solid
+1. **The 3D view's CPU fallback draws the model as a skin.** With a GPU the model is solid
    down to the modeling plane (`view3d::solid`); without one (and in the headless tests) the
    walls are left off, because the painter draws in order and the walls would show through.
-3. **The modeling plane is always drawn while a model is imported**, even with View ▸ Draw
+2. **The modeling plane is always drawn while a model is imported**, even with View ▸ Draw
    Modeling Plane off. Draw Material Block is in the View menu only, not in the 3D view's
    right-click menu.
-4. **Double-sided jobs:** Zero off same side is kept but the posts do not use it yet. An
+3. **Double-sided jobs:** Zero off same side is kept but the posts do not use it yet. An
    animated preview plays this side only.
-5. **Display settings:** the 3D view toggles are saved with Options; the Toolpath Drawing
+4. **Display settings:** the 3D view toggles are saved with Options; the Toolpath Drawing
    toggles (rapids, plunges, retracts, joins) last only for the session.
 
 ## 4. Missing: still to build
@@ -142,9 +128,8 @@ built; machine configuration built; no laser features.
 
 ## 9. Order of work
 
-1. The six menu wiring fixes (section 3, item 1).
-2. Hand test the 2026-11-01 batch; fix what it finds.
-3. The small missing items (Object Properties, Move to Group, Copy to Sheet, keep-out zones
+1. Hand test the 2026-11-01 batch; fix what it finds.
+2. The small missing items (Object Properties, Move to Group, Copy to Sheet, keep-out zones
    in 3D, window tiling, Selected Level boundary, Trace Bitmap swatches).
-4. The larger in-tool gaps (arc handles, TrueType kerning, segment handles) by need.
-5. After each batch: update this file, `docs/tool-inventory.md` and `docs/courses-capabilities.tsv`.
+3. The larger in-tool gaps (arc handles, TrueType kerning, segment handles) by need.
+4. After each batch: update this file, `docs/tool-inventory.md` and `docs/courses-capabilities.tsv`.

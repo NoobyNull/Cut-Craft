@@ -42,7 +42,7 @@ them, and what is not built, is in `docs/ROADMAP.md` (sections 3 and 4).
 | A | Selection order, component and bitmap selection, groups | done (nested groups left) |
 | T | Tracing core: outlines, simplify, fit lines / arcs / Béziers | done (`cc50ed1`) |
 | M1 | Trace Bitmap, Fit Curves, Vector Boundary, calibration rig | done (`crates/calib`, blind-test harness) |
-| M2 | Component tools (rest of Phase B) | done (six Model menu entries not wired: ROADMAP 3.1) |
+| M2 | Component tools (rest of Phase B) | done |
 | M3 | STL import; small file and job items (Phase C) | done (Import Toolpaths left: format unknown) |
 | M4 | Node editing and the vector tools on it (Phase D) | done |
 | M5 | Text | done (TrueType kerning left) |

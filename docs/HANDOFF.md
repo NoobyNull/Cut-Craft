@@ -2,7 +2,7 @@
 status: read
 created: 2026-10-24
 updated: 2026-11-01
-focus: Fix the six unwired Model menu items, hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
+focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
 ---
 
 ## Update 2026-11-01 (version 0.4.2, `4659eb6`…`ec83b2b`, pushed with tag `v0.4.2`)
@@ -16,9 +16,10 @@ focus: Fix the six unwired Model menu items, hand test the 2026-11-01 batch, the
   an empty object list (`form::blank`), the 3D model drawn solid down to the modeling plane
   (`view3d::solid`, GPU only), imported models without spikes under steep sides
   (`fmt_import_stl::top_down`), Draw Material Block hiding the import outline.
-- **Found, not fixed:** six Model menu items name ids no command has, so they are greyed
-  (`docs/ROADMAP.md`, section 3). The probe that found them: run every menu item and list
-  those that say "not implemented yet".
+- **Fixed after the release (local, not pushed):** six Model menu items named ids no command
+  has, so they were greyed; they now run Texture Area, Add Draft, Offset Model, Slice,
+  Split and Emboss. Found by a probe: run every menu item and list those that say "not
+  implemented yet".
 - **Read first:** `docs/ROADMAP.md` (state, fixes pending, missing, decisions),
   `docs/tool-inventory.md`, `docs/hand-test-3d.md`.
 

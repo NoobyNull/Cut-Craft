@@ -608,11 +608,6 @@ say "not implemented yet".
 
 **Not built yet.** (Probe 2026-11-01: every menu item run, those that say "not
 implemented yet" listed.)
-- Model menu items whose tools exist but are not wired (ids do not match the commands):
-  Create Textured Area Component (`texture_area`), Create Component with Draft from Visible
-  Model (`add_draft`), Create an Offset Model (`offset_model`), Slice Model (`slice`),
-  Split Selected Component (`split`), Emboss Component (`emboss`). The tools run from their
-  tab buttons.
 - Edit ▸ Object Properties; the component menu's Move to Group; the selection menu's Copy
   to Sheet.
 - View: Draw Keep-Out Zones in 3D View, Use Shadow Shading; Window: Tile Horizontal / Vertical,

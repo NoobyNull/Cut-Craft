@@ -3384,6 +3384,30 @@ fn every_enabled_control_works() {
 }
 
 #[test]
+fn the_model_menu_runs_the_component_tools_it_names() {
+    let h = Harness::new();
+    let items = h.app.menus.items();
+    for (label, id) in [
+        ("Create Textured Area Component", "texture_area"),
+        (
+            "Create Component with Draft from Visible Model",
+            "add_draft",
+        ),
+        ("Create an Offset Model", "offset_model"),
+        ("Slice Model", "slice"),
+        ("Split Selected Component", "split"),
+        ("Emboss Component", "emboss"),
+    ] {
+        let item = items
+            .iter()
+            .find(|i| i.name == label)
+            .unwrap_or_else(|| panic!("{label} is in the menu"));
+        assert_eq!(item.action, id, "{label}");
+        assert!(h.app.available(id), "{label} runs its tool");
+    }
+}
+
+#[test]
 fn preview_visible_leaves_hidden_toolpaths_out() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
