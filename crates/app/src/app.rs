@@ -131,6 +131,10 @@ const MODELING_PLANE_ALPHA: f32 = 0.35;
 
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
+/// How see-through Sketch Carving's previewed areas are drawn.
+const SKETCH_AREA_ALPHA: f32 = 0.5;
+
+type SketchFor = (Value, u64, cut_craft_core::selection::Selection);
 
 const BUILT_INS: [&str; 90] = [
     "find_tool",
@@ -702,6 +706,9 @@ struct CutCraftApp {
     /// picture it is cut from is asked for; then what saving it said, for the status bar.
     shaded_image: Option<std::path::PathBuf>,
     shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Sketch Carving's form: the areas it would carve, drawn over the 2D view, and the
+    /// settings, history revision and selection they were found with.
+    sketch_areas: Option<(SketchFor, Vec<Rect>)>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
     view_tool: Option<ViewTool>,

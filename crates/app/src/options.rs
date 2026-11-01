@@ -394,6 +394,10 @@ pub struct Appearance {
     #[serde(default = "grid_point_size")]
     #[schemars(range(min = 0.5, max = 10))]
     pub grid_point_size: f32,
+    /// Sketch Carving's preview of the areas it would carve, in the 2D view
+    #[serde(default = "sketch_area_color")]
+    #[schemars(title = "Sketch area color", extend("x-kind" = "colour"))]
+    pub sketch_area_color: [u8; 3],
 }
 
 impl Default for Appearance {
@@ -403,6 +407,7 @@ impl Default for Appearance {
             system_title_bar: false,
             grid_color: grid_color(),
             grid_point_size: grid_point_size(),
+            sketch_area_color: sketch_area_color(),
         }
     }
 }
@@ -410,6 +415,12 @@ impl Default for Appearance {
 /// The light theme's faint text colour, as other faint marks are.
 fn grid_color() -> [u8; 3] {
     let c = egui::Visuals::light().weak_text_color();
+    [c.r(), c.g(), c.b()]
+}
+
+/// Green, as Aspire shows them.
+fn sketch_area_color() -> [u8; 3] {
+    let c = egui::Color32::GREEN;
     [c.r(), c.g(), c.b()]
 }
 

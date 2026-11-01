@@ -4,10 +4,11 @@
 use super::{
     APP_NAME, Align, BRUSH_FINE_STEP, BRUSH_STEP, Canvas, Change, CutCraftApp, DAffine2,
     DESIGN_TABS, DROP_SHADE, Drag, EntityId, Gesture, Grab, Handle, Info, JOB_EXTENSION, Layout,
-    OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
-    Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
-    ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
-    inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel, view2d,
+    OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, SKETCH_AREA_ALPHA,
+    STROKE_TOOLS, Screen, Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value,
+    View, ViewTool, ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui,
+    handles, inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel,
+    view2d,
 };
 use crate::options::WindowLayout;
 use cut_craft_core::document::Units;
@@ -973,6 +974,11 @@ impl CutCraftApp {
             self.selected_toolpath,
             &self.display,
         );
+        if let Some((_, areas)) = &self.sketch_areas {
+            let [r, g, b] = self.options.appearance.sketch_area_color;
+            let colour = egui::Color32::from_rgb(r, g, b).gamma_multiply(SKETCH_AREA_ALPHA);
+            canvas.paint_areas(ui, areas, colour);
+        }
         if self.snap.snap_to_grid {
             let look = &self.options.appearance;
             canvas.paint_grid(

@@ -589,6 +589,19 @@ impl Canvas {
         }
     }
 
+    /// Areas in job coordinates, filled with `colour`.
+    pub fn paint_areas(&self, ui: &egui::Ui, areas: &[JobRect], colour: egui::Color32) {
+        let painter = ui.painter_at(self.area);
+        let t = self.transform;
+        for r in areas {
+            painter.rect_filled(
+                Rect::from_two_pos(t.to_screen(r.min), t.to_screen(r.max)),
+                0.0,
+                colour,
+            );
+        }
+    }
+
     /// The snap grid's points over the job, `spacing` apart, coloured and sized as asked;
     /// when they would crowd closer than a few of their own size, only every so many.
     pub fn paint_grid(&self, ui: &egui::Ui, spacing: f64, colour: [u8; 3], size: f32) {

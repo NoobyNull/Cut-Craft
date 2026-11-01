@@ -42,6 +42,7 @@ impl CutCraftApp {
             view_3d_area: None,
             shaded_image: None,
             shaded_saved: std::sync::Arc::default(),
+            sketch_areas: None,
             camera: None,
             view_tool: None,
             pages: Pages::default(),
@@ -1915,6 +1916,9 @@ impl CutCraftApp {
     /// changed and the pointer is let go (so a dragged value is not re-run every frame).
     pub(super) fn follow_form(&mut self, ctx: &egui::Context) {
         let pressed = ctx.input(|i| i.pointer.any_down());
+        if !pressed {
+            self.find_sketch_areas();
+        }
         let Some(form) = self.form.as_mut().filter(|f| f.dirty && !pressed) else {
             return;
         };
@@ -1922,6 +1926,35 @@ impl CutCraftApp {
         if self.drawn_shape().is_some() {
             self.apply_live();
         }
+    }
+
+    /// Sketch Carving's form previews the areas it would carve, found again as its settings,
+    /// the document or the selection change.
+    fn find_sketch_areas(&mut self) {
+        let id =
+            <cmd_sketch_carving_toolpath::SketchCarvingToolpath as cut_craft_core::Command>::ID;
+        let Some(form) = self.form.as_ref().filter(|f| f.id == id) else {
+            self.sketch_areas = None;
+            return;
+        };
+        let now = (
+            form.params.clone(),
+            self.history.revision(),
+            self.doc.selection.clone(),
+        );
+        if self
+            .sketch_areas
+            .as_ref()
+            .is_some_and(|(seen, _)| *seen == now)
+        {
+            return;
+        }
+        // settings it cannot carve with preview nothing; Apply says why
+        let areas = serde_json::from_value(now.0.clone())
+            .ok()
+            .and_then(|p| cmd_sketch_carving_toolpath::areas(&self.doc, &p).ok())
+            .unwrap_or_default();
+        self.sketch_areas = Some((now, areas));
     }
 
     /// Applies the open form, Orientate 3D Model's Model Size following the model's own

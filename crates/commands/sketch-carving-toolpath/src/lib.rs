@@ -2,7 +2,7 @@
 //! model: wherever it is darker (or lower) than its surroundings.
 
 use cut_craft_core::component::model;
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, contour_moves, made_by};
@@ -190,15 +190,10 @@ impl Params {
     }
 }
 
-/// Cuts each row's runs of line cells (where `keep` allows) flat at `z`.
-fn cut_rows(
-    grid: &Grid,
-    line: &[bool],
-    keep: impl Fn(Point) -> bool,
-    z: f64,
-    safe: f64,
-) -> Vec<Move> {
-    let mut moves = vec![];
+/// Each row's runs of line cells (where `keep` allows), as the centres of their first and
+/// last cells.
+fn runs(grid: &Grid, line: &[bool], keep: impl Fn(Point) -> bool) -> Vec<[Point; 2]> {
+    let mut runs = vec![];
     #[expect(clippy::cast_precision_loss, reason = "cell counts")]
     let centre =
         |c: usize, r: usize| grid.area.min + Point::new(c as f64 + 0.5, r as f64 + 0.5) * grid.cell;
@@ -213,41 +208,26 @@ fn cut_rows(
             while c + 1 < grid.columns && line[r * grid.columns + c + 1] && keep(centre(c + 1, r)) {
                 c += 1;
             }
-            moves.extend(contour_moves(
-                &[centre(first, r), centre(c, r)],
-                false,
-                &[z],
-                safe,
-            ));
+            runs.push([centre(first, r), centre(c, r)]);
             c += 1;
         }
     }
-    moves
+    runs
 }
 
-impl Command for SketchCarvingToolpath {
-    const ID: &'static str = "sketch_carving_toolpath";
-    type Params = Params;
+/// The runs of line cells to carve, their cell size and the boundary vectors.
+type Lines = (Vec<[Point; 2]>, f64, Vec<EntityId>);
 
-    fn meta() -> Meta {
-        Meta {
-            label: "Sketch Carving Toolpath",
-            group: "Toolpath Operations",
-            icon: "toolpaths/sketch_carving.png",
-            shortcut: "",
-        }
-    }
-
-    fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        ensure_positive("cut depth", p.cut_depth)?;
+impl Params {
+    fn lines(&self, doc: &Document) -> Result<Lines, CommandError> {
+        let p = self;
         ensure_positive("tool diameter", p.tool.diameter)?;
         if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
                 "stepover must be more than 0 and at most 1".into(),
             ));
         }
-        let step = p.tool.stepover * p.tool.diameter;
-        let cell = step;
+        let cell = p.tool.stepover * p.tool.diameter;
         let grid = p.darkness(doc, cell)?;
         #[expect(
             clippy::cast_possible_truncation,
@@ -284,10 +264,44 @@ impl Command for SketchCarvingToolpath {
                 .as_ref()
                 .is_none_or(|rings| cut_craft_core::geometry::inside(rings, q))
         };
+        Ok((runs(&grid, &line, inside), cell, ids))
+    }
+}
+
+/// The areas the toolpath would carve, as the form previews them: a rectangle per run of
+/// line cells.
+pub fn areas(doc: &Document, p: &Params) -> Result<Vec<Rect>, CommandError> {
+    let (runs, cell, _) = p.lines(doc)?;
+    let half = Point::new(cell, cell) / 2.0;
+    Ok(runs
+        .into_iter()
+        .map(|[a, b]| Rect::new(a - half, b + half))
+        .collect())
+}
+
+impl Command for SketchCarvingToolpath {
+    const ID: &'static str = "sketch_carving_toolpath";
+    type Params = Params;
+
+    fn meta() -> Meta {
+        Meta {
+            label: "Sketch Carving Toolpath",
+            group: "Toolpath Operations",
+            icon: "toolpaths/sketch_carving.png",
+            shortcut: "",
+        }
+    }
+
+    fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
+        ensure_positive("cut depth", p.cut_depth)?;
+        let (runs, _, ids) = p.lines(doc)?;
         // ponytail: each row's runs of line cells are cut flat; offsetting round the lines
         // would give smoother edges
         let z = -(p.start_depth + p.cut_depth);
-        let moves = cut_rows(&grid, &line, inside, z, doc.job.clearance);
+        let moves: Vec<Move> = runs
+            .iter()
+            .flat_map(|run| contour_moves(run, false, &[z], doc.job.clearance))
+            .collect();
         if moves.is_empty() {
             return Err(CommandError::Failed(
                 "the sketch has no lines: try a thicker line".into(),
@@ -355,6 +369,18 @@ mod tests {
             "only along the line"
         );
         assert!(cuts.iter().all(|q| (q.z + 1.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn the_previewed_areas_cover_the_line_and_nothing_on_the_white() {
+        let areas = areas(&with_picture(), &Params::default()).unwrap();
+        assert!(
+            !areas.is_empty()
+                && areas
+                    .iter()
+                    .all(|r| r.min.x >= 18.0 && r.max.x <= 22.0 && r.max.x > r.min.x),
+            "{areas:?}"
+        );
     }
 
     #[test]

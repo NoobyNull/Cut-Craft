@@ -567,6 +567,34 @@ fn clicking_a_picture_selects_it_and_delete_removes_it() {
 }
 
 #[test]
+fn sketch_carvings_form_previews_the_areas_it_would_carve() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    // white with a black vertical line 2 mm wide down the middle
+    c.add_bitmap(Bitmap {
+        name: "line".into(),
+        columns: 40,
+        rows: 40,
+        grey: (0..40 * 40)
+            .map(|i| if (19..21).contains(&(i % 40)) { 0 } else { 255 })
+            .collect(),
+        rect: Rect::new(Point::ZERO, Point::new(40.0, 40.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.start_command("sketch_carving_toolpath");
+    h.frame(vec![]);
+    let (_, areas) = h.app.sketch_areas.as_ref().expect("previewed");
+    assert!(!areas.is_empty() && areas.iter().all(|r| r.min.x >= 18.0 && r.max.x <= 22.0));
+    h.app.form = None;
+    h.frame(vec![]);
+    assert!(h.app.sketch_areas.is_none(), "gone with the form");
+}
+
+#[test]
 fn clicking_one_of_a_group_picks_the_group() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
