@@ -2,7 +2,10 @@
 //! grouped, stay together), laid out inside the job from a chosen corner, kept a tool's
 //! width plus a clearance apart and a border in from the edge: by their boxes in rows, or
 //! (True Shape) each where its own shape first fits, turned in steps, holes filled by
-//! smaller parts, with as many copies of each as asked.
+//! smaller parts, with as many copies of each as asked; mirrored where that fits better,
+//! inside a boundary layer's vectors, onto new sheets when the job is full, with a double-
+//! sided part's other side following it, and filler parts in what is left (Aspire's help:
+//! Nest Parts).
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};
@@ -32,6 +35,10 @@ pub enum Direction {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the tick boxes of Aspire's form"
+)]
 pub struct Params {
     /// The cut-out tool: the least gap left between parts
     #[schemars(title = "Tool dia. (D)", extend("x-unit" = "mm"), range(min = 0))]
@@ -70,7 +77,58 @@ pub struct Params {
         range(min = 1, max = 500)
     )]
     pub copies: u32,
+    /// True shape: also try each part flipped over, where that fits better; only when the
+    /// direction the parts are cut in does not matter
+    #[serde(default)]
+    #[schemars(
+        title = "Mirror parts to find best fit",
+        extend("x-show-when" = {"true_shape": true})
+    )]
+    pub mirror_parts: bool,
+    /// True shape: smaller parts go into the holes of bigger ones
+    #[serde(default = "yes")]
+    #[schemars(
+        title = "Allow parts inside other parts",
+        extend("x-show-when" = {"true_shape": true})
+    )]
+    pub parts_inside: bool,
+    /// True shape: the layer whose closed vectors are the area to nest inside (holes in
+    /// them are kept clear); empty nests inside the job
+    #[serde(default)]
+    #[schemars(
+        title = "Nest boundary layer",
+        extend("x-show-when" = {"true_shape": true})
+    )]
+    pub boundary_layer: String,
+    /// True shape: the layer whose parts fill what space is left, as many as fit; empty for
+    /// none
+    #[serde(default)]
+    #[schemars(title = "Filler part layer", extend("x-show-when" = {"true_shape": true}))]
+    pub filler_layer: String,
+    /// True shape: parts that do not fit go onto new sheets the size of this one
+    #[serde(default)]
+    #[schemars(
+        title = "Add sheets as needed",
+        extend("x-show-when" = {"true_shape": true})
+    )]
+    pub more_sheets: bool,
+    /// True shape, double-sided jobs: what is on the other side under a part goes with it
+    #[serde(default)]
+    #[schemars(
+        title = "Nest two-sided parts",
+        extend("x-show-when" = {"true_shape": true})
+    )]
+    pub two_sided: bool,
 }
+
+fn yes() -> bool {
+    true
+}
+
+/// The most sheets Add sheets as needed makes in one nesting.
+const MOST_SHEETS: usize = 50;
+/// The most filler parts one nesting places.
+const MOST_FILLERS: usize = 2000;
 
 fn one() -> u32 {
     1
@@ -89,6 +147,12 @@ impl Default for Params {
             true_shape: false,
             rotation_step: 0.0,
             copies: 1,
+            mirror_parts: false,
+            parts_inside: true,
+            boundary_layer: String::new(),
+            filler_layer: String::new(),
+            more_sheets: false,
+            two_sided: false,
         }
     }
 }
@@ -213,8 +277,26 @@ impl Command for NestParts {
     }
 }
 
+/// A part as it nests: its vectors, its box, and the other side's vectors under it.
+struct Part {
+    ids: Vec<EntityId>,
+    bounds: Rect,
+    riders: Vec<EntityId>,
+    filler: bool,
+}
+
+/// Where a part (by its place in the list) goes: on which sheet (0 the active one, then
+/// the new ones) and how it is moved there.
+struct Placed {
+    part: usize,
+    sheet: usize,
+    to: DAffine2,
+}
+
 /// True Shape nesting: each part (largest first), and each copy of it, put where its shape,
-/// grown by half the gap all round, first fits on a grid of the job, at the turns allowed.
+/// grown by half the gap all round, first fits on a grid of the room, at the turns (and
+/// flips) allowed; onto new sheets when it is full and asked; then the filler parts until
+/// nothing more fits.
 fn true_shape(
     doc: &Document,
     p: &Params,
@@ -222,9 +304,83 @@ fn true_shape(
 ) -> Result<Change, CommandError> {
     let gap = p.tool_diameter + p.clearance;
     let edge = p.border_gap + p.clearance;
-    let area = doc.job.area();
-    let room = Rect::new(area.min + Point::splat(edge), area.max - Point::splat(edge));
-    let mut grid = Grid::new(room, gap);
+    let (parts, boundary) = nestable(doc, p, parts)?;
+    let room = if boundary.is_empty() {
+        let area = doc.job.area();
+        Rect::new(area.min + Point::splat(edge), area.max - Point::splat(edge))
+    } else {
+        let (mut lo, mut hi) = (Point::splat(f64::INFINITY), Point::splat(f64::NEG_INFINITY));
+        for q in boundary.iter().flatten() {
+            (lo, hi) = (lo.min(*q), hi.max(*q));
+        }
+        Rect::new(lo + Point::splat(edge), hi - Point::splat(edge))
+    };
+    let fresh = || {
+        let mut grid = Grid::new(room, gap);
+        grid.keep_inside(&boundary, edge);
+        grid
+    };
+    let placed = place(doc, p, &parts, fresh);
+    if placed.iter().all(|placed| parts[placed.part].filler) {
+        return Err(CommandError::Failed("no part fits in the job".into()));
+    }
+    Ok(write(doc, p, &parts, &placed))
+}
+
+/// The parts to nest (the boundary layer's left out, the filler layer's marked, a two-sided
+/// part's riders found) and the boundary layer's closed vectors.
+fn nestable(
+    doc: &Document,
+    p: &Params,
+    parts: &[(Vec<EntityId>, Rect)],
+) -> Result<(Vec<Part>, Vec<Vec<Point>>), CommandError> {
+    let layer = |name: &str| {
+        let name = name.trim();
+        (!name.is_empty())
+            .then(|| doc.layers.iter().find(|l| l.name == name).map(|l| l.id))
+            .flatten()
+    };
+    let boundary_layer = layer(&p.boundary_layer);
+    if !p.boundary_layer.trim().is_empty() && boundary_layer.is_none() {
+        return Err(CommandError::InvalidParams(format!(
+            "there is no layer called {}",
+            p.boundary_layer.trim()
+        )));
+    }
+    let boundary: Vec<Vec<Point>> = boundary_layer.map_or_else(Vec::new, |id| {
+        doc.vectors
+            .iter()
+            .filter(|(v, path)| path.closed && doc.layer_of(**v) == id)
+            .map(|(_, path)| path.flatten(0.05))
+            .collect()
+    });
+    let filler_layer = layer(&p.filler_layer);
+    let parts: Vec<Part> = parts
+        .iter()
+        .filter(|(ids, _)| {
+            ids.iter()
+                .all(|id| Some(doc.layer_of(*id)) != boundary_layer)
+        })
+        .map(|(ids, bounds)| Part {
+            ids: ids.clone(),
+            bounds: *bounds,
+            riders: if p.two_sided {
+                riders(doc, *bounds)
+            } else {
+                vec![]
+            },
+            filler: filler_layer.is_some()
+                && ids.iter().all(|id| Some(doc.layer_of(*id)) == filler_layer),
+        })
+        .collect();
+    Ok((parts, boundary))
+}
+
+/// Where each part and copy goes: largest first on the first grid with room, a new grid
+/// (`fresh`) when asked, then the fillers until nothing more fits.
+fn place(doc: &Document, p: &Params, parts: &[Part], fresh: impl Fn() -> Grid) -> Vec<Placed> {
+    let gap = p.tool_diameter + p.clearance;
+    let mut grids = vec![fresh()];
     let turns: Vec<f64> = if p.rotation_step > 0.0 {
         // the turns a whole step apart below a full turn
         std::iter::successors(Some(0.0), |a| Some(a + p.rotation_step))
@@ -235,51 +391,202 @@ fn true_shape(
     } else {
         vec![0.0]
     };
-    // the largest parts first, so small ones find the gaps left
+    let flips: &[bool] = if p.mirror_parts {
+        &[false, true]
+    } else {
+        &[false]
+    };
+    // the largest parts first, so small ones find the gaps left; fillers last
     let mut order: Vec<usize> = (0..parts.len()).collect();
     order.sort_by(|&a, &b| {
-        let size = |i: usize| parts[i].1.size().x * parts[i].1.size().y;
-        size(b).total_cmp(&size(a))
+        let size = |i: usize| parts[i].bounds.size().x * parts[i].bounds.size().y;
+        parts[a]
+            .filler
+            .cmp(&parts[b].filler)
+            .then(size(b).total_cmp(&size(a)))
     });
+    let mut placed: Vec<Placed> = vec![];
+    for i in order {
+        let part = &parts[i];
+        let mut rings: Vec<Vec<Point>> = part
+            .ids
+            .iter()
+            .map(|id| doc.vectors[id].flatten(grids[0].cell / 4.0))
+            .collect();
+        // a two-sided part's other side takes room too
+        let mirror = doc.job.double_sided.map(|d| d.flip.mirror(doc.job.area()));
+        if let Some(m) = mirror {
+            for id in &part.riders {
+                let path = &doc.other_side.vectors[id].path;
+                rings.push(path.transformed(&m.inverse()).flatten(grids[0].cell / 4.0));
+            }
+        }
+        let tries: Vec<DAffine2> = flips
+            .iter()
+            .flat_map(|&flip| {
+                turns.iter().map(move |&turn| {
+                    let flip = DAffine2::from_scale(Point::new(if flip { -1.0 } else { 1.0 }, 1.0));
+                    DAffine2::from_angle(turn.to_radians()) * flip
+                })
+            })
+            .map(|spin| spin * DAffine2::from_translation(-part.bounds.center()))
+            .collect();
+        let wanted = if part.filler {
+            MOST_FILLERS
+        } else {
+            p.copies.max(1) as usize
+        };
+        let mut sheet = 0;
+        let mut done = 0;
+        while done < wanted {
+            let found = tries.iter().find_map(|&spin| {
+                let cells = grids[sheet].shape(&rings, spin, gap / 2.0, p.parts_inside);
+                let at = grids[sheet].first_fit(
+                    &cells,
+                    p.nest_from,
+                    p.nest_direction,
+                    p.parts_inside,
+                )?;
+                Some((spin, cells, at))
+            });
+            if let Some((spin, cells, at)) = found {
+                grids[sheet].fill(&cells, at);
+                let to = DAffine2::from_translation(grids[sheet].centre(at)) * spin;
+                placed.push(Placed { part: i, sheet, to });
+                done += 1;
+                continue;
+            }
+            // full: a filler stops; another part tries the next sheet, made when asked
+            if part.filler {
+                break;
+            }
+            sheet += 1;
+            if sheet == grids.len() {
+                if !p.more_sheets || grids.len() > MOST_SHEETS {
+                    break;
+                }
+                grids.push(fresh());
+            }
+        }
+    }
+    placed
+}
+
+/// The other side's vectors under the box `bounds` of a part on this side: they go where it
+/// goes.
+fn riders(doc: &Document, bounds: Rect) -> Vec<EntityId> {
+    let Some(two) = doc.job.double_sided else {
+        return vec![];
+    };
+    let back = two.flip.mirror(doc.job.area()).inverse();
+    doc.other_side
+        .vectors
+        .iter()
+        .filter(|(_, v)| {
+            let b = v.path.transformed(&back).bounds();
+            b.min.x <= bounds.max.x
+                && bounds.min.x <= b.max.x
+                && b.min.y <= bounds.max.y
+                && bounds.min.y <= b.max.y
+        })
+        .map(|(&id, _)| id)
+        .collect()
+}
+
+/// The nested parts written: on the active sheet as moves or copies, and on the new sheets
+/// (named after the active one) as stored vectors; a two-sided part's riders moved to match
+/// on the other side.
+fn write(doc: &Document, p: &Params, parts: &[Part], placed: &[Placed]) -> Change {
+    use cut_craft_core::document::{Sheet, SheetObjects, StoredVector};
     let mut c = Change::builder(doc);
     let mut made = Vec::new();
-    let mut nested = 0;
-    for i in order {
-        let (ids, bounds) = &parts[i];
-        let rings: Vec<Vec<Point>> = ids
-            .iter()
-            .map(|id| doc.vectors[id].flatten(grid.cell / 4.0))
-            .collect();
-        for copy in 0..p.copies.max(1) {
-            let Some(place) = turns.iter().find_map(|&turn| {
-                let spin = DAffine2::from_angle(turn.to_radians())
-                    * DAffine2::from_translation(-bounds.center());
-                let cells = grid.shape(&rings, spin, gap / 2.0);
-                let at = grid.first_fit(&cells, p.nest_from, p.nest_direction)?;
-                Some((spin, cells, at))
-            }) else {
-                continue;
-            };
-            let (spin, cells, at) = place;
-            grid.fill(&cells, at);
-            let to = DAffine2::from_translation(grid.centre(at)) * spin;
-            for id in ids {
-                let moved = doc.vectors[id].transformed(&to);
-                if p.remove_original_parts && copy == 0 {
+    let mirror = doc.job.double_sided.map(|d| d.flip.mirror(doc.job.area()));
+    let (bottom, mut other) = c.side().clone();
+    let mut sheets: Vec<SheetObjects> = vec![];
+    let mut moved_once = std::collections::BTreeSet::new();
+    for placed in placed {
+        let part = &parts[placed.part];
+        // the first placing of a part moves it when asked; the rest are copies
+        let relocate = p.remove_original_parts && moved_once.insert(placed.part);
+        let rider_to = mirror.map(|m| m * placed.to * m.inverse());
+        if placed.sheet == 0 {
+            for id in &part.ids {
+                let moved = doc.vectors[id].transformed(&placed.to);
+                if relocate {
                     c.replace(*id, moved);
                     made.push(*id);
                 } else {
                     made.push(c.add(moved));
                 }
             }
-            nested += 1;
+            for id in &part.riders {
+                let Some(to) = rider_to else { continue };
+                let stored = &doc.other_side.vectors[id];
+                let moved = StoredVector {
+                    path: stored.path.transformed(&to),
+                    ..stored.clone()
+                };
+                let key = if relocate { *id } else { c.fresh_id() };
+                other.vectors.insert(key, moved);
+            }
+            continue;
+        }
+        while sheets.len() < placed.sheet {
+            sheets.push(SheetObjects {
+                other_side: (doc.job.double_sided.is_some())
+                    .then(|| Box::new(SheetObjects::default())),
+                ..SheetObjects::default()
+            });
+        }
+        let objects = &mut sheets[placed.sheet - 1];
+        for id in &part.ids {
+            if relocate {
+                c.remove(*id);
+            }
+            let key = c.fresh_id();
+            objects.vectors.insert(
+                key,
+                StoredVector {
+                    path: doc.vectors[id].transformed(&placed.to),
+                    layer: Some(doc.layer_of(*id)),
+                    group: None,
+                },
+            );
+        }
+        for id in &part.riders {
+            let (Some(to), Some(back)) = (rider_to, objects.other_side.as_mut()) else {
+                continue;
+            };
+            if relocate {
+                other.vectors.remove(id);
+            }
+            let stored = &doc.other_side.vectors[id];
+            let key = c.fresh_id();
+            back.vectors.insert(
+                key,
+                StoredVector {
+                    path: stored.path.transformed(&to),
+                    ..stored.clone()
+                },
+            );
         }
     }
-    if nested == 0 {
-        return Err(CommandError::Failed("no part fits in the job".into()));
+    c.set_side(bottom, other);
+    if !sheets.is_empty() {
+        let name = doc
+            .sheets
+            .get(doc.active_sheet)
+            .map_or_else(|| "Sheet".to_owned(), |s| s.name.clone());
+        let mut all = doc.sheets.clone();
+        for (k, objects) in sheets.into_iter().enumerate() {
+            let mut sheet = Sheet::new(&format!("{name} ({})", k + 2), doc.job);
+            sheet.objects = objects;
+            all.push(sheet);
+        }
+        c.set_sheets(all, doc.active_sheet);
     }
     c.select(made);
-    Ok(c.finish())
+    c.finish()
 }
 
 /// The job's room as square cells, filled where nested parts are.
@@ -319,7 +626,14 @@ impl Grid {
 
     /// The cells a part covers (turned and centred by `spin`), grown by `grow`, as offsets
     /// from its centre cell.
-    fn shape(&self, rings: &[Vec<Point>], spin: DAffine2, grow: f64) -> Vec<(i64, i64)> {
+    /// With `holes` off, a part's holes count as part of it, so nothing nests in them.
+    fn shape(
+        &self,
+        rings: &[Vec<Point>],
+        spin: DAffine2,
+        grow: f64,
+        holes: bool,
+    ) -> Vec<(i64, i64)> {
         let turned: Vec<Vec<Point>> = rings
             .iter()
             .map(|r| r.iter().map(|&q| spin.transform_point2(q)).collect())
@@ -337,7 +651,14 @@ impl Grid {
                 let near = turned.iter().any(|r| {
                     cut_craft_core::geometry::polyline_distance(r, q) <= grow + self.cell / 2.0
                 });
-                if near || cut_craft_core::geometry::inside(&turned, q) {
+                let within = if holes {
+                    cut_craft_core::geometry::inside(&turned, q)
+                } else {
+                    turned
+                        .iter()
+                        .any(|r| cut_craft_core::geometry::inside(std::slice::from_ref(r), q))
+                };
+                if near || within {
                     cells.push((column, row));
                 }
             }
@@ -351,6 +672,7 @@ impl Grid {
         cells: &[(i64, i64)],
         corner: Corner,
         direction: Direction,
+        holes: bool,
     ) -> Option<(i64, i64)> {
         let (columns, rows) = (self.columns as i64, self.rows as i64);
         let from_right = matches!(corner, Corner::BottomRight | Corner::TopRight);
@@ -368,9 +690,13 @@ impl Grid {
             })
         };
         // inside the boxes of parts already nested first: their holes
-        let in_holes = self.boxes.iter().find_map(|&((x0, y0), (x1, y1))| {
-            (y0..=y1).find_map(|y| (x0..=x1).find_map(|x| fits((x, y)).then_some((x, y))))
-        });
+        let in_holes = self
+            .boxes
+            .iter()
+            .filter(|_| holes)
+            .find_map(|&((x0, y0), (x1, y1))| {
+                (y0..=y1).find_map(|y| (x0..=x1).find_map(|x| fits((x, y)).then_some((x, y))))
+            });
         if in_holes.is_some() {
             return in_holes;
         }
@@ -387,6 +713,26 @@ impl Grid {
                 fits(at).then_some(at)
             })
         })
+    }
+
+    /// Only the inside of the boundary's `rings` (its holes kept out), `edge` in from them,
+    /// is room; no rings: all of it.
+    fn keep_inside(&mut self, rings: &[Vec<Point>], edge: f64) {
+        if rings.is_empty() {
+            return;
+        }
+        for row in 0..self.rows {
+            for column in 0..self.columns {
+                let q = self.centre((column as i64, row as i64));
+                let clear = cut_craft_core::geometry::inside(rings, q)
+                    && rings.iter().all(|r| {
+                        cut_craft_core::geometry::polyline_distance(r, q) >= edge + self.cell / 2.0
+                    });
+                if !clear {
+                    self.full[row * self.columns + column] = true;
+                }
+            }
+        }
     }
 
     fn fill(&mut self, cells: &[(i64, i64)], at: (i64, i64)) {
@@ -502,6 +848,199 @@ mod tests {
                 || boxes[b].max.y + 1.9 <= boxes[a].min.y;
             assert!(apart, "a gap between copies: {:?} {:?}", boxes[a], boxes[b]);
         }
+    }
+
+    use cut_craft_core::document::{Layer, LayerId};
+    use cut_craft_core::geometry::Path;
+
+    /// `doc` with a layer `name` holding the vectors `ids`.
+    fn on_layer(doc: &mut Document, name: &str, ids: &[EntityId]) {
+        let id = LayerId(u32::try_from(doc.layers.len()).unwrap() + 1);
+        doc.layers.push(Layer {
+            id,
+            name: name.into(),
+            visible: true,
+            locked: false,
+        });
+        for v in ids {
+            doc.vector_layers.insert(*v, id);
+        }
+    }
+
+    fn triangle(points: [(f64, f64); 3]) -> Path {
+        Path::polyline(&points.map(|(x, y)| Point::new(x, y)), true)
+    }
+
+    fn true_shape() -> Params {
+        Params {
+            true_shape: true,
+            tool_diameter: 1.0,
+            clearance: 0.0,
+            border_gap: 0.0,
+            rotate_parts: false,
+            ..Params::default()
+        }
+    }
+
+    #[test]
+    fn a_part_mirrored_fits_a_boundary_its_own_way_round_does_not() {
+        // the part's square corner bottom left; the boundary's bottom right: only mirrored
+        // does the part go in
+        let mut doc = document_with(vec![
+            triangle([(400.0, 300.0), (440.0, 300.0), (400.0, 340.0)]),
+            triangle([(100.0, 100.0), (170.0, 100.0), (170.0, 170.0)]),
+        ]);
+        let ids: Vec<EntityId> = doc.vectors.keys().copied().collect();
+        on_layer(&mut doc, "Board", &ids[1..]);
+        doc.selection = [ids[0]].into();
+        let p = Params {
+            boundary_layer: "Board".into(),
+            ..true_shape()
+        };
+        assert!(
+            NestParts::run(&doc, &p).is_err(),
+            "its own way round it cannot go in"
+        );
+        run_on::<NestParts>(
+            &mut doc,
+            &Params {
+                mirror_parts: true,
+                ..p
+            },
+        );
+        let part = doc.vectors[&ids[0]].bounds();
+        let board = doc.vectors[&ids[1]].bounds();
+        assert!(board.contains_rect(part), "{part:?} inside {board:?}");
+        let flat = doc.vectors[&ids[0]].flatten(0.1);
+        let lowest = flat.iter().fold(f64::INFINITY, |m, q| m.min(q.y));
+        let corner = flat
+            .iter()
+            .find(|q| (q.y - lowest).abs() < 1e-6 && (q.x - part.max.x).abs() < 1e-6);
+        assert!(
+            corner.is_some(),
+            "the square corner is now bottom right: {flat:?}"
+        );
+        // and a missing boundary layer is said so
+        let missing = Params {
+            boundary_layer: "Nope".into(),
+            ..true_shape()
+        };
+        assert!(NestParts::run(&doc, &missing).is_err());
+    }
+
+    #[test]
+    fn with_parts_inside_off_nothing_goes_in_a_hole() {
+        let mut doc = document_with(vec![
+            square(300.0, 300.0, 60.0),
+            square(310.0, 310.0, 40.0),
+            square(500.0, 300.0, 10.0),
+        ]);
+        doc.selection = doc.vectors.keys().copied().collect();
+        run_on::<NestParts>(
+            &mut doc,
+            &Params {
+                parts_inside: false,
+                ..true_shape()
+            },
+        );
+        let small = doc
+            .vectors
+            .values()
+            .map(Path::bounds)
+            .find(|b| b.size().x < 11.0)
+            .unwrap();
+        let frame = doc
+            .vectors
+            .values()
+            .map(Path::bounds)
+            .find(|b| b.size().x > 59.0)
+            .unwrap();
+        assert!(!frame.contains_rect(small), "{small:?} outside {frame:?}");
+    }
+
+    #[test]
+    fn parts_that_do_not_fit_go_onto_new_sheets_and_fillers_fill_what_is_left() {
+        let mut doc = document_with(vec![square(500.0, 300.0, 60.0), square(20.0, 20.0, 5.0)]);
+        doc.job.width = 100.0;
+        doc.job.height = 100.0;
+        let ids: Vec<EntityId> = doc.vectors.keys().copied().collect();
+        on_layer(&mut doc, "Fill", &ids[1..]);
+        doc.selection = ids.iter().copied().collect();
+        let p = Params {
+            copies: 3,
+            more_sheets: true,
+            filler_layer: "Fill".into(),
+            ..true_shape()
+        };
+        run_on::<NestParts>(&mut doc, &p);
+        assert_eq!(doc.sheets.len(), 3, "one big square a sheet");
+        for sheet in &doc.sheets[1..] {
+            assert_eq!(sheet.objects.vectors.len(), 1);
+        }
+        let fillers = doc
+            .vectors
+            .values()
+            .filter(|v| v.bounds().size().x < 6.0)
+            .count();
+        assert!(
+            fillers > 20,
+            "the space round the big square filled: {fillers}"
+        );
+        // without new sheets, the copies that do not fit are left out
+        let mut one = document_with(vec![square(500.0, 300.0, 60.0)]);
+        one.job.width = 100.0;
+        one.job.height = 100.0;
+        one.selection = one.vectors.keys().copied().collect();
+        run_on::<NestParts>(
+            &mut one,
+            &Params {
+                copies: 3,
+                ..true_shape()
+            },
+        );
+        assert_eq!((one.sheets.len(), one.vectors.len()), (1, 1));
+    }
+
+    #[test]
+    fn a_two_sided_part_takes_its_other_side_with_it() {
+        use cut_craft_core::document::{DoubleSided, Flip, StoredVector};
+        let mut doc = document_with(vec![square(400.0, 200.0, 50.0)]);
+        doc.job.double_sided = Some(DoubleSided {
+            flip: Flip::Horizontal,
+            zero_same_side: false,
+        });
+        let mirror = Flip::Horizontal.mirror(doc.job.area());
+        // a pocket outline under the part, seen from the other side
+        let under = square(410.0, 210.0, 20.0).transformed(&mirror);
+        let rider = EntityId(99);
+        doc.other_side.vectors.insert(
+            rider,
+            StoredVector {
+                path: under,
+                layer: None,
+                group: None,
+            },
+        );
+        let part = *doc.vectors.keys().next().unwrap();
+        doc.selection = [part].into();
+        run_on::<NestParts>(
+            &mut doc,
+            &Params {
+                two_sided: true,
+                ..true_shape()
+            },
+        );
+        let moved = doc.vectors[&part].bounds();
+        assert!(moved.min.x < 100.0, "nested from the corner: {moved:?}");
+        let back = doc.other_side.vectors[&rider]
+            .path
+            .transformed(&mirror.inverse())
+            .bounds();
+        assert!(
+            moved.contains_rect(back)
+                && (back.min - moved.min - Point::splat(10.0)).length() < 1e-6,
+            "the other side moved with it: {back:?} in {moved:?}"
+        );
     }
 
     /// Three 100 mm squares scattered, one with a 20 mm square inside it, on a 600 x 400 job.
