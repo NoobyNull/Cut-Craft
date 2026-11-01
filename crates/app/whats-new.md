@@ -1,4 +1,5 @@
-- The 3D view shows the model solid down to the modeling plane, without spikes
-- Text bends into an arc with handles; Text in a Box stretches to fit
-- Create Shape: mitred inside corners, blend to inner vectors, E to edit
-- Trace Bitmap areas, Segment 3D Model tree; Draw Material Block hides the 3D outline
+- Import 3D Model: move the model up and down in the material, Align in Material buttons, numbers that follow
+- Every dragged number in a form changes the model or shape as you drag, as one undo
+- Toolpaths: Trochoidal pocket clearing, Edit Passes, Edit Tabs, Climb + Conventional, Pocket Rings
+- Handles on every selection, Shift or Ctrl to constrain; status bar hints for every tool
+- Tool numbers and a Tool Changer window; Tapered Ball Nose; Vector Selector by circle diameter
