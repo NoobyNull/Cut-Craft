@@ -2438,7 +2438,7 @@ fn the_file_and_component_level_icons_have_their_tools() {
     // with no library folder there is nothing to open, and it says so
     h.app.invoke(&h.ctx, "open_clipart_folder");
     assert!(
-        h.app.status.message.contains("Clipart library"),
+        h.app.status.message.contains("Library first"),
         "{}",
         h.app.status.message
     );
@@ -3085,11 +3085,15 @@ fn the_clipart_tab_shows_a_library_folder_and_imports_what_is_double_clicked() {
     h.app.pages.set_pinned(Page::Design, true);
     h.app.design_tab = 4;
     h.app.clipart.folders = vec![dir.clone()];
-    h.app.clipart.chosen = Some(0);
     h.frame(vec![]);
+    let importable = ["bmp".to_owned()].into();
+    h.app.clipart.read_now(&importable);
     h.frame(vec![]);
     let folder = dir.file_name().unwrap().to_string_lossy().into_owned();
-    assert!(h.text_at(&folder).is_some(), "the library lists the folder");
+    assert!(
+        h.text_at(&format!("{folder} (1)")).is_some(),
+        "the library lists the folder, with how many files are in it"
+    );
     assert!(
         h.text_at("notes.txt").is_none(),
         "only what can be imported"

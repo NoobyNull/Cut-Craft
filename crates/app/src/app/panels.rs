@@ -339,14 +339,21 @@ impl CutCraftApp {
     pub(super) fn clipart_panel(&mut self, ui: &mut egui::Ui) {
         use crate::clipart::Picked;
         cut_craft_bug_report::mark(ui, "Library tab");
-        let registry = &self.registry;
-        let importable = |ext: &str| registry.importer_for(ext).is_some();
+        let importable: crate::clipart::Importable = (self.registry.importers())
+            .flat_map(|i| i.format.extensions)
+            .map(|e| e.to_lowercase())
+            .collect();
         let levels: Vec<(u64, String)> = (self.doc.levels.iter())
             .map(|(&id, l)| (id, l.name.clone()))
             .collect();
         match crate::clipart::panel(ui, &mut self.clipart, &importable, &levels) {
             Some(Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
-            Some(Picked::OpenFolder) => self.invoke(ui.ctx(), "open_clipart_folder"),
+            Some(Picked::ShowFolder(folder)) => {
+                if let Err(e) = files::show_folder(&folder) {
+                    self.status
+                        .set_message(&format!("Couldn't show {}: {e}", folder.display()));
+                }
+            }
             Some(Picked::Import(path)) => self.add_from_library(vec![path], None),
             Some(Picked::AddToProject(files)) => self.add_from_library(files, None),
             Some(Picked::AddToLevel(files, level)) => self.add_from_library(files, Some(level)),
