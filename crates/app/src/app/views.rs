@@ -283,6 +283,7 @@ impl CutCraftApp {
         self.measure_window(ctx);
         self.snap_options_window(ctx);
         self.job_sheet_window(ctx);
+        self.part_labels_window(ctx);
         self.stl_window(ctx);
         self.options_window(ctx);
         self.settings_3d_window(ctx);
@@ -2754,6 +2755,68 @@ impl CutCraftApp {
             self.save_options();
         }
         self.job_sheet_window = open;
+    }
+
+    /// Toolpaths ▸ Print Part Labels: the labels' size and what they show (kept with the
+    /// options), how many parts there are, and Open Labels to Print.
+    pub(super) fn part_labels_window(&mut self, ctx: &egui::Context) {
+        if !self.part_labels_window {
+            return;
+        }
+        let mut open = true;
+        let schema = serde_json::to_value(schemars::schema_for!(fmt_part_labels::Style))
+            .expect("a schema serialises");
+        let fields = crate::form::fields(&schema);
+        let mut values =
+            serde_json::to_value(&self.options.part_labels).expect("a style serialises");
+        let units = self.doc.job.units;
+        let count = fmt_cut_list::parts(&self.doc).len();
+        let (id, size) = (egui::Id::unique("part_labels"), dialog_size(ctx));
+        let (mut changed, mut print) = (None, false);
+        cut_craft_bug_report::dialog(ctx, id, "Print Part Labels", size, &mut open, |ui| {
+            ui.label(
+                "A label for each part, to stick on it once it is cut, so you can tell the \
+                 parts apart when you put the job together.",
+            );
+            let picture = |_: &str| None;
+            let look = crate::form::Look {
+                units,
+                picture: &picture,
+                material: crate::form::material(&self.doc, units),
+                tool: None,
+                group_end: None,
+            };
+            if crate::form::show(ui, &fields, &mut values, &look)
+                && let Ok(style) = serde_json::from_value(values)
+            {
+                changed = Some(style);
+            }
+            ui.separator();
+            if count == 0 {
+                ui.label("The job has no parts yet. Draw or import closed shapes first.");
+            } else {
+                ui.label(format!(
+                    "{count} part{} will get a label. Name parts with Edit ▸ Name Part.",
+                    if count == 1 { "" } else { "s" }
+                ));
+            }
+            print = ui
+                .add_enabled(count > 0, egui::Button::new("Open Labels to Print"))
+                .on_hover_text("Opens the labels in your web browser; print them from there")
+                .clicked();
+            ui.weak(
+                "On a label printer, turn off the browser's headers and footers and set the \
+                 margins to None when printing.",
+            );
+        });
+        if let Some(style) = changed {
+            self.options.part_labels = style;
+            self.save_options();
+        }
+        if print {
+            self.open_part_labels();
+        }
+        self.part_labels_window = open;
     }
 
     /// Export as STL: how the model is triangulated (kept with the options), Triangulate to

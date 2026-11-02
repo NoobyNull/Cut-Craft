@@ -1,0 +1,14 @@
+[package]
+name = "fmt-cut-list"
+description = "Cut lists: the job's parts as a CSV table, and a CSV cut list imported as parts"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true
