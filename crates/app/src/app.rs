@@ -14,6 +14,7 @@ mod tabs;
 #[cfg(test)]
 mod tests;
 mod title_bar;
+mod updates;
 mod views;
 
 use crate::files::{self, Session};
@@ -141,7 +142,7 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 93] = [
+const BUILT_INS: [&str; 94] = [
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",
@@ -198,6 +199,7 @@ const BUILT_INS: [&str; 93] = [
     "keyboard_shortcuts",
     "third_party_licenses",
     "about_cut_craft",
+    "check_for_updates",
     "undo",
     "redo",
     "exit",
@@ -781,6 +783,10 @@ struct CutCraftApp {
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
+    /// Help ▸ Check for Updates, and the check at startup.
+    updates: crate::update::Updates,
+    /// Restart Now: the new version, started once the window has closed.
+    restart_after_close: Option<std::path::PathBuf>,
     /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
     unsigned_gadgets: std::collections::HashMap<String, String>,
     /// The unsigned gadgets the user has said yes to running this session.
@@ -2021,6 +2027,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                 app.reporter.report_crash(crash);
             }
             app.space_mouse = Some(crate::spacemouse::listen(cc.egui_ctx.clone()));
+            app.check_for_updates_at_startup(&cc.egui_ctx);
             Ok(Box::new(app))
         }),
     )

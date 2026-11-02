@@ -20,6 +20,7 @@ mod pages;
 mod polyline;
 mod shortcut;
 mod spacemouse;
+mod update;
 mod view2d;
 mod view3d;
 
@@ -35,5 +36,9 @@ fn main() {
         ),
         _ => None,
     };
+    // what the last update set aside, now that the new version is the one running
+    if let Some(program) = cut_craft_updater::this_install().program() {
+        cut_craft_updater::clean_up(program);
+    }
     app::run(concat!("Cut Craft v", env!("CARGO_PKG_VERSION")), shots);
 }
