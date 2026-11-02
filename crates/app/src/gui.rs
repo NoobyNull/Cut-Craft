@@ -38,8 +38,8 @@ fn group(name: &'static str, tools: &'static [&'static str]) -> ToolGroup {
     ToolGroup { name, tools }
 }
 
-/// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see
-/// `re/SPEC.md`); which tool sits in which group is inferred from the help topics. Ids match
+/// Aspire's Drawing tab. Group names and which tool sits in which group follow the help
+/// topics and the trial (see `re/SPEC.md`). Ids match
 /// the icon file names, so unimplemented tools still show their icon.
 #[expect(clippy::too_many_lines, reason = "the drawing tab's tool list")]
 fn drawing_groups() -> Vec<ToolGroup> {
@@ -74,7 +74,9 @@ fn drawing_groups() -> Vec<ToolGroup> {
             &[
                 "draw_polyline",
                 "draw_rectangle",
+                "draw_rectangle_from_center",
                 "draw_circle",
+                "draw_circle_from_edge",
                 "draw_ellipse",
                 "draw_polygon",
                 "draw_star",
@@ -148,11 +150,13 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "nest_parts",
                 "name_part",
                 "engrave_part_names",
-                "copy_along_vectors",
                 "plate_production",
             ],
         ),
-        group("Array Objects", &["array_copy", "circular_copy"]),
+        group(
+            "Array Objects",
+            &["array_copy", "circular_copy", "copy_along_vectors"],
+        ),
     ]
 }
 
@@ -1378,8 +1382,8 @@ pub fn command_action(action: &str) -> Option<(bool, &str, serde_json::Value)> {
 }
 
 impl MenuSystem {
-    /// Aspire's main menu (`Resources_ENU.dll` MENU 129, see `re/SPEC.md`), minus vendor web links,
-    /// licensing and the debug menu. Shortcuts follow the accelerator table where the two disagree.
+    /// Aspire's main menu (see `re/SPEC.md`, Menus), minus vendor web links and licensing.
+    /// Shortcuts follow the keyboard shortcut table there where the two disagree.
     #[expect(clippy::too_many_lines, reason = "the menu table is data, not logic")]
     pub fn new() -> Self {
         let i = |name: &str| MenuItem::new(name, "");
@@ -1731,7 +1735,7 @@ impl MenuSystem {
         }
     }
 
-    /// The menus with no job open (`Resources_ENU.dll` MENU 128): files, options, machines,
+    /// The menus with no job open (see `re/SPEC.md`, Startup sequence): files, options, machines,
     /// tools and help. Machine, Gadgets and Help are the same as with a job.
     pub fn without_job(&self) -> Self {
         let i = |name: &str| MenuItem::new(name, "");

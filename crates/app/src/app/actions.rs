@@ -232,6 +232,10 @@ impl CutCraftApp {
             }
             "activate_layer_of_selection" => !self.doc.selection.is_empty(),
             "increment_and_save" | "find_tool" => self.screen == Screen::Job,
+            id if crate::flyout::variant(id).is_some() => {
+                crate::flyout::variant(id).is_some_and(|v| self.registry.get(v.command).is_some())
+                    && self.screen != Screen::Start
+            }
             _ => {
                 BUILT_INS.contains(&id)
                     // a command's form shows in a job's pages: with no job it could not be seen
@@ -313,6 +317,8 @@ impl CutCraftApp {
                 }
             }
             "edit_toolpath" => self.edit_toolpath(),
+            // a drawing tool's toolbox variant: its form, the drag read the variant's way
+            id if crate::flyout::variant(id).is_some() => self.start_variant(id),
             // Edit Text: Draw Text opens on the selected text's settings
             "edit_text" => self.start_command("draw_text"),
             // Aspire's three Join icons: Join / Close Vectors their way
@@ -1443,11 +1449,26 @@ impl CutCraftApp {
                 model_whole: true,
                 applied: None,
                 undo_from: self.history.undo_depth(),
+                way: crate::flyout::DragWay::AsIs,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
                 self.pages.open(page);
             }
+        }
+    }
+
+    /// A toolbox variant of a drawing tool (Draw Circle from Edge): its command's form, named
+    /// for the variant, reading the drag the variant's way.
+    fn start_variant(&mut self, id: &str) {
+        let Some(variant) = crate::flyout::variant(id) else {
+            return;
+        };
+        self.start_command(variant.command);
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == variant.command) {
+            form.way = variant.way;
+            form.label = variant.label;
+            variant.label.clone_into(&mut self.status.current_tool);
         }
     }
 
@@ -3771,6 +3792,9 @@ impl CutCraftApp {
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.label("2D and 3D design and CNC toolpaths.");
                 ui.separator();
+                ui.strong("Acknowledgements");
+                ui.label(ACKNOWLEDGEMENT);
+                ui.separator();
                 ui.strong("Contributors on GitHub");
                 for (login, commits, url) in contributors() {
                     ui.horizontal(|ui| {
@@ -3820,6 +3844,12 @@ impl CutCraftApp {
         }
     }
 }
+
+/// The About window's thanks to the program that inspired Cut Craft (ACKNOWLEDGEMENTS.md in full).
+pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. Cut Craft was inspired by Vectric Aspire, \
+whose tools and workflow showed what a hobby CNC program can be. Cut Craft is an independent \
+program written from scratch in Rust; it is not affiliated with or endorsed by Vectric and uses \
+none of Vectric's code. Vectric and Aspire are trademarks of their owners.";
 
 /// The GitHub contributors built in: login, commits and profile, most commits first.
 pub(super) fn contributors() -> Vec<(&'static str, &'static str, &'static str)> {

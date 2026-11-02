@@ -3,8 +3,8 @@
 Where Cut Craft stands against Aspire 12, what is still to do, and what is causing trouble.
 Updated **2026-11-01**, at version **0.4.2** (tag `v0.4.2`, commit `ec83b2b`).
 
-Behaviour comes from the clean-room spec (`re/SPEC.md`: Aspire's help, resources and
-strings, and black-box comparison under Wine). The tool-by-tool list is
+Behaviour comes from the clean-room spec (`re/SPEC.md`: Vectric's public documentation and
+hands-on use of the Aspire trial). The tool-by-tool list is
 `docs/tool-inventory.md`. How commands are built is
 `docs/superpowers/specs/2026-10-23-command-architecture-design.md`. The training-course
 check is `docs/courses.md` (made by `scripts/courses-report.py`).
@@ -109,7 +109,7 @@ under Wine (`~/.wine-aspire`) before it can be called exact.
 ## 7. Decisions needed
 
 1. **Gadgets:** leave them out, or design a Cut Craft scripting interface?
-2. **Import Toolpaths:** worth reverse engineering the formats, or leave out?
+2. **Import Toolpaths:** worth reading the file formats (from files the trial saves), or leave out?
 3. **Segment 3D Model handles:** build Aspire's 3D plane handles and drag-and-drop tree, or
    keep the form lists?
 

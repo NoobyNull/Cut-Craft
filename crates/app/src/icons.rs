@@ -1,5 +1,5 @@
-//! Tool icons, built into the program from `assets/icons` (SVGs redrawn by `re/make_icons.py`,
-//! a few credited PNGs, and dialog pictures kept as Aspire's own bitmaps; all in git), or read
+//! Tool icons, built into the program from `assets/icons` (original drawings made by
+//! `scripts/build-icons`, and a few credited PNGs; all in git), or read
 //! from the folder `CUT_CRAFT_ICON_DIR` names while icons are being worked on.
 
 use eframe::egui;
