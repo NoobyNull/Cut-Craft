@@ -74,7 +74,9 @@ fn drawing_groups() -> Vec<ToolGroup> {
             &[
                 "draw_polyline",
                 "draw_rectangle",
+                "draw_rectangle_from_center",
                 "draw_circle",
+                "draw_circle_from_edge",
                 "draw_ellipse",
                 "draw_polygon",
                 "draw_star",
@@ -143,14 +145,12 @@ fn drawing_groups() -> Vec<ToolGroup> {
         ),
         group(
             "Offset and Layout",
-            &[
-                "offset_vectors",
-                "nest_parts",
-                "copy_along_vectors",
-                "plate_production",
-            ],
+            &["offset_vectors", "nest_parts", "plate_production"],
         ),
-        group("Array Objects", &["array_copy", "circular_copy"]),
+        group(
+            "Array Objects",
+            &["array_copy", "circular_copy", "copy_along_vectors"],
+        ),
     ]
 }
 
