@@ -1341,6 +1341,7 @@ impl CutCraftApp {
             }
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
+        self.fill_drill_bank(cmd.id(), &mut params);
         // a toolpath's form in Aspire's order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
@@ -1927,10 +1928,27 @@ impl CutCraftApp {
             return;
         };
         self.start_command(&toolpath.strategy);
+        let mut params = toolpath.params;
+        // the bank as the machine has it now, so a bank changed since is used
+        self.fill_drill_bank(&toolpath.strategy, &mut params);
         if let Some(form) = self.form.as_mut().filter(|f| f.id == toolpath.strategy) {
-            form.params = toolpath.params;
+            form.params = params;
             form.editing = Some(id);
         }
+    }
+
+    /// A Drill Bank Toolpath's form drills with the active machine's bank (none when it has
+    /// none, which the toolpath then says how to set up).
+    pub(super) fn fill_drill_bank(&self, command: &str, params: &mut Value) {
+        if command != "drill_bank_toolpath" {
+            return;
+        }
+        let bank = self
+            .machines
+            .active()
+            .and_then(|m| m.drill_bank.clone())
+            .unwrap_or_default();
+        params["bank"] = serde_json::to_value(bank).expect("a drill bank serialises");
     }
 
     /// A form's Apply: its command, or for an edited toolpath that toolpath made again with

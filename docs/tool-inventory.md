@@ -284,6 +284,21 @@ say "not implemented yet".
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- Drill Bank (Aspire 12.5's Advanced Machining Module): Machine Configuration ▸ Drill Bank
+  sets up a head of drills on an X and a Y arm (count, pitch, where the arms cross, each
+  drill's controller number and diameter, the reference drill), with a picture of it. The
+  Drill Bank Toolpath (Toolpath Operations, beside Drilling) takes the active machine's bank,
+  matches the selected circles to drills by size and position (pitch and diameter
+  tolerances), and drops as many drills per plunge as line up; holes no drill fits are named
+  with the sizes there are. Peck, retract and dwell as Drilling. Posts with
+  `SETUP_DRILL_BANK` / `FINAL_DRILL_BANK_ACTION` and either `DRILL_BANK_PATTERN` or
+  `DRILL_BANK_EXTEND_DRILL` + `DRILL_BANK_RETRACT_DRILL` write it (`[DB]`, `[DBX]`, `[DBY]`,
+  `[DL]`, `[CD]`); others refuse it, saying what is missing. Array Copy and Plate
+  Production move its plunges with it; Merged refuses it. Not done: a Cut Craft post with
+  drill bank blocks (none of the hobby controllers has one), a toolpath icon of its own (it
+  borrows Drilling's), the simulation and time estimate count every hole as its own plunge,
+  vector selection templates, projection onto the 3D model, and the bank in the Tool
+  Database (`.vtdb` `drill_bank_*` tables are not read).
 - Toolpath options: Profile ramps (smooth, zig zag, spiral; by distance or angle), leads
   (straight or circular, lead out, overcut) and tabs (2D or 3D, by number or distance); Pocket
   Offset or Raster (angle, profile pass first / last / none) with ramped plunges; 3D Roughing
