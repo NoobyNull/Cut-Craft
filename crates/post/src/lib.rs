@@ -988,12 +988,22 @@ fn parts(toolpath: &Toolpath) -> Vec<(Option<&BankHit>, std::borrow::Cow<'_, Too
     bank.hits
         .iter()
         .map(|hit| {
-            // every hole of a hit is drilled with the same moves
-            let per_hole = hit.end.saturating_sub(hit.start) / hit.drills.len().max(1);
-            let moves = toolpath
+            // every hole of a hit is drilled with the same moves: the first hole's, up to its
+            // rise back to the height it came in at (ways round keep-out zones may come first)
+            let hit_moves = toolpath
                 .moves
-                .get(hit.start..hit.start + per_hole)
-                .unwrap_or_default()
+                .get(hit.start..hit.end.min(toolpath.moves.len()))
+                .unwrap_or_default();
+            let safe = hit_moves.first().map_or(0.0, |m| m.to.z);
+            let mut plunged = false;
+            let first_hole = hit_moves
+                .iter()
+                .position(|m| {
+                    plunged |= m.kind == MoveKind::Plunge;
+                    plunged && m.kind == MoveKind::Rapid && m.to.z >= safe - 1e-9
+                })
+                .map_or(hit_moves.len(), |i| i + 1);
+            let moves = hit_moves[..first_hole]
                 .iter()
                 .map(|m| cut_craft_core::toolpath::Move {
                     kind: m.kind,
@@ -2173,6 +2183,19 @@ begin FOOTER
             lines[second + 1].starts_with("G0 X224.000 Y0.000"),
             "{lines:?}"
         );
+    }
+
+    #[test]
+    fn a_way_round_a_keep_out_zone_before_a_plunge_still_plunges_once() {
+        let mut t = bank_toolpath();
+        // a waypoint leading into the second hit, as keep-out routing puts there
+        t.moves.insert(15, mv(MoveKind::Rapid, 150.0, 40.0, 5.0));
+        let bank = t.drill_bank.as_mut().unwrap();
+        bank.hits[1].end += 1;
+        let post = BASIC.replace("begin HEADER", PATTERN);
+        let lines = render(&post, vec![t]);
+        let plunges = lines.iter().filter(|l| l.contains("Z-10.000")).count();
+        assert_eq!(plunges, 2, "{lines:?}");
     }
 
     #[test]
