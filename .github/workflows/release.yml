@@ -112,10 +112,21 @@ jobs:
     needs: [plan, build]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+
+      # FILE.minisig beside each download: Help > Check for Updates installs nothing unsigned.
+      # A versioned release fails here without the key; the nightly goes out unsigned.
+      - name: Sign the downloads
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          REQUIRE_SIGNING: ${{ needs.plan.outputs.tag == 'nightly' && '0' || '1' }}
+        run: scripts/sign-release dist
 
       - name: Publish release
         env:

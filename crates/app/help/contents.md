@@ -36,8 +36,9 @@ A number field takes a sum as well as a number, worked out when it is entered:
 Cut Craft asks GitHub about once a day, when it starts, whether there is a new version, and
 says so if there is. **Help ▸ Check for Updates** asks straight away.
 
-- **Update Now** downloads the new version, checks it arrived complete and unchanged, and
-  installs it. Nothing is downloaded until you press it.
+- **Update Now** downloads the new version, checks it is a genuine Cut Craft release
+  (signed by its maker) that arrived complete, and installs it. Nothing is downloaded until
+  you press it.
 - **Restart Now** closes Cut Craft and opens the new version. If your job has unsaved
   changes, you are asked whether to save them first. **Restart Later** keeps working; the
   new version starts next time.

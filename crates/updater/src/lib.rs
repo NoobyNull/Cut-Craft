@@ -1,7 +1,7 @@
 //! Help ▸ Check for Updates: finds a newer Cut Craft on GitHub, and with the user's go-ahead
-//! downloads it, checks it against GitHub's checksum and swaps it in for the running
-//! program, ready for a restart. A copy built from a clone of the code fetches the newest
-//! code and builds it instead. Only GitHub is asked, never a mirror.
+//! downloads it, checks it was signed with Cut Craft's release key (minisign) and matches
+//! GitHub's checksum, and swaps it in for the running program, ready for a restart. Only
+//! GitHub is asked, never a mirror.
 
 mod install;
 mod package;
@@ -22,6 +22,9 @@ pub const LATEST: &str = "https://api.github.com/repos/NoobyNull/Cut-Craft/relea
 pub const RELEASES_PAGE: &str = "https://github.com/NoobyNull/Cut-Craft/releases";
 /// How long after one check the next start checks again.
 pub const CHECK_EVERY_SECONDS: u64 = 20 * 60 * 60;
+/// The minisign public key releases are signed with (the secret key is only in the
+/// repository's Actions secrets; see `scripts/sign-release`).
+pub const RELEASE_KEY: &str = include_str!("../release-key.pub");
 /// A download larger than this is not Cut Craft.
 const MAX_DOWNLOAD: u64 = 500 * 1024 * 1024;
 
@@ -73,6 +76,11 @@ impl Found {
                      the release page instead.",
                     release.version
                 )),
+                Some(a) if release.signature_of(a).is_none() => Err(format!(
+                    "Version {}'s download is not signed, so Cut Craft cannot check it is a \
+                     real release. Download it from the release page instead.",
+                    release.version
+                )),
                 Some(a) if a.digest.is_none() => Err(format!(
                     "GitHub has no checksum for version {}'s download, so Cut Craft cannot \
                      check it arrives whole. Download it from the release page instead.",
@@ -120,6 +128,11 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
                 .asset_suffix()
                 .and_then(|s| release.asset(s))
                 .ok_or("the release has no download for this computer")?;
+            let signature = release
+                .signature_of(asset)
+                .ok_or("the release's download is not signed")?;
+            let signature = String::from_utf8(download(signature, &|_| {})?)
+                .map_err(|_| "the release's signature is not text".to_owned())?;
             let bytes = download(asset, &|done| {
                 step(Step::Downloading {
                     done,
@@ -128,6 +141,7 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
             })?;
             step(Step::Checking);
             package::verify(&bytes, asset.digest.as_deref())?;
+            package::verify_signature(&bytes, &signature, RELEASE_KEY, &asset.name)?;
             let program = match install {
                 Install::AppImage { .. } => bytes,
                 Install::Archive { windows, .. } => {
@@ -263,22 +277,24 @@ mod tests {
     };
 
     #[test]
-    fn a_release_installs_only_with_a_checked_download() {
-        let ok = release(&[("cut-craft-v0.5.0-linux-x86_64.tar.gz", Some("sha256:00"))]);
-        let Found::Release { ready, .. } = Found::for_release(&LINUX, ok) else {
-            panic!()
-        };
-        assert_eq!(ready, Ok(()));
-        let unchecked = release(&[("cut-craft-v0.5.0-linux-x86_64.tar.gz", None)]);
-        let Found::Release { ready, .. } = Found::for_release(&LINUX, unchecked) else {
-            panic!()
-        };
-        assert!(ready.unwrap_err().contains("no checksum"));
-        let windows_only = release(&[("cut-craft-v0.5.0-windows-x86_64.zip", Some("sha256:00"))]);
-        let Found::Release { ready, .. } = Found::for_release(&LINUX, windows_only) else {
-            panic!()
-        };
-        assert!(ready.unwrap_err().contains("no download"));
+    fn a_release_installs_only_with_a_signed_checked_download() {
+        let ready =
+            |assets: &[(&str, Option<&str>)]| match Found::for_release(&LINUX, release(assets)) {
+                Found::Release { ready, .. } => ready,
+                Found::UpToDate => unreachable!(),
+            };
+        let tgz = "cut-craft-v0.5.0-linux-x86_64.tar.gz";
+        let sig = "cut-craft-v0.5.0-linux-x86_64.tar.gz.minisig";
+        assert_eq!(
+            ready(&[(tgz, Some("sha256:00")), (sig, Some("sha256:01"))]),
+            Ok(())
+        );
+        let unsigned = ready(&[(tgz, Some("sha256:00"))]);
+        assert!(unsigned.unwrap_err().contains("not signed"));
+        let unchecked = ready(&[(tgz, None), (sig, None)]);
+        assert!(unchecked.unwrap_err().contains("no checksum"));
+        let windows_only = ready(&[("cut-craft-v0.5.0-windows-x86_64.zip", Some("sha256:00"))]);
+        assert!(windows_only.unwrap_err().contains("no download"));
         let flatpak = Install::Elsewhere {
             why: "use the .flatpak".into(),
         };
@@ -346,5 +362,18 @@ mod tests {
         assert!(matches!(steps[0], Step::Downloading { .. }));
         assert_eq!(steps[steps.len() - 2..], [Step::Checking, Step::Installing]);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_release_key_is_built_in() {
+        let key = RELEASE_KEY
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty() && !l.starts_with("untrusted comment:"));
+        assert!(
+            key.and_then(|k| minisign_verify::PublicKey::from_base64(k).ok())
+                .is_some(),
+            "crates/updater/release-key.pub needs the release key: the .pub file `minisign -G` made"
+        );
     }
 }

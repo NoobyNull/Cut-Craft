@@ -187,7 +187,9 @@ say "not implemented yet".
   `crates/updater`). Asks GitHub's releases (never a mirror) for a newer stable version,
   at startup about once a day (Options ▸ Updates turns that off) and from the menu. Update
   Now downloads the release's file for this install (Windows .zip, Linux .tar.gz or
-  AppImage), refuses it unless it matches GitHub's SHA-256 checksum, swaps the program in
+  AppImage), refuses it unless it carries a minisign signature from the release key built
+  into the app (`crates/updater/release-key.pub`, its trusted comment naming the file) and
+  matches GitHub's SHA-256 checksum, swaps the program in
   (the old one kept as `.old` until the next start), then offers Restart Now, which asks to
   save first. Flatpak, macOS, other processors and builds from the source code are told how
   to update by hand instead. Skip This Version quiets the startup check for that version.

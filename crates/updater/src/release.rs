@@ -68,6 +68,12 @@ impl Release {
         self.version > *current
     }
 
+    /// The minisign signature published beside `asset`: `<name>.minisig`.
+    pub fn signature_of(&self, asset: &Asset) -> Option<&Asset> {
+        let name = format!("{}.minisig", asset.name);
+        self.assets.iter().find(|a| a.name == name)
+    }
+
     /// The download whose name ends with `suffix` (see [`crate::Install::asset_suffix`]).
     pub fn asset(&self, suffix: &str) -> Option<&Asset> {
         self.assets.iter().find(|a| a.name.ends_with(suffix))

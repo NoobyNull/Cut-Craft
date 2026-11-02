@@ -34,6 +34,46 @@ pub fn verify(bytes: &[u8], digest: Option<&str>) -> Result<(), String> {
     }
 }
 
+/// Whether `bytes` were signed with the release key `key` (a minisign public key file):
+/// `signature` is the `.minisig` file published beside the download, and its trusted
+/// comment must name the download (`file:<name>`), so an older signed file cannot be passed
+/// off as a newer one.
+pub fn verify_signature(
+    bytes: &[u8],
+    signature: &str,
+    key: &str,
+    name: &str,
+) -> Result<(), String> {
+    let refused = |why: &str| {
+        format!(
+            "The download's signature {why}, so it may not be a real Cut Craft release. \
+             Nothing was installed."
+        )
+    };
+    let key = key
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !l.starts_with("untrusted comment:"))
+        .and_then(|line| minisign_verify::PublicKey::from_base64(line).ok())
+        .ok_or(
+            "This copy of Cut Craft has no release key built in, so it cannot check \
+                downloads. Download the new version from the release page instead.",
+        )?;
+    let signature =
+        minisign_verify::Signature::decode(signature).map_err(|_| refused("could not be read"))?;
+    key.verify(bytes, &signature, false)
+        .map_err(|_| refused("does not match"))?;
+    let named = signature
+        .trusted_comment()
+        .split_whitespace()
+        .any(|word| word.strip_prefix("file:") == Some(name));
+    if named {
+        Ok(())
+    } else {
+        Err(refused(&format!("is for another file than {name}")))
+    }
+}
+
 /// The program `name` (`cut-craft` or `cut-craft.exe`) inside a release archive.
 pub fn program_from(archive: &[u8], zip: bool, name: &str) -> Result<Vec<u8>, String> {
     let missing = || format!("the download has no {name} in it");
@@ -154,6 +194,52 @@ mod tests {
         );
         assert!(verify(b"hello", None).unwrap_err().contains("no checksum"));
         assert!(verify(b"hello", Some("md5:abc")).is_err());
+    }
+
+    /// A key pair and a signature made as `minisign -S -t "file:<name>"` makes them.
+    fn sign(bytes: &[u8], comment: &str) -> (String, String) {
+        let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
+        let signature = minisign::sign(
+            Some(&pair.pk),
+            &pair.sk,
+            std::io::Cursor::new(bytes),
+            Some(comment),
+            None,
+        )
+        .unwrap();
+        (pair.pk.to_box().unwrap().to_string(), signature.to_string())
+    }
+
+    #[test]
+    fn a_download_must_be_signed_with_the_release_key() {
+        let name = "cut-craft-v0.5.0-linux-x86_64.tar.gz";
+        let (key, signature) = sign(b"program", &format!("file:{name}"));
+        assert_eq!(verify_signature(b"program", &signature, &key, name), Ok(()));
+        let e = verify_signature(b"programme", &signature, &key, name).unwrap_err();
+        assert!(e.contains("does not match"), "{e}");
+        // signed by someone else's key
+        let (other, _) = sign(b"program", "x");
+        assert!(verify_signature(b"program", &signature, &other, name).is_err());
+        assert!(verify_signature(b"program", "junk", &key, name).is_err());
+        let none = verify_signature(b"program", &signature, "untrusted comment: none\n", name);
+        assert!(none.unwrap_err().contains("no release key"));
+    }
+
+    #[test]
+    fn an_older_signed_download_cannot_pass_as_a_newer_one() {
+        let old = "cut-craft-v0.4.9-linux-x86_64.tar.gz";
+        let (key, signature) = sign(b"old program", &format!("file:{old}"));
+        let e = verify_signature(
+            b"old program",
+            &signature,
+            &key,
+            "cut-craft-v0.5.0-linux-x86_64.tar.gz",
+        )
+        .unwrap_err();
+        assert!(e.contains("another file"), "{e}");
+        // the name must be the whole word, not a part of it
+        let (key, signature) = sign(b"p", "file:x.tar.gz.old");
+        assert!(verify_signature(b"p", &signature, &key, "x.tar.gz").is_err());
     }
 
     fn tar_gz(files: &[(&str, &[u8])]) -> Vec<u8> {

@@ -357,9 +357,9 @@ fn offer(
     ui.add_space(8.0);
     ui.label(match ready {
         Ok(()) => {
-            "Update Now downloads it from GitHub, checks the download is complete and \
-             unchanged, and installs it. Cut Craft asks before restarting, and your open job \
-             is not touched."
+            "Update Now downloads it from GitHub, checks it is a genuine, signed Cut Craft \
+             release that arrived complete, and installs it. Cut Craft asks before \
+             restarting, and your open job is not touched."
         }
         Err(why) => why.as_str(),
     });
@@ -415,7 +415,7 @@ fn progress(step: Step) -> (String, Option<f32>) {
         ),
         Step::Downloading { .. } => ("Downloading...".to_owned(), None),
         Step::Checking => (
-            "Checking the download is complete and unchanged...".to_owned(),
+            "Checking the download is a genuine, signed Cut Craft release...".to_owned(),
             None,
         ),
         Step::Installing => ("Installing...".to_owned(), None),
@@ -509,7 +509,7 @@ mod tests {
         assert_eq!(words, "Downloading... 7.3 of 14.7 MB");
         assert_eq!(fraction, Some(0.5));
         assert_eq!(progress(Step::Downloading { done: 5, total: 0 }).1, None);
-        assert!(progress(Step::Checking).0.contains("unchanged"));
+        assert!(progress(Step::Checking).0.contains("signed"));
     }
 
     /// Draws the window once, as a frame would; what it asked for.

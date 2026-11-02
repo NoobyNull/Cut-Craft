@@ -120,10 +120,18 @@ jobs:
     needs: [macos, linux, linux-packages, windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      # FILE.minisig beside each: Help > Check for Updates installs nothing unsigned
+      - name: Sign them
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          REQUIRE_SIGNING: "1"
+        run: scripts/sign-release dist
       - name: Attach them all to the release
         env:
           GH_TOKEN: ${{ github.token }}
