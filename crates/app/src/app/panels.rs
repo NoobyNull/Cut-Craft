@@ -335,24 +335,74 @@ impl CutCraftApp {
         }
     }
 
-    /// The Clipart tab: its library, and the chosen folder's clipart to double-click in.
+    /// The Library tab: its folders, and the chosen folder's clipart to add to the project.
     pub(super) fn clipart_panel(&mut self, ui: &mut egui::Ui) {
-        cut_craft_bug_report::mark(ui, "Clipart tab");
-        let registry = &self.registry;
-        let importable = |ext: &str| registry.importer_for(ext).is_some();
+        use crate::clipart::Picked;
+        cut_craft_bug_report::mark(ui, "Library tab");
+        let importable: crate::clipart::Importable = (self.registry.importers())
+            .flat_map(|i| i.format.extensions)
+            .map(|e| e.to_lowercase())
+            .collect();
         let levels: Vec<(u64, String)> = (self.doc.levels.iter())
             .map(|(&id, l)| (id, l.name.clone()))
             .collect();
         match crate::clipart::panel(ui, &mut self.clipart, &importable, &levels) {
-            Some(crate::clipart::Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
-            Some(crate::clipart::Picked::OpenFolder) => {
-                self.invoke(ui.ctx(), "open_clipart_folder");
+            Some(Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
+            Some(Picked::ShowFolder(folder)) => {
+                if let Err(e) = files::show_folder(&folder) {
+                    self.status
+                        .set_message(&format!("Couldn't show {}: {e}", folder.display()));
+                }
             }
-            Some(crate::clipart::Picked::Import(path)) => self.import_file(&path),
-            Some(crate::clipart::Picked::ImportToLevel(path, level)) => {
-                self.import_clipart(&path, None, Some(level));
+            Some(Picked::Import(path)) => self.add_from_library(vec![path], None),
+            Some(Picked::AddToProject(files)) => self.add_from_library(files, None),
+            Some(Picked::AddToLevel(files, level)) => self.add_from_library(files, Some(level)),
+            Some(Picked::Locate(path)) => {
+                if let Err(e) = files::locate(&path) {
+                    self.status
+                        .set_message(&format!("Couldn't show {}: {e}", path.display()));
+                }
+            }
+            Some(Picked::Delete(doomed)) => {
+                if confirm_delete(&doomed)
+                    && let Err(e) = self.clipart.delete(&doomed)
+                {
+                    self.status.set_message(&e);
+                }
             }
             None => {}
+        }
+    }
+
+    /// Adds `files` from the Library to the project, one after another: each model through
+    /// Orientate 3D Model, the next once its form is closed (applied or cancelled).
+    pub(super) fn add_from_library(
+        &mut self,
+        files: Vec<std::path::PathBuf>,
+        level: Option<crate::clipart::ToLevel>,
+    ) {
+        self.import_queue
+            .extend(files.into_iter().map(|f| (f, level)));
+        self.next_import();
+    }
+
+    /// The next file waiting to be added from the Library, when no form is open.
+    pub(super) fn next_import(&mut self) {
+        while self.form.is_none()
+            && let Some((path, level)) = self.import_queue.pop_front()
+        {
+            if path.is_file() {
+                if level.is_some() {
+                    self.import_clipart(&path, None, level);
+                } else {
+                    self.import_file(&path);
+                }
+            } else {
+                self.status.set_message(&format!(
+                    "Couldn't add {}: the file isn't there any more.",
+                    path.display()
+                ));
+            }
         }
     }
 
@@ -489,10 +539,7 @@ impl CutCraftApp {
         menu: impl FnOnce() -> Vec<gui::MenuItem>,
     ) -> Option<String> {
         let mut clicked = None;
-        if response.secondary_clicked() {
-            cut_craft_bug_report::claim(&response.ctx);
-        }
-        response.context_menu(|ui| {
+        cut_craft_bug_report::context_menu(response, |ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
                 checked: &|_| None,
@@ -501,11 +548,6 @@ impl CutCraftApp {
                 image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
             };
             menu_items(ui, &menu(), &menus, &mut clicked);
-            ui.separator();
-            if ui.button("Report a Bug Here…").clicked() {
-                cut_craft_bug_report::open_here(ui.ctx());
-                ui.close();
-            }
         });
         clicked
     }
@@ -2894,6 +2936,36 @@ fn save_part(
 }
 
 /// Whether `path` is a mesh, imported through Orientate 3D Model.
+/// Asks before Delete from Disk, naming what goes; whether to go ahead.
+fn confirm_delete(doomed: &[std::path::PathBuf]) -> bool {
+    const LISTED: usize = 8;
+    let mut names: Vec<String> = (doomed.iter().take(LISTED))
+        .map(|f| format!("  {}", file_name(f)))
+        .collect();
+    if doomed.len() > LISTED {
+        names.push(format!("  and {} more", doomed.len() - LISTED));
+    }
+    let what = if doomed.len() == 1 {
+        "this file".to_owned()
+    } else {
+        format!("these {} files", doomed.len())
+    };
+    let answer = super::message_dialog()
+        .set_title("Delete from Disk")
+        .set_description(format!(
+            "Delete {what} from your disk?\n\n{}\n\nThis can't be undone: they don't go \
+             to the bin.",
+            names.join("\n")
+        ))
+        .set_level(rfd::MessageLevel::Warning)
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            "Delete".into(),
+            "Cancel".into(),
+        ))
+        .show();
+    matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Delete")
+}
+
 fn is_model(path: &std::path::Path) -> bool {
     path.extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("stl") || e.eq_ignore_ascii_case("obj"))

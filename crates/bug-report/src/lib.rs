@@ -194,6 +194,22 @@ pub fn open_here(ctx: &egui::Context) {
     with_frame(ctx, |f| f.asked = true);
 }
 
+/// `response`'s right-click menu, with Report a Bug Here… at its foot: the right-click is
+/// [`claim`]ed, so the small menu doesn't open over this one as well.
+pub fn context_menu(response: &egui::Response, add_contents: impl FnOnce(&mut egui::Ui)) {
+    if response.secondary_clicked() {
+        claim(&response.ctx);
+    }
+    response.context_menu(|ui| {
+        add_contents(ui);
+        ui.separator();
+        if ui.button("Report a Bug Here…").clicked() {
+            open_here(ui.ctx());
+            ui.close();
+        }
+    });
+}
+
 /// The regions holding `at`, outermost first (in the order they were drawn).
 pub fn regions_at(regions: &[Region], at: egui::Pos2) -> Vec<Region> {
     regions
@@ -667,6 +683,60 @@ mod tests {
             "{}",
             found[1].at.file()
         );
+    }
+
+    /// A right-click menu made with [`context_menu`] has Report a Bug Here… at its foot, and
+    /// takes the right-click, so the small menu doesn't open over it as well.
+    #[test]
+    fn a_menu_of_its_own_ends_with_the_report() {
+        let ctx = egui::Context::default();
+        let mut reporter = Reporter::new("me/app", None);
+        let host = Host {
+            state: &|| "state".into(),
+            pick_pictures: &Vec::new,
+        };
+        let at = egui::pos2(100.0, 100.0);
+        let mut texts = vec![];
+        let mut frame = |events, reporter: &mut Reporter| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_pass(input, |ctx| {
+                ctx.root_ui(|ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        mark(ui, "Tiles");
+                        let tile = ui.add_sized([400.0, 400.0], egui::Button::new("Tile"));
+                        context_menu(&tile, |ui| {
+                            ui.label("Mine");
+                        });
+                    });
+                });
+                reporter.frame(ctx, &host);
+            });
+            output.textures_delta.clear();
+            texts = output
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+        };
+        frame(vec![egui::Event::PointerMoved(at)], &mut reporter);
+        frame(right_click(at), &mut reporter);
+        // a new menu is drawn unseen for a frame while egui sizes it
+        frame(vec![], &mut reporter);
+        frame(vec![], &mut reporter);
+        assert!(!reporter.menu, "the small menu stays shut");
+        assert!(texts.iter().any(|t| t == "Mine"), "{texts:?}");
+        let reports = texts.iter().filter(|t| *t == "Report a Bug Here…").count();
+        assert_eq!(reports, 1, "{texts:?}");
     }
 
     #[test]

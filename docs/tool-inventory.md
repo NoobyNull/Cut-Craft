@@ -186,11 +186,34 @@ say "not implemented yet".
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
   Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
-  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Clipart
-  (a library of folders; double-click a thumbnail to import it centred on the job, drag it
-  onto the 2D or 3D view to import it centred where it is dropped, or right-click ▸ Import
-  to Level onto one of the job's levels or a New Level named after the file; a model goes
-  through Orientate 3D Model already placed and levelled).
+  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
+  (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, as a tree
+  of the folders in them however deep, each with how many files are in it; hidden folders
+  and links to folders are passed over. A folder is listed once: adding one inside a folder
+  already added opens it in the tree instead, adding one around folders already added
+  takes their place, and duplicates kept from before are tidied as the library loads. Click a folder to see what is in it and the folders
+  in it, or All folders for everything; the one looked in is remembered. Right-click a
+  folder: Open Folder, and Remove Folder for one added. Folders are read in the background
+  and again every 5 s; only the rows of tiles on screen are drawn, so thousands of files
+  open at once (at most 100 000 listed). A missing folder is marked "not found" and says
+  how to fix it). Double-click a tile to add it to the project
+  centred on the job, or drag it onto the 2D or 3D view to add it centred where it is
+  dropped; a model goes through Orientate 3D Model already placed and levelled. Click picks
+  a tile, Ctrl+click adds or removes one, Shift+click picks a range. Right-click (on what is
+  picked): Add to Project (several are added one after another, each model's form in
+  turn), Add to Level (one of the job's levels, or a New Level each, named after the
+  file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
+  answering `org.freedesktop.FileManager1`, else its folder opened), Add Tag / Remove Tag
+  (kept in the config folder's `library-tags.json`, never in the files), Delete from Disk
+  (asks first, naming the files; a model's picture goes with it; not to the bin). A Show
+  filter picks Everything, 3D models, 2D drawings, Pictures or Depth maps (greyscale
+  pictures, by their header, or tagged "depth map"); Search finds names and tags. A 3D
+  model's tile shows a preview: `mydesign.png` beside `mydesign.stl` if there is one (and
+  that picture gets no tile of its own), else the model rendered from its largest side
+  (from above, or face on for one saved standing up), once, on background threads for the
+  tiles on screen, and kept in the cache folder until the file changes; previews unused for
+  60 days are cleared. Vectric's locked `.3dclip` / `.v3m` files are counted and explained.
+  Not done: subfolders, thumbnail sizes.
 - Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
   geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
   snap point across or up and down, and puts it on a span's tangent at the span's ends or
@@ -495,7 +518,8 @@ say "not implemented yet".
 - Model ▸ Export as 3D Clipart: the selected components (baked into one, shaping and all)
   saved as Cut Craft's own `.ccclip` (JSON); Import Component / 3D Model reads them back,
   centred on the job, on the first level. Aspire's `.3dclip` is encrypted (`re/SPEC.md`),
-  so it is neither read nor written; the Clipart tab lists folders of your own files instead.
+  so it is neither read nor written; the Clipart tab lists folders of your own files instead
+  (and says how many locked Vectric files a folder has, and why they aren't shown).
 - Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by planes
   square to X, Y or Z: one at a percentage of its size, or (Number of Cuts) several in
   equal slices; the first segment and the ones after it (turned over, if asked, so their
