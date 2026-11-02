@@ -38,6 +38,7 @@ python3 -I re/vfont.py "$HOME/Desktop/Aspire 12.0/Fonts/Helvetica 1L.vfont" re/e
 - **[obs]** 3D: OpenSceneGraph (`osg*.dll`), with a Mesa llvmpipe software-OpenGL fallback (`x64/swrndr/opengl32.dll`). `VectricGLDetector.exe` probes the GPU.
 - **[obs]** I/O libraries: ODA (DXF/DWG; `IoOda`, `Oda` catalogs), pstill (EPS/AI/PDF; `IoPScript`), GraphicsMagick (bitmaps; `IoMagick`), OpenNURBS (`.3dm`), SketchUp SDK (`.skp`).
 - **[obs]** Scripting: Lua + LuaBind, used for Gadgets and Lua-based post-processors (`Lua/ppVariables.lua`).
+  - **Deliberate difference:** CutCraft gadgets are Lua 5.4 too, but call CutCraft's own commands by id (`cutcraft.run("draw_circle", {...})`) instead of Vectric's gadget API, run sandboxed (no files, programs or network), and each run is one Undo step. Aspire gadgets do not run unchanged.
 - **[obs]** Cloud and support: curl/OpenSSL/JsonCpp (clipart library, machine database, licensing, makerspace accounts) and BugSplat crash reporting.
 - **[inf]** Subsystem split, from `.mo` catalog names: `App`/`AppCmd` commands, `Io*` file I/O, `Vd` vector geometry, `Cm` layers, `Tri*` triangle meshes, `Mc*` machining and post-processing, `Nest` nesting, `Sd` two-sided jobs, `V3d` 3D view, `UiP`/`VfUi`/`Uvs*` UI forms.
 
