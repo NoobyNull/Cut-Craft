@@ -109,8 +109,9 @@ fn settings_schema(settings: &Value) -> Result<(Value, Value), String> {
         }
         let default = match &s["default"] {
             Value::Null => match kind {
-                "integer" => json!(0),
-                "number" | "length" => json!(0.0),
+                // zero, unless the setting's range leaves zero out
+                "integer" => json!(whole(in_range(s).ceil())),
+                "number" | "length" => json!(in_range(s)),
                 "boolean" => json!(false),
                 "choice" => property["enum"][0].clone(),
                 _ => json!(""),
@@ -125,6 +126,22 @@ fn settings_schema(settings: &Value) -> Result<(Value, Value), String> {
         json!({ "type": "object", "properties": properties }),
         Value::Object(defaults),
     ))
+}
+
+/// Zero, or the end of the setting's `min`..`max` range nearest it.
+fn in_range(setting: &Value) -> f64 {
+    let min = setting["min"].as_f64().unwrap_or(f64::NEG_INFINITY);
+    let max = setting["max"].as_f64().unwrap_or(f64::INFINITY);
+    0.0_f64.max(min).min(max)
+}
+
+/// A whole number setting's starting value, which a gadget's range keeps small.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "saturates; a form setting's range is nowhere near i64's"
+)]
+fn whole(value: f64) -> i64 {
+    value as i64
 }
 
 /// `hole-pattern` → `Hole Pattern`.

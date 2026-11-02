@@ -129,3 +129,22 @@ fn a_gadget_joins_the_registry() {
     ));
     assert!(r.get("gadget_hole_pattern").is_some());
 }
+
+#[test]
+fn a_setting_without_a_default_starts_within_its_range() {
+    let g = load_gadget(
+        "ranged.lua",
+        r#"settings = {
+             { key = "holes", type = "integer", min = 2.5 },
+             { key = "depth", type = "length", min = 3 },
+             { key = "angle", type = "number", min = -10, max = -5 },
+           }
+           function run() end"#,
+        commands(),
+    )
+    .unwrap();
+    assert_eq!(
+        g.default_params(),
+        json!({ "holes": 3, "depth": 3.0, "angle": -5.0 })
+    );
+}
