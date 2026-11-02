@@ -91,6 +91,19 @@ fn about_lists_the_github_contributors() {
 }
 
 #[test]
+fn about_thanks_vectric_and_says_cut_craft_is_independent() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::About);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Acknowledgements").is_some());
+    let thanks = super::actions::ACKNOWLEDGEMENT;
+    assert!(thanks.contains("Vectric Aspire"), "{thanks}");
+    assert!(thanks.contains("not affiliated with"), "{thanks}");
+    assert!(thanks.contains("trademarks"), "{thanks}");
+}
+
+#[test]
 fn importing_models_offers_what_the_options_say() {
     use crate::options::ModelTypes;
     let mut h = Harness::new();
