@@ -3,13 +3,15 @@
 #   any feat: or "!" (rewrite, breaking)  -> 0.x+1.0
 #   otherwise any fix:/perf:/refactor:/revert:  -> 0.x.y+1
 #   only docs:/chore:/ci:/test:/style:/build:, or no merges  -> nothing is released
-# then commits "Version X.Y.Z", tags vX.Y.Z and starts Release and Builds on that tag, which
-# build and publish the release. "Run workflow" does the same now.
+# then commits "Version X.Y.Z" and tags vX.Y.Z. The tag starts Release and Builds, which build
+# and publish the release. "Run workflow" does the same now.
 #
 # It starts once main's version has a tag (v0.5.1, cut by hand); until then it only reports.
 # Everything since the last tag counts, so a night that fails is made up the next night.
-# Pushes made with the workflow's own token start no workflows, so its "Version" commit
-# doesn't start CI or this again; that is also why it starts Release and Builds itself.
+# main is protected (no direct pushes), so the push goes through the deploy key in the
+# VERSION_BUMP_DEPLOY_KEY secret, the one thing the "Protect main" ruleset lets bypass it.
+# Unlike the workflow's own token, a deploy-key push starts workflows: CI checks the Version
+# commit, and the tag starts Release and Builds.
 name: Version bump
 
 on:
@@ -19,7 +21,6 @@ on:
 
 permissions:
   contents: write # the Version commit and the tag
-  actions: write # start Release and Builds on the tag
   pull-requests: read
 
 concurrency:
@@ -35,6 +36,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          ssh-key: ${{ secrets.VERSION_BUMP_DEPLOY_KEY }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -78,7 +80,12 @@ jobs:
         if: steps.plan.outputs.version
         env:
           VERSION: ${{ steps.plan.outputs.version }}
+          HAS_KEY: ${{ secrets.VERSION_BUMP_DEPLOY_KEY != '' }}
         run: |
+          if [[ $HAS_KEY != true ]]; then
+            echo "::error::Secret VERSION_BUMP_DEPLOY_KEY is missing, so Version $VERSION can't be pushed to protected main. See BUILDING.md, \"Let the nightly version push to main\"."
+            exit 1
+          fi
           sed -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" Cargo.toml
           cargo update --workspace
           git config user.name "github-actions[bot]"
@@ -88,12 +95,3 @@ jobs:
           # both or neither: if main moved meanwhile this is refused and the next night retries
           git push --atomic origin HEAD:main "v$VERSION"
 
-      - name: Build and publish the release
-        if: steps.plan.outputs.version
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.plan.outputs.version }}
-        run: |
-          gh workflow run release.yml --ref "v$VERSION"
-          gh workflow run builds.yml --ref "v$VERSION"
-          echo "v$VERSION: started Release and Builds." >> "$GITHUB_STEP_SUMMARY"
