@@ -17,9 +17,10 @@ use std::time::{Duration, Instant};
 /// A thumbnail's edge, in rows of the theme's interactive height.
 // ponytail: one size; Aspire's three view sizes can come with a setting
 const THUMBNAIL_ROWS: f32 = 4.0;
-/// Pictures drawn as themselves; the rest ([`preview::PICTURES`]) are shrunk once and kept,
-/// as a model's preview is, so a folder of big photos doesn't fill the memory.
-const DRAWN: [&str; 2] = ["gif", "svg"];
+/// Pictures drawn as themselves (at the tile's size); the rest ([`BITMAPS`]) are shrunk
+/// once and kept, as a model's preview is, so a folder of big photos doesn't fill the
+/// memory, nor a huge scan go past the graphics card's largest texture (which stops the app).
+const DRAWN: [&str; 1] = ["svg"];
 /// Pictures made of pixels (a depth map is one of these).
 const BITMAPS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff"];
 /// Vectric's clipart, which is locked to Vectric's own software: counted, not shown.
@@ -1103,7 +1104,7 @@ fn thumbnail(
         return (ui.add(egui::Button::image(image).selected(chosen)), None);
     }
     let model = preview::MODELS.contains(&extension.as_str());
-    let picture = preview::PICTURES.contains(&extension.as_str());
+    let picture = BITMAPS.contains(&extension.as_str());
     let on_screen = ui.is_rect_visible(egui::Rect::from_min_size(ui.cursor().min, size));
     let kind = if model {
         "3D".into()
@@ -1244,6 +1245,34 @@ mod tests {
             stamp(&list(&dir, &importable, &mut HashMap::new()), "lonely.obj"),
             before
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A picture's tile is a preview shrunk from it, not the picture itself: a scan 16 604
+    /// pixels wide went past the graphics card's largest texture and stopped the app.
+    #[test]
+    fn pictures_are_shrunk() {
+        let dir = folder("huge");
+        image::RgbImage::new(9000, 2)
+            .save(dir.join("scan.png"))
+            .unwrap();
+        image::RgbImage::new(9000, 2)
+            .save(dir.join("banner.gif"))
+            .unwrap();
+        let pictures = importable(&["png", "gif"]);
+        let mut clipart = Clipart {
+            folders: vec![dir.clone()],
+            ..Clipart::default()
+        };
+        clipart.read_now(&pictures);
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                panel(ui, &mut clipart, &pictures, &[]);
+            });
+        });
+        out.textures_delta.clear();
+        assert_eq!(clipart.previews.asked(), 2, "both made into previews");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
