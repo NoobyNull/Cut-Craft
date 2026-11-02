@@ -190,7 +190,12 @@ say "not implemented yet".
   (a library of folders; double-click a thumbnail to import it centred on the job, drag it
   onto the 2D or 3D view to import it centred where it is dropped, or right-click ▸ Import
   to Level onto one of the job's levels or a New Level named after the file; a model goes
-  through Orientate 3D Model already placed and levelled).
+  through Orientate 3D Model already placed and levelled). A 3D model's tile shows a
+  preview: `mydesign.png` beside `mydesign.stl` if there is one (and that picture gets no
+  tile of its own), else the model rendered from above, once, on background threads for
+  the tiles on screen, and kept in the cache folder until the file changes. Search by
+  name; Vectric's locked `.3dclip` / `.v3m` files are counted and explained. Not done:
+  subfolders, thumbnail sizes.
 - Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
   geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
   snap point across or up and down, and puts it on a span's tangent at the span's ends or
@@ -473,7 +478,8 @@ say "not implemented yet".
 - Model ▸ Export as 3D Clipart: the selected components (baked into one, shaping and all)
   saved as Cut Craft's own `.ccclip` (JSON); Import Component / 3D Model reads them back,
   centred on the job, on the first level. Aspire's `.3dclip` is encrypted (`re/SPEC.md`),
-  so it is neither read nor written; the Clipart tab lists folders of your own files instead.
+  so it is neither read nor written; the Clipart tab lists folders of your own files instead
+  (and says how many locked Vectric files a folder has, and why they aren't shown).
 - Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by planes
   square to X, Y or Z: one at a percentage of its size, or (Number of Cuts) several in
   equal slices; the first segment and the ones after it (turned over, if asked, so their
