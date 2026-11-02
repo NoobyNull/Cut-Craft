@@ -23,17 +23,28 @@ impl CutCraftApp {
         reason = "one line per field of the window's state"
     )]
     pub(super) fn new() -> Self {
-        let menus = gui::MenuSystem::new();
+        let mut registry = commands::registry();
+        let my_gadgets = crate::gadgets::my_gadgets_dir();
+        let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref());
+        let mut menus = gui::MenuSystem::new();
+        menus.add_gadgets(&gadgets, my_gadgets.as_deref());
+        let mut status = gui::StatusBar::new();
+        if !gadgets.problems.is_empty() {
+            status.set_message(&format!(
+                "Some gadgets could not be loaded: {}",
+                gadgets.problems.join("; ")
+            ));
+        }
         Self {
             screen: Screen::Start,
             start_menus: menus.without_job(),
             doc: Document::default(),
             history: History::default(),
-            registry: commands::registry(),
+            registry,
             icons: Icons::default_set(),
             menus,
             toolbar: gui::Toolbar::new(),
-            status: gui::StatusBar::new(),
+            status,
             design_tab: 0,
             view: View::TwoD,
             cursor: None,

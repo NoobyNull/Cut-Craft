@@ -10,6 +10,7 @@ mod compute;
 mod display;
 mod files;
 mod form;
+mod gadgets;
 mod gui;
 mod icons;
 mod options;
