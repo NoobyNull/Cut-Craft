@@ -38,6 +38,9 @@ pub struct Machine {
     /// Areas of the bed a tool must never pass over in any job (clamps fixed to the bed),
     /// in the machine's millimetres from the job's XY origin, as its G-code is.
     pub keep_out: Vec<Zone>,
+    /// A drill bank: several drills on the head, dropped together to drill rows of holes in
+    /// one plunge (Drill Bank Toolpath); `None` when the machine has none.
+    pub drill_bank: Option<cut_craft_core::drill_bank::DrillBank>,
 }
 
 /// A rectangle of the bed kept out of: its lower-left corner and its size, mm.
@@ -275,6 +278,8 @@ mod tests {
         m.machines[0].max_rate = [5000.0, 5000.0, 1500.0];
         m.machines[0].acceleration = [500.0, 500.0, 200.0];
         m.machines[0].spindle = [8000.0, 24000.0];
+        m.machines[0].drill_bank =
+            Some(cut_craft_core::drill_bank::DrillBank::new(5, 3, 32.0, 5.0));
         m.save(&path).unwrap();
         assert_eq!(Machines::load(&path), m);
         let _ = std::fs::remove_file(&path);

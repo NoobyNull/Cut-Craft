@@ -175,9 +175,10 @@ impl Command for FinishingToolpath3d {
 /// The toolpath for `tool`, cutting only what `p.after` left.
 fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandError> {
     ensure_positive("tool diameter", tool.diameter)?;
-    if !(tool.stepover > 0.0 && tool.stepover <= 1.0) {
+    let stepover = tool.finishing_stepover();
+    if !(stepover > 0.0 && stepover <= 1.0) {
         return Err(CommandError::InvalidParams(
-            "stepover must be more than 0 and at most 1".into(),
+            "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
         ));
     }
     let surface = placed_model(doc, tool)?;
@@ -202,7 +203,7 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
         p.machining_boundary_offset,
         &p.boundary_level,
     )?;
-    let step = tool.stepover * tool.diameter;
+    let step = stepover * tool.diameter;
     let lines: Vec<Vec<Point>> = match p.strategy {
         Strategy::Raster => raster_lines(&regions, step, p.raster_angle),
         Strategy::Offset => {
@@ -393,6 +394,34 @@ mod tests {
             cut.at(foot).unwrap() > -15.0 + 1.0,
             "{}",
             cut.at(foot).unwrap()
+        );
+    }
+
+    #[test]
+    fn it_steps_over_by_the_finishing_stepover_not_the_clearing_one() {
+        let with = |stepover: f64, finish_stepover: f64| {
+            let tool = Tool {
+                stepover,
+                finish_stepover,
+                ..ball("6 mm Ball Nose")
+            };
+            let params = Params {
+                tools: vec![tool],
+                ..Params::default()
+            };
+            finish(&domed(), &params).moves
+        };
+        assert_eq!(
+            with(0.4, 0.1),
+            with(0.8, 0.1),
+            "clearing does not change it"
+        );
+        let (fine, coarse) = (with(0.4, 0.1), with(0.4, 0.2));
+        assert!(
+            fine.len() > coarse.len() * 3 / 2,
+            "half the stepover, about twice the lines: {} and {}",
+            fine.len(),
+            coarse.len()
         );
     }
 

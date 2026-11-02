@@ -364,6 +364,10 @@ impl CutCraftApp {
                         machine: m.name.clone(),
                         slots: m.slots.clone(),
                     });
+                // tools loaded before slots set their numbers show those numbers now
+                if let Some(changer) = &manager.changer {
+                    manager.draft.number_by_slots(&changer.slots);
+                }
                 self.tool_manager = Some(manager);
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
@@ -1178,6 +1182,21 @@ impl CutCraftApp {
         self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
     }
 
+    /// The active machine's tool changer was loaded differently: the machines are saved,
+    /// and each tool now in a slot takes the slot as its tool number.
+    pub(super) fn tool_changer_changed(&mut self) {
+        self.machines_changed("Tool changer changed");
+        let slots = self
+            .machines
+            .active()
+            .map(|m| m.slots.clone())
+            .unwrap_or_default();
+        if self.tools.number_by_slots(&slots) {
+            self.tools_changed("Tool changer changed; tools numbered by their slots");
+            self.refresh_form_tool();
+        }
+    }
+
     /// Writes the machines, if they have a file, and reports `done` or the failure.
     pub(super) fn machines_changed(&mut self, done: &str) {
         let result = self
@@ -1352,6 +1371,7 @@ impl CutCraftApp {
             }
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
+        self.fill_drill_bank(cmd.id(), &mut params);
         // a toolpath's form in Aspire's order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
@@ -1938,10 +1958,27 @@ impl CutCraftApp {
             return;
         };
         self.start_command(&toolpath.strategy);
+        let mut params = toolpath.params;
+        // the bank as the machine has it now, so a bank changed since is used
+        self.fill_drill_bank(&toolpath.strategy, &mut params);
         if let Some(form) = self.form.as_mut().filter(|f| f.id == toolpath.strategy) {
-            form.params = toolpath.params;
+            form.params = params;
             form.editing = Some(id);
         }
+    }
+
+    /// A Drill Bank Toolpath's form drills with the active machine's bank (none when it has
+    /// none, which the toolpath then says how to set up).
+    pub(super) fn fill_drill_bank(&self, command: &str, params: &mut Value) {
+        if command != "drill_bank_toolpath" {
+            return;
+        }
+        let bank = self
+            .machines
+            .active()
+            .and_then(|m| m.drill_bank.clone())
+            .unwrap_or_default();
+        params["bank"] = serde_json::to_value(bank).expect("a drill bank serialises");
     }
 
     /// A form's Apply: its command, or for an edited toolpath that toolpath made again with
@@ -2579,6 +2616,14 @@ impl CutCraftApp {
             for id in fired {
                 self.invoke(ctx, &id);
             }
+        }
+        // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
+        let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
+        if self.drag_3d.is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.cancel_drag_3d();
         }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()

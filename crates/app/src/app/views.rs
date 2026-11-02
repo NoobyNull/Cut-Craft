@@ -1409,7 +1409,7 @@ impl CutCraftApp {
             });
         self.tool_changer_window = open;
         if changed {
-            self.machines_changed("Tool changer changed");
+            self.tool_changer_changed();
         }
     }
 

@@ -1,0 +1,28 @@
+# Each pull request's title says what kind of change it is (feat:, fix:, docs:, ...), because
+# that decides the version number main gets when it merges; see scripts/next-version.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The version rule's own tests
+        run: scripts/test-next-version
+      - name: The title names a kind of change
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          kind=$(scripts/next-version kind "$TITLE")
+          case $kind in
+            minor) echo "::notice::Merging this makes a new feature version (0.x+1.0)." ;;
+            patch) echo "::notice::Merging this makes a fix version (0.x.y+1)." ;;
+            none) echo "::notice::Merging this doesn't change the version." ;;
+          esac

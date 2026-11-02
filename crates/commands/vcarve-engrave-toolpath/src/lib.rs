@@ -156,9 +156,10 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         }
         ensure_positive("tool diameter", tool.diameter)?;
         ensure_positive("pass depth", tool.pass_depth)?;
-        if !(tool.stepover > 0.0 && tool.stepover <= 1.0) {
+        let stepover = tool.finishing_stepover();
+        if !(stepover > 0.0 && stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
+                "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|path| path.closed);
@@ -283,7 +284,8 @@ fn carve_together(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
         limit if limit > 0.0 => (tool.diameter / 2.0).min(limit * spread),
         _ => tool.diameter / 2.0,
     };
-    let step = tool.stepover * tool.diameter;
+    // the V-bit's rings make the carved surface: a finishing stepover
+    let step = tool.finishing_stepover() * tool.diameter;
     // the flat bottom's middle, cleared by end mills, is left alone
     let last = p.cleared_within.map_or(f64::INFINITY, |r| reach + r);
     let mut moves = vec![];
@@ -522,7 +524,7 @@ mod tests {
     #[test]
     fn a_90_degree_bit_carves_a_slot_as_deep_as_half_its_width() {
         let t = carve(vec![rectangle(100.0, 10.0)], &Params::default());
-        let step = t.tool.stepover * t.tool.diameter;
+        let step = t.tool.finishing_stepover() * t.tool.diameter;
         assert!((deepest(&t) + 5.0).abs() <= step, "{}", deepest(&t));
         let job = Job {
             width: 100.0,
@@ -579,7 +581,7 @@ mod tests {
             ..Job::default()
         };
         // the edge is cut at the start depth, sloping down from there
-        let step = t.tool.stepover * t.tool.diameter;
+        let step = t.tool.finishing_stepover() * t.tool.diameter;
         let z = carved(&t, &job).at(Point::new(50.0, 1.0)).unwrap();
         assert!((z + 4.0).abs() <= step + 0.25, "{z}");
     }

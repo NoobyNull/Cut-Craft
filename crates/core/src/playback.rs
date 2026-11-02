@@ -198,6 +198,7 @@ mod tests {
             power: vec![],
             stale: false,
             group: None,
+            drill_bank: None,
         };
         (Material::new(&job, 100), toolpath)
     }

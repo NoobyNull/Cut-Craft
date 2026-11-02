@@ -1167,7 +1167,15 @@ impl ChangeBuilder<'_> {
     fn kept_out(&self, mut toolpath: Toolpath) -> Toolpath {
         let zones = self.doc.keep_out_zones();
         if !zones.is_empty() && toolpath.power.is_empty() {
-            toolpath.moves = crate::keep_out::route(&zones, &toolpath.moves).0;
+            let (moves, origin, _) = crate::keep_out::route_indexed(&zones, &toolpath.moves);
+            // a drill bank's plunges keep their moves, and the ways round that lead to them
+            if let Some(bank) = &mut toolpath.drill_bank {
+                let at = |old: usize| origin.partition_point(|&o| o < old);
+                for hit in &mut bank.hits {
+                    (hit.start, hit.end) = (at(hit.start), at(hit.end));
+                }
+            }
+            toolpath.moves = moves;
         }
         toolpath
     }

@@ -39,6 +39,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_profile_toolpath::ProfileToolpath>();
     r.add::<cmd_pocket_toolpath::PocketToolpath>();
     r.add::<cmd_drilling_toolpath::DrillingToolpath>();
+    r.add::<cmd_drill_bank_toolpath::DrillBankToolpath>();
     r.add::<cmd_add_layer::AddLayer>();
     r.add::<cmd_delete_layer::DeleteLayer>();
     r.add::<cmd_move_to_layer::MoveToLayer>();
