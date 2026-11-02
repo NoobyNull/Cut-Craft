@@ -3,6 +3,7 @@ name = "cmd-smooth-selected-components"
 description = "Smooth Selected Components"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

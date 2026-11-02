@@ -3,6 +3,7 @@ name = "cmd-drill-bank-toolpath"
 description = "Drill Bank Toolpath"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cmd-drilling-toolpath = { path = "../drilling-toolpath" }

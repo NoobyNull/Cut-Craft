@@ -3,6 +3,7 @@ name = "cut-craft"
 description = "Desktop UI: panels, menus, forms and tools over the command registry"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 chrono.workspace = true

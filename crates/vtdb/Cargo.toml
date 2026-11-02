@@ -3,6 +3,7 @@ name = "cut-craft-vtdb"
 description = "Read Vectric .vtdb tool databases (SQLite) into Cut Craft tools"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

@@ -3,6 +3,7 @@ name = "cmd-toolpath-group"
 description = "Toolpath Groups"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

@@ -3,6 +3,7 @@ name = "cmd-reset-inside-selected-vectors"
 description = "Reset Inside Selected Vectors"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

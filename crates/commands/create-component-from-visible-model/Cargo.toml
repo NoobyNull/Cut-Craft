@@ -3,6 +3,7 @@ name = "cmd-create-component-from-visible-model"
 description = "Create Component from Visible Model"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

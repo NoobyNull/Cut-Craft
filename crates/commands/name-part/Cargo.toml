@@ -3,6 +3,7 @@ name = "cmd-name-part"
 description = "Name Part"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

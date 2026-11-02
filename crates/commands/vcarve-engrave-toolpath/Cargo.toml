@@ -3,6 +3,7 @@ name = "cmd-vcarve-engrave-toolpath"
 description = "V-Carve / Engrave Toolpath"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

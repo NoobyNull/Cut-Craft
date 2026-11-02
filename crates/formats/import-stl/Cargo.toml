@@ -3,6 +3,7 @@ name = "fmt-import-stl"
 description = "Import an STL model as a component"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

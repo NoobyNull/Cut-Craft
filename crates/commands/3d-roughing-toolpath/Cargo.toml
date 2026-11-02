@@ -3,6 +3,7 @@ name = "cmd-3d-roughing-toolpath"
 description = "3D Roughing Toolpath"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

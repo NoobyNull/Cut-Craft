@@ -3,6 +3,7 @@ name = "cmd-relief-from-photo"
 description = "Relief from Photo: a photo and its estimated depth shaped into a relief"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

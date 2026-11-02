@@ -142,7 +142,7 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 94] = [
+const BUILT_INS: [&str; 95] = [
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",

@@ -3,6 +3,7 @@ name = "cmd-convert-text-to-curves"
 description = "Convert Text to Curves"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
