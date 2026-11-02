@@ -18,6 +18,9 @@ use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::rc::Rc;
 
+mod gadget;
+pub use gadget::{GadgetCommand, load_gadget};
+
 /// How much a gadget may do before it is stopped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
@@ -118,7 +121,7 @@ pub fn run_gadget(
         let cutcraft = lua.create_table()?;
         cutcraft.set(
             "job",
-            scope.create_function(|lua, ()| lua.to_value(&scratch.borrow().job))?,
+            scope.create_function(|lua, ()| lua.to_value(&job_info(&scratch.borrow().job)))?,
         )?;
         cutcraft.set(
             "selection",
@@ -181,6 +184,47 @@ pub fn run_gadget(
         Ok(()) => Ok(total.into_inner()),
         Err(_) if stopped.get() => Err(ScriptError::TooLong),
         Err(_) if too_many.get() => Err(ScriptError::TooManyCommands(limits.commands)),
+        Err(e) => Err(script_error(&e)),
+    }
+}
+
+/// The job as a gadget reads it: its settings, plus where the material is (`area`, with
+/// `min` and `max` corners) and its middle (`centre`), in job coordinates.
+fn job_info(job: &cut_craft_core::document::Job) -> Value {
+    let mut info = serde_json::to_value(job).unwrap_or_default();
+    let area = job.area();
+    let point = |x: f64, y: f64| serde_json::json!({ "x": x, "y": y });
+    info["area"] = serde_json::json!({
+        "min": point(area.min.x, area.min.y),
+        "max": point(area.max.x, area.max.y),
+    });
+    info["centre"] = point(
+        f64::midpoint(area.min.x, area.max.x),
+        f64::midpoint(area.min.y, area.max.y),
+    );
+    info
+}
+
+/// What a gadget file says about itself at its top level: its `gadget` table (name,
+/// description) and its `settings` list, as JSON (`null` where it has none).
+pub(crate) fn describe(name: &str, source: &str) -> Result<(Value, Value), ScriptError> {
+    let limits = Limits::default();
+    let lua = sandbox(limits)?;
+    let stopped = Rc::new(Cell::new(false));
+    budget(&lua, limits.instructions, Rc::clone(&stopped))?;
+    let read = || -> mlua::Result<(Value, Value)> {
+        lua.load(source)
+            .set_name(format!("={name}"))
+            .set_mode(ChunkMode::Text)
+            .exec()?;
+        let globals = lua.globals();
+        let gadget: mlua::Value = globals.get("gadget")?;
+        let settings: mlua::Value = globals.get("settings")?;
+        Ok((lua.from_value(gadget)?, lua.from_value(settings)?))
+    };
+    match read() {
+        Ok(found) => Ok(found),
+        Err(_) if stopped.get() => Err(ScriptError::TooLong),
         Err(e) => Err(script_error(&e)),
     }
 }

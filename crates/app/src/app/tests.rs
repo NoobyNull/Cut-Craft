@@ -6408,3 +6408,35 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
             .is_some()
     );
 }
+
+#[test]
+fn the_gadgets_menu_runs_a_lua_gadget_as_one_undo_step() {
+    let mut h = Harness::new();
+    let gadgets = &h
+        .app
+        .menus
+        .menus
+        .iter()
+        .find(|m| m.name == "Gadgets")
+        .unwrap()
+        .items;
+    let hole_pattern = leaf(gadgets, &["Hole Pattern"]).action.clone();
+    assert!(gadgets.iter().any(|i| i.name == "My Gadgets"));
+    assert!(h.app.available(&hole_pattern));
+    h.app.invoke(&h.ctx, &hole_pattern);
+    let mut params = h
+        .app
+        .form
+        .as_ref()
+        .expect("its settings form")
+        .params
+        .clone();
+    assert_eq!(params["count"], 6, "the gadget's own default");
+    params["count"] = serde_json::json!(8);
+    let before = h.app.doc.vectors.len();
+    h.app.apply_form(&hole_pattern, &params).unwrap();
+    assert_eq!(h.app.doc.vectors.len(), before + 8);
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.vectors.len(), before, "one Undo takes all 8 away");
+}

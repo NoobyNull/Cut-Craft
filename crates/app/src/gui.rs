@@ -353,6 +353,33 @@ pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<Menu
 }
 
 impl MenuSystem {
+    /// Adds the Lua gadgets to the Gadgets menu, below the built-in ones: Cut Craft's own,
+    /// then the user's in a My Gadgets submenu that says where to put them when it is empty.
+    pub fn add_gadgets(
+        &mut self,
+        loaded: &crate::gadgets::Loaded,
+        folder: Option<&std::path::Path>,
+    ) {
+        let item = |g: &crate::gadgets::Listed| MenuItem::with_action(&g.label, &g.id);
+        let mut mine: Vec<MenuItem> = loaded.mine.iter().map(item).collect();
+        if mine.is_empty() {
+            let hint = folder.map_or_else(
+                || "Put .lua gadget files in Cut Craft's settings folder".to_owned(),
+                |f| format!("Put .lua gadget files in {}", f.display()),
+            );
+            mine.push(MenuItem {
+                is_enabled: false,
+                ..MenuItem::with_action(&hint, "")
+            });
+        }
+        let Some(menu) = self.menus.iter_mut().find(|m| m.name == "Gadgets") else {
+            return;
+        };
+        menu.items.push(MenuItem::separator());
+        menu.items.extend(loaded.built_in.iter().map(item));
+        menu.items.push(MenuItem::submenu("My Gadgets", mine));
+    }
+
     fn menu(&self, name: &str) -> &Menu {
         self.menus
             .iter()
