@@ -337,7 +337,12 @@ say "not implemented yet".
   behind the model.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
-  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
+  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Cut Craft's own Rectangle
+    from Center and Circle from Edge (the drag is the diameter).
+  - Toolbox flyouts (Cut Craft's own; Aspire shows every tool as its own icon): tools that
+    do one job different ways share a button with an arrow in its corner, showing the one
+    picked last; click the arrow, hold the button, or press Down on it for the rest
+    (`crates/app/src/flyout.rs`). Drawing tab 78 buttons to 44, Modeling 23 to 20.
   - Edit ▸ Edit Object (E) opens the tool that drew the one selected vector on it, and a
     Shift-click in a drawing tool's form edits another shape that tool drew; a change to
     the form then changes that shape. Rectangles (square, rounded or notched corners, not

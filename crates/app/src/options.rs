@@ -513,6 +513,10 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub favourites: Favourites,
+    /// The tool each toolbox flyout shows: the one picked from it last.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[schemars(skip)]
+    pub flyout_faces: crate::flyout::Faces,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -589,6 +593,7 @@ impl Default for Options {
             space_mouse: SpaceMouse::default(),
             default_job: None,
             favourites: Favourites::default(),
+            flyout_faces: crate::flyout::Faces::new(),
         }
     }
 }

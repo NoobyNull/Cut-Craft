@@ -169,6 +169,15 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   3. A form offers the same values as exact typed input. Rectangle corners can be square, external-radius or internal-radius, with draggable green radius handles.
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
+- **Toolbox flyouts** (Cut Craft's own choice, not Aspire's) [inf]: Aspire shows each of these
+  tools as an icon of its own; Cut Craft groups tools that do one job different ways behind
+  one button so a beginner faces fewer, clearer buttons (Drawing tab 78 buttons to 44). The
+  button shows the tool picked from it last (kept in the options); a press held for 0.4 s, a
+  click on the arrow in its bottom-right corner, or Down with the button focused opens the
+  others, each by icon and name. Find Tool, the Rail layout and Favourites still name every
+  tool on its own. The groups are `FLYOUTS` in `crates/app/src/flyout.rs`. Two variants are
+  Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle from
+  Edge (the drag is the diameter).
 
 ### Create Fillets [obs] (help: Create Fillets, V12.5; Aspire 12.5 trial, 2026-10-25)
 - Fillets corners where two **straight** spans meet; corners touching arcs or curves cannot be filleted. The form: **Fillet / Tool Radius** and a type: **Normal** (a rounded corner of the radius), **Dog-Bone** (a relief circle the radius whose edge touches the sharp corner: for slots clearly wider than the cutter), **T-Bone** (the relief circle pushed sideways into one side: for slots about as wide as the cutter; the trial put it in the longer side when the corner itself was clicked) and **Plasma / Drag Knife** (the two sides run on past the corner and join in a loop outside it, so the cutter turns there).

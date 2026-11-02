@@ -149,7 +149,8 @@ impl CutCraftApp {
     }
 
     /// Headed sections of tool buttons; a right-click on one adds it to `page`'s favourites
-    /// or takes it off (`among` them, it moves along them too).
+    /// or takes it off (`among` them, it moves along them too). Tools that do one job
+    /// different ways share a flyout button (see [`crate::flyout`]).
     fn tool_sections(
         &mut self,
         ui: &mut egui::Ui,
@@ -164,21 +165,21 @@ impl CutCraftApp {
         for (name, tools) in sections {
             ui.strong(*name);
             ui.horizontal_wrapped(|ui| {
-                for &id in tools {
-                    let cmd = self.registry.get(id);
-                    let label =
-                        cmd.map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned());
-                    let explicit = cmd.map_or("", |c| c.meta().icon);
-                    let button = self
-                        .icon_button(explicit, id, &label, edge)
-                        .selected(self.status.current_tool == label);
-                    let response = ui
-                        .add_enabled(self.available(id), button)
-                        .on_hover_hint(gui::about(id).unwrap_or(&label))
-                        .on_disabled_hover_text(format!("{label}: not implemented yet"));
-                    if response.clicked() {
-                        clicked = Some(id);
-                    }
+                for button in crate::flyout::buttons(tools, &self.options.flyout_faces) {
+                    let id = button.face;
+                    let response = if button.members.is_empty() {
+                        let response = self.tool_button(ui, id, edge);
+                        if response.clicked() {
+                            clicked = Some(id);
+                        }
+                        response
+                    } else {
+                        let (response, run) = self.flyout_button(ui, &button, edge);
+                        if run.is_some() {
+                            clicked = run;
+                        }
+                        response
+                    };
                     let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
                     if let Some(action) =
                         self.popup(&response, || gui::tool_menu(page, id, favourite, among))
@@ -190,11 +191,156 @@ impl CutCraftApp {
             ui.add_space(ui.spacing().item_spacing.y);
         }
         if let Some(id) = clicked {
+            if let Some(flyout) = crate::flyout::flyout_of(id)
+                && self.options.flyout_faces.get(flyout[0]).map(String::as_str) != Some(id)
+            {
+                crate::flyout::remember(&mut self.options.flyout_faces, id);
+                self.save_options();
+            }
             self.pick(ui.ctx(), page, id);
         }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
         }
+    }
+
+    /// One tool's icon button: enabled when it is built, highlighted while in hand.
+    fn tool_button(&self, ui: &mut egui::Ui, id: &str, edge: f32) -> egui::Response {
+        let label = self.tool_label(id);
+        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let button = self
+            .icon_button(explicit, id, &label, edge)
+            .selected(self.status.current_tool == label);
+        ui.add_enabled(self.available(id), button)
+            .on_hover_hint(gui::about(id).unwrap_or(&label))
+            .on_disabled_hover_text(format!("{label}: not implemented yet"))
+    }
+
+    /// A flyout's button: its face as [`Self::tool_button`] with an arrow in the corner. A
+    /// click on the arrow, a press held for [`crate::flyout::HOLD_SECONDS`], or Down while it
+    /// has the focus opens the flyout: each of its tools by icon and name. The button's
+    /// response, and the tool to run: the face on a plain click, or the one picked from the
+    /// flyout.
+    fn flyout_button(
+        &self,
+        ui: &mut egui::Ui,
+        button: &crate::flyout::Button,
+        edge: f32,
+    ) -> (egui::Response, Option<&'static str>) {
+        use crate::flyout::{HOLD_SECONDS, on_arrow, tooltip};
+        let id = button.face;
+        let label = self.tool_label(id);
+        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let in_hand = button
+            .members
+            .iter()
+            .any(|m| self.status.current_tool == self.tool_label(m));
+        let others: Vec<String> = button
+            .members
+            .iter()
+            .filter(|m| **m != id)
+            .map(|m| self.tool_label(m))
+            .collect();
+        let about = gui::about(id).unwrap_or(&label).to_owned();
+        let any_available = button.members.iter().any(|m| self.available(m));
+        let response = ui
+            .add_enabled(
+                any_available,
+                self.icon_button(explicit, id, &label, edge)
+                    .selected(in_hand),
+            )
+            .on_hover_hint(tooltip(&about, &others))
+            .on_disabled_hover_text(format!("{label}: not implemented yet"));
+        let r = response.rect;
+        flyout_arrow(ui, &response);
+        let popup_id = response.id.with("flyout");
+        let held_id = response.id.with("flyout_held");
+        let ctx = ui.ctx().clone();
+        // a long press opens it; the release that follows is no click
+        let mut open = false;
+        if response.is_pointer_button_down_on() {
+            let held = ctx.input(|i| i.pointer.press_start_time().map(|t| i.time - t));
+            match held {
+                Some(t) if t >= HOLD_SECONDS => {
+                    if !ctx.data(|d| d.get_temp::<bool>(held_id).unwrap_or(false)) {
+                        ctx.data_mut(|d| d.insert_temp(held_id, true));
+                        open = true;
+                    }
+                }
+                Some(t) => {
+                    ctx.request_repaint_after(std::time::Duration::from_secs_f64(HOLD_SECONDS - t));
+                }
+                None => {}
+            }
+        }
+        let mut run = None;
+        if response.clicked() {
+            let was_held = ctx.data_mut(|d| d.remove_temp::<bool>(held_id).unwrap_or(false));
+            let at_arrow = response
+                .interact_pointer_pos()
+                .is_some_and(|at| on_arrow(r, at));
+            // the arrow, or a face not built yet, opens the flyout; a held press already did
+            if at_arrow || !self.available(id) {
+                open |= !was_held;
+            } else if !was_held {
+                run = Some(id);
+            }
+        } else if !response.is_pointer_button_down_on() {
+            ctx.data_mut(|d| d.remove_temp::<bool>(held_id));
+        }
+        if response.has_focus() && ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+            open = true;
+        }
+        let picked = egui::Popup::from_response(&response)
+            .id(popup_id)
+            .kind(egui::PopupKind::Menu)
+            .align(egui::RectAlign::RIGHT_START)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .open_memory(open.then_some(egui::SetOpenCommand::Bool(true)))
+            .show(|ui| self.flyout_list(ui, button, edge, open))
+            .and_then(|shown| shown.inner);
+        if picked.is_some() {
+            egui::Popup::close_id(&ctx, popup_id);
+        }
+        (response, picked.or(run))
+    }
+
+    /// An open flyout: each of its tools by icon and name, the face first in focus when it
+    /// has just opened; the tool clicked.
+    fn flyout_list(
+        &self,
+        ui: &mut egui::Ui,
+        button: &crate::flyout::Button,
+        edge: f32,
+        opened: bool,
+    ) -> Option<&'static str> {
+        cut_craft_bug_report::mark(ui, "Flyout");
+        let mut picked = None;
+        for &member in &button.members {
+            let name = self.tool_label(member);
+            let explicit = self.registry.get(member).map_or("", |c| c.meta().icon);
+            let row = match self.icons.find(explicit, member) {
+                Some(path) => egui::Button::image_and_text(
+                    self.icons
+                        .image(path)
+                        .fit_to_exact_size(egui::vec2(edge * 0.6, edge * 0.6)),
+                    &name,
+                ),
+                None => egui::Button::new(&name),
+            }
+            .selected(member == button.face);
+            let row = ui
+                .add_enabled(self.available(member), row)
+                .on_hover_hint(gui::about(member).unwrap_or(&name))
+                .on_disabled_hover_text(format!("{name}: not implemented yet"));
+            if opened && member == button.face {
+                row.request_focus();
+            }
+            if row.clicked() {
+                picked = Some(member);
+            }
+        }
+        picked
     }
 
     /// An icon button, or a text one when the icon is missing.
@@ -3074,4 +3220,21 @@ fn combine_radios_3d(ui: &mut egui::Ui, icons: &crate::icons::Icons, s: &mut Set
             s.radios.push((mode, response.rect.center()));
         }
     });
+}
+
+/// A flyout button's arrow: a small filled triangle in its bottom-right corner.
+fn flyout_arrow(ui: &egui::Ui, response: &egui::Response) {
+    let r = response.rect;
+    let side = r.width().min(r.height()) * crate::flyout::ARROW_SHARE * 0.6;
+    let corner = r.right_bottom() - egui::vec2(3.0, 3.0);
+    let colour = ui.style().interact(response).fg_stroke.color;
+    ui.painter().add(egui::Shape::convex_polygon(
+        vec![
+            corner,
+            corner - egui::vec2(0.0, side),
+            corner - egui::vec2(side, 0.0),
+        ],
+        colour,
+        egui::Stroke::NONE,
+    ));
 }

@@ -210,6 +210,10 @@ impl CutCraftApp {
             }
             "activate_layer_of_selection" => !self.doc.selection.is_empty(),
             "increment_and_save" | "find_tool" => self.screen == Screen::Job,
+            id if crate::flyout::variant(id).is_some() => {
+                crate::flyout::variant(id).is_some_and(|v| self.registry.get(v.command).is_some())
+                    && self.screen != Screen::Start
+            }
             _ => {
                 BUILT_INS.contains(&id)
                     // a command's form shows in a job's pages: with no job it could not be seen
@@ -290,6 +294,8 @@ impl CutCraftApp {
                 }
             }
             "edit_toolpath" => self.edit_toolpath(),
+            // a drawing tool's toolbox variant: its form, the drag read the variant's way
+            id if crate::flyout::variant(id).is_some() => self.start_variant(id),
             // Edit Text: Draw Text opens on the selected text's settings
             "edit_text" => self.start_command("draw_text"),
             // Aspire's three Join icons: Join / Close Vectors their way
@@ -1373,11 +1379,26 @@ impl CutCraftApp {
                 model_whole: true,
                 applied: None,
                 undo_from: self.history.undo_depth(),
+                way: crate::flyout::DragWay::AsIs,
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {
                 self.pages.open(page);
             }
+        }
+    }
+
+    /// A toolbox variant of a drawing tool (Draw Circle from Edge): its command's form, named
+    /// for the variant, reading the drag the variant's way.
+    fn start_variant(&mut self, id: &str) {
+        let Some(variant) = crate::flyout::variant(id) else {
+            return;
+        };
+        self.start_command(variant.command);
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == variant.command) {
+            form.way = variant.way;
+            form.label = variant.label;
+            variant.label.clone_into(&mut self.status.current_tool);
         }
     }
 

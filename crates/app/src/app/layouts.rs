@@ -56,6 +56,9 @@ impl CutCraftApp {
 
     /// A tool's name: the command's label, or its id in words.
     pub(super) fn tool_label(&self, id: &str) -> String {
+        if let Some(variant) = crate::flyout::variant(id) {
+            return variant.label.to_owned();
+        }
         self.registry
             .get(id)
             .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())

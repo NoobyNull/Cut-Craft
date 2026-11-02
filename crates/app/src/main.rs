@@ -9,6 +9,7 @@ mod commands;
 mod compute;
 mod display;
 mod files;
+mod flyout;
 mod form;
 mod gui;
 mod icons;

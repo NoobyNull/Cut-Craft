@@ -9,6 +9,7 @@ use super::{
     ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
     inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel, view2d,
 };
+use crate::flyout::DragWay;
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
@@ -1783,6 +1784,14 @@ impl CutCraftApp {
                     .into(),
             );
         }
+        // a toolbox variant says how it reads the drag
+        if let Some(form) = self.form.as_ref().filter(|f| f.way != DragWay::AsIs)
+            && let Some(variant) = crate::flyout::VARIANTS
+                .iter()
+                .find(|v| v.command == form.id && v.way == form.way)
+        {
+            return drag(variant.hint);
+        }
         match self.drawing_tool() {
             Some("draw_polyline") if self.polyline.is_empty() => Some(
                 "Draw Polyline: click the first point (drag for a curved span)".into(),
@@ -2440,7 +2449,7 @@ impl CutCraftApp {
             return vec![];
         };
         let mut paths: Vec<Path> = cmd
-            .drag_params(drag, &self.with_stroke(id, &form.params))
+            .drag_params(form.way.apply(drag), &self.with_stroke(id, &form.params))
             .and_then(|params| cmd.run_json(&self.doc, &params))
             .map(|change| change.added().cloned().collect())
             .unwrap_or_default();
@@ -2887,9 +2896,14 @@ impl CutCraftApp {
         let Some(cmd) = self.registry.get(id) else {
             return;
         };
-        let Some(current) = self.form.as_ref().map(|f| self.with_stroke(id, &f.params)) else {
+        let Some((current, way)) = self
+            .form
+            .as_ref()
+            .map(|f| (self.with_stroke(id, &f.params), f.way))
+        else {
             return;
         };
+        let drag = way.apply(drag);
         self.stroke.clear();
         let before = self.entity_ids();
         let result = cmd
