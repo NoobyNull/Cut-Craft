@@ -7,7 +7,7 @@ clean (`.githooks/pre-commit` runs all three), and open a pull request into `mai
 ## Pull request titles set the version
 
 Cut Craft's version is **0.FEATURE.FIX**. Each night, if anything worth shipping merged that
-day, `main` gets a new version and a signed release that installed copies offer as an update.
+day, `main` gets a new version and a release on GitHub.
 The pull request titles decide which number moves, so every title starts with a kind
 (the **PR title** check fails until it does):
 

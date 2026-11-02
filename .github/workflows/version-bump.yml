@@ -4,7 +4,7 @@
 #   otherwise any fix:/perf:/refactor:/revert:  -> 0.x.y+1
 #   only docs:/chore:/ci:/test:/style:/build:, or no merges  -> nothing is released
 # then commits "Version X.Y.Z", tags vX.Y.Z and starts Release and Builds on that tag, which
-# publish the signed release the in-app updater offers. "Run workflow" does the same now.
+# build and publish the release. "Run workflow" does the same now.
 #
 # It starts once main's version has a tag (v0.5.1, cut by hand); until then it only reports.
 # Everything since the last tag counts, so a night that fails is made up the next night.

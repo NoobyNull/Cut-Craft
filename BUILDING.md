@@ -139,7 +139,7 @@ Do this once on a new machine or a fresh clone.
 Versions are automatic. Each night **Version bump** reads the titles of the pull requests
 merged since the last version tag (see [CONTRIBUTING.md](CONTRIBUTING.md)), and if any of them
 changes the program it commits "Version X.Y.Z", tags vX.Y.Z and starts **Release** and
-**Builds** on the tag, which publish the signed release. To release before the night,
+**Builds** on the tag, which build and publish the release. To release before the night,
 open Actions → Version bump → **Run workflow**. Afterwards, `git pull` and push `main` and the
 new tag to the Gitea mirror too (`git push gitea main --tags`), since the bot pushes only to GitHub.
 
