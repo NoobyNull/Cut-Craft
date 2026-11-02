@@ -256,6 +256,8 @@ fn tool(entry: &Value) -> Option<Tool> {
             material: p["name"].as_str().unwrap_or_default().trim().to_owned(),
             pass_depth: length("stepdown").unwrap_or(tool.pass_depth),
             stepover: length("stepover").map_or(tool.stepover, |s| (s / diameter).clamp(0.01, 1.0)),
+            // a Fusion preset has one stepover: it finishes with it too
+            finish_stepover: 0.0,
             feed_rate: length("v_f").unwrap_or(tool.feed_rate),
             plunge_rate: length("v_f_plunge").unwrap_or(tool.plunge_rate),
             spindle_speed: num(&p["n"]).unwrap_or(tool.spindle_speed),

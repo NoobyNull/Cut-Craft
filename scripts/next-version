@@ -1,0 +1,92 @@
+#!/bin/bash
+# The version rule. Cut Craft's version is 0.FEATURE.FIX, decided by pull request titles:
+#   feat: ...                         a new feature or tool              -> 0.MINOR+1.0
+#   anything with "!" (feat!: fix!: refactor!:)  a rewrite or a change that
+#                                     breaks old files or habits         -> 0.MINOR+1.0
+#   fix: perf: refactor: revert:      a fix, or a change to the program  -> 0.MINOR.PATCH+1
+#   docs: chore: ci: test: style: build:   nothing users run changes     -> no new version
+# A scope is allowed: "feat(toolpaths): ...". The major number stays 0 until 1.0.
+#
+#   scripts/next-version kind "feat: Draw in 3D"    prints minor, patch or none;
+#                                                   fails with a hint for any other title
+#   scripts/next-version highest patch minor none   prints minor (the biggest of them)
+#   scripts/next-version bump 0.5.1 minor           prints 0.6.0
+# .github/workflows/pr-title.yml checks each pull request's title with "kind";
+# .github/workflows/version-bump.yml makes one version a night from the day's merges.
+set -euo pipefail
+
+kind() {
+  local title=$1
+  local re='^([A-Za-z]+)(\([^)]*\))?(!?): +[^ ]'
+  if [[ ! $title =~ $re ]]; then
+    cat >&2 <<HINT
+The pull request title "$title" doesn't say what kind of change it is.
+Start it with one of these, so main gets the right version number when it merges:
+  feat: ...      a new feature or tool                    (0.5.1 -> 0.6.0)
+  fix: ...       a fix (also perf:, refactor:, revert:)   (0.5.1 -> 0.5.2)
+  refactor!: ... a rewrite or a breaking change ("!")     (0.5.1 -> 0.6.0)
+  docs: ...      no new version (also chore:, ci:, test:, style:, build:)
+HINT
+    return 1
+  fi
+  local type=${BASH_REMATCH[1],,} breaking=${BASH_REMATCH[3]}
+  case $type in
+    feat | fix | perf | refactor | revert | docs | chore | ci | test | style | build) ;;
+    *)
+      echo "\"${BASH_REMATCH[1]}:\" isn't a kind of change this project uses; use feat:, fix:, docs: or chore:." >&2
+      return 1
+      ;;
+  esac
+  case $breaking$type in
+    !* | feat) echo minor ;;
+    fix | perf | refactor | revert) echo patch ;;
+    *) echo none ;;
+  esac
+}
+
+highest() {
+  local best=none kind
+  for kind in "$@"; do
+    case $kind in
+      minor) best=minor ;;
+      patch) [[ $best == none ]] && best=patch ;;
+      none) ;;
+      *)
+        echo "\"$kind\" isn't minor, patch or none" >&2
+        return 1
+        ;;
+    esac
+  done
+  echo "$best"
+}
+
+bump() {
+  local version=$1 kind=$2 major minor patch
+  if [[ ! $version =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    echo "\"$version\" isn't a version like 0.5.1" >&2
+    return 1
+  fi
+  major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+  case $kind in
+    minor) echo "$major.$((minor + 1)).0" ;;
+    patch) echo "$major.$minor.$((patch + 1))" ;;
+    none) echo "$version" ;;
+    *)
+      echo "\"$kind\" isn't minor, patch or none" >&2
+      return 1
+      ;;
+  esac
+}
+
+case ${1:-} in
+  kind) kind "${2:?a pull request title}" ;;
+  highest)
+    shift
+    highest "$@"
+    ;;
+  bump) bump "${2:?a version}" "${3:?minor, patch or none}" ;;
+  *)
+    echo "usage: $0 kind TITLE | highest KIND... | bump VERSION KIND" >&2
+    exit 2
+    ;;
+esac
