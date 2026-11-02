@@ -227,6 +227,16 @@ impl Manager {
         }
     }
 
+    /// Loads tool `i` into the tool changer's `slot` (counted from 1; `None` takes it out),
+    /// the slot becoming its tool number so the number shown is the holder it is in.
+    pub fn load_into(&mut self, i: usize, slot: Option<usize>) {
+        let (Some(changer), Some(tool)) = (&mut self.changer, self.draft.tools.get(i)) else {
+            return;
+        };
+        changer.load(&tool.name, slot);
+        self.draft.number_by_slots(&changer.slots);
+    }
+
     /// Aspire's Duplicate Material: the active material copied under the typed name, or
     /// its own with " copy", with every tool's cutting data for it when asked, and made
     /// active.
@@ -566,11 +576,27 @@ impl Manager {
                     name_formats,
                     ..
                 } = &mut self.draft;
-                tool_details(ui, &mut tools[i], (&groups, name_formats), look, &material);
+                let loaded = self
+                    .changer
+                    .as_ref()
+                    .and_then(|c| c.slot_of(&before).map(|slot| (c.machine.as_str(), slot)));
+                tool_details(
+                    ui,
+                    &mut tools[i],
+                    (&groups, name_formats),
+                    (look, loaded),
+                    &material,
+                );
                 let name = self.draft.tools[i].name.clone();
+                let mut chosen = None;
                 if let Some(changer) = &mut self.changer {
                     changer.rename(&before, &name);
-                    section(ui, "Tool Changer", |ui| load_slot(ui, changer, &name));
+                    section(ui, "Tool Changer", |ui| {
+                        chosen = load_slot(ui, changer, &name);
+                    });
+                }
+                if let Some(slot) = chosen {
+                    self.load_into(i, (slot > 0).then_some(slot));
                 }
             }
             _ => {
@@ -664,8 +690,9 @@ impl Manager {
     }
 }
 
-/// Which slot of the tool changer `tool` is loaded in, to change.
-fn load_slot(ui: &mut egui::Ui, changer: &mut Changer, tool: &str) {
+/// Which slot of the tool changer `tool` is loaded in, to change: the slot picked (0 for
+/// taking it out), if one was.
+fn load_slot(ui: &mut egui::Ui, changer: &Changer, tool: &str) -> Option<usize> {
     let now = changer.slot_of(tool);
     let shown = now.map_or_else(|| "(not loaded)".to_owned(), |n| format!("T{n}"));
     let mut chosen = None;
@@ -675,7 +702,7 @@ fn load_slot(ui: &mut egui::Ui, changer: &mut Changer, tool: &str) {
             .selected_text(shown)
             .show_ui(ui, |ui| {
                 if ui.selectable_label(now.is_none(), "(not loaded)").clicked() {
-                    chosen = Some(None);
+                    chosen = Some(0);
                 }
                 for (i, slot) in changer.slots.iter().enumerate() {
                     let holding = slot
@@ -685,14 +712,13 @@ fn load_slot(ui: &mut egui::Ui, changer: &mut Changer, tool: &str) {
                         .selectable_label(now == Some(i + 1), format!("T{} ({holding})", i + 1))
                         .clicked()
                     {
-                        chosen = Some(Some(i + 1));
+                        chosen = Some(i + 1);
                     }
                 }
             });
     });
-    if let Some(slot) = chosen {
-        changer.load(tool, slot);
-    }
+    ui.weak("The slot it is loaded in becomes its tool number");
+    chosen
 }
 
 /// A length (mm) shown in the tool's units; whether it changed.
@@ -744,10 +770,12 @@ fn tool_details(
     ui: &mut egui::Ui,
     tool: &mut Tool,
     (groups, formats): (&[String], &mut BTreeMap<String, String>),
-    look: &Look,
+    (look, loaded): (&Look, Option<(&str, usize)>),
     material: &str,
 ) {
-    section(ui, "Tool Info", |ui| tool_info(ui, tool, groups, look));
+    section(ui, "Tool Info", |ui| {
+        tool_info(ui, tool, groups, look, loaded);
+    });
     // the cutting data shown is the active material's, as Aspire's
     let own = tool
         .materials
@@ -888,7 +916,13 @@ fn form_row(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
 }
 
 /// Name, type, group and notes, then the geometry beside the tool's picture.
-fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look) {
+fn tool_info(
+    ui: &mut egui::Ui,
+    tool: &mut Tool,
+    groups: &[String],
+    look: &Look,
+    loaded: Option<(&str, usize)>,
+) {
     egui::Grid::new("tool_info").num_columns(2).show(ui, |ui| {
         ui.label("Name");
         // a name made from its name format is not typed
@@ -933,7 +967,18 @@ fn tool_info(ui: &mut egui::Ui, tool: &mut Tool, groups: &[String], look: &Look)
         ui.end_row();
         ui.label("Tool Number")
             .on_hover_hint("The post's [T] for this tool without a tool changer, and its holder for Load by Tool Number; 0 for none");
-        ui.add(egui::DragValue::new(&mut tool.number).range(0..=999));
+        // a tool in a tool changer is numbered by its slot: change the slot, not the number
+        match loaded {
+            Some((machine, slot)) => {
+                ui.horizontal(|ui| {
+                    ui.add_enabled(false, egui::DragValue::new(&mut tool.number));
+                    ui.weak(format!("from slot T{slot} of {machine}'s tool changer"));
+                });
+            }
+            None => {
+                ui.add(egui::DragValue::new(&mut tool.number).range(0..=999));
+            }
+        }
         ui.end_row();
         form_row(ui, tool, look);
         ui.label("Notes");
@@ -1034,21 +1079,46 @@ fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
             ui.label("Pass Depth");
             length(ui, &mut tool.pass_depth, tool.units);
             ui.end_row();
-            ui.label("Stepover");
-            let mut percent = tool.stepover * 100.0;
-            if ui
-                .add(
-                    egui::DragValue::new(&mut percent)
-                        .range(0.0..=100.0)
-                        .max_decimals(2)
-                        .suffix(" %"),
-                )
-                .changed()
-            {
-                tool.stepover = percent / 100.0;
-            }
+            ui.label("Clearing Stepover").on_hover_hint(
+                "Stepover is how far the tool moves sideways between passes, as a share of \
+                 its width. Clearing (roughing) removes the bulk of the wood, in pockets, \
+                 flat bottoms and 3D roughing: a big step is faster. 40% suits most end mills",
+            );
+            percent(ui, &mut tool.stepover);
+            ui.end_row();
+            ui.label("Finishing Stepover").on_hover_hint(
+                "How far the tool moves sideways between finishing passes, which leave the \
+                 surface you see: 3D finishing, V-carved edges, chamfers and mouldings. A \
+                 smaller step leaves finer ridges but takes longer; 8-10% suits a ball nose",
+            );
+            ui.horizontal(|ui| {
+                let mut finish = tool.finishing_stepover();
+                if percent(ui, &mut finish) {
+                    tool.finish_stepover = finish;
+                }
+                if tool.finish_stepover <= 0.0 {
+                    ui.weak("same as clearing until changed");
+                }
+            });
             ui.end_row();
         });
+}
+
+/// A stepover (a fraction of the diameter) shown as a percentage; whether it changed.
+fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
+    let mut percent = *fraction * 100.0;
+    let changed = ui
+        .add(
+            egui::DragValue::new(&mut percent)
+                .range(0.0..=100.0)
+                .max_decimals(2)
+                .suffix(" %"),
+        )
+        .changed();
+    if changed {
+        *fraction = percent / 100.0;
+    }
+    changed
 }
 
 fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
@@ -1350,6 +1420,29 @@ mod tests {
             m.changer.as_ref().unwrap().slots[0],
             None,
             "a deleted tool leaves its slot"
+        );
+    }
+
+    #[test]
+    fn a_tool_loaded_into_a_slot_takes_the_slot_as_its_number() {
+        let mut m = Manager::new(&ToolDatabase::starter());
+        m.changer = Some(Changer {
+            machine: "Router".into(),
+            slots: vec![None; 6],
+        });
+        m.draft.tools[1].number = 9;
+        m.load_into(1, Some(4));
+        assert_eq!(m.draft.tools[1].number, 4, "T4 holds it: tool 4");
+        assert_eq!(
+            m.changer.as_ref().unwrap().slot_of(&m.draft.tools[1].name),
+            Some(4)
+        );
+        m.load_into(1, Some(2));
+        assert_eq!(m.draft.tools[1].number, 2, "moved to T2");
+        m.load_into(1, None);
+        assert_eq!(
+            m.draft.tools[1].number, 2,
+            "taken out, it keeps its last number"
         );
     }
 

@@ -145,7 +145,7 @@ impl Params {
             let len = nh.hypot(nz);
             (nh / len, nz / len)
         };
-        let step = (self.tool.stepover * self.tool.diameter).max(1e-3);
+        let step = (self.tool.finishing_stepover() * self.tool.diameter).max(1e-3);
         #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
