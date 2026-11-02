@@ -64,7 +64,15 @@ pub fn preview(
 ) -> Result<RgbaImage, String> {
     let source = picture.unwrap_or(model);
     let kept = cache.and_then(|dir| Some(dir.join(cache_name(source)?)));
-    if let Some(image) = kept.as_deref().and_then(|p| image::open(p).ok()) {
+    if let Some((at, image)) = kept
+        .as_deref()
+        .and_then(|p| Some((p, image::open(p).ok()?)))
+    {
+        // marked as used, so [`prune`] keeps it
+        let _ = std::fs::File::options()
+            .write(true)
+            .open(at)
+            .and_then(|f| f.set_modified(std::time::SystemTime::now()));
         return Ok(image.into_rgba8());
     }
     let image = match picture {
@@ -80,6 +88,27 @@ pub fn preview(
             .and_then(|()| image.save(&kept).map_err(std::io::Error::other));
     }
     Ok(image)
+}
+
+/// How long a cached preview is kept unused: one of a file deleted, moved or changed since
+/// is never used again.
+pub const UNUSED: std::time::Duration = std::time::Duration::from_hours(1440);
+
+/// Deletes the previews in `cache` unused for longer than `unused`.
+pub fn prune(cache: &Path, unused: std::time::Duration) {
+    let Ok(read) = std::fs::read_dir(cache) else {
+        return;
+    };
+    for entry in read.flatten() {
+        let path = entry.path();
+        let old = (entry.metadata().and_then(|m| m.modified()))
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > unused);
+        if old && extension(&path) == "png" {
+            let _ = std::fs::remove_file(path);
+        }
+    }
 }
 
 /// The cached preview's file name for `source`: from its [`stamp`].
@@ -813,5 +842,30 @@ mod tests {
         let (q, h) = (SIZE / 4, SIZE / 2);
         assert!(brightness(&image, q, h) > brightness(&image, SIZE - q, h));
         assert!(brightness(&image, h, q) > brightness(&image, h, SIZE - q));
+    }
+
+    /// Previews unused for a long time (their files deleted, moved or changed) are cleared
+    /// out; ones in use are kept, as reading one marks it used.
+    #[test]
+    fn unused_previews_cleared() {
+        let dir = temp("prune");
+        let cache = dir.join("cache");
+        let stl = dir.join("pyramid.stl");
+        std::fs::write(&stl, fmt_export_as_stl::binary_stl(&pyramid())).unwrap();
+        preview(&stl, None, Some(&cache)).unwrap();
+        let old = cache.join("0123456789abcdef.png");
+        std::fs::write(&old, "").unwrap();
+        let long_ago = std::time::SystemTime::now() - 2 * UNUSED;
+        for f in std::fs::read_dir(&cache).unwrap().flatten() {
+            let file = std::fs::File::options().write(true).open(f.path()).unwrap();
+            file.set_modified(long_ago).unwrap();
+        }
+        // the model's preview is used again, the other isn't
+        preview(&stl, None, Some(&cache)).unwrap();
+        prune(&cache, UNUSED);
+        let left: Vec<_> = std::fs::read_dir(&cache).unwrap().flatten().collect();
+        assert_eq!(left.len(), 1);
+        assert!(!old.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

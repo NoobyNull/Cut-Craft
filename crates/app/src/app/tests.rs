@@ -2796,7 +2796,7 @@ fn zoom_box_zoom_to_selection_and_zoom_to_job() {
 fn the_side_tabs_are_aspire_12s_with_drawing_and_modeling_on_design() {
     assert_eq!(
         DESIGN_TABS,
-        ["Design", "Sheets", "Layers", "Components", "Clipart"]
+        ["Design", "Sheets", "Layers", "Components", "Library"]
     );
     let h = Harness::new();
     let names: Vec<&str> = h
@@ -4959,6 +4959,41 @@ fn the_preview_paints_machined_areas_in_the_materials_a_fill_or_each_toolpaths_c
         h.app.doc.toolpaths[&ids[1]].preview_colour(1).is_none(),
         "no fill: the profile shows the material"
     );
+}
+
+/// Add to Project with several picked adds them one after another: a model through its
+/// Orientate 3D Model form, the next once that form is closed; a file gone meanwhile is
+/// reported, not a crash.
+#[test]
+fn library_adds_several_in_turn() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-library-add-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let square = r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20"><rect x="0" y="0" width="20" height="20"/></svg>"#;
+    let (first, last) = (dir.join("first.svg"), dir.join("last.svg"));
+    std::fs::write(&first, square).unwrap();
+    std::fs::write(&last, square).unwrap();
+    let model = pyramid_stl("library-add");
+    h.app
+        .add_from_library(vec![first, model, last, dir.join("gone.svg")], None);
+    assert_eq!(h.app.doc.vectors.len(), 1, "the first is in");
+    assert_eq!(
+        h.app.form.as_ref().map(|f| f.id),
+        Some("orientate_3d_model"),
+        "the model waits on its form"
+    );
+    assert_eq!(h.app.import_queue.len(), 2, "the rest wait their turn");
+    h.app.form = None; // the form closed
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.vectors.len(), 2, "then the next comes in");
+    assert!(h.app.import_queue.is_empty());
+    assert!(
+        h.app.status.message.contains("isn't there"),
+        "{}",
+        h.app.status.message
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

@@ -222,6 +222,69 @@ pub fn show_folder(path: &Path) -> std::io::Result<()> {
     cut_craft_bug_report::open_with_platform(path.as_os_str())
 }
 
+/// Shows `file` in the desktop's file manager, picked in its folder where the file manager
+/// can (Windows Explorer, macOS Finder, and on Linux one that answers the freedesktop
+/// `FileManager1` call, as Dolphin, Nautilus, Nemo and Thunar do); else opens its folder.
+pub fn locate(file: &Path) -> std::io::Result<()> {
+    if !file.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "the file isn't there any more",
+        ));
+    }
+    if cfg!(windows) {
+        return std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(file)
+            .spawn()
+            .map(drop);
+    }
+    if cfg!(target_os = "macos") {
+        return std::process::Command::new("open")
+            .arg("-R")
+            .arg(file)
+            .spawn()
+            .map(drop);
+    }
+    let shown = std::process::Command::new("dbus-send")
+        .args([
+            "--session",
+            "--print-reply",
+            "--dest=org.freedesktop.FileManager1",
+            "--type=method_call",
+            "/org/freedesktop/FileManager1",
+            "org.freedesktop.FileManager1.ShowItems",
+        ])
+        .arg(format!("array:string:{}", file_uri(file)))
+        .arg("string:")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    if shown {
+        return Ok(());
+    }
+    show_folder(file.parent().unwrap_or(file))
+}
+
+/// `path` as a `file://` URI: each byte outside the unreserved set and `/` percent-encoded.
+fn file_uri(path: &Path) -> String {
+    use std::fmt::Write as _;
+    let path = path.to_string_lossy().replace('\\', "/");
+    let mut uri = String::from("file://");
+    if !path.starts_with('/') {
+        uri.push('/'); // a Windows drive
+    }
+    for b in path.bytes() {
+        if b.is_ascii_alphanumeric() || b"-._~/:".contains(&b) {
+            uri.push(char::from(b));
+        } else {
+            let _ = write!(uri, "%{b:02X}");
+        }
+    }
+    uri
+}
+
 /// The next file name for Increment and Save: a name ending `_N` or `-N` counts up, any
 /// other gets `_1`, and it keeps counting past names that `exists` says are taken.
 pub fn incremented(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
@@ -265,7 +328,12 @@ pub fn clipart_folders_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join("clipart.json"))
 }
 
-/// Where the Clipart tab keeps the previews it has made of models.
+/// Where the Library keeps the tags given to its files.
+pub fn library_tags_path() -> Option<PathBuf> {
+    config_dir().map(|dir| dir.join("library-tags.json"))
+}
+
+/// Where the Library tab keeps the previews it has made of models.
 pub fn clipart_previews_path() -> Option<PathBuf> {
     cache_dir().map(|dir| dir.join("clipart-previews"))
 }
@@ -744,6 +812,20 @@ mod tests {
                 .unwrap()
                 .lines()
                 .any(|l| l.starts_with("G0 X"))
+        );
+    }
+
+    /// Locate hands the file manager a URI: spaces and other bytes escaped, a Windows path
+    /// with forward slashes.
+    #[test]
+    fn file_uris() {
+        assert_eq!(
+            super::file_uri(Path::new("/home/m/0325. Welcome #2.stl")),
+            "file:///home/m/0325.%20Welcome%20%232.stl"
+        );
+        assert_eq!(
+            super::file_uri(Path::new(r"C:\Clip art\a.stl")),
+            "file:///C:/Clip%20art/a.stl"
         );
     }
 }
