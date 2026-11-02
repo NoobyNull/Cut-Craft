@@ -2943,7 +2943,28 @@ impl CutCraftApp {
             (component, false) => self.doc.selected_components = component.into_iter().collect(),
             (None, true) => {}
         }
-        if shift {
+        // inside a closed shape, away from any line, picture or component: the shape and
+        // its holes, as one part
+        let part = if hit.is_none() && picture.is_none() && component.is_none() {
+            self.doc.pick_part(at, tolerance)
+        } else {
+            Vec::new()
+        };
+        if !part.is_empty() {
+            let mut ids = self.doc.selection.clone();
+            if !shift {
+                ids.clear();
+            }
+            // Shift-clicking a part already picked takes it away
+            if shift && part.iter().all(|id| ids.contains(id)) {
+                for id in part.iter().flat_map(|&id| self.doc.group_members(id)) {
+                    ids.remove(&id);
+                }
+            } else {
+                ids.extend(part);
+            }
+            self.select(ids, false);
+        } else if shift {
             // a grouped vector brings or takes its whole group
             let mut ids = self.doc.selection.clone();
             if let Some(id) = hit {

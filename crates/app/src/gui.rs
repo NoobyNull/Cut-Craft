@@ -482,6 +482,7 @@ impl MenuSystem {
             edit("Paste"),
             edit("Delete"),
             MenuItem::separator(),
+            MenuItem::with_action("Select Vectors Inside", "select_vectors_inside"),
             MenuItem::submenu("Move to Layer", layers.collect()),
             MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
                 .enabled(doc.job.double_sided.is_some()),
@@ -1445,6 +1446,7 @@ impl MenuSystem {
                                 i("Select All Open Vectors"),
                                 i("Select All Duplicate Vectors"),
                                 i("Select All Vectors On Current Layer"),
+                                i("Select Vectors Inside"),
                                 i("Unselect All"),
                                 i("Vector Selector..."),
                             ],

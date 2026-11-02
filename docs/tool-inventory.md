@@ -111,10 +111,15 @@ say "not implemented yet".
   Bitmap (bitmaps: PNG, JPEG, GIF, BMP, TIFF in grey, shown in the 2D view), Export DXF /
   SVG, Open Application Data Folder, Exit.
 - Edit: Undo, Redo, Cut, Copy, Paste, Delete; Select All Vectors / Open Vectors / Duplicate
-  Vectors / On Current Layer, Unselect All; the ten Align commands and the four spacing ones
+  Vectors / On Current Layer, Select Vectors Inside, Unselect All; the ten Align commands and the four spacing ones
   (Left To Right ... Bottom To Top; laid out in pick order, the first picked at the named start [inf]); Join Vectors, Group, Ungroup, Job Size and Position.
 - Selection: pick order kept; components picked in the Components tab; bitmaps picked in the
   2D view (Bitmap Properties: position and size; Delete removes them).
+- Smart part selection (Aspire 12.5) ✅: a click inside a closed shape, away from its lines,
+  picks the smallest shape round the click with everything wholly inside it (holes, and
+  anything in them) as one part, without grouping; Shift-click adds or takes away the part.
+  Select Vectors Inside (Edit ▸ Selection and the 2D right-click menu) adds what lies inside
+  the selected closed shapes. Not yet in the 3D view.
 - Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL (its form: limit by tolerance or triangle count; back

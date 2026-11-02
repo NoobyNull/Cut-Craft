@@ -351,6 +351,9 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - Click selects. **Shift+click** toggles an object in or out of the selection.
 - A drag **left→right** selects objects *fully inside* the box. A drag **right→left** selects objects *touching* it.
 - Ctrl+A selects all vectors. Esc or a click on empty background deselects.
+- **Smart part selection [inf]** (help: What's New in Aspire V12.5): "Select all vectors internal to a selected boundary using the right click context menu in both 2D and 3D view", so complete parts can be picked "without requiring manual grouping first".
+  - **[inf]** Cut Craft: right-click ▸ **Select Vectors Inside** (also Edit ▸ Selection) keeps the selection and adds every vector lying wholly inside a selected closed shape; with no closed shape selected it says to select one first. 2D view only so far.
+  - **[inf]** Cut Craft, a deliberate difference: a plain **click inside a closed shape** (away from any line, picture or component) also picks the part: the smallest closed shape round the click plus everything wholly inside it (its holes, open vectors such as grooves, and islands in its holes). A novice clicks inside a shape to pick it on day one and would not find a menu item. Clicking inside a hole picks the hole and what is in it; Shift-click adds the part, or takes it away when it is all selected already. Overlapping shapes are never each other's holes (a closed shape must be smaller and wholly inside). Lines, pictures and components under the click still win, so nothing that was pickable before stops being so.
 - Selected vectors draw as **dotted magenta**; groups and text draw as solid magenta.
 - **Click an already-selected object again** to show the transform handles:
   - **Centre handle:** move. Alt restricts the move to one axis. Clicking it again switches to the rotation centre, which can be dragged.
