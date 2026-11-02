@@ -265,6 +265,36 @@ pub fn clipart_folders_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join("clipart.json"))
 }
 
+/// Where the Clipart tab keeps the previews it has made of models.
+pub fn clipart_previews_path() -> Option<PathBuf> {
+    cache_dir().map(|dir| dir.join("clipart-previews"))
+}
+
+/// Where Cut Craft keeps files it can make again: `%LOCALAPPDATA%\cut-craft` on Windows,
+/// `~/Library/Caches/cut-craft` on macOS, elsewhere `$XDG_CACHE_HOME/cut-craft`, else
+/// `~/.cache/cut-craft`.
+fn cache_dir() -> Option<PathBuf> {
+    cache_base().map(|dir| dir.join("cut-craft"))
+}
+
+#[cfg(windows)]
+fn cache_base() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+}
+
+#[cfg(target_os = "macos")]
+fn cache_base() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches"))
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn cache_base() -> Option<PathBuf> {
+    std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+}
+
 /// The tool database at `path`; the starter tools when there is none yet.
 pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
     if !path.exists() {
