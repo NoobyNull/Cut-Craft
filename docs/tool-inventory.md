@@ -189,7 +189,9 @@ say "not implemented yet".
   (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
   (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, as a tree
   of the folders in them however deep, each with how many files are in it; hidden folders
-  and links to folders are passed over. Click a folder to see what is in it and the folders
+  and links to folders are passed over. A folder is listed once: adding one inside a folder
+  already added opens it in the tree instead, adding one around folders already added
+  takes their place, and duplicates kept from before are tidied as the library loads. Click a folder to see what is in it and the folders
   in it, or All folders for everything; the one looked in is remembered. Right-click a
   folder: Open Folder, and Remove Folder for one added. Folders are read in the background
   and again every 5 s; only the rows of tiles on screen are drawn, so thousands of files
