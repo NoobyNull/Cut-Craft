@@ -575,6 +575,10 @@ pub struct Document {
     /// is only here; each toolpath names its own group.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub toolpath_groups: Vec<String>,
+    /// Part names (Name Part, Import Cut List), by vector group: what the cut list and part
+    /// labels call the part the group belongs to (added with part labels).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub part_names: BTreeMap<u64, String>,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -712,6 +716,7 @@ impl Default for Document {
             machine_keep_out: vec![],
             guides: vec![],
             toolpath_groups: vec![],
+            part_names: BTreeMap::new(),
             tiling: None,
             bottom_side: false,
             other_side: SheetObjects::default(),

@@ -4046,7 +4046,7 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 28] = [
+    const ASKS: [&str; 29] = [
         "save_shaded_image",
         "add_clipart_folder",
         "segment_3d_model_file",
@@ -4058,6 +4058,7 @@ fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
         "increment_and_save",
         "open_application_data_folder",
         "import_vectors_bitmap",
+        "import_cut_list",
         "import_component_3d_model",
         "save_as_template",
         "new_from_template",
@@ -6063,6 +6064,38 @@ fn export_as_stl_opens_its_form_and_keeps_its_settings() {
         assert!(h.text_at(text).is_some(), "{text}");
     }
     assert_eq!(h.app.options.stl, fmt_export_as_stl::Settings::default());
+}
+
+#[test]
+fn a_cut_list_imports_as_parts_and_nest_parts_opens_to_move_them() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-cut-list-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("kitchen.csv");
+    std::fs::write(&file, "Name,Length,Width,Qty\nSide,72,56,2\n").unwrap();
+    h.app.import_cut_list(&file);
+    assert_eq!(h.app.doc.vectors.len(), 2);
+    assert_eq!(h.app.doc.part_names.values().next().unwrap(), "Side");
+    let form = h.app.form.as_ref().expect("Nest Parts opens next");
+    assert_eq!(form.id, "nest_parts");
+    assert_eq!(form.params["remove_original_parts"], true);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn print_part_labels_shows_how_many_parts_get_a_label() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "part_labels");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.part_labels_window);
+    assert!(
+        h.text_at("1 part will get a label. Name parts with Edit ▸ Name Part.")
+            .is_some()
+    );
+    assert!(h.text_at("Open Labels to Print").is_some());
+    assert!(h.text_at("Label size").is_some());
 }
 
 #[test]
