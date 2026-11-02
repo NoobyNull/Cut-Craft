@@ -636,11 +636,14 @@ fn clip(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
             picked = Some(Picked::Import(file.clone()));
         }
     }
-    thumbnail.context_menu(|ui| {
-        if let Some(p) = menu(ui, clipart, tile) {
-            picked = Some(p);
-        }
-    });
+    // the name under a tile has the tile's menu too
+    for response in [&thumbnail, &caption] {
+        cut_craft_bug_report::context_menu(response, |ui| {
+            if let Some(p) = menu(ui, clipart, tile) {
+                picked = Some(p);
+            }
+        });
+    }
     let mut hint = label.clone();
     let tags: Vec<&str> = clipart.tags.of(file).collect();
     if !tags.is_empty() {

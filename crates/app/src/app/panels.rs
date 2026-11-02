@@ -532,10 +532,7 @@ impl CutCraftApp {
         menu: impl FnOnce() -> Vec<gui::MenuItem>,
     ) -> Option<String> {
         let mut clicked = None;
-        if response.secondary_clicked() {
-            cut_craft_bug_report::claim(&response.ctx);
-        }
-        response.context_menu(|ui| {
+        cut_craft_bug_report::context_menu(response, |ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
                 checked: &|_| None,
@@ -544,11 +541,6 @@ impl CutCraftApp {
                 image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
             };
             menu_items(ui, &menu(), &menus, &mut clicked);
-            ui.separator();
-            if ui.button("Report a Bug Here…").clicked() {
-                cut_craft_bug_report::open_here(ui.ctx());
-                ui.close();
-            }
         });
         clicked
     }
