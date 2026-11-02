@@ -3682,6 +3682,9 @@ impl CutCraftApp {
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.label("2D and 3D design and CNC toolpaths.");
                 ui.separator();
+                ui.strong("Acknowledgements");
+                ui.label(ACKNOWLEDGEMENT);
+                ui.separator();
                 ui.strong("Contributors on GitHub");
                 for (login, commits, url) in contributors() {
                     ui.horizontal(|ui| {
@@ -3731,6 +3734,12 @@ impl CutCraftApp {
         }
     }
 }
+
+/// The About window's thanks to the program that inspired Cut Craft (ACKNOWLEDGEMENTS.md in full).
+pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. Cut Craft was inspired by Vectric Aspire, \
+whose tools and workflow showed what a hobby CNC program can be. Cut Craft is an independent \
+program written from scratch in Rust; it is not affiliated with or endorsed by Vectric and uses \
+none of Vectric's code. Vectric and Aspire are trademarks of their owners.";
 
 /// The GitHub contributors built in: login, commits and profile, most commits first.
 pub(super) fn contributors() -> Vec<(&'static str, &'static str, &'static str)> {
