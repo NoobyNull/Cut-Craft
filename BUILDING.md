@@ -16,6 +16,10 @@ Do this once on a new machine or a fresh clone.
    cargo install cargo-nextest --locked
    ```
 
+   Lua gadgets compile Lua from C, so a C compiler is needed too: on Windows, Visual Studio
+   Build Tools with "Desktop development with C++"; on Linux, `gcc` or `clang` (usually there
+   already, e.g. `sudo apt install build-essential`).
+
 2. Turn on the commit hook. It runs `cargo fmt --check`, `cargo clippy` with every warning as
    an error, and the whole test suite before each commit:
 

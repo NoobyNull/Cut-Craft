@@ -1,0 +1,16 @@
+[package]
+name = "cmd-relief-from-photo"
+description = "Relief from Photo: a photo and its estimated depth shaped into a relief"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

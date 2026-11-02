@@ -243,12 +243,17 @@ impl Registry {
     }
 
     fn insert<C: Command>(&mut self, command: Erased<C>) -> &mut Self {
+        self.add_dyn(Box::new(command))
+    }
+
+    /// Registers a command made at run time (a Lua gadget) rather than compiled in.
+    pub fn add_dyn(&mut self, command: Box<dyn DynCommand>) -> &mut Self {
         assert!(
-            self.get(C::ID).is_none(),
+            self.get(command.id()).is_none(),
             "command `{}` registered twice",
-            C::ID
+            command.id()
         );
-        self.commands.push(Box::new(command));
+        self.commands.push(command);
         self
     }
 

@@ -1,5 +1,6 @@
 //! The Edit menu's selection commands: Select All Vectors, Select All Open Vectors, Select All
-//! Duplicate Vectors and Unselect All. Each picks from the vectors on visible, unlocked layers.
+//! Duplicate Vectors, Select Vectors Inside and Unselect All. Each picks from the vectors on
+//! visible, unlocked layers.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::Path;
@@ -88,6 +89,41 @@ impl Command for SelectAllDuplicateVectors {
     }
 }
 
+/// Aspire 12.5's smart part selection from the menu: keeps the selection and adds every
+/// vector lying wholly inside a selected closed shape (its holes, and anything in them), so
+/// a part can be picked whole without grouping it first.
+pub struct SelectVectorsInside;
+
+impl Command for SelectVectorsInside {
+    const ID: &'static str = "select_vectors_inside";
+    type Params = NoParams;
+
+    fn meta() -> Meta {
+        meta("Select Vectors Inside", "")
+    }
+
+    fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
+        let outlines: Vec<EntityId> = doc
+            .selection
+            .iter()
+            .copied()
+            .filter(|id| doc.vectors[id].closed)
+            .collect();
+        if outlines.is_empty() {
+            return Err(CommandError::Failed(
+                "Select a closed shape first, then choose Select Vectors Inside to add \
+                 everything inside it (or just click inside the shape)."
+                    .into(),
+            ));
+        }
+        let inside = doc.vectors_inside(&outlines, CHORD);
+        Ok(selecting(doc, doc.selection.iter().copied().chain(inside)))
+    }
+}
+
+/// How closely curves are followed when testing what lies inside a shape, in mm.
+const CHORD: f64 = 0.05;
+
 pub struct UnselectAll;
 
 impl Command for UnselectAll {
@@ -154,6 +190,47 @@ mod tests {
             let mut doc = document_with(vec![s.clone(), square(20.0, 0.0, 10.0), s.clone(), s]);
             run_on::<SelectAllDuplicateVectors>(&mut doc, &NoParams {});
             assert_eq!(doc.selection, [EntityId(3), EntityId(4)].into());
+        }
+    }
+
+    mod select_vectors_inside {
+        use super::*;
+        use cut_craft_core::geometry::Point;
+
+        fn select(doc: &mut Document, ids: &[EntityId]) {
+            let mut c = Change::builder(doc);
+            c.select(ids.iter().copied());
+            doc.apply(&c.finish()).unwrap();
+        }
+
+        #[test]
+        fn adds_what_lies_inside_the_selected_shapes() {
+            let mut doc = document_with(vec![
+                square(0.0, 0.0, 100.0),
+                square(10.0, 10.0, 20.0),
+                Path::polyline(&[Point::new(50.0, 50.0), Point::new(90.0, 50.0)], false),
+                square(200.0, 0.0, 50.0),
+                square(210.0, 10.0, 10.0),
+            ]);
+            select(&mut doc, &[EntityId(1)]);
+            run_on::<SelectVectorsInside>(&mut doc, &NoParams {});
+            assert_eq!(
+                doc.selection,
+                [EntityId(1), EntityId(2), EntityId(3)].into(),
+                "the panel keeps its place, its hole and groove join; the other shape stays out"
+            );
+        }
+
+        #[test]
+        fn says_what_to_do_without_a_closed_shape_selected() {
+            let mut doc = document_with(vec![Path::polyline(
+                &[Point::new(0.0, 0.0), Point::new(9.0, 0.0)],
+                false,
+            )]);
+            let why = SelectVectorsInside::run(&doc, &NoParams {}).unwrap_err();
+            assert!(why.to_string().contains("closed shape"), "{why}");
+            select(&mut doc, &[]);
+            assert!(SelectVectorsInside::run(&doc, &NoParams {}).is_err());
         }
     }
 
