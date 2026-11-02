@@ -3,6 +3,7 @@ name = "fmt-part-labels"
 description = "Part Labels: a printable label for each part of the job, with a QR code"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
