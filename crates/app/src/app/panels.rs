@@ -1384,7 +1384,9 @@ impl CutCraftApp {
         );
         // while sculpting the left button sculpts; the right turns the view, the middle pans
         let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
-        let left = left && !sculpting;
+        // with a drawing tool open the left button draws on the model, as in Aspire 12
+        let drawing = self.drawing_in_3d();
+        let left = left && !sculpting && drawing.is_none();
         let delta = response.drag_delta();
         self.take_ring(ui, &response);
         if response.dragged() && delta != egui::Vec2::ZERO {
@@ -1424,23 +1426,9 @@ impl CutCraftApp {
         // a double-click picks the component under it, as in Aspire; off the model it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         self.fit_3d = Some(fit);
-        let double = response
-            .double_clicked()
-            .then(|| response.interact_pointer_pos())
-            .flatten();
-        // while a preview shows, a double-click takes away the piece cut free under it
-        let removed = double
-            .filter(|_| self.playback.is_none() && self.simulation.is_some())
-            .is_some_and(|at| self.remove_preview_piece(fit, at));
-        let picked = double
-            .filter(|_| !removed)
-            .and_then(|at| self.component_at_3d(fit, at));
-        if removed {
-        } else if let Some(id) = picked {
-            self.pick_3d(ui, id);
-        } else if double.is_some() || (response.hovered() && fit_key) {
-            self.framing = self.framing.fitted();
-        }
+        // F fits too, with the pointer over the view
+        let fit_now = response.hovered() && fit_key;
+        self.double_click_3d(ui, &response, fit, drawing.is_none(), fit_now);
         if response.dragged() || on_cube.dragged() || before != (self.orbit, self.framing) {
             self.moved_3d = ui.input(|i| i.time);
         }
@@ -1451,7 +1439,41 @@ impl CutCraftApp {
         self.handles_3d(ui, area, fit);
         self.rings_3d(ui, area, fit);
         self.anchors_3d(ui, &response, area, fit);
+        if let Some(id) = drawing {
+            self.draw_3d(ui, &response, area, fit, id);
+        }
         self.view_3d_menu(ui, &response, fit);
+    }
+
+    /// A double-click in the 3D view (not while drawing): on a preview it takes away the
+    /// piece cut free under it, on a component it picks it, off the model it fits the view,
+    /// as `fit_now` (F) does.
+    fn double_click_3d(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        fit: egui::Rect,
+        picking: bool,
+        fit_now: bool,
+    ) {
+        let double = response
+            .double_clicked()
+            .then(|| response.interact_pointer_pos())
+            .flatten()
+            .filter(|_| picking);
+        // while a preview shows, a double-click takes away the piece cut free under it
+        let removed = double
+            .filter(|_| self.playback.is_none() && self.simulation.is_some())
+            .is_some_and(|at| self.remove_preview_piece(fit, at));
+        let picked = double
+            .filter(|_| !removed)
+            .and_then(|at| self.component_at_3d(fit, at));
+        if removed {
+        } else if let Some(id) = picked {
+            self.pick_3d(ui, id);
+        } else if double.is_some() || fit_now {
+            self.framing = self.framing.fitted();
+        }
     }
 
     /// A double-click on component `id`: Shift adds or takes it away; again on a selected
@@ -1541,7 +1563,7 @@ impl CutCraftApp {
 
     /// The preview's material, or the model's shape, at its own detail up to
     /// [`FINE_MESH_CELLS`].
-    fn fine_surface(&mut self) -> Material {
+    pub(super) fn fine_surface(&mut self) -> Material {
         if let Some(material) = &self.simulation {
             return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
         }

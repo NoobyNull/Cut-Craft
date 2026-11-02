@@ -111,11 +111,18 @@ say "not implemented yet".
   Bitmap (bitmaps: PNG, JPEG, GIF, BMP, TIFF in grey, shown in the 2D view), Export DXF /
   SVG, Open Application Data Folder, Exit.
 - Edit: Undo, Redo, Cut, Copy, Paste, Delete; Select All Vectors / Open Vectors / Duplicate
-  Vectors / On Current Layer, Unselect All; the ten Align commands and the four spacing ones
+  Vectors / On Current Layer, Select Vectors Inside, Unselect All; the ten Align commands and the four spacing ones
   (Left To Right ... Bottom To Top; laid out in pick order, the first picked at the named start [inf]); Join Vectors, Group, Ungroup, Job Size and Position.
 - Selection: pick order kept; components picked in the Components tab; bitmaps picked in the
   2D view (Bitmap Properties: position and size; Delete removes them).
-- Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
+- Smart part selection (Aspire 12.5) ✅: a click inside a closed shape, away from its lines,
+  picks the smallest shape round the click with everything wholly inside it (holes, and
+  anything in them) as one part, without grouping; Shift-click adds or takes away the part.
+  Select Vectors Inside (Edit ▸ Selection and the 2D right-click menu) adds what lies inside
+  the selected closed shapes. Not yet in the 3D view.
+- Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Relief
+  from Photo (Cut Craft's own: Estimate Depth runs the optional Depth add-on on the chosen
+  photo, then backdrop cut-off, lift, fine detail and smoothing shape it into a relief), Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL (its form: limit by tolerance or triangle count; back
   left open or closed by a flat plane, the inverted front or the other side; Triangulate shows
@@ -180,6 +187,15 @@ say "not implemented yet".
   be and is applied when let go (one undo). Escape cancels a drag; let go off the material
   (over the horizon in perspective) it changes nothing. [inf: the manual's edit box for an exact value and
   moving the rotation centre are not offered; Move, Scale and Rotate take exact values.]
+- Drawing in the 3D view (Aspire 12 [inf: "the drawing tools are now available in the 3D
+  view", What's New in V12.0]): with a drawing tool's form open, the left button draws in the
+  3D view as it does in the 2D view (drags, clicks, Shift-click to edit, the polyline's
+  clicks, text, trim, dimensions, cross section), at the point where the pointer meets the
+  model (off it, the material's top plane). The shape being drawn shows on the model; the
+  right button still turns the view, the middle pans, the wheel zooms; snapping works as in
+  2D and the status bar adds "right-drag turns the view". Vectors are still flat 2D vectors.
+  Not offered while the job is shown wrapped round a rotary axis, while a 3D model is being
+  imported, or with a view tool on; nor before anything is in 3D (the view is empty then).
 - Import 3D Model is one page (Aspire 12 has two; Matthew asked for one): Initial
   Orientation, Model Size, the model type and Scale to fit, Position relative to Modeling
   Plane (Position, Depth Below Top, Create both sides, Discard data below zero plane), Align

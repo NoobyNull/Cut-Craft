@@ -39,6 +39,7 @@ python3 -I re/vfont.py "$HOME/Desktop/Aspire 12.0/Fonts/Helvetica 1L.vfont" re/e
 - **[obs]** I/O libraries: ODA (DXF/DWG; `IoOda`, `Oda` catalogs), pstill (EPS/AI/PDF; `IoPScript`), GraphicsMagick (bitmaps; `IoMagick`), OpenNURBS (`.3dm`), SketchUp SDK (`.skp`).
 - **[obs]** Scripting: Lua + LuaBind, used for Gadgets and Lua-based post-processors (`Lua/ppVariables.lua`).
   - **Deliberate difference:** CutCraft gadgets are Lua 5.4 too, but call CutCraft's own commands by id (`cutcraft.run("draw_circle", {...})`) instead of Vectric's gadget API, run sandboxed (no files, programs or network), and each run is one Undo step. Aspire gadgets do not run unchanged.
+  - Gadgets built into Cut Craft are signed with the app. A gadget from the user's My Gadgets folder is unsigned: before it first runs each session, Cut Craft warns that it is not responsible for what the gadget does, and the user picks Run Gadget or Cancel. Only gadgets from Cut Craft's own builds count as signed; any other gadget, from the folder or downloaded, is allowed after the same warning.
 - **[obs]** Cloud and support: curl/OpenSSL/JsonCpp (clipart library, machine database, licensing, makerspace accounts) and BugSplat crash reporting.
 - **[inf]** Subsystem split, from `.mo` catalog names: `App`/`AppCmd` commands, `Io*` file I/O, `Vd` vector geometry, `Cm` layers, `Tri*` triangle meshes, `Mc*` machining and post-processing, `Nest` nesting, `Sd` two-sided jobs, `V3d` 3D view, `UiP`/`VfUi`/`Uvs*` UI forms.
 
@@ -207,6 +208,7 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
 - **Create Shape** (from closed vectors): Round, Angled, Flat, Custom and Smooth profiles. The other creation tools are in the Model menu: Two Rail Sweep, Extrude & Weave, Turn & Spin, Texture Area, Zero Plane and From Bitmap.
 - **Modify:** Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Add Draft, Scale Z Height, Replace Below, Split, Bake, Segment 3D Model.
+- **Relief from Photo** (Cut Craft only, not in Aspire): Aspire's From Bitmap reads grey as height, so it works only on a depth map made elsewhere. Cut Craft estimates a photo's depth with an optional add-on (Depth Anything V2 Small, run on the CPU, Apache 2.0 weights; the larger models are non-commercial and are not offered). It then cuts away the backdrop, which it finds from the photo's border so light and dark backdrops both work, and lifts the subject clear of it. It adds the photo's fine shading back as texture and smooths speckle while keeping edges (Perona-Malik). Settings: Background cut-off, Fine detail, Smoothness, Max height, Lift. This is a deliberate addition for novices: one tool goes from photo to relief, and STL comes from Export as STL.
 
 ### Clipart tab (Cut Craft: Library) [inf] (help: Clipart Tab)
 - **[inf]** Aspire: the Clipart tab browses clipart libraries by folder, each piece shown as a thumbnail; a double-click imports one, and a thumbnail dragged onto the 2D or 3D view drops it there. Vectric's own `.3dclip` / `.v3m` files carry their previews.
@@ -360,6 +362,9 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - Click selects. **Shift+click** toggles an object in or out of the selection.
 - A drag **left→right** selects objects *fully inside* the box. A drag **right→left** selects objects *touching* it.
 - Ctrl+A selects all vectors. Esc or a click on empty background deselects.
+- **Smart part selection [inf]** (help: What's New in Aspire V12.5): "Select all vectors internal to a selected boundary using the right click context menu in both 2D and 3D view", so complete parts can be picked "without requiring manual grouping first".
+  - **[inf]** Cut Craft: right-click ▸ **Select Vectors Inside** (also Edit ▸ Selection) keeps the selection and adds every vector lying wholly inside a selected closed shape; with no closed shape selected it says to select one first. 2D view only so far.
+  - **[inf]** Cut Craft, a deliberate difference: a plain **click inside a closed shape** (away from any line, picture or component) also picks the part: the smallest closed shape round the click plus everything wholly inside it (its holes, open vectors such as grooves, and islands in its holes). A novice clicks inside a shape to pick it on day one and would not find a menu item. Clicking inside a hole picks the hole and what is in it; Shift-click adds the part, or takes it away when it is all selected already. Overlapping shapes are never each other's holes (a closed shape must be smaller and wholly inside). Lines, pictures and components under the click still win, so nothing that was pickable before stops being so.
 - Selected vectors draw as **dotted magenta**; groups and text draw as solid magenta.
 - **Click an already-selected object again** to show the transform handles:
   - **Centre handle:** move. Alt restricts the move to one axis. Clicking it again switches to the rotation centre, which can be dragged.
@@ -763,6 +768,33 @@ instead of half-cell steps.
 - Perspective's zoom scales the picture (like a longer lens) rather than moving the eye in.
 - Not tried by hand: how the cube looks and feels, label fit at other font sizes, and
   side-on overlay speed on a big job.
+
+## Drawing in the 3D view [inf] (help: What's New in Aspire V12.0, "Drawing in the 3D View")
+
+#### Aspire behaviour (sources)
+- "The software's drawing tools are now available in the 3D view", so a user can stay in the
+  3D view instead of switching views [inf: What's New V12.0]. The help does not say how the
+  pointer maps onto the model, nor how the view is turned while a tool is open.
+
+#### What was built, and the choices made
+- The open drawing tool takes the 3D view's left button; its gestures are the 2D view's
+  (`view2d::gesture_of`), with each screen point taken to where its line of sight first meets
+  the model's solid (`view3d::Camera::on_surface`: stepped half a cell, then halved to a hair),
+  off the material the top plane (`Camera::on_floor`). [inf] Projecting onto what is under the
+  pointer is our guess; it means what is drawn lies on what the user sees, which a novice
+  expects, where the top plane would put it millimetres off on a raised or cut surface.
+- Right-drag turns the view and middle-drag pans while drawing (the sculpting rule), so the
+  left button never does two things; the status bar says so. Double-click does not pick a
+  component or fit while drawing (it would fight the polyline's clicks).
+- The shape being drawn is drawn on the model in the selection colour, flat at the height a
+  finished vector shows (`view3d::vector_plane`), hidden where the model hides it.
+- Not offered on the wrapped (rotary) view, while importing a 3D model, or with a view tool on.
+
+#### What's left
+- Node editing and the selection's 2D handles in the 3D view; selecting vectors by clicking
+  them there.
+- Drawing before any component exists (the 3D view shows "Nothing in 3D yet").
+- Drawing on the wrapped rotary view.
 
 ## Tool databases: `.vtdb` [obs] (vendor files from Amana, IDC Woodcraft and CIC; Aspire 12.5)
 

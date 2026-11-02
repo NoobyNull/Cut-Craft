@@ -302,7 +302,9 @@ mod tests {
                 .sum()
         };
         assert!(count(&toolbar.groups) <= 45, "{}", count(&toolbar.groups));
-        assert_eq!(count(&toolbar.modeling_groups), 20);
+        // the four Create Shape buttons become one
+        let modeling: usize = toolbar.modeling_groups.iter().map(|g| g.tools.len()).sum();
+        assert_eq!(count(&toolbar.modeling_groups), modeling - 3);
     }
 
     #[test]

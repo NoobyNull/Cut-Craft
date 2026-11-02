@@ -3,6 +3,7 @@
 
 mod actions;
 mod cutting;
+mod draw3d;
 mod help;
 mod layouts;
 mod panels;
@@ -759,6 +760,10 @@ struct CutCraftApp {
     selected_group: Option<String>,
     /// Quick Engrave's Immediate Output: the post and side name it saves with.
     immediate_output: SaveForm,
+    /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
+    depth_estimate: Option<crate::depth::Estimating>,
+    /// Where add-ons are installed; `None` in tests.
+    addons_path: Option<std::path::PathBuf>,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,
@@ -776,6 +781,12 @@ struct CutCraftApp {
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
+    /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
+    unsigned_gadgets: std::collections::HashMap<String, String>,
+    /// The unsigned gadgets the user has said yes to running this session.
+    unsigned_gadgets_allowed: std::collections::HashSet<String>,
+    /// Asks whether to run the unsigned gadget with this label (a dialog; tests answer).
+    unsigned_gadget_ok: fn(&str) -> bool,
     /// A SpaceMouse's moves, once the app is running (not in tests or screenshots).
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
@@ -857,6 +868,12 @@ struct CutCraftApp {
     polyline: crate::polyline::Draft,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
+    /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
+    /// with the history revision and job it was made for.
+    drawn_on: Option<(
+        (u64, cut_craft_core::document::Job),
+        std::sync::Arc<Material>,
+    )>,
     /// The imported model's triangles as last drawn, kept while nothing about the view or
     /// the model changes: sorting and lighting a big model every frame is what made the
     /// window drag while a model was being imported.
@@ -1983,6 +2000,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.options = crate::options::Options::load();
             app.options_path = crate::options::Options::path();
             app.words_path = files::config_dir().map(|d| d.join("words.txt"));
+            app.addons_path = crate::depth::addons_dir();
             app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
