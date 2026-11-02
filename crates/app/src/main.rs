@@ -1,4 +1,4 @@
-//! Cut Craft: an open-source, Vectric Aspire-style app for 2D/3D design and CNC toolpaths.
+//! Cut Craft: a free, source-available, Vectric Aspire-style app for 2D/3D design and CNC toolpaths.
 
 // release builds on Windows open no console window behind the app
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
