@@ -38,6 +38,8 @@ impl CutCraftApp {
         let ctx = &ui.ctx().clone();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
+        // the Depth add-on's answer, when it has one
+        self.take_depth();
         self.draw_window(ui);
         self.dropped_files(ctx);
         self.follow_form(ctx);

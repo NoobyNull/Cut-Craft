@@ -1,0 +1,13 @@
+# The Depth add-on's manifest, in the shared add-on layout: a zip of this file, the
+# program (cutcraft-depth, .exe on Windows) and the weights, unpacked per user into
+# <add-ons folder>/depth/.
+id = "depth"
+name = "Depth (Relief from Photo)"
+kind = "tool"
+version = "0.1.0"
+needs_cutcraft = ">=0.5.0"
+platforms = ["windows-x64", "linux-x64"]
+# the program is Cut Craft's own; the weights are Depth Anything V2 Small (Apache 2.0),
+# converted with `cutcraft-depth convert depth_anything_v2_vits.pth`
+license = "LicenseRef-CutCraft AND Apache-2.0"
+files = ["cutcraft-depth", "depth_anything_v2_vits.safetensors"]

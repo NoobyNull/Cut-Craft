@@ -135,6 +135,7 @@ cmd-smooth-selected-components = { path = "../commands/smooth-selected-component
 cmd-create-component-from-visible-model = { path = "../commands/create-component-from-visible-model" }
 cmd-bake-components = { path = "../commands/bake-components" }
 cmd-create-component-from-bitmap = { path = "../commands/create-component-from-bitmap" }
+cmd-relief-from-photo = { path = "../commands/relief-from-photo" }
 cmd-scale-model-z-height = { path = "../commands/scale-model-z-height" }
 cmd-add-zero-plane = { path = "../commands/add-zero-plane" }
 cmd-space-vertically = { path = "../commands/space-vertically" }

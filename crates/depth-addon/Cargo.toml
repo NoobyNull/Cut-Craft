@@ -1,0 +1,19 @@
+[package]
+name = "cut-craft-depth"
+description = "Depth add-on: estimates a photo's depth (Depth Anything V2 Small, Apache 2.0) for Relief from Photo. A separate program, downloaded only by those who use it"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "cutcraft-depth"
+path = "src/main.rs"
+
+[dependencies]
+# pure Rust, CPU, no Python or native libraries to install; has Depth Anything V2 built in
+candle-core = "0.11"
+candle-nn = "0.11"
+candle-transformers = "0.11"
+image.workspace = true
+
+[lints]
+workspace = true
