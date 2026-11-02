@@ -1716,6 +1716,7 @@ impl MenuSystem {
                         i("Keyboard Shortcuts"),
                         i("Third Party Licenses"),
                         sep(),
+                        MenuItem::with_action("Check for Updates...", "check_for_updates"),
                         i("About Cut Craft"),
                     ],
                 ),
