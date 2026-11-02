@@ -824,6 +824,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-drill-bank-toolpath"
+version = "0.4.3"
+dependencies = [
+ "cmd-drilling-toolpath",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-drilling-toolpath"
 version = "0.4.3"
 dependencies = [
@@ -1934,6 +1944,7 @@ dependencies = [
  "cmd-draw-rectangle",
  "cmd-draw-star",
  "cmd-draw-text",
+ "cmd-drill-bank-toolpath",
  "cmd-drilling-toolpath",
  "cmd-duplicate-component",
  "cmd-duplicate-toolpath",

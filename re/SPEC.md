@@ -763,6 +763,49 @@ instead of half-cell steps.
   102, 4204, 5176, 5180), a laser sketch-carving form (35159, 5172), getting-started guides.
   Trial dumps: `re/extracted/dialogs-12.5/`, `re/extracted/help-12.5/`.
 
+### Drill Bank Toolpath [inf: help 12.5 "Drill Bank Toolpath" and "Post-Processor Editing"]
+- A variant of Drilling for a drill bank: "multiple individual drills arranged on horizontal
+  and vertical arms" that are engaged (extended) or disengaged (retracted) before plunging.
+  Part of the Advanced Machining Module.
+- Layout: Horizontal Drills and Vertical Drills (how many on each arm), Central Drill (X, Y)
+  (the drill both arms share, by its index on each), Pitch (even spacing). Per drill: Drill
+  Number (the controller's; the shared drill may have one on each arm "for machines that
+  number the horizontal and vertical drill arrays independently"), Diameter, and Reference
+  Drill ("the origin point when positioning the drill bank"; one at a time). Pitch Tolerance
+  and Diameter Tolerance are used "when looking for matching drill patterns". Peck drilling,
+  retract gap and options as Drilling; Project onto 3D Model; Vector Selection; Name.
+- **[inf]** The help shows the layout in the toolpath's own Template Creation form; the
+  `.vtdb` has `drill_bank_*` tables, so Aspire may keep banks in the tool database.
+  **[dec: clarity]** Cut Craft keeps the bank with the machine (Machine Configuration ▸
+  Drill Bank): it is part of the machine, set once, and the toolpath form takes it from the
+  active machine each time it opens (editing a toolpath picks up a changed bank).
+- **[inf]** The arms are taken to cross in the XY plane (a cross, T or L): horizontal along
+  +X, vertical along +Y, all drills pointing down. Not edge (horizontal) boring.
+- **[inf]** Matching (the help does not say how): from the first hole not yet drilled, the
+  head is placed for each drill that fits it by size, and the placement dropping the most
+  drills onto other holes (within the tolerances) is taken. Holes no drill fits stop the
+  toolpath, naming their sizes and the bank's (Aspire's behaviour is not known).
+- Post (help 12.5): mode by blocks, mutually exclusive: pattern (`DRILL_BANK_PATTERN`, on
+  pattern change) or per drill (`DRILL_BANK_EXTEND_DRILL` / `DRILL_BANK_RETRACT_DRILL`, on
+  each drill's change). Both need `SETUP_DRILL_BANK` (entering drill bank mode, "at the
+  start of every block of drill bank moves") and the final action (leaving it). Missing ones
+  or an invalid mix "will prohibit the saving of drill bank toolpaths". The help heads the
+  final block `DRILL_BANK_FINAL_ACTION` but its `begin` line is `FINAL_DRILL_BANK_ACTION`;
+  Cut Craft reads both.
+- Variables: `DRILL [DB]` bitwise OR of the engaged drills' numbers, `DRILL_X [DBX]` /
+  `DRILL_Y [DBY]` the same for horizontal-only / vertical-only drills, `DRILL_LIST [DL]` the
+  list, formatted `[DL|prefix|separator|first_separator]` (1, 3, 5 with `[DL|D|,| ]` print
+  `D1 D3,D5`), `CURRENT_DRILL [CD]` the drill being extended or retracted.
+- **[inf]** Cut Craft's reading: `[DBX]` / `[DBY]` are each arm's engaged drills including
+  the shared one by its number on that arm; `[DB]` is both ORed; `[DL]` and `[CD]` give the
+  shared drill its horizontal number. New banks are numbered 1, 2, 4, 8... so the OR is a
+  bitmask. The pattern or extends are written before the hit's move to the head's position
+  at safe Z; per-drill posts retract every drill before the final action. The G-code's X / Y
+  are the reference drill's position.
+- **[inf]** Cut Craft's toolpath drills each hole in its moves (so the preview, simulation and
+  checks show every hole) and keeps each plunge of the head with them; the post writes one
+  plunge per hit.
+
 ## Open questions (need decompilation or sample files)
 1. `.v3m` byte layout, and the rest of `.crv3d` (see Job files). `.3dClip` (the 22 sculpting
    brushes the installer puts in `Public/Documents/Vectric Files`) is **not** a compound file:

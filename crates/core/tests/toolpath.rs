@@ -30,6 +30,7 @@ fn toolpath(name: &str) -> Toolpath {
         power: vec![],
         stale: false,
         group: None,
+        drill_bank: None,
     }
 }
 

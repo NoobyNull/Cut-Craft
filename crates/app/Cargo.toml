@@ -173,6 +173,7 @@ cmd-select-layer-vectors = { path = "../commands/select-layer-vectors" }
 cmd-move-to-layer = { path = "../commands/move-to-layer" }
 cmd-delete-layer = { path = "../commands/delete-layer" }
 cmd-add-layer = { path = "../commands/add-layer" }
+cmd-drill-bank-toolpath = { path = "../commands/drill-bank-toolpath" }
 cmd-drilling-toolpath = { path = "../commands/drilling-toolpath" }
 cmd-pocket-toolpath = { path = "../commands/pocket-toolpath" }
 cmd-profile-toolpath = { path = "../commands/profile-toolpath" }

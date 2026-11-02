@@ -309,6 +309,7 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
             moves: vec![],
             vectors: vec![],
             power: vec![],
+            drill_bank: None,
             ..t.clone()
         })
         .collect();
@@ -439,6 +440,7 @@ mod tests {
                 power: vec![],
                 stale: false,
                 group: None,
+                drill_bank: None,
             })
         });
         doc.apply(&c.finish()).unwrap();

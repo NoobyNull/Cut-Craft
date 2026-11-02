@@ -2419,6 +2419,53 @@ fn edit_toolpath_reopens_its_form_and_replaces_it() {
 }
 
 #[test]
+fn a_drill_bank_toolpath_drills_with_the_machines_bank_and_says_when_there_is_none() {
+    use cut_craft_core::drill_bank::DrillBank;
+    use cut_craft_core::geometry::{Path, Point};
+    let mut h = Harness::new();
+    let mut c = cut_craft_core::Change::builder(&h.app.doc);
+    let holes: Vec<_> = (0..3)
+        .map(|i| {
+            c.add(Path::circle(
+                Point::new(20.0 + 32.0 * f64::from(i), 20.0),
+                2.5,
+            ))
+        })
+        .collect();
+    c.select(holes);
+    h.app.doc.apply(&c.finish()).unwrap();
+    // no machine: the form opens and the toolpath says where the bank is set up
+    h.app.invoke(&h.ctx, "drill_bank_toolpath");
+    let params = h.app.form.as_ref().expect("its form").params.clone();
+    let err = h.app.apply("drill_bank_toolpath", &params).unwrap_err();
+    assert!(err.contains("Machine Configuration"), "{err}");
+    // a machine with a bank of three: one plunge drills all three
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().drill_bank = Some(DrillBank::new(3, 0, 32.0, 5.0));
+    h.app.invoke(&h.ctx, "drill_bank_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("drill_bank_toolpath", &params).unwrap();
+    h.app.form = None;
+    let (&id, toolpath) = h.app.doc.toolpaths.iter().next().unwrap();
+    assert_eq!(toolpath.drill_bank.as_ref().unwrap().hits.len(), 1);
+    // editing it again picks up the bank as the machine has it now
+    h.app.machines.active_mut().unwrap().drill_bank = Some(DrillBank::new(2, 0, 32.0, 5.0));
+    h.app.selected_toolpath = Some(id);
+    h.app.invoke(&h.ctx, "edit_toolpath");
+    let form = h.app.form.as_ref().expect("the toolpath's form");
+    assert_eq!(
+        form.params["bank"]["horizontal"].as_array().unwrap().len(),
+        2
+    );
+    // Cut Craft's own posts have no drill bank blocks: saving says so
+    let post = h.app.output_post().unwrap();
+    let out = std::env::temp_dir().join(format!("cut-craft-bank-{}.nc", std::process::id()));
+    let err = files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap_err();
+    assert!(err.contains("SETUP_DRILL_BANK"), "{err}");
+    let _ = std::fs::remove_file(out);
+}
+
+#[test]
 fn the_file_and_component_level_icons_have_their_tools() {
     let mut h = Harness::new();
     for id in [
@@ -4740,6 +4787,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         power: vec![],
         stale: false,
         group: None,
+        drill_bank: None,
     });
     h.app.simulation = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
