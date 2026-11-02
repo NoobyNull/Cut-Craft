@@ -469,6 +469,9 @@ I[wo + "subtract_vectors.svg"] = lambda: [circ(18, 20, 13, INK, SW, LIGHT), circ
 I[wo + "overlap_intersect.svg"] = lambda: [circ(18, 21, 12, GREY, 2), circ(30, 27, 12, GREY, 2),
                                            path("M24.0,12.9 A12,12 0 0 1 24.0,35.1 A12,12 0 0 1 24.0,12.9 Z", INK, SW, LIGHT)]
 I[wo + "offset_vectors.svg"] = lambda: [rect(14, 14, 20, 20, 2, INK, SW, LIGHT), rect(6, 6, 36, 36, 9, ACC, 2.5, None, "4 3")]
+I[wo + "name_part.svg"] = lambda: [rect(5, 16, 30, 26, 2, INK, SW, LIGHT), line(31, 19, 35, 24, DARK, 2),
+                                   path("M27,22 L35,28 L43,22 V8 H27 Z", ACC, 2.5, "#ffe9d2"), circ(35, 13, 2.2, ACC, 2, WHITE)]
+I[wo + "engrave_part_names.svg"] = lambda: [rect(5, 8, 38, 32, 2, INK, SW, LIGHT), text("A1", 11, 16, 16, ACC, 3.5)]
 I[wo + "vector_texture_fill.svg"] = lambda: [circ(24, 24, 18, INK, SW, LIGHT)] + [line(10 + i * 6, 12 + abs(i - 2) * 1.5, 10 + i * 6, 36 - abs(i - 2) * 1.5, ACC, 2.5) for i in range(5)]
 
 # dialog pictures (were Aspire's bitmaps): grey shape, the dimension in orange

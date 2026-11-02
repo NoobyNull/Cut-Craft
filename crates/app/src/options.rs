@@ -499,6 +499,10 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub job_sheet: fmt_create_job_sheet::Style,
+    /// Toolpaths ▸ Print Part Labels: the labels' size and what they show.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub part_labels: fmt_part_labels::Style,
     /// Export as STL: how the model is triangulated.
     #[serde(default)]
     #[schemars(skip)]
@@ -582,6 +586,7 @@ impl Default for Options {
             },
             confirmations: Confirmations::default(),
             job_sheet: fmt_create_job_sheet::Style::default(),
+            part_labels: fmt_part_labels::Style::default(),
             stl: fmt_export_as_stl::Settings::default(),
             import: Import::default(),
             appearance: Appearance::default(),

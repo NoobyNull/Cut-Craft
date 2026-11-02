@@ -146,6 +146,8 @@ fn drawing_groups() -> Vec<ToolGroup> {
             &[
                 "offset_vectors",
                 "nest_parts",
+                "name_part",
+                "engrave_part_names",
                 "copy_along_vectors",
                 "plate_production",
             ],
@@ -506,6 +508,7 @@ impl MenuSystem {
             },
             MenuItem::submenu("Text", text_items(doc)),
             MenuItem::separator(),
+            MenuItem::with_action("Name Part...", "name_part"),
             MenuItem::with_action("Object Properties", "object_properties"),
             MenuItem::with_action("Bitmap Properties", "bitmap_properties")
                 .enabled(!doc.selected_bitmaps.is_empty()),
@@ -1402,6 +1405,7 @@ impl MenuSystem {
                                 i("Import Component / 3D Model..."),
                                 a("Segment 3D Model...", "segment_3d_model_file"),
                                 i("Import Toolpaths..."),
+                                a("Import Cut List (CSV)...", "import_cut_list"),
                             ],
                         ),
                         sub(
@@ -1474,6 +1478,8 @@ impl MenuSystem {
                         k("Join Vectors", "J"),
                         a("Curve Fit Vectors", "fit_curves_to_vectors"),
                         a("Nest Selected Objects", "nest_parts"),
+                        a("Name Part...", "name_part"),
+                        a("Engrave Part Names...", "engrave_part_names"),
                         sep(),
                         i("Job Size and Position"),
                         sub(
@@ -1620,6 +1626,8 @@ impl MenuSystem {
                         ),
                         MenuItem::with_action("Merge Visible Toolpaths", "merged_toolpath"),
                         i("Create Job Sheet"),
+                        a("Print Part Labels...", "part_labels"),
+                        a("Save Cut List...", "cut_list"),
                         sep(),
                         i("Materials..."),
                         sep(),

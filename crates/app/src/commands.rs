@@ -180,12 +180,17 @@ pub fn registry() -> Registry {
     r.add::<cmd_merge_visible_layers::MergeVisibleLayers>();
     r.add::<cmd_send_to_sheet::SendToSheet>();
     r.add::<cmd_copy_toolpath_to_sheet::CopyToolpathToSheet>();
+    r.add::<cmd_name_part::NamePart>();
+    r.add::<cmd_engrave_part_names::EngravePartNames>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
     r.add_exporter::<fmt_export_pdf::ExportEps>();
     r.add_exporter::<fmt_export_pdf::ExportAi>();
     r.add_exporter::<fmt_create_job_sheet::JobSheet>();
+    r.add_exporter::<fmt_cut_list::CutList>();
+    r.add_importer::<fmt_cut_list::ImportCutList>();
+    r.add_exporter::<fmt_part_labels::PartLabels>();
     r.add_importer::<fmt_import_svg::ImportSvg>();
     r.add_importer::<fmt_import_bitmap::ImportBitmap>();
     r.add_importer::<fmt_import_stl::ImportStl>();

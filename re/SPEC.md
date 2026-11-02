@@ -763,6 +763,38 @@ instead of half-cell steps.
   102, 4204, 5176, 5180), a laser sketch-carving form (35159, 5172), getting-started guides.
   Trial dumps: `re/extracted/dialogs-12.5/`, `re/extracted/help-12.5/`.
 
+### Cut lists and part labels [inf] (Vectric's public Advanced Machining Module product page and help page, V12.5; not tried in the trial)
+- **What Vectric documents [inf]:** Cabinet Import brings in parts exported from cabinet
+  programs (CabinetParts Pro, CabinetSense, KCD, Mozaik), or others through a Custom Mapping
+  File, and nests and toolpaths them from a template job. Labels can be made for each part
+  during import, with a barcode, QR code or Data Matrix holding the part's information, in
+  one of seven standard sizes for common label printers. The help does not list the label
+  fields, the sizes or how printing works.
+- **Cut Craft, a deliberate difference:** the same results are reachable without the add-on
+  or a cabinet program, in steps a novice can follow, and labels work on any job, not only
+  imported ones.
+  - Import Cut List reads a plain CSV (what any spreadsheet saves) rather than the cabinet
+    programs' formats or a mapping file: columns found by heading (Name, Length, Width,
+    Quantity, Material; synonyms such as Qty, Part, Description), or Name, Length, Width,
+    Quantity without headings. Each part is a named rectangle; a material picks the layer.
+    Nest Parts opens next, set to move the parts, instead of a template job. Mistakes name
+    the row and the fix.
+  - Parts carry a name (Name Part; kept on the job by vector group, undoable). A part is a
+    group or closed vector with what lies inside its box; Nest Parts' own rule (boxes that
+    overlap) is not used, so parts nested close together stay apart on the list.
+  - The cut list lists length (the longer side) and width (the shorter), so a part turned
+    by nesting stays on the same row; grain direction is not kept.
+  - Labels: name, "3 of 12", size, sheet, job name and a QR code holding those same lines as
+    plain text (any phone camera reads it; no database is needed). Sizes are our choice of
+    common rolls: 4 × 6, 4 × 3, 4 × 2, 3 × 2, 2.25 × 1.25 in, 100 × 50 and 62 × 29 mm, plus
+    plain paper with cut lines for people without a label printer. Printed through the web
+    browser, which every platform has, rather than a print dialog of our own.
+  - Engrave Part Names puts the label's number and name on the part itself as Draw Text on
+    a Part Names layer, for an engraving toolpath; Vectric's page does not mention this.
+- **Platform notes:** Excel on Windows saves "CSV" in the Windows code page, read here as
+  Latin-1; European spreadsheets use semicolons and decimal commas, both read. The labels
+  page is written to the system temp folder and opened with the platform's opener.
+
 ## Open questions (need decompilation or sample files)
 1. `.v3m` byte layout, and the rest of `.crv3d` (see Job files). `.3dClip` (the 22 sculpting
    brushes the installer puts in `Public/Documents/Vectric Files`) is **not** a compound file:

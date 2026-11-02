@@ -1,0 +1,17 @@
+[package]
+name = "cmd-name-part"
+description = "Name Part"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+fmt-cut-list = { path = "../../formats/cut-list" }
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

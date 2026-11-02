@@ -131,6 +131,12 @@ pub enum Edit {
         before: Option<serde_json::Value>,
         after: Option<serde_json::Value>,
     },
+    /// A part's name, by its vector group; `None` when it has none.
+    SetPartName {
+        group: u64,
+        before: Option<String>,
+        after: Option<String>,
+    },
     /// Adds, changes or removes (`None`) a level of the component tree.
     SetLevel {
         id: u64,
@@ -276,6 +282,15 @@ impl Edit {
                 group,
                 before: after.clone(),
                 after: before.clone(),
+            },
+            Self::SetPartName {
+                group,
+                before,
+                after,
+            } => Self::SetPartName {
+                group,
+                before: after,
+                after: before,
             },
             Self::SetLevel { id, before, after } => Self::SetLevel {
                 id,
@@ -964,6 +979,14 @@ impl Document {
             | Edit::SetToolpathGroups { .. }
             | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
+            Edit::SetPartName { group, after, .. } => match after {
+                Some(name) => {
+                    self.part_names.insert(*group, name.clone());
+                }
+                None => {
+                    self.part_names.remove(group);
+                }
+            },
             Edit::SetLevel { id, before, after } => {
                 self.set_level(*id, before.as_ref(), after.as_ref())?;
             }
@@ -1376,6 +1399,28 @@ impl ChangeBuilder<'_> {
             .unwrap_or_else(|| self.doc.texts.get(&group).cloned());
         if before != after {
             self.edits.push(Edit::SetText {
+                group,
+                before,
+                after,
+            });
+        }
+    }
+
+    /// Names the part vector group `group` belongs to, or (`None`) takes its name away.
+    pub fn set_part_name(&mut self, group: u64, after: Option<String>) {
+        let before = self
+            .edits
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                Edit::SetPartName {
+                    group: g, after, ..
+                } if *g == group => Some(after.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| self.doc.part_names.get(&group).cloned());
+        if before != after {
+            self.edits.push(Edit::SetPartName {
                 group,
                 before,
                 after,
