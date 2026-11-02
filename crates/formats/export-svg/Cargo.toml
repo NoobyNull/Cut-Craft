@@ -3,6 +3,7 @@ name = "fmt-export-svg"
 description = "Export vectors as SVG"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

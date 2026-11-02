@@ -3,6 +3,7 @@ name = "cut-craft-post"
 description = "Reads Vectric-style .pp post-processors and renders toolpaths through them"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 chrono.workspace = true

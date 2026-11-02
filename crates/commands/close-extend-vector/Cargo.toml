@@ -3,6 +3,7 @@ name = "cmd-close-extend-vector"
 description = "Close / Extend Vector"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

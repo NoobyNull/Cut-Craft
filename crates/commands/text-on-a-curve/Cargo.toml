@@ -3,6 +3,7 @@ name = "cmd-text-on-a-curve"
 description = "Text on a Curve"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

@@ -3,6 +3,7 @@ name = "cmd-array-copy-toolpath"
 description = "Array Copy Toolpath"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

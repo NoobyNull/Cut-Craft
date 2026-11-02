@@ -3,6 +3,7 @@ name = "cmd-space-horizontally"
 description = "Space Horizontally"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

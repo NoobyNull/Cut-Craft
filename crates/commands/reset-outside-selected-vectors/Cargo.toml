@@ -3,6 +3,7 @@ name = "cmd-reset-outside-selected-vectors"
 description = "Reset Outside Selected Vectors"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

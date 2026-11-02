@@ -3,6 +3,7 @@ name = "cmd-nest-parts"
 description = "Nest Parts"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

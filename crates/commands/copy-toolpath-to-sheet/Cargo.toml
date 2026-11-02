@@ -3,6 +3,7 @@ name = "cmd-copy-toolpath-to-sheet"
 description = "Copy Toolpath to Sheet"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

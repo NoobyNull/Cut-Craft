@@ -3,6 +3,7 @@ name = "cmd-merge-visible-layers"
 description = "Merge Visible Layers"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

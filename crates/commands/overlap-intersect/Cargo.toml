@@ -3,6 +3,7 @@ name = "cmd-overlap-intersect"
 description = "Overlap"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

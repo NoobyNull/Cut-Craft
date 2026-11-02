@@ -3,6 +3,7 @@ name = "cmd-make-start-point"
 description = "Make Start Point"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

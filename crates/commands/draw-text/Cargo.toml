@@ -3,6 +3,7 @@ name = "cmd-draw-text"
 description = "Draw Text"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

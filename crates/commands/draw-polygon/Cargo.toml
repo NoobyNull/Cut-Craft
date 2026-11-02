@@ -3,6 +3,7 @@ name = "cmd-draw-polygon"
 description = "Draw Polygon"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

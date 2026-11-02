@@ -3,6 +3,7 @@ name = "cmd-layer-properties"
 description = "Layer Properties"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
