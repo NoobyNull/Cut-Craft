@@ -81,9 +81,14 @@ pub fn preview(
     Ok(image)
 }
 
-/// The cached preview's file name for `source`: from its path, size and time changed, so
-/// a changed file gets a new one. `None` when the file can't be looked at.
+/// The cached preview's file name for `source`: from its [`stamp`].
 fn cache_name(source: &Path) -> Option<String> {
+    stamp(source).map(|hash| format!("{hash:016x}.png"))
+}
+
+/// What a preview of `source` is made from: its path, size and time changed, so a changed
+/// file gets a new one. `None` when the file can't be looked at.
+pub fn stamp(source: &Path) -> Option<u64> {
     let meta = std::fs::metadata(source).ok()?;
     let changed = meta
         .modified()
@@ -103,7 +108,7 @@ fn cache_name(source: &Path) -> Option<String> {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0100_0000_01b3);
     }
-    Some(format!("{hash:016x}.png"))
+    Some(hash)
 }
 
 /// Heights in pixels, row by row from the top; NaN where there is nothing.
@@ -274,7 +279,8 @@ fn shade(heights: &Heights) -> Option<RgbaImage> {
 
 /// Previews made on background threads, for the tiles on screen, newest asked first.
 pub struct Previews {
-    shown: HashMap<PathBuf, Shown>,
+    /// Each model's preview, and the [`stamp`] it was asked for with.
+    shown: HashMap<PathBuf, (u64, Shown)>,
     jobs: Arc<Jobs>,
     done: Receiver<Made>,
     send: Sender<Made>,
@@ -286,10 +292,10 @@ pub struct Previews {
     frame: u64,
 }
 
-/// A model, and the picture beside it if it has one.
-type Job = (PathBuf, Option<PathBuf>);
-/// A model, and its preview or why it has none.
-type Made = (PathBuf, Result<RgbaImage, String>);
+/// A model, the picture beside it if it has one, and the [`stamp`] asked for.
+type Job = (PathBuf, Option<PathBuf>, u64);
+/// A model, the [`stamp`] asked for, and its preview or why it has none.
+type Made = (PathBuf, u64, Result<RgbaImage, String>);
 
 /// Previews waiting to be made, and whether the workers should stop.
 #[derive(Default)]
@@ -340,12 +346,13 @@ impl Previews {
         }
     }
 
-    /// The preview of `model` (made from `picture` if it has one), asking for it if new.
-    pub fn get(&mut self, model: &Path, picture: Option<&Path>) -> Preview<'_> {
-        if !self.shown.contains_key(model) {
-            self.ask(model, picture);
+    /// The preview of `model` (made from `picture` if it has one), asking for it if new or
+    /// if `stamp` (its source's [`stamp`]) says the file has changed since.
+    pub fn get(&mut self, model: &Path, picture: Option<&Path>, stamp: u64) -> Preview<'_> {
+        if self.shown.get(model).is_none_or(|(had, _)| *had != stamp) {
+            self.ask(model, picture, stamp);
         }
-        match self.shown.get_mut(model) {
+        match self.shown.get_mut(model).map(|(_, shown)| shown) {
             Some(Shown::Ready(texture, seen)) => {
                 *seen = self.frame;
                 Preview::Ready(texture)
@@ -355,8 +362,8 @@ impl Previews {
         }
     }
 
-    fn ask(&mut self, model: &Path, picture: Option<&Path>) {
-        self.shown.insert(model.to_owned(), Shown::Waiting);
+    fn ask(&mut self, model: &Path, picture: Option<&Path>, stamp: u64) {
+        self.shown.insert(model.to_owned(), (stamp, Shown::Waiting));
         let mut waiting = self
             .jobs
             .waiting
@@ -364,7 +371,7 @@ impl Previews {
             .expect("no worker panics holding it");
         waiting
             .jobs
-            .push((model.to_owned(), picture.map(Path::to_owned)));
+            .push((model.to_owned(), picture.map(Path::to_owned), stamp));
         drop(waiting);
         self.jobs.ready.notify_one();
         let wanted = std::thread::available_parallelism()
@@ -387,7 +394,14 @@ impl Previews {
     /// in. Called once a frame, before the tiles.
     pub fn update(&mut self, ctx: &egui::Context) {
         self.frame += 1;
-        for (model, made) in self.done.try_iter() {
+        for (model, stamp, made) in self.done.try_iter() {
+            if self
+                .shown
+                .get(&model)
+                .is_none_or(|(asked, _)| *asked != stamp)
+            {
+                continue; // made from a file that has changed since, or no longer wanted
+            }
             let shown = match made {
                 Ok(image) => {
                     let size = [image.width() as usize, image.height() as usize];
@@ -398,15 +412,15 @@ impl Previews {
                 }
                 Err(e) => Shown::Failed(e),
             };
-            self.shown.insert(model, shown);
+            self.shown.insert(model, (stamp, shown));
         }
         let ready = self
             .shown
             .values()
-            .filter(|s| matches!(s, Shown::Ready(..)));
+            .filter(|(_, s)| matches!(s, Shown::Ready(..)));
         if ready.count() > KEEP {
             let mut seen: Vec<(u64, PathBuf)> = (self.shown.iter())
-                .filter_map(|(p, s)| match s {
+                .filter_map(|(p, (_, s))| match s {
                     Shown::Ready(_, seen) => Some((*seen, p.clone())),
                     _ => None,
                 })
@@ -416,7 +430,11 @@ impl Previews {
                 self.shown.remove(p);
             }
         }
-        if self.shown.values().any(|s| matches!(s, Shown::Waiting)) {
+        if self
+            .shown
+            .values()
+            .any(|(_, s)| matches!(s, Shown::Waiting))
+        {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
     }
@@ -434,7 +452,7 @@ impl Previews {
             .waiting
             .lock()
             .expect("no worker panics holding it");
-        for (model, _) in waiting.jobs.drain(..) {
+        for (model, ..) in waiting.jobs.drain(..) {
             self.shown.remove(&model);
         }
     }
@@ -455,7 +473,7 @@ fn work(jobs: &Jobs, send: &Sender<Made>, cache: Option<&Path>) {
         let Ok(mut waiting) = jobs.waiting.lock() else {
             return;
         };
-        let (model, picture) = loop {
+        let (model, picture, stamp) = loop {
             if waiting.stop {
                 return;
             }
@@ -469,7 +487,7 @@ fn work(jobs: &Jobs, send: &Sender<Made>, cache: Option<&Path>) {
         };
         drop(waiting);
         let made = preview(&model, picture.as_deref(), cache);
-        if send.send((model, made)).is_err() {
+        if send.send((model, stamp, made)).is_err() {
             return;
         }
     }
@@ -656,18 +674,52 @@ mod tests {
         std::fs::write(&bad, "nope").unwrap();
         let mut previews = Previews::new(None);
         let ctx = egui::Context::default();
-        assert!(matches!(previews.get(&stl, None), Preview::Waiting));
-        let _ = previews.get(&bad, None);
+        assert!(matches!(previews.get(&stl, None, 1), Preview::Waiting));
+        let _ = previews.get(&bad, None, 1);
         let start = std::time::Instant::now();
         loop {
             previews.update(&ctx);
-            let ready = matches!(previews.get(&stl, None), Preview::Ready(_));
-            if ready && matches!(previews.get(&bad, None), Preview::Failed(_)) {
+            let ready = matches!(previews.get(&stl, None, 1), Preview::Ready(_));
+            if ready && matches!(previews.get(&bad, None, 1), Preview::Failed(_)) {
                 break;
             }
             assert!(start.elapsed().as_secs() < 10, "no preview after 10 s");
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A model changed while the tab is open (its stamp changes) is previewed again, and a
+    /// preview made from the old file is not shown for the new one.
+    #[test]
+    fn a_changed_model_is_previewed_again() {
+        let dir = temp("changed");
+        let stl = dir.join("pyramid.stl");
+        std::fs::write(&stl, fmt_export_as_stl::binary_stl(&pyramid())).unwrap();
+        let before = stamp(&stl).unwrap();
+        let mut previews = Previews::new(None);
+        let ctx = egui::Context::default();
+        let start = std::time::Instant::now();
+        while !matches!(previews.get(&stl, None, before), Preview::Ready(_)) {
+            previews.update(&ctx);
+            assert!(start.elapsed().as_secs() < 10, "no preview after 10 s");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let twice: Vec<_> = pyramid().into_iter().chain(pyramid()).collect();
+        std::fs::write(&stl, fmt_export_as_stl::binary_stl(&twice)).unwrap();
+        let after = stamp(&stl).unwrap();
+        assert_ne!(before, after);
+        assert!(matches!(previews.get(&stl, None, after), Preview::Waiting));
+        // the old preview, coming in late, is not taken for the new file's
+        previews
+            .send
+            .send((stl.clone(), before, Ok(RgbaImage::new(1, 1))))
+            .unwrap();
+        previews.forget_waiting();
+        let _ = previews.get(&stl, None, after);
+        previews.update(&ctx);
+        let shown = previews.shown.get(&stl).map(|(s, _)| *s);
+        assert_eq!(shown, Some(after));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

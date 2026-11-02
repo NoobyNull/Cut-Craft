@@ -48,6 +48,9 @@ struct Entry {
     /// A picture of a model, beside it with the same name (`mydesign.png` for
     /// `mydesign.stl`): shown as its preview, and not as a tile of its own.
     picture: Option<PathBuf>,
+    /// A model's preview's [`preview::stamp`] as the folder was read: when it changes, the
+    /// preview is made again.
+    stamp: u64,
 }
 
 /// What the tab asks the app to do.
@@ -157,9 +160,15 @@ fn list(folder: &Path, importable: &dyn Fn(&str) -> bool) -> Listing {
     let taken: HashSet<&PathBuf> = files.iter().filter_map(|p| picture_of(p)).collect();
     let entries = (files.iter())
         .filter(|p| !taken.contains(p))
-        .map(|file| Entry {
-            file: file.clone(),
-            picture: picture_of(file).cloned(),
+        .map(|file| {
+            let picture = picture_of(file).cloned();
+            let model = is(file, &preview::MODELS);
+            let source = picture.as_deref().unwrap_or(file);
+            Entry {
+                stamp: model.then(|| preview::stamp(source)).flatten().unwrap_or(0),
+                file: file.clone(),
+                picture,
+            }
         })
         .collect();
     Listing { entries, locked }
@@ -350,7 +359,7 @@ fn tile(
         };
         return (ui.add_sized(size, egui::Button::new(kind)), None);
     }
-    match previews.get(&entry.file, entry.picture.as_deref()) {
+    match previews.get(&entry.file, entry.picture.as_deref(), entry.stamp) {
         preview::Preview::Ready(texture) => {
             let image = egui::Image::new(texture).fit_to_exact_size(size);
             (ui.add(egui::Button::image(image)), None)
@@ -430,9 +439,18 @@ mod tests {
         }
         let importable = |e: &str| ["stl", "obj", "png", "jpg"].contains(&e);
         let listing = list(&dir, &importable);
-        let entry = |file: &str, picture: Option<&str>| Entry {
-            file: dir.join(file),
-            picture: picture.map(|p| dir.join(p)),
+        let entry = |file: &str, picture: Option<&str>| {
+            let picture = picture.map(|p| dir.join(p));
+            let source = picture.clone().unwrap_or_else(|| dir.join(file));
+            Entry {
+                file: dir.join(file),
+                stamp: if file == "sunset.png" {
+                    0
+                } else {
+                    preview::stamp(&source).unwrap()
+                },
+                picture,
+            }
         };
         assert_eq!(
             listing,
@@ -446,6 +464,14 @@ mod tests {
                 locked: 2,
             }
         );
+        // a picture put beside a model later becomes its preview: the model's stamp changes
+        let stamp = |listing: &Listing, file: &str| {
+            let at = listing.entries.iter().find(|e| e.file == dir.join(file));
+            at.unwrap().stamp
+        };
+        let before = stamp(&listing, "lonely.obj");
+        std::fs::write(dir.join("lonely.png"), "").unwrap();
+        assert_ne!(stamp(&list(&dir, &importable), "lonely.obj"), before);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
