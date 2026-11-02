@@ -422,6 +422,22 @@ mod tests {
     }
 
     #[test]
+    fn a_pocket_clears_with_the_clearing_stepover_not_the_finishing_one() {
+        let with = |stepover: f64, finish_stepover: f64| {
+            let mut p = Params::default();
+            p.tool.stepover = stepover;
+            p.tool.finish_stepover = finish_stepover;
+            pocket(30.0, &p).unwrap().moves
+        };
+        assert_eq!(
+            with(0.4, 0.05),
+            with(0.4, 0.4),
+            "finishing does not change it"
+        );
+        assert_ne!(with(0.2, 0.4), with(0.4, 0.4), "clearing does");
+    }
+
+    #[test]
     fn the_tool_reaches_the_middle() {
         let tp = pocket(20.0, &Params::default()).unwrap();
         let middle = Point::new(10.0, 10.0);

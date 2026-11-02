@@ -3730,6 +3730,11 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
         h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
         Some(3)
     );
+    assert_eq!(
+        h.app.tools.get("3 mm End Mill").unwrap().number,
+        3,
+        "loaded in slot 3, it is tool 3"
+    );
     // the toolpath form shows the magazine first: 0 by hand, then each holder
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
@@ -6449,6 +6454,22 @@ fn the_tool_changer_window_loads_holders_and_tools_carry_their_own_numbers() {
     assert!(h.text_at("Tool Changer").is_some(), "the window");
     assert!(h.text_at("Load by Tool Number").is_some());
     assert!(h.text_at("T4").is_some(), "a row per holder");
+}
+
+#[test]
+fn tools_loaded_in_the_tool_changer_window_take_their_slot_numbers() {
+    let mut h = Harness::new();
+    h.app.machines.add();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.set_slot_count(4);
+    machine.slots[1] = Some("6 mm Ball Nose".into());
+    h.app.tool_changer_changed();
+    assert_eq!(h.app.tools.get("6 mm Ball Nose").unwrap().number, 2);
+    // and a tool loaded before is numbered when the Tool Database opens
+    h.app.machines.active_mut().unwrap().slots[3] = Some("3 mm End Mill".into());
+    h.app.invoke(&h.ctx, "tool_database");
+    let draft = &h.app.tool_manager.as_ref().unwrap().draft;
+    assert_eq!(draft.get("3 mm End Mill").unwrap().number, 4);
 }
 
 #[test]

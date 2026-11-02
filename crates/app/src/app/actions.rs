@@ -362,6 +362,10 @@ impl CutCraftApp {
                         machine: m.name.clone(),
                         slots: m.slots.clone(),
                     });
+                // tools loaded before slots set their numbers show those numbers now
+                if let Some(changer) = &manager.changer {
+                    manager.draft.number_by_slots(&changer.slots);
+                }
                 self.tool_manager = Some(manager);
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
@@ -1165,6 +1169,21 @@ impl CutCraftApp {
             self.machines = cut_craft_machines::Machines::load(path);
         }
         self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
+    }
+
+    /// The active machine's tool changer was loaded differently: the machines are saved,
+    /// and each tool now in a slot takes the slot as its tool number.
+    pub(super) fn tool_changer_changed(&mut self) {
+        self.machines_changed("Tool changer changed");
+        let slots = self
+            .machines
+            .active()
+            .map(|m| m.slots.clone())
+            .unwrap_or_default();
+        if self.tools.number_by_slots(&slots) {
+            self.tools_changed("Tool changer changed; tools numbered by their slots");
+            self.refresh_form_tool();
+        }
     }
 
     /// Writes the machines, if they have a file, and reports `done` or the failure.

@@ -398,3 +398,83 @@ fn the_starter_database_has_a_thread_mill() {
         .expect("a thread mill");
     assert!(tool.tooth_size > 0.0 && tool.tooth_offset >= tool.tooth_size / 2.0);
 }
+
+#[test]
+fn tools_saved_with_one_stepover_finish_with_it_too() {
+    let mut json = serde_json::to_value(Tool {
+        stepover: 0.3,
+        ..Tool::default()
+    })
+    .unwrap();
+    json.as_object_mut().unwrap().remove("finish_stepover");
+    // cutting data for a material saved before the split
+    json["materials"] = serde_json::json!([{
+        "material": "Oak", "pass_depth": 2.0, "stepover": 0.25,
+        "feed_rate": 600.0, "plunge_rate": 200.0, "spindle_speed": 16000.0
+    }]);
+    let tool: Tool = serde_json::from_value(json).unwrap();
+    assert_eq!(tool.stepover, 0.3, "the clearing stepover is the old one");
+    assert_eq!(tool.finishing_stepover(), 0.3, "and so is the finishing");
+    let oak = tool.for_material("Oak");
+    assert_eq!((oak.stepover, oak.finishing_stepover()), (0.25, 0.25));
+}
+
+#[test]
+fn a_tool_clears_and_finishes_with_its_own_stepovers() {
+    let mut tool = Tool {
+        stepover: 0.4,
+        finish_stepover: 0.1,
+        ..Tool::default()
+    };
+    assert_eq!((tool.stepover, tool.finishing_stepover()), (0.4, 0.1));
+    // a material's set keeps both
+    tool.set_cutting(CuttingData {
+        material: "Oak".into(),
+        stepover: 0.3,
+        finish_stepover: 0.05,
+        ..tool.cutting("")
+    });
+    let oak = tool.for_material("Oak");
+    assert_eq!((oak.stepover, oak.finishing_stepover()), (0.3, 0.05));
+    assert_eq!(tool.cutting("").finish_stepover, 0.1);
+    assert_eq!(tool.cutting("MDF").finish_stepover, 0.1, "the default's");
+    // and it round-trips
+    let back: Tool = serde_json::from_str(&serde_json::to_string(&tool).unwrap()).unwrap();
+    assert_eq!(back, tool);
+}
+
+#[test]
+fn starter_ball_noses_clear_coarse_and_finish_fine() {
+    let db = ToolDatabase::starter();
+    let ball = db.get("6 mm Ball Nose").unwrap();
+    assert!(
+        ball.stepover > ball.finishing_stepover(),
+        "{} then {}",
+        ball.stepover,
+        ball.finishing_stepover()
+    );
+    assert_eq!(ball.finishing_stepover(), 0.1);
+}
+
+#[test]
+fn tools_loaded_in_a_tool_changer_take_their_slot_as_their_number() {
+    let mut db = ToolDatabase {
+        tools: vec![tool("A", 3.0), tool("B", 6.0), tool("C", 12.0)],
+        ..ToolDatabase::default()
+    };
+    db.tools[2].number = 7;
+    let mut slots = vec![None, Some("B".to_owned()), Some("A".to_owned()), None];
+    assert!(db.number_by_slots(&slots), "numbers changed");
+    let numbers: Vec<u32> = db.tools.iter().map(|t| t.number).collect();
+    assert_eq!(numbers, [3, 2, 7], "a tool not loaded keeps its own");
+    assert!(!db.number_by_slots(&slots), "nothing more to change");
+    // A taken out keeps its last number while T3 is empty
+    slots[2] = None;
+    db.number_by_slots(&slots);
+    assert_eq!(db.tools[0].number, 3);
+    // C put in T3: A gives up 3, so no two tools share a number
+    slots[2] = Some("C".to_owned());
+    db.number_by_slots(&slots);
+    let numbers: Vec<u32> = db.tools.iter().map(|t| t.number).collect();
+    assert_eq!(numbers, [0, 2, 3]);
+}

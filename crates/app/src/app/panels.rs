@@ -38,6 +38,9 @@ impl CutCraftApp {
             Outcome::Apply | Outcome::Ok => {
                 self.tools = manager.draft.clone();
                 let changer = manager.changer.clone();
+                if let Some(changer) = &changer {
+                    self.tools.number_by_slots(&changer.slots);
+                }
                 if outcome == Outcome::Ok {
                     self.tool_manager = None;
                 }

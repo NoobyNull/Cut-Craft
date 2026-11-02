@@ -84,13 +84,18 @@ impl RateUnits {
 }
 
 /// A tool's cutting data for one material: what Aspire keeps per material (and machine),
-/// as against the tool's geometry. Rates in mm/min; stepover a fraction of the diameter.
+/// as against the tool's geometry. Rates in mm/min; stepovers a fraction of the diameter.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CuttingData {
     /// The material it is for; empty for the tool's default data
     pub material: String,
     pub pass_depth: f64,
+    /// The clearing (roughing) stepover, as [`Tool::stepover`]
     pub stepover: f64,
+    /// The finishing stepover, as [`Tool::finish_stepover`]; 0 for the clearing one
+    /// (cutting data saved before there were two)
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    pub finish_stepover: f64,
     pub feed_rate: f64,
     pub plunge_rate: f64,
     pub spindle_speed: f64,
@@ -119,9 +124,17 @@ pub struct Tool {
     /// Depth cut on each pass
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub pass_depth: f64,
-    /// Sideways step between pocketing passes, as a fraction of the diameter
+    /// Sideways step between clearing (roughing) passes, as a fraction of the diameter:
+    /// pockets, flat bottoms, inlay clearing and 3D roughing step over by this
     #[schemars(range(min = 0, max = 1))]
     pub stepover: f64,
+    /// Sideways step between finishing passes, as a fraction of the diameter: 3D
+    /// finishing, V-carved edges, chamfers, roundings and moulding profiles step over by
+    /// this, smaller for a smoother surface. 0 for the clearing stepover (tools saved before
+    /// there were two); read it with [`Tool::finishing_stepover`]
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    #[schemars(skip)]
+    pub finish_stepover: f64,
     #[schemars(extend("x-unit" = "mm/min"), range(min = 0))]
     pub feed_rate: f64,
     #[schemars(extend("x-unit" = "mm/min"), range(min = 0))]
@@ -248,6 +261,16 @@ fn default_tip_radius() -> f64 {
 }
 
 impl Tool {
+    /// The stepover finishing passes use: its own, else (0, a tool saved with one
+    /// stepover) the clearing stepover.
+    pub fn finishing_stepover(&self) -> f64 {
+        if self.finish_stepover > 0.0 {
+            self.finish_stepover
+        } else {
+            self.stepover
+        }
+    }
+
     /// How much each flute cuts per turn (mm): the feed rate over the spindle speed and
     /// flutes, to compare with the cutter maker's figure. `None` with no spindle or flutes.
     pub fn chip_load(&self) -> Option<f64> {
@@ -265,6 +288,7 @@ impl Tool {
             material: material.to_owned(),
             pass_depth: self.pass_depth,
             stepover: self.stepover,
+            finish_stepover: self.finish_stepover,
             feed_rate: self.feed_rate,
             plunge_rate: self.plunge_rate,
             spindle_speed: self.spindle_speed,
@@ -276,6 +300,7 @@ impl Tool {
         if data.material.is_empty() {
             self.pass_depth = data.pass_depth;
             self.stepover = data.stepover;
+            self.finish_stepover = data.finish_stepover;
             self.feed_rate = data.feed_rate;
             self.plunge_rate = data.plunge_rate;
             self.spindle_speed = data.spindle_speed;
@@ -483,6 +508,7 @@ impl Default for Tool {
             diameter: 6.0,
             pass_depth: 3.0,
             stepover: 0.4,
+            finish_stepover: 0.0,
             feed_rate: 1000.0,
             plunge_rate: 300.0,
             spindle_speed: 18000.0,
@@ -549,36 +575,48 @@ impl ToolDatabase {
                 plunge_rate,
                 ..Tool::default()
             };
-        let shaped =
-            |name: &str, shape: ToolShape, diameter: f64, angle: f64, stepover: f64| Tool {
-                shape,
-                angle,
-                stepover,
-                ..end_mill(name, diameter, 3.0, 1500.0, 500.0)
-            };
+        // a stepover to clear with and a smaller one to finish with, fractions of the
+        // diameter: a ball nose roughs wide and finishes close for a smooth surface
+        let shaped = |name: &str,
+                      shape: ToolShape,
+                      diameter: f64,
+                      angle: f64,
+                      (stepover, finish_stepover): (f64, f64)| Tool {
+            shape,
+            angle,
+            stepover,
+            finish_stepover,
+            ..end_mill(name, diameter, 3.0, 1500.0, 500.0)
+        };
         let mut tools = vec![
             end_mill("3 mm End Mill", 3.0, 1.5, 800.0, 250.0),
             Tool::default(),
             end_mill("12 mm End Mill", 12.0, 4.0, 2000.0, 500.0),
             end_mill("1/8 in End Mill", 3.175, 1.5, 800.0, 250.0),
             end_mill("1/4 in End Mill", 6.35, 3.0, 1000.0, 300.0),
-            shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, 0.1),
-            shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, 0.1),
+            shaped("3 mm Ball Nose", ToolShape::BallNose, 3.0, 90.0, (0.4, 0.1)),
+            shaped("6 mm Ball Nose", ToolShape::BallNose, 6.0, 90.0, (0.4, 0.1)),
             shaped(
                 "6 mm Radiused End Mill",
                 ToolShape::RadiusedEndMill,
                 6.0,
                 90.0,
-                0.2,
+                (0.4, 0.2),
             ),
             // a V-bit's stepover spaces V-carving passes, so it is small
-            shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, 0.02),
-            shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, 0.02),
+            shaped("90° V-Bit", ToolShape::VBit, 12.7, 90.0, (0.02, 0.02)),
+            shaped("60° V-Bit", ToolShape::VBit, 12.7, 60.0, (0.02, 0.02)),
             // 60° for ISO threads; a 1 mm tooth suits pitches up to about 1.5 mm
             Tool {
                 tooth_size: 1.0,
                 tooth_offset: 2.0,
-                ..shaped("10 mm Thread Mill", ToolShape::ThreadMill, 10.0, 60.0, 0.1)
+                ..shaped(
+                    "10 mm Thread Mill",
+                    ToolShape::ThreadMill,
+                    10.0,
+                    60.0,
+                    (0.1, 0.1),
+                )
             },
         ];
         for tool in &mut tools {
@@ -608,6 +646,32 @@ impl ToolDatabase {
     }
 
     /// The tool `name` as a toolpath takes it: cutting with the active material's data.
+    /// Gives each tool loaded in a tool changer its slot (counted from 1) as its tool
+    /// number, so the number shown is the holder it sits in. A tool not loaded keeps its
+    /// number unless a loaded tool now has it (it was displaced, or taken out and the slot
+    /// refilled): then it has none (0), so Load by Tool Number is never ambiguous.
+    /// Whether any number changed.
+    pub fn number_by_slots(&mut self, slots: &[Option<String>]) -> bool {
+        let slot_of = |name: &str| {
+            slots
+                .iter()
+                .position(|s| s.as_deref() == Some(name))
+                .and_then(|i| u32::try_from(i + 1).ok())
+        };
+        let taken: Vec<u32> = self.tools.iter().filter_map(|t| slot_of(&t.name)).collect();
+        let mut changed = false;
+        for tool in &mut self.tools {
+            let number = match slot_of(&tool.name) {
+                Some(slot) => slot,
+                None if taken.contains(&tool.number) => 0,
+                None => tool.number,
+            };
+            changed |= tool.number != number;
+            tool.number = number;
+        }
+        changed
+    }
+
     pub fn pick(&self, name: &str) -> Option<Tool> {
         self.get(name).map(|t| t.for_material(&self.material))
     }
