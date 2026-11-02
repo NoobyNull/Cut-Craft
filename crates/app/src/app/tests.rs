@@ -6835,3 +6835,37 @@ fn the_gadgets_menu_runs_a_lua_gadget_as_one_undo_step() {
     h.app.invoke(&h.ctx, "undo");
     assert_eq!(h.app.doc.vectors.len(), before, "one Undo takes all 8 away");
 }
+
+#[test]
+fn an_unsigned_gadget_warns_once_before_it_runs() {
+    let mut h = Harness::new();
+    h.app.unsigned_gadgets = [("gadget_hole_pattern".to_owned(), "Hole Pattern".to_owned())].into();
+    // the user says no: nothing opens, and they are asked again next time
+    h.app.unsigned_gadget_ok = |_| false;
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_none(), "cancelled: no form");
+    // the user says yes: the form opens, and the gadget is not asked about again this session
+    h.app.unsigned_gadget_ok = |label| label == "Hole Pattern";
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_some());
+    h.app.form = None;
+    h.app.unsigned_gadget_ok = |_| panic!("asked twice");
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_some());
+}
+
+#[test]
+fn built_in_gadgets_need_no_warning() {
+    let mut h = Harness::new();
+    h.app.unsigned_gadget_ok = |_| panic!("a built-in gadget is signed with the app");
+    h.app.invoke(&h.ctx, "gadget_drill_grid");
+    assert!(h.app.form.is_some());
+}
+
+#[test]
+fn the_unsigned_warning_says_who_is_responsible() {
+    let text = super::actions::unsigned_warning("Star Burst");
+    assert!(text.contains("Star Burst"));
+    assert!(text.contains("not responsible"));
+    assert!(text.contains("Undo"));
+}
