@@ -9,14 +9,12 @@ tracing core (`crates/core/src/trace.rs`).
 
 The same cycle for each item, one at a time, nothing pushed until asked.
 
-1. **Find Aspire's behaviour.** In order: Aspire's help (extracted with `re/help2txt.py`),
-   its resource DLL (dialog controls, labels, menu entries), data in `Aspire.exe` (strings,
-   settings keys, form names from MFC runtime-class records, tables and constants), and the
-   VCarve Pro 12.5 gadget Lua scripts. Write what is found into `re/SPEC.md`, tagged [obs],
-   [dec], [inf] or [unk].
-   - `Aspire.exe`'s **code** is encrypted on disk (see `re/SPEC.md`, Sources), so its
-     functions cannot be read. Decrypting them (or using a memory dump of the running
-     program) is not done: it gets around Vectric's copy protection.
+1. **Find Aspire's behaviour.** Only from Vectric's public documentation (the help, extracted
+   with `re/help2txt.py`; guides; tutorial videos) and hands-on use of the Aspire trial. Write
+   what is found into `re/SPEC.md`, tagged [obs] (seen in the trial), [inf] (from the docs),
+   [check] or [unk].
+   - Never decompile, disassemble or otherwise analyse Aspire's program files or resource
+     DLLs, and never extract artwork or strings from them.
 2. **Calibrate where exactness matters** (tracing, curve fitting, offsets, nesting, fonts):
    run the same input through VCarve Pro 12.5 under Wine and through Cut Craft, compare the
    results (node counts, distances between outlines, areas), and tune until they agree.

@@ -10,6 +10,7 @@ mod compute;
 mod depth;
 mod display;
 mod files;
+mod flyout;
 mod form;
 mod gadgets;
 mod gui;

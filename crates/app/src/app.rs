@@ -142,7 +142,9 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 92] = [
+const BUILT_INS: [&str; 94] = [
+    "draw_rectangle_from_center",
+    "draw_circle_from_edge",
     "tool_changer",
     "find_tool",
     "activate_layer_of_selection",
@@ -689,6 +691,8 @@ struct OpenForm {
     dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
     /// How many changes could be undone when it opened: Cancel undoes back to there.
     undo_from: usize,
+    /// How its drag is read: another way for a toolbox variant (Draw Circle from Edge).
+    way: crate::flyout::DragWay,
 }
 
 /// See [`CutCraftApp::sketch_areas`].

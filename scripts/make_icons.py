@@ -585,6 +585,13 @@ I[md + "add_draft_to_model.svg"] = lambda: [plane(40), path("M8,38 L16,12 H32 L4
 I[md + "bake_components.svg"] = lambda: [dome(16, 30, 20, 14), dome(30, 30, 20, 14), arrow(24, 32, 24, 42, ACC, 2.5, 6)]
 I[md + "component_levels.svg"] = lambda: [path(f"M4,{y} L14,{y - 8} H44 L34,{y} Z", INK, 2.5, c) for y, c in ((40, LIGHT), (30, MODEL), (20, "#ffe9d2"))]
 I[md + "create_component_from_bitmap.svg"] = lambda: [picture(3, 4, 22, 18), arrow(14, 25, 22, 32, ACC, 2.5, 6), dome(32, 44, 26, 16)]
+# a portrait photo, then that person raised as a relief: a head and shoulders on a slab
+I[md + "relief_from_photo.svg"] = lambda: [rect(3, 3, 22, 19, 2, INK, 2.5, "#e9f2ff"), circ(14, 10, 3.5, "#5a4a3c", 0, "#5a4a3c"),
+                                           solid("M7,20 C8,15 11,14.5 14,14.5 S20,15 21,20 Z", "#5a4a3c"),
+                                           arrow(18, 24, 24, 30, ACC, 2.5, 6),
+                                           path("M18,44 L24,38 H46 L40,44 Z", INK, 2.5, MODEL),
+                                           circ(33, 26, 4.5, INK, 2.5, MODEL),
+                                           path("M25,41 C26,35 29,33 33,33 S40,35 41,41", INK, 2.5, MODEL)]
 I[md + "create_component_from_visible_model.svg"] = lambda: [eye(16, 12, 0.55), dome(26, 42, 34, 22)]
 I[md + "create_cross_section_vector.svg"] = lambda: [plane(42), profile("round", 6, 42, 40, 26, GREY, "#e6e8ec"), path("M6,40 A18,26 0 0 1 42,40", ACC, 4)]
 I[md + "create_texture_area.svg"] = lambda: [rect(5, 5, 38, 38, 2, ACC, 2.5, None, "4 3")] + [circ(13 + 11 * c, 13 + 11 * r, 4, MODELD, 2, MODEL) for r in range(3) for c in range(3)]

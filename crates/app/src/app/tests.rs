@@ -91,6 +91,19 @@ fn about_lists_the_github_contributors() {
 }
 
 #[test]
+fn about_thanks_vectric_and_says_cut_craft_is_independent() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::About);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Acknowledgements").is_some());
+    let thanks = super::actions::ACKNOWLEDGEMENT;
+    assert!(thanks.contains("Vectric Aspire"), "{thanks}");
+    assert!(thanks.contains("not affiliated with"), "{thanks}");
+    assert!(thanks.contains("trademarks"), "{thanks}");
+}
+
+#[test]
 fn importing_models_offers_what_the_options_say() {
     use crate::options::ModelTypes;
     let mut h = Harness::new();
@@ -177,7 +190,10 @@ fn find_tool_lists_the_tools_whose_names_match() {
             .map(|(_, label)| label)
             .collect::<Vec<_>>()
     };
-    assert_eq!(names(&h, "draw circ"), vec!["Draw Circle"]);
+    assert_eq!(
+        names(&h, "draw circ"),
+        vec!["Draw Circle", "Draw Circle from Edge"]
+    );
     assert!(names(&h, "POCKET").contains(&"Pocket Toolpath".to_owned()));
     assert!(
         names(&h, "paste in place").is_empty(),
@@ -6921,6 +6937,148 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
         h.text_at("In loops turning clockwise: each loop cuts conventional")
             .is_some()
     );
+}
+
+/// The middles of the corner arrows the last frame drew on flyout buttons.
+fn flyout_arrows(h: &Harness) -> Vec<Pos2> {
+    h.shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::Path(p) if p.points.len() == 3 && p.closed => Some(
+                p.points
+                    .iter()
+                    .fold(Pos2::ZERO, |sum, q| sum + q.to_vec2() / 3.0),
+            ),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The corner arrow of the flyout button whose tooltip names `tool`.
+fn flyout_arrow_naming(h: &mut Harness, tool: &str) -> Pos2 {
+    for arrow in flyout_arrows(h) {
+        let over = arrow - vec2(12.0, 12.0);
+        h.frame(vec![Event::PointerMoved(over)]);
+        h.frame(vec![]);
+        if cut_craft_bug_report::hint::current(&h.ctx).is_some_and(|t| t.contains(tool)) {
+            return arrow;
+        }
+    }
+    panic!("no flyout button names {tool}");
+}
+
+#[test]
+fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        flyout_arrows(&h).len() >= 10,
+        "the Drawing tab's flyouts show their arrows"
+    );
+    let arrow = flyout_arrow_naming(&mut h, "Draw Circle from Edge");
+    // a click on the arrow opens the flyout, each tool by name, and runs nothing
+    h.click(arrow, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.form.is_none(), "the arrow runs nothing");
+    assert!(
+        h.text_at("Draw Ellipse").is_some(),
+        "the flyout names its tools"
+    );
+    let pick = h.text_at("Draw Circle from Edge").expect("listed");
+    h.click(pick, Modifiers::NONE);
+    let form = h.app.form.as_ref().expect("its form");
+    assert_eq!(form.id, "draw_circle");
+    assert_eq!(form.way, crate::flyout::DragWay::AcrossEdge);
+    assert_eq!(
+        h.app
+            .options
+            .flyout_faces
+            .get("draw_circle")
+            .map(String::as_str),
+        Some("draw_circle_from_edge"),
+        "the pick becomes the button's face"
+    );
+    // a press held on the face opens it too, and its release runs nothing
+    h.app.form = None;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let face = arrow - vec2(12.0, 12.0);
+    h.frame(vec![Event::PointerMoved(face)]);
+    h.press(face, true, Modifiers::NONE);
+    for _ in 0..6 {
+        h.frame(vec![]);
+    }
+    assert!(h.text_at("Draw Ellipse").is_some(), "held open");
+    h.press(face, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        h.app.form.is_none(),
+        "the release after a hold runs nothing"
+    );
+    // a plain click runs the face: the tool picked last
+    h.frame(vec![key(Key::Escape)]);
+    h.click(face, Modifiers::NONE);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| (f.id, f.way)),
+        Some(("draw_circle", crate::flyout::DragWay::AcrossEdge))
+    );
+}
+
+#[test]
+fn draw_circle_from_edge_takes_the_drag_as_the_diameter() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_circle_from_edge");
+    h.frame(vec![]);
+    assert_eq!(h.app.status.current_tool, "Draw Circle from Edge");
+    h.drag(h.at(20.0, 50.0), h.at(60.0, 50.0));
+    let b = h.app.doc.vectors.values().last().expect("drawn").bounds();
+    assert!(
+        (b.min.x - 20.0).abs() < 0.5 && (b.max.x - 60.0).abs() < 0.5,
+        "{b:?}"
+    );
+    assert!(
+        (b.min.y - 30.0).abs() < 0.5 && (b.max.y - 70.0).abs() < 0.5,
+        "{b:?}"
+    );
+}
+
+#[test]
+fn draw_rectangle_from_center_drags_from_the_middle_out() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "draw_rectangle_from_center");
+    h.frame(vec![]);
+    h.drag(h.at(50.0, 50.0), h.at(70.0, 60.0));
+    let b = h.app.doc.vectors.values().last().expect("drawn").bounds();
+    assert!(
+        (b.min.x - 30.0).abs() < 0.5 && (b.max.x - 70.0).abs() < 0.5,
+        "{b:?}"
+    );
+    assert!(
+        (b.min.y - 40.0).abs() < 0.5 && (b.max.y - 60.0).abs() < 0.5,
+        "{b:?}"
+    );
+}
+
+#[test]
+fn favourites_list_each_tool_on_its_own_even_from_one_flyout() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.options.favourites.design = vec!["draw_circle".into(), "draw_ellipse".into()];
+    h.app.options.favourites.design_only = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Favourites").is_some());
+    for arrow in flyout_arrows(&h) {
+        h.frame(vec![Event::PointerMoved(arrow - vec2(12.0, 12.0))]);
+        h.frame(vec![]);
+        let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+        assert!(
+            !hint.contains("corner arrow"),
+            "a flyout among favourites: {hint}"
+        );
+    }
 }
 
 #[test]

@@ -60,7 +60,7 @@ Position and the start page's Create a new file are Job Setup.
 
 ## Right-click menus: the shared families
 
-Aspire's popup menus (`Resources_ENU.dll`, see `re/SPEC.md`) repeat a few families across kinds
+Aspire's popup menus (see `re/SPEC.md`, Right-click menus) repeat a few families across kinds
 of item. Each family is one parent tool; each kind needs one subordinate tool that sets a
 single item's visibility, name or mode. ✅ built · ⬜ to build.
 
@@ -385,7 +385,12 @@ say "not implemented yet".
   behind the model.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
-  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
+  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Cut Craft's own Rectangle
+    from Center and Circle from Edge (the drag is the diameter).
+  - Toolbox flyouts (Cut Craft's own; Aspire shows every tool as its own icon): tools that
+    do one job different ways share a button with an arrow in its corner, showing the one
+    picked last; click the arrow, hold the button, or press Down on it for the rest
+    (`crates/app/src/flyout.rs`). Drawing tab 78 buttons to 44, Modeling 23 to 20.
   - Edit ▸ Edit Object (E) opens the tool that drew the one selected vector on it, and a
     Shift-click in a drawing tool's form edits another shape that tool drew; a change to
     the form then changes that shape. Rectangles (square, rounded or notched corners, not
@@ -713,8 +718,7 @@ implemented yet" listed.)
 - Imported models: a cell over only a near-vertical side takes the height of the top beside
   it (up to 4 cells in), so steep sides leave no spikes; a wider steep band keeps its slope.
 - Lasers are not a tool type in the database (laser features are skipped by decision).
-- Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code
-  reference to the fluting strings was found in Aspire.exe), prism and photo V-carve
+- Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
   (`docs/ROADMAP.md`, section 6).
 - Not tried by hand: the 2026-11-01 batch (`docs/ROADMAP.md`, section 5) and earlier work
