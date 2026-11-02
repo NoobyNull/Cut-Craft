@@ -135,6 +135,7 @@ impl CutCraftApp {
             options_page: 0,
             split: None,
             clipart: crate::clipart::Clipart::default(),
+            import_queue: std::collections::VecDeque::new(),
             recent_path: None,
             recovery_path: None,
             autosaved: (0, 0.0),
@@ -2737,7 +2738,7 @@ impl CutCraftApp {
                     self.tools_or_favourites(ui, &groups, Page::Design);
                 }
                 "Sheets" => self.sheets_panel(ui),
-                "Clipart" => self.clipart_panel(ui),
+                "Library" => self.clipart_panel(ui),
                 "Layers" => self.layers_panel(ui),
                 "Components" => self.component_list(ui),
                 tab => {

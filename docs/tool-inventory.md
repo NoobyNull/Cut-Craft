@@ -186,16 +186,26 @@ say "not implemented yet".
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
   Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
-  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Clipart
-  (a library of folders; double-click a thumbnail to import it centred on the job, drag it
-  onto the 2D or 3D view to import it centred where it is dropped, or right-click ▸ Import
-  to Level onto one of the job's levels or a New Level named after the file; a model goes
-  through Orientate 3D Model already placed and levelled). A 3D model's tile shows a
-  preview: `mydesign.png` beside `mydesign.stl` if there is one (and that picture gets no
-  tile of its own), else the model rendered from above, once, on background threads for
-  the tiles on screen, and kept in the cache folder until the file changes. Search by
-  name; Vectric's locked `.3dclip` / `.v3m` files are counted and explained. Not done:
-  subfolders, thumbnail sizes.
+  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
+  (Aspire's Clipart tab, renamed: folders of your own files; a missing folder is marked
+  "not found" and says how to fix it). Double-click a tile to add it to the project
+  centred on the job, or drag it onto the 2D or 3D view to add it centred where it is
+  dropped; a model goes through Orientate 3D Model already placed and levelled. Click picks
+  a tile, Ctrl+click adds or removes one, Shift+click picks a range. Right-click (on what is
+  picked): Add to Project (several are added one after another, each model's form in
+  turn), Add to Level (one of the job's levels, or a New Level each, named after the
+  file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
+  answering `org.freedesktop.FileManager1`, else its folder opened), Add Tag / Remove Tag
+  (kept in the config folder's `library-tags.json`, never in the files), Delete from Disk
+  (asks first, naming the files; a model's picture goes with it; not to the bin). A Show
+  filter picks Everything, 3D models, 2D drawings, Pictures or Depth maps (greyscale
+  pictures, by their header, or tagged "depth map"); Search finds names and tags. A 3D
+  model's tile shows a preview: `mydesign.png` beside `mydesign.stl` if there is one (and
+  that picture gets no tile of its own), else the model rendered from its largest side
+  (from above, or face on for one saved standing up), once, on background threads for the
+  tiles on screen, and kept in the cache folder until the file changes; previews unused for
+  60 days are cleared. Vectric's locked `.3dclip` / `.v3m` files are counted and explained.
+  Not done: subfolders, thumbnail sizes.
 - Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
   geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
   snap point across or up and down, and puts it on a span's tangent at the span's ends or
