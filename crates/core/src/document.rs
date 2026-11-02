@@ -1030,8 +1030,28 @@ fn contents<'a>(
                 && ring
                     .iter()
                     .all(|&p| inside(std::slice::from_ref(outline), p))
+                && !crosses(ring, outline)
         })
         .map(|(id, _, _)| *id)
+}
+
+/// Whether any span of the polyline `points` crosses a span of the closed `outline`: a
+/// straight span can leave a concave outline and come back with both its ends inside.
+fn crosses(points: &[Point], outline: &[Point]) -> bool {
+    let n = outline.len();
+    let edges = (0..n).map(|i| (outline[i], outline[(i + 1) % n]));
+    let spans: Vec<(Point, Point)> = points.windows(2).map(|w| (w[0], w[1])).collect();
+    edges
+        .into_iter()
+        .any(|(c, d)| spans.iter().any(|&(a, b)| segments_cross(a, b, c, d)))
+}
+
+/// Whether segments `ab` and `cd` cross, each passing strictly between the other's ends.
+fn segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let side = |p: Point, q: Point, r: Point| (q - p).perp_dot(r - p);
+    let (d1, d2) = (side(a, b, c), side(a, b, d));
+    let (d3, d4) = (side(c, d, a), side(c, d, b));
+    d1 * d2 < 0.0 && d3 * d4 < 0.0
 }
 
 /// The area a closed ring encloses.
@@ -1162,6 +1182,39 @@ mod part_tests {
         let part = doc.pick_part(Point::new(30.0, 30.0), 0.5);
         assert!(part.contains(&panel) && part.contains(&groove));
         assert!(!part.contains(&crossing), "it runs outside the panel");
+    }
+
+    #[test]
+    fn a_line_across_a_notch_is_not_inside() {
+        // a U: both ends of the bar sit in its arms, but the bar crosses the gap between
+        let p = Point::new;
+        let u = Path::polyline(
+            &[
+                p(0.0, 0.0),
+                p(100.0, 0.0),
+                p(100.0, 100.0),
+                p(70.0, 100.0),
+                p(70.0, 30.0),
+                p(30.0, 30.0),
+                p(30.0, 100.0),
+                p(0.0, 100.0),
+            ],
+            true,
+        );
+        let doc = document_with(vec![
+            u,
+            Path::polyline(&[p(10.0, 80.0), p(90.0, 80.0)], false),
+            square(10.0, 10.0, 10.0),
+        ]);
+        let [outline, bar, hole] = ids(&doc)[..] else {
+            panic!("three vectors")
+        };
+        assert_eq!(
+            doc.pick_part(p(50.0, 10.0), 0.5),
+            vec![outline, hole],
+            "the bar runs outside the U"
+        );
+        assert!(!doc.vectors_inside(&[outline], 0.1).contains(&bar));
     }
 
     #[test]
