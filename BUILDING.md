@@ -136,14 +136,21 @@ Do this once on a new machine or a fresh clone.
 
 ## Cut a versioned release
 
-A release is one "Version X.Y.Z" commit, an annotated tag, and a push of both to both
-remotes. The steps use 0.5.0 as the example; use the next version number.
+Versions are automatic. Each night **Version bump** reads the titles of the pull requests
+merged since the last version tag (see [CONTRIBUTING.md](CONTRIBUTING.md)), and if any of them
+changes the program it commits "Version X.Y.Z", tags vX.Y.Z and starts **Release** and
+**Builds** on the tag, which publish the signed release. To release before the night,
+open Actions → Version bump → **Run workflow**. Afterwards, `git pull` and push `main` and the
+new tag to the Gitea mirror too (`git push gitea main --tags`), since the bot pushes only to GitHub.
+
+The night's job starts working once `main`'s version has a tag, so the first one (0.5.1) is
+cut by hand, the same way you'd cut one to fix a failed night:
 
 1. Get the latest code and make sure the gate passes (see above), with `git status --short`
    printing nothing.
 
 2. Set the version. In the root `Cargo.toml`, under `[workspace.package]`, change the line
-   `version = "0.4.0"` to the new version, then update the lock file to match:
+   `version = "0.4.3"` to the new version, then update the lock file to match:
 
    ```bash
    cargo update -w
@@ -157,20 +164,20 @@ remotes. The steps use 0.5.0 as the example; use the next version number.
 
    ```bash
    git add Cargo.toml Cargo.lock crates/app/whats-new.md
-   git commit -m "Version 0.5.0"
+   git commit -m "Version 0.5.1"
    ```
 
 5. Tag the commit:
 
    ```bash
-   git tag -a v0.5.0 -m "Cut Craft 0.5.0"
+   git tag -a v0.5.1 -m "Cut Craft 0.5.1"
    ```
 
 6. Push `main` and the tag to both remotes:
 
    ```bash
-   git push origin main v0.5.0
-   git push gitea main v0.5.0
+   git push origin main v0.5.1
+   git push gitea main v0.5.1
    ```
 
 7. Watch GitHub build the packages:
