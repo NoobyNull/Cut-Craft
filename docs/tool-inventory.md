@@ -60,7 +60,7 @@ Position and the start page's Create a new file are Job Setup.
 
 ## Right-click menus: the shared families
 
-Aspire's popup menus (`Resources_ENU.dll`, see `re/SPEC.md`) repeat a few families across kinds
+Aspire's popup menus (see `re/SPEC.md`, Right-click menus) repeat a few families across kinds
 of item. Each family is one parent tool; each kind needs one subordinate tool that sets a
 single item's visibility, name or mode. ✅ built · ⬜ to build.
 
@@ -704,8 +704,7 @@ implemented yet" listed.)
 - Imported models: a cell over only a near-vertical side takes the height of the top beside
   it (up to 4 cells in), so steep sides leave no spikes; a wider steep band keeps its slope.
 - Lasers are not a tool type in the database (laser features are skipped by decision).
-- Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code
-  reference to the fluting strings was found in Aspire.exe), prism and photo V-carve
+- Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
   (`docs/ROADMAP.md`, section 6).
 - Not tried by hand: the 2026-11-01 batch (`docs/ROADMAP.md`, section 5) and earlier work
