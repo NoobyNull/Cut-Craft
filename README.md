@@ -165,7 +165,7 @@ axis; **Options ▸ Importing Models** can offer the flat, top-only import inste
 The window can be laid out three ways (**Options ▸ General ▸ Window layout**, or **View ▸
 Window Layout**). Classic is the layout above. Rail puts one icon per tool group down the
 left; clicking one lists that group's tools by name, and the inspector on the right holds
-the open tool's form or the sheets, layers, components, clipart and toolpath list.
+the open tool's form or the sheets, layers, components, library and toolpath list.
 
 ![The Rail layout](docs/screenshots/09-rail-layout.png)
 
@@ -199,7 +199,7 @@ can be opened again later from the File Operations group.
 
 ### The window
 
-- **Left:** the side tabs (Design, Sheets, Layers, Components, Clipart). A tool's settings
+- **Left:** the side tabs (Design, Sheets, Layers, Components, Library). A tool's settings
   take the place of the tool groups while it is open; **Close** brings them back.
 - **Right:** the Toolpaths tab, with the toolpath list and its buttons underneath.
 - **Top:** 2D view (F2), 3D view (F3), the split views, the sheet / layer / level drop-downs

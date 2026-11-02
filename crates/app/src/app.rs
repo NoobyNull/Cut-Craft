@@ -37,10 +37,10 @@ use serde_json::Value;
 use std::borrow::Cow;
 
 /// Aspire 12's side tabs: Design holds the drawing and modeling tools.
-const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Clipart"];
+const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Library"];
 /// The browser's tabs in the Rail and Ribbon layouts: the design tabs' panels and the
 /// toolpath list under one row of tabs.
-const INSPECTOR_TABS: [&str; 5] = ["Sheets", "Layers", "Components", "Clipart", "Toolpaths"];
+const INSPECTOR_TABS: [&str; 5] = ["Sheets", "Layers", "Components", "Library", "Toolpaths"];
 /// The ribbon's tabs: the drawing, modeling and toolpath groups.
 const RIBBON_TABS: [&str; 3] = ["Design", "Model", "Toolpaths"];
 /// Actions the app handles itself rather than through a command.
@@ -899,8 +899,11 @@ struct CutCraftApp {
     options_page: usize,
     /// Both views shown at once.
     split: Option<Split>,
-    /// The Clipart tab's library.
+    /// The Library tab.
     clipart: crate::clipart::Clipart,
+    /// Files from the Library waiting to be added, one after another, each with the level
+    /// Add to Level puts it on.
+    import_queue: std::collections::VecDeque<(std::path::PathBuf, Option<crate::clipart::ToLevel>)>,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
     recent_path: Option<std::path::PathBuf>,
     /// Where unsaved work is copied every [`AUTOSAVE_SECONDS`] for the next run to recover;

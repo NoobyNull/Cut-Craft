@@ -616,17 +616,28 @@ impl Camera {
         (seen, along)
     }
 
-    /// The point on the material's top plane (z = 0) under `at` on screen, `None` when the
-    /// plane is seen edge-on.
-    pub(crate) fn on_floor(&self, at: Pos2) -> Option<DVec2> {
-        // the point at the middle's depth under `at`, then along the line of sight to z = 0
+    /// The point on the level plane at height `z` (0 is the material's top) under `at` on
+    /// screen, `None` when the plane is seen edge-on or, in perspective, `at` is above its
+    /// horizon.
+    pub(crate) fn on_plane(&self, at: Pos2, z: f64) -> Option<DVec2> {
+        // the point at the middle's depth under `at`, then along the line of sight to z
         let (seen, along) = self.sight(at);
-        (along.z.abs() > EDGE_ON).then(|| (seen - along * (seen.z / along.z)).truncate())
+        if along.z.abs() <= EDGE_ON {
+            return None;
+        }
+        // in perspective, a point above the horizon looks away from the plane: the line
+        // of sight only meets it behind the eye
+        if let Some(eye) = self.eye_at()
+            && (z - eye.z) / along.z <= 0.0
+        {
+            return None;
+        }
+        Some((seen - along * ((seen.z - z) / along.z)).truncate())
     }
 
     /// Where the line of sight through `at` first meets the solid of `material` (unwrapped),
     /// as a point on its plan: what a vector drawn there in the 3D view lies on. Off the
-    /// material, the top plane under `at` ([`Camera::on_floor`]).
+    /// material, the top plane under `at` ([`Camera::on_plane`]).
     // ponytail: stepped half a cell at a time, then halved down to a hair between the last
     // step outside and the first inside, as `seen_of` steps; walk the cells if it shows
     pub(crate) fn on_surface(&self, material: &Material, at: Pos2) -> Option<DVec2> {
@@ -658,7 +669,7 @@ impl Camera {
             }
             t += step;
         }
-        self.on_floor(at)
+        self.on_plane(at, 0.0)
     }
 
     /// Material coordinates to clip space over `area` (x and y across it, -1 to 1), placing
@@ -1767,7 +1778,7 @@ mod tests {
             };
             let camera = Camera::new(&m, Orbit::default(), framing, area, None);
             let p = DVec3::new(30.0, 70.0, 0.0);
-            let back = camera.on_floor(camera.screen(p)).unwrap();
+            let back = camera.on_plane(camera.screen(p), 0.0).unwrap();
             // screen positions are f32
             assert!(
                 (back - p.truncate()).length() < 1e-3,
@@ -1776,10 +1787,31 @@ mod tests {
         }
         let edge_on = Camera::new(&m, Orbit::FRONT, Framing::default(), area, None);
         assert_eq!(
-            edge_on.on_floor(area.center()),
+            edge_on.on_plane(area.center(), 0.0),
             None,
             "the plane seen edge-on"
         );
+        // nearly side on in perspective, the top of the view looks over the horizon
+        let low = Orbit {
+            pitch: 80f64.to_radians(),
+            ..Orbit::FRONT
+        };
+        let framing = Framing {
+            perspective: true,
+            ..Framing::default()
+        };
+        let camera = Camera::new(&m, low, framing, area, None);
+        assert_eq!(
+            camera.on_plane(area.center_top(), 0.0),
+            None,
+            "above the horizon, not a point behind the eye"
+        );
+        assert!(camera.on_plane(area.center_bottom(), 0.0).is_some());
+        // a raised plane: the point drawn at that height goes back to it
+        let camera = Camera::new(&m, Orbit::default(), framing, area, None);
+        let p = DVec3::new(30.0, 70.0, 6.0);
+        let back = camera.on_plane(camera.screen(p), 6.0).unwrap();
+        assert!((back - p.truncate()).length() < 1e-3, "{back}");
     }
 
     #[test]
@@ -1807,7 +1839,7 @@ mod tests {
                     "perspective {perspective}: {p} came back as {back}"
                 );
                 if p.z < 0.0 {
-                    let plane = camera.on_floor(at).unwrap();
+                    let plane = camera.on_plane(at, 0.0).unwrap();
                     assert!((plane - p.truncate()).length() > 1.0, "{plane}");
                 }
             }

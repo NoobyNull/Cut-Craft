@@ -64,6 +64,6 @@ tool-by-tool state is `docs/tool-inventory.md`.
 
 ## Advanced Features
 - Plugin architecture *(out of scope unless decided: see ROADMAP, Decisions)*
-- Scripting support *(out of scope unless decided: Aspire gadgets)*
+- Scripting support: Lua 5.4 gadgets in `crates/scripting` (sandboxed, one undo step per run; gadgets will install as add-ons)
 - Advanced modeling tools
 - Simulation and verification

@@ -136,6 +136,7 @@ impl CutCraftApp {
             options_page: 0,
             split: None,
             clipart: crate::clipart::Clipart::default(),
+            import_queue: std::collections::VecDeque::new(),
             recent_path: None,
             recovery_path: None,
             autosaved: (0, 0.0),
@@ -1341,6 +1342,7 @@ impl CutCraftApp {
             }
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
+        self.fill_drill_bank(cmd.id(), &mut params);
         // a toolpath's form in Aspire's order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
@@ -1904,17 +1906,13 @@ impl CutCraftApp {
                     files::show_folder(&f).map_err(|e| e.to_string())
                 })
             }
-            _ => match self
-                .clipart
-                .chosen
-                .or((!self.clipart.folders.is_empty()).then_some(0))
-                .and_then(|i| self.clipart.folders.get(i))
-            {
+            // the folder looked in, or the first when looking in all of them
+            _ => match (self.clipart.open.as_ref()).or(self.clipart.folders.first()) {
                 Some(folder) => {
                     on_the_desktop();
                     files::show_folder(folder).map_err(|e| e.to_string())
                 }
-                None => Err("add a folder to the Clipart library first".to_owned()),
+                None => Err("add a folder to the Library first".to_owned()),
             },
         };
         if let Err(e) = result {
@@ -1931,10 +1929,27 @@ impl CutCraftApp {
             return;
         };
         self.start_command(&toolpath.strategy);
+        let mut params = toolpath.params;
+        // the bank as the machine has it now, so a bank changed since is used
+        self.fill_drill_bank(&toolpath.strategy, &mut params);
         if let Some(form) = self.form.as_mut().filter(|f| f.id == toolpath.strategy) {
-            form.params = toolpath.params;
+            form.params = params;
             form.editing = Some(id);
         }
+    }
+
+    /// A Drill Bank Toolpath's form drills with the active machine's bank (none when it has
+    /// none, which the toolpath then says how to set up).
+    pub(super) fn fill_drill_bank(&self, command: &str, params: &mut Value) {
+        if command != "drill_bank_toolpath" {
+            return;
+        }
+        let bank = self
+            .machines
+            .active()
+            .and_then(|m| m.drill_bank.clone())
+            .unwrap_or_default();
+        params["bank"] = serde_json::to_value(bank).expect("a drill bank serialises");
     }
 
     /// A form's Apply: its command, or for an edited toolpath that toolpath made again with
@@ -2521,6 +2536,14 @@ impl CutCraftApp {
                 self.invoke(ctx, &id);
             }
         }
+        // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
+        let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
+        if self.drag_3d.is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.cancel_drag_3d();
+        }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {
@@ -2738,7 +2761,7 @@ impl CutCraftApp {
                     self.tools_or_favourites(ui, &groups, Page::Design);
                 }
                 "Sheets" => self.sheets_panel(ui),
-                "Clipart" => self.clipart_panel(ui),
+                "Library" => self.clipart_panel(ui),
                 "Layers" => self.layers_panel(ui),
                 "Components" => self.component_list(ui),
                 tab => {

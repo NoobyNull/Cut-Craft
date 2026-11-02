@@ -173,7 +173,13 @@ say "not implemented yet".
   up, as the help says the 3D view does), Appearance (Same as Parent or Solid Color) and its
   colour, all applied through Component Properties. A component's Solid Color
   shows on the GPU-drawn surface [inf: the CPU path of the headless tests leaves it out].
-  Not done: the 3D Transform Handles themselves (move, scale, rotate in the 3D view).
+  The 3D Transform Handles sit over the selection's box (vectors or components), level
+  with the highest surface inside it: a cross in
+  the middle moves, white corners and black edges scale, and a rotation arrow on a stem
+  above the far edge turns it, with the 2D view's keys; the drag shows the box as it will
+  be and is applied when let go (one undo). Escape cancels a drag; let go off the material
+  (over the horizon in perspective) it changes nothing. [inf: the manual's edit box for an exact value and
+  moving the rotation centre are not offered; Move, Scale and Rotate take exact values.]
 - Drawing in the 3D view (Aspire 12 [inf: "the drawing tools are now available in the 3D
   view", What's New in V12.0]): with a drawing tool's form open, the left button draws in the
   3D view as it does in the 2D view (drags, clicks, Shift-click to edit, the polyline's
@@ -195,11 +201,34 @@ say "not implemented yet".
 - Help: About, Keyboard Shortcuts, Third Party Licenses.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
   Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
-  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Clipart
-  (a library of folders; double-click a thumbnail to import it centred on the job, drag it
-  onto the 2D or 3D view to import it centred where it is dropped, or right-click ▸ Import
-  to Level onto one of the job's levels or a New Level named after the file; a model goes
-  through Orientate 3D Model already placed and levelled).
+  (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
+  (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, as a tree
+  of the folders in them however deep, each with how many files are in it; hidden folders
+  and links to folders are passed over. A folder is listed once: adding one inside a folder
+  already added opens it in the tree instead, adding one around folders already added
+  takes their place, and duplicates kept from before are tidied as the library loads. Click a folder to see what is in it and the folders
+  in it, or All folders for everything; the one looked in is remembered. Right-click a
+  folder: Open Folder, and Remove Folder for one added. Folders are read in the background
+  and again every 5 s; only the rows of tiles on screen are drawn, so thousands of files
+  open at once (at most 100 000 listed). A missing folder is marked "not found" and says
+  how to fix it). Double-click a tile to add it to the project
+  centred on the job, or drag it onto the 2D or 3D view to add it centred where it is
+  dropped; a model goes through Orientate 3D Model already placed and levelled. Click picks
+  a tile, Ctrl+click adds or removes one, Shift+click picks a range. Right-click (on what is
+  picked): Add to Project (several are added one after another, each model's form in
+  turn), Add to Level (one of the job's levels, or a New Level each, named after the
+  file), Locate (shown picked in the file manager: Explorer, Finder, or a Linux one
+  answering `org.freedesktop.FileManager1`, else its folder opened), Add Tag / Remove Tag
+  (kept in the config folder's `library-tags.json`, never in the files), Delete from Disk
+  (asks first, naming the files; a model's picture goes with it; not to the bin). A Show
+  filter picks Everything, 3D models, 2D drawings, Pictures or Depth maps (greyscale
+  pictures, by their header, or tagged "depth map"); Search finds names and tags. A 3D
+  model's tile shows a preview: `mydesign.png` beside `mydesign.stl` if there is one (and
+  that picture gets no tile of its own), else the model rendered from its largest side
+  (from above, or face on for one saved standing up), once, on background threads for the
+  tiles on screen, and kept in the cache folder until the file changes; previews unused for
+  60 days are cleared. Vectric's locked `.3dclip` / `.v3m` files are counted and explained.
+  Not done: subfolders, thumbnail sizes.
 - Top bar over the views: 2D over 3D or beside it; sheet, layer and level drop-downs;
   geometry, smart and grid snapping toggles. Smart snapping lines the pointer up with any
   snap point across or up and down, and puts it on a span's tangent at the span's ends or
@@ -270,6 +299,21 @@ say "not implemented yet".
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- Drill Bank (Aspire 12.5's Advanced Machining Module): Machine Configuration ▸ Drill Bank
+  sets up a head of drills on an X and a Y arm (count, pitch, where the arms cross, each
+  drill's controller number and diameter, the reference drill), with a picture of it. The
+  Drill Bank Toolpath (Toolpath Operations, beside Drilling) takes the active machine's bank,
+  matches the selected circles to drills by size and position (pitch and diameter
+  tolerances), and drops as many drills per plunge as line up; holes no drill fits are named
+  with the sizes there are. Peck, retract and dwell as Drilling. Posts with
+  `SETUP_DRILL_BANK` / `FINAL_DRILL_BANK_ACTION` and either `DRILL_BANK_PATTERN` or
+  `DRILL_BANK_EXTEND_DRILL` + `DRILL_BANK_RETRACT_DRILL` write it (`[DB]`, `[DBX]`, `[DBY]`,
+  `[DL]`, `[CD]`); others refuse it, saying what is missing. Array Copy and Plate
+  Production move its plunges with it; Merged refuses it. Not done: a Cut Craft post with
+  drill bank blocks (none of the hobby controllers has one), a toolpath icon of its own (it
+  borrows Drilling's), the simulation and time estimate count every hole as its own plunge,
+  vector selection templates, projection onto the 3D model, and the bank in the Tool
+  Database (`.vtdb` `drill_bank_*` tables are not read).
 - Toolpath options: Profile ramps (smooth, zig zag, spiral; by distance or angle), leads
   (straight or circular, lead out, overcut) and tabs (2D or 3D, by number or distance); Pocket
   Offset or Raster (angle, profile pass first / last / none) with ramped plunges; 3D Roughing
@@ -482,7 +526,8 @@ say "not implemented yet".
 - Model ▸ Export as 3D Clipart: the selected components (baked into one, shaping and all)
   saved as Cut Craft's own `.ccclip` (JSON); Import Component / 3D Model reads them back,
   centred on the job, on the first level. Aspire's `.3dclip` is encrypted (`re/SPEC.md`),
-  so it is neither read nor written; the Clipart tab lists folders of your own files instead.
+  so it is neither read nor written; the Clipart tab lists folders of your own files instead
+  (and says how many locked Vectric files a folder has, and why they aren't shown).
 - Model ▸ Segment 3D Model (help: Segment 3D Model): an STL picked first, split by planes
   square to X, Y or Z: one at a percentage of its size, or (Number of Cuts) several in
   equal slices; the first segment and the ones after it (turned over, if asked, so their
@@ -513,8 +558,8 @@ say "not implemented yet".
   - Move, Rotate, Mirror, Set Size and the Align / Center tools also act on the selected
     components (picked in the 2D view or the Components tab): each is resampled onto cells
     of its own size where it lands (bilinear inside the shape), heights unchanged, fade
-    and tilt anchors carried along. Aspire's Transform handles and Set Size's Z scaling
-    are not done.
+    and tilt anchors carried along; the 3D view's Transform handles too. Set Size's Z
+    scaling is not done.
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
