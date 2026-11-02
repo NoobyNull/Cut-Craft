@@ -1,39 +1,61 @@
-//! The Library tab: folders of the user's own clipart, and what is in the chosen one as
-//! tiles: pictures as themselves, 3D models as previews, drawings by their kind. Tiles are
-//! picked with a click (Ctrl or Shift for more), added to the project with a double-click
-//! or by dragging, and a right-click menu adds, locates, tags or deletes the ones picked.
+//! The Library tab: folders of the user's own clipart as a tree, and what is in the one
+//! picked (and the folders in it; in all of them when none is) as tiles: pictures and 3D
+//! models as previews, drawings by their kind. Tiles are picked with a click (Ctrl or
+//! Shift for more), added to the project with a double-click or by dragging, and a
+//! right-click menu adds, locates, tags or deletes the ones picked.
 
 mod preview;
 mod tags;
 
 use cut_craft_bug_report::hint::HoverHint;
 use eframe::egui;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 /// A thumbnail's edge, in rows of the theme's interactive height.
 // ponytail: one size; Aspire's three view sizes can come with a setting
 const THUMBNAIL_ROWS: f32 = 4.0;
-/// Files shown as their own picture.
-const PICTURES: [&str; 6] = ["png", "jpg", "jpeg", "gif", "bmp", "svg"];
+/// Pictures drawn as themselves (at the tile's size); the rest ([`BITMAPS`]) are shrunk
+/// once and kept, as a model's preview is, so a folder of big photos doesn't fill the
+/// memory, nor a huge scan go past the graphics card's largest texture (which stops the app).
+const DRAWN: [&str; 1] = ["svg"];
 /// Pictures made of pixels (a depth map is one of these).
 const BITMAPS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff"];
 /// Vectric's clipart, which is locked to Vectric's own software: counted, not shown.
 const LOCKED: [&str; 2] = ["3dclip", "v3m"];
-/// How often the chosen folder is read again, for files added or taken away meanwhile.
-const RELIST: std::time::Duration = std::time::Duration::from_secs(2);
+/// How often the folders are read again, for files added, moved or taken away meanwhile.
+const RELIST: Duration = Duration::from_secs(5);
+/// At most this many files are listed, so a folder as big as a whole drive can't swamp it.
+const MOST: usize = 100_000;
+/// The folder tree's height at most, in rows of the theme's interactive height.
+const TREE_ROWS: f32 = 10.0;
+
+/// The extensions of files something imports, in lower case.
+pub type Importable = HashSet<String>;
+/// Whether each picture is greyscale (a depth map), by the [`preview::stamp`] it had.
+type Greys = HashMap<PathBuf, (u64, bool)>;
+/// Folders read in the background: which, what is in them, and the greys learnt.
+type Read = (Vec<PathBuf>, Listing, Greys);
 
 /// The library's folders, kept between runs, and the one being looked in.
 #[derive(Default)]
 pub struct Clipart {
+    /// The folders added to the library: the tree's roots.
     pub folders: Vec<PathBuf>,
-    pub chosen: Option<usize>,
+    /// The folder looked in, with the folders in it; `None`: all of them.
+    pub open: Option<PathBuf>,
     /// Where the folders are kept; `None` keeps them only for this run.
     store: Option<PathBuf>,
-    /// Models' previews, made in the background.
+    /// Models' and pictures' previews, made in the background.
     previews: preview::Previews,
-    /// The chosen folder as last read, and when.
-    listing: Option<(PathBuf, std::time::Instant, Listing)>,
+    /// Everything in the folders as last read: which folders, when, and what.
+    listing: Option<(Vec<PathBuf>, Instant, Listing)>,
+    /// The folders being read in the background.
+    reading: Option<mpsc::Receiver<Read>>,
+    /// Read the folders again as soon as they can be (a file was deleted).
+    again: bool,
     /// Only files whose names or tags have this in them are shown.
     pub search: String,
     /// Only files of this kind are shown.
@@ -45,10 +67,13 @@ pub struct Clipart {
     tags: tags::Tags,
     /// Add Tag: the files being tagged, and the tag as typed so far.
     tagging: Option<(Vec<PathBuf>, String)>,
-    /// Whether each picture is greyscale (a depth map), by the [`preview::stamp`] it had.
-    greys: HashMap<PathBuf, (u64, bool)>,
+    /// Kept between readings, so each picture's colours are read once.
+    greys: Greys,
     /// The last thing that went wrong, until the next action.
     trouble: Option<String>,
+    /// How many tiles were drawn last.
+    #[cfg(test)]
+    drawn: usize,
 }
 
 /// What a file is, for the Show filter.
@@ -91,12 +116,16 @@ impl Show {
     }
 }
 
-/// What is in a folder.
+/// What is in a folder, or in folders and the folders in them.
 #[derive(Debug, Default, PartialEq)]
 struct Listing {
     entries: Vec<Entry>,
     /// Vectric clipart files, which can't be opened.
-    locked: usize,
+    locked: Vec<PathBuf>,
+    /// Each folder with something in it, and how many files are in it and the folders in it.
+    counts: BTreeMap<PathBuf, usize>,
+    /// There were more than [`MOST`] files: the rest aren't listed.
+    full: bool,
 }
 
 /// A file the tab shows.
@@ -117,8 +146,8 @@ struct Entry {
 /// What the tab asks the app to do.
 pub enum Picked {
     AddFolder,
-    /// Show the chosen folder in the desktop's file manager.
-    OpenFolder,
+    /// Show this folder in the desktop's file manager.
+    ShowFolder(PathBuf),
     /// A double-click: this file into the project.
     Import(PathBuf),
     /// Add to Project: these files, one after another.
@@ -171,54 +200,59 @@ impl Clipart {
         }
     }
 
-    /// The folders kept at `store`, looking in the one looked in last (or the first).
+    /// The folders kept at `store`, looking in the folder looked in last (all of them, if
+    /// none was or it is no longer in the library).
     fn kept(store: Option<PathBuf>) -> Self {
-        let folders = store
+        let folders: Vec<PathBuf> = store
             .as_deref()
             .map(crate::files::load_recent)
             .unwrap_or_default();
-        let last: Option<PathBuf> = store
+        let open = store
             .as_deref()
             .and_then(|s| std::fs::read(open_path(s)).ok())
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
-        let chosen = last
-            .and_then(|last| folders.iter().position(|f| *f == last))
-            .or((!folders.is_empty()).then_some(0));
+            .and_then(|bytes| serde_json::from_slice::<Option<PathBuf>>(&bytes).ok())
+            .flatten()
+            .filter(|open| folders.iter().any(|f| open.starts_with(f)));
         Self {
             folders,
-            chosen,
+            open,
             store,
             ..Self::default()
         }
     }
 
-    /// Looks in folder `i`, and remembers it for next time.
-    pub fn choose(&mut self, i: usize) {
-        self.chosen = Some(i);
-        if let (Some(store), Some(folder)) = (&self.store, self.folders.get(i))
-            && let Ok(bytes) = serde_json::to_vec(folder)
+    /// Looks in `folder` and the folders in it (`None`: in all of them), and remembers it
+    /// for next time.
+    pub fn choose(&mut self, folder: Option<PathBuf>) {
+        if self.open != folder {
+            self.previews.forget_waiting();
+            self.selected.clear();
+            self.anchor = None;
+        }
+        self.open = folder;
+        if let Some(store) = &self.store
+            && let Ok(bytes) = serde_json::to_vec(&self.open)
         {
-            // only a convenience: not remembered, the first folder is shown next time
+            // only a convenience: not remembered, all the folders are shown next time
             let _ = cut_craft_core::file::write_atomic(&open_path(store), &bytes);
         }
     }
 
     /// Adds `folder` (once) and looks in it.
     pub fn add(&mut self, folder: PathBuf) -> Result<(), String> {
-        let at = self.folders.iter().position(|f| *f == folder);
-        let at = at.unwrap_or_else(|| {
-            self.folders.push(folder);
-            self.folders.len() - 1
-        });
+        if !self.folders.contains(&folder) {
+            self.folders.push(folder.clone());
+        }
         let saved = self.save();
-        self.choose(at);
+        self.choose(Some(folder));
         saved
     }
 
-    /// Takes the chosen folder out of the library (the folder itself stays on disk).
-    pub fn remove_chosen(&mut self) -> Result<(), String> {
-        if let Some(at) = self.chosen.take().filter(|&at| at < self.folders.len()) {
-            self.folders.remove(at);
+    /// Takes `folder` out of the library (the folder itself stays on disk).
+    pub fn remove(&mut self, folder: &Path) -> Result<(), String> {
+        self.folders.retain(|f| f != folder);
+        if self.open.as_ref().is_some_and(|o| o.starts_with(folder)) {
+            self.choose(None);
         }
         self.save()
     }
@@ -228,6 +262,59 @@ impl Clipart {
             Some(path) => crate::files::save_recent(&self.folders, path),
             None => Ok(()),
         }
+    }
+
+    /// Takes in the folders read in the background, and starts reading them again once
+    /// they've changed, a file was deleted, or it's been [`RELIST`] since.
+    fn refresh(&mut self, ctx: &egui::Context, importable: &Importable) {
+        if let Some(reading) = &self.reading {
+            match reading.try_recv() {
+                Ok(read) => self.read(read),
+                Err(mpsc::TryRecvError::Disconnected) => self.reading = None,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let stale = self.again
+            || (self.listing.as_ref())
+                .is_none_or(|(roots, at, _)| *roots != self.folders || at.elapsed() > RELIST);
+        if stale && self.reading.is_none() {
+            self.again = false;
+            let roots = self.folders.clone();
+            let importable = importable.clone();
+            let mut greys = std::mem::take(&mut self.greys);
+            let (send, receive) = mpsc::channel();
+            let ctx = ctx.clone();
+            let spawned = std::thread::Builder::new()
+                .name("library reading".into())
+                .spawn(move || {
+                    let listing = read_all(&roots, &importable, &mut greys);
+                    let _ = send.send((roots, listing, greys));
+                    ctx.request_repaint();
+                });
+            if spawned.is_ok() {
+                self.reading = Some(receive);
+            }
+        }
+        ctx.request_repaint_after(RELIST);
+    }
+
+    /// Folders read: shown from now on.
+    fn read(&mut self, (roots, listing, greys): Read) {
+        self.reading = None;
+        self.greys = greys;
+        // files gone since (deleted or moved elsewhere) are no longer picked
+        let there: HashSet<&Path> = (listing.entries.iter()).map(|e| e.file.as_path()).collect();
+        self.selected.retain(|f| there.contains(f.as_path()));
+        self.listing = Some((roots, Instant::now(), listing));
+    }
+
+    /// The folders read now, not in the background.
+    #[cfg(test)]
+    pub(crate) fn read_now(&mut self, importable: &Importable) {
+        let roots = self.folders.clone();
+        let mut greys = std::mem::take(&mut self.greys);
+        let listing = read_all(&roots, importable, &mut greys);
+        self.read((roots, listing, greys));
     }
 
     /// `file` clicked: picked alone, or (`toggle`, Ctrl) in or out of what is picked, or
@@ -276,7 +363,11 @@ impl Clipart {
                 Err(e) => Err(format!("Couldn't delete {}: {e}", name(f))),
             });
         self.selected.retain(|s| !files.contains(s));
-        self.listing = None; // read the folder again
+        // gone from the tab at once; the folders are read again for the counts
+        if let Some((_, _, listing)) = &mut self.listing {
+            listing.entries.retain(|e| !gone.contains(&e.file));
+        }
+        self.again = true;
         let forgotten = self.tags.forget(files);
         result.and(forgotten)
     }
@@ -309,28 +400,75 @@ fn is_grey(path: &Path) -> bool {
         })
 }
 
-/// The files in `folder` that something imports, by name; a model's picture goes with it.
-/// `greys` remembers which pictures are greyscale, so each is read once.
-fn list(
-    folder: &Path,
-    importable: &dyn Fn(&str) -> bool,
-    greys: &mut HashMap<PathBuf, (u64, bool)>,
-) -> Listing {
+/// Everything in `roots` and the folders in them, however deep. Hidden folders are passed
+/// over, and so are links to folders, which can lead round in a circle; a folder added
+/// inside another one added is read once, as part of it.
+fn read_all(roots: &[PathBuf], importable: &Importable, greys: &mut Greys) -> Listing {
+    let mut all = Listing::default();
+    for (i, root) in roots.iter().enumerate() {
+        let inside = |(j, other): (usize, &PathBuf)| {
+            j != i && root.starts_with(other) && (root != other || j < i)
+        };
+        if roots.iter().enumerate().any(inside) {
+            continue;
+        }
+        let mut waiting = vec![root.clone()];
+        while let Some(folder) = waiting.pop() {
+            if all.entries.len() >= MOST {
+                all.full = true;
+                break;
+            }
+            let mut read = list(&folder, importable, greys);
+            for entry in &read.entries {
+                let up = entry.file.ancestors().skip(1);
+                for folder in up.take_while(|a| a.starts_with(root)) {
+                    *all.counts.entry(folder.to_path_buf()).or_default() += 1;
+                }
+            }
+            all.entries.append(&mut read.entries);
+            all.locked.append(&mut read.locked);
+            waiting.extend(subfolders(&folder));
+        }
+    }
+    all.entries.sort_by(|a, b| a.file.cmp(&b.file));
+    all
+}
+
+/// The folders in `folder`, but not hidden ones or links to folders.
+fn subfolders(folder: &Path) -> Vec<PathBuf> {
+    let Ok(read) = std::fs::read_dir(folder) else {
+        return vec![];
+    };
+    read.flatten()
+        // the entry's own type: a link to a folder isn't one
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        .map(|e| e.path())
+        .collect()
+}
+
+/// The files in `folder` (not the folders in it) that something imports, by name; a
+/// model's picture goes with it. `greys` remembers which pictures are greyscale, so each
+/// is read once.
+fn list(folder: &Path, importable: &Importable, greys: &mut Greys) -> Listing {
     let Ok(read) = std::fs::read_dir(folder) else {
         return Listing::default();
     };
-    let mut locked = 0;
+    let mut locked = vec![];
     let mut files: Vec<PathBuf> = read
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.is_file())
         .filter(|p| {
             let extension = preview::extension(p);
-            locked += usize::from(LOCKED.contains(&extension.as_str()));
-            importable(&extension)
+            if LOCKED.contains(&extension.as_str()) {
+                locked.push(p.clone());
+            }
+            importable.contains(&extension)
         })
         .collect();
     files.sort();
+    locked.sort();
     let stem = |p: &Path| p.file_stem().map(|s| s.to_string_lossy().to_lowercase());
     let is = |p: &Path, kinds: &[&str]| kinds.contains(&preview::extension(p).as_str());
     let pictures: HashMap<String, &PathBuf> = (files.iter())
@@ -371,7 +509,11 @@ fn list(
             }
         })
         .collect();
-    Listing { entries, locked }
+    Listing {
+        entries,
+        locked,
+        ..Listing::default()
+    }
 }
 
 fn name(path: &Path) -> String {
@@ -385,45 +527,201 @@ fn name(path: &Path) -> String {
 pub fn panel(
     ui: &mut egui::Ui,
     clipart: &mut Clipart,
-    importable: &dyn Fn(&str) -> bool,
+    importable: &Importable,
     levels: &[(u64, String)],
 ) -> Option<Picked> {
-    let mut picked = folders(ui, clipart);
-    let Some(folder) = clipart.chosen.and_then(|i| clipart.folders.get(i)).cloned() else {
-        return picked;
-    };
     clipart.previews.update(ui.ctx());
-    let moved = (clipart.listing.as_ref()).is_some_and(|(f, ..)| *f != folder);
-    if moved {
-        clipart.previews.forget_waiting();
-        clipart.selected.clear();
-        clipart.anchor = None;
+    clipart.refresh(ui.ctx(), importable);
+    #[cfg(test)]
+    {
+        clipart.drawn = 0;
     }
-    let stale = (clipart.listing.as_ref()).is_none_or(|(_, read, _)| read.elapsed() > RELIST);
-    if moved || stale {
-        let read = list(&folder, importable, &mut clipart.greys);
-        // files gone since (deleted or moved elsewhere) are no longer picked
-        (clipart.selected).retain(|f| read.entries.iter().any(|e| e.file == *f));
-        clipart.listing = Some((folder.clone(), std::time::Instant::now(), read));
+    // taken out while drawn, so the tiles can change the rest of the tab
+    let taken = clipart.listing.take();
+    let none = Listing::default();
+    let listing = taken.as_ref().map_or(&none, |(_, _, l)| l);
+    let mut picked = folders(ui, clipart, listing);
+    if !clipart.folders.is_empty() {
+        let reading = taken.is_none();
+        picked = files(ui, clipart, listing, reading, levels).or(picked);
     }
-    if !folder.is_dir() {
+    if clipart.listing.is_none() {
+        clipart.listing = taken;
+    }
+    picked
+}
+
+/// What the folder tree asks for.
+#[derive(Default)]
+struct Tree {
+    /// Look in this folder.
+    choose: Option<PathBuf>,
+    /// Look in all the folders.
+    all: bool,
+    /// Take this folder out of the library.
+    remove: Option<PathBuf>,
+    /// Show this folder in the file manager.
+    show: Option<PathBuf>,
+}
+
+/// The library's folders as a tree, to look in one (and the folders in it) or in all of
+/// them; with Add, Remove and Open Folder.
+fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Option<Picked> {
+    let mut picked = None;
+    ui.strong("Folders");
+    let mut tree = Tree::default();
+    if clipart.folders.is_empty() {
+        ui.weak("No folders yet. Add a folder of your models and pictures to see them here.");
+    } else {
+        let most = ui.spacing().interact_size.y * TREE_ROWS;
+        egui::ScrollArea::vertical()
+            .id_salt("library_tree")
+            .max_height(most)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                let all = format!("All folders ({})", listing.entries.len());
+                if ui
+                    .selectable_label(clipart.open.is_none(), all)
+                    .on_hover_hint("Shows what's in every folder at once.")
+                    .clicked()
+                {
+                    tree.all = true;
+                }
+                for root in &clipart.folders {
+                    node(ui, root, true, listing, clipart.open.as_deref(), &mut tree);
+                }
+            });
+    }
+    let root = (clipart.open.as_ref()).filter(|o| clipart.folders.contains(o));
+    let mut remove = None;
+    ui.horizontal(|ui| {
+        if ui.button("Add Folder...").clicked() {
+            picked = Some(Picked::AddFolder);
+        }
+        if ui
+            .add_enabled(root.is_some(), egui::Button::new("Remove Folder"))
+            .on_hover_hint("Takes the folder out of the Library; its files stay on disk.")
+            .on_disabled_hover_text("Click one of your folders in the list first.")
+            .clicked()
+        {
+            remove = root.cloned();
+        }
+        if ui
+            .add_enabled(clipart.open.is_some(), egui::Button::new("Open Folder"))
+            .on_hover_hint("Shows the folder in your file manager.")
+            .on_disabled_hover_text("Click a folder in the list first.")
+            .clicked()
+            && let Some(open) = &clipart.open
+        {
+            picked = Some(Picked::ShowFolder(open.clone()));
+        }
+    });
+    ui.separator();
+    if tree.all {
+        clipart.choose(None);
+    } else if let Some(folder) = tree.choose {
+        clipart.choose(Some(folder));
+    }
+    if let Some(folder) = tree.remove.or(remove)
+        && let Err(e) = clipart.remove(&folder)
+    {
+        clipart.trouble = Some(e);
+    }
+    tree.show.map(Picked::ShowFolder).or(picked)
+}
+
+/// A folder in the tree, named with how many files are in it (and the folders in it), and
+/// the folders in it below it, folded away until opened.
+fn node(
+    ui: &mut egui::Ui,
+    folder: &Path,
+    root: bool,
+    listing: &Listing,
+    open: Option<&Path>,
+    tree: &mut Tree,
+) {
+    let count = listing.counts.get(folder).copied().unwrap_or(0);
+    let text = if root && !folder.is_dir() {
+        egui::RichText::new(format!("{} (not found)", name(folder))).weak()
+    } else {
+        egui::RichText::new(format!("{} ({count})", name(folder)))
+    };
+    // the folders in it come straight after it, in order
+    let inside: Vec<&PathBuf> = (listing.counts.range(folder.to_path_buf()..))
+        .map(|(f, _)| f)
+        .take_while(|f| f.starts_with(folder))
+        .filter(|f| f.parent() == Some(folder))
+        .collect();
+    let label = |ui: &mut egui::Ui, tree: &mut Tree| {
+        let row = ui
+            .selectable_label(open == Some(folder), text)
+            .on_hover_hint(folder.display().to_string());
+        if row.clicked() {
+            tree.choose = Some(folder.to_path_buf());
+        }
+        cut_craft_bug_report::context_menu(&row, |ui| {
+            if ui.button("Open Folder").clicked() {
+                tree.show = Some(folder.to_path_buf());
+            }
+            if root
+                && ui
+                    .button("Remove Folder")
+                    .on_hover_hint("Takes the folder out of the Library; its files stay on disk.")
+                    .clicked()
+            {
+                tree.remove = Some(folder.to_path_buf());
+            }
+        });
+    };
+    if inside.is_empty() {
+        ui.horizontal(|ui| {
+            ui.add_space(ui.spacing().icon_width + ui.spacing().icon_spacing);
+            label(ui, tree);
+        });
+        return;
+    }
+    let id = ui.make_persistent_id(("library_folder", folder));
+    // the way to the folder looked in is open
+    let towards = open.is_some_and(|o| o != folder && o.starts_with(folder));
+    egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, towards)
+        .show_header(ui, |ui| label(ui, tree))
+        .body(|ui| {
+            for f in inside {
+                node(ui, f, false, listing, open, tree);
+            }
+        });
+}
+
+/// What is in the folder looked in, as tiles to pick from: those of the kind shown with
+/// the search in their names or tags.
+fn files(
+    ui: &mut egui::Ui,
+    clipart: &mut Clipart,
+    listing: &Listing,
+    reading: bool,
+    levels: &[(u64, String)],
+) -> Option<Picked> {
+    if let Some(open) = &clipart.open
+        && !open.is_dir()
+    {
         ui.colored_label(
             ui.visuals().warn_fg_color,
             format!(
                 "{} isn't there. If it's on a drive that isn't plugged in, plug it in; if it \
                  was moved, use Remove Folder and add it again from where it is now.",
-                folder.display()
+                open.display()
             ),
         );
-        return picked;
+        return None;
     }
-    // taken out while drawn, so the tiles can change the rest of the tab
-    let Some((folder, read, listing)) = clipart.listing.take() else {
-        return picked;
+    let under = |f: &Path| match &clipart.open {
+        Some(open) => f.starts_with(open),
+        None => clipart.folders.iter().any(|root| f.starts_with(root)),
     };
-    filters(ui, clipart, &listing);
+    let here: Vec<&Entry> = listing.entries.iter().filter(|e| under(&e.file)).collect();
+    let locked = listing.locked.iter().filter(|f| under(f)).count();
     let wanted = clipart.search.trim().to_lowercase();
-    let shown: Vec<&Entry> = (listing.entries.iter())
+    let shown: Vec<&Entry> = (here.iter().copied())
         .filter(|e| match clipart.show {
             Show::Everything => true,
             Show::Only(kind) => clipart.kind(e) == kind,
@@ -434,94 +732,45 @@ pub fn panel(
                 || clipart.tags.matches(&e.file, &wanted)
         })
         .collect();
+    filters(ui, clipart, locked, listing.full);
+    let place = clipart.open.as_deref().map_or_else(
+        || "all your folders".to_owned(),
+        |open| format!("{} and the folders in it", name(open)),
+    );
+    let files = |n: usize| {
+        if n == 1 {
+            "1 file".into()
+        } else {
+            format!("{n} files")
+        }
+    };
     if shown.is_empty() {
-        ui.weak(if listing.entries.is_empty() {
-            "Nothing in this folder yet. 3D models (STL, OBJ, .ccclip), pictures and drawings \
-             (SVG, DXF) show up here."
-                .to_owned()
-        } else {
-            "Nothing here matches. Clear the search or choose Everything.".to_owned()
-        });
-    }
-    let order: Vec<&Path> = shown.iter().map(|e| e.file.as_path()).collect();
-    let pictures: HashMap<&Path, &Path> = (listing.entries.iter())
-        .filter_map(|e| Some((e.file.as_path(), e.picture.as_deref()?)))
-        .collect();
-    let edge = ui.spacing().interact_size.y * THUMBNAIL_ROWS;
-    ui.horizontal_wrapped(|ui| {
-        for entry in &shown {
-            // sized up front, so the wrapped row knows when it is full (`vertical` doesn't)
-            let cell = egui::vec2(edge, edge + ui.spacing().interact_size.y);
-            ui.allocate_ui_with_layout(cell, egui::Layout::top_down(egui::Align::Min), |ui| {
-                let tile = Tile {
-                    entry,
-                    edge,
-                    levels,
-                    order: &order,
-                    pictures: &pictures,
-                };
-                if let Some(p) = clip(ui, clipart, &tile) {
-                    picked = Some(p);
-                }
+        if reading {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.weak("Reading your folders...");
             });
-        }
-    });
-    if clipart.listing.is_none() {
-        clipart.listing = Some((folder, read, listing));
-    }
-    picked
-}
-
-/// The library's folders, with Add, Remove and Open Folder.
-fn folders(ui: &mut egui::Ui, clipart: &mut Clipart) -> Option<Picked> {
-    let mut picked = None;
-    ui.strong("Folders");
-    let mut clicked = None;
-    for (i, folder) in clipart.folders.iter().enumerate() {
-        let there = folder.is_dir();
-        let label = if there {
-            egui::RichText::new(name(folder))
+        } else if here.is_empty() {
+            ui.weak(
+                "Nothing here yet. 3D models (STL, OBJ, .ccclip), pictures and drawings (SVG, \
+                 DXF) show up here.",
+            );
         } else {
-            egui::RichText::new(format!("{} (not found)", name(folder))).weak()
-        };
-        let row = ui
-            .selectable_label(clipart.chosen == Some(i), label)
-            .on_hover_hint(folder.display().to_string());
-        if row.clicked() {
-            clicked = Some(i);
+            ui.weak("Nothing here matches. Clear the search or choose Everything.");
         }
+        return None;
     }
-    if let Some(i) = clicked {
-        clipart.choose(i);
-    }
-    if clipart.folders.is_empty() {
-        ui.weak("No folders yet. Add a folder of your models and pictures to see them here.");
-    }
-    let mut remove = false;
-    ui.horizontal(|ui| {
-        if ui.button("Add Folder...").clicked() {
-            picked = Some(Picked::AddFolder);
-        }
-        remove = ui
-            .add_enabled(clipart.chosen.is_some(), egui::Button::new("Remove Folder"))
-            .on_hover_hint("Takes the folder out of the Library; its files stay on disk.")
-            .clicked();
-        if ui
-            .add_enabled(clipart.chosen.is_some(), egui::Button::new("Open Folder"))
-            .clicked()
-        {
-            picked = Some(Picked::OpenFolder);
-        }
+    ui.weak(if shown.len() == here.len() {
+        format!("{} in {place}", files(here.len()))
+    } else {
+        format!("{} of {} in {place}", shown.len(), files(here.len()))
     });
-    if remove && let Err(e) = clipart.remove_chosen() {
-        clipart.trouble = Some(e);
-    }
-    ui.separator();
-    picked
+    grid(ui, clipart, &shown, levels)
 }
 
-/// Search, the Show filter, what is picked, Add Tag's box, and anything gone wrong.
-fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) {
+/// Search, the Show filter, what is picked, Add Tag's box, and anything gone wrong;
+/// `locked` Vectric files where the tab looks, and whether there were too many files to list.
+fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) {
     ui.horizontal(|ui| {
         egui::ComboBox::from_id_salt("library_show")
             .selected_text(clipart.show.label())
@@ -541,17 +790,22 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) {
                 .desired_width(f32::INFINITY),
         );
     });
-    if listing.locked > 0 {
+    if locked > 0 {
         ui.label(
             egui::RichText::new(format!(
-                "{} Vectric clipart file{} here can't be shown. Vectric locks .3dclip and .v3m \
-                 files to its own software. If you have Aspire, export them as STL to use them \
-                 here.",
-                listing.locked,
-                if listing.locked == 1 { "" } else { "s" },
+                "{locked} Vectric clipart file{} here can't be shown. Vectric locks .3dclip \
+                 and .v3m files to its own software. If you have Aspire, export them as STL \
+                 to use them here.",
+                if locked == 1 { "" } else { "s" },
             ))
             .weak(),
         );
+    }
+    if full {
+        ui.weak(format!(
+            "There are more than {MOST} files in your folders, so only the first {MOST} are \
+             shown. Add smaller folders to see the rest."
+        ));
     }
     if clipart.selected.len() > 1 {
         ui.horizontal(|ui| {
@@ -596,6 +850,93 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) {
     }
 }
 
+/// `shown` as tiles in rows across the tab. Only the rows on screen are drawn, so a folder
+/// of thousands is as quick as a folder of ten.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "whole numbers of tiles, small enough"
+)]
+fn grid(
+    ui: &mut egui::Ui,
+    clipart: &mut Clipart,
+    shown: &[&Entry],
+    levels: &[(u64, String)],
+) -> Option<Picked> {
+    let mut picked = None;
+    let order: Vec<&Path> = shown.iter().map(|e| e.file.as_path()).collect();
+    let pictures: HashMap<&Path, &Path> = (shown.iter())
+        .filter_map(|e| Some((e.file.as_path(), e.picture.as_deref()?)))
+        .collect();
+    let edge = ui.spacing().interact_size.y * THUMBNAIL_ROWS;
+    let cell = egui::vec2(edge, edge + ui.spacing().interact_size.y);
+    let gap = ui.spacing().item_spacing;
+    let step = cell + gap;
+    let width = ui.available_width();
+    let (columns, rows, first, last) = layout(
+        shown.len(),
+        width,
+        step,
+        gap.x,
+        ui.clip_rect().y_range(),
+        ui.cursor().top(),
+    );
+    let (whole, _) = ui.allocate_exact_size(
+        egui::vec2(width, step.y * rows as f32),
+        egui::Sense::hover(),
+    );
+    for (i, entry) in shown.iter().enumerate().take(last).skip(first) {
+        let at =
+            whole.min + egui::vec2(step.x * (i % columns) as f32, step.y * (i / columns) as f32);
+        // named by its file, so its menu stays open as the rows above come and go
+        let builder = egui::UiBuilder::new()
+            .id_salt(&entry.file)
+            .max_rect(egui::Rect::from_min_size(at, cell))
+            .layout(egui::Layout::top_down(egui::Align::Min));
+        ui.scope_builder(builder, |ui| {
+            let tile = Tile {
+                entry,
+                edge,
+                levels,
+                order: &order,
+                pictures: &pictures,
+            };
+            if let Some(p) = clip(ui, clipart, &tile) {
+                picked = Some(p);
+            }
+        });
+        #[cfg(test)]
+        {
+            clipart.drawn += 1;
+        }
+    }
+    picked
+}
+
+/// `tiles` in a grid `width` across, each `step` (its size and the gap after it) from the
+/// next, the grid's top at `top`: how many columns and rows, and the tiles (first, and one
+/// past the last) in the rows within `seen`, top to bottom.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "whole numbers of tiles, small enough"
+)]
+fn layout(
+    tiles: usize,
+    width: f32,
+    step: egui::Vec2,
+    gap: f32,
+    seen: egui::Rangef,
+    top: f32,
+) -> (usize, usize, usize, usize) {
+    // the last column needs no gap after it
+    let columns = (((width + gap) / step.x).floor() as usize).max(1);
+    let rows = tiles.div_ceil(columns);
+    let row = |y: f32| ((y - top) / step.y).max(0.0);
+    let first = (row(seen.min).floor() as usize).min(rows);
+    let last = (row(seen.max).ceil() as usize).min(rows);
+    (columns, rows, first * columns, (last * columns).min(tiles))
+}
+
 /// What a tile needs from the grid around it.
 struct Tile<'a> {
     entry: &'a Entry,
@@ -636,11 +977,14 @@ fn clip(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
             picked = Some(Picked::Import(file.clone()));
         }
     }
-    thumbnail.context_menu(|ui| {
-        if let Some(p) = menu(ui, clipart, tile) {
-            picked = Some(p);
-        }
-    });
+    // the name under a tile has the tile's menu too
+    for response in [&thumbnail, &caption] {
+        cut_craft_bug_report::context_menu(response, |ui| {
+            if let Some(p) = menu(ui, clipart, tile) {
+                picked = Some(p);
+            }
+        });
+    }
     let mut hint = label.clone();
     let tags: Vec<&str> = clipart.tags.of(file).collect();
     if !tags.is_empty() {
@@ -754,23 +1098,30 @@ fn thumbnail(
 ) -> (egui::Response, Option<String>) {
     let size = egui::vec2(edge, edge);
     let extension = preview::extension(&entry.file);
-    if PICTURES.contains(&extension.as_str()) {
+    if DRAWN.contains(&extension.as_str()) {
         let image =
             egui::Image::new(format!("file://{}", entry.file.display())).fit_to_exact_size(size);
         return (ui.add(egui::Button::image(image).selected(chosen)), None);
     }
     let model = preview::MODELS.contains(&extension.as_str());
+    let picture = BITMAPS.contains(&extension.as_str());
     let on_screen = ui.is_rect_visible(egui::Rect::from_min_size(ui.cursor().min, size));
-    if !model || !on_screen {
-        let kind = if model {
-            "3D".into()
-        } else {
-            extension.to_uppercase()
-        };
+    let kind = if model {
+        "3D".into()
+    } else {
+        extension.to_uppercase()
+    };
+    if !(model || picture) || !on_screen {
         let button = egui::Button::new(kind).selected(chosen);
         return (ui.add_sized(size, button), None);
     }
-    match previews.get(&entry.file, entry.picture.as_deref(), entry.stamp) {
+    // a picture is its own preview: shrunk once, and kept
+    let source = if picture {
+        Some(entry.file.as_path())
+    } else {
+        entry.picture.as_deref()
+    };
+    match previews.get(&entry.file, source, entry.stamp) {
         preview::Preview::Ready(texture) => {
             let image = egui::Image::new(texture).fit_to_exact_size(size);
             (ui.add(egui::Button::image(image).selected(chosen)), None)
@@ -782,7 +1133,7 @@ fn thumbnail(
         }
         preview::Preview::Failed(e) => {
             let e = e.to_owned();
-            let button = egui::Button::new("3D").selected(chosen);
+            let button = egui::Button::new(kind).selected(chosen);
             (ui.add_sized(size, button), Some(e))
         }
     }
@@ -791,6 +1142,10 @@ fn thumbnail(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn importable(extensions: &[&str]) -> Importable {
+        extensions.iter().map(|&e| e.to_owned()).collect()
+    }
 
     /// A folder's clipart wraps onto rows in a narrow panel, not one long line (#34).
     #[test]
@@ -801,11 +1156,12 @@ mod tests {
         for i in 0..8 {
             std::fs::write(dir.join(format!("{i}.stl")), "").unwrap();
         }
+        let stl = importable(&["stl"]);
         let mut clipart = Clipart {
             folders: vec![dir.clone()],
-            chosen: Some(0),
             ..Clipart::default()
         };
+        clipart.read_now(&stl);
         let ctx = egui::Context::default();
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
@@ -817,7 +1173,7 @@ mod tests {
         let mut used = egui::Rect::NOTHING;
         let mut out = ctx.run_ui(input, |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
-                panel(ui, &mut clipart, &|e| e == "stl", &[]);
+                panel(ui, &mut clipart, &stl, &[]);
                 used = ui.min_rect();
             });
         });
@@ -849,7 +1205,7 @@ mod tests {
         ] {
             std::fs::write(dir.join(f), "").unwrap();
         }
-        let importable = |e: &str| ["stl", "obj", "png", "jpg"].contains(&e);
+        let importable = importable(&["stl", "obj", "png", "jpg"]);
         let listing = list(&dir, &importable, &mut HashMap::new());
         let entry = |file: &str, picture: Option<&str>| {
             let picture = picture.map(|p| dir.join(p));
@@ -874,7 +1230,8 @@ mod tests {
                     entry("mydesign.stl", Some("mydesign.png")),
                     entry("sunset.png", None),
                 ],
-                locked: 2,
+                locked: vec![dir.join("rose.3dclip"), dir.join("tulip.V3M")],
+                ..Listing::default()
             }
         );
         // a picture put beside a model later becomes its preview: the model's stamp changes
@@ -891,6 +1248,34 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// A picture's tile is a preview shrunk from it, not the picture itself: a scan 16 604
+    /// pixels wide went past the graphics card's largest texture and stopped the app.
+    #[test]
+    fn pictures_are_shrunk() {
+        let dir = folder("huge");
+        image::RgbImage::new(9000, 2)
+            .save(dir.join("scan.png"))
+            .unwrap();
+        image::RgbImage::new(9000, 2)
+            .save(dir.join("banner.gif"))
+            .unwrap();
+        let pictures = importable(&["png", "gif"]);
+        let mut clipart = Clipart {
+            folders: vec![dir.clone()],
+            ..Clipart::default()
+        };
+        clipart.read_now(&pictures);
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                panel(ui, &mut clipart, &pictures, &[]);
+            });
+        });
+        out.textures_delta.clear();
+        assert_eq!(clipart.previews.asked(), 2, "both made into previews");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     /// Only the tiles on screen ask for previews: a folder of a thousand models opens at
     /// once, and the rest are made as they are scrolled to.
     #[test]
@@ -902,11 +1287,12 @@ mod tests {
         for i in 0..200 {
             std::fs::write(dir.join(format!("{i:03}.stl")), "").unwrap();
         }
+        let stl = importable(&["stl"]);
         let mut clipart = Clipart {
             folders: vec![dir.clone()],
-            chosen: Some(0),
             ..Clipart::default()
         };
+        clipart.read_now(&stl);
         let ctx = egui::Context::default();
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
@@ -918,7 +1304,7 @@ mod tests {
         let mut out = ctx.run_ui(input, |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    panel(ui, &mut clipart, &|e| e == "stl", &[]);
+                    panel(ui, &mut clipart, &stl, &[]);
                 });
             });
         });
@@ -958,7 +1344,8 @@ mod tests {
             .tags
             .add(&[dir.join("tagged.png")], "Depth Map")
             .unwrap();
-        let listing = list(&dir, &|_| true, &mut clipart.greys);
+        let all = importable(&["stl", "svg", "dxf", "png"]);
+        let listing = list(&dir, &all, &mut clipart.greys);
         let kinds: Vec<(String, Kind)> = (listing.entries.iter())
             .map(|e| (name(&e.file), clipart.kind(e)))
             .collect();
@@ -1026,28 +1413,155 @@ mod tests {
     }
 
     /// The Library opens on its folders as they were: kept between runs, looking in the
-    /// one looked in last (the first, if that is gone), not on an empty tab.
+    /// folder looked in last; in all of them if that was all, or it's no longer added.
     #[test]
     fn opens_where_it_was() {
         let dir = folder("kept");
         let store = dir.join("clipart.json");
         let (a, b) = (dir.join("a"), dir.join("b"));
         let mut library = Clipart::kept(Some(store.clone()));
-        assert_eq!(library.chosen, None, "nothing to look in yet");
+        assert_eq!(library.open, None, "nothing to look in yet");
         library.add(a.clone()).unwrap();
         library.add(b.clone()).unwrap();
-        let again = Clipart::kept(Some(store.clone()));
+        let mut again = Clipart::kept(Some(store.clone()));
         assert_eq!(again.folders, [a.clone(), b.clone()]);
-        assert_eq!(again.chosen, Some(1), "the one added last is looked in");
-        let mut again = again;
-        again.choose(0);
-        assert_eq!(Clipart::kept(Some(store.clone())).chosen, Some(0));
-        again.remove_chosen().unwrap();
         assert_eq!(
-            Clipart::kept(Some(store)).chosen,
-            Some(0),
-            "the one looked in is gone: the first"
+            again.open,
+            Some(b.clone()),
+            "the one added last is looked in"
+        );
+        again.choose(Some(a.join("birds")));
+        assert_eq!(
+            Clipart::kept(Some(store.clone())).open,
+            Some(a.join("birds"))
+        );
+        again.choose(None);
+        assert_eq!(Clipart::kept(Some(store.clone())).open, None, "all of them");
+        again.choose(Some(a.join("birds")));
+        again.remove(&a).unwrap();
+        assert_eq!(
+            again.open, None,
+            "looking in a folder taken away: all of them"
+        );
+        assert_eq!(Clipart::kept(Some(store.clone())).folders, [b]);
+        assert_eq!(Clipart::kept(Some(store)).open, None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The folders in the folders added are read too, however deep, and counted for the
+    /// tree; hidden ones aren't, and a folder added inside another is read once.
+    #[test]
+    fn folders_in_folders() {
+        let dir = folder("deep");
+        let birds = dir.join("animals").join("birds");
+        let hidden = dir.join(".thumbnails");
+        for d in [&birds, &hidden, &dir.join("empty")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        for f in [
+            dir.join("top.stl"),
+            dir.join("animals").join("cat.stl"),
+            birds.join("eagle.stl"),
+            birds.join("owl.stl"),
+            hidden.join("secret.stl"),
+        ] {
+            std::fs::write(f, "").unwrap();
+        }
+        // a link back up, which would go round for ever if followed
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&dir, birds.join("loop")).unwrap();
+        let stl = importable(&["stl"]);
+        let read = read_all(&[dir.clone(), birds.clone()], &stl, &mut HashMap::new());
+        let names: Vec<String> = read.entries.iter().map(|e| name(&e.file)).collect();
+        // by folder, then name
+        assert_eq!(names, ["eagle.stl", "owl.stl", "cat.stl", "top.stl"]);
+        let count = |f: &Path| read.counts.get(f).copied();
+        assert_eq!(count(&dir), Some(4));
+        assert_eq!(count(&dir.join("animals")), Some(3));
+        assert_eq!(count(&birds), Some(2));
+        assert_eq!(
+            count(&dir.join("empty")),
+            None,
+            "nothing in it: not in the tree"
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Thousands of files open at once: only the tiles on screen are drawn. Looking in a
+    /// folder shows what is in it and the folders in it; looking in none, everything.
+    #[test]
+    fn thousands_of_files() {
+        let root = folder("thousands");
+        std::fs::create_dir_all(root.join("few")).unwrap();
+        let entry = |file: PathBuf| Entry {
+            file,
+            picture: None,
+            stamp: 0,
+            kind: Kind::Drawing,
+        };
+        let mut entries: Vec<Entry> = (0..3000)
+            .map(|i| entry(root.join(format!("{i:04}.dxf"))))
+            .collect();
+        entries.extend((0..5).map(|i| entry(root.join("few").join(format!("{i}.dxf")))));
+        let mut clipart = Clipart {
+            folders: vec![root.clone()],
+            listing: Some((
+                vec![root.clone()],
+                Instant::now(),
+                Listing {
+                    entries,
+                    ..Listing::default()
+                },
+            )),
+            ..Clipart::default()
+        };
+        let ctx = egui::Context::default();
+        let draw = |clipart: &mut Clipart| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(300.0, 600.0),
+                )),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        panel(ui, clipart, &importable(&["dxf"]), &[]);
+                    });
+                });
+            });
+            out.textures_delta.clear();
+            clipart.drawn
+        };
+        let drawn = draw(&mut clipart);
+        assert!(drawn > 0 && drawn < 60, "{drawn} tiles drawn");
+        clipart.open = Some(root.join("few"));
+        assert_eq!(draw(&mut clipart), 5);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Tiles fill the rows across, and the rows in view are the ones drawn.
+    #[test]
+    fn rows_in_view() {
+        let step = egui::vec2(60.0, 80.0);
+        let seen = |from: f32, to: f32| egui::Rangef::new(from, to);
+        // 300 wide fits 5 tiles 56 across with a 4 gap between (the last needs none)
+        assert_eq!(
+            layout(12, 296.0, step, 4.0, seen(0.0, 100.0), 0.0),
+            (5, 3, 0, 10)
+        );
+        assert_eq!(
+            layout(12, 296.0, step, 4.0, seen(170.0, 400.0), 0.0),
+            (5, 3, 10, 12)
+        );
+        assert_eq!(
+            layout(12, 10.0, step, 4.0, seen(0.0, 10.0), 50.0),
+            (1, 12, 0, 0)
+        );
+        assert_eq!(
+            layout(0, 300.0, step, 4.0, seen(0.0, 100.0), 0.0),
+            (5, 0, 0, 0)
+        );
     }
 }

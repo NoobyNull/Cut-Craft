@@ -1904,17 +1904,13 @@ impl CutCraftApp {
                     files::show_folder(&f).map_err(|e| e.to_string())
                 })
             }
-            _ => match self
-                .clipart
-                .chosen
-                .or((!self.clipart.folders.is_empty()).then_some(0))
-                .and_then(|i| self.clipart.folders.get(i))
-            {
+            // the folder looked in, or the first when looking in all of them
+            _ => match (self.clipart.open.as_ref()).or(self.clipart.folders.first()) {
                 Some(folder) => {
                     on_the_desktop();
                     files::show_folder(folder).map_err(|e| e.to_string())
                 }
-                None => Err("add a folder to the Clipart library first".to_owned()),
+                None => Err("add a folder to the Library first".to_owned()),
             },
         };
         if let Err(e) = result {
