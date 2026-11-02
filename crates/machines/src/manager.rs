@@ -142,6 +142,7 @@ impl MachineManager {
             limits(ui, machine);
             tool_changer(ui, machine, None);
             keep_out(ui, machine);
+            drill_bank(ui, machine);
             if names_clash {
                 ui.colored_label(
                     ui.visuals().error_fg_color,
@@ -501,6 +502,228 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
             machine.keep_out.push(crate::machine::Zone::default());
         }
     });
+}
+
+/// Drill Bank: whether the head has a bank of drills that drop down together, and if so
+/// its arms, pitch and each drill's number and size, with a picture of it.
+fn drill_bank(ui: &mut egui::Ui, machine: &mut Machine) {
+    use cut_craft_core::drill_bank::DrillBank;
+    let (per, length) = if machine.inches {
+        (INCH, "in")
+    } else {
+        (1.0, "mm")
+    };
+    // one line, folded, until wanted: most machines have none, and it is set once
+    let summary = machine.drill_bank.as_ref().map_or_else(
+        || "Drill Bank: none".to_owned(),
+        |bank| {
+            format!(
+                "Drill Bank: {} drills, {} {length} apart",
+                bank.drills().len(),
+                bank.pitch / per
+            )
+        },
+    );
+    egui::CollapsingHeader::new(summary)
+        .id_salt("drill_bank")
+        .show(ui, |ui| {
+            let mut has = machine.drill_bank.is_some();
+            if ui
+                .checkbox(&mut has, "This machine has a drill bank")
+                .on_hover_hint(
+                    "A head with several drills side by side that drop down together, so a \
+                     row of shelf-pin or dowel holes is drilled in one plunge. Most hobby \
+                     machines have none",
+                )
+                .changed()
+            {
+                // a common start: five 5 mm drills 32 mm apart (the 32 mm cabinet system)
+                machine.drill_bank = has.then(|| DrillBank::new(5, 0, 32.0, 5.0));
+            }
+            if let Some(bank) = machine.drill_bank.as_mut() {
+                bank_layout(ui, bank, per, length);
+            }
+        });
+    if let Some(problem) = machine.drill_bank.as_ref().and_then(DrillBank::problem) {
+        ui.colored_label(ui.visuals().error_fg_color, problem);
+    }
+}
+
+/// The bank's arms, pitch and drills, and a picture of it.
+fn bank_layout(
+    ui: &mut egui::Ui,
+    bank: &mut cut_craft_core::drill_bank::DrillBank,
+    per: f64,
+    length: &str,
+) {
+    {
+        egui::Grid::new("drill_bank_layout")
+            .num_columns(2)
+            .show(ui, |ui| {
+                let (mut across, mut along) = (bank.horizontal.len(), bank.vertical.len());
+                ui.label("Drills along X")
+                    .on_hover_hint("How many drills are on the arm running left to right");
+                let a = ui.add(egui::DragValue::new(&mut across).range(0..=32));
+                ui.end_row();
+                ui.label("Drills along Y")
+                    .on_hover_hint("How many drills are on the arm running front to back; 0 for a single row");
+                let b = ui.add(egui::DragValue::new(&mut along).range(0..=32));
+                ui.end_row();
+                if a.changed() || b.changed() {
+                    bank.set_counts(across, along);
+                }
+                ui.label("Pitch")
+                    .on_hover_hint("The distance between neighbouring drills, centre to centre");
+                measure(ui, &mut bank.pitch, per, &format!(" {length}"));
+                ui.end_row();
+                if !bank.horizontal.is_empty() && !bank.vertical.is_empty() {
+                    ui.label("Arms cross at").on_hover_hint(
+                        "The drill both arms share: its place along X, then along Y, counted from 1",
+                    );
+                    ui.horizontal(|ui| {
+                        let limits = [bank.horizontal.len(), bank.vertical.len()];
+                        for (place, most) in bank.central.iter_mut().zip(limits) {
+                            let mut shown = *place + 1;
+                            if ui
+                                .add(egui::DragValue::new(&mut shown).range(1..=most))
+                                .changed()
+                            {
+                                *place = shown - 1;
+                            }
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
+        let drills = bank.drills();
+        bank_drills(ui, bank, &drills, per, length);
+        bank_picture(ui, bank, &drills);
+    }
+}
+
+/// Each drill of the bank: its number for the controller, its size, and whether it is the
+/// one the machine positions by.
+fn bank_drills(
+    ui: &mut egui::Ui,
+    bank: &mut cut_craft_core::drill_bank::DrillBank,
+    drills: &[(
+        cut_craft_core::drill_bank::DrillId,
+        cut_craft_core::drill_bank::BankDrill,
+    )],
+    per: f64,
+    length: &str,
+) {
+    use cut_craft_core::drill_bank::Arm;
+    egui::Grid::new("drill_bank_drills")
+        .num_columns(4)
+        .striped(true)
+        .show(ui, |ui| {
+            for heading in ["Drill", "Number", "Diameter", "Reference"] {
+                ui.label(heading);
+            }
+            ui.end_row();
+            for (id, _) in drills {
+                let name = match id.arm {
+                    Arm::Horizontal => format!("X{}", id.index + 1),
+                    Arm::Vertical => format!("Y{}", id.index + 1),
+                };
+                let crossing = bank.is_crossing(*id);
+                ui.label(if crossing {
+                    format!("{name} (both arms)")
+                } else {
+                    name
+                });
+                ui.horizontal(|ui| {
+                    let drill = match id.arm {
+                        Arm::Horizontal => &mut bank.horizontal[id.index],
+                        Arm::Vertical => &mut bank.vertical[id.index],
+                    };
+                    ui.add(egui::DragValue::new(&mut drill.number))
+                        .on_hover_hint(
+                            "The number the controller picks this drill by; controllers that \
+                             take a bitmask expect 1, 2, 4, 8...",
+                        );
+                    if crossing {
+                        let y = &mut bank.vertical[bank.central[1]].number;
+                        ui.add(egui::DragValue::new(y).prefix("Y ")).on_hover_hint(
+                            "Its number on the Y arm, for controllers that number the \
+                                 arms apart",
+                        );
+                    }
+                });
+                let drill = match id.arm {
+                    Arm::Horizontal => &mut bank.horizontal[id.index],
+                    Arm::Vertical => &mut bank.vertical[id.index],
+                };
+                measure(ui, &mut drill.diameter, per, &format!(" {length}"));
+                let is_reference = bank.same(bank.reference, *id);
+                if ui
+                    .radio(is_reference, "")
+                    .on_hover_hint(
+                        "The drill the machine positions by: the G-code's X and Y are where \
+                     this drill is",
+                    )
+                    .clicked()
+                {
+                    bank.reference = *id;
+                }
+                ui.end_row();
+            }
+        });
+}
+
+/// The bank from above: each drill as a circle its size, the reference drill crossed.
+fn bank_picture(
+    ui: &mut egui::Ui,
+    bank: &cut_craft_core::drill_bank::DrillBank,
+    drills: &[(
+        cut_craft_core::drill_bank::DrillId,
+        cut_craft_core::drill_bank::BankDrill,
+    )],
+) {
+    if drills.is_empty() || bank.pitch <= 0.0 {
+        return;
+    }
+    let places: Vec<(egui::Vec2, f64)> = drills
+        .iter()
+        .map(|(id, d)| {
+            let p = bank.position(*id);
+            #[expect(clippy::cast_possible_truncation, reason = "screen points")]
+            let at = egui::vec2(p.x as f32, -p.y as f32);
+            (at, d.diameter)
+        })
+        .collect();
+    let (mut lo, mut hi) = (places[0].0, places[0].0);
+    for (p, _) in &places {
+        lo = lo.min(*p);
+        hi = hi.max(*p);
+    }
+    #[expect(clippy::cast_possible_truncation, reason = "screen points")]
+    let pitch = bank.pitch as f32;
+    let span = (hi - lo) + egui::vec2(pitch, pitch);
+    let width = ui.available_width().min(320.0);
+    let scale = (width / span.x).min(140.0 / span.y);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, span.y * scale), egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    let middle = (lo + hi) / 2.0;
+    let stroke = egui::Stroke::new(1.5, ui.visuals().text_color());
+    for ((id, _), (at, diameter)) in drills.iter().zip(&places) {
+        let centre = rect.center() + (*at - middle) * scale;
+        #[expect(clippy::cast_possible_truncation, reason = "screen points")]
+        let radius = (diameter / 2.0) as f32 * scale;
+        painter.circle_stroke(centre, radius.max(2.0), stroke);
+        if bank.same(bank.reference, *id) {
+            let r = radius.max(2.0) + 3.0;
+            painter.line_segment(
+                [centre - egui::vec2(r, 0.0), centre + egui::vec2(r, 0.0)],
+                stroke,
+            );
+            painter.line_segment(
+                [centre - egui::vec2(0.0, r), centre + egui::vec2(0.0, r)],
+                stroke,
+            );
+        }
+    }
 }
 
 /// Associated Post-Processors: the machine's posts (the default marked), Add and Remove, and
@@ -920,7 +1143,9 @@ mod tests {
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
-                egui::vec2(1200.0, 800.0),
+                // tall enough for the whole Machine Configuration, so a window sized to the
+                // screen and not its contents shows
+                egui::vec2(1200.0, 1000.0),
             )),
             ..Default::default()
         };
@@ -936,6 +1161,9 @@ mod tests {
         let mut none = MachineManager::new(&Machines::default());
         let mut one = MachineManager::adding(&Machines::default());
         one.draft.machines[0].posts = vec![library.entries()[0].name.clone(), "Gone (*.nc)".into()];
+        // a drill bank folds away to one line
+        one.draft.machines[0].drill_bank =
+            Some(cut_craft_core::drill_bank::DrillBank::new(5, 3, 32.0, 5.0));
         let mut posts = PostManager::default();
         for _ in 0..10 {
             frame(&ctx, |ctx| {
@@ -951,6 +1179,23 @@ mod tests {
         assert!(
             window.height() < ctx.content_rect().height() - 2.0 * window.top(),
             "fits its contents, not the screen: {window:?}"
+        );
+    }
+
+    #[test]
+    fn a_drill_banks_layout_draws_on_both_arms_and_in_inches() {
+        let ctx = egui::Context::default();
+        let mut bank = cut_craft_core::drill_bank::DrillBank::new(5, 3, 32.0, 5.0);
+        for (per, length) in [(1.0, "mm"), (INCH, "in")] {
+            frame(&ctx, |ctx| {
+                egui::Window::new("bank").show(ctx, |ui| {
+                    bank_layout(ui, &mut bank, per, length);
+                });
+            });
+        }
+        assert_eq!(
+            bank,
+            cut_craft_core::drill_bank::DrillBank::new(5, 3, 32.0, 5.0)
         );
     }
 

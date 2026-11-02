@@ -17,6 +17,7 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 - [Using it](#using-it)
 - [Reporting bugs](#reporting-bugs)
 - [Building from source](#building-from-source)
+- [Acknowledgements](#acknowledgements)
 - [How the code is laid out](#how-the-code-is-laid-out)
 - [License](#license)
 
@@ -333,6 +334,15 @@ STL models given on the command line (the models are not kept here). It needs `p
 `CUT_CRAFT_ICON_DIR` points Cut Craft at a folder instead while icons are being worked on; an
 icon that is missing leaves its button showing its name, and everything still works. The
 third-party icons and models are credited under **Help ▸ Third Party Licenses**.
+
+## Acknowledgements
+
+Cut Craft was inspired by **Vectric Aspire**, and our thanks go to Vectric for it. Cut Craft
+follows Aspire's workflow so Aspire users feel at home, but it is an independent program
+written from scratch in Rust: it is not affiliated with or endorsed by Vectric, and it uses none
+of Vectric's code. Versions 0.1.0 to 0.2.1 used icons traced from Aspire's as stand-ins; every
+icon since 0.2.2 is drawn for Cut Craft. Vectric and Aspire are trademarks of their respective owners. More in
+[ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
 
 ## How the code is laid out
 

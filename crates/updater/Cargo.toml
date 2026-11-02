@@ -1,0 +1,25 @@
+[package]
+name = "cut-craft-updater"
+description = "Help > Check for Updates: finds a newer release on GitHub, downloads and checks it, and swaps it in"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+flate2.workspace = true
+log = "0.4"
+# release signatures (minisign, Ed25519)
+minisign-verify = "0.3"
+semver = "1"
+serde_json.workspace = true
+sha2 = "0.10"
+tar = "0.4"
+# GitHub over HTTPS (rustls, no OpenSSL to install), trusting the computer's certificates
+ureq = { version = "3", features = ["platform-verifier"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# signs test downloads as the release workflow does
+minisign = "0.10"

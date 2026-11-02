@@ -376,6 +376,34 @@ impl Advanced {
     }
 }
 
+/// Help ▸ Check for Updates, and the check at startup.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Updates {
+    /// About once a day, when Cut Craft starts, ask GitHub whether there is a new version,
+    /// and say so if there is. Nothing is downloaded or installed until you choose Update Now
+    #[serde(default = "on")]
+    #[schemars(title = "Check for updates when Cut Craft starts")]
+    pub check_at_startup: bool,
+    /// When GitHub was last asked, in seconds since 1970.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub last_check: Option<u64>,
+    /// The version Skip This Version was pressed for: not offered again at startup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub skipped_version: Option<String>,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Self {
+            check_at_startup: on(),
+            last_check: None,
+            skipped_version: None,
+        }
+    }
+}
+
 /// How Cut Craft looks (not one of Aspire's).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Appearance {
@@ -495,6 +523,9 @@ pub struct Options {
     #[serde(default)]
     #[schemars(title = "SpaceMouse", extend("x-section" = true))]
     pub space_mouse: SpaceMouse,
+    #[serde(default)]
+    #[schemars(title = "Updates", extend("x-section" = true))]
+    pub updates: Updates,
     /// Gadgets ▸ Job Setup Sheet Editor: how job sheets look.
     #[serde(default)]
     #[schemars(skip)]
@@ -513,6 +544,10 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub favourites: Favourites,
+    /// The tool each toolbox flyout shows: the one picked from it last.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[schemars(skip)]
+    pub flyout_faces: crate::flyout::Faces,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -587,8 +622,10 @@ impl Default for Options {
             appearance: Appearance::default(),
             advanced: Advanced::default(),
             space_mouse: SpaceMouse::default(),
+            updates: Updates::default(),
             default_job: None,
             favourites: Favourites::default(),
+            flyout_faces: crate::flyout::Faces::new(),
         }
     }
 }
@@ -687,6 +724,10 @@ mod tests {
             "solid_2d_previews": false }, "general": { "recent_file_list_size": 4 } }"#;
         let older: Options = serde_json::from_str(older).expect("options saved before preloading");
         assert!(!older.view_3d.draw_origin && older.general.preload_icons);
+        assert!(
+            older.updates.check_at_startup,
+            "options saved before updates check for them"
+        );
         assert_eq!(
             older.appearance.theme,
             Theme::Light,
@@ -709,9 +750,17 @@ mod tests {
                 "Importing Models",
                 "Appearance",
                 "Advanced",
-                "SpaceMouse"
+                "SpaceMouse",
+                "Updates"
             ]
         );
+        // what the check keeps for itself is not a setting to change
+        let updates = fields.iter().find(|f| f.label == "Updates").unwrap();
+        let crate::form::Kind::Group(shown) = &updates.kind else {
+            panic!("Updates is a group of settings")
+        };
+        let shown: Vec<&str> = shown.iter().map(|f| f.key.as_str()).collect();
+        assert_eq!(shown, ["check_at_startup"]);
     }
 
     #[test]
@@ -734,6 +783,7 @@ mod tests {
             power: vec![],
             stale: false,
             group: None,
+            drill_bank: None,
         };
         let mut doc = cut_craft_core::document::Document::default();
         doc.toolpaths.insert(

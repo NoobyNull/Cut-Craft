@@ -34,27 +34,38 @@ pub fn crossed(zones: &[Path], moves: &[Move]) -> bool {
 /// or a rapid that starts or ends inside one or can find no way round): a toolpath that
 /// cannot abide by the zones.
 pub fn route(zones: &[Path], moves: &[Move]) -> (Vec<Move>, bool) {
+    let (out, _, violates) = route_indexed(zones, moves);
+    (out, violates)
+}
+
+/// [`route`], also giving for each move out the index of the move in `moves` it is or leads
+/// to (a waypoint, the rapid it goes round the zones for), so ranges of moves can follow.
+pub fn route_indexed(zones: &[Path], moves: &[Move]) -> (Vec<Move>, Vec<usize>, bool) {
     let rings = rings_of(zones);
     if rings.is_empty() || moves.is_empty() {
-        return (moves.to_vec(), false);
+        return (moves.to_vec(), (0..moves.len()).collect(), false);
     }
-    let mut out = vec![moves[0]];
-    for w in moves.windows(2) {
+    let (mut out, mut origin) = (vec![moves[0]], vec![0]);
+    for (i, w) in moves.windows(2).enumerate() {
         let (a, b) = (w[0], w[1]);
         if b.kind == MoveKind::Rapid
             && crosses(&rings, plan(a), plan(b))
             && let Some(way) = way_round(&rings, plan(a), plan(b))
         {
             let z = a.to.z.max(b.to.z);
-            out.extend(way.into_iter().map(|p| Move {
-                kind: MoveKind::Rapid,
-                to: glam::DVec3::new(p.x, p.y, z),
-            }));
+            for p in way {
+                out.push(Move {
+                    kind: MoveKind::Rapid,
+                    to: glam::DVec3::new(p.x, p.y, z),
+                });
+                origin.push(i + 1);
+            }
         }
         out.push(b);
+        origin.push(i + 1);
     }
     let violates = crossed(zones, &out);
-    (out, violates)
+    (out, origin, violates)
 }
 
 fn rings_of(zones: &[Path]) -> Vec<Vec<Point>> {
@@ -206,6 +217,59 @@ mod tests {
             kind: MoveKind::Rapid,
             to: DVec3::new(x, y, 5.0),
         }
+    }
+
+    #[test]
+    fn a_drill_banks_plunges_keep_their_moves_when_rapids_go_round_a_zone() {
+        use crate::drill_bank::{BankHit, BankToolpath, DrillBank};
+        let mut doc = crate::testing::with_toolpath();
+        doc.keep_out = vec![square(40.0, -10.0, 20.0)];
+        let hole = |x: f64| {
+            let at = |z: f64| DVec3::new(x, 0.0, z);
+            [
+                Move {
+                    kind: MoveKind::Rapid,
+                    to: at(5.0),
+                },
+                Move {
+                    kind: MoveKind::Plunge,
+                    to: at(-10.0),
+                },
+                Move {
+                    kind: MoveKind::Rapid,
+                    to: at(5.0),
+                },
+            ]
+        };
+        let mut t = doc.toolpaths.values().next().unwrap().clone();
+        t.moves = [hole(0.0), hole(100.0)].concat();
+        let hit = |start, x| BankHit {
+            start,
+            end: start + 3,
+            head: Point::new(x, 0.0),
+            drills: vec![],
+        };
+        t.drill_bank = Some(BankToolpath {
+            bank: DrillBank::new(1, 0, 32.0, 5.0),
+            hits: vec![hit(0, 0.0), hit(3, 100.0)],
+        });
+        let mut c = crate::Change::builder(&doc);
+        let id = c.add_toolpath(t);
+        doc.apply(&c.finish()).unwrap();
+        let made = &doc.toolpaths[&id];
+        assert!(made.moves.len() > 6, "a way round the zone");
+        let hits = &made.drill_bank.as_ref().unwrap().hits;
+        assert_eq!(hits[0].end, hits[1].start);
+        assert_eq!(hits[1].end, made.moves.len());
+        for h in hits {
+            let moves = &made.moves[h.start..h.end];
+            assert!(
+                moves.iter().any(|m| m.kind == MoveKind::Plunge),
+                "{moves:?}"
+            );
+        }
+        // the second hit's way round leads into it
+        assert_eq!(made.moves[hits[1].end - 2].to.x, 100.0);
     }
 
     #[test]

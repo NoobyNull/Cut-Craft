@@ -38,8 +38,8 @@ fn group(name: &'static str, tools: &'static [&'static str]) -> ToolGroup {
     ToolGroup { name, tools }
 }
 
-/// Aspire's Drawing tab. Group names come from `Resources_ENU.dll` (strings 130-945, see
-/// `re/SPEC.md`); which tool sits in which group is inferred from the help topics. Ids match
+/// Aspire's Drawing tab. Group names and which tool sits in which group follow the help
+/// topics and the trial (see `re/SPEC.md`). Ids match
 /// the icon file names, so unimplemented tools still show their icon.
 #[expect(clippy::too_many_lines, reason = "the drawing tab's tool list")]
 fn drawing_groups() -> Vec<ToolGroup> {
@@ -74,7 +74,9 @@ fn drawing_groups() -> Vec<ToolGroup> {
             &[
                 "draw_polyline",
                 "draw_rectangle",
+                "draw_rectangle_from_center",
                 "draw_circle",
+                "draw_circle_from_edge",
                 "draw_ellipse",
                 "draw_polygon",
                 "draw_star",
@@ -143,14 +145,12 @@ fn drawing_groups() -> Vec<ToolGroup> {
         ),
         group(
             "Offset and Layout",
-            &[
-                "offset_vectors",
-                "nest_parts",
-                "copy_along_vectors",
-                "plate_production",
-            ],
+            &["offset_vectors", "nest_parts", "plate_production"],
         ),
-        group("Array Objects", &["array_copy", "circular_copy"]),
+        group(
+            "Array Objects",
+            &["array_copy", "circular_copy", "copy_along_vectors"],
+        ),
     ]
 }
 
@@ -171,6 +171,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "texture_area",
                 "add_zero_plane",
                 "create_component_from_bitmap",
+                "relief_from_photo",
             ],
         ),
         group(
@@ -203,6 +204,7 @@ fn toolpath_groups() -> Vec<ToolGroup> {
                 "profile_toolpath",
                 "pocket_toolpath",
                 "drilling_toolpath",
+                "drill_bank_toolpath",
                 "quick_engrave_toolpath",
                 "vcarve_engrave_toolpath",
                 "vcarve_inlay_toolpath",
@@ -353,6 +355,33 @@ pub fn node_menu(doc: &Document, at: &cut_craft_core::nodes::NodeAt) -> Vec<Menu
 }
 
 impl MenuSystem {
+    /// Adds the Lua gadgets to the Gadgets menu, below the built-in ones: Cut Craft's own,
+    /// then the user's in a My Gadgets submenu that says where to put them when it is empty.
+    pub fn add_gadgets(
+        &mut self,
+        loaded: &crate::gadgets::Loaded,
+        folder: Option<&std::path::Path>,
+    ) {
+        let item = |g: &crate::gadgets::Listed| MenuItem::with_action(&g.label, &g.id);
+        let mut mine: Vec<MenuItem> = loaded.mine.iter().map(item).collect();
+        if mine.is_empty() {
+            let hint = folder.map_or_else(
+                || "Put .lua gadget files in Cut Craft's settings folder".to_owned(),
+                |f| format!("Put .lua gadget files in {}", f.display()),
+            );
+            mine.push(MenuItem {
+                is_enabled: false,
+                ..MenuItem::with_action(&hint, "")
+            });
+        }
+        let Some(menu) = self.menus.iter_mut().find(|m| m.name == "Gadgets") else {
+            return;
+        };
+        menu.items.push(MenuItem::separator());
+        menu.items.extend(loaded.built_in.iter().map(item));
+        menu.items.push(MenuItem::submenu("My Gadgets", mine));
+    }
+
     fn menu(&self, name: &str) -> &Menu {
         self.menus
             .iter()
@@ -481,6 +510,7 @@ impl MenuSystem {
             edit("Paste"),
             edit("Delete"),
             MenuItem::separator(),
+            MenuItem::with_action("Select Vectors Inside", "select_vectors_inside"),
             MenuItem::submenu("Move to Layer", layers.collect()),
             MenuItem::with_action("Copy to Other Side", "copy_to_other_side")
                 .enabled(doc.job.double_sided.is_some()),
@@ -1345,8 +1375,8 @@ pub fn command_action(action: &str) -> Option<(bool, &str, serde_json::Value)> {
 }
 
 impl MenuSystem {
-    /// Aspire's main menu (`Resources_ENU.dll` MENU 129, see `re/SPEC.md`), minus vendor web links,
-    /// licensing and the debug menu. Shortcuts follow the accelerator table where the two disagree.
+    /// Aspire's main menu (see `re/SPEC.md`, Menus), minus vendor web links and licensing.
+    /// Shortcuts follow the keyboard shortcut table there where the two disagree.
     #[expect(clippy::too_many_lines, reason = "the menu table is data, not logic")]
     pub fn new() -> Self {
         let i = |name: &str| MenuItem::new(name, "");
@@ -1444,6 +1474,7 @@ impl MenuSystem {
                                 i("Select All Open Vectors"),
                                 i("Select All Duplicate Vectors"),
                                 i("Select All Vectors On Current Layer"),
+                                i("Select Vectors Inside"),
                                 i("Unselect All"),
                                 i("Vector Selector..."),
                             ],
@@ -1685,6 +1716,7 @@ impl MenuSystem {
                         i("Keyboard Shortcuts"),
                         i("Third Party Licenses"),
                         sep(),
+                        MenuItem::with_action("Check for Updates...", "check_for_updates"),
                         i("About Cut Craft"),
                     ],
                 ),
@@ -1692,7 +1724,7 @@ impl MenuSystem {
         }
     }
 
-    /// The menus with no job open (`Resources_ENU.dll` MENU 128): files, options, machines,
+    /// The menus with no job open (see `re/SPEC.md`, Startup sequence): files, options, machines,
     /// tools and help. Machine, Gadgets and Help are the same as with a job.
     pub fn without_job(&self) -> Self {
         let i = |name: &str| MenuItem::new(name, "");

@@ -60,7 +60,7 @@ Position and the start page's Create a new file are Job Setup.
 
 ## Right-click menus: the shared families
 
-Aspire's popup menus (`Resources_ENU.dll`, see `re/SPEC.md`) repeat a few families across kinds
+Aspire's popup menus (see `re/SPEC.md`, Right-click menus) repeat a few families across kinds
 of item. Each family is one parent tool; each kind needs one subordinate tool that sets a
 single item's visibility, name or mode. ✅ built · ⬜ to build.
 
@@ -111,11 +111,18 @@ say "not implemented yet".
   Bitmap (bitmaps: PNG, JPEG, GIF, BMP, TIFF in grey, shown in the 2D view), Export DXF /
   SVG, Open Application Data Folder, Exit.
 - Edit: Undo, Redo, Cut, Copy, Paste, Delete; Select All Vectors / Open Vectors / Duplicate
-  Vectors / On Current Layer, Unselect All; the ten Align commands and the four spacing ones
+  Vectors / On Current Layer, Select Vectors Inside, Unselect All; the ten Align commands and the four spacing ones
   (Left To Right ... Bottom To Top; laid out in pick order, the first picked at the named start [inf]); Join Vectors, Group, Ungroup, Job Size and Position.
 - Selection: pick order kept; components picked in the Components tab; bitmaps picked in the
   2D view (Bitmap Properties: position and size; Delete removes them).
-- Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
+- Smart part selection (Aspire 12.5) ✅: a click inside a closed shape, away from its lines,
+  picks the smallest shape round the click with everything wholly inside it (holes, and
+  anything in them) as one part, without grouping; Shift-click adds or takes away the part.
+  Select Vectors Inside (Edit ▸ Selection and the 2D right-click menu) adds what lies inside
+  the selected closed shapes. Not yet in the 3D view.
+- Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Relief
+  from Photo (Cut Craft's own: Estimate Depth runs the optional Depth add-on on the chosen
+  photo, then backdrop cut-off, lift, fine detail and smoothing shape it into a relief), Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL (its form: limit by tolerance or triangle count; back
   left open or closed by a flat plane, the inverted front or the other side; Triangulate shows
@@ -173,7 +180,22 @@ say "not implemented yet".
   up, as the help says the 3D view does), Appearance (Same as Parent or Solid Color) and its
   colour, all applied through Component Properties. A component's Solid Color
   shows on the GPU-drawn surface [inf: the CPU path of the headless tests leaves it out].
-  Not done: the 3D Transform Handles themselves (move, scale, rotate in the 3D view).
+  The 3D Transform Handles sit over the selection's box (vectors or components), level
+  with the highest surface inside it: a cross in
+  the middle moves, white corners and black edges scale, and a rotation arrow on a stem
+  above the far edge turns it, with the 2D view's keys; the drag shows the box as it will
+  be and is applied when let go (one undo). Escape cancels a drag; let go off the material
+  (over the horizon in perspective) it changes nothing. [inf: the manual's edit box for an exact value and
+  moving the rotation centre are not offered; Move, Scale and Rotate take exact values.]
+- Drawing in the 3D view (Aspire 12 [inf: "the drawing tools are now available in the 3D
+  view", What's New in V12.0]): with a drawing tool's form open, the left button draws in the
+  3D view as it does in the 2D view (drags, clicks, Shift-click to edit, the polyline's
+  clicks, text, trim, dimensions, cross section), at the point where the pointer meets the
+  model (off it, the material's top plane). The shape being drawn shows on the model; the
+  right button still turns the view, the middle pans, the wheel zooms; snapping works as in
+  2D and the status bar adds "right-drag turns the view". Vectors are still flat 2D vectors.
+  Not offered while the job is shown wrapped round a rotary axis, while a 3D model is being
+  imported, or with a view tool on; nor before anything is in 3D (the view is empty then).
 - Import 3D Model is one page (Aspire 12 has two; Matthew asked for one): Initial
   Orientation, Model Size, the model type and Scale to fit, Position relative to Modeling
   Plane (Position, Depth Below Top, Create both sides, Discard data below zero plane), Align
@@ -183,13 +205,24 @@ say "not implemented yet".
   the model off the plane, up to the material's top. Every dragged value moves the model as
   it is dragged. [inf: Aspire's slider
   beside the picture is not drawn; Overcut Distance is not offered.]
-- Help: About, Keyboard Shortcuts, Third Party Licenses.
+- Help: About, Keyboard Shortcuts, Third Party Licenses, Check for Updates (crate
+  `crates/updater`). Asks GitHub's releases (never a mirror) for a newer stable version,
+  at startup about once a day (Options ▸ Updates turns that off) and from the menu. Update
+  Now downloads the release's file for this install (Windows .zip, Linux .tar.gz or
+  AppImage), refuses it unless it carries a minisign signature from the release key built
+  into the app (`crates/updater/release-key.pub`, its trusted comment naming the file) and
+  matches GitHub's SHA-256 checksum, swaps the program in
+  (the old one kept as `.old` until the next start), then offers Restart Now, which asks to
+  save first. Flatpak, macOS, other processors and builds from the source code are told how
+  to update by hand instead. Skip This Version quiets the startup check for that version.
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
   Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
   (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
   (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, as a tree
   of the folders in them however deep, each with how many files are in it; hidden folders
-  and links to folders are passed over. Click a folder to see what is in it and the folders
+  and links to folders are passed over. A folder is listed once: adding one inside a folder
+  already added opens it in the tree instead, adding one around folders already added
+  takes their place, and duplicates kept from before are tidied as the library loads. Click a folder to see what is in it and the folders
   in it, or All folders for everything; the one looked in is remembered. Right-click a
   folder: Open Folder, and Remove Folder for one added. Folders are read in the background
   and again every 5 s; only the rows of tiles on screen are drawn, so thousands of files
@@ -282,6 +315,21 @@ say "not implemented yet".
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- Drill Bank (Aspire 12.5's Advanced Machining Module): Machine Configuration ▸ Drill Bank
+  sets up a head of drills on an X and a Y arm (count, pitch, where the arms cross, each
+  drill's controller number and diameter, the reference drill), with a picture of it. The
+  Drill Bank Toolpath (Toolpath Operations, beside Drilling) takes the active machine's bank,
+  matches the selected circles to drills by size and position (pitch and diameter
+  tolerances), and drops as many drills per plunge as line up; holes no drill fits are named
+  with the sizes there are. Peck, retract and dwell as Drilling. Posts with
+  `SETUP_DRILL_BANK` / `FINAL_DRILL_BANK_ACTION` and either `DRILL_BANK_PATTERN` or
+  `DRILL_BANK_EXTEND_DRILL` + `DRILL_BANK_RETRACT_DRILL` write it (`[DB]`, `[DBX]`, `[DBY]`,
+  `[DL]`, `[CD]`); others refuse it, saying what is missing. Array Copy and Plate
+  Production move its plunges with it; Merged refuses it. Not done: a Cut Craft post with
+  drill bank blocks (none of the hobby controllers has one), a toolpath icon of its own (it
+  borrows Drilling's), the simulation and time estimate count every hole as its own plunge,
+  vector selection templates, projection onto the 3D model, and the bank in the Tool
+  Database (`.vtdb` `drill_bank_*` tables are not read).
 - Toolpath options: Profile ramps (smooth, zig zag, spiral; by distance or angle), leads
   (straight or circular, lead out, overcut) and tabs (2D or 3D, by number or distance); Pocket
   Offset or Raster (angle, profile pass first / last / none) with ramped plunges; 3D Roughing
@@ -337,7 +385,12 @@ say "not implemented yet".
   behind the model.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
-  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc.
+  - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Cut Craft's own Rectangle
+    from Center and Circle from Edge (the drag is the diameter).
+  - Toolbox flyouts (Cut Craft's own; Aspire shows every tool as its own icon): tools that
+    do one job different ways share a button with an arrow in its corner, showing the one
+    picked last; click the arrow, hold the button, or press Down on it for the rest
+    (`crates/app/src/flyout.rs`). Drawing tab 78 buttons to 44, Modeling 23 to 20.
   - Edit ▸ Edit Object (E) opens the tool that drew the one selected vector on it, and a
     Shift-click in a drawing tool's form edits another shape that tool drew; a change to
     the form then changes that shape. Rectangles (square, rounded or notched corners, not
@@ -526,8 +579,8 @@ say "not implemented yet".
   - Move, Rotate, Mirror, Set Size and the Align / Center tools also act on the selected
     components (picked in the 2D view or the Components tab): each is resampled onto cells
     of its own size where it lands (bilinear inside the shape), heights unchanged, fade
-    and tilt anchors carried along. Aspire's Transform handles and Set Size's Z scaling
-    are not done.
+    and tilt anchors carried along; the 3D view's Transform handles too. Set Size's Z
+    scaling is not done.
   - Replace Below (transparent or plane, optional lowering; several selected are baked
     first), Offset Model (a ball offset of the visible model into a new component, the
     originals hidden, optional clip to the zero plane), Slice Model (by thickness, from the
@@ -665,8 +718,7 @@ implemented yet" listed.)
 - Imported models: a cell over only a near-vertical side takes the height of the top beside
   it (up to 4 cells in), so steep sides leave no spikes; a wider steep band keeps its slope.
 - Lasers are not a tool type in the database (laser features are skipped by decision).
-- Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (no code
-  reference to the fluting strings was found in Aspire.exe), prism and photo V-carve
+- Guessed behaviour, marked [inf] / [unk] in `re/SPEC.md`: Fluting's Smooth curve (not described in the help), prism and photo V-carve
   geometry, texture scallop shape, sketch-line contrast rule, and the 2026-11-01 batch
   (`docs/ROADMAP.md`, section 6).
 - Not tried by hand: the 2026-11-01 batch (`docs/ROADMAP.md`, section 5) and earlier work

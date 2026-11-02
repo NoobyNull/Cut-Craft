@@ -62,8 +62,7 @@ focus: Hand test the 2026-11-01 batch, then docs/ROADMAP.md section 9
   Nest (box packing); Validator, Extend, Fillets, Dimensions, Trim, Measure, Vector Texture,
   Freehand, Curve, Vector Selector; node editing (`core::nodes`, N, node right-click menu);
   snapping (`core::snap`, F4); Draw Join Moves.
-- **New stdlib RE helpers:** `re/cfb.py` (OLE files), `re/vfont.py`, `re/dialogs.py` (every
-  DIALOG and XAML resource; dumps in `re/extracted/dialogs/`, one per tool's form).
+- **New stdlib file readers:** `re/cfb.py` (OLE files), `re/vfont.py`.
 - **Left:** see "Not built yet". Mostly big or UI-heavy: Sculpt, Distort, Transform handles,
   guides, keep-out zones, Options, document variables, machine configuration, double-sided
   jobs, sheets, true-shape nesting. Calibration against VCarve Pro under Wine still needs
@@ -187,8 +186,4 @@ The sections below this heading are from 2026-10-24 and kept for their working n
 - `superpowers:test-driven-development`: every feature and fix.
 - `superpowers:verification-before-completion`: before claiming anything done.
 - `superpowers:brainstorming`: before big new tools (text, node editing, nesting).
-- `reverse-engineer-anything` (REA): only on the local machine, where the Aspire install
-  exists; static analysis only. REA uses Ghidra 12.1.2 (`/opt/ghidra`). Its `--snapshot` keeps
-  only answers already given, not Ghidra's analysis; the analysed `Aspire.exe` is kept in the
-  permanent Ghidra project `re/extracted/ghidra/Aspire.gpr` (gitignored).
 - `ponytail`: the user's default style.

@@ -314,8 +314,11 @@ fn sheet_toolpaths(
     for t in doc.toolpaths.values().filter(of_template) {
         for sheet in 0..sheets {
             let (mut moves, mut power, mut vectors) = (vec![], vec![], vec![]);
+            // where each copy is, for a drill bank's plunges
+            let mut placed = vec![];
             for (k, &(_, at)) in spots.iter().enumerate().filter(|(_, s)| s.0 == sheet) {
                 let shift = at - bounds.min;
+                placed.push((shift, moves.len()));
                 moves.extend(t.moves.iter().map(|m| Move {
                     kind: m.kind,
                     to: m.to + DVec3::new(shift.x, shift.y, 0.0),
@@ -333,6 +336,7 @@ fn sheet_toolpaths(
                 moves,
                 power,
                 stale: false,
+                drill_bank: t.drill_bank.as_ref().map(|b| b.copied(&placed)),
                 ..t.clone()
             });
         }
@@ -571,6 +575,7 @@ mod tests {
             power: vec![],
             stale: false,
             group: None,
+            drill_bank: None,
         });
         doc.apply(&c.finish()).unwrap();
         let without = doc.clone();

@@ -1,47 +1,38 @@
-# Aspire 12.0 — clean-room behaviour spec
+# Aspire 12 — clean-room behaviour spec
 
-Static analysis of the installed Vectric Aspire 12.0.0.9 (`~/Desktop/Aspire 12.0/`). No Aspire binary was run.
-This file describes **behaviour** to reimplement. Don't copy Vectric code, icons, `.vfont` fonts, help text or `.pp`
-files into this repo. Write our own implementations from this description.
+What Vectric Aspire does, written down so Cut Craft can reimplement it. This file describes **behaviour** only.
+Don't copy Vectric code, icons, `.vfont` fonts, help text or `.pp` files into this repo. Write our own
+implementations from this description.
 
-Confidence tags: **[obs]** read directly from a shipped file · **[dec]** read from `Aspire.exe`'s data or decompiled code (Ghidra, `re/ghidra_scripts/`) · **[inf]** inferred from several observations · **[unk]** not established.
+Confidence tags: **[obs]** seen in hands-on use of the Aspire trial (or in a file the trial saved) · **[inf]** inferred
+from Vectric's public documentation (help, guides, tutorial videos) · **[check]** a detail still to be confirmed in the
+trial or the docs before relying on it · **[unk]** not established. A section marked `(help: …)` names the help topic
+it comes from. Older sections tagged [obs] whose only source is the help should be read as [inf] until checked in
+the trial.
 
 ## Sources
 
-| Source | What it gave | How |
-|---|---|---|
-| `Language/ENU/x64/Resources_ENU.dll` | 39 menus, 1 accelerator table (64 keys), 20 toolbars, 885 strings, 273 dialogs, 107 `RT_XAML` | REA `inspect_pe_resources` (Evidence `ev_cf7650e8ff7c8f62e4c5ef0c002cedfe5839fbba3f5973766872a107771200ca`) → `re/peres.py` decodes payloads |
-| `Language/Lang/*/LC_MESSAGES/*.mo` | English UI strings split into 35 subsystem catalogs | `re/mo.py` (stdlib gettext) |
-| `Language/ENU/Help/{form,page}/*/index.html` | 241 help topics = full feature list and behaviour | `re/help2txt.py` |
-| `x64/`, `Language/ENU/Help/third-party/` | dependency and architecture map | file inventory |
-| `x64/Aspire.exe` | the post-processor vocabulary table, unit labels, date formats, form names (MFC runtime-class records). **Its code section is encrypted on disk** (7.99 bits/byte; most of the decompile is Ghidra decoding encrypted bytes), so only data is read statically. | Ghidra 12.1.2 project `re/extracted/ghidra/` (gitignored, about 2 h to analyse); `re/ghidra_scripts/` decompiles one function, finds a string's users, or dumps everything (`dump-decompiled`, about 50 min on 12 processes) |
+Only two kinds of source are allowed:
 
-Regenerate the raw dumps:
+| Source | What it gives |
+|---|---|
+| Vectric's public documentation: the help (online, and as installed with the trial; `re/help2txt.py` turns it into text), the getting-started and reference guides, the post-processor editing guide, and Vectric's tutorial videos | features, forms, options, limits and error messages |
+| Hands-on use of the legitimate Aspire trial | menus, right-click menus, form layouts, keyboard shortcuts, and job files the trial saved (read with `re/crv3d.py`) |
+
+Never decompile, disassemble or otherwise analyse Aspire's program files or resource DLLs, and never extract
+artwork or strings from them. Vendor tool databases (`.vtdb`) published by tool makers are read as files.
+
 ```bash
-python3 -I re/mo.py "$HOME/Desktop/Aspire 12.0/Language/Lang/de_DE/LC_MESSAGES" /tmp/mo
-python3 -I re/help2txt.py "$HOME/Desktop/Aspire 12.0/Language/ENU/Help" /tmp/help
-# peres.py needs the JSON from REA inspect_pe_resources on Resources_ENU.dll:
-python3 -I re/peres.py rea.json "$HOME/Desktop/Aspire 12.0/Language/ENU/x64/Resources_ENU.dll" /tmp/res
-# every DIALOG(EX) as one control per line, and the RT_XAML forms (stdlib PE walker):
-python3 -I re/dialogs.py "$HOME/Desktop/Aspire 12.0/Language/ENU/x64/Resources_ENU.dll" re/extracted/dialogs
-# a .vfont's streams and glyph sheet (re/cfb.py reads any OLE compound file):
-python3 -I re/vfont.py "$HOME/Desktop/Aspire 12.0/Fonts/Helvetica 1L.vfont" re/extracted/vfont/helv.svg
+python3 -I re/help2txt.py "<Aspire install>/Language/ENU/Help" re/extracted/help
 ```
 
-## How the original is built (reference only)
+## Scripting
 
-- **[obs]** Toolchain (from `Aspire.exe`'s PE header, Rich header and debug record): Microsoft
-  Visual C++ 2019, toolset 14.29 (16.11), C++ with MFC 14 (`mfc140u.dll`, `MSVCP140`,
-  `VCRUNTIME140`), x64, linked 2024-07-09 on a TeamCity agent from an "AspireUnified" tree
-  (`Vectric.pdb`); one static library inside dates from the VS 2008 SP1 toolset.
-- **[obs]** UI: MFC + Codejock Xtreme Toolkit Pro (`XTP_*` resource names) and embedded XAML for newer forms. The same resource DLL is shared with VCarve Pro / ShopBot builds, and product edition decides which menu items appear.
-- **[obs]** 3D: OpenSceneGraph (`osg*.dll`), with a Mesa llvmpipe software-OpenGL fallback (`x64/swrndr/opengl32.dll`). `VectricGLDetector.exe` probes the GPU.
-- **[obs]** I/O libraries: ODA (DXF/DWG; `IoOda`, `Oda` catalogs), pstill (EPS/AI/PDF; `IoPScript`), GraphicsMagick (bitmaps; `IoMagick`), OpenNURBS (`.3dm`), SketchUp SDK (`.skp`).
-- **[obs]** Scripting: Lua + LuaBind, used for Gadgets and Lua-based post-processors (`Lua/ppVariables.lua`).
-- **[obs]** Cloud and support: curl/OpenSSL/JsonCpp (clipart library, machine database, licensing, makerspace accounts) and BugSplat crash reporting.
-- **[inf]** Subsystem split, from `.mo` catalog names: `App`/`AppCmd` commands, `Io*` file I/O, `Vd` vector geometry, `Cm` layers, `Tri*` triangle meshes, `Mc*` machining and post-processing, `Nest` nesting, `Sd` two-sided jobs, `V3d` 3D view, `UiP`/`VfUi`/`Uvs*` UI forms.
+- Aspire's gadgets are Lua scripts (help: Gadgets).
+- **Deliberate difference:** CutCraft gadgets are Lua 5.4 too, but call CutCraft's own commands by id (`cutcraft.run("draw_circle", {...})`) instead of Vectric's gadget API, run sandboxed (no files, programs or network), and each run is one Undo step. Aspire gadgets do not run unchanged.
+- Gadgets built into Cut Craft are signed with the app. A gadget from the user's My Gadgets folder is unsigned: before it first runs each session, Cut Craft warns that it is not responsible for what the gadget does, and the user picks Run Gadget or Cancel. Only gadgets from Cut Craft's own builds count as signed; any other gadget, from the folder or downloaded, is allowed after the same warning.
 
-Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every dependency is still open below.
+Our equivalents so far: wgpu for the 3D view, winit for windows.
 
 ---
 
@@ -60,30 +51,30 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Help prompts:** an on-screen panel that follows the active tool, with a `?` on every form linking to its help topic.
 - **[unk]** Status bar contents: no evidence found yet.
 
-### Startup sequence [obs] (help: how-to-get-started, create-a-new-file, Job Setup Single; MENU 128; screenshots)
+### Startup sequence [obs] (help: how-to-get-started, create-a-new-file, Job Setup Single; trial screenshots)
 - **Start page, no job open:** the left panel holds *Startup Tasks*: Create a new file, New file from template, Open an existing file. Below them is *Recently opened files*, a rolling list of the last 4 jobs, empty on a first run. The rest of the panel is vendor links (tutorial videos, online resources, social media, clipart shop), which are out of scope. The centre shows the product splash. There are no Drawing or Toolpaths panels, and no 2D/3D view.
-- **No-job menu (MENU 128):** File (New, New from template, Open, Open Application Data Folder, Recent files, Close, Exit), Edit (Options only), Machine (as with a job), Toolpaths (Materials, Tool Database), Gadgets, Help. Model and View are absent.
+- **No-job menu:** File (New, New from template, Open, Open Application Data Folder, Recent files, Close, Exit), Edit (Options only), Machine (as with a job), Toolpaths (Materials, Tool Database), Gadgets, Help. Model and View are absent.
 - **Create a new file → Job Setup:** the form fills the left panel, with OK and Cancel at the bottom. The 2D view (rulers, zoom buttons) appears beside it, and the full menu bar is back. Sections, top down: Job Type, Job Size + Units, Z Zero Position, XY Datum Position (+ Use Offset X/Y), Modeling Resolution, Material Settings.
 - **OK** creates the new empty job: a grey rectangle in the 2D view, with dotted lines through X0 and Y0. **[inf]** Cancel abandons the new job and goes back to the start page; File ▸ Close closes the job and goes back to the start page too.
 - **Open an existing file** takes native jobs and importable 2D vector files (DXF, EPS, AI, PDF). Opening a 2D file starts a job at the drawing's size (see Import).
 
-### Right-click menus [obs] (popup MENU resources in `Resources_ENU.dll`)
+### Right-click menus [check] (to re-confirm item by item in the trial)
 - **Families that repeat across kinds of item:**
-  - **Show / Hide:** Show This, Show Only This, Show All But This, Show All; Hide This, Hide All. On layers (967), toolpaths (968, 669; toolpaths also have Show All With This Tool), components (613) and levels (1046).
+  - **Show / Hide:** Show This, Show Only This, Show All But This, Show All; Hide This, Hide All. On layers, toolpaths ( 669; toolpaths also have Show All With This Tool), components and levels.
   - **Delete:** This, Visible, Invisible, Empty, All. On layers and toolpaths.
-  - **Combine Mode:** Add, Subtract, Merge, Low, Multiply. On a component (613), several components (615), the active component (616), a component in the 3D view (619) and levels (1046).
+  - **Combine Mode:** Add, Subtract, Merge, Low, Multiply. On a component, several components, the active component, a component in the 3D view and levels.
   - **Rename, Properties:** on every kind.
-- **Layers (967, 982):** Activate, Show / Hide, Lock, Unlock, Insert New Layer, Delete (This, Visible, Invisible, Empty), Rename, Merge Visible, Select Layer Vectors. With no layer under the pointer: New Layer.
-- **Toolpaths (968):** Show / Hide, Activate Sheet, Edit, Rename, Duplicate, Recalculate (This, Visible, All), Create an Empty Group, Group Visible, Ungroup, Delete (This, All Invisible, All Visible, All).
-- **Components (613, 614, 615):**
+- **Layers:** Activate, Show / Hide, Lock, Unlock, Insert New Layer, Delete (This, Visible, Invisible, Empty), Rename, Merge Visible, Select Layer Vectors. With no layer under the pointer: New Layer.
+- **Toolpaths:** Show / Hide, Activate Sheet, Edit, Rename, Duplicate, Recalculate (This, Visible, All), Create an Empty Group, Group Visible, Ungroup, Delete (This, All Invisible, All Visible, All).
+- **Components:**
   - On a component: Combine Mode, 2D preview order, Export as 3D Clipart, Save as Sculpting Brush, Re-Import, Copy, Duplicate, Copy / Move to other side, Ungroup, Delete, Rename, Show / Hide, Properties.
   - With no component under the pointer: Paste, Import, Show All, Hide All.
-- **Levels (1046, 1048):** Combine Mode, Show / Hide, Select Components, Clipping, Mirror Mode, Wrapping, Insert New Level, Delete Level, Rename Level, Export as 3D Clipart.
-- **2D selection (318):** Undo, Redo, Cut, Copy, Paste, Delete, Move to Front / Back, Ungroup Component, Object Properties.
-- **Node editing (142, 317, 635, 636, 245):** span to Line / Bezier / Arc, insert / delete / smooth point, cut vector, make start point, mirror, close or join with a line / curve / moved end points, reverse direction, exit node editing.
-- **Also:** sheets (5030), post-processor list (5093: make default), clipart library (1050).
+- **Levels:** Combine Mode, Show / Hide, Select Components, Clipping, Mirror Mode, Wrapping, Insert New Level, Delete Level, Rename Level, Export as 3D Clipart.
+- **2D selection:** Undo, Redo, Cut, Copy, Paste, Delete, Move to Front / Back, Ungroup Component, Object Properties.
+- **Node editing:** span to Line / Bezier / Arc, insert / delete / smooth point, cut vector, make start point, mirror, close or join with a line / curve / moved end points, reverse direction, exit node editing.
+- **Also:** sheets, post-processor list (make default), clipart library.
 
-### Menus [obs] (resource MENU 129 = job open, 128 = no job)
+### Menus [check] (job open; the no-job menu is under Startup sequence; to re-confirm in the trial)
 - **File:** New (Ctrl+N), New from template, Open (Ctrl+O), Close, Save (Ctrl+S), Save As, Save As Template, Save To Version ▸ 11.0, Increment and Save (Ctrl+Alt+S), Print / Preview / Setup.
   - Import ▸ Vectors/Bitmap (Ctrl+I), Component/3D Model, PhotoVCarve/Machinist/Cut3D toolpaths.
   - Export ▸ EPS, DXF, AI, SVG, PDF.
@@ -106,6 +97,7 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   - Draw Origin / Modeling Plane / Material Block / Vectors in 3D / Keep-Out Zones.
   - Auto-Wrapping, Colour Shaded, Shaded Background, Light Follows Viewer, Shadow Shading, Save Shaded Image, Tile H/V, Cascade.
 - **Help:** contents, shortcuts, tutorials, licence, updates, about. Licensing and vendor web links are out of scope.
+  - **Check for Updates [inf]** (Aspire checks Vectric's own servers and has the user download and run a new installer). Cut Craft's differs on purpose, for a novice who will not go looking for a download page: it checks GitHub's releases by itself at startup (about once a day, off in Options ▸ Updates), only says something when there is a newer version, and installs in place after one click, checking the download's minisign signature (the release key is built in; releases are signed in CI by `scripts/sign-release`) and GitHub's SHA-256 checksum first. Nothing downloads or restarts without the user pressing Update Now and Restart Now; restarting goes through the usual "Save changes?" question.
 
 ---
 
@@ -121,8 +113,8 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 | `.v3m` | Vectric 3D clipart model (Vector Art 3D) |
 | `.pvc` / `.v3d` | PhotoVCarve / Cut3D toolpath files (import only) |
 
-- **[obs]** The format is versioned. The loader rejects "written by an unsupported later version", can save down to 11.0, and checks trial-version and machine binding (`Io.mo`).
-- **[unk]** Internal byte layout. There are no sample files in the install, and reversing it would mean decompiling `Aspire.exe` (80 MB).
+- **[obs]** The format is versioned. The loader rejects "written by an unsupported later version", can save down to 11.0, and checks trial-version and machine binding (its error messages).
+- **[unk]** The full byte layout. What is known comes from jobs the trial saved (see Job files below).
 - **Recommendation:** use our own serde/JSON job format (serde_json is already a dependency) and treat `.crv3d` import as a much later stretch goal.
 
 ### Import [obs]
@@ -169,6 +161,15 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   3. A form offers the same values as exact typed input. Rectangle corners can be square, external-radius or internal-radius, with draggable green radius handles.
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
+- **Toolbox flyouts** (Cut Craft's own choice, not Aspire's) [inf]: Aspire shows each of these
+  tools as an icon of its own; Cut Craft groups tools that do one job different ways behind
+  one button so a beginner faces fewer, clearer buttons (Drawing tab 78 buttons to 44). The
+  button shows the tool picked from it last (kept in the options); a press held for 0.4 s, a
+  click on the arrow in its bottom-right corner, or Down with the button focused opens the
+  others, each by icon and name. Find Tool, the Rail layout and Favourites still name every
+  tool on its own. The groups are `FLYOUTS` in `crates/app/src/flyout.rs`. Two variants are
+  Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle from
+  Edge (the drag is the diameter).
 
 ### Create Fillets [obs] (help: Create Fillets, V12.5; Aspire 12.5 trial, 2026-10-25)
 - Fillets corners where two **straight** spans meet; corners touching arcs or curves cannot be filleted. The form: **Fillet / Tool Radius** and a type: **Normal** (a rounded corner of the radius), **Dog-Bone** (a relief circle the radius whose edge touches the sharp corner: for slots clearly wider than the cutter), **T-Bone** (the relief circle pushed sideways into one side: for slots about as wide as the cutter; the trial put it in the longer side when the corner itself was clicked) and **Plasma / Drag Knife** (the two sides run on past the corner and join in a loop outside it, so the cutter turns there).
@@ -197,11 +198,12 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
 - **Create Shape** (from closed vectors): Round, Angled, Flat, Custom and Smooth profiles. The other creation tools are in the Model menu: Two Rail Sweep, Extrude & Weave, Turn & Spin, Texture Area, Zero Plane and From Bitmap.
 - **Modify:** Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Add Draft, Scale Z Height, Replace Below, Split, Bake, Segment 3D Model.
+- **Relief from Photo** (Cut Craft only, not in Aspire): Aspire's From Bitmap reads grey as height, so it works only on a depth map made elsewhere. Cut Craft estimates a photo's depth with an optional add-on (Depth Anything V2 Small, run on the CPU, Apache 2.0 weights; the larger models are non-commercial and are not offered). It then cuts away the backdrop, which it finds from the photo's border so light and dark backdrops both work, and lifts the subject clear of it. It adds the photo's fine shading back as texture and smooths speckle while keeping edges (Perona-Malik). Settings: Background cut-off, Fine detail, Smoothness, Max height, Lift. This is a deliberate addition for novices: one tool goes from photo to relief, and STL comes from Export as STL.
 
 ### Clipart tab (Cut Craft: Library) [inf] (help: Clipart Tab)
 - **[inf]** Aspire: the Clipart tab browses clipart libraries by folder, each piece shown as a thumbnail; a double-click imports one, and a thumbnail dragged onto the 2D or 3D view drops it there. Vectric's own `.3dclip` / `.v3m` files carry their previews.
 - **[inf]** Cut Craft: a library of the user's own folders, shown as a tree of the folders in them (however deep; hidden folders and links to folders passed over), each with how many files are in it. Clicking a folder shows what is in it and every folder in it; All folders shows everything. Pictures (PNG, JPEG, BMP) show as themselves, shrunk once and kept in the preview cache like a model's preview, so a folder of big photos doesn't fill the memory; GIF and SVG are drawn as they are. A 3D model (STL, OBJ, `.ccclip`) shows a preview: a picture beside it with the same name (`mydesign.png` or `.jpg` / `.jpeg` / `.bmp` for `mydesign.stl`, any letter case) if there is one, else the model seen from the side with the largest outline (from above, unless it was saved standing up: then face on, as a statue is from the front; of that side and its opposite, the front (from above, or from -Y) unless the other has far more relief, so a relief's flat back isn't shown), lit from the top left and with shallow carvings deepened so their detail shows. Previews are made on background threads, only for tiles on screen (newest first), and kept as PNGs in the cache folder (`%LOCALAPPDATA%\cut-craft\clipart-previews` on Windows, `~/Library/Caches/cut-craft/clipart-previews` on macOS, else `$XDG_CACHE_HOME` or `~/.cache`), named from the file's path, size and time changed, so a model is rendered once and again only when it changes. A model that can't be read keeps a "3D" tile, and its tooltip says why.
-- **Deliberate differences, for novices:** a model's picture beside it goes with it and is not a tile of its own (one tile per design). Vectric's `.3dclip` / `.v3m` are encrypted, so they are not shown, but the tab counts them and says why, and how to bring them across (export as STL from Aspire). The tab is called Library (it holds the user's own files, not bought clipart). Tiles are picked like files in a file manager (click, Ctrl+click, Shift+click) and a right-click menu acts on all picked: Add to Project, Add to Level, Locate, Add / Remove Tag, Delete from Disk (confirmed; for good). Tags live in the config folder, never in the files. A Show filter (Everything, 3D models, 2D drawings, Pictures, Depth maps) and a Search box (names and tags) narrow the folder. Folders are read in the background, again every 5 s, so files that vanish drop out; a missing folder says so. Only the rows of tiles on screen are drawn, for folders of thousands. Adding and removing folders stays in the tab (not Settings), where a novice looks for them. Not built: Aspire's thumbnail sizes, a preview for vector files (DXF, SVG drawings show their type).
+- **Deliberate differences, for novices:** a model's picture beside it goes with it and is not a tile of its own (one tile per design). Vectric's `.3dclip` / `.v3m` are encrypted, so they are not shown, but the tab counts them and says why, and how to bring them across (export as STL from Aspire). The tab is called Library (it holds the user's own files, not bought clipart). Tiles are picked like files in a file manager (click, Ctrl+click, Shift+click) and a right-click menu acts on all picked: Add to Project, Add to Level, Locate, Add / Remove Tag, Delete from Disk (confirmed; for good). Tags live in the config folder, never in the files. A Show filter (Everything, 3D models, 2D drawings, Pictures, Depth maps) and a Search box (names and tags) narrow the folder. Folders are read in the background, again every 5 s, so files that vanish drop out; a missing folder says so. Only the rows of tiles on screen are drawn, for folders of thousands. Adding and removing folders stays in the tab (not Settings), where a novice looks for them. No folder is listed twice: one added inside another opens there, one added around others replaces them, and old duplicates are tidied on load. Not built: Aspire's thumbnail sizes, a preview for vector files (DXF, SVG drawings show their type).
 
 ### Toolpaths (beyond P4, listed for completeness) [obs]
 - **Strategies:** Profile, Pocket, Drilling, V-Carve, Quick Engrave (Ctrl+Q), Inlay / V-Carve Inlay, Fluting, Prism, Chamfer, Keyhole, Thread Milling, Drag Knife, Moulding/Extruded, Texture, Rough and Finish Machining (3D), Rounding, PhotoVCarve, Sketch Carving, Laser Cut/Fill and Laser Picture, Array Copy, Merged.
@@ -211,18 +213,20 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Tool types:** V-Bit, Engraving, Tapered Ball Nose, Ball Nose, End Mill, Radiused End Mill (a toroidal or bull-nose cutter: flat bottom, rounded corners of a tip radius), Form Cutters (profile imported from vectors), Diamond Drag, Drills.
 - **Geometry vs cutting data:** a tool's geometry (diameter, tip radius, angle…) is one record; its cutting data (pass depth, stepover, spindle speed, feed rate, plunge rate) is kept **per machine and per material**, and the active machine / material picks which set a toolpath gets. The tool number is per machine only. Copying a tool copies its geometry without cutting data.
 - **Fields:** Number of Flutes; Pass Depth (sets the number of Z passes, e.g. 25.4 deep at 6.35 per pass = 4 passes); Stepover (stepovers over 50 % add "tail" moves in corners of offset strategies; V-bits have Final Pass and Clearance Pass stepovers instead); Spindle Speed in rpm; Feed Rate and Plunge Rate (plunge also used for ramping); Maximum Burn Rate (lasers, simulation only); Notes.
-- **Rate units** are chosen per tool: distance per second or per minute. **[dec]** The labels offered are mm/sec, mm/min, m/min, inches/sec, inches/min and feet/min.
+- **Cut Craft, a deliberate difference:** every tool gets two stepovers, not only V-bits: a **Clearing Stepover** (pockets, flat bottoms, inlay clearing, 3D roughing, moulding clearance) and a **Finishing Stepover** (3D finishing, V-carved surfaces, chamfers, roundings, moulding profiles). A beginner's ball nose then roughs at 40 % and finishes at 10 % without retyping the stepover between toolpaths. Tools saved with one stepover finish with it too (an unset finishing stepover follows the clearing one). Both are kept per material.
+- **Cut Craft, a deliberate difference:** loading a tool into a tool changer slot (Tool Database's Tool Changer section, or Machine ▸ Tool Changer…) makes the slot its tool number, and the number field is locked while it is loaded, so the number shown always matches the holder. A tool taken out keeps its last number until another tool is loaded in that slot; then it has none (0), so no two tools share a number. The number is one per tool, not per machine (Aspire keeps it per machine): with two tool changers, the active machine's slots win.
+- **Rate units** are chosen per tool: distance per second or per minute. **[check]** The labels offered are mm/sec, mm/min, m/min, inches/sec, inches/min and feet/min.
 - **Chip Load** is shown, calculated from flutes, spindle speed and feed rate (feed per tooth: feed ÷ (rpm × flutes)), to compare with the maker's recommendation.
 - **Radiused End Mill [obs]** has a Tip Radius (its name template offers `{Tip Radius}` and `{Flat Diameter}`). **[inf]** The shape is a torus: flat across `diameter − 2 × tip radius`, then a quarter circle of the tip radius up to the full diameter, so its edge rises `tip − √(tip² − d²)` at `d` past the flat.
 
-### Profile, Pocket, 3D Roughing and 3D Finishing options [obs] (help: uiProfileMachineForm, uiPocketMachineForm, Toolpath Tabs, Rough / Finish Machining Toolpath; dialogs 379, 381, 382)
-- **Profile tabs** (dialog 379: Add tabs to toolpath, Length, Thickness, Create 3D tabs, Edit Tabs): **2D tabs** stop at each tab's start, lift by the thickness, cross and plunge down the other side; **3D tabs** are triangular in section, ramping up to the thickness and down without stopping. Thickness is measured up from the bottom of the cut. The Tabs dialog places them automatically at a **Constant number** or **Constant distance**, optionally the first at the start point or **avoiding corners and curved regions**, or by clicking (add, delete, drag).
-- **Profile ramps** (dialog 381: Add ramps, Smooth / Zig Zag / Spiral, Distance / Angle, Ramp on Lead In): applied at the start of every pass, at the plunge rate. Smooth ramps over a distance or at an angle; Zig Zag goes back and forth by the distance (Angle: down at the angle, zig length no more than the distance — settings key `rampingRampingAngleMaxDistance`); Spiral (closed paths without leads only) goes down a pass depth per loop round the whole path. With a lead in, Ramp on Lead In keeps the ramp on the lead.
-- **Profile leads** (dialog 382: Add leads, Straight Line Lead with Angle, Circular Lead with Radius, Lead Length, Do lead out, Overcut Distance): a straight lead meets the edge at the angle; a circular one curves on tangent to it (angle 0.1–90°, the radius and angle give the length). Lead out leaves the same way; the overcut runs past the start first.
+### Profile, Pocket, 3D Roughing and 3D Finishing options [obs] (help: uiProfileMachineForm, uiPocketMachineForm, Toolpath Tabs, Rough / Finish Machining Toolpath)
+- **Profile tabs** (Add tabs to toolpath, Length, Thickness, Create 3D tabs, Edit Tabs): **2D tabs** stop at each tab's start, lift by the thickness, cross and plunge down the other side; **3D tabs** are triangular in section, ramping up to the thickness and down without stopping. Thickness is measured up from the bottom of the cut. The Tabs dialog places them automatically at a **Constant number** or **Constant distance**, optionally the first at the start point or **avoiding corners and curved regions**, or by clicking (add, delete, drag).
+- **Profile ramps** (Add ramps, Smooth / Zig Zag / Spiral, Distance / Angle, Ramp on Lead In): applied at the start of every pass, at the plunge rate. Smooth ramps over a distance or at an angle; Zig Zag goes back and forth by the distance (Angle: down at the angle, zig length no more than the distance — settings key `rampingRampingAngleMaxDistance`); Spiral (closed paths without leads only) goes down a pass depth per loop round the whole path. With a lead in, Ramp on Lead In keeps the ramp on the lead.
+- **Profile leads** (Add leads, Straight Line Lead with Angle, Circular Lead with Radius, Lead Length, Do lead out, Overcut Distance): a straight lead meets the edge at the angle; a circular one curves on tangent to it (angle 0.1–90°, the radius and angle give the length). Lead out leaves the same way; the overcut runs past the start first.
 - **Pocket:** **Offset** (rings, climb or conventional; tails in corners over 50 % stepover) or **Raster** (Raster Angle 0–90°, a **Profile Pass** First / Last / None, Pocket Allowance), and **Ramp Plunge Moves** over a distance.
 - **3D Roughing:** **Machining Limit Boundary** Model (all components' outline) / Material / Selected Vector(s) / Selected Level, plus a **Boundary Offset** (the tool tip, not its side, stays inside); Machining Allowance; **Z Level** (pocket-like levels round the model, Profile First / Last / None, Order **Level by level** or **Depth-first**: each separate region all the way down before the next) or **3D Raster** (over the whole model; more even skin, slower when deep); Raster direction along X or Y, Reverse step direction, Avoid machined areas; Ramp Plunge Moves.
 - **3D Finishing:** the same Machining Limit Boundary and offset; **Offset** or **Raster** (Raster Angle 0–90°) area strategy; Stepover Retract (offset only).
-- **[unk]** Defaults (tab size and count, ramp distance and angle, lead length, angle and radius) are not in the dialogs; the settings keys (`rampingRampingDistance`, `rampingRampingAngle`, `_ppdTabLength`, `_mcldLeadLength`) are in `Aspire.exe` without values. Cut Craft uses a 10 mm ramp at 10° and 5 mm leads at 45° or radius 5. Tabs default to a rule of thumb from the user: as thick as the tool's pass depth (at most half the cut depth) and twice as long as thick (a 1/4" bit in 1/4" passes: 1/2" × 1/4"), spaced automatically about every 150 mm, at least three a path and no more than a third of the path in tabs.
+- **[unk]** Defaults (tab size and count, ramp distance and angle, lead length, angle and radius) are not given in the help. Cut Craft uses a 10 mm ramp at 10° and 5 mm leads at 45° or radius 5. Tabs default to a rule of thumb from the user: as thick as the tool's pass depth (at most half the cut depth) and twice as long as thick (a 1/4" bit in 1/4" passes: 1/2" × 1/4"), spaced automatically about every 150 mm, at least three a path and no more than a third of the path in tabs.
 - **[inf]** Cut Craft: tab length is the material left, so the toolpath lifts over the length plus the tool's diameter on the centre line. Tabs go evenly from half a spacing in, from the start point, or moved up to half a spacing to a stretch turning under 5° (avoid corners); with Placed spacing, a click on a selected vector in the 2D view adds a tab there and a click on one removes it (the points are kept in the toolpath's settings, each tab on the path nearest it). Leads come from the waste side (outside an outside profile, inside an inside one, left of an open or On path) and ramps then run down the lead; Pocket's ramps and 3D Roughing's are zig zags from the level above. Climb runs clockwise round a part and anticlockwise round a hole or pocket (a spindle turning clockwise). Z Level's profile pass follows the traced edge of each level's area; Avoid Machined Areas leaves out points above the level before (keeping the move up to them); Reverse step direction reverses the order of the lines. Neighbouring lines and rings (on one level, for roughing) are joined at depth when the move between them stays out of the model, lifted by the Stepover Retract between offset finishing rings. Selected Level takes a level by name. Not yet: tabs dragged along a vector; Profile's order, start points and sharp corners are below (2026-10-27).
 
 ### 3D Finishing: several tools (rest machining) [obs] (help: Finish Machining Toolpath)
@@ -231,10 +235,10 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Boundary Offset**: every unmachined area is grown by this before it is machined; small values give many small areas, large values fewer, larger ones.
 - Finishing is always one pass at full depth (it ignores pass depth); the usual tool is a ball nose with an 8–12 % stepover.
 
-### Fluting [obs] (help: Fluting Toolpath; `Aspire.exe` strings)
+### Fluting [obs] (help: Fluting Toolpath)
 - Cuts along each selected vector from its start point. **Start Depth** is where it begins (0 at the surface, or a pocket floor); **Flute Depth** is added below it.
 - **Flute Type:** ramp over the complete length (start depth at the start → full depth at the end); ramp at start (then full depth to the end); ramp at start and end.
-- **Ramp Length** is capped at the longest possible ramp (the vector's length, or half of it for start and end). **Ramp %** is a percentage of that longest ramp; **[dec]** it must be greater than 0 and less than 100 ("Ramp % is invalid").
+- **Ramp Length** is capped at the longest possible ramp (the vector's length, or half of it for start and end). **Ramp %** is a percentage of that longest ramp; **[check]** it must be greater than 0 and less than 100 ("Ramp % is invalid").
 - **Ramp Type:** Linear, or Smooth, which curves and transitions smoothly into full depth. **[unk]** the curve itself: no code reference to the fluting strings was found (no LEA or pointer to them); Cut Craft uses a quarter sine, level at full depth.
 - **[unk]** whether it cuts in several passes; Cut Craft cuts one pass. Project onto 3D Model is not yet done.
 
@@ -257,7 +261,7 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **[inf]** Cut Craft: each scallop is a half sine; a Seed makes the random pattern repeatable so it recalculates the same. Nothing selected textures the whole material.
 - **Load… / Save…** [obs: the shipped `VectorTextures/*.vtexture` files]: a texture's settings as a text file: the line `Vectric Vector Texture Definition`, then `Version: 1`, `Type: 1`, `Units: 1`, `ToolRadius: r`, and `Length`, `Depth`, `Stepover`, `Overlap`, `Angle`, each a value and a second number (Length and Depth: the max and the min %; Overlap: the max as a fraction of the max length and the variation %). **[unk]** what Type, Units and the second numbers of Stepover and Angle mean; both shipped files hold millimetres. Cut Craft reads and writes the same file (lengths in millimetres) and keeps them in its textures folder.
 
-### Quick Engrave [obs] (help: Quick Engrave; dialog strings in `Resources_ENU.dll`)
+### Quick Engrave [obs] (help: Quick Engrave)
 - Ctrl+Q. Depth to engrave (a diamond drag tool uses a Pressure instead, its preview depth from its angle and line width). Stepover is set on the form, not from the tool database.
 - Strategy: **Outline** (the tip runs on the lines) or **Fill**, with the patterns **Offset, Hatch, Cross Hatch**. **Use Nose Cone** (the cutter sticks out of a sprung cone by the depth; the preview uses the depth as given). **Number of Passes** runs the pattern several times. Immediate Output saves or sends the toolpath from the form; quick engrave toolpaths cannot be output with other strategies. **[inf]** Cut Craft's Immediate Output: a post-processor, Add side to toolpath name (two-sided jobs) and Save Toolpath Now…, which saves the quick engrave toolpath calculated last (the one being edited) through Save Toolpaths' checks and file dialog. Not built: Output Direct to Machine, and the rule against saving quick engraving with other strategies.
 - **[inf]** Cut Craft: hatch lines run along X, cross hatch adds Y; a fill also runs the outline. Diamond drag tools, nose cone and immediate output are not done.
@@ -348,6 +352,9 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - Click selects. **Shift+click** toggles an object in or out of the selection.
 - A drag **left→right** selects objects *fully inside* the box. A drag **right→left** selects objects *touching* it.
 - Ctrl+A selects all vectors. Esc or a click on empty background deselects.
+- **Smart part selection [inf]** (help: What's New in Aspire V12.5): "Select all vectors internal to a selected boundary using the right click context menu in both 2D and 3D view", so complete parts can be picked "without requiring manual grouping first".
+  - **[inf]** Cut Craft: right-click ▸ **Select Vectors Inside** (also Edit ▸ Selection) keeps the selection and adds every vector lying wholly inside a selected closed shape; with no closed shape selected it says to select one first. 2D view only so far.
+  - **[inf]** Cut Craft, a deliberate difference: a plain **click inside a closed shape** (away from any line, picture or component) also picks the part: the smallest closed shape round the click plus everything wholly inside it (its holes, open vectors such as grooves, and islands in its holes). A novice clicks inside a shape to pick it on day one and would not find a menu item. Clicking inside a hole picks the hole and what is in it; Shift-click adds the part, or takes it away when it is all selected already. Overlapping shapes are never each other's holes (a closed shape must be smaller and wholly inside). Lines, pictures and components under the click still win, so nothing that was pickable before stops being so.
 - Selected vectors draw as **dotted magenta**; groups and text draw as solid magenta.
 - **Click an already-selected object again** to show the transform handles:
   - **Centre handle:** move. Alt restricts the move to one axis. Clicking it again switches to the rotation centre, which can be dragged.
@@ -355,6 +362,14 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   - **Edge handles:** scale along one axis. Shift keeps it proportional.
   - **Black corner handles:** rotate. Alt snaps to 15° steps.
   - **3D view differences:** the edge handles are black, and a rotation arrow sits on top.
+  - **Cut Craft differs, deliberately:** one rule for the keys on every handle, 2D and 3D:
+    Shift or Ctrl scales in proportion, moves along one axis, and snaps rotation (Shift to
+    5.625°, Ctrl to 1°); Alt scales about the centre. The status bar names the keys over
+    each handle. Aspire's Alt-for-15° and per-handle key meanings are harder to learn.
+  - **Cut Craft's 3D handles** sit level with the highest surface inside the selection (on
+    top of a raised component, not under it) inside a dashed box; they work on vectors
+    as well as components; Escape cancels a drag; letting go over the horizon changes
+    nothing. [inf: where Aspire draws them on a raised component is not confirmed.]
   - Grabbing any handle focuses an **edit box** where an exact value can be typed, then Enter.
 - **Node editing:** N toggles it on and off.
   - Drag nodes, Bezier control points or spans. Shift / box selection picks several nodes.
@@ -378,7 +393,7 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
 - **Smart snapping:** hovering "wakes" nodes and vectors, and the most recent few take priority (with a cap on how many). It draws dashed snap lines for bounding boxes and centres, horizontal and vertical lines through nodes, tangents, perpendiculars to tangents, lines connecting two woken nodes (and their midpoint), the span geometry itself, angle constraints, and job edge and centre lines.
 - **Hold Shift** to turn snapping off temporarily.
 
-### Keyboard shortcuts [obs] (accelerator table; the 3 debug-only Ctrl+Alt+Shift entries are left out)
+### Keyboard shortcuts [check] (help: keyboard shortcuts; to re-confirm in the trial)
 | Key | Command | Key | Command |
 |---|---|---|---|
 | Ctrl+N / O / S | New / Open / Save | Ctrl+Alt+S | Increment and save |
@@ -419,32 +434,15 @@ A plain-text, line-based format. Supporting it lets users reuse the `.pp` file f
   - INITIAL_RAPID_MOVE, RAPID_MOVE, FIRST_FEED_MOVE, FEED_MOVE, FIRST_PLUNGE_MOVE, PLUNGE_MOVE, RETRACT_MOVE, DWELL_MOVE.
   - FIRST_CW_ARC_MOVE, CW_ARC_MOVE, FIRST_CCW_ARC_MOVE, CCW_ARC_MOVE, and the `*_HELICAL_ARC_MOVE` / `*_HELICAL_ARC_PLUNGE_MOVE` variants.
   - JET_TOOL_POWER / ON / OFF (lasers).
-- **Feed units [obs]** (help: post-processor-editing): a post prints feed rates **per minute** (mm/min or inches/min, by `UNITS`) unless its variable has a multiplier. The help's examples multiply by `0.01666` to convert "from inches per minute to inches per second" and "from mm per minute to mm per second". Real grbl / FluidNC posts use multiplier 1 (mm/min). `Lua/ppVariables.lua` says "mm/sec or inches / sec"; that only matters to Lua-scripted posts, which we don't run.
+- **Feed units [obs]** (help: post-processor-editing): a post prints feed rates **per minute** (mm/min or inches/min, by `UNITS`) unless its variable has a multiplier. The help's examples multiply by `0.01666` to convert "from inches per minute to inches per second" and "from mm per minute to mm per second". Real grbl / FluidNC posts use multiplier 1 (mm/min).
 - **[inf] A new feed rate starts a new feed run:** real posts print `[F]` only in `FIRST_FEED_MOVE` (and `FIRST_PLUNGE_MOVE`), so the `FIRST_` block must be used whenever the rate changes (plunge to cut), not only after a rapid; otherwise the cut would run at the plunge rate.
-- **Inverse time [obs]:** `INVERSE_TIME_MODE = YES` makes feed moves print `[FI]` instead of a rate: the move takes 1/F minutes (G93; G94 is units per minute), so F = feed rate ÷ move length. **[dec]** It is refused unless wrapping is on ("INVERSE_TIME_MODE directive can only be used when wrapping is enabled!").
-- **The full vocabulary [dec]** (`Aspire.exe` keeps one table of `NAME [LABEL|A||default format]`):
-  - Numbers, with their default formats: `POWER [P|A||1.0]`, `SPINDLE_SPEED [S|A||1.0]`, `PLUNGE_RATE [FP|A||1.0]`, `FEED_RATE [F|A||1.0]`, `ROTARY_FEED_RATE [FW|A||1.0]`, `INVERSE_TIME [FI|A||1.3]`, `CUT_RATE [FC|A||1.0]`, `LINE_NUMBER [N|A||1.0]`, `X/Y/Z_POSITION [X|A||1.3]…`, `X/Y/Z_HOME_POSITION [XH|A||1.3]…`, `SAFE_Z_HEIGHT [SAFEZ|A||1.3]`, `DWELL_TIME [DWELL|A||1.0]`, `X/Y/Z_MIN`, `X/Y/Z_MAX`, `X/Y/Z_LENGTH` (all `1.3`), `WRAP_DIAMETER [WRAP_DIA|A||1.3]`, `X/Y_ORIGIN_POS [X_ORIGIN_POS|A||1.3]…`, `TOOL_NUMBER [T|A||1.0]`, `PREVIOUS_TOOL_NUMBER [TP|A||1.0]`, `TOOL_DIAMETER [TDIA|A||1.3]`, the arc values (`ArcStartX/Y`, `ArcMidX/Y`, `ArcMidXI/YI`, `I`, `J`, `IA`, `JA`, `Radius`, `Angle`, all `1.3`), `A_POSITION [A|A||1.3]`, `A_HOME_POSITION [AH|A||1.3]`.
-  - Text: `Z_ORIGIN`, `XY_ORIGIN`, `TOOL_NAME` (`TOOLNAME`), `TOOLPATH_NAME`, `TOOLPATH_PATHNAME` (`PATHNAME`), `TOOLPATH_FILENAME` (`TP_FILENAME`), `TOOLPATH_DIR` (`TP_DIR`), `TOOLPATH_EXTENSION` (`TP_EXT`), `FILE_NAME`, `FILE_PATHNAME`, `FILE_NOTES`, `TOOLPATH_NOTES`, `TOOL_NOTES`, `TOOLS_USED`, `TOOLPATHS_OUTPUT`, `SIDE_FLIP_DIRECTION`, `TIME`, `DATE`, `POST_NAME`, `UNITS`, `PRODUCT`, `REVISION`.
-  - Global statements beyond those above: `POST_BASE` (refused as no longer supported), `LINE_NUMBER_START`, `SCRIPT`, `ROTARY_SUPPORT`, `RUN_SCRIPT_AFTER`, `RUN_EXE_AFTER`, `RAPID_SPEED`; templates may use `%IF` / `%ELSE` / `%ENDIF`.
-  - Blocks beyond those above: `ROTARY_A_INDEX`, `FIRST_RAPID_MOVE`, `INITIAL_STRAIGHT_RAPID_MOVE` / `FIRST_STRAIGHT_RAPID_MOVE` / `STRAIGHT_RAPID_MOVE`, `POST_INFO`, `TOOLS_USED_LINE` (the template for each line of `[TOOLS_USED]`), `REVISION_COMMENT`.
-  - Parse errors name what is required: `UNITS` (MM or INCHES), `POST_NAME`, `FILE_EXTENSION` and a `FEED_MOVE` block; `MIN/MAX_ARC_RADIUS` need arc support; wrap text needs a wrap axis.
+- **Inverse time [obs]:** `INVERSE_TIME_MODE = YES` makes feed moves print `[FI]` instead of a rate: the move takes 1/F minutes (G93; G94 is units per minute), so F = feed rate ÷ move length.
+- **More variables and blocks [check]:** the post-processor editing guide and the plain-text `.pp` files Vectric ships list more (rotary, laser, scripts after output, `%IF` templates); add them from those as needed.
 - **Meanings [obs]** (help table): `XLENGTH` etc. are the material size; `Z_ORIGIN` is "Table or Material Surface" (**[obs]** the UI words are "Material Surface" and "Machine Bed"); `XY_ORIGIN` is the X, Y origin; `TOOLS_USED` and `TOOLPATHS_OUTPUT` list the tools / toolpaths in order of use; `DATE` / `TIME` are when the file was made; `PRODUCT` is the program name and version; `DWELL` is seconds when drilling; `WRAP_DIA` is the cylinder's diameter.
-- **[inf]** Date and time read like "Saturday October 24 2026" and "09:37 AM": `Aspire.exe` holds the formats `%A %B %d %Y` and `%I:%M %p`, but the code using them is not traced yet.
 
 ---
 
-## Icons (`x64/Icons_Light.dll`) [obs]
-- The DLL holds 243 PNGs, 364 BMPs and 36 icon groups (REA Evidence `ev_f158112e…`). `re/icons.py` extracts them into the gitignored `re/extracted/`.
-- **The main UI icons are Codejock image strips**: square slots side by side, `png/35039`–`35070`. There are 8 strips (slot counts 31, 12, 5, 6, 14, 28, 29, 37), each at 4 sizes (24/30/36/48 px; the toolpath strip uses 28/35/42/56). The strips are:
-  - Create Vectors, Edit/Transform, Weld/Subtract/Offset, Join modes, Align (14, the same as the Align menu), Modeling, File + vendor links, Toolpaths.
-- The BMPs are mostly illustrations from older dialogs: tool shapes, ramp and lead-in diagrams, nesting layouts.
-- **[obs]** `Aspire.exe` never contains the strip IDs, as 32-bit values, 16-bit values, `mov` immediates or data tables. It names `Icons_Light` once (a UTF-16 string). **[inf]** The slot-to-command binding is computed at runtime; following it means decompiling the code that references that string.
-- **Our icon set (until 0.2.1; since 0.2.2 the icons are original drawings from `scripts/build-icons`):** `re/make_icons.py` traced the useful icons to SVG and writes them to `assets/icons/<folder>/<name>.svg` (gitignored). It traces in colour layers with potrace and uses a 96 px copy of a strip icon when one exists. `re/icon_set.json` lists each path with its label, whether the label is a guess, and its source ID.
-- `re/icon_labels.json` maps every image and slot to a name. It contains IDs only, no artwork. The sources are help-manual image matches (exact for about 19 Model tools) plus visual identification; a trailing `?` marks a guess.
-
----
-
-## Fonts: `.vfont` [obs] (the 23 files in `Fonts/`, read with `re/vfont.py`)
+## Fonts: `.vfont` [obs] (the 23 fonts the trial installs, read as files with `re/vfont.py`)
 
 - An OLE compound file (`D0 CF 11 E0`, version 4, 4096-byte sectors; the last sector may be
   cut short). Two streams: `VectricFontInfo/Info` and `VectricFontData/GLYPHS_0_255`.
@@ -472,7 +470,7 @@ A plain-text, line-based format. Supporting it lets users reuse the `.pp` file f
 - Cut Craft reads `.vfont` files from `~/.config/cut-craft/fonts` (a link to a Vectric
   install's `Fonts/` will do); none ship with it.
 
-### Create Text form [obs] (dialog 344; Text in a Box is dialog 279; Text on a Curve 426)
+### Create Text form [obs] (help: Create Text, Text on a Curve)
 
 Text / Text in a Box radios; Text box (with Larger Edit …); Font: TrueType / Single Line radios
 over one font list, Bold, Italic; Text Alignment: Left, Center, Right; Text Height; Anchor
@@ -480,7 +478,7 @@ Point X, Y "(Click on drawing to set position)"; Apply, Close. Text in a Box swa
 anchor for Bounding Box Width / Height, Margin Size (None, Normal, Wide), Vertical Stretch and
 Horizontal Stretch drop-downs.
 
-## Job files: `.crv3d` [obs] (samples saved from Aspire 12.010 under Wine, read with `re/crv3d.py`)
+## Job files: `.crv3d` [obs] (samples saved from the Aspire trial, read with `re/crv3d.py`)
 
 - The same OLE compound container as `.vfont`. Streams: `VersionData/Version`,
   `PreviewData/Preview2D_GIF` and `Preview3D_PNG`, `SideData/Sides`, `VectorData/MaterialSize`,
@@ -532,7 +530,7 @@ What was found, and what Cut Craft does where Aspire's behaviour is not known.
   the tool rapids down to before changing to the plunge rate; by default Z2 equals Z1 (no rapid
   plunges). Home / Start Position is "the absolute position that the tool will start moving
   from" and can be returned to at the end.
-- Material Setup dialog (`re/extracted/dialogs-12.5/dialog_205.txt`): the home group is X, Y and
+- Material Setup form [check]: the home group is X, Y and
   "Z Gap above Material", so home Z is a gap above the material, not a machine Z.
 - Post help (`post-processor-editing.txt`): the arc variables and blocks above;
   `MIN_ARC_RADIUS` turns smaller arcs into a straight line, `MAX_ARC_RADIUS` polygonizes larger
@@ -560,13 +558,13 @@ What was found, and what Cut Craft does where Aspire's behaviour is not known.
 - help `uiProfileMachineForm`: nested vectors cut on the correct side, inner always before
   outer; Order options may be combined and the shortest machining time wins; Start At three
   options; "Closest on Bounding Box ... nearest point from all of the spans' endpoints".
-- dialog 626 (order tab): five options incl. **Shortest Path** (not in the help), and "the
+- Order tab [check]: five options incl. **Shortest Path** (not in the help), and "the
   option which results in the shortest rapid move join ups will be used" — so the measure is
   rapid link length, which is what is used.
-- dialog 33838 (start tab): Keep Current / Optimize / "Move Start Points to be closest to
+- Start tab [check]: Keep Current / Optimize / "Move Start Points to be closest to
   selected point on vector bounding box" with 8 radio buttons (corners and mid-edges, no
   centre).
-- dialog 380 (corners tab): "Sharp external corners", "Sharp internal corners (3D)",
+- Corners tab [check]: "Sharp external corners", "Sharp internal corners (3D)",
   "Allowance for cut out tool".
 
 #### Guessed defaults
@@ -612,7 +610,7 @@ What was found, and what Cut Craft does where Aspire's behaviour is not known.
   `Tool Database.txt` § Material / Machine Management.
 - Add Material makes the new one active. Delete Material deletes all its cutting data. Names are
   unique. Source: help `tool-database-material-management.txt`.
-- Rate units: "distance per second or per minute"; the list order is from `re/SPEC.md` [dec].
+- Rate units: "distance per second or per minute"; the list of labels is [check].
 - Thread mill S, H, D, A, O: O must be bigger than half the tool size. H, S and A are linked,
   and changing H with A fixed changes S. Source: help `ThreadMillingStrategy.txt`.
 - The tool number is per machine, not per material. Source: `Tool Database.txt` § Tool Number.
@@ -652,7 +650,6 @@ What was found, and what Cut Craft does where Aspire's behaviour is not known.
   toolpath onto 3D Model" — after calculating, the toolpath is dropped in Z onto the model; depth below
   the material surface becomes depth below the model surface; limited to the material bottom; only
   available when a 3D model exists.
-- Aspire.exe strings: "3D Finish %d" (default name) and "%s [%d]".
 
 #### Guesses
 - [inf] Names of a several-tool set: "<name> [1]", "<name> [2]"… from the "%s [%d]" string; which code
@@ -744,6 +741,33 @@ instead of half-cell steps.
 - Not tried by hand: how the cube looks and feels, label fit at other font sizes, and
   side-on overlay speed on a big job.
 
+## Drawing in the 3D view [inf] (help: What's New in Aspire V12.0, "Drawing in the 3D View")
+
+#### Aspire behaviour (sources)
+- "The software's drawing tools are now available in the 3D view", so a user can stay in the
+  3D view instead of switching views [inf: What's New V12.0]. The help does not say how the
+  pointer maps onto the model, nor how the view is turned while a tool is open.
+
+#### What was built, and the choices made
+- The open drawing tool takes the 3D view's left button; its gestures are the 2D view's
+  (`view2d::gesture_of`), with each screen point taken to where its line of sight first meets
+  the model's solid (`view3d::Camera::on_surface`: stepped half a cell, then halved to a hair),
+  off the material the top plane (`Camera::on_floor`). [inf] Projecting onto what is under the
+  pointer is our guess; it means what is drawn lies on what the user sees, which a novice
+  expects, where the top plane would put it millimetres off on a raised or cut surface.
+- Right-drag turns the view and middle-drag pans while drawing (the sculpting rule), so the
+  left button never does two things; the status bar says so. Double-click does not pick a
+  component or fit while drawing (it would fight the polyline's clicks).
+- The shape being drawn is drawn on the model in the selection colour, flat at the height a
+  finished vector shows (`view3d::vector_plane`), hidden where the model hides it.
+- Not offered on the wrapped (rotary) view, while importing a 3D model, or with a view tool on.
+
+#### What's left
+- Node editing and the selection's 2D handles in the 3D view; selecting vectors by clicking
+  them there.
+- Drawing before any component exists (the 3D view shows "Nothing in 3D yet").
+- Drawing on the wrapped rotary view.
+
 ## Tool databases: `.vtdb` [obs] (vendor files from Amana, IDC Woodcraft and CIC; Aspire 12.5)
 
 - A SQLite file: `tool_geometry` (name_format with `{Tool Type}`, `{Diameter|F}`,
@@ -761,20 +785,61 @@ instead of half-cell steps.
 
 ## Aspire 12.5 trial (12.5.1.1) against 12.010 [obs]
 
-- Same fonts (23) and posts; code encrypted the same way (`.text` 8.00 bits/byte). Help 242 →
-  248 pages, dialogs 273 → 285. New: the **Advanced Machining Module** (paid add-on: cabinet
+- Help 242 → 248 pages. New: the **Advanced Machining Module** (paid add-on: cabinet
   cut-list import from CSV + DXF parts with a template job, cutter compensation on profile
-  toolpaths, Drill Bank toolpath, Print Part Labels with barcodes via ZXing; dialogs 101,
-  102, 4204, 5176, 5180), a laser sketch-carving form (35159, 5172), getting-started guides.
-  Trial dumps: `re/extracted/dialogs-12.5/`, `re/extracted/help-12.5/`.
+  toolpaths, Drill Bank toolpath, Print Part Labels with barcodes), a laser sketch-carving form,
+  getting-started guides. Help text: `re/extracted/help-12.5/` (gitignored).
 
-## Open questions (need decompilation or sample files)
+### Drill Bank Toolpath [inf: help 12.5 "Drill Bank Toolpath" and "Post-Processor Editing"]
+- A variant of Drilling for a drill bank: "multiple individual drills arranged on horizontal
+  and vertical arms" that are engaged (extended) or disengaged (retracted) before plunging.
+  Part of the Advanced Machining Module.
+- Layout: Horizontal Drills and Vertical Drills (how many on each arm), Central Drill (X, Y)
+  (the drill both arms share, by its index on each), Pitch (even spacing). Per drill: Drill
+  Number (the controller's; the shared drill may have one on each arm "for machines that
+  number the horizontal and vertical drill arrays independently"), Diameter, and Reference
+  Drill ("the origin point when positioning the drill bank"; one at a time). Pitch Tolerance
+  and Diameter Tolerance are used "when looking for matching drill patterns". Peck drilling,
+  retract gap and options as Drilling; Project onto 3D Model; Vector Selection; Name.
+- **[inf]** The help shows the layout in the toolpath's own Template Creation form; the
+  `.vtdb` has `drill_bank_*` tables, so Aspire may keep banks in the tool database.
+  **[dec: clarity]** Cut Craft keeps the bank with the machine (Machine Configuration ▸
+  Drill Bank): it is part of the machine, set once, and the toolpath form takes it from the
+  active machine each time it opens (editing a toolpath picks up a changed bank).
+- **[inf]** The arms are taken to cross in the XY plane (a cross, T or L): horizontal along
+  +X, vertical along +Y, all drills pointing down. Not edge (horizontal) boring.
+- **[inf]** Matching (the help does not say how): from the first hole not yet drilled, the
+  head is placed for each drill that fits it by size, and the placement dropping the most
+  drills onto other holes (within the tolerances) is taken. Holes no drill fits stop the
+  toolpath, naming their sizes and the bank's (Aspire's behaviour is not known).
+- Post (help 12.5): mode by blocks, mutually exclusive: pattern (`DRILL_BANK_PATTERN`, on
+  pattern change) or per drill (`DRILL_BANK_EXTEND_DRILL` / `DRILL_BANK_RETRACT_DRILL`, on
+  each drill's change). Both need `SETUP_DRILL_BANK` (entering drill bank mode, "at the
+  start of every block of drill bank moves") and the final action (leaving it). Missing ones
+  or an invalid mix "will prohibit the saving of drill bank toolpaths". The help heads the
+  final block `DRILL_BANK_FINAL_ACTION` but its `begin` line is `FINAL_DRILL_BANK_ACTION`;
+  Cut Craft reads both.
+- Variables: `DRILL [DB]` bitwise OR of the engaged drills' numbers, `DRILL_X [DBX]` /
+  `DRILL_Y [DBY]` the same for horizontal-only / vertical-only drills, `DRILL_LIST [DL]` the
+  list, formatted `[DL|prefix|separator|first_separator]` (1, 3, 5 with `[DL|D|,| ]` print
+  `D1 D3,D5`), `CURRENT_DRILL [CD]` the drill being extended or retracted.
+- **[inf]** Cut Craft's reading: `[DBX]` / `[DBY]` are each arm's engaged drills including
+  the shared one by its number on that arm; `[DB]` is both ORed; `[DL]` and `[CD]` give the
+  shared drill its horizontal number. New banks are numbered 1, 2, 4, 8... so the OR is a
+  bitmask. The pattern or extends are written before the hit's move to the head's position
+  at safe Z; per-drill posts retract every drill before the final action. The G-code's X / Y
+  are the reference drill's position.
+- **[inf]** Cut Craft's toolpath drills each hole in its moves (so the preview, simulation and
+  checks show every hole) and keeps each plunge of the head with them; the post writes one
+  plunge per hit.
+
+## Open questions (need trial testing, the docs or sample files)
 1. `.v3m` byte layout, and the rest of `.crv3d` (see Job files). `.3dClip` (the 22 sculpting
    brushes the installer puts in `Public/Documents/Vectric Files`) is **not** a compound file:
    a plain header (u16s 2, 1, 1; the GUID `7d82aea4-9169-f743-a375-09ddf91359e7` in every
    file; UTF-16 "Aspire" (the creating application), "DLL", then the exported component's
    name, e.g. "Clouds - Baked") and then 7.99 bits/byte, so the height data is encrypted
-   like the program code and is left alone.
+   and is left alone.
 2. Meanings of the `Default.prf` fields.
 3. Which mouse button orbits the 3D view (the help pages contradict each other).
 4. The commands behind keys 1, 2 and Ctrl+F1…F9.

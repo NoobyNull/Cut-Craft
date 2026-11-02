@@ -11,8 +11,11 @@ cut-craft-core.workspace = true
 cut-craft-vtdb = { path = "../vtdb" }
 cut-craft-tool-database = { path = "../tool-database" }
 cut-craft-bug-report = { path = "../bug-report" }
+# Help ▸ Check for Updates
+cut-craft-updater = { path = "../updater" }
 cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
+cut-craft-scripting = { path = "../scripting" }
 eframe.workspace = true
 # Help Contents: the help pages are Markdown, shown in the app
 egui_commonmark.workspace = true
@@ -135,6 +138,7 @@ cmd-smooth-selected-components = { path = "../commands/smooth-selected-component
 cmd-create-component-from-visible-model = { path = "../commands/create-component-from-visible-model" }
 cmd-bake-components = { path = "../commands/bake-components" }
 cmd-create-component-from-bitmap = { path = "../commands/create-component-from-bitmap" }
+cmd-relief-from-photo = { path = "../commands/relief-from-photo" }
 cmd-scale-model-z-height = { path = "../commands/scale-model-z-height" }
 cmd-add-zero-plane = { path = "../commands/add-zero-plane" }
 cmd-space-vertically = { path = "../commands/space-vertically" }
@@ -174,6 +178,7 @@ cmd-select-layer-vectors = { path = "../commands/select-layer-vectors" }
 cmd-move-to-layer = { path = "../commands/move-to-layer" }
 cmd-delete-layer = { path = "../commands/delete-layer" }
 cmd-add-layer = { path = "../commands/add-layer" }
+cmd-drill-bank-toolpath = { path = "../commands/drill-bank-toolpath" }
 cmd-drilling-toolpath = { path = "../commands/drilling-toolpath" }
 cmd-pocket-toolpath = { path = "../commands/pocket-toolpath" }
 cmd-profile-toolpath = { path = "../commands/profile-toolpath" }

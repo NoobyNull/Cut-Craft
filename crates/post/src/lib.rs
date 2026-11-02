@@ -8,6 +8,7 @@ mod built_in;
 pub use built_in::BUILT_IN;
 
 use cut_craft_core::document::{Along, Datum, Document, Job, ZZero};
+use cut_craft_core::drill_bank::{BankHit, DrillBank, DrillId};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::toolpath::{MoveKind, Toolpath};
 use std::collections::HashMap;
@@ -56,6 +57,10 @@ const NUMBERS: &[&str] = &[
     "Radius",
     "Angle",
     "DWELL",
+    "DB",
+    "DBX",
+    "DBY",
+    "CD",
 ];
 const LENGTHS: &[&str] = &[
     "X",
@@ -126,7 +131,7 @@ const THREE_PLACES: &[&str] = &[
     "Radius",
     "Angle",
 ];
-const TEXTS: [&str; 18] = [
+const TEXTS: [&str; 19] = [
     "TOOLNAME",
     "TOOLPATH_NAME",
     "TP_FILENAME",
@@ -145,11 +150,12 @@ const TEXTS: [&str; 18] = [
     "FILE_NOTES",
     "TOOLPATH_NOTES",
     "TOOL_NOTES",
+    "DL",
 ];
 /// Texts that are lists: a template line holding one is written once per item.
 const LISTS: [&str; 2] = ["TOOLS_USED", "TOOLPATHS_OUTPUT"];
 /// The blocks Cut Craft writes; a post may define others (arcs, lasers...) that it never uses.
-const WRITTEN: [&str; 23] = [
+const WRITTEN: [&str; 28] = [
     "JET_TOOL_ON",
     "JET_TOOL_POWER",
     "JET_TOOL_OFF",
@@ -173,6 +179,11 @@ const WRITTEN: [&str; 23] = [
     "FIRST_CCW_HELICAL_ARC_MOVE",
     "CCW_HELICAL_ARC_MOVE",
     "DWELL_MOVE",
+    "SETUP_DRILL_BANK",
+    "DRILL_BANK_PATTERN",
+    "DRILL_BANK_EXTEND_DRILL",
+    "DRILL_BANK_RETRACT_DRILL",
+    "FINAL_DRILL_BANK_ACTION",
 ];
 // ponytail: arcs are fitted to cuts only, so the helical plunge arc and tape splitting blocks
 // are never written; posts using unknown variables in written blocks are refused
@@ -228,6 +239,9 @@ pub struct Post {
     /// the post's units.
     arc_radius: (Option<f64>, Option<f64>),
     formats: HashMap<String, Format>,
+    /// How `[DL]` lists a drill bank's drills: before each number, between numbers, and
+    /// between the first two (`VAR DRILL_LIST = [DL|prefix|separator|first separator]`).
+    drill_list: (String, String, String),
     blocks: HashMap<String, Vec<String>>,
 }
 
@@ -405,6 +419,7 @@ impl Post {
             laser: false,
             arc_radius: (None, None),
             formats: HashMap::new(),
+            drill_list: (String::new(), ",".into(), ",".into()),
             blocks: HashMap::new(),
         };
         let mut block: Option<String> = None;
@@ -413,7 +428,12 @@ impl Post {
                 continue;
             }
             if let Some(name) = line.strip_prefix("begin ") {
-                let name = name.trim().to_owned();
+                let name = match name.trim() {
+                    // Vectric's help names the block both ways
+                    "DRILL_BANK_FINAL_ACTION" => "FINAL_DRILL_BANK_ACTION",
+                    name => name,
+                }
+                .to_owned();
                 post.blocks.entry(name.clone()).or_default();
                 block = Some(name);
             } else if line.starts_with('"') {
@@ -428,6 +448,10 @@ impl Post {
                 let (_, spec) = rest
                     .split_once('=')
                     .ok_or_else(|| format!("bad VAR line: {line}"))?;
+                if let Some(list) = drill_list(spec) {
+                    post.drill_list = list;
+                    continue;
+                }
                 let (label, format) = Format::parse(spec)?;
                 post.formats.insert(label, format);
             } else if let Some((key, value)) = line.split_once('=') {
@@ -508,6 +532,10 @@ impl Post {
         Ok(())
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one pass writing every toolpath in order"
+    )]
     pub fn render(&self, doc: &Document, file: &File) -> Result<String, String> {
         let toolpaths: Vec<_> = doc.toolpaths.values().collect();
         let Some(first) = toolpaths.first() else {
@@ -560,54 +588,70 @@ impl Post {
             let laser = !toolpath.power.is_empty();
             // the laser's power while it is on
             let mut burning: Option<f64> = None;
-            for step in self.steps(toolpath, &doc.job, at) {
-                let (kind, to) = match step {
-                    Step::Line(kind, to, _) => (kind, to),
-                    Step::Arc(arc) => (MoveKind::Cut, arc.to),
-                };
-                let from = std::mem::replace(&mut at, to);
-                let length = to.distance(from);
-                if self.inverse_time && kind != MoveKind::Rapid && length == 0.0 {
-                    // a move that goes nowhere has no time to invert
-                    continue;
+            // a drill bank: which drills are down, and how the post chooses them
+            let bank = toolpath.drill_bank.as_ref();
+            let by_pattern = bank.is_some() && self.bank_mode()?;
+            let mut down = vec![];
+            if bank.is_some() {
+                out.block("SETUP_DRILL_BANK", &v);
+            }
+            for (hit, part) in parts(toolpath) {
+                if let (Some(b), Some(hit)) = (bank, hit) {
+                    out.drop_drills(&mut v, &b.bank, &hit.drills, by_pattern, &mut down);
                 }
-                v.numbers.insert("X", wrapped("X", to.x));
-                v.numbers.insert("Y", wrapped("Y", to.y));
-                v.numbers.insert("Z", doc.job.machine_z(to.z));
-                if let (true, Step::Line(_, _, power)) = (laser, step) {
-                    v.numbers.insert("P", power);
-                    out.jet(&v, kind, power, &mut burning);
-                }
-                let block = if kind == MoveKind::Rapid {
-                    feeding = None;
-                    let initial = std::mem::replace(&mut first_rapid, false);
-                    if initial && self.blocks.contains_key("INITIAL_RAPID_MOVE") {
-                        "INITIAL_RAPID_MOVE"
-                    } else {
-                        "RAPID_MOVE"
-                    }
-                } else {
-                    let rate = if kind == MoveKind::Plunge {
-                        toolpath.tool.plunge_rate
-                    } else {
-                        toolpath.tool.feed_rate
+                for step in self.steps(&part, &doc.job, at) {
+                    let (kind, to) = match step {
+                        Step::Line(kind, to, _) => (kind, to),
+                        Step::Arc(arc) => (MoveKind::Cut, arc.to),
                     };
-                    v.numbers.insert("F", rate);
-                    v.numbers.insert("FI", rate / length);
-                    let start = feeding.replace(rate) != Some(rate);
-                    if let Step::Arc(arc) = step {
-                        v.arc(from, &arc);
-                        self.arc_block(&arc, from, start)
-                    } else {
-                        self.feed_block(kind, start)
+                    let from = std::mem::replace(&mut at, to);
+                    let length = to.distance(from);
+                    if self.inverse_time && kind != MoveKind::Rapid && length == 0.0 {
+                        // a move that goes nowhere has no time to invert
+                        continue;
                     }
-                };
-                out.block(block, &v);
-                // a drill waits at the bottom of each peck when its toolpath asks
-                if kind == MoveKind::Plunge && dwell(toolpath) > 0.0 {
-                    v.numbers.insert("DWELL", dwell(toolpath));
-                    out.block("DWELL_MOVE", &v);
+                    v.numbers.insert("X", wrapped("X", to.x));
+                    v.numbers.insert("Y", wrapped("Y", to.y));
+                    v.numbers.insert("Z", doc.job.machine_z(to.z));
+                    if let (true, Step::Line(_, _, power)) = (laser, step) {
+                        v.numbers.insert("P", power);
+                        out.jet(&v, kind, power, &mut burning);
+                    }
+                    let block = if kind == MoveKind::Rapid {
+                        feeding = None;
+                        let initial = std::mem::replace(&mut first_rapid, false);
+                        if initial && self.blocks.contains_key("INITIAL_RAPID_MOVE") {
+                            "INITIAL_RAPID_MOVE"
+                        } else {
+                            "RAPID_MOVE"
+                        }
+                    } else {
+                        let rate = if kind == MoveKind::Plunge {
+                            toolpath.tool.plunge_rate
+                        } else {
+                            toolpath.tool.feed_rate
+                        };
+                        v.numbers.insert("F", rate);
+                        v.numbers.insert("FI", rate / length);
+                        let start = feeding.replace(rate) != Some(rate);
+                        if let Step::Arc(arc) = step {
+                            v.arc(from, &arc);
+                            self.arc_block(&arc, from, start)
+                        } else {
+                            self.feed_block(kind, start)
+                        }
+                    };
+                    out.block(block, &v);
+                    // a drill waits at the bottom of each peck when its toolpath asks
+                    if kind == MoveKind::Plunge && dwell(toolpath) > 0.0 {
+                        v.numbers.insert("DWELL", dwell(toolpath));
+                        out.block("DWELL_MOVE", &v);
+                    }
                 }
+            }
+            if let Some(b) = bank {
+                out.drop_drills(&mut v, &b.bank, &[], by_pattern, &mut down);
+                out.block("FINAL_DRILL_BANK_ACTION", &v);
             }
             if burning.is_some() {
                 out.block("JET_TOOL_OFF", &v);
@@ -640,6 +684,10 @@ impl Post {
                 t.name
             ));
         }
+        if let Some(t) = toolpaths.iter().find(|t| t.drill_bank.is_some()) {
+            self.bank_mode()
+                .map_err(|why| format!("{} uses a drill bank, but this post {why}", t.name))?;
+        }
         if let Some(t) = toolpaths
             .iter()
             .find(|t| !t.power.is_empty() && !self.laser)
@@ -650,6 +698,35 @@ impl Post {
             ));
         }
         Ok(())
+    }
+
+    /// How this post drives a drill bank: by pattern (`true`: one block choosing every drill
+    /// at once) or drill by drill (`false`), as Vectric's help says the blocks choose; why
+    /// it cannot when it cannot.
+    fn bank_mode(&self) -> Result<bool, String> {
+        let has = |name: &str| self.blocks.contains_key(name);
+        if !has("SETUP_DRILL_BANK") || !has("FINAL_DRILL_BANK_ACTION") {
+            return Err("cannot drive one: it needs SETUP_DRILL_BANK and \
+                        FINAL_DRILL_BANK_ACTION blocks (ask the machine's maker for a post with \
+                        drill bank support)"
+                .into());
+        }
+        let per_drill = (
+            has("DRILL_BANK_EXTEND_DRILL"),
+            has("DRILL_BANK_RETRACT_DRILL"),
+        );
+        match (has("DRILL_BANK_PATTERN"), per_drill) {
+            (true, (false, false)) => Ok(true),
+            (false, (true, true)) => Ok(false),
+            (true, _) => Err(
+                "has both DRILL_BANK_PATTERN and the extend and retract blocks: \
+                              it should have one or the other, not both"
+                    .into(),
+            ),
+            (false, _) => Err("needs a DRILL_BANK_PATTERN block, or both \
+                               DRILL_BANK_EXTEND_DRILL and DRILL_BANK_RETRACT_DRILL"
+                .into()),
+        }
     }
 
     /// The block for a feed move: plunges have their own if the post does, and a new rate
@@ -739,6 +816,22 @@ impl Post {
             at = run[run.len() - 1].1;
         }
         steps
+    }
+
+    /// A drill bank's drill numbers as `[DL]` prints them.
+    fn drill_list_text(&self, numbers: &[u32]) -> String {
+        let (prefix, separator, first) = &self.drill_list;
+        let mut text = String::new();
+        for (i, n) in numbers.iter().enumerate() {
+            match i {
+                0 => {}
+                1 => text.push_str(first),
+                _ => text.push_str(separator),
+            }
+            text.push_str(prefix);
+            text.push_str(&n.to_string());
+        }
+        text
     }
 
     /// A flat X or Y as it prints: a wrapped axis in degrees round the cylinder.
@@ -886,6 +979,55 @@ enum Step {
     Arc(arcs::Arc),
 }
 
+/// What `toolpath` writes, in parts: all its moves, or for a drill bank toolpath each plunge
+/// of the head (its hit) with the moves of its first hole moved to where the head is.
+fn parts(toolpath: &Toolpath) -> Vec<(Option<&BankHit>, std::borrow::Cow<'_, Toolpath>)> {
+    let Some(bank) = &toolpath.drill_bank else {
+        return vec![(None, std::borrow::Cow::Borrowed(toolpath))];
+    };
+    bank.hits
+        .iter()
+        .map(|hit| {
+            // every hole of a hit is drilled with the same moves: the first hole's, up to its
+            // rise back to the height it came in at (ways round keep-out zones may come first)
+            let hit_moves = toolpath
+                .moves
+                .get(hit.start..hit.end.min(toolpath.moves.len()))
+                .unwrap_or_default();
+            let safe = hit_moves.first().map_or(0.0, |m| m.to.z);
+            let mut plunged = false;
+            let first_hole = hit_moves
+                .iter()
+                .position(|m| {
+                    plunged |= m.kind == MoveKind::Plunge;
+                    plunged && m.kind == MoveKind::Rapid && m.to.z >= safe - 1e-9
+                })
+                .map_or(hit_moves.len(), |i| i + 1);
+            let moves = hit_moves[..first_hole]
+                .iter()
+                .map(|m| cut_craft_core::toolpath::Move {
+                    kind: m.kind,
+                    to: DVec3::new(hit.head.x, hit.head.y, m.to.z),
+                })
+                .collect();
+            let part = Toolpath {
+                moves,
+                power: vec![],
+                drill_bank: None,
+                params: serde_json::Value::Null,
+                vectors: vec![],
+                name: String::new(),
+                strategy: String::new(),
+                tool: toolpath.tool.clone(),
+                visible: true,
+                stale: false,
+                group: None,
+            };
+            (Some(hit), std::borrow::Cow::Owned(part))
+        })
+        .collect()
+}
+
 /// Each tool's name once, in the order the toolpaths use them.
 /// Each tool's `[T]`: on a machine with a tool changer its holder, or 0 for a bit not in
 /// the magazine (changed by hand); without one, its own tool number, else the order it is
@@ -952,6 +1094,43 @@ impl Output<'_> {
             }
             _ => {}
         }
+    }
+
+    /// Puts down `drills` of `bank` (none: all up) given those `down` already: by pattern,
+    /// one `DRILL_BANK_PATTERN` when the drills change; else each drill that goes up, then
+    /// each that comes down, on its own.
+    fn drop_drills(
+        &mut self,
+        v: &mut Values,
+        bank: &DrillBank,
+        drills: &[DrillId],
+        by_pattern: bool,
+        down: &mut Vec<DrillId>,
+    ) {
+        let same = drills.len() == down.len() && drills.iter().all(|d| down.contains(d));
+        if same || (by_pattern && drills.is_empty()) {
+            return;
+        }
+        let chosen = bank.selection(drills);
+        v.numbers.insert("DB", f64::from(chosen.all));
+        v.numbers.insert("DBX", f64::from(chosen.horizontal));
+        v.numbers.insert("DBY", f64::from(chosen.vertical));
+        v.texts
+            .insert("DL", self.post.drill_list_text(&chosen.list));
+        if by_pattern {
+            self.block("DRILL_BANK_PATTERN", v);
+        } else {
+            let number = |id: DrillId| bank.selection(&[id]).list.first().copied();
+            for &id in down.iter().filter(|d| !drills.contains(d)) {
+                v.numbers.insert("CD", number(id).map_or(0.0, f64::from));
+                self.block("DRILL_BANK_RETRACT_DRILL", v);
+            }
+            for &id in drills.iter().filter(|d| !down.contains(d)) {
+                v.numbers.insert("CD", number(id).map_or(0.0, f64::from));
+                self.block("DRILL_BANK_EXTEND_DRILL", v);
+            }
+        }
+        *down = drills.to_vec();
     }
 
     fn block(&mut self, name: &str, v: &Values) {
@@ -1054,6 +1233,22 @@ impl Output<'_> {
     }
 }
 
+/// `[DL|prefix|separator|first separator]`: how a drill bank's drill list prints; `None`
+/// for any other variable.
+fn drill_list(spec: &str) -> Option<(String, String, String)> {
+    let inner = spec.trim().strip_prefix('[')?.strip_suffix(']')?;
+    let mut parts = inner.split('|');
+    if parts.next()?.trim() != "DL" {
+        return None;
+    }
+    let prefix = parts.next().unwrap_or_default().to_owned();
+    let separator = parts.next().unwrap_or(",").to_owned();
+    let first = parts
+        .next()
+        .map_or_else(|| separator.clone(), str::to_owned);
+    Some((prefix, separator, first))
+}
+
 fn unquote(s: &str) -> String {
     s.trim()
         .trim_start_matches('"')
@@ -1145,6 +1340,7 @@ begin FOOTER
                 mv(MoveKind::Rapid, 25.4, 25.4, 5.0),
             ],
             visible: true,
+            drill_bank: None,
         }
     }
 
@@ -1915,6 +2111,157 @@ begin FOOTER
             Post::parse(&post).unwrap_err(),
             "the post has no FEED_MOVE block"
         );
+    }
+
+    /// A five-drill bank toolpath of two plunges: holes 0..5 at x = 0, 32... 128, then
+    /// holes 5 and 6 at x = 160 and 192, each drilled straight down 10 mm.
+    fn bank_toolpath() -> Toolpath {
+        use cut_craft_core::drill_bank::{Arm, BankHit, BankToolpath, DrillBank, DrillId};
+        let bank = DrillBank::new(5, 0, 32.0, 5.0);
+        let mut moves = vec![];
+        for i in 0..7_i32 {
+            let x = 32.0 * f64::from(i);
+            moves.push(mv(MoveKind::Rapid, x, 0.0, 5.0));
+            moves.push(mv(MoveKind::Plunge, x, 0.0, -10.0));
+            moves.push(mv(MoveKind::Rapid, x, 0.0, 5.0));
+        }
+        let h = |index| DrillId {
+            arm: Arm::Horizontal,
+            index,
+        };
+        let hits = vec![
+            BankHit {
+                start: 0,
+                end: 15,
+                head: cut_craft_core::geometry::Point::new(64.0, 0.0),
+                drills: (0..5).map(h).collect(),
+            },
+            BankHit {
+                start: 15,
+                end: 21,
+                // the reference (middle) drill two pitches before the first hole
+                head: cut_craft_core::geometry::Point::new(224.0, 0.0),
+                drills: vec![h(0), h(1)],
+            },
+        ];
+        Toolpath {
+            strategy: "drill_bank_toolpath".into(),
+            moves,
+            drill_bank: Some(BankToolpath { bank, hits }),
+            ..toolpath("Shelf Pins", "5 mm Drill")
+        }
+    }
+
+    const PATTERN: &str = "VAR DRILL_LIST = [DL|D|,| ]\n\
+         begin SETUP_DRILL_BANK\n\"(bank on)\"\n\
+         begin DRILL_BANK_PATTERN\n\"M100 P[DB] (X[DBX] Y[DBY]) [DL]\"\n\
+         begin FINAL_DRILL_BANK_ACTION\n\"(bank off)\"\n\
+         begin HEADER";
+
+    #[test]
+    fn a_drill_bank_plunges_once_for_each_pattern_of_drills() {
+        let post = BASIC.replace("begin HEADER", PATTERN);
+        let lines = render(&post, vec![bank_toolpath()]);
+        let at = |text: &str| {
+            lines
+                .iter()
+                .position(|l| l == text)
+                .unwrap_or_else(|| panic!("{text} in {lines:?}"))
+        };
+        let on = at("(bank on)");
+        let first = at("M100 P31 (X31 Y0) D1 D2,D4,D8,D16");
+        let second = at("M100 P3 (X3 Y0) D1 D2");
+        assert!(on < first && first < second && second < at("(bank off)"));
+        // the head goes where its reference drill is: one plunge a hit, not a hole
+        let plunges: Vec<&String> = lines.iter().filter(|l| l.contains("Z-10.000")).collect();
+        assert_eq!(plunges.len(), 2, "{lines:?}");
+        assert!(
+            lines[first + 1].starts_with("G0 X64.000 Y0.000"),
+            "{lines:?}"
+        );
+        assert!(
+            lines[second + 1].starts_with("G0 X224.000 Y0.000"),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn a_way_round_a_keep_out_zone_before_a_plunge_still_plunges_once() {
+        let mut t = bank_toolpath();
+        // a waypoint leading into the second hit, as keep-out routing puts there
+        t.moves.insert(15, mv(MoveKind::Rapid, 150.0, 40.0, 5.0));
+        let bank = t.drill_bank.as_mut().unwrap();
+        bank.hits[1].end += 1;
+        let post = BASIC.replace("begin HEADER", PATTERN);
+        let lines = render(&post, vec![t]);
+        let plunges = lines.iter().filter(|l| l.contains("Z-10.000")).count();
+        assert_eq!(plunges, 2, "{lines:?}");
+    }
+
+    #[test]
+    fn a_per_drill_post_extends_and_retracts_only_the_drills_that_change() {
+        let post = BASIC.replace(
+            "begin HEADER",
+            "begin SETUP_DRILL_BANK\n\"(bank on)\"\n\
+             begin DRILL_BANK_EXTEND_DRILL\n\"M61 P[CD]\"\n\
+             begin DRILL_BANK_RETRACT_DRILL\n\"M62 P[CD]\"\n\
+             begin FINAL_DRILL_BANK_ACTION\n\"(bank off)\"\n\
+             begin HEADER",
+        );
+        let lines = render(&post, vec![bank_toolpath()]);
+        let bank: Vec<&str> = lines
+            .iter()
+            .map(String::as_str)
+            .filter(|l| l.starts_with("M6") || l.starts_with("(bank"))
+            .collect();
+        assert_eq!(
+            bank,
+            [
+                "(bank on)",
+                "M61 P1",
+                "M61 P2",
+                "M61 P4",
+                "M61 P8",
+                "M61 P16",
+                // the second plunge keeps 1 and 2 down
+                "M62 P4",
+                "M62 P8",
+                "M62 P16",
+                // all up again before leaving
+                "M62 P1",
+                "M62 P2",
+                "(bank off)",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_post_without_drill_bank_blocks_refuses_drill_bank_toolpaths() {
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(bank_toolpath());
+        doc.apply(&c.finish()).unwrap();
+        let file = File {
+            path: Path::new("x.nc"),
+            job: None,
+            made: chrono::NaiveDateTime::default(),
+            slots: &[],
+        };
+        let why = Post::parse(BASIC).unwrap().render(&doc, &file).unwrap_err();
+        assert!(
+            why.starts_with("Shelf Pins uses a drill bank") && why.contains("SETUP_DRILL_BANK"),
+            "{why}"
+        );
+        // both modes at once cannot be told apart
+        let both = BASIC.replace(
+            "begin HEADER",
+            &format!(
+                "{PATTERN}\nbegin DRILL_BANK_EXTEND_DRILL\n\"M61\"\n\
+                 begin DRILL_BANK_RETRACT_DRILL\n\"M62\"\nbegin HEADER"
+            ),
+        );
+        let why = Post::parse(&both).unwrap().render(&doc, &file).unwrap_err();
+        assert!(why.contains("not both"), "{why}");
     }
 }
 

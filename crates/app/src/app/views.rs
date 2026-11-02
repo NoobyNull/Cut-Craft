@@ -9,6 +9,7 @@ use super::{
     ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
     inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel, view2d,
 };
+use crate::flyout::DragWay;
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
@@ -22,9 +23,9 @@ const SELECTION_HANDLE_SHARE: f32 = 0.55;
 
 /// What the 2D view's clicks go to besides selecting: the selection's handles (when nothing
 /// else takes them), tracing a bitmap, filleting corners, placing tabs.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 #[expect(clippy::struct_excessive_bools, reason = "the view's modes, one each")]
-struct Modes {
+pub(super) struct Modes {
     handled: bool,
     tracing: bool,
     filleting: bool,
@@ -38,6 +39,8 @@ impl CutCraftApp {
         let ctx = &ui.ctx().clone();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
+        // the Depth add-on's answer, when it has one
+        self.take_depth();
         self.draw_window(ui);
         self.dropped_files(ctx);
         self.follow_form(ctx);
@@ -248,8 +251,11 @@ impl CutCraftApp {
         if ctx.input(|i| i.viewport().close_requested()) {
             if self.confirm_discard() {
                 self.clear_recovery();
+                self.restart_into_update();
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                // Cancel at "Save changes?" cancels Restart Now too
+                self.restart_after_close = None;
             }
         }
         paint_focus_ring(ctx);
@@ -283,6 +289,7 @@ impl CutCraftApp {
         self.tool_search(ctx);
         self.guide_window(ctx);
         self.tool_changer_window(ctx);
+        self.updates_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
@@ -768,7 +775,7 @@ impl CutCraftApp {
     }
 
     /// The vectors the text settings `p` make, without making them.
-    fn text_preview(&self, p: &cmd_draw_text::Params) -> Vec<Path> {
+    pub(super) fn text_preview(&self, p: &cmd_draw_text::Params) -> Vec<Path> {
         let value = serde_json::to_value(p).expect("text settings serialise");
         self.registry
             .get("draw_text")
@@ -1059,21 +1066,24 @@ impl CutCraftApp {
     }
 
     /// The polyline being drawn, on to the pointer (or along a drag in progress).
-    fn polyline_overlay(&self, gesture: Option<Gesture>, canvas: &Canvas) -> Overlay {
+    /// `pointer` is where the pointer is over the view, in job coordinates.
+    pub(super) fn polyline_overlay(
+        &self,
+        gesture: Option<Gesture>,
+        pointer: Option<Point>,
+    ) -> Vec<Path> {
         let mut draft = self.polyline.clone();
         let pointer = match gesture {
             Some(Gesture::Dragging(drag)) => {
                 draft.drag(drag.start, drag.end);
                 None
             }
-            _ => canvas.hover().map(|at| canvas.transform.to_job(at)),
+            _ => pointer,
         };
-        Overlay::Preview(
-            draft
-                .path(false, pointer.filter(|_| !draft.is_empty()))
-                .into_iter()
-                .collect(),
-        )
+        draft
+            .path(false, pointer.filter(|_| !draft.is_empty()))
+            .into_iter()
+            .collect()
     }
 
     /// Clipart dragged from the Clipart tab and dropped on the 2D view goes where it was
@@ -1180,7 +1190,9 @@ impl CutCraftApp {
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Transform), _) => {
                 self.transform_overlay(ui, drag, reach)
             }
-            (gesture, None, Some("draw_polyline")) => self.polyline_overlay(gesture, &canvas),
+            (gesture, None, Some("draw_polyline")) => {
+                Overlay::Preview(self.polyline_overlay(gesture, canvas.cursor()))
+            }
             (Some(Gesture::Dragging(drag)), _, Some(id)) => {
                 Overlay::Preview(match self.text_arc_drag(drag, reach) {
                     Some(bent) => self.text_preview(&bent),
@@ -1408,7 +1420,7 @@ impl CutCraftApp {
             });
         self.tool_changer_window = open;
         if changed {
-            self.machines_changed("Tool changer changed");
+            self.tool_changer_changed();
         }
     }
 
@@ -1732,7 +1744,7 @@ impl CutCraftApp {
 
     /// What the tool in hand does next, for the status bar: a view tool's use, a drawing
     /// tool's next click or drag (a polyline's by how far it has got), or selecting's.
-    fn step_hint(&self, modes: Modes) -> Option<String> {
+    pub(super) fn step_hint(&self, modes: Modes) -> Option<String> {
         const EDIT: &str = "; Shift-click one this tool drew to edit it";
         let drag = |what: &str| Some(format!("{what}{EDIT}"));
         match self.view_tool {
@@ -1782,6 +1794,14 @@ impl CutCraftApp {
                  tab to move it"
                     .into(),
             );
+        }
+        // a toolbox variant says how it reads the drag
+        if let Some(form) = self.form.as_ref().filter(|f| f.way != DragWay::AsIs)
+            && let Some(variant) = crate::flyout::VARIANTS
+                .iter()
+                .find(|v| v.command == form.id && v.way == form.way)
+        {
+            return drag(variant.hint);
         }
         match self.drawing_tool() {
             Some("draw_polyline") if self.polyline.is_empty() => Some(
@@ -2440,7 +2460,7 @@ impl CutCraftApp {
             return vec![];
         };
         let mut paths: Vec<Path> = cmd
-            .drag_params(drag, &self.with_stroke(id, &form.params))
+            .drag_params(form.way.apply(drag), &self.with_stroke(id, &form.params))
             .and_then(|params| cmd.run_json(&self.doc, &params))
             .map(|change| change.added().cloned().collect())
             .unwrap_or_default();
@@ -2887,9 +2907,14 @@ impl CutCraftApp {
         let Some(cmd) = self.registry.get(id) else {
             return;
         };
-        let Some(current) = self.form.as_ref().map(|f| self.with_stroke(id, &f.params)) else {
+        let Some((current, way)) = self
+            .form
+            .as_ref()
+            .map(|f| (self.with_stroke(id, &f.params), f.way))
+        else {
             return;
         };
+        let drag = way.apply(drag);
         self.stroke.clear();
         let before = self.entity_ids();
         let result = cmd
@@ -2943,7 +2968,28 @@ impl CutCraftApp {
             (component, false) => self.doc.selected_components = component.into_iter().collect(),
             (None, true) => {}
         }
-        if shift {
+        // inside a closed shape, away from any line, picture or component: the shape and
+        // its holes, as one part
+        let part = if hit.is_none() && picture.is_none() && component.is_none() {
+            self.doc.pick_part(at, tolerance)
+        } else {
+            Vec::new()
+        };
+        if !part.is_empty() {
+            let mut ids = self.doc.selection.clone();
+            if !shift {
+                ids.clear();
+            }
+            // Shift-clicking a part already picked takes it away
+            if shift && part.iter().all(|id| ids.contains(id)) {
+                for id in part.iter().flat_map(|&id| self.doc.group_members(id)) {
+                    ids.remove(&id);
+                }
+            } else {
+                ids.extend(part);
+            }
+            self.select(ids, false);
+        } else if shift {
             // a grouped vector brings or takes its whole group
             let mut ids = self.doc.selection.clone();
             if let Some(id) = hit {

@@ -203,10 +203,17 @@ impl Clipart {
     /// The folders kept at `store`, looking in the folder looked in last (all of them, if
     /// none was or it is no longer in the library).
     fn kept(store: Option<PathBuf>) -> Self {
-        let folders: Vec<PathBuf> = store
+        let loaded: Vec<PathBuf> = store
             .as_deref()
             .map(crate::files::load_recent)
             .unwrap_or_default();
+        let folders = outermost(&loaded);
+        if folders != loaded
+            && let Some(store) = &store
+        {
+            // only tidying: kept as it was, it is tidied again next time
+            let _ = crate::files::save_recent(&folders, store);
+        }
         let open = store
             .as_deref()
             .and_then(|s| std::fs::read(open_path(s)).ok())
@@ -238,12 +245,16 @@ impl Clipart {
         }
     }
 
-    /// Adds `folder` (once) and looks in it.
+    /// Adds `folder` and looks in it. One inside a folder already added is only looked in
+    /// (it is in the tree already); the folders inside one added are in it, so they go.
     pub fn add(&mut self, folder: PathBuf) -> Result<(), String> {
-        if !self.folders.contains(&folder) {
+        let saved = if self.folders.iter().any(|f| folder.starts_with(f)) {
+            Ok(())
+        } else {
             self.folders.push(folder.clone());
-        }
-        let saved = self.save();
+            self.folders = outermost(&self.folders);
+            self.save()
+        };
         self.choose(Some(folder));
         saved
     }
@@ -382,6 +393,19 @@ impl Clipart {
     }
 }
 
+/// `folders` without any inside another of them (or the same again): each is in the
+/// library once, as part of the outermost, which keeps its place.
+fn outermost(folders: &[PathBuf]) -> Vec<PathBuf> {
+    let inside = |i: usize, folder: &PathBuf| {
+        (folders.iter().enumerate())
+            .any(|(j, other)| j != i && folder.starts_with(other) && (folder != other || j < i))
+    };
+    (folders.iter().enumerate())
+        .filter(|&(i, f)| !inside(i, f))
+        .map(|(_, f)| f.clone())
+        .collect()
+}
+
 /// Where the folder looked in last is kept, beside the folders kept at `store`.
 fn open_path(store: &Path) -> PathBuf {
     store.with_file_name("library-open.json")
@@ -405,13 +429,7 @@ fn is_grey(path: &Path) -> bool {
 /// inside another one added is read once, as part of it.
 fn read_all(roots: &[PathBuf], importable: &Importable, greys: &mut Greys) -> Listing {
     let mut all = Listing::default();
-    for (i, root) in roots.iter().enumerate() {
-        let inside = |(j, other): (usize, &PathBuf)| {
-            j != i && root.starts_with(other) && (root != other || j < i)
-        };
-        if roots.iter().enumerate().any(inside) {
-            continue;
-        }
+    for root in &outermost(roots) {
         let mut waiting = vec![root.clone()];
         while let Some(folder) = waiting.pop() {
             if all.entries.len() >= MOST {
@@ -1445,6 +1463,60 @@ mod tests {
         );
         assert_eq!(Clipart::kept(Some(store.clone())).folders, [b]);
         assert_eq!(Clipart::kept(Some(store)).open, None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A folder is in the library once: one added inside another already there is looked
+    /// in, not added; one added round others takes their place; and folders kept from
+    /// before this (Matthew's had both) are tidied as they are loaded.
+    #[test]
+    fn no_folder_twice() {
+        let dir = folder("once");
+        let store = dir.join("clipart.json");
+        let (team, club, other) = (
+            dir.join("team"),
+            dir.join("team").join("club"),
+            dir.join("other"),
+        );
+        crate::files::save_recent(&[other.clone(), team.clone(), club.clone()], &store).unwrap();
+        let mut library = Clipart::kept(Some(store.clone()));
+        assert_eq!(
+            library.folders,
+            [other.clone(), team.clone()],
+            "tidied as loaded"
+        );
+        assert_eq!(
+            Clipart::kept(Some(store.clone())).folders,
+            [other.clone(), team.clone()],
+            "and kept tidy"
+        );
+        library.add(club.clone()).unwrap();
+        assert_eq!(
+            library.folders,
+            [other.clone(), team.clone()],
+            "inside one already added"
+        );
+        assert_eq!(
+            library.open,
+            Some(club.clone()),
+            "so looked in there instead"
+        );
+        library.add(team.clone()).unwrap();
+        assert_eq!(
+            library.folders,
+            [other.clone(), team.clone()],
+            "the same one again"
+        );
+        library.add(dir.clone()).unwrap();
+        assert_eq!(
+            library.folders,
+            std::slice::from_ref(&dir),
+            "round the others: they're in it"
+        );
+        assert_eq!(
+            Clipart::kept(Some(store)).folders,
+            std::slice::from_ref(&dir)
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

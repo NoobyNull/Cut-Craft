@@ -154,9 +154,10 @@ impl Command for MouldingToolpath {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("tool diameter", p.tool.diameter)?;
-        if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
+        let stepover = p.tool.finishing_stepover();
+        if !(stepover > 0.0 && stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
+                "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
             ));
         }
         // the profile is the open vector picked last, as in Aspire
@@ -239,7 +240,7 @@ fn finish_positions(
     (from, to): (f64, f64),
     floor: f64,
 ) -> Vec<(f64, f64)> {
-    let step = p.tool.stepover * p.tool.diameter;
+    let step = p.tool.finishing_stepover() * p.tool.diameter;
     let at = |h: f64| (h, tip_height(section, &p.tool, h).max(floor));
     let mut out = vec![at(from)];
     if p.vary_stepover {
@@ -490,7 +491,7 @@ mod tests {
             "{varied:?} vs {even:?}"
         );
         // a stepover apart along the surface the tip follows, never further
-        let step = Params::default().tool.stepover * Params::default().tool.diameter;
+        let step = Params::default().tool.finishing_stepover() * Params::default().tool.diameter;
         for pair in varied[0].1.windows(2) {
             let along = (pair[1].0 - pair[0].0).hypot(pair[1].1 - pair[0].1);
             assert!(along <= step + 1e-6, "{pair:?}");

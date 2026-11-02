@@ -38,6 +38,9 @@ impl CutCraftApp {
             Outcome::Apply | Outcome::Ok => {
                 self.tools = manager.draft.clone();
                 let changer = manager.changer.clone();
+                if let Some(changer) = &changer {
+                    self.tools.number_by_slots(&changer.slots);
+                }
                 if outcome == Outcome::Ok {
                     self.tool_manager = None;
                 }
@@ -149,7 +152,8 @@ impl CutCraftApp {
     }
 
     /// Headed sections of tool buttons; a right-click on one adds it to `page`'s favourites
-    /// or takes it off (`among` them, it moves along them too).
+    /// or takes it off (`among` them, it moves along them too). Tools that do one job
+    /// different ways share a flyout button (see [`crate::flyout`]).
     fn tool_sections(
         &mut self,
         ui: &mut egui::Ui,
@@ -164,21 +168,33 @@ impl CutCraftApp {
         for (name, tools) in sections {
             ui.strong(*name);
             ui.horizontal_wrapped(|ui| {
-                for &id in tools {
-                    let cmd = self.registry.get(id);
-                    let label =
-                        cmd.map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned());
-                    let explicit = cmd.map_or("", |c| c.meta().icon);
-                    let button = self
-                        .icon_button(explicit, id, &label, edge)
-                        .selected(self.status.current_tool == label);
-                    let response = ui
-                        .add_enabled(self.available(id), button)
-                        .on_hover_hint(gui::about(id).unwrap_or(&label))
-                        .on_disabled_hover_text(format!("{label}: not implemented yet"));
-                    if response.clicked() {
-                        clicked = Some(id);
-                    }
+                // favourites name each tool on its own, flyout or not
+                let buttons = if among {
+                    tools
+                        .iter()
+                        .map(|&face| crate::flyout::Button {
+                            face,
+                            members: vec![],
+                        })
+                        .collect()
+                } else {
+                    crate::flyout::buttons(tools, &self.options.flyout_faces)
+                };
+                for button in buttons {
+                    let id = button.face;
+                    let response = if button.members.is_empty() {
+                        let response = self.tool_button(ui, id, edge);
+                        if response.clicked() {
+                            clicked = Some(id);
+                        }
+                        response
+                    } else {
+                        let (response, run) = self.flyout_button(ui, &button, edge);
+                        if run.is_some() {
+                            clicked = run;
+                        }
+                        response
+                    };
                     let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
                     if let Some(action) =
                         self.popup(&response, || gui::tool_menu(page, id, favourite, among))
@@ -190,11 +206,156 @@ impl CutCraftApp {
             ui.add_space(ui.spacing().item_spacing.y);
         }
         if let Some(id) = clicked {
+            if let Some(flyout) = crate::flyout::flyout_of(id)
+                && self.options.flyout_faces.get(flyout[0]).map(String::as_str) != Some(id)
+            {
+                crate::flyout::remember(&mut self.options.flyout_faces, id);
+                self.save_options();
+            }
             self.pick(ui.ctx(), page, id);
         }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
         }
+    }
+
+    /// One tool's icon button: enabled when it is built, highlighted while in hand.
+    fn tool_button(&self, ui: &mut egui::Ui, id: &str, edge: f32) -> egui::Response {
+        let label = self.tool_label(id);
+        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let button = self
+            .icon_button(explicit, id, &label, edge)
+            .selected(self.status.current_tool == label);
+        ui.add_enabled(self.available(id), button)
+            .on_hover_hint(gui::about(id).unwrap_or(&label))
+            .on_disabled_hover_text(format!("{label}: not implemented yet"))
+    }
+
+    /// A flyout's button: its face as [`Self::tool_button`] with an arrow in the corner. A
+    /// click on the arrow, a press held for [`crate::flyout::HOLD_SECONDS`], or Down while it
+    /// has the focus opens the flyout: each of its tools by icon and name. The button's
+    /// response, and the tool to run: the face on a plain click, or the one picked from the
+    /// flyout.
+    fn flyout_button(
+        &self,
+        ui: &mut egui::Ui,
+        button: &crate::flyout::Button,
+        edge: f32,
+    ) -> (egui::Response, Option<&'static str>) {
+        use crate::flyout::{HOLD_SECONDS, on_arrow, tooltip};
+        let id = button.face;
+        let label = self.tool_label(id);
+        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let in_hand = button
+            .members
+            .iter()
+            .any(|m| self.status.current_tool == self.tool_label(m));
+        let others: Vec<String> = button
+            .members
+            .iter()
+            .filter(|m| **m != id)
+            .map(|m| self.tool_label(m))
+            .collect();
+        let about = gui::about(id).unwrap_or(&label).to_owned();
+        let any_available = button.members.iter().any(|m| self.available(m));
+        let response = ui
+            .add_enabled(
+                any_available,
+                self.icon_button(explicit, id, &label, edge)
+                    .selected(in_hand),
+            )
+            .on_hover_hint(tooltip(&about, &others))
+            .on_disabled_hover_text(format!("{label}: not implemented yet"));
+        let r = response.rect;
+        flyout_arrow(ui, &response);
+        let popup_id = response.id.with("flyout");
+        let held_id = response.id.with("flyout_held");
+        let ctx = ui.ctx().clone();
+        // a long press opens it; the release that follows is no click
+        let mut open = false;
+        if response.is_pointer_button_down_on() {
+            let held = ctx.input(|i| i.pointer.press_start_time().map(|t| i.time - t));
+            match held {
+                Some(t) if t >= HOLD_SECONDS => {
+                    if !ctx.data(|d| d.get_temp::<bool>(held_id).unwrap_or(false)) {
+                        ctx.data_mut(|d| d.insert_temp(held_id, true));
+                        open = true;
+                    }
+                }
+                Some(t) => {
+                    ctx.request_repaint_after(std::time::Duration::from_secs_f64(HOLD_SECONDS - t));
+                }
+                None => {}
+            }
+        }
+        let mut run = None;
+        if response.clicked() {
+            let was_held = ctx.data_mut(|d| d.remove_temp::<bool>(held_id).unwrap_or(false));
+            let at_arrow = response
+                .interact_pointer_pos()
+                .is_some_and(|at| on_arrow(r, at));
+            // the arrow, or a face not built yet, opens the flyout; a held press already did
+            if at_arrow || !self.available(id) {
+                open |= !was_held;
+            } else if !was_held {
+                run = Some(id);
+            }
+        } else if !response.is_pointer_button_down_on() {
+            ctx.data_mut(|d| d.remove_temp::<bool>(held_id));
+        }
+        if response.has_focus() && ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+            open = true;
+        }
+        let picked = egui::Popup::from_response(&response)
+            .id(popup_id)
+            .kind(egui::PopupKind::Menu)
+            .align(egui::RectAlign::RIGHT_START)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .open_memory(open.then_some(egui::SetOpenCommand::Bool(true)))
+            .show(|ui| self.flyout_list(ui, button, edge, open))
+            .and_then(|shown| shown.inner);
+        if picked.is_some() {
+            egui::Popup::close_id(&ctx, popup_id);
+        }
+        (response, picked.or(run))
+    }
+
+    /// An open flyout: each of its tools by icon and name, the face first in focus when it
+    /// has just opened; the tool clicked.
+    fn flyout_list(
+        &self,
+        ui: &mut egui::Ui,
+        button: &crate::flyout::Button,
+        edge: f32,
+        opened: bool,
+    ) -> Option<&'static str> {
+        cut_craft_bug_report::mark(ui, "Flyout");
+        let mut picked = None;
+        for &member in &button.members {
+            let name = self.tool_label(member);
+            let explicit = self.registry.get(member).map_or("", |c| c.meta().icon);
+            let row = match self.icons.find(explicit, member) {
+                Some(path) => egui::Button::image_and_text(
+                    self.icons
+                        .image(path)
+                        .fit_to_exact_size(egui::vec2(edge * 0.6, edge * 0.6)),
+                    &name,
+                ),
+                None => egui::Button::new(&name),
+            }
+            .selected(member == button.face);
+            let row = ui
+                .add_enabled(self.available(member), row)
+                .on_hover_hint(gui::about(member).unwrap_or(&name))
+                .on_disabled_hover_text(format!("{name}: not implemented yet"));
+            if opened && member == button.face {
+                row.request_focus();
+            }
+            if row.clicked() {
+                picked = Some(member);
+            }
+        }
+        picked
     }
 
     /// An icon button, or a text one when the icon is missing.
@@ -1223,7 +1384,9 @@ impl CutCraftApp {
         );
         // while sculpting the left button sculpts; the right turns the view, the middle pans
         let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
-        let left = left && !sculpting;
+        // with a drawing tool open the left button draws on the model, as in Aspire 12
+        let drawing = self.drawing_in_3d();
+        let left = left && !sculpting && drawing.is_none();
         let delta = response.drag_delta();
         self.take_ring(ui, &response);
         if response.dragged() && delta != egui::Vec2::ZERO {
@@ -1263,23 +1426,9 @@ impl CutCraftApp {
         // a double-click picks the component under it, as in Aspire; off the model it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         self.fit_3d = Some(fit);
-        let double = response
-            .double_clicked()
-            .then(|| response.interact_pointer_pos())
-            .flatten();
-        // while a preview shows, a double-click takes away the piece cut free under it
-        let removed = double
-            .filter(|_| self.playback.is_none() && self.simulation.is_some())
-            .is_some_and(|at| self.remove_preview_piece(fit, at));
-        let picked = double
-            .filter(|_| !removed)
-            .and_then(|at| self.component_at_3d(fit, at));
-        if removed {
-        } else if let Some(id) = picked {
-            self.pick_3d(ui, id);
-        } else if double.is_some() || (response.hovered() && fit_key) {
-            self.framing = self.framing.fitted();
-        }
+        // F fits too, with the pointer over the view
+        let fit_now = response.hovered() && fit_key;
+        self.double_click_3d(ui, &response, fit, drawing.is_none(), fit_now);
         if response.dragged() || on_cube.dragged() || before != (self.orbit, self.framing) {
             self.moved_3d = ui.input(|i| i.time);
         }
@@ -1290,7 +1439,41 @@ impl CutCraftApp {
         self.handles_3d(ui, area, fit);
         self.rings_3d(ui, area, fit);
         self.anchors_3d(ui, &response, area, fit);
+        if let Some(id) = drawing {
+            self.draw_3d(ui, &response, area, fit, id);
+        }
         self.view_3d_menu(ui, &response, fit);
+    }
+
+    /// A double-click in the 3D view (not while drawing): on a preview it takes away the
+    /// piece cut free under it, on a component it picks it, off the model it fits the view,
+    /// as `fit_now` (F) does.
+    fn double_click_3d(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        fit: egui::Rect,
+        picking: bool,
+        fit_now: bool,
+    ) {
+        let double = response
+            .double_clicked()
+            .then(|| response.interact_pointer_pos())
+            .flatten()
+            .filter(|_| picking);
+        // while a preview shows, a double-click takes away the piece cut free under it
+        let removed = double
+            .filter(|_| self.playback.is_none() && self.simulation.is_some())
+            .is_some_and(|at| self.remove_preview_piece(fit, at));
+        let picked = double
+            .filter(|_| !removed)
+            .and_then(|at| self.component_at_3d(fit, at));
+        if removed {
+        } else if let Some(id) = picked {
+            self.pick_3d(ui, id);
+        } else if double.is_some() || fit_now {
+            self.framing = self.framing.fitted();
+        }
     }
 
     /// A double-click on component `id`: Shift adds or takes it away; again on a selected
@@ -1380,7 +1563,7 @@ impl CutCraftApp {
 
     /// The preview's material, or the model's shape, at its own detail up to
     /// [`FINE_MESH_CELLS`].
-    fn fine_surface(&mut self) -> Material {
+    pub(super) fn fine_surface(&mut self) -> Material {
         if let Some(material) = &self.simulation {
             return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
         }
@@ -1474,12 +1657,13 @@ impl CutCraftApp {
         geometry
     }
 
-    /// Aspire 12's component editing icons in Transform mode: round buttons along the near
-    /// edge of the selected component's box; a drag on the first three sets its total,
-    /// shape or base height, and the last opens its settings. The model's own view has
-    /// them, not a preview.
+    /// Transform mode's handles in the 3D view, over whatever is selected: Aspire's 3D
+    /// Transform Handles (see [`Self::transform_handles_3d`]) for vectors and components
+    /// alike, and for a component, Aspire 12's component editing icons, round buttons
+    /// along the near edge of its box; a drag on the first three sets its total, shape or
+    /// base height, and the last opens its settings. The model's own view has them, not a
+    /// preview. With nothing selected the status bar says how to start.
     pub(super) fn handles_3d(&mut self, ui: &mut egui::Ui, area: egui::Rect, fit: egui::Rect) {
-        use cut_craft_core::glam::DVec3;
         self.handles_3d.clear();
         let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
         if self.simulation.is_some()
@@ -1487,8 +1671,32 @@ impl CutCraftApp {
             || importing
             || self.view_tool != Some(ViewTool::Transform)
         {
+            // a drag the mode was left in the middle of ends here, as far as it went
+            self.drag_3d = None;
+            self.drag_base = None;
             return;
         }
+        let Some(bounds) = self.doc.selection_bounds() else {
+            self.drag_3d = None;
+            if ui.rect_contains_pointer(area) {
+                cut_craft_bug_report::hint::hint(
+                    ui.ctx(),
+                    "Transform: click a component or vector to select it, then drag its \
+                     handles to move, scale or rotate it",
+                );
+            }
+            return;
+        };
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return;
+        };
+        let camera = view3d::Camera::new(&surface, self.orbit, self.framing, fit, None);
+        let plane = Plane3d {
+            camera: &camera,
+            origin: surface.origin,
+            z: top_over(&surface, bounds),
+        };
+        let painter = ui.painter_at(area);
         let chosen = self
             .doc
             .selected_components
@@ -1496,38 +1704,39 @@ impl CutCraftApp {
             .rev()
             .find(|id| self.doc.components.contains_key(id))
             .copied();
-        let Some(id) = chosen else {
-            self.drag_3d = None;
-            return;
-        };
+        if let Some(id) = chosen {
+            self.component_icons_3d(ui, &painter, &plane, id);
+        }
+        self.transform_handles_3d(ui, &painter, &plane, bounds);
+        if let Some(id) = chosen {
+            self.handle_drag_3d(ui, fit, id);
+        }
+    }
+
+    /// Aspire 12's component editing icons along the near edge of component `id`'s box, a
+    /// button's height below it (the transform handles sit on the edge itself).
+    fn component_icons_3d(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        plane: &Plane3d,
+        id: EntityId,
+    ) {
         let extent = self.doc.components[&id].extent();
-        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
-            return;
-        };
-        let camera = view3d::Camera::new(&surface, self.orbit, self.framing, fit, None);
-        let floor = |p: Point| {
-            camera.screen(DVec3::new(
-                p.x - surface.origin.x,
-                p.y - surface.origin.y,
-                0.0,
-            ))
-        };
         let (near, far) = (
-            floor(extent.min),
-            floor(Point::new(extent.max.x, extent.min.y)),
+            plane.screen(extent.min),
+            plane.screen(Point::new(extent.max.x, extent.min.y)),
         );
-        // a button's height below the near edge of its box (the transform handles sit on
-        // the edge itself), a button's height apart; an edge seen end-on runs to the right
+        // a button's height apart; an edge seen end-on runs to the right
         let edge = ui.spacing().interact_size.y;
         let mut along = (far - near).normalized();
         if !along.is_finite() || along == egui::Vec2::ZERO {
             along = egui::Vec2::X;
         }
         let mut below = along.rot90();
-        if below.dot(near - floor(extent.center())) < 0.0 {
+        if below.dot(near - plane.screen(extent.center())) < 0.0 {
             below = -below;
         }
-        let painter = ui.painter_at(area);
         for (i, handle) in Handle3d::ALL.into_iter().enumerate() {
             #[expect(clippy::cast_precision_loss, reason = "four handles")]
             let centre = near + along * edge * (1.0 + 1.5 * i as f32) + below * edge;
@@ -1568,37 +1777,39 @@ impl CutCraftApp {
                 });
             }
         }
-        self.transform_handles_3d(ui, &painter, &camera, surface.origin);
-        self.handle_drag_3d(ui, fit, id);
     }
 
-    /// Aspire's 3D Transform Handles over the selection's box on the material's top: the 2D
+    /// Aspire's 3D Transform Handles over the selection's box, level with the highest
+    /// surface inside it so they sit on what is selected rather than under it: the 2D
     /// view's handles at the same places (a cross in the middle moves, white corners and
     /// black edges scale) and a rotation arrow on a stem above the far edge. Dragged as the
-    /// 2D view's are, with Alt and Shift, and applied once the pointer is let go (one undo);
-    /// while dragging, the box as it will be.
+    /// 2D view's are, with the same keys, and applied once the pointer is let go (one
+    /// undo); while dragging, the box as it will be. Escape cancels a drag.
     // ponytail: the manual's edit box for an exact value, and moving the rotation centre,
     // are not offered; the Move, Scale and Rotate forms take exact values
     fn transform_handles_3d(
         &mut self,
         ui: &egui::Ui,
         painter: &egui::Painter,
-        camera: &view3d::Camera,
-        origin: Point,
+        plane: &Plane3d,
+        bounds: cut_craft_core::geometry::Rect,
     ) {
-        use cut_craft_core::glam::DVec3;
-        let Some(bounds) = self.doc.selection_bounds() else {
-            return;
-        };
-        let floor = |p: Point| camera.screen(DVec3::new(p.x - origin.x, p.y - origin.y, 0.0));
         let visuals = ui.visuals();
         let (stroke, dark) = (visuals.selection.stroke, visuals.text_color());
         let edge = ui.spacing().interact_size.y;
         let half = edge * view2d::NODE_HANDLE_SHARE / 2.0;
+        // the selection's box itself, so the handles read as its corners and sides
+        let corners = box_corners(bounds).map(|c| plane.screen(c)).to_vec();
+        painter.add(egui::Shape::dashed_line(
+            &[corners.as_slice(), &corners[..1]].concat(),
+            stroke,
+            6.0,
+            4.0,
+        ));
         // the arrow a button's height out from the far edge's middle, on a stem
         let arrow = Handle::Rotate { x: 0, y: 1 };
-        let far = floor(handles::position(bounds, arrow));
-        let mut out = (far - floor(bounds.center())).normalized();
+        let far = plane.screen(handles::position(bounds, arrow));
+        let mut out = (far - plane.screen(bounds.center())).normalized();
         if !out.is_finite() || out == egui::Vec2::ZERO {
             out = -egui::Vec2::Y;
         }
@@ -1609,7 +1820,7 @@ impl CutCraftApp {
             let at = if handle == arrow {
                 tip
             } else {
-                floor(handles::position(bounds, handle))
+                plane.screen(handles::position(bounds, handle))
             };
             let square = egui::Rect::from_center_size(at, egui::Vec2::splat(half * 2.0));
             match handle {
@@ -1657,9 +1868,22 @@ impl CutCraftApp {
                 self.drag_3d = Some((Handle3d::Transform(handle), from));
             }
         }
+        self.transform_drag_3d(ui, painter, plane, bounds);
+    }
+
+    /// A transform handle's drag in the 3D view: the box as it will be while dragging, the
+    /// transform applied (one undo) when the pointer is let go over the handles' plane.
+    fn transform_drag_3d(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        plane: &Plane3d,
+        bounds: cut_craft_core::geometry::Rect,
+    ) {
         let Some((Handle3d::Transform(handle), from)) = self.drag_3d else {
             return;
         };
+        let stroke = ui.visuals().selection.stroke;
         let (now, released, keys) = ui.input(|i| {
             (
                 i.pointer.latest_pos(),
@@ -1671,24 +1895,42 @@ impl CutCraftApp {
                 },
             )
         });
-        let on_floor = |at: egui::Pos2| camera.on_floor(at).map(|p| p + origin);
-        let Some((start, end)) = on_floor(from).zip(now.and_then(on_floor)) else {
+        let Some((start, end)) = plane.back(from).zip(now.and_then(|at| plane.back(at))) else {
+            // off the handles' plane (over the horizon in perspective, or the plane seen
+            // edge-on): nothing to show, and letting go there changes nothing
+            if released {
+                self.drag_3d = None;
+                self.status
+                    .set_message("Let go off the material: nothing was changed");
+            } else {
+                self.status.set_message(
+                    "The pointer is off the material: bring it back, or let go to cancel",
+                );
+            }
             return;
         };
         let t = handles::transform(bounds, handle, start, end, keys);
-        let corners = [
-            bounds.min,
-            Point::new(bounds.max.x, bounds.min.y),
-            bounds.max,
-            Point::new(bounds.min.x, bounds.max.y),
-        ];
-        let moved = corners.map(|c| floor(t.transform_point2(c))).to_vec();
+        let moved = box_corners(bounds)
+            .map(|c| plane.screen(t.transform_point2(c)))
+            .to_vec();
         painter.add(egui::Shape::closed_line(moved, stroke));
         if released {
             self.drag_3d = None;
             let change = Change::transform_selected(&self.doc, |_| t);
             self.record(change, "Transformed");
         }
+    }
+
+    /// Escape during a drag on a 3D view handle: the drag ends with nothing changed (a
+    /// height already set as it went is undone), Transform mode stays.
+    pub(super) fn cancel_drag_3d(&mut self) {
+        if self.drag_3d.take().is_none() {
+            return;
+        }
+        if let Some((.., Some(_))) = self.drag_base.take() {
+            self.history.undo(&mut self.doc);
+        }
+        self.status.set_message("Cancelled: nothing was changed");
     }
 
     /// A height handle's drag: the component follows the pointer, its total, shape or base
@@ -3074,4 +3316,66 @@ fn combine_radios_3d(ui: &mut egui::Ui, icons: &crate::icons::Icons, s: &mut Set
             s.radios.push((mode, response.rect.center()));
         }
     });
+}
+
+/// A flyout button's arrow: a small filled triangle in its bottom-right corner.
+fn flyout_arrow(ui: &egui::Ui, response: &egui::Response) {
+    let r = response.rect;
+    let side = r.width().min(r.height()) * crate::flyout::ARROW_SHARE * 0.6;
+    let corner = r.right_bottom() - egui::vec2(3.0, 3.0);
+    let colour = ui.style().interact(response).fg_stroke.color;
+    ui.painter().add(egui::Shape::convex_polygon(
+        vec![
+            corner,
+            corner - egui::vec2(0.0, side),
+            corner - egui::vec2(side, 0.0),
+        ],
+        colour,
+        egui::Stroke::NONE,
+    ));
+}
+
+/// The level plane the 3D view's transform handles sit on, at height `z` in the material.
+struct Plane3d<'a> {
+    camera: &'a view3d::Camera,
+    origin: Point,
+    z: f64,
+}
+
+impl Plane3d<'_> {
+    /// Where the job's point `p` on this plane shows.
+    fn screen(&self, p: Point) -> egui::Pos2 {
+        use cut_craft_core::glam::DVec3;
+        self.camera
+            .screen(DVec3::new(p.x - self.origin.x, p.y - self.origin.y, self.z))
+    }
+
+    /// The job's point on this plane under `at` on screen, if the plane is there.
+    fn back(&self, at: egui::Pos2) -> Option<Point> {
+        self.camera.on_plane(at, self.z).map(|p| p + self.origin)
+    }
+}
+
+/// The highest surface over `bounds` (sampled on a 9 by 9 grid), or the material's top
+/// when that is higher or the surface is not there.
+fn top_over(surface: &Material, bounds: cut_craft_core::geometry::Rect) -> f64 {
+    const SAMPLES: u32 = 9;
+    let size = bounds.size();
+    (0..SAMPLES)
+        .flat_map(|i| (0..SAMPLES).map(move |j| (i, j)))
+        .filter_map(|(i, j)| {
+            let along = |k: u32| f64::from(k) / f64::from(SAMPLES - 1);
+            surface.at(bounds.min + Point::new(size.x * along(i), size.y * along(j)))
+        })
+        .fold(0.0, f64::max)
+}
+
+/// The corners of `bounds`, round from its minimum.
+fn box_corners(bounds: cut_craft_core::geometry::Rect) -> [Point; 4] {
+    [
+        bounds.min,
+        Point::new(bounds.max.x, bounds.min.y),
+        bounds.max,
+        Point::new(bounds.min.x, bounds.max.y),
+    ]
 }

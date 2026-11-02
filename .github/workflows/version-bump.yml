@@ -1,0 +1,97 @@
+# The nightly version. Each night it reads the titles of the pull requests merged since the
+# last version tag and takes the biggest kind among them (scripts/next-version):
+#   any feat: or "!" (rewrite, breaking)  -> 0.x+1.0
+#   otherwise any fix:/perf:/refactor:/revert:  -> 0.x.y+1
+#   only docs:/chore:/ci:/test:/style:/build:, or no merges  -> nothing is released
+# then commits "Version X.Y.Z" and tags vX.Y.Z. The tag starts Release and Builds, which build
+# and publish the release. "Run workflow" does the same now.
+#
+# It starts once main's version has a tag (v0.5.1, cut by hand); until then it only reports.
+# Everything since the last tag counts, so a night that fails is made up the next night.
+# main is protected (no direct pushes), so the push goes through the deploy key in the
+# VERSION_BUMP_DEPLOY_KEY secret, the one thing the "Protect main" ruleset lets bypass it.
+# Unlike the workflow's own token, a deploy-key push starts workflows: CI checks the Version
+# commit, and the tag starts Release and Builds.
+name: Version bump
+
+on:
+  schedule:
+    - cron: '47 9 * * *' # 02:47 Pacific (daylight time) / 01:47 (standard time)
+  workflow_dispatch:
+
+permissions:
+  contents: write # the Version commit and the tag
+  pull-requests: read
+
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          ssh-key: ${{ secrets.VERSION_BUMP_DEPLOY_KEY }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Work out the next version
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if ! git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
+            echo "::notice::Not started: main is $current but has no tag v$current yet. Cut v$current by hand (BUILDING.md) and merges after it get versions."
+            exit 0
+          fi
+          kinds=()
+          {
+            echo "### Merges since v$current"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          for sha in $(git rev-list --first-parent --reverse "v$current..HEAD"); do
+            pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" \
+              --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0] | select(.) | "\(.number)\t\(.title)"')
+            if [[ -z $pr ]]; then
+              continue # a direct push, such as an earlier Version commit
+            fi
+            number=${pr%%$'\t'*} title=${pr#*$'\t'}
+            if ! kind=$(scripts/next-version kind "$title" 2>/dev/null); then
+              echo "::warning::#$number \"$title\" has no feat:/fix:/docs: kind; counted as a fix."
+              kind=patch
+            fi
+            kinds+=("$kind")
+            echo "- #$number $title ($kind)" >> "$GITHUB_STEP_SUMMARY"
+          done
+          version=$(scripts/next-version bump "$current" "$(scripts/next-version highest "${kinds[@]}")")
+          if [[ $version == "$current" ]]; then
+            echo "Nothing since v$current changes the version: no release tonight." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag the version
+        if: steps.plan.outputs.version
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          HAS_KEY: ${{ secrets.VERSION_BUMP_DEPLOY_KEY != '' }}
+        run: |
+          if [[ $HAS_KEY != true ]]; then
+            echo "::error::Secret VERSION_BUMP_DEPLOY_KEY is missing, so Version $VERSION can't be pushed to protected main. See BUILDING.md, \"Let the nightly version push to main\"."
+            exit 1
+          fi
+          sed -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" Cargo.toml
+          cargo update --workspace
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Version $VERSION"
+          git tag -a "v$VERSION" -m "Cut Craft $VERSION"
+          # both or neither: if main moved meanwhile this is refused and the next night retries
+          git push --atomic origin HEAD:main "v$VERSION"
+

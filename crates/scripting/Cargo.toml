@@ -1,0 +1,17 @@
+[package]
+name = "cut-craft-scripting"
+description = "Lua gadgets: a sandboxed Lua 5.4 that drives the commands, one undo step per run"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+mlua = { version = "0.12.2", features = ["lua54", "vendored", "serde"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+cmd-draw-circle = { path = "../commands/draw-circle" }
+
+[lints]
+workspace = true

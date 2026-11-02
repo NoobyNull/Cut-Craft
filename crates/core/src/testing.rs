@@ -302,6 +302,7 @@ pub fn with_toolpath() -> Document {
         power: vec![],
         stale: false,
         group: None,
+        drill_bank: None,
     });
     let change = c.finish();
     doc.apply(&change).expect("a toolpath applies");
