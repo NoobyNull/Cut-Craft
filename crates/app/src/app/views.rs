@@ -248,8 +248,11 @@ impl CutCraftApp {
         if ctx.input(|i| i.viewport().close_requested()) {
             if self.confirm_discard() {
                 self.clear_recovery();
+                self.restart_into_update();
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                // Cancel at "Save changes?" cancels Restart Now too
+                self.restart_after_close = None;
             }
         }
         paint_focus_ring(ctx);
@@ -283,6 +286,7 @@ impl CutCraftApp {
         self.tool_search(ctx);
         self.guide_window(ctx);
         self.tool_changer_window(ctx);
+        self.updates_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));

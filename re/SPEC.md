@@ -106,6 +106,7 @@ Our equivalents so far: wgpu instead of OSG/OpenGL, winit instead of MFC. Every 
   - Draw Origin / Modeling Plane / Material Block / Vectors in 3D / Keep-Out Zones.
   - Auto-Wrapping, Colour Shaded, Shaded Background, Light Follows Viewer, Shadow Shading, Save Shaded Image, Tile H/V, Cascade.
 - **Help:** contents, shortcuts, tutorials, licence, updates, about. Licensing and vendor web links are out of scope.
+  - **Check for Updates [inf]** (Aspire checks Vectric's own servers and has the user download and run a new installer). Cut Craft's differs on purpose, for a novice who will not go looking for a download page: it checks GitHub's releases by itself at startup (about once a day, off in Options ▸ Updates), only says something when there is a newer version, and installs in place after one click, checking the download against GitHub's SHA-256 checksum first. Nothing downloads or restarts without the user pressing Update Now and Restart Now; restarting goes through the usual "Save changes?" question.
 
 ---
 

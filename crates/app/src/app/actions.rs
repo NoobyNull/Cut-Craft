@@ -78,6 +78,8 @@ impl CutCraftApp {
                 super::BUG_REPO,
                 files::config_dir().map(|d| d.join("bug-reports")),
             ),
+            updates: crate::update::Updates::default(),
+            restart_after_close: None,
             clipboard: vec![],
             clipboard_components: vec![],
             fit_3d: None,
@@ -388,6 +390,10 @@ impl CutCraftApp {
             | "help_contents"
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
+            "check_for_updates" => {
+                let skipped = self.options.updates.skipped_version.clone();
+                self.updates.check(ctx, true, skipped);
+            }
             // the Select tool: put away whatever tool is in hand
             "select" => {
                 (self.form, self.view_tool) = (None, None);
