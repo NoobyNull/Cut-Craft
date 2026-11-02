@@ -2135,6 +2135,25 @@ fn a_drag_with_a_drawing_tool_in_the_3d_view_draws_where_it_meets_the_model() {
 }
 
 #[test]
+fn drawing_in_the_3d_view_meets_the_model_as_finely_as_the_settled_view_draws_it() {
+    let (mut h, _, _) = drawing_on_the_dome("draw_rectangle");
+    let fine = h.app.fine_surface();
+    let hit = h.app.drawing_surface().expect("a model to draw on");
+    assert_eq!((hit.columns, hit.rows), (fine.columns, fine.rows));
+    // cells off the model are NaN, so compare bit for bit
+    let bits = |m: &Material| m.heights.iter().map(|h| h.to_bits()).collect::<Vec<_>>();
+    assert_eq!(bits(&hit), bits(&fine));
+    let again = h.app.drawing_surface().unwrap();
+    assert!(
+        std::sync::Arc::ptr_eq(&hit, &again),
+        "kept while nothing changes"
+    );
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.invoke(&h.ctx, "delete");
+    assert!(h.app.drawing_surface().is_none(), "nothing left to draw on");
+}
+
+#[test]
 fn polyline_clicks_in_the_3d_view_place_its_points_on_the_model() {
     let (mut h, on_model, cell) = drawing_on_the_dome("draw_polyline");
     let corners = [(17.0, 18.0), (23.0, 18.0), (20.0, 23.0)];

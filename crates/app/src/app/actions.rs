@@ -114,6 +114,7 @@ impl CutCraftApp {
             import_level: None,
             polyline: crate::polyline::Draft::default(),
             fine_3d: None,
+            drawn_on: None,
             model_3d: None,
             gpu_3d: None,
             surface_gpu: None,

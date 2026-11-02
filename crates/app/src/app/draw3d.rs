@@ -3,6 +3,7 @@
 
 use super::views::Modes;
 use super::{Cow, CutCraftApp, Gesture, Material, Path, Point, egui, view2d, view3d};
+use std::sync::Arc;
 
 impl CutCraftApp {
     /// The drawing tool the 3D view's left button draws with: the open form's, when it is
@@ -31,7 +32,10 @@ impl CutCraftApp {
             return;
         };
         let camera = view3d::Camera::new(&surface, self.orbit, self.framing, fit, None);
-        let to_job = |at: egui::Pos2| camera.on_surface(&surface, at).map(|p| p + surface.origin);
+        // the pointer meets the model as finely as the settled view draws it
+        let model = self.drawing_surface();
+        let solid = model.as_deref().unwrap_or(&surface);
+        let to_job = |at: egui::Pos2| camera.on_surface(solid, at).map(|p| p + solid.origin);
         let gesture = view2d::gesture_of(ui, response, to_job);
         #[expect(clippy::cast_possible_truncation, reason = "a screen scale fits f32")]
         let scale = camera.scale() as f32;
@@ -58,6 +62,24 @@ impl CutCraftApp {
         }
         let modifiers = ui.input(|i| i.modifiers);
         self.drawing_gesture(id, gesture, reach, modifiers);
+    }
+
+    /// The model at the detail the settled 3D view draws it ([`Self::fine_surface`]), kept
+    /// while the document and job stay as they are; `None` while a preview shows, which is
+    /// hit as [`Self::surface_3d`] has it.
+    pub(super) fn drawing_surface(&mut self) -> Option<Arc<Material>> {
+        if self.simulation.is_some() || self.playback.is_some() || self.doc.components.is_empty() {
+            return None;
+        }
+        let key = (self.history.revision(), self.doc.job);
+        if let Some((kept, model)) = &self.drawn_on
+            && *kept == key
+        {
+            return Some(Arc::clone(model));
+        }
+        let model = Arc::new(self.fine_surface());
+        self.drawn_on = Some((key, Arc::clone(&model)));
+        Some(model)
     }
 
     /// What drawing tool `id` would make with `gesture`, as the 2D view previews it.

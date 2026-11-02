@@ -1360,7 +1360,7 @@ impl CutCraftApp {
 
     /// The preview's material, or the model's shape, at its own detail up to
     /// [`FINE_MESH_CELLS`].
-    fn fine_surface(&mut self) -> Material {
+    pub(super) fn fine_surface(&mut self) -> Material {
         if let Some(material) = &self.simulation {
             return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
         }
