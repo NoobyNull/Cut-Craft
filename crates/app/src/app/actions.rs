@@ -3402,14 +3402,16 @@ impl CutCraftApp {
         else {
             return;
         };
-        let id = self.depth_estimate.take().expect("answered").bitmap;
+        let sent = self.depth_estimate.take().expect("answered");
+        let id = sent.bitmap;
         let result = answer.and_then(|depth| {
             let bitmap = self
                 .doc
                 .bitmaps
                 .get(&id)
                 .ok_or("the photo was deleted while its depth was estimated")?;
-            if depth.len() != bitmap.grey.len() {
+            // another job opened, or the photo edited, while the add-on worked
+            if *bitmap != sent.photo || depth.len() != bitmap.grey.len() {
                 return Err("the photo changed while its depth was estimated; try again".into());
             }
             let after = crate::depth::with_depth(bitmap, depth);

@@ -91,6 +91,9 @@ pub fn with_depth(bitmap: &Bitmap, depth: Vec<f32>) -> Bitmap {
 /// An estimate running in the background: for which picture, and its answer to come.
 pub struct Estimating {
     pub bitmap: EntityId,
+    /// The picture as it was sent: the answer is for it alone, not a picture that has since
+    /// changed or one of another job that happens to share its id.
+    pub photo: Bitmap,
     answer: mpsc::Receiver<Result<Vec<f32>, String>>,
 }
 
@@ -104,6 +107,7 @@ impl Estimating {
     ) -> Result<Self, String> {
         let png = photo_png(bitmap)?;
         let (send, answer) = mpsc::channel();
+        let photo = bitmap.clone();
         let (installed, bitmap, ctx) = (installed.clone(), bitmap.clone(), ctx.clone());
         std::thread::Builder::new()
             .name("depth estimate".into())
@@ -112,7 +116,11 @@ impl Estimating {
                 ctx.request_repaint();
             })
             .map_err(|e| e.to_string())?;
-        Ok(Self { bitmap: id, answer })
+        Ok(Self {
+            bitmap: id,
+            photo,
+            answer,
+        })
     }
 
     /// The answer once there is one.

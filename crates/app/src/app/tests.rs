@@ -706,6 +706,27 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
     assert_eq!(h.app.doc.bitmaps[&id].depth, [0.0, 1.0]);
     assert!(h.app.history.undo(&mut h.app.doc));
     assert!(h.app.doc.bitmaps[&id].depth.is_empty(), "undone");
+    // an answer for a picture that has changed since (another job's, sharing its id) is
+    // turned away
+    let mut other = photo.clone();
+    other.grey = vec![90, 90];
+    let mut c = Change::builder(&h.app.doc);
+    c.replace_bitmap(id, other);
+    h.app.record(Ok(c.finish()), "edited");
+    h.app.depth_estimate =
+        Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
+    for _ in 0..200 {
+        if h.app.depth_estimate.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.frame(vec![]);
+    }
+    assert!(h.app.depth_estimate.is_none(), "the add-on answered");
+    assert!(
+        h.app.doc.bitmaps[&id].depth.is_empty(),
+        "not given to another picture"
+    );
     std::fs::remove_dir_all(addons).unwrap();
 }
 
