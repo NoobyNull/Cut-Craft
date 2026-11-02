@@ -1,0 +1,52 @@
+#!/bin/bash
+# Tests for scripts/next-version: scripts/test-next-version (CI runs it on each pull request).
+set -uo pipefail
+cd "$(dirname "$0")"
+failed=0
+expect() {
+  local want=$1 got
+  shift
+  got=$(./next-version "$@" 2>/dev/null) || got="(fails)"
+  if [[ $got != "$want" ]]; then
+    echo "FAIL: next-version $* -> $got, want $want"
+    failed=1
+  fi
+}
+
+expect minor kind "feat: Draw in 3D"
+expect minor kind "feat(toolpaths): Drill bank"
+expect minor kind "Feat: capitalised"
+expect minor kind "feat!: changed file format"
+expect patch kind "fix: Safari export button"
+expect patch kind "fix(updater): retry the download"
+expect patch kind "perf: faster V-carve"
+expect patch kind "revert: Draw in 3D"
+expect patch kind "refactor: split views.rs"
+expect minor kind "refactor!: rewrite the toolpath engine"
+expect minor kind "fix!: new project file format"
+expect minor kind "fix(io)!: new project file format"
+expect none kind "docs: README install steps"
+expect none kind "chore: bump dependencies"
+expect none kind "ci: cache cargo"
+expect none kind "style: rustfmt"
+expect "(fails)" kind "Draw in 3D"
+expect "(fails)" kind "feature: Draw in 3D"
+expect "(fails)" kind "feat:"
+expect "(fails)" kind "feat:missing space"
+expect "(fails)" kind "wip: half done"
+
+expect minor highest patch minor none
+expect patch highest none patch
+expect none highest none none
+expect none highest
+expect "(fails)" highest patch major
+
+expect 0.6.0 bump 0.5.1 minor
+expect 0.5.2 bump 0.5.1 patch
+expect 0.5.1 bump 0.5.1 none
+expect 0.10.0 bump 0.9.7 minor
+expect "(fails)" bump 0.5 minor
+expect "(fails)" bump 0.5.1 major
+
+[[ $failed == 0 ]] && echo "next-version: all tests pass"
+exit $failed
