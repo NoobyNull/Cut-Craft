@@ -1,4 +1,5 @@
-//! Previews of 3D clipart for the Clipart tab: a model seen from above, shaded as if lit from
+//! Previews of 3D clipart for the Clipart tab: a model seen from its largest side (from above,
+//! or face on for one saved standing up), shaded as if lit from
 //! the top left, so its shape reads at a glance. A picture beside the model with its name
 //! (`mydesign.png` for `mydesign.stl`) is shown instead. Each preview is made once and kept
 //! in the cache folder, until the file it was made from changes.
@@ -25,7 +26,7 @@ const WOOD: [f64; 3] = [222.0, 184.0, 135.0];
 /// A model shown as at least this deep, for its slopes' shading, as a share of its width.
 const DEEPEST: f64 = 0.25;
 /// Bump when previews are drawn differently, so the cached ones are made again.
-const RENDERER: u32 = 1;
+const RENDERER: u32 = 2;
 
 fn name(path: &Path) -> String {
     path.file_name()
@@ -39,7 +40,7 @@ pub fn extension(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// `model` seen from above.
+/// `model` seen from its best side.
 pub fn render(model: &Path) -> Result<RgbaImage, String> {
     let bytes = std::fs::read(model).map_err(|e| format!("Couldn't read {}: {e}", name(model)))?;
     let image = if extension(model) == "ccclip" {
@@ -133,11 +134,60 @@ fn fit(width: f64, depth: f64) -> Option<(f64, f64, f64)> {
     ))
 }
 
+/// The ways a model can be looked at: (right, up, towards the viewer). From above first, so
+/// it wins a tie (clipart is mostly modelled lying down), then from the front.
+const VIEWS: [[DVec3; 3]; 6] = [
+    [DVec3::X, DVec3::Y, DVec3::Z],
+    [DVec3::X, DVec3::Z, DVec3::NEG_Y],
+    [DVec3::NEG_Y, DVec3::Z, DVec3::NEG_X],
+    [DVec3::X, DVec3::NEG_Y, DVec3::NEG_Z],
+    [DVec3::NEG_X, DVec3::Z, DVec3::Y],
+    [DVec3::Y, DVec3::Z, DVec3::X],
+];
+
+/// `triangles` seen from the side that shows them best.
 fn shade_triangles(triangles: &[[DVec3; 3]]) -> Option<RgbaImage> {
-    shade(&from_triangles(triangles)?)
+    shade(&best_view(triangles)?)
 }
 
-/// The highest of `triangles` over each pixel's centre.
+/// The view of `triangles` that shows the most of them: the side with the largest outline
+/// (a relief saved standing up is seen face on, a statue from the front), and of it and
+/// the side opposite, the front (from above, or -Y) unless the other has far more relief
+/// (a relief's flat back is the wrong way round).
+#[expect(clippy::cast_precision_loss, reason = "pixel counts are small")]
+fn best_view(triangles: &[[DVec3; 3]]) -> Option<Heights> {
+    let outline = |(Heights(z), scale): &(Heights, f64)| {
+        z.iter().filter(|h| !h.is_nan()).count() as f64 / (scale * scale)
+    };
+    let relief = |Heights(z): &Heights| {
+        let shown: Vec<f64> = z.iter().copied().filter(|h| !h.is_nan()).collect();
+        let mean = shown.iter().sum::<f64>() / shown.len().max(1) as f64;
+        shown.iter().map(|h| (h - mean).powi(2)).sum::<f64>() / shown.len().max(1) as f64
+    };
+    // the first three views and their opposites (the last three) have the same outline
+    let mut best: Option<(usize, (Heights, f64))> = None;
+    for (i, view) in VIEWS[..3].iter().enumerate() {
+        let seen = from_triangles(triangles, *view)?;
+        // a little larger to win, so near ties go to the view listed first
+        if best
+            .as_ref()
+            .is_none_or(|(_, b)| outline(&seen) > outline(b) * 1.05)
+        {
+            best = Some((i, seen));
+        }
+    }
+    let (i, (front, _)) = best?;
+    let (back, _) = from_triangles(triangles, VIEWS[i + 3])?;
+    // well ahead to win: a figure carved all round keeps its front
+    Some(if relief(&back) > relief(&front) * 2.0 {
+        back
+    } else {
+        front
+    })
+}
+
+/// The highest of `triangles`, seen along `view` (right, up, towards the viewer), over
+/// each pixel's centre; and how many pixels a model unit is.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -148,10 +198,12 @@ fn shade_triangles(triangles: &[[DVec3; 3]]) -> Option<RgbaImage> {
     clippy::many_single_char_names,
     reason = "the triangle's corners and barycentric u, v"
 )]
-fn from_triangles(triangles: &[[DVec3; 3]]) -> Option<Heights> {
-    let points = || triangles.iter().flatten();
-    let lo = points().fold(DVec3::INFINITY, |a, p| a.min(*p));
-    let hi = points().fold(DVec3::NEG_INFINITY, |a, p| a.max(*p));
+fn from_triangles(triangles: &[[DVec3; 3]], view: [DVec3; 3]) -> Option<(Heights, f64)> {
+    let [right, up, out] = view;
+    let seen = |p: &DVec3| DVec3::new(p.dot(right), p.dot(up), p.dot(out));
+    let points = || triangles.iter().flatten().map(seen);
+    let lo = points().fold(DVec3::INFINITY, DVec3::min);
+    let hi = points().fold(DVec3::NEG_INFINITY, DVec3::max);
     let (scale, left, bottom) = fit(hi.x - lo.x, hi.y - lo.y)?;
     let top = PIXELS as f64;
     // in pixels, y down the picture, z from the model's lowest point
@@ -165,7 +217,7 @@ fn from_triangles(triangles: &[[DVec3; 3]]) -> Option<Heights> {
     let mut heights = vec![f64::NAN; PIXELS * PIXELS];
     let index = |v: f64| (v.max(0.0) as usize).min(PIXELS - 1);
     for t in triangles {
-        let [a, b, c] = t.map(to_pixels);
+        let [a, b, c] = t.map(|p| to_pixels(seen(&p)));
         let (ab, ac) = (b - a, c - a);
         let det = ab.x * ac.y - ab.y * ac.x;
         if det.abs() < 1e-12 {
@@ -188,7 +240,7 @@ fn from_triangles(triangles: &[[DVec3; 3]]) -> Option<Heights> {
             }
         }
     }
-    Some(Heights(heights))
+    Some((Heights(heights), scale))
 }
 
 /// A clipart component's heights, each pixel taking the cell under its centre.
@@ -506,7 +558,7 @@ mod tests {
         dir
     }
 
-    /// A square pyramid 10 wide and 5 high, its peak at the centre.
+    /// A square pyramid 10 wide and 5 high, its peak at the centre, closed underneath.
     fn pyramid() -> Vec<[DVec3; 3]> {
         let peak = DVec3::new(5.0, 5.0, 5.0);
         let c = [
@@ -515,7 +567,11 @@ mod tests {
             DVec3::new(10.0, 10.0, 0.0),
             DVec3::new(0.0, 10.0, 0.0),
         ];
-        (0..4).map(|i| [c[i], c[(i + 1) % 4], peak]).collect()
+        // its sides, and its base closing it as a model's is
+        (0..4)
+            .map(|i| [c[i], c[(i + 1) % 4], peak])
+            .chain([[c[0], c[2], c[1]], [c[0], c[3], c[2]]])
+            .collect()
     }
 
     fn alpha(image: &RgbaImage, x: u32, y: u32) -> u8 {
@@ -529,7 +585,7 @@ mod tests {
             .sum()
     }
 
-    /// A model is seen from above, filling the picture but for a margin: solid where it is,
+    /// A model lying down is seen from above, filling the picture but for a margin: solid where it is,
     /// clear round it.
     #[test]
     fn model_seen_from_above() {
@@ -721,5 +777,41 @@ mod tests {
         let shown = previews.shown.get(&stl).map(|(s, _)| *s);
         assert_eq!(shown, Some(after));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A pyramid stood up, its base in the X-Z plane and its point towards -Y, as a relief
+    /// saved standing up is.
+    fn standing() -> Vec<[DVec3; 3]> {
+        pyramid()
+            .into_iter()
+            .map(|t| t.map(|p| DVec3::new(p.x, -p.z, p.y)))
+            .collect()
+    }
+
+    /// A model saved standing up is seen face on: along its thinnest side, from the side
+    /// with its shape (its point), not from its top edge.
+    #[test]
+    fn a_standing_model_is_seen_face_on() {
+        let image = shade_triangles(&standing()).unwrap();
+        let (q, h) = (SIZE / 4, SIZE / 2);
+        // seen from above it would be a thin strip across the middle
+        assert_eq!(alpha(&image, h, q), 255, "not just its top edge");
+        assert_eq!(alpha(&image, h, SIZE - q), 255);
+        // and from the front: lit like the pyramid lying down
+        assert!(brightness(&image, q, h) > brightness(&image, SIZE - q, h));
+        assert!(brightness(&image, h, q) > brightness(&image, h, SIZE - q));
+    }
+
+    /// A model with a flat back is seen from its front, whichever way it faces.
+    #[test]
+    fn seen_from_the_side_with_its_shape() {
+        let backwards: Vec<_> = standing()
+            .into_iter()
+            .map(|t| t.map(|p| DVec3::new(-p.x, -p.y, p.z)))
+            .collect();
+        let image = shade_triangles(&backwards).unwrap();
+        let (q, h) = (SIZE / 4, SIZE / 2);
+        assert!(brightness(&image, q, h) > brightness(&image, SIZE - q, h));
+        assert!(brightness(&image, h, q) > brightness(&image, h, SIZE - q));
     }
 }

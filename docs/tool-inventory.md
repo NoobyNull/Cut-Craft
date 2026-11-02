@@ -192,7 +192,8 @@ say "not implemented yet".
   to Level onto one of the job's levels or a New Level named after the file; a model goes
   through Orientate 3D Model already placed and levelled). A 3D model's tile shows a
   preview: `mydesign.png` beside `mydesign.stl` if there is one (and that picture gets no
-  tile of its own), else the model rendered from above, once, on background threads for
+  tile of its own), else the model rendered from its largest side (from above, or face on for one saved
+  standing up), once, on background threads for
   the tiles on screen, and kept in the cache folder until the file changes. Search by
   name; Vectric's locked `.3dclip` / `.v3m` files are counted and explained. Not done:
   subfolders, thumbnail sizes.
