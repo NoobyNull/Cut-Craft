@@ -340,8 +340,8 @@ third-party icons and models are credited under **Help ▸ Third Party Licenses*
 Cut Craft was inspired by **Vectric Aspire**, and our thanks go to Vectric for it. Cut Craft
 follows Aspire's workflow so Aspire users feel at home, but it is an independent program
 written from scratch in Rust: it is not affiliated with or endorsed by Vectric, and it uses none
-of Vectric's code. Early builds used Aspire-style icons as stand-ins; every icon now is drawn
-for Cut Craft. Vectric and Aspire are trademarks of their respective owners. More in
+of Vectric's code. Versions 0.1.0 to 0.2.1 used icons traced from Aspire's as stand-ins; every
+icon since 0.2.2 is drawn for Cut Craft. Vectric and Aspire are trademarks of their respective owners. More in
 [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
 
 ## How the code is laid out

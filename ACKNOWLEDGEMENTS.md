@@ -18,8 +18,9 @@ Cut Craft is an independent program:
 
 ### Icons
 
-Early development builds of Cut Craft used Aspire-style icons as stand-ins while the tools were
-being written. Every icon Cut Craft ships now was drawn for it:
+Cut Craft 0.1.0 to 0.2.1 used icons traced from Aspire's, and a few of Aspire's own dialog
+pictures, as stand-ins while the tools were being written. From 0.2.2 on, every icon Cut Craft
+ships was drawn for it:
 
 - `scripts/make_icons.py` draws the flat icons from a few shared shapes in Cut Craft's own
   style, and `scripts/make_3d_icons.py` the shaded solids of the 3D tools.
