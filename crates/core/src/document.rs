@@ -2,7 +2,7 @@
 
 use crate::bitmap::Bitmap;
 use crate::component::{Component, Level};
-use crate::geometry::{Path, Point, Rect, polyline_distance, polyline_touches};
+use crate::geometry::{Path, Point, Rect, inside, polyline_distance, polyline_touches, winding};
 use crate::selection::Selection;
 use crate::toolpath::Toolpath;
 use schemars::JsonSchema;
@@ -953,6 +953,51 @@ impl Document {
             .map(|(id, _)| id)
     }
 
+    /// The part a click inside a closed shape picks: the smallest closed vector round `at`
+    /// with every vector lying wholly inside it (its holes, and anything in them). Empty
+    /// when `at` is inside no closed vector. Only editable vectors take part.
+    pub fn pick_part(&self, at: Point, tolerance: f64) -> Vec<EntityId> {
+        let rings = self.editable_rings(tolerance / 4.0);
+        let around = rings
+            .iter()
+            .filter(|(_, ring, closed)| {
+                *closed && ring.len() > 2 && inside(std::slice::from_ref(ring), at)
+            })
+            .min_by(|a, b| ring_area(&a.1).total_cmp(&ring_area(&b.1)));
+        let Some((outer, outline, _)) = around else {
+            return Vec::new();
+        };
+        let mut part = vec![*outer];
+        part.extend(contents(&rings, *outer, outline));
+        part
+    }
+
+    /// The editable vectors lying wholly inside any of the closed vectors `outlines`, not
+    /// counting those vectors themselves, curves flattened to within `chord`.
+    pub fn vectors_inside(&self, outlines: &[EntityId], chord: f64) -> Vec<EntityId> {
+        let rings = self.editable_rings(chord);
+        let mut found: Vec<EntityId> = Vec::new();
+        for (outer, outline, closed) in &rings {
+            if *closed && outlines.contains(outer) {
+                for id in contents(&rings, *outer, outline) {
+                    if !found.contains(&id) && !outlines.contains(&id) {
+                        found.push(id);
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// Every editable vector, flattened, with whether it is closed.
+    fn editable_rings(&self, chord: f64) -> Vec<(EntityId, Vec<Point>, bool)> {
+        self.vectors
+            .iter()
+            .filter(|(id, _)| self.editable(**id))
+            .map(|(&id, path)| (id, path.flatten(chord), path.closed))
+            .collect()
+    }
+
     /// Paths fully inside `area`; with `crossing`, also those whose outline touches it.
     pub fn window(&self, area: Rect, crossing: bool) -> Vec<EntityId> {
         // ponytail: chord tolerance relative to the box; exact curve/box tests if this proves coarse
@@ -967,6 +1012,31 @@ impl Document {
             .map(|(&id, _)| id)
             .collect()
     }
+}
+
+/// The vectors among `rings` lying wholly inside `outline` (the ring of `outer`); a closed
+/// one must also be smaller, so two copies of a shape are not inside each other.
+fn contents<'a>(
+    rings: &'a [(EntityId, Vec<Point>, bool)],
+    outer: EntityId,
+    outline: &'a Vec<Point>,
+) -> impl Iterator<Item = EntityId> + 'a {
+    let size = ring_area(outline);
+    rings
+        .iter()
+        .filter(move |(id, ring, closed)| {
+            *id != outer
+                && (!closed || ring_area(ring) < size)
+                && ring
+                    .iter()
+                    .all(|&p| inside(std::slice::from_ref(outline), p))
+        })
+        .map(|(id, _, _)| *id)
+}
+
+/// The area a closed ring encloses.
+fn ring_area(ring: &[Point]) -> f64 {
+    winding(ring).abs() / 2.0
 }
 
 impl Document {
@@ -1022,4 +1092,97 @@ fn an_angled_guide_is_a_line_through_where_it_crosses_its_axis() {
     let beside = g.parallel(10.0);
     assert!((beside.distance(Point::new(5.0, 15.0)) - 10.0).abs() < 1e-9);
     assert!((beside.angle() - 45.0).abs() < 1e-9);
+}
+
+#[cfg(test)]
+mod part_tests {
+    use crate::geometry::{Path, Point};
+    use crate::testing::{document_with, square};
+
+    fn ids(doc: &super::Document) -> Vec<super::EntityId> {
+        doc.vectors.keys().copied().collect()
+    }
+
+    #[test]
+    fn clicking_inside_a_shape_picks_it_with_its_holes() {
+        // a panel with two holes, and a shape beside it
+        let doc = document_with(vec![
+            square(0.0, 0.0, 100.0),
+            square(10.0, 10.0, 20.0),
+            Path::circle(Point::new(70.0, 70.0), 10.0),
+            square(200.0, 0.0, 50.0),
+        ]);
+        let [panel, hole, round, beside] = ids(&doc)[..] else {
+            panic!("four vectors")
+        };
+        let mut part = doc.pick_part(Point::new(50.0, 50.0), 0.5);
+        part.sort();
+        assert_eq!(part, vec![panel, hole, round], "the panel and its holes");
+        assert_eq!(doc.pick_part(Point::new(220.0, 20.0), 0.5), vec![beside]);
+        assert!(
+            doc.pick_part(Point::new(150.0, 50.0), 0.5).is_empty(),
+            "outside every shape"
+        );
+    }
+
+    #[test]
+    fn clicking_inside_a_hole_picks_the_hole_and_what_is_in_it() {
+        // a frame whose opening holds an island
+        let doc = document_with(vec![
+            square(0.0, 0.0, 100.0),
+            square(20.0, 20.0, 60.0),
+            square(40.0, 40.0, 20.0),
+        ]);
+        let [frame, opening, island] = ids(&doc)[..] else {
+            panic!("three vectors")
+        };
+        let mut part = doc.pick_part(Point::new(30.0, 30.0), 0.5);
+        part.sort();
+        assert_eq!(
+            part,
+            vec![opening, island],
+            "the innermost shape round the click"
+        );
+        assert_eq!(doc.pick_part(Point::new(50.0, 50.0), 0.5), vec![island]);
+        let mut whole = doc.pick_part(Point::new(10.0, 10.0), 0.5);
+        whole.sort();
+        assert_eq!(whole, vec![frame, opening, island]);
+    }
+
+    #[test]
+    fn an_open_vector_inside_comes_along_but_one_crossing_out_does_not() {
+        let doc = document_with(vec![
+            square(0.0, 0.0, 100.0),
+            Path::polyline(&[Point::new(20.0, 50.0), Point::new(80.0, 50.0)], false),
+            Path::polyline(&[Point::new(50.0, 20.0), Point::new(50.0, 150.0)], false),
+        ]);
+        let [panel, groove, crossing] = ids(&doc)[..] else {
+            panic!("three vectors")
+        };
+        let part = doc.pick_part(Point::new(30.0, 30.0), 0.5);
+        assert!(part.contains(&panel) && part.contains(&groove));
+        assert!(!part.contains(&crossing), "it runs outside the panel");
+    }
+
+    #[test]
+    fn overlapping_shapes_are_not_holes_of_each_other() {
+        let doc = document_with(vec![square(0.0, 0.0, 100.0), square(50.0, 50.0, 100.0)]);
+        let [first, second] = ids(&doc)[..] else {
+            panic!("two vectors")
+        };
+        assert_eq!(doc.pick_part(Point::new(10.0, 10.0), 0.5), vec![first]);
+        // in the overlap: the two are the same size, so either one, but not both
+        assert_eq!(doc.pick_part(Point::new(75.0, 75.0), 0.5).len(), 1);
+        assert_eq!(doc.pick_part(Point::new(140.0, 140.0), 0.5), vec![second]);
+    }
+
+    #[test]
+    fn a_locked_layer_is_never_picked() {
+        let mut doc = document_with(vec![square(0.0, 0.0, 100.0)]);
+        doc.layers[0].locked = true;
+        assert!(
+            doc.pick_part(Point::new(50.0, 50.0), 0.5).is_empty(),
+            "its layer is locked"
+        );
+    }
 }

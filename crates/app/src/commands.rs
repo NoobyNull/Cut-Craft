@@ -81,6 +81,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_space_vertically::SpaceVertically>();
     r.add::<cmd_select::SelectAllOpenVectors>();
     r.add::<cmd_select::SelectAllDuplicateVectors>();
+    r.add::<cmd_select::SelectVectorsInside>();
     r.add::<cmd_add_zero_plane::AddZeroPlane>();
     r.add::<cmd_scale_model_z_height::ScaleModelZHeight>();
     r.add::<cmd_create_component_from_bitmap::CreateComponentFromBitmap>();
