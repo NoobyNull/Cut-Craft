@@ -3,6 +3,7 @@ name = "cmd-orientate-3d-model"
 description = "Orientate 3D Model"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

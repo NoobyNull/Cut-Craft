@@ -3,6 +3,7 @@ name = "cut-craft-calib"
 description = "Blind-test harness: the same input through Aspire (a saved .crv3d) and Cut Craft, compared"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

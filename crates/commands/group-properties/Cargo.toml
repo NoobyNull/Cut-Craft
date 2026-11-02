@@ -3,6 +3,7 @@ name = "cmd-group-properties"
 description = "Group Properties"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

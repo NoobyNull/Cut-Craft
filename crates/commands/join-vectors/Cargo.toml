@@ -3,6 +3,7 @@ name = "cmd-join-vectors"
 description = "Join Vectors"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

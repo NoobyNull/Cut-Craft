@@ -3,6 +3,7 @@ name = "cmd-add-draft"
 description = "Add Draft to Model"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

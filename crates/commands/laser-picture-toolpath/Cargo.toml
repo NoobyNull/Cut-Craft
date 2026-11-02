@@ -3,6 +3,7 @@ name = "cmd-laser-picture-toolpath"
 description = "Laser Picture"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
