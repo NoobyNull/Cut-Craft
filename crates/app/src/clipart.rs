@@ -158,11 +158,6 @@ pub fn onto_level(mut change: cut_craft_core::Change, level: u64) -> cut_craft_c
 impl Clipart {
     /// The library kept in the config folder.
     pub fn load() -> Self {
-        let store = crate::files::clipart_folders_path();
-        let folders = store
-            .as_deref()
-            .map(crate::files::load_recent)
-            .unwrap_or_default();
         let cache = crate::files::clipart_previews_path();
         if let Some(cache) = cache.clone() {
             let _ = std::thread::Builder::new()
@@ -170,22 +165,54 @@ impl Clipart {
                 .spawn(move || preview::prune(&cache, preview::UNUSED));
         }
         Self {
-            folders,
-            store,
             previews: preview::Previews::new(cache),
             tags: tags::Tags::load(crate::files::library_tags_path()),
+            ..Self::kept(crate::files::clipart_folders_path())
+        }
+    }
+
+    /// The folders kept at `store`, looking in the one looked in last (or the first).
+    fn kept(store: Option<PathBuf>) -> Self {
+        let folders = store
+            .as_deref()
+            .map(crate::files::load_recent)
+            .unwrap_or_default();
+        let last: Option<PathBuf> = store
+            .as_deref()
+            .and_then(|s| std::fs::read(open_path(s)).ok())
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+        let chosen = last
+            .and_then(|last| folders.iter().position(|f| *f == last))
+            .or((!folders.is_empty()).then_some(0));
+        Self {
+            folders,
+            chosen,
+            store,
             ..Self::default()
+        }
+    }
+
+    /// Looks in folder `i`, and remembers it for next time.
+    pub fn choose(&mut self, i: usize) {
+        self.chosen = Some(i);
+        if let (Some(store), Some(folder)) = (&self.store, self.folders.get(i))
+            && let Ok(bytes) = serde_json::to_vec(folder)
+        {
+            // only a convenience: not remembered, the first folder is shown next time
+            let _ = cut_craft_core::file::write_atomic(&open_path(store), &bytes);
         }
     }
 
     /// Adds `folder` (once) and looks in it.
     pub fn add(&mut self, folder: PathBuf) -> Result<(), String> {
         let at = self.folders.iter().position(|f| *f == folder);
-        self.chosen = Some(at.unwrap_or_else(|| {
+        let at = at.unwrap_or_else(|| {
             self.folders.push(folder);
             self.folders.len() - 1
-        }));
-        self.save()
+        });
+        let saved = self.save();
+        self.choose(at);
+        saved
     }
 
     /// Takes the chosen folder out of the library (the folder itself stays on disk).
@@ -262,6 +289,11 @@ impl Clipart {
             entry.kind
         }
     }
+}
+
+/// Where the folder looked in last is kept, beside the folders kept at `store`.
+fn open_path(store: &Path) -> PathBuf {
+    store.with_file_name("library-open.json")
 }
 
 /// Whether the picture at `path` is stored in shades of grey (read from its header only).
@@ -444,6 +476,7 @@ pub fn panel(
 fn folders(ui: &mut egui::Ui, clipart: &mut Clipart) -> Option<Picked> {
     let mut picked = None;
     ui.strong("Folders");
+    let mut clicked = None;
     for (i, folder) in clipart.folders.iter().enumerate() {
         let there = folder.is_dir();
         let label = if there {
@@ -455,8 +488,11 @@ fn folders(ui: &mut egui::Ui, clipart: &mut Clipart) -> Option<Picked> {
             .selectable_label(clipart.chosen == Some(i), label)
             .on_hover_hint(folder.display().to_string());
         if row.clicked() {
-            clipart.chosen = Some(i);
+            clicked = Some(i);
         }
+    }
+    if let Some(i) = clicked {
+        clipart.choose(i);
     }
     if clipart.folders.is_empty() {
         ui.weak("No folders yet. Add a folder of your models and pictures to see them here.");
@@ -986,6 +1022,32 @@ mod tests {
         assert!(!stl.exists() && !png.exists());
         assert_eq!(clipart.selected, [dir.join("other.stl")]);
         assert_eq!(clipart.tags.of(&stl).count(), 0);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The Library opens on its folders as they were: kept between runs, looking in the
+    /// one looked in last (the first, if that is gone), not on an empty tab.
+    #[test]
+    fn opens_where_it_was() {
+        let dir = folder("kept");
+        let store = dir.join("clipart.json");
+        let (a, b) = (dir.join("a"), dir.join("b"));
+        let mut library = Clipart::kept(Some(store.clone()));
+        assert_eq!(library.chosen, None, "nothing to look in yet");
+        library.add(a.clone()).unwrap();
+        library.add(b.clone()).unwrap();
+        let again = Clipart::kept(Some(store.clone()));
+        assert_eq!(again.folders, [a.clone(), b.clone()]);
+        assert_eq!(again.chosen, Some(1), "the one added last is looked in");
+        let mut again = again;
+        again.choose(0);
+        assert_eq!(Clipart::kept(Some(store.clone())).chosen, Some(0));
+        again.remove_chosen().unwrap();
+        assert_eq!(
+            Clipart::kept(Some(store)).chosen,
+            Some(0),
+            "the one looked in is gone: the first"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -187,8 +187,8 @@ say "not implemented yet".
 - Side tabs: Sheets (the Sheets List with each sheet's X, Y, Z; Add New Sheet; Activate,
   Show, Hide, Edit Sheet, Rename, Delete; objects are not kept per sheet yet), Components
   (headed with the sheet; level menu Select Components and Export as 3D Clipart), Library
-  (Aspire's Clipart tab, renamed: folders of your own files; a missing folder is marked
-  "not found" and says how to fix it). Double-click a tile to add it to the project
+  (Aspire's Clipart tab, renamed: folders of your own files, kept between runs, opening on
+  the one looked in last; a missing folder is marked "not found" and says how to fix it). Double-click a tile to add it to the project
   centred on the job, or drag it onto the 2D or 3D view to add it centred where it is
   dropped; a model goes through Orientate 3D Model already placed and levelled. Click picks
   a tile, Ctrl+click adds or removes one, Shift+click picks a range. Right-click (on what is
