@@ -6533,3 +6533,23 @@ fn draw_rectangle_from_center_drags_from_the_middle_out() {
         "{b:?}"
     );
 }
+
+#[test]
+fn favourites_list_each_tool_on_its_own_even_from_one_flyout() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.options.favourites.design = vec!["draw_circle".into(), "draw_ellipse".into()];
+    h.app.options.favourites.design_only = true;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Favourites").is_some());
+    for arrow in flyout_arrows(&h) {
+        h.frame(vec![Event::PointerMoved(arrow - vec2(12.0, 12.0))]);
+        h.frame(vec![]);
+        let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+        assert!(
+            !hint.contains("corner arrow"),
+            "a flyout among favourites: {hint}"
+        );
+    }
+}

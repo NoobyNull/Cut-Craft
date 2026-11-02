@@ -165,7 +165,19 @@ impl CutCraftApp {
         for (name, tools) in sections {
             ui.strong(*name);
             ui.horizontal_wrapped(|ui| {
-                for button in crate::flyout::buttons(tools, &self.options.flyout_faces) {
+                // favourites name each tool on its own, flyout or not
+                let buttons = if among {
+                    tools
+                        .iter()
+                        .map(|&face| crate::flyout::Button {
+                            face,
+                            members: vec![],
+                        })
+                        .collect()
+                } else {
+                    crate::flyout::buttons(tools, &self.options.flyout_faces)
+                };
+                for button in buttons {
                     let id = button.face;
                     let response = if button.members.is_empty() {
                         let response = self.tool_button(ui, id, edge);
