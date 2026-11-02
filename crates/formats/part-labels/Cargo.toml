@@ -1,0 +1,20 @@
+[package]
+name = "fmt-part-labels"
+description = "Part Labels: a printable label for each part of the job, with a QR code"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+fmt-cut-list = { path = "../cut-list" }
+# the QR code on each label; no image feature, the label draws the modules as SVG
+qrcode = { version = "0.14", default-features = false }
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

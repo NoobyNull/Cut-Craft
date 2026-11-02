@@ -118,6 +118,7 @@ impl CutCraftApp {
             snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
             job_sheet_window: false,
+            part_labels_window: false,
             stl_window: false,
             stl_result: None,
             layers_on_sheet: false,
@@ -284,6 +285,7 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "import_component_3d_model"
             | "segment_3d_model_file"
+            | "import_cut_list"
             | "install_post_processor"
             | "add_clipart_folder" => self.file_action(id),
             "save_as_template"
@@ -463,6 +465,7 @@ impl CutCraftApp {
                 }
             }
             "job_sheet_editor" => self.job_sheet_window = true,
+            "part_labels" => self.part_labels_window = true,
             "create_job_sheet" => self.create_job_sheet(),
             "edit_object" => {
                 if let Some((id, command, params)) = self.object_to_edit() {
@@ -849,6 +852,14 @@ impl CutCraftApp {
                 }
                 if let Some(path) = dialog.pick_file() {
                     self.import_file(&path);
+                }
+            }
+            "import_cut_list" => {
+                if let Some(path) = file_dialog()
+                    .add_filter("Cut list (CSV)", &["csv"])
+                    .pick_file()
+                {
+                    self.import_cut_list(&path);
                 }
             }
             "add_clipart_folder" => {
@@ -2286,6 +2297,58 @@ impl CutCraftApp {
             .set_message(&format!("{} changed", cmd.meta().label));
         self.warn(&toolpaths, &notes);
         Ok(())
+    }
+
+    /// File ▸ Import ▸ Import Cut List: the list's parts drawn and selected, then Nest Parts
+    /// opened on them to put them on the material (moving them, not copying). A mistake in
+    /// the file is shown in a message box, since the person has to go and fix the file.
+    pub(super) fn import_cut_list(&mut self, path: &std::path::Path) {
+        let read = std::fs::read(path)
+            .map_err(|e| format!("could not read {}: {e}", path.display()))
+            .and_then(|bytes| {
+                <fmt_cut_list::ImportCutList as cut_craft_core::Importer>::import(&self.doc, &bytes)
+                    .map_err(|e| e.to_string())
+            });
+        match read {
+            Ok(change) => {
+                self.record(Ok(change), &format!("Imported {}", path.display()));
+                self.start_command("nest_parts");
+                if let Some(form) = self.form.as_mut().filter(|f| f.id == "nest_parts") {
+                    form.params["remove_original_parts"] = Value::from(true);
+                }
+            }
+            Err(e) => {
+                message_dialog()
+                    .set_title("Import Cut List")
+                    .set_description(format!("The cut list could not be imported.\n\n{e}"))
+                    .show();
+            }
+        }
+    }
+
+    /// Toolpaths ▸ Print Part Labels ▸ Open Labels to Print: the labels, in the window's
+    /// style, opened in the web browser, which prints them.
+    pub(super) fn open_part_labels(&mut self) {
+        let job = self
+            .session
+            .path
+            .as_deref()
+            .and_then(std::path::Path::file_stem)
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let path = std::env::temp_dir().join("cut-craft-part-labels.html");
+        let opened = fmt_part_labels::labels(&self.doc, &self.options.part_labels, &job)
+            .map_err(|e| e.to_string())
+            .and_then(|html| {
+                cut_craft_core::file::write_atomic(&path, html.as_bytes())
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                on_the_desktop();
+                files::show_folder(&path).map_err(|e| e.to_string())
+            });
+        self.status.set_message(&opened.map_or_else(
+            |e| e,
+            |()| "Part labels opened in your web browser: print them from there".to_owned(),
+        ));
     }
 
     /// Toolpaths ▸ Create Job Sheet: the page for each sheet with toolpaths (and the side

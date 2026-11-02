@@ -1015,6 +1015,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-engrave-part-names"
+version = "0.4.3"
+dependencies = [
+ "cut-craft-core",
+ "fmt-cut-list",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-extrude-and-weave"
 version = "0.4.3"
 dependencies = [
@@ -1306,6 +1317,16 @@ name = "cmd-move-to-level"
 version = "0.4.3"
 dependencies = [
  "cut-craft-core",
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "cmd-name-part"
+version = "0.4.3"
+dependencies = [
+ "cut-craft-core",
+ "fmt-cut-list",
  "schemars",
  "serde",
 ]
@@ -2154,6 +2175,7 @@ dependencies = [
  "cmd-duplicate-toolpath",
  "cmd-edit-picture",
  "cmd-emboss",
+ "cmd-engrave-part-names",
  "cmd-extrude-and-weave",
  "cmd-fit-curves-to-vectors",
  "cmd-fluting-toolpath",
@@ -2186,6 +2208,7 @@ dependencies = [
  "cmd-move-nodes",
  "cmd-move-to-layer",
  "cmd-move-to-level",
+ "cmd-name-part",
  "cmd-nest-parts",
  "cmd-notes",
  "cmd-offset-model",
@@ -2263,6 +2286,7 @@ dependencies = [
  "egui_commonmark",
  "egui_extras",
  "fmt-create-job-sheet",
+ "fmt-cut-list",
  "fmt-export-as-3d-clipart",
  "fmt-export-as-grayscale-bitmap",
  "fmt-export-as-stl",
@@ -2274,6 +2298,7 @@ dependencies = [
  "fmt-import-dxf",
  "fmt-import-stl",
  "fmt-import-svg",
+ "fmt-part-labels",
  "hmac",
  "image",
  "log",
@@ -3055,6 +3080,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fmt-cut-list"
+version = "0.4.3"
+dependencies = [
+ "cut-craft-core",
+]
+
+[[package]]
 name = "fmt-export-as-3d-clipart"
 version = "0.4.3"
 dependencies = [
@@ -3141,6 +3173,18 @@ dependencies = [
  "cut-craft-core",
  "fmt-export-svg",
  "usvg 0.37.0",
+]
+
+[[package]]
+name = "fmt-part-labels"
+version = "0.4.3"
+dependencies = [
+ "cut-craft-core",
+ "fmt-cut-list",
+ "qrcode",
+ "schemars",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5128,6 +5172,12 @@ name = "pxfm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "quick-error"

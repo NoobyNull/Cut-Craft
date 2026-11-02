@@ -1,6 +1,6 @@
 # Tool inventory
 
-Date: 2026-10-24, updated 2026-11-01 (version 0.4.2). What every tool is built from, what it is reused by, and whether it works.
+Date: 2026-10-24, updated 2026-11-01 (version 0.4.3). What every tool is built from, what it is reused by, and whether it works.
 "Works" is checked by `every_enabled_control_works` (crates/app): it builds a small job (two
 overlapping squares, a toolpath, a 3D shape) and runs every enabled menu item, tool button and
 right-click menu item through the app as a click would, failing on a panic or a dead end
@@ -520,6 +520,28 @@ say "not implemented yet".
   double-sided job's page ends `_Top` or `_Bottom`. Gadgets ▸ Job Setup Sheet Editor sets
   the title, a logo (PNG, JPEG or GIF), the header and footer colours and which of the
   five sections show, kept with the options.
+- Cut lists and part labels (the Advanced Machining Module's cabinet tools, made plain; see
+  `re/SPEC.md`, Cut lists and part labels). A part is a group or a closed vector with what
+  lies inside its box (holes, pockets, engraved text); open lines alone and hidden layers
+  are left out. Parts are numbered sheet by sheet, top row first, left to right, and that
+  number is the same on the cut list, the labels and the engraved names (`fmt-cut-list`).
+  - File ▸ Import ▸ Import Cut List (CSV): rows of name, length, width, quantity and
+    material (headings in any order, or none; commas, semicolons or tabs; decimal commas;
+    UTF-8 or Excel's Windows CSV) become named rectangles, length along X, a material's on a
+    layer of its name, laid out in rows and selected; Nest Parts then opens on them, set to
+    move them. A mistake in the file opens a message naming the row and how to fix it.
+  - Edit ▸ Name Part (Design tab, Offset and Layout): the selected parts' name, carried by
+    each outline's group (an ungrouped outline gets a group of its own); empty clears it.
+  - Edit ▸ Engrave Part Names: number and name (or either) as text in the middle of each
+    part, smaller where the part is small, on a Part Names layer, editable with Draw Text;
+    selected parts or the whole sheet; running it again replaces the names.
+  - Toolpaths ▸ Save Cut List (File ▸ Export too): a CSV of the parts, identical ones on one
+    row with the quantity and their sheets, sizes in the job's units.
+  - Toolpaths ▸ Print Part Labels: a label for each part (name, "3 of 12", size, sheet, job
+    name, and a QR code of the same words) opened in the web browser to print; plain paper
+    with cut lines, or one label a page in seven label-printer sizes. The style is kept with
+    the options. Barcodes and Data Matrix codes, the cabinet programs' own export formats and
+    grain direction are not done.
 - Edit ▸ Notes: text kept with the job, undoable, printed by posts as `[FILE_NOTES]`; notes
   starting with "." open with the job (dialog 606).
 - File ▸ Export ▸ PDF, EPS and AI (a PDF saved as `.ai`): the vectors on a page the size of

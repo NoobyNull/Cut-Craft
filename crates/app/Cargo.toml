@@ -37,6 +37,8 @@ fmt-export-as-stl = { path = "../formats/export-as-stl" }
 fmt-export-svg = { path = "../formats/export-svg" }
 fmt-export-pdf = { path = "../formats/export-pdf" }
 fmt-create-job-sheet = { path = "../formats/create-job-sheet" }
+fmt-cut-list = { path = "../formats/cut-list" }
+fmt-part-labels = { path = "../formats/part-labels" }
 fmt-import-dxf = { path = "../formats/import-dxf" }
 fmt-import-svg = { path = "../formats/import-svg" }
 fmt-import-bitmap = { path = "../formats/import-bitmap" }
@@ -45,6 +47,8 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-engrave-part-names = { path = "../commands/engrave-part-names" }
+cmd-name-part = { path = "../commands/name-part" }
 cmd-copy-toolpath-to-sheet = { path = "../commands/copy-toolpath-to-sheet" }
 cmd-send-to-sheet = { path = "../commands/send-to-sheet" }
 cmd-merge-visible-layers = { path = "../commands/merge-visible-layers" }

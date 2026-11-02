@@ -142,7 +142,7 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 94] = [
+const BUILT_INS: [&str; 95] = [
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",
@@ -177,6 +177,7 @@ const BUILT_INS: [&str; 94] = [
     "unlock_all_existing_guides",
     "options",
     "segment_3d_model_file",
+    "import_cut_list",
     "snap_options",
     "node_edit",
     "transform",
@@ -322,13 +323,14 @@ struct SummaryRow {
 
 /// The libraries Cut Craft is built on and the licences their makers declare.
 // ponytail: the direct dependencies, kept by hand; generate from `cargo metadata` if it drifts
-const THIRD_PARTY: [(&str, &str); 20] = [
+const THIRD_PARTY: [(&str, &str); 21] = [
     ("eframe / egui / egui_extras", "MIT or Apache-2.0"),
     ("log", "MIT or Apache-2.0"),
     ("egui_commonmark", "MIT or Apache-2.0"),
     ("pulldown-cmark", "MIT"),
     ("glam", "MIT or Apache-2.0"),
     ("i_overlay", "MIT or Apache-2.0"),
+    ("qrcode (part labels)", "MIT or Apache-2.0"),
     ("md-5", "MIT or Apache-2.0"),
     ("image", "MIT or Apache-2.0"),
     ("usvg", "MPL-2.0"),
@@ -855,6 +857,8 @@ struct CutCraftApp {
     snap_window: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
     job_sheet_window: bool,
+    /// Toolpaths ▸ Print Part Labels is open.
+    part_labels_window: bool,
     /// Export as STL's form is open.
     stl_window: bool,
     /// The triangle count and largest error of its last Triangulate.
