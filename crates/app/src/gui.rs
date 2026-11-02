@@ -204,6 +204,7 @@ fn toolpath_groups() -> Vec<ToolGroup> {
                 "profile_toolpath",
                 "pocket_toolpath",
                 "drilling_toolpath",
+                "drill_bank_toolpath",
                 "quick_engrave_toolpath",
                 "vcarve_engrave_toolpath",
                 "vcarve_inlay_toolpath",

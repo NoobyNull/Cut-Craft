@@ -8,6 +8,7 @@ mod command;
 pub mod component;
 pub mod compute;
 pub mod document;
+pub mod drill_bank;
 pub mod entry;
 pub mod file;
 pub mod font;

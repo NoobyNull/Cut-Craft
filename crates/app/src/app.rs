@@ -1596,7 +1596,14 @@ fn tool_summary(ui: &mut egui::Ui, tool: &Tool, passes: Option<f64>, in_database
     }
     rows.extend([
         ("Pass depth", length(tool.pass_depth)),
-        ("Stepover", format!("{}%", trimmed(tool.stepover * 100.0))),
+        (
+            "Clearing stepover",
+            format!("{}%", trimmed(tool.stepover * 100.0)),
+        ),
+        (
+            "Finishing stepover",
+            format!("{}%", trimmed(tool.finishing_stepover() * 100.0)),
+        ),
         ("Feed rate", rate(tool.feed_rate)),
         ("Plunge rate", rate(tool.plunge_rate)),
         (

@@ -394,6 +394,7 @@ mod tests {
             power: vec![],
             stale: false,
             group: None,
+            drill_bank: None,
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

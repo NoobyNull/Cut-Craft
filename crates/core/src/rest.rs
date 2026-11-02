@@ -264,6 +264,7 @@ mod tests {
             power: vec![],
             stale: false,
             group: None,
+            drill_bank: None,
         };
         let params = serde_json::json!({ "rest": { "after": [end_mill(10.0)], "minimum_detail": 0.0, "overlap": 0.0 } });
         apply(&job, &mut t, &params).unwrap();
