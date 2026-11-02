@@ -135,6 +135,7 @@ impl CutCraftApp {
             options_page: 0,
             split: None,
             clipart: crate::clipart::Clipart::default(),
+            import_queue: std::collections::VecDeque::new(),
             recent_path: None,
             recovery_path: None,
             autosaved: (0, 0.0),
@@ -1903,17 +1904,13 @@ impl CutCraftApp {
                     files::show_folder(&f).map_err(|e| e.to_string())
                 })
             }
-            _ => match self
-                .clipart
-                .chosen
-                .or((!self.clipart.folders.is_empty()).then_some(0))
-                .and_then(|i| self.clipart.folders.get(i))
-            {
+            // the folder looked in, or the first when looking in all of them
+            _ => match (self.clipart.open.as_ref()).or(self.clipart.folders.first()) {
                 Some(folder) => {
                     on_the_desktop();
                     files::show_folder(folder).map_err(|e| e.to_string())
                 }
-                None => Err("add a folder to the Clipart library first".to_owned()),
+                None => Err("add a folder to the Library first".to_owned()),
             },
         };
         if let Err(e) = result {
@@ -2737,7 +2734,7 @@ impl CutCraftApp {
                     self.tools_or_favourites(ui, &groups, Page::Design);
                 }
                 "Sheets" => self.sheets_panel(ui),
-                "Clipart" => self.clipart_panel(ui),
+                "Library" => self.clipart_panel(ui),
                 "Layers" => self.layers_panel(ui),
                 "Components" => self.component_list(ui),
                 tab => {

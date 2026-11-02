@@ -400,7 +400,7 @@ impl Manager {
                     let picked = self.pick == Some(Pick::Group(sub.clone()));
                     let label = egui::RichText::new(tree::leaf(sub)).strong();
                     let label = ui.selectable_label(picked, label);
-                    label.context_menu(|ui| {
+                    cut_craft_bug_report::context_menu(&label, |ui| {
                         ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
                     });
                     if label.clicked() {
@@ -431,7 +431,7 @@ impl Manager {
                         self.draft.material
                     ));
                 }
-                label.context_menu(|ui| {
+                cut_craft_bug_report::context_menu(&label, |ui| {
                     ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
                 });
                 if label.clicked() {

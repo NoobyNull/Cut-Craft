@@ -537,7 +537,7 @@ fn posts_section(
             if row.clicked() {
                 *picked = Some(i);
             }
-            row.context_menu(|ui| {
+            cut_craft_bug_report::context_menu(&row, |ui| {
                 if ui.button("View").clicked() {
                     *viewing = entries.iter().find(|e| &e.name == name).and_then(view);
                     ui.close();
@@ -823,7 +823,7 @@ impl PostManager {
             if let Some(Some(a)) = button.inner {
                 asked = Some(a);
             }
-            label.context_menu(|ui| {
+            cut_craft_bug_report::context_menu(&label, |ui| {
                 if let Some(a) = self.inspect(ui, library, entry) {
                     asked = Some(a);
                 }
