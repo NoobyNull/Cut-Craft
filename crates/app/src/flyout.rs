@@ -46,6 +46,8 @@ pub const FLYOUTS: &[&[&str]] = &[
     ],
     &["weld_vectors", "subtract_vectors", "overlap_intersect"],
     &["interactive_vector_trim", "trim_objects"],
+    // naming parts, then marking them with their names (cut lists and part labels)
+    &["name_part", "engrave_part_names"],
     &["edit_picture", "crop_bitmap"],
     &[
         "center_in_material",
