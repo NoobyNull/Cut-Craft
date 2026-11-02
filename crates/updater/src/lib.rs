@@ -364,16 +364,19 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    /// A pasted key must be a key; until one is pasted no update installs, and the release
+    /// workflow (`scripts/sign-release`) refuses to publish a versioned release.
     #[test]
-    fn the_release_key_is_built_in() {
+    fn the_release_key_reads_when_there_is_one() {
         let key = RELEASE_KEY
             .lines()
             .map(str::trim)
             .find(|l| !l.is_empty() && !l.starts_with("untrusted comment:"));
-        assert!(
-            key.and_then(|k| minisign_verify::PublicKey::from_base64(k).ok())
-                .is_some(),
-            "crates/updater/release-key.pub needs the release key: the .pub file `minisign -G` made"
-        );
+        if let Some(key) = key {
+            assert!(
+                minisign_verify::PublicKey::from_base64(key).is_ok(),
+                "crates/updater/release-key.pub: paste the whole .pub file `minisign -G` made"
+            );
+        }
     }
 }

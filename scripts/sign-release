@@ -21,6 +21,7 @@ if ! command -v minisign >/dev/null; then
     sudo apt-get update -qq
     sudo apt-get install -y -qq minisign
 fi
+pub="$(dirname "$0")/../crates/updater/release-key.pub"
 key=$(mktemp)
 trap 'rm -f "$key"' EXIT
 printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
@@ -31,4 +32,9 @@ for file in "$dir"/*; do
     # the password on standard input: there is no terminal on a runner
     printf '%s\n' "${MINISIGN_PASSWORD:-}" | minisign -S -s "$key" -m "$file" -t "file:$name"
     echo "signed $name"
+    # the key built into Cut Craft must check what was just signed, or no copy could update
+    if ! minisign -V -q -p "$pub" -m "$file" >/dev/null; then
+        echo "::error::crates/updater/release-key.pub is not the public key of MINISIGN_SECRET_KEY: installed copies could not update"
+        exit 1
+    fi
 done
