@@ -251,6 +251,13 @@ impl Command for MergedToolpath {
                 "show the toolpaths to merge in the toolpath list".into(),
             ));
         };
+        // a drill bank's plunges are its own: merged, they would be drilled by one drill
+        if let Some(bank) = sources.iter().find(|t| t.drill_bank.is_some()) {
+            return Err(CommandError::Failed(format!(
+                "{} is a drill bank toolpath, which cannot be merged: hide it before merging",
+                bank.name
+            )));
+        }
         if let Some(other) = sources.iter().find(|t| t.tool.name != first.tool.name) {
             return Err(CommandError::Failed(format!(
                 "only toolpaths with the same tool merge: {} uses {} and {} uses {}",
@@ -440,6 +447,19 @@ mod tests {
             .map(|m| m.to.x)
             .collect();
         assert_eq!(starts, [0.0, 50.0, 100.0]);
+    }
+
+    #[test]
+    fn drill_bank_toolpaths_do_not_merge() {
+        let mut doc = two();
+        let id = *doc.toolpaths.keys().last().unwrap();
+        let mut bank = doc.toolpaths[&id].clone();
+        bank.drill_bank = Some(cut_craft_core::drill_bank::BankToolpath::default());
+        let mut c = Change::builder(&doc);
+        c.replace_toolpath(id, bank);
+        doc.apply(&c.finish()).unwrap();
+        let err = MergedToolpath::run(&doc, &Params::default()).unwrap_err();
+        assert!(err.to_string().contains("drill bank"), "{err}");
     }
 
     #[test]

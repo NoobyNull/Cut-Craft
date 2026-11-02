@@ -135,6 +135,53 @@ pub enum Gesture {
     Dropped { drag: Drag, shift: bool },
 }
 
+/// The left button's click, drag or drop on `response`, in job coordinates by `to_job`
+/// (the 2D view's transform, or where the 3D view's pointer meets the model): `None` while
+/// nothing happens, or where `to_job` finds no point.
+pub fn gesture_of(
+    ui: &egui::Ui,
+    response: &egui::Response,
+    to_job: impl Fn(Pos2) -> Option<Point>,
+) -> Option<Gesture> {
+    let modifiers = ui.input(|i| i.modifiers);
+    if response.clicked() {
+        let at = to_job(response.interact_pointer_pos()?)?;
+        return Some(Gesture::Click {
+            at,
+            shift: modifiers.shift,
+        });
+    }
+    // egui forgets where a press started on the frame it is released, so remember it
+    let id = response.id;
+    if response.drag_started_by(PointerButton::Primary)
+        && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+    {
+        ui.data_mut(|d| d.insert_temp(id, origin));
+    }
+    let start: Pos2 = ui.data(|d| d.get_temp(id))?;
+    let stopped = response.drag_stopped_by(PointerButton::Primary);
+    if stopped {
+        ui.data_mut(|d| d.remove::<Pos2>(id));
+    }
+    let end = ui.input(|i| i.pointer.latest_pos())?;
+    let drag = Drag {
+        start: to_job(start)?,
+        end: to_job(end)?,
+        from_center: modifiers.alt,
+        constrain: modifiers.command,
+    };
+    if stopped {
+        Some(Gesture::Dropped {
+            drag,
+            shift: modifiers.shift,
+        })
+    } else if response.dragged_by(PointerButton::Primary) {
+        Some(Gesture::Dragging(drag))
+    } else {
+        None
+    }
+}
+
 /// Drawn over the document while a gesture is in progress.
 pub enum Overlay {
     None,
@@ -204,41 +251,8 @@ impl Canvas {
     }
 
     pub fn gesture(&self, ui: &egui::Ui) -> Option<Gesture> {
-        let modifiers = ui.input(|i| i.modifiers);
         let t = self.transform;
-        if self.response.clicked() {
-            let at = t.to_job(self.response.interact_pointer_pos()?);
-            return Some(Gesture::Click {
-                at,
-                shift: modifiers.shift,
-            });
-        }
-        // egui forgets where a press started on the frame it is released, so remember it
-        let id = self.response.id;
-        if self.response.drag_started_by(PointerButton::Primary)
-            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
-        {
-            ui.data_mut(|d| d.insert_temp(id, origin));
-        }
-        let start: Pos2 = ui.data(|d| d.get_temp(id))?;
-        let end = ui.input(|i| i.pointer.latest_pos())?;
-        let drag = Drag {
-            start: t.to_job(start),
-            end: t.to_job(end),
-            from_center: modifiers.alt,
-            constrain: modifiers.command,
-        };
-        if self.response.drag_stopped_by(PointerButton::Primary) {
-            ui.data_mut(|d| d.remove::<Pos2>(id));
-            Some(Gesture::Dropped {
-                drag,
-                shift: modifiers.shift,
-            })
-        } else if self.response.dragged_by(PointerButton::Primary) {
-            Some(Gesture::Dragging(drag))
-        } else {
-            None
-        }
+        gesture_of(ui, &self.response, |at| Some(t.to_job(at)))
     }
 
     /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the
@@ -398,7 +412,7 @@ impl Canvas {
                     let image = egui::ColorImage::new([component.columns, component.rows], pixels);
                     let texture = ctx.load_texture(
                         format!("component {}", id.0),
-                        image,
+                        fitting(ctx, image),
                         egui::TextureOptions::LINEAR,
                     );
                     ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
@@ -625,20 +639,7 @@ impl Canvas {
         let job = Rect::from_two_pos(t.to_screen(self.job.min), t.to_screen(self.job.max));
         painter.rect_filled(job, 0.0, visuals.widgets.inactive.bg_fill);
         for (id, bitmap) in &doc.bitmaps {
-            let key = egui::Id::unique(("bitmap", id.0, bitmap.columns, bitmap.rows));
-            let ctx = ui.ctx();
-            // uploaded once; kept while the bitmap is the same size
-            let texture = ctx
-                .data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
-                .unwrap_or_else(|| {
-                    let texture = ctx.load_texture(
-                        format!("bitmap {}", id.0),
-                        egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey),
-                        egui::TextureOptions::LINEAR,
-                    );
-                    ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
-                    texture
-                });
+            let texture = bitmap_texture(ui.ctx(), *id, bitmap);
             let at = Rect::from_two_pos(t.to_screen(bitmap.rect.min), t.to_screen(bitmap.rect.max));
             let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
             painter.image(texture.id(), at, whole, egui::Color32::WHITE);
@@ -724,6 +725,47 @@ impl Canvas {
     }
 }
 
+/// `bitmap`'s texture: uploaded once, and kept while the bitmap is the same size.
+fn bitmap_texture(
+    ctx: &egui::Context,
+    id: EntityId,
+    bitmap: &cut_craft_core::bitmap::Bitmap,
+) -> egui::TextureHandle {
+    let key = egui::Id::unique(("bitmap", id.0, bitmap.columns, bitmap.rows));
+    ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
+        .unwrap_or_else(|| {
+            let image = egui::ColorImage::from_gray([bitmap.columns, bitmap.rows], &bitmap.grey);
+            let texture = ctx.load_texture(
+                format!("bitmap {}", id.0),
+                fitting(ctx, image),
+                egui::TextureOptions::LINEAR,
+            );
+            ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
+            texture
+        })
+}
+
+/// `image` shrunk, if it must be, to at most `side` pixels each way (the graphics card's
+/// largest texture), keeping its shape: a texture bigger than that stops the app.
+pub fn within(image: egui::ColorImage, most: usize) -> egui::ColorImage {
+    let [width, height] = image.size;
+    let step = width.max(height).div_ceil(most.max(1));
+    if step <= 1 {
+        return image;
+    }
+    let shrunk = [width.div_ceil(step), height.div_ceil(step)];
+    let pixels = (0..shrunk[1])
+        .flat_map(|y| (0..shrunk[0]).map(move |x| (x, y)))
+        .map(|(x, y)| image.pixels[y * step * width + x * step])
+        .collect();
+    egui::ColorImage::new(shrunk, pixels)
+}
+
+/// [`within`] what `ctx`'s graphics card takes.
+pub fn fitting(ctx: &egui::Context, image: egui::ColorImage) -> egui::ColorImage {
+    within(image, ctx.input(|i| i.max_texture_side))
+}
+
 /// Job coordinates are f64 millimetres; the screen is f32 pixels.
 #[expect(
     clippy::cast_possible_truncation,
@@ -755,6 +797,28 @@ mod tests {
 
     use super::*;
     use eframe::egui::{pos2, vec2};
+
+    /// A picture wider or taller than the graphics card takes is shrunk to fit, not
+    /// refused: a 16 604 pixel scan crashed the app (wgpu's limit was 8192).
+    #[test]
+    fn pictures_fit_the_graphics_card() {
+        let wide = egui::ColorImage::new([16_604, 6], vec![egui::Color32::RED; 16_604 * 6]);
+        let fitted = within(wide, 8192);
+        assert!(
+            fitted.size[0] <= 8192 && fitted.size[0] > 4000,
+            "{:?}",
+            fitted.size
+        );
+        assert_eq!(fitted.size[1], 2, "both sides shrink alike");
+        assert_eq!(fitted.pixels.len(), fitted.size[0] * fitted.size[1]);
+        assert_eq!(fitted.pixels[0], egui::Color32::RED);
+        let small = egui::ColorImage::new([10, 10], vec![egui::Color32::BLUE; 100]);
+        assert_eq!(
+            within(small.clone(), 8192),
+            small,
+            "one that fits is left alone"
+        );
+    }
 
     #[test]
     fn zooming_keeps_the_point_under_the_cursor_still() {

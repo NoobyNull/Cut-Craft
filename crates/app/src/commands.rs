@@ -39,6 +39,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_profile_toolpath::ProfileToolpath>();
     r.add::<cmd_pocket_toolpath::PocketToolpath>();
     r.add::<cmd_drilling_toolpath::DrillingToolpath>();
+    r.add::<cmd_drill_bank_toolpath::DrillBankToolpath>();
     r.add::<cmd_add_layer::AddLayer>();
     r.add::<cmd_delete_layer::DeleteLayer>();
     r.add::<cmd_move_to_layer::MoveToLayer>();
@@ -81,9 +82,11 @@ pub fn registry() -> Registry {
     r.add::<cmd_space_vertically::SpaceVertically>();
     r.add::<cmd_select::SelectAllOpenVectors>();
     r.add::<cmd_select::SelectAllDuplicateVectors>();
+    r.add::<cmd_select::SelectVectorsInside>();
     r.add::<cmd_add_zero_plane::AddZeroPlane>();
     r.add::<cmd_scale_model_z_height::ScaleModelZHeight>();
     r.add::<cmd_create_component_from_bitmap::CreateComponentFromBitmap>();
+    r.add::<cmd_relief_from_photo::ReliefFromPhoto>();
     r.add::<cmd_bake_components::BakeComponents>();
     r.add::<cmd_create_component_from_visible_model::CreateComponentFromVisibleModel>();
     r.add::<cmd_smooth_selected_components::SmoothSelectedComponents>();

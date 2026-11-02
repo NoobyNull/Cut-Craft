@@ -650,6 +650,86 @@ fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
     );
 }
 
+/// Estimate Depth with a stand-in add-on (a shell script that answers with a fixed depth
+/// map): the photo gets its depth, undoably, and Relief from Photo can then use it.
+#[cfg(unix)]
+#[test]
+fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    use std::os::unix::fs::PermissionsExt;
+    let addons = std::env::temp_dir().join(format!("cutcraft-addons-test-{}", std::process::id()));
+    let dir = addons.join(crate::depth::ADDON_ID);
+    std::fs::create_dir_all(&dir).unwrap();
+    let answer = dir.join("answer.png");
+    image::ImageBuffer::<image::Luma<u16>, _>::from_raw(2, 1, vec![0_u16, 65_535])
+        .unwrap()
+        .save(&answer)
+        .unwrap();
+    let program = dir.join(crate::depth::program_name());
+    std::fs::write(
+        &program,
+        format!("#!/bin/sh\ncp '{}' \"$3\"\n", answer.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::write(dir.join(crate::depth::WEIGHTS), b"").unwrap();
+
+    let mut h = Harness::new();
+    h.app.addons_path = Some(addons.clone());
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "photo".into(),
+        columns: 2,
+        rows: 1,
+        grey: vec![30, 220],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(20.0, 10.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    let id = *h.app.doc.bitmaps.keys().next().unwrap();
+    let installed = crate::depth::find(&addons).expect("installed");
+    let photo = h.app.doc.bitmaps[&id].clone();
+    h.app.depth_estimate =
+        Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
+    for _ in 0..200 {
+        if h.app.depth_estimate.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.frame(vec![]);
+    }
+    assert!(h.app.depth_estimate.is_none(), "the add-on answered");
+    assert_eq!(h.app.doc.bitmaps[&id].depth, [0.0, 1.0]);
+    assert!(h.app.history.undo(&mut h.app.doc));
+    assert!(h.app.doc.bitmaps[&id].depth.is_empty(), "undone");
+    // an answer for a picture that has changed since (another job's, sharing its id) is
+    // turned away
+    let mut other = photo.clone();
+    other.grey = vec![90, 90];
+    let mut c = Change::builder(&h.app.doc);
+    c.replace_bitmap(id, other);
+    h.app.record(Ok(c.finish()), "edited");
+    h.app.depth_estimate =
+        Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
+    for _ in 0..200 {
+        if h.app.depth_estimate.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.frame(vec![]);
+    }
+    assert!(h.app.depth_estimate.is_none(), "the add-on answered");
+    assert!(
+        h.app.doc.bitmaps[&id].depth.is_empty(),
+        "not given to another picture"
+    );
+    std::fs::remove_dir_all(addons).unwrap();
+}
+
 #[test]
 fn clicking_one_of_a_group_picks_the_group() {
     let mut h = Harness::new();
@@ -988,6 +1068,51 @@ fn clicking_selects_without_adding_undo_steps() {
     assert!(
         h.app.doc.vectors.is_empty(),
         "the last undo step is the draw, not a click"
+    );
+}
+
+#[test]
+fn clicking_inside_a_shape_selects_it_with_its_holes() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 100.0, 100.0);
+    h.rectangle(20.0, 20.0, 20.0, 20.0);
+    h.rectangle(150.0, 10.0, 50.0, 50.0);
+    h.click(h.at(80.0, 80.0), Modifiers::NONE);
+    assert_eq!(
+        h.app.doc.selection.len(),
+        2,
+        "the outline and its hole, not the shape beside them"
+    );
+    h.click(h.at(175.0, 35.0), Modifiers::SHIFT);
+    assert_eq!(h.app.doc.selection.len(), 3, "Shift adds the shape beside");
+    h.click(h.at(80.0, 80.0), Modifiers::SHIFT);
+    assert_eq!(
+        h.app.doc.selection.len(),
+        1,
+        "Shift again takes the part away"
+    );
+    h.click(h.at(130.0, 300.0), Modifiers::NONE);
+    assert!(h.app.doc.selection.is_empty(), "outside every shape clears");
+}
+
+#[test]
+fn select_vectors_inside_adds_a_selected_shapes_holes() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 100.0, 100.0);
+    h.rectangle(20.0, 20.0, 20.0, 20.0);
+    h.rectangle(150.0, 10.0, 50.0, 50.0);
+    h.click(h.at(110.0, 60.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.selection.len(), 1, "the outline's edge alone");
+    let menu = |app: &CutCraftApp| app.menus.selection_menu(&app.doc);
+    h.choose(menu, &["Select Vectors Inside"]);
+    assert_eq!(h.app.doc.selection.len(), 2, "with its hole");
+    h.app.invoke(&h.ctx, "unselect_all");
+    h.app.invoke(&h.ctx, "select_vectors_inside");
+    assert!(h.app.doc.selection.is_empty());
+    assert!(
+        h.app.status.message.contains("closed shape"),
+        "{}",
+        h.app.status.message
     );
 }
 
@@ -2070,6 +2195,125 @@ fn right_clicking_a_component_in_the_3d_view_picks_it_and_opens_its_menu() {
     assert_eq!(h.app.doc.components.len(), 1);
 }
 
+/// The domed document in the 3D view, seen at a slant, with drawing tool `tool` open, and
+/// where a point on the model's surface shows on screen.
+fn drawing_on_the_dome(tool: &str) -> (Harness, impl Fn(f64, f64) -> Pos2, f64) {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, tool);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let fit = h.app.fit_3d.expect("the 3D view has been drawn");
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let camera = view3d::Camera::new(&surface, h.app.orbit, h.app.framing, fit, None);
+    let cell = surface.cell;
+    let on_model = move |x: f64, y: f64| {
+        let z = surface.at(Point::new(x, y)).unwrap();
+        camera.screen(cut_craft_core::glam::DVec3::new(
+            x - surface.origin.x,
+            y - surface.origin.y,
+            z,
+        ))
+    };
+    (h, on_model, cell)
+}
+
+#[test]
+fn a_drag_with_a_drawing_tool_in_the_3d_view_draws_where_it_meets_the_model() {
+    let (mut h, on_model, cell) = drawing_on_the_dome("draw_rectangle");
+    let turned = h.app.orbit;
+    // on the dome's top, well up off the material's top plane
+    h.drag(on_model(18.0, 18.0), on_model(23.0, 21.0));
+    assert_eq!(
+        h.app.orbit, turned,
+        "the left button draws, it does not turn the view"
+    );
+    assert_eq!(
+        h.app.doc.vectors.len(),
+        1,
+        "{:?}",
+        h.app.form.as_ref().map(|f| &f.error)
+    );
+    let b = h.app.doc.vectors.values().next().unwrap().bounds();
+    let close = |a: Point, b: Point| a.distance(b) < 1.5 * cell;
+    assert!(
+        close(b.min, Point::new(18.0, 18.0)) && close(b.max, Point::new(23.0, 21.0)),
+        "{b:?}, cells of {cell}"
+    );
+    assert!(h.app.history.can_undo());
+    // the right button still turns it
+    let at = on_model(20.0, 20.0);
+    h.frame(vec![Event::PointerMoved(at)]);
+    let right = |pos, pressed| Event::PointerButton {
+        pos,
+        button: PointerButton::Secondary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    h.frame(vec![right(at, true)]);
+    h.frame(vec![Event::PointerMoved(at + vec2(40.0, 0.0))]);
+    h.frame(vec![Event::PointerMoved(at + vec2(80.0, 0.0))]);
+    h.frame(vec![right(at + vec2(80.0, 0.0), false)]);
+    assert_ne!(h.app.orbit, turned);
+    assert_eq!(h.app.doc.vectors.len(), 1, "turning draws nothing");
+}
+
+#[test]
+fn drawing_in_the_3d_view_meets_the_model_as_finely_as_the_settled_view_draws_it() {
+    let (mut h, _, _) = drawing_on_the_dome("draw_rectangle");
+    let fine = h.app.fine_surface();
+    let hit = h.app.drawing_surface().expect("a model to draw on");
+    assert_eq!((hit.columns, hit.rows), (fine.columns, fine.rows));
+    // cells off the model are NaN, so compare bit for bit
+    let bits = |m: &Material| m.heights.iter().map(|h| h.to_bits()).collect::<Vec<_>>();
+    assert_eq!(bits(&hit), bits(&fine));
+    let again = h.app.drawing_surface().unwrap();
+    assert!(
+        std::sync::Arc::ptr_eq(&hit, &again),
+        "kept while nothing changes"
+    );
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.invoke(&h.ctx, "delete");
+    assert!(h.app.drawing_surface().is_none(), "nothing left to draw on");
+}
+
+#[test]
+fn polyline_clicks_in_the_3d_view_place_its_points_on_the_model() {
+    let (mut h, on_model, cell) = drawing_on_the_dome("draw_polyline");
+    let corners = [(17.0, 18.0), (23.0, 18.0), (20.0, 23.0)];
+    for (x, y) in corners {
+        h.click(on_model(x, y), Modifiers::NONE);
+    }
+    // the first point again closes it
+    h.click(on_model(17.0, 18.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    let path = h.app.doc.vectors.values().next().unwrap();
+    assert!(path.closed);
+    let b = path.bounds();
+    let close = |a: f64, b: f64| (a - b).abs() < 1.5 * cell;
+    assert!(
+        close(b.min.x, 17.0)
+            && close(b.max.x, 23.0)
+            && close(b.min.y, 18.0)
+            && close(b.max.y, 23.0),
+        "{b:?}"
+    );
+}
+
+#[test]
+fn the_3d_view_tells_how_to_draw_and_turn_while_a_drawing_tool_is_open() {
+    let (mut h, on_model, _) = drawing_on_the_dome("draw_circle");
+    h.frame(vec![Event::PointerMoved(on_model(20.0, 20.0))]);
+    h.frame(vec![]);
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(
+        hint.starts_with("Draw Circle: drag from the centre"),
+        "{hint}"
+    );
+    assert!(hint.ends_with("right-drag turns the view"), "{hint}");
+}
+
 #[test]
 fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
     use cut_craft_core::handles::Handle;
@@ -2131,6 +2375,207 @@ fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
         (turned.center() - before.center()).length() < 0.5,
         "about the centre"
     );
+}
+
+#[test]
+fn a_3d_transform_drag_let_go_above_the_horizon_changes_nothing_and_ends() {
+    use cut_craft_core::handles::Handle;
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    // nearly side on in perspective: the top of the view is sky, not material
+    h.app.orbit = view3d::Orbit {
+        pitch: 80f64.to_radians(),
+        ..view3d::Orbit::FRONT
+    };
+    h.app.framing.perspective = true;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let middle = h
+        .app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == Handle3d::Transform(Handle::Move))
+        .map(|(_, at)| *at)
+        .expect("the move handle is drawn");
+    let sky = h
+        .app
+        .fit_3d
+        .expect("the 3D view has been drawn")
+        .center_top()
+        + vec2(0.0, 5.0);
+    let before = h.app.doc.components[&EntityId(1)].extent();
+    h.drag(middle, sky);
+    assert!(h.app.drag_3d.is_none(), "letting go ends the drag");
+    assert_eq!(
+        h.app.doc.components[&EntityId(1)].extent(),
+        before,
+        "let go over the sky, nothing moves"
+    );
+    // moving and clicking afterwards does not pick the abandoned drag back up
+    h.click(middle + vec2(0.0, 30.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.components[&EntityId(1)].extent(), before);
+}
+
+/// The 3D view in Transform mode over the domed fixture, its component selected.
+fn transform_3d(orbit: view3d::Orbit, perspective: bool) -> Harness {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = orbit;
+    h.app.framing.perspective = perspective;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h
+}
+
+/// Where the 3D view drew `which`.
+fn handle_3d_at(h: &Harness, which: Handle3d) -> Pos2 {
+    h.app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == which)
+        .map(|(_, at)| *at)
+        .expect("the handle is drawn")
+}
+
+fn escape() -> Event {
+    Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+#[test]
+fn escape_cancels_a_3d_handle_drag_and_stays_in_transform_mode() {
+    use cut_craft_core::handles::Handle;
+    let mut h = transform_3d(view3d::Orbit::TOP, false);
+    let extent = |h: &Harness| h.app.doc.components[&EntityId(1)].extent();
+    let before = extent(&h);
+    let depth = h.app.history.undo_depth();
+    // a move: Escape mid-drag, then the button let go
+    let from = handle_3d_at(&h, Handle3d::Transform(Handle::Move));
+    let to = from + vec2(60.0, 0.0);
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(to)]);
+    h.frame(vec![escape()]);
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(extent(&h), before, "nothing moved");
+    assert_eq!(h.app.history.undo_depth(), depth, "nothing to undo");
+    assert_eq!(
+        h.app.view_tool,
+        Some(ViewTool::Transform),
+        "still transforming"
+    );
+    assert!(h.app.drag_3d.is_none());
+    // a height: set as it is dragged, so Escape takes it back
+    let height = |h: &Harness| h.app.doc.components[&EntityId(1)].shaping.shape_height;
+    let start = height(&h);
+    let from = handle_3d_at(&h, Handle3d::Height);
+    let up = from - vec2(0.0, 80.0);
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(up)]);
+    h.frame(vec![Event::PointerMoved(up)]);
+    assert!(height(&h) > start * 1.2, "follows the drag");
+    h.frame(vec![escape()]);
+    h.press(up, false, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!((height(&h) - start).abs() < 1e-9, "back to {start}");
+    assert_eq!(h.app.history.undo_depth(), depth);
+    assert_eq!(h.app.view_tool, Some(ViewTool::Transform));
+}
+
+#[test]
+fn the_3d_views_transform_handles_move_a_selection_of_vectors_only() {
+    use cut_craft_core::handles::Handle;
+    let mut h = transform_3d(view3d::Orbit::TOP, false);
+    h.app.doc.selected_components.clear();
+    h.rectangle(2.0, 2.0, 6.0, 6.0);
+    let id = *h
+        .app
+        .doc
+        .selection
+        .iter()
+        .next()
+        .expect("the rectangle is selected");
+    h.app.view = View::ThreeD;
+    h.app.view_tool = Some(ViewTool::Transform);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        !h.app.handles_3d.iter().any(|(k, _)| *k == Handle3d::Height),
+        "a vector has no component icons"
+    );
+    let before = h.app.doc.vectors[&id].bounds();
+    let from = handle_3d_at(&h, Handle3d::Transform(Handle::Move));
+    let corner = handle_3d_at(&h, Handle3d::Transform(Handle::Scale { x: 1, y: 1 }));
+    h.drag(from, corner);
+    let after = h.app.doc.vectors[&id].bounds();
+    assert!((after.center() - before.max).length() < 0.5, "{after:?}");
+}
+
+#[test]
+fn with_nothing_selected_the_3d_transform_mode_says_how_to_start() {
+    let mut h = transform_3d(view3d::Orbit::TOP, false);
+    h.app.doc.selected_components.clear();
+    let middle = h.app.fit_3d.expect("the 3D view has been drawn").center();
+    h.frame(vec![Event::PointerMoved(middle)]);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.handles_3d,
+        Vec::<(Handle3d, Pos2)>::new(),
+        "no selection, no handles"
+    );
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(hint.contains("select it"), "{hint}");
+}
+
+#[test]
+fn the_3d_transform_handles_sit_on_top_of_a_raised_component() {
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::handles::Handle;
+    // nearly side on in perspective, where a box on the material's top would sit well
+    // below the dome
+    let low = view3d::Orbit {
+        pitch: 70f64.to_radians(),
+        ..view3d::Orbit::FRONT
+    };
+    let mut h = transform_3d(low, true);
+    let fit = h.app.fit_3d.unwrap();
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let top = surface.at(Point::new(20.0, 20.0)).unwrap();
+    assert!(top > 1.0, "the dome stands up: {top}");
+    let camera = view3d::Camera::new(&surface, h.app.orbit, h.app.framing, fit, None);
+    let at = |z: f64| {
+        camera.screen(DVec3::new(
+            20.0 - surface.origin.x,
+            20.0 - surface.origin.y,
+            z,
+        ))
+    };
+    let cross = handle_3d_at(&h, Handle3d::Transform(Handle::Move));
+    assert!(
+        (cross - at(top)).length() < 2.0,
+        "{cross:?} at the dome's top {:?}, not its foot {:?}",
+        at(top),
+        at(0.0)
+    );
+    // and a drag on that plane still moves by what the pointer moved over
+    let before = h.app.doc.components[&EntityId(1)].extent();
+    let corner = handle_3d_at(&h, Handle3d::Transform(Handle::Scale { x: 1, y: 1 }));
+    h.drag(cross, corner);
+    let moved = h.app.doc.components[&EntityId(1)].extent();
+    assert!((moved.center() - before.max).length() < 0.5, "{moved:?}");
 }
 
 #[test]
@@ -2419,6 +2864,53 @@ fn edit_toolpath_reopens_its_form_and_replaces_it() {
 }
 
 #[test]
+fn a_drill_bank_toolpath_drills_with_the_machines_bank_and_says_when_there_is_none() {
+    use cut_craft_core::drill_bank::DrillBank;
+    use cut_craft_core::geometry::{Path, Point};
+    let mut h = Harness::new();
+    let mut c = cut_craft_core::Change::builder(&h.app.doc);
+    let holes: Vec<_> = (0..3)
+        .map(|i| {
+            c.add(Path::circle(
+                Point::new(20.0 + 32.0 * f64::from(i), 20.0),
+                2.5,
+            ))
+        })
+        .collect();
+    c.select(holes);
+    h.app.doc.apply(&c.finish()).unwrap();
+    // no machine: the form opens and the toolpath says where the bank is set up
+    h.app.invoke(&h.ctx, "drill_bank_toolpath");
+    let params = h.app.form.as_ref().expect("its form").params.clone();
+    let err = h.app.apply("drill_bank_toolpath", &params).unwrap_err();
+    assert!(err.contains("Machine Configuration"), "{err}");
+    // a machine with a bank of three: one plunge drills all three
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().drill_bank = Some(DrillBank::new(3, 0, 32.0, 5.0));
+    h.app.invoke(&h.ctx, "drill_bank_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("drill_bank_toolpath", &params).unwrap();
+    h.app.form = None;
+    let (&id, toolpath) = h.app.doc.toolpaths.iter().next().unwrap();
+    assert_eq!(toolpath.drill_bank.as_ref().unwrap().hits.len(), 1);
+    // editing it again picks up the bank as the machine has it now
+    h.app.machines.active_mut().unwrap().drill_bank = Some(DrillBank::new(2, 0, 32.0, 5.0));
+    h.app.selected_toolpath = Some(id);
+    h.app.invoke(&h.ctx, "edit_toolpath");
+    let form = h.app.form.as_ref().expect("the toolpath's form");
+    assert_eq!(
+        form.params["bank"]["horizontal"].as_array().unwrap().len(),
+        2
+    );
+    // Cut Craft's own posts have no drill bank blocks: saving says so
+    let post = h.app.output_post().unwrap();
+    let out = std::env::temp_dir().join(format!("cut-craft-bank-{}.nc", std::process::id()));
+    let err = files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap_err();
+    assert!(err.contains("SETUP_DRILL_BANK"), "{err}");
+    let _ = std::fs::remove_file(out);
+}
+
+#[test]
 fn the_file_and_component_level_icons_have_their_tools() {
     let mut h = Harness::new();
     for id in [
@@ -2438,7 +2930,7 @@ fn the_file_and_component_level_icons_have_their_tools() {
     // with no library folder there is nothing to open, and it says so
     h.app.invoke(&h.ctx, "open_clipart_folder");
     assert!(
-        h.app.status.message.contains("Clipart library"),
+        h.app.status.message.contains("Library first"),
         "{}",
         h.app.status.message
     );
@@ -3085,11 +3577,15 @@ fn the_clipart_tab_shows_a_library_folder_and_imports_what_is_double_clicked() {
     h.app.pages.set_pinned(Page::Design, true);
     h.app.design_tab = 4;
     h.app.clipart.folders = vec![dir.clone()];
-    h.app.clipart.chosen = Some(0);
     h.frame(vec![]);
+    let importable = ["bmp".to_owned()].into();
+    h.app.clipart.read_now(&importable);
     h.frame(vec![]);
     let folder = dir.file_name().unwrap().to_string_lossy().into_owned();
-    assert!(h.text_at(&folder).is_some(), "the library lists the folder");
+    assert!(
+        h.text_at(&format!("{folder} (1)")).is_some(),
+        "the library lists the folder, with how many files are in it"
+    );
     assert!(
         h.text_at("notes.txt").is_none(),
         "only what can be imported"
@@ -3477,6 +3973,11 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
     assert_eq!(
         h.app.machines.active().unwrap().slot_of("3 mm End Mill"),
         Some(3)
+    );
+    assert_eq!(
+        h.app.tools.get("3 mm End Mill").unwrap().number,
+        3,
+        "loaded in slot 3, it is tool 3"
     );
     // the toolpath form shows the magazine first: 0 by hand, then each holder
     h.rectangle(10.0, 10.0, 50.0, 50.0);
@@ -4740,6 +5241,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         power: vec![],
         stale: false,
         group: None,
+        drill_bank: None,
     });
     h.app.simulation = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
@@ -6199,6 +6701,22 @@ fn the_tool_changer_window_loads_holders_and_tools_carry_their_own_numbers() {
 }
 
 #[test]
+fn tools_loaded_in_the_tool_changer_window_take_their_slot_numbers() {
+    let mut h = Harness::new();
+    h.app.machines.add();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.set_slot_count(4);
+    machine.slots[1] = Some("6 mm Ball Nose".into());
+    h.app.tool_changer_changed();
+    assert_eq!(h.app.tools.get("6 mm Ball Nose").unwrap().number, 2);
+    // and a tool loaded before is numbered when the Tool Database opens
+    h.app.machines.active_mut().unwrap().slots[3] = Some("3 mm End Mill".into());
+    h.app.invoke(&h.ctx, "tool_database");
+    let draft = &h.app.tool_manager.as_ref().unwrap().draft;
+    assert_eq!(draft.get("3 mm End Mill").unwrap().number, 4);
+}
+
+#[test]
 fn the_toolpath_lists_divider_stays_where_it_is_dragged() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::three_toolpaths();
@@ -6403,4 +6921,70 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
         h.text_at("In loops turning clockwise: each loop cuts conventional")
             .is_some()
     );
+}
+
+#[test]
+fn the_gadgets_menu_runs_a_lua_gadget_as_one_undo_step() {
+    let mut h = Harness::new();
+    let gadgets = &h
+        .app
+        .menus
+        .menus
+        .iter()
+        .find(|m| m.name == "Gadgets")
+        .unwrap()
+        .items;
+    let hole_pattern = leaf(gadgets, &["Hole Pattern"]).action.clone();
+    assert!(gadgets.iter().any(|i| i.name == "My Gadgets"));
+    assert!(h.app.available(&hole_pattern));
+    h.app.invoke(&h.ctx, &hole_pattern);
+    let mut params = h
+        .app
+        .form
+        .as_ref()
+        .expect("its settings form")
+        .params
+        .clone();
+    assert_eq!(params["count"], 6, "the gadget's own default");
+    params["count"] = serde_json::json!(8);
+    let before = h.app.doc.vectors.len();
+    h.app.apply_form(&hole_pattern, &params).unwrap();
+    assert_eq!(h.app.doc.vectors.len(), before + 8);
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.vectors.len(), before, "one Undo takes all 8 away");
+}
+
+#[test]
+fn an_unsigned_gadget_warns_once_before_it_runs() {
+    let mut h = Harness::new();
+    h.app.unsigned_gadgets = [("gadget_hole_pattern".to_owned(), "Hole Pattern".to_owned())].into();
+    // the user says no: nothing opens, and they are asked again next time
+    h.app.unsigned_gadget_ok = |_| false;
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_none(), "cancelled: no form");
+    // the user says yes: the form opens, and the gadget is not asked about again this session
+    h.app.unsigned_gadget_ok = |label| label == "Hole Pattern";
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_some());
+    h.app.form = None;
+    h.app.unsigned_gadget_ok = |_| panic!("asked twice");
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_some());
+}
+
+#[test]
+fn built_in_gadgets_need_no_warning() {
+    let mut h = Harness::new();
+    h.app.unsigned_gadget_ok = |_| panic!("a built-in gadget is signed with the app");
+    h.app.invoke(&h.ctx, "gadget_drill_grid");
+    assert!(h.app.form.is_some());
+}
+
+#[test]
+fn the_unsigned_warning_says_who_is_responsible() {
+    let text = super::actions::unsigned_warning("Star Burst");
+    assert!(text.contains("Star Burst"));
+    assert!(text.contains("not responsible"));
+    assert!(text.contains("Undo"));
 }

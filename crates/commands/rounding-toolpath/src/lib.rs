@@ -117,9 +117,10 @@ impl Command for RoundingToolpath {
         };
         ensure_positive("tool diameter", p.tool.diameter)?;
         ensure_positive("pass depth", p.tool.pass_depth)?;
-        if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
+        let stepover = p.tool.finishing_stepover();
+        if !(stepover > 0.0 && stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
+                "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
             ));
         }
         if p.method == Method::OptimizedRaster && p.blank == Blank::Round {
@@ -148,7 +149,7 @@ impl Command for RoundingToolpath {
             };
             (area.min + flat).extend(z)
         };
-        let step = p.tool.stepover * p.tool.diameter;
+        let step = p.tool.finishing_stepover() * p.tool.diameter;
         let safe = top + doc.job.clearance;
         let surface_radius = rotary.diameter / 2.0;
         let mut moves: Vec<Move> = vec![];

@@ -131,10 +131,13 @@ impl Command for ArrayCopyToolpath {
         {
             let mut moves: Vec<Move> = vec![];
             let mut power = vec![];
+            // where each copy is, for a drill bank's plunges
+            let mut placed = vec![];
             for row in 0..p.rows {
                 for column in 0..p.columns {
                     let by =
                         Point::new(f64::from(column) * step.x, f64::from(row) * step.y).extend(0.0);
+                    placed.push((by.truncate(), moves.len()));
                     moves.extend(source.moves.iter().map(|m| Move {
                         kind: m.kind,
                         to: m.to + by,
@@ -154,6 +157,7 @@ impl Command for ArrayCopyToolpath {
                 moves,
             );
             toolpath.power = power;
+            toolpath.drill_bank = source.drill_bank.as_ref().map(|b| b.copied(&placed));
             c.add_toolpath(toolpath);
         }
         Ok(c.finish())
@@ -204,6 +208,37 @@ mod tests {
     }
 
     cut_craft_core::contract_tests!(ArrayCopyToolpath, with_sources);
+
+    #[test]
+    fn a_drill_banks_plunges_are_copied_with_its_moves() {
+        use cut_craft_core::drill_bank::{BankHit, BankToolpath, DrillBank};
+        let mut doc = with_profile();
+        let mut t = doc.toolpaths[&EntityId(1)].clone();
+        t.drill_bank = Some(BankToolpath {
+            bank: DrillBank::new(1, 0, 32.0, 5.0),
+            hits: vec![BankHit {
+                start: 0,
+                end: t.moves.len(),
+                head: Point::ZERO,
+                drills: vec![],
+            }],
+        });
+        let mut c = Change::builder(&doc);
+        c.replace_toolpath(EntityId(1), t);
+        doc.apply(&c.finish()).unwrap();
+        let p = Params {
+            sources: vec![EntityId(1)],
+            ..Params::default()
+        };
+        let made = &array(&doc, &p)[0];
+        let hits = &made.drill_bank.as_ref().expect("still a drill bank").hits;
+        assert_eq!(hits.len(), usize::try_from(p.rows * p.columns).unwrap());
+        for hit in hits {
+            // each copy's head is where its first move is
+            assert_eq!(hit.head, made.moves[hit.start].to.truncate());
+        }
+        assert_eq!(hits.last().unwrap().end, made.moves.len());
+    }
 
     #[test]
     fn the_form_starts_with_the_visible_toolpaths() {

@@ -38,6 +38,9 @@ impl CutCraftApp {
             Outcome::Apply | Outcome::Ok => {
                 self.tools = manager.draft.clone();
                 let changer = manager.changer.clone();
+                if let Some(changer) = &changer {
+                    self.tools.number_by_slots(&changer.slots);
+                }
                 if outcome == Outcome::Ok {
                     self.tool_manager = None;
                 }
@@ -339,14 +342,21 @@ impl CutCraftApp {
     pub(super) fn clipart_panel(&mut self, ui: &mut egui::Ui) {
         use crate::clipart::Picked;
         cut_craft_bug_report::mark(ui, "Library tab");
-        let registry = &self.registry;
-        let importable = |ext: &str| registry.importer_for(ext).is_some();
+        let importable: crate::clipart::Importable = (self.registry.importers())
+            .flat_map(|i| i.format.extensions)
+            .map(|e| e.to_lowercase())
+            .collect();
         let levels: Vec<(u64, String)> = (self.doc.levels.iter())
             .map(|(&id, l)| (id, l.name.clone()))
             .collect();
         match crate::clipart::panel(ui, &mut self.clipart, &importable, &levels) {
             Some(Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
-            Some(Picked::OpenFolder) => self.invoke(ui.ctx(), "open_clipart_folder"),
+            Some(Picked::ShowFolder(folder)) => {
+                if let Err(e) = files::show_folder(&folder) {
+                    self.status
+                        .set_message(&format!("Couldn't show {}: {e}", folder.display()));
+                }
+            }
             Some(Picked::Import(path)) => self.add_from_library(vec![path], None),
             Some(Picked::AddToProject(files)) => self.add_from_library(files, None),
             Some(Picked::AddToLevel(files, level)) => self.add_from_library(files, Some(level)),
@@ -532,10 +542,7 @@ impl CutCraftApp {
         menu: impl FnOnce() -> Vec<gui::MenuItem>,
     ) -> Option<String> {
         let mut clicked = None;
-        if response.secondary_clicked() {
-            cut_craft_bug_report::claim(&response.ctx);
-        }
-        response.context_menu(|ui| {
+        cut_craft_bug_report::context_menu(response, |ui| {
             let menus = Menus {
                 available: &|id| self.available(id),
                 checked: &|_| None,
@@ -544,11 +551,6 @@ impl CutCraftApp {
                 image: &|path| self.icons.find(path, "").map(|p| self.icons.image(p)),
             };
             menu_items(ui, &menu(), &menus, &mut clicked);
-            ui.separator();
-            if ui.button("Report a Bug Here…").clicked() {
-                cut_craft_bug_report::open_here(ui.ctx());
-                ui.close();
-            }
         });
         clicked
     }
@@ -1224,7 +1226,9 @@ impl CutCraftApp {
         );
         // while sculpting the left button sculpts; the right turns the view, the middle pans
         let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
-        let left = left && !sculpting;
+        // with a drawing tool open the left button draws on the model, as in Aspire 12
+        let drawing = self.drawing_in_3d();
+        let left = left && !sculpting && drawing.is_none();
         let delta = response.drag_delta();
         self.take_ring(ui, &response);
         if response.dragged() && delta != egui::Vec2::ZERO {
@@ -1264,23 +1268,9 @@ impl CutCraftApp {
         // a double-click picks the component under it, as in Aspire; off the model it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
         self.fit_3d = Some(fit);
-        let double = response
-            .double_clicked()
-            .then(|| response.interact_pointer_pos())
-            .flatten();
-        // while a preview shows, a double-click takes away the piece cut free under it
-        let removed = double
-            .filter(|_| self.playback.is_none() && self.simulation.is_some())
-            .is_some_and(|at| self.remove_preview_piece(fit, at));
-        let picked = double
-            .filter(|_| !removed)
-            .and_then(|at| self.component_at_3d(fit, at));
-        if removed {
-        } else if let Some(id) = picked {
-            self.pick_3d(ui, id);
-        } else if double.is_some() || (response.hovered() && fit_key) {
-            self.framing = self.framing.fitted();
-        }
+        // F fits too, with the pointer over the view
+        let fit_now = response.hovered() && fit_key;
+        self.double_click_3d(ui, &response, fit, drawing.is_none(), fit_now);
         if response.dragged() || on_cube.dragged() || before != (self.orbit, self.framing) {
             self.moved_3d = ui.input(|i| i.time);
         }
@@ -1291,7 +1281,41 @@ impl CutCraftApp {
         self.handles_3d(ui, area, fit);
         self.rings_3d(ui, area, fit);
         self.anchors_3d(ui, &response, area, fit);
+        if let Some(id) = drawing {
+            self.draw_3d(ui, &response, area, fit, id);
+        }
         self.view_3d_menu(ui, &response, fit);
+    }
+
+    /// A double-click in the 3D view (not while drawing): on a preview it takes away the
+    /// piece cut free under it, on a component it picks it, off the model it fits the view,
+    /// as `fit_now` (F) does.
+    fn double_click_3d(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        fit: egui::Rect,
+        picking: bool,
+        fit_now: bool,
+    ) {
+        let double = response
+            .double_clicked()
+            .then(|| response.interact_pointer_pos())
+            .flatten()
+            .filter(|_| picking);
+        // while a preview shows, a double-click takes away the piece cut free under it
+        let removed = double
+            .filter(|_| self.playback.is_none() && self.simulation.is_some())
+            .is_some_and(|at| self.remove_preview_piece(fit, at));
+        let picked = double
+            .filter(|_| !removed)
+            .and_then(|at| self.component_at_3d(fit, at));
+        if removed {
+        } else if let Some(id) = picked {
+            self.pick_3d(ui, id);
+        } else if double.is_some() || fit_now {
+            self.framing = self.framing.fitted();
+        }
     }
 
     /// A double-click on component `id`: Shift adds or takes it away; again on a selected
@@ -1381,7 +1405,7 @@ impl CutCraftApp {
 
     /// The preview's material, or the model's shape, at its own detail up to
     /// [`FINE_MESH_CELLS`].
-    fn fine_surface(&mut self) -> Material {
+    pub(super) fn fine_surface(&mut self) -> Material {
         if let Some(material) = &self.simulation {
             return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
         }
@@ -1475,12 +1499,13 @@ impl CutCraftApp {
         geometry
     }
 
-    /// Aspire 12's component editing icons in Transform mode: round buttons along the near
-    /// edge of the selected component's box; a drag on the first three sets its total,
-    /// shape or base height, and the last opens its settings. The model's own view has
-    /// them, not a preview.
+    /// Transform mode's handles in the 3D view, over whatever is selected: Aspire's 3D
+    /// Transform Handles (see [`Self::transform_handles_3d`]) for vectors and components
+    /// alike, and for a component, Aspire 12's component editing icons, round buttons
+    /// along the near edge of its box; a drag on the first three sets its total, shape or
+    /// base height, and the last opens its settings. The model's own view has them, not a
+    /// preview. With nothing selected the status bar says how to start.
     pub(super) fn handles_3d(&mut self, ui: &mut egui::Ui, area: egui::Rect, fit: egui::Rect) {
-        use cut_craft_core::glam::DVec3;
         self.handles_3d.clear();
         let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
         if self.simulation.is_some()
@@ -1488,8 +1513,32 @@ impl CutCraftApp {
             || importing
             || self.view_tool != Some(ViewTool::Transform)
         {
+            // a drag the mode was left in the middle of ends here, as far as it went
+            self.drag_3d = None;
+            self.drag_base = None;
             return;
         }
+        let Some(bounds) = self.doc.selection_bounds() else {
+            self.drag_3d = None;
+            if ui.rect_contains_pointer(area) {
+                cut_craft_bug_report::hint::hint(
+                    ui.ctx(),
+                    "Transform: click a component or vector to select it, then drag its \
+                     handles to move, scale or rotate it",
+                );
+            }
+            return;
+        };
+        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
+            return;
+        };
+        let camera = view3d::Camera::new(&surface, self.orbit, self.framing, fit, None);
+        let plane = Plane3d {
+            camera: &camera,
+            origin: surface.origin,
+            z: top_over(&surface, bounds),
+        };
+        let painter = ui.painter_at(area);
         let chosen = self
             .doc
             .selected_components
@@ -1497,38 +1546,39 @@ impl CutCraftApp {
             .rev()
             .find(|id| self.doc.components.contains_key(id))
             .copied();
-        let Some(id) = chosen else {
-            self.drag_3d = None;
-            return;
-        };
+        if let Some(id) = chosen {
+            self.component_icons_3d(ui, &painter, &plane, id);
+        }
+        self.transform_handles_3d(ui, &painter, &plane, bounds);
+        if let Some(id) = chosen {
+            self.handle_drag_3d(ui, fit, id);
+        }
+    }
+
+    /// Aspire 12's component editing icons along the near edge of component `id`'s box, a
+    /// button's height below it (the transform handles sit on the edge itself).
+    fn component_icons_3d(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        plane: &Plane3d,
+        id: EntityId,
+    ) {
         let extent = self.doc.components[&id].extent();
-        let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
-            return;
-        };
-        let camera = view3d::Camera::new(&surface, self.orbit, self.framing, fit, None);
-        let floor = |p: Point| {
-            camera.screen(DVec3::new(
-                p.x - surface.origin.x,
-                p.y - surface.origin.y,
-                0.0,
-            ))
-        };
         let (near, far) = (
-            floor(extent.min),
-            floor(Point::new(extent.max.x, extent.min.y)),
+            plane.screen(extent.min),
+            plane.screen(Point::new(extent.max.x, extent.min.y)),
         );
-        // a button's height below the near edge of its box (the transform handles sit on
-        // the edge itself), a button's height apart; an edge seen end-on runs to the right
+        // a button's height apart; an edge seen end-on runs to the right
         let edge = ui.spacing().interact_size.y;
         let mut along = (far - near).normalized();
         if !along.is_finite() || along == egui::Vec2::ZERO {
             along = egui::Vec2::X;
         }
         let mut below = along.rot90();
-        if below.dot(near - floor(extent.center())) < 0.0 {
+        if below.dot(near - plane.screen(extent.center())) < 0.0 {
             below = -below;
         }
-        let painter = ui.painter_at(area);
         for (i, handle) in Handle3d::ALL.into_iter().enumerate() {
             #[expect(clippy::cast_precision_loss, reason = "four handles")]
             let centre = near + along * edge * (1.0 + 1.5 * i as f32) + below * edge;
@@ -1569,37 +1619,39 @@ impl CutCraftApp {
                 });
             }
         }
-        self.transform_handles_3d(ui, &painter, &camera, surface.origin);
-        self.handle_drag_3d(ui, fit, id);
     }
 
-    /// Aspire's 3D Transform Handles over the selection's box on the material's top: the 2D
+    /// Aspire's 3D Transform Handles over the selection's box, level with the highest
+    /// surface inside it so they sit on what is selected rather than under it: the 2D
     /// view's handles at the same places (a cross in the middle moves, white corners and
     /// black edges scale) and a rotation arrow on a stem above the far edge. Dragged as the
-    /// 2D view's are, with Alt and Shift, and applied once the pointer is let go (one undo);
-    /// while dragging, the box as it will be.
+    /// 2D view's are, with the same keys, and applied once the pointer is let go (one
+    /// undo); while dragging, the box as it will be. Escape cancels a drag.
     // ponytail: the manual's edit box for an exact value, and moving the rotation centre,
     // are not offered; the Move, Scale and Rotate forms take exact values
     fn transform_handles_3d(
         &mut self,
         ui: &egui::Ui,
         painter: &egui::Painter,
-        camera: &view3d::Camera,
-        origin: Point,
+        plane: &Plane3d,
+        bounds: cut_craft_core::geometry::Rect,
     ) {
-        use cut_craft_core::glam::DVec3;
-        let Some(bounds) = self.doc.selection_bounds() else {
-            return;
-        };
-        let floor = |p: Point| camera.screen(DVec3::new(p.x - origin.x, p.y - origin.y, 0.0));
         let visuals = ui.visuals();
         let (stroke, dark) = (visuals.selection.stroke, visuals.text_color());
         let edge = ui.spacing().interact_size.y;
         let half = edge * view2d::NODE_HANDLE_SHARE / 2.0;
+        // the selection's box itself, so the handles read as its corners and sides
+        let corners = box_corners(bounds).map(|c| plane.screen(c)).to_vec();
+        painter.add(egui::Shape::dashed_line(
+            &[corners.as_slice(), &corners[..1]].concat(),
+            stroke,
+            6.0,
+            4.0,
+        ));
         // the arrow a button's height out from the far edge's middle, on a stem
         let arrow = Handle::Rotate { x: 0, y: 1 };
-        let far = floor(handles::position(bounds, arrow));
-        let mut out = (far - floor(bounds.center())).normalized();
+        let far = plane.screen(handles::position(bounds, arrow));
+        let mut out = (far - plane.screen(bounds.center())).normalized();
         if !out.is_finite() || out == egui::Vec2::ZERO {
             out = -egui::Vec2::Y;
         }
@@ -1610,7 +1662,7 @@ impl CutCraftApp {
             let at = if handle == arrow {
                 tip
             } else {
-                floor(handles::position(bounds, handle))
+                plane.screen(handles::position(bounds, handle))
             };
             let square = egui::Rect::from_center_size(at, egui::Vec2::splat(half * 2.0));
             match handle {
@@ -1658,9 +1710,22 @@ impl CutCraftApp {
                 self.drag_3d = Some((Handle3d::Transform(handle), from));
             }
         }
+        self.transform_drag_3d(ui, painter, plane, bounds);
+    }
+
+    /// A transform handle's drag in the 3D view: the box as it will be while dragging, the
+    /// transform applied (one undo) when the pointer is let go over the handles' plane.
+    fn transform_drag_3d(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        plane: &Plane3d,
+        bounds: cut_craft_core::geometry::Rect,
+    ) {
         let Some((Handle3d::Transform(handle), from)) = self.drag_3d else {
             return;
         };
+        let stroke = ui.visuals().selection.stroke;
         let (now, released, keys) = ui.input(|i| {
             (
                 i.pointer.latest_pos(),
@@ -1672,24 +1737,42 @@ impl CutCraftApp {
                 },
             )
         });
-        let on_floor = |at: egui::Pos2| camera.on_floor(at).map(|p| p + origin);
-        let Some((start, end)) = on_floor(from).zip(now.and_then(on_floor)) else {
+        let Some((start, end)) = plane.back(from).zip(now.and_then(|at| plane.back(at))) else {
+            // off the handles' plane (over the horizon in perspective, or the plane seen
+            // edge-on): nothing to show, and letting go there changes nothing
+            if released {
+                self.drag_3d = None;
+                self.status
+                    .set_message("Let go off the material: nothing was changed");
+            } else {
+                self.status.set_message(
+                    "The pointer is off the material: bring it back, or let go to cancel",
+                );
+            }
             return;
         };
         let t = handles::transform(bounds, handle, start, end, keys);
-        let corners = [
-            bounds.min,
-            Point::new(bounds.max.x, bounds.min.y),
-            bounds.max,
-            Point::new(bounds.min.x, bounds.max.y),
-        ];
-        let moved = corners.map(|c| floor(t.transform_point2(c))).to_vec();
+        let moved = box_corners(bounds)
+            .map(|c| plane.screen(t.transform_point2(c)))
+            .to_vec();
         painter.add(egui::Shape::closed_line(moved, stroke));
         if released {
             self.drag_3d = None;
             let change = Change::transform_selected(&self.doc, |_| t);
             self.record(change, "Transformed");
         }
+    }
+
+    /// Escape during a drag on a 3D view handle: the drag ends with nothing changed (a
+    /// height already set as it went is undone), Transform mode stays.
+    pub(super) fn cancel_drag_3d(&mut self) {
+        if self.drag_3d.take().is_none() {
+            return;
+        }
+        if let Some((.., Some(_))) = self.drag_base.take() {
+            self.history.undo(&mut self.doc);
+        }
+        self.status.set_message("Cancelled: nothing was changed");
     }
 
     /// A height handle's drag: the component follows the pointer, its total, shape or base
@@ -3075,4 +3158,49 @@ fn combine_radios_3d(ui: &mut egui::Ui, icons: &crate::icons::Icons, s: &mut Set
             s.radios.push((mode, response.rect.center()));
         }
     });
+}
+
+/// The level plane the 3D view's transform handles sit on, at height `z` in the material.
+struct Plane3d<'a> {
+    camera: &'a view3d::Camera,
+    origin: Point,
+    z: f64,
+}
+
+impl Plane3d<'_> {
+    /// Where the job's point `p` on this plane shows.
+    fn screen(&self, p: Point) -> egui::Pos2 {
+        use cut_craft_core::glam::DVec3;
+        self.camera
+            .screen(DVec3::new(p.x - self.origin.x, p.y - self.origin.y, self.z))
+    }
+
+    /// The job's point on this plane under `at` on screen, if the plane is there.
+    fn back(&self, at: egui::Pos2) -> Option<Point> {
+        self.camera.on_plane(at, self.z).map(|p| p + self.origin)
+    }
+}
+
+/// The highest surface over `bounds` (sampled on a 9 by 9 grid), or the material's top
+/// when that is higher or the surface is not there.
+fn top_over(surface: &Material, bounds: cut_craft_core::geometry::Rect) -> f64 {
+    const SAMPLES: u32 = 9;
+    let size = bounds.size();
+    (0..SAMPLES)
+        .flat_map(|i| (0..SAMPLES).map(move |j| (i, j)))
+        .filter_map(|(i, j)| {
+            let along = |k: u32| f64::from(k) / f64::from(SAMPLES - 1);
+            surface.at(bounds.min + Point::new(size.x * along(i), size.y * along(j)))
+        })
+        .fold(0.0, f64::max)
+}
+
+/// The corners of `bounds`, round from its minimum.
+fn box_corners(bounds: cut_craft_core::geometry::Rect) -> [Point; 4] {
+    [
+        bounds.min,
+        Point::new(bounds.max.x, bounds.min.y),
+        bounds.max,
+        Point::new(bounds.min.x, bounds.max.y),
+    ]
 }

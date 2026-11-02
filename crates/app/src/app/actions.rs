@@ -23,17 +23,28 @@ impl CutCraftApp {
         reason = "one line per field of the window's state"
     )]
     pub(super) fn new() -> Self {
-        let menus = gui::MenuSystem::new();
+        let mut registry = commands::registry();
+        let my_gadgets = crate::gadgets::my_gadgets_dir();
+        let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref());
+        let mut menus = gui::MenuSystem::new();
+        menus.add_gadgets(&gadgets, my_gadgets.as_deref());
+        let mut status = gui::StatusBar::new();
+        if !gadgets.problems.is_empty() {
+            status.set_message(&format!(
+                "Some gadgets could not be loaded: {}",
+                gadgets.problems.join("; ")
+            ));
+        }
         Self {
             screen: Screen::Start,
             start_menus: menus.without_job(),
             doc: Document::default(),
             history: History::default(),
-            registry: commands::registry(),
+            registry,
             icons: Icons::default_set(),
             menus,
             toolbar: gui::Toolbar::new(),
-            status: gui::StatusBar::new(),
+            status,
             design_tab: 0,
             view: View::TwoD,
             cursor: None,
@@ -64,6 +75,8 @@ impl CutCraftApp {
                 post: None,
                 add_side: false,
             },
+            depth_estimate: None,
+            addons_path: None,
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             posts: cut_craft_machines::Library::new(None),
@@ -74,6 +87,13 @@ impl CutCraftApp {
             tool_manager: None,
             shots: None,
             space_mouse: None,
+            unsigned_gadgets: gadgets
+                .mine
+                .iter()
+                .map(|g| (g.id.clone(), g.label.clone()))
+                .collect(),
+            unsigned_gadgets_allowed: std::collections::HashSet::new(),
+            unsigned_gadget_ok: ask_to_run_unsigned,
             reporter: cut_craft_bug_report::Reporter::new(
                 super::BUG_REPO,
                 files::config_dir().map(|d| d.join("bug-reports")),
@@ -116,6 +136,7 @@ impl CutCraftApp {
             import_level: None,
             polyline: crate::polyline::Draft::default(),
             fine_3d: None,
+            drawn_on: None,
             model_3d: None,
             gpu_3d: None,
             surface_gpu: None,
@@ -364,6 +385,10 @@ impl CutCraftApp {
                         machine: m.name.clone(),
                         slots: m.slots.clone(),
                     });
+                // tools loaded before slots set their numbers show those numbers now
+                if let Some(changer) = &manager.changer {
+                    manager.draft.number_by_slots(&changer.slots);
+                }
                 self.tool_manager = Some(manager);
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
@@ -499,7 +524,25 @@ impl CutCraftApp {
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
             }
+            id if !self.may_run_gadget(id) => {}
             _ => self.start_command(id),
+        }
+    }
+
+    /// Whether gadget `id` may run: always for Cut Craft's own; for one from the My Gadgets
+    /// folder, once the user has been warned and said yes (asked once a session).
+    fn may_run_gadget(&mut self, id: &str) -> bool {
+        let Some(label) = self.unsigned_gadgets.get(id) else {
+            return true;
+        };
+        if self.unsigned_gadgets_allowed.contains(id) {
+            return true;
+        }
+        if (self.unsigned_gadget_ok)(label) {
+            self.unsigned_gadgets_allowed.insert(id.to_owned());
+            true
+        } else {
+            false
         }
     }
 
@@ -1173,6 +1216,21 @@ impl CutCraftApp {
         self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
     }
 
+    /// The active machine's tool changer was loaded differently: the machines are saved,
+    /// and each tool now in a slot takes the slot as its tool number.
+    pub(super) fn tool_changer_changed(&mut self) {
+        self.machines_changed("Tool changer changed");
+        let slots = self
+            .machines
+            .active()
+            .map(|m| m.slots.clone())
+            .unwrap_or_default();
+        if self.tools.number_by_slots(&slots) {
+            self.tools_changed("Tool changer changed; tools numbered by their slots");
+            self.refresh_form_tool();
+        }
+    }
+
     /// Writes the machines, if they have a file, and reports `done` or the failure.
     pub(super) fn machines_changed(&mut self, done: &str) {
         let result = self
@@ -1347,6 +1405,7 @@ impl CutCraftApp {
             }
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
+        self.fill_drill_bank(cmd.id(), &mut params);
         // a toolpath's form in Aspire's order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
@@ -1910,17 +1969,13 @@ impl CutCraftApp {
                     files::show_folder(&f).map_err(|e| e.to_string())
                 })
             }
-            _ => match self
-                .clipart
-                .chosen
-                .or((!self.clipart.folders.is_empty()).then_some(0))
-                .and_then(|i| self.clipart.folders.get(i))
-            {
+            // the folder looked in, or the first when looking in all of them
+            _ => match (self.clipart.open.as_ref()).or(self.clipart.folders.first()) {
                 Some(folder) => {
                     on_the_desktop();
                     files::show_folder(folder).map_err(|e| e.to_string())
                 }
-                None => Err("add a folder to the Clipart library first".to_owned()),
+                None => Err("add a folder to the Library first".to_owned()),
             },
         };
         if let Err(e) = result {
@@ -1937,10 +1992,27 @@ impl CutCraftApp {
             return;
         };
         self.start_command(&toolpath.strategy);
+        let mut params = toolpath.params;
+        // the bank as the machine has it now, so a bank changed since is used
+        self.fill_drill_bank(&toolpath.strategy, &mut params);
         if let Some(form) = self.form.as_mut().filter(|f| f.id == toolpath.strategy) {
-            form.params = toolpath.params;
+            form.params = params;
             form.editing = Some(id);
         }
+    }
+
+    /// A Drill Bank Toolpath's form drills with the active machine's bank (none when it has
+    /// none, which the toolpath then says how to set up).
+    pub(super) fn fill_drill_bank(&self, command: &str, params: &mut Value) {
+        if command != "drill_bank_toolpath" {
+            return;
+        }
+        let bank = self
+            .machines
+            .active()
+            .and_then(|m| m.drill_bank.clone())
+            .unwrap_or_default();
+        params["bank"] = serde_json::to_value(bank).expect("a drill bank serialises");
     }
 
     /// A form's Apply: its command, or for an edited toolpath that toolpath made again with
@@ -2526,6 +2598,14 @@ impl CutCraftApp {
             for id in fired {
                 self.invoke(ctx, &id);
             }
+        }
+        // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
+        let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
+        if self.drag_3d.is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.cancel_drag_3d();
         }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
@@ -3281,6 +3361,7 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
+            "relief_from_photo" => self.depth_section(ui),
             "profile_toolpath" => self.edit_tabs(ui),
             "sculpt" => {
                 let (load, round) = ui
@@ -3318,6 +3399,125 @@ impl CutCraftApp {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Relief from Photo's Depth: Estimate Depth when the add-on is installed, else how to
+    /// get it.
+    fn depth_section(&mut self, ui: &mut egui::Ui) {
+        let installed = self.addons_path.as_deref().and_then(crate::depth::find);
+        let chosen = self
+            .doc
+            .selected_bitmaps
+            .iter()
+            .rev()
+            .copied()
+            .find(|id| self.doc.bitmaps.contains_key(id))
+            .or_else(|| self.doc.bitmaps.keys().next_back().copied());
+        let has_depth = chosen.is_some_and(|id| {
+            let b = &self.doc.bitmaps[&id];
+            !b.grey.is_empty() && b.depth.len() == b.grey.len()
+        });
+        let mut start = false;
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.strong("Depth");
+            let Some(_) = &installed else {
+                ui.label(
+                    "Turning a photo into a relief needs the free Depth add-on \
+                     (about 100 MB, downloaded once).",
+                );
+                let folder = self
+                    .addons_path
+                    .as_ref()
+                    .map(|d| d.join(crate::depth::ADDON_ID));
+                if let Some(folder) = folder {
+                    ui.label(format!(
+                        "Put {} and {} in {}",
+                        crate::depth::program_name(),
+                        crate::depth::WEIGHTS,
+                        folder.display()
+                    ));
+                    if ui
+                        .button("Open Add-ons Folder")
+                        .on_hover_hint("Where the Depth add-on's two files go")
+                        .clicked()
+                    {
+                        let shown = std::fs::create_dir_all(&folder)
+                            .and_then(|()| files::show_folder(&folder));
+                        if let Err(e) = shown {
+                            self.status
+                                .set_message(&format!("cannot open {}: {e}", folder.display()));
+                        }
+                    }
+                }
+                return;
+            };
+            if self.depth_estimate.is_some() {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("Estimating depth… (up to a minute on a large photo)");
+                });
+                return;
+            }
+            ui.label(if has_depth {
+                "This photo has its depth. Estimate again after editing the photo."
+            } else {
+                "First estimate how far each part of the photo is from the camera."
+            });
+            start = ui
+                .add_enabled(chosen.is_some(), egui::Button::new("Estimate Depth"))
+                .on_hover_hint("Works out the photo's depth on this computer; nothing is uploaded")
+                .on_disabled_hover_text("Import a photo first")
+                .clicked();
+        });
+        if let (true, Some(installed), Some(id)) = (start, installed, chosen) {
+            match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())
+            {
+                Ok(running) => self.depth_estimate = Some(running),
+                Err(e) => self.status.set_message(&e),
+            }
+        }
+    }
+
+    /// Gives the picture its depth once the Depth add-on answers (undoable), and shows the
+    /// form's preview again.
+    pub(super) fn take_depth(&mut self) {
+        let Some(answer) = self
+            .depth_estimate
+            .as_ref()
+            .and_then(crate::depth::Estimating::answer)
+        else {
+            return;
+        };
+        let sent = self.depth_estimate.take().expect("answered");
+        let id = sent.bitmap;
+        let result = answer.and_then(|depth| {
+            let bitmap = self
+                .doc
+                .bitmaps
+                .get(&id)
+                .ok_or("the photo was deleted while its depth was estimated")?;
+            // another job opened, or the photo edited, while the add-on worked
+            if *bitmap != sent.photo || depth.len() != bitmap.grey.len() {
+                return Err("the photo changed while its depth was estimated; try again".into());
+            }
+            let after = crate::depth::with_depth(bitmap, depth);
+            let mut c = cut_craft_core::Change::builder(&self.doc);
+            c.replace_bitmap(id, after);
+            let change = c.finish();
+            self.history
+                .apply(&mut self.doc, change)
+                .map_err(|e| e.to_string())
+        });
+        match result {
+            Ok(()) => {
+                self.status.set_message("Depth estimated");
+                if let Some(form) = self.form.as_mut() {
+                    form.dirty = true;
+                }
+            }
+            Err(e) => self.status.set_message(&e),
         }
     }
 
@@ -3722,4 +3922,29 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
         .on_hover_hint("Judge again what a cutter from above cannot reach")
         .on_disabled_hover_text("Tick Highlight undercuts first")
         .clicked()
+}
+
+/// What the user is told before an unsigned gadget first runs.
+pub(super) fn unsigned_warning(label: &str) -> String {
+    format!(
+        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder, \
+         not from a signed Cut Craft build, so nobody has checked what it does.\n\n\
+         Cut Craft and its author are not responsible for what this gadget does. It can only \
+         change the job that is open, and Undo takes back everything it did in one step. \
+         Check its result before you cut.\n\nRun it?"
+    )
+}
+
+/// Asks, in a system dialog, whether to run the unsigned gadget `label`.
+fn ask_to_run_unsigned(label: &str) -> bool {
+    let answer = super::message_dialog()
+        .set_title("Unsigned gadget")
+        .set_description(unsigned_warning(label))
+        .set_level(rfd::MessageLevel::Warning)
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            "Run Gadget".into(),
+            "Cancel".into(),
+        ))
+        .show();
+    matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
 }
