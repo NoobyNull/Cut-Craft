@@ -204,3 +204,24 @@ fn later_commands_see_what_earlier_ones_made() {
     "#);
     assert!(change.is_ok(), "{change:?}");
 }
+
+#[test]
+fn a_gadget_that_runs_too_many_commands_is_stopped() {
+    let err = run_gadget(
+        "test.lua",
+        r#"function run()
+             for i = 1, 100 do
+               cutcraft.run("draw_circle", { center = { x = i, y = 0 }, radius = 1 })
+             end
+           end"#,
+        &sample_document(),
+        &registry(),
+        &json!({}),
+        Limits {
+            commands: 10,
+            ..Limits::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(err, ScriptError::TooManyCommands(10));
+}

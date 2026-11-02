@@ -25,6 +25,9 @@ pub struct Limits {
     pub instructions: u64,
     /// Bytes of Lua memory.
     pub memory: usize,
+    /// Commands one run may run. Commands work outside Lua's memory, so this bounds what a
+    /// loop of them can build up.
+    pub commands: usize,
 }
 
 impl Default for Limits {
@@ -32,6 +35,7 @@ impl Default for Limits {
         Self {
             instructions: 200_000_000,
             memory: 64 * 1024 * 1024,
+            commands: 10_000,
         }
     }
 }
@@ -50,6 +54,8 @@ pub enum ScriptError {
     TooLong,
     /// It used more memory than gadgets may.
     OutOfMemory,
+    /// It ran more commands than one run may (the limit is given).
+    TooManyCommands(usize),
 }
 
 impl fmt::Display for ScriptError {
@@ -63,6 +69,11 @@ impl fmt::Display for ScriptError {
             ),
             Self::OutOfMemory => f.write_str(
                 "the gadget used too much memory and was stopped; nothing in the job was changed",
+            ),
+            Self::TooManyCommands(limit) => write!(
+                f,
+                "the gadget tried to do more than {limit} things in one go and was stopped; \
+                 nothing in the job was changed"
             ),
         }
     }
@@ -98,6 +109,8 @@ pub fn run_gadget(
     let stopped = Rc::new(Cell::new(false));
     budget(&lua, limits.instructions, Rc::clone(&stopped))?;
 
+    let ran = Cell::new(0_usize);
+    let too_many = Cell::new(false);
     let scratch = RefCell::new(doc.clone());
     let total = RefCell::new(Change::default());
 
@@ -132,6 +145,11 @@ pub fn run_gadget(
         lua.globals().set("cutcraft", cutcraft)?;
 
         let run_command = scope.create_function(|lua, (id, params): (String, mlua::Value)| {
+            if ran.get() >= limits.commands {
+                too_many.set(true);
+                return Err(mlua::Error::runtime("too many commands"));
+            }
+            ran.set(ran.get() + 1);
             let params = json_params(lua.from_value(params)?);
             Ok(match run_one(registry, &scratch, &id, &params) {
                 Ok(change) => {
@@ -162,6 +180,7 @@ pub fn run_gadget(
     match result {
         Ok(()) => Ok(total.into_inner()),
         Err(_) if stopped.get() => Err(ScriptError::TooLong),
+        Err(_) if too_many.get() => Err(ScriptError::TooManyCommands(limits.commands)),
         Err(e) => Err(script_error(&e)),
     }
 }
