@@ -174,6 +174,15 @@ say "not implemented yet".
   colour, all applied through Component Properties. A component's Solid Color
   shows on the GPU-drawn surface [inf: the CPU path of the headless tests leaves it out].
   Not done: the 3D Transform Handles themselves (move, scale, rotate in the 3D view).
+- Drawing in the 3D view (Aspire 12 [inf: "the drawing tools are now available in the 3D
+  view", What's New in V12.0]): with a drawing tool's form open, the left button draws in the
+  3D view as it does in the 2D view (drags, clicks, Shift-click to edit, the polyline's
+  clicks, text, trim, dimensions, cross section), at the point where the pointer meets the
+  model (off it, the material's top plane). The shape being drawn shows on the model; the
+  right button still turns the view, the middle pans, the wheel zooms; snapping works as in
+  2D and the status bar adds "right-drag turns the view". Vectors are still flat 2D vectors.
+  Not offered while the job is shown wrapped round a rotary axis, while a 3D model is being
+  imported, or with a view tool on; nor before anything is in 3D (the view is empty then).
 - Import 3D Model is one page (Aspire 12 has two; Matthew asked for one): Initial
   Orientation, Model Size, the model type and Scale to fit, Position relative to Modeling
   Plane (Position, Depth Below Top, Create both sides, Discard data below zero plane), Align

@@ -3,6 +3,7 @@
 
 mod actions;
 mod cutting;
+mod draw3d;
 mod help;
 mod layouts;
 mod panels;

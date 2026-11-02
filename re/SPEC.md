@@ -739,6 +739,33 @@ instead of half-cell steps.
 - Not tried by hand: how the cube looks and feels, label fit at other font sizes, and
   side-on overlay speed on a big job.
 
+## Drawing in the 3D view [inf] (help: What's New in Aspire V12.0, "Drawing in the 3D View")
+
+#### Aspire behaviour (sources)
+- "The software's drawing tools are now available in the 3D view", so a user can stay in the
+  3D view instead of switching views [inf: What's New V12.0]. The help does not say how the
+  pointer maps onto the model, nor how the view is turned while a tool is open.
+
+#### What was built, and the choices made
+- The open drawing tool takes the 3D view's left button; its gestures are the 2D view's
+  (`view2d::gesture_of`), with each screen point taken to where its line of sight first meets
+  the model's solid (`view3d::Camera::on_surface`: stepped half a cell, then halved to a hair),
+  off the material the top plane (`Camera::on_floor`). [inf] Projecting onto what is under the
+  pointer is our guess; it means what is drawn lies on what the user sees, which a novice
+  expects, where the top plane would put it millimetres off on a raised or cut surface.
+- Right-drag turns the view and middle-drag pans while drawing (the sculpting rule), so the
+  left button never does two things; the status bar says so. Double-click does not pick a
+  component or fit while drawing (it would fight the polyline's clicks).
+- The shape being drawn is drawn on the model in the selection colour, flat at the height a
+  finished vector shows (`view3d::vector_plane`), hidden where the model hides it.
+- Not offered on the wrapped (rotary) view, while importing a 3D model, or with a view tool on.
+
+#### What's left
+- Node editing and the selection's 2D handles in the 3D view; selecting vectors by clicking
+  them there.
+- Drawing before any component exists (the 3D view shows "Nothing in 3D yet").
+- Drawing on the wrapped rotary view.
+
 ## Tool databases: `.vtdb` [obs] (vendor files from Amana, IDC Woodcraft and CIC; Aspire 12.5)
 
 - A SQLite file: `tool_geometry` (name_format with `{Tool Type}`, `{Diameter|F}`,

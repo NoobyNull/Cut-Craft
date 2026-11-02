@@ -135,6 +135,53 @@ pub enum Gesture {
     Dropped { drag: Drag, shift: bool },
 }
 
+/// The left button's click, drag or drop on `response`, in job coordinates by `to_job`
+/// (the 2D view's transform, or where the 3D view's pointer meets the model): `None` while
+/// nothing happens, or where `to_job` finds no point.
+pub fn gesture_of(
+    ui: &egui::Ui,
+    response: &egui::Response,
+    to_job: impl Fn(Pos2) -> Option<Point>,
+) -> Option<Gesture> {
+    let modifiers = ui.input(|i| i.modifiers);
+    if response.clicked() {
+        let at = to_job(response.interact_pointer_pos()?)?;
+        return Some(Gesture::Click {
+            at,
+            shift: modifiers.shift,
+        });
+    }
+    // egui forgets where a press started on the frame it is released, so remember it
+    let id = response.id;
+    if response.drag_started_by(PointerButton::Primary)
+        && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+    {
+        ui.data_mut(|d| d.insert_temp(id, origin));
+    }
+    let start: Pos2 = ui.data(|d| d.get_temp(id))?;
+    let stopped = response.drag_stopped_by(PointerButton::Primary);
+    if stopped {
+        ui.data_mut(|d| d.remove::<Pos2>(id));
+    }
+    let end = ui.input(|i| i.pointer.latest_pos())?;
+    let drag = Drag {
+        start: to_job(start)?,
+        end: to_job(end)?,
+        from_center: modifiers.alt,
+        constrain: modifiers.command,
+    };
+    if stopped {
+        Some(Gesture::Dropped {
+            drag,
+            shift: modifiers.shift,
+        })
+    } else if response.dragged_by(PointerButton::Primary) {
+        Some(Gesture::Dragging(drag))
+    } else {
+        None
+    }
+}
+
 /// Drawn over the document while a gesture is in progress.
 pub enum Overlay {
     None,
@@ -204,41 +251,8 @@ impl Canvas {
     }
 
     pub fn gesture(&self, ui: &egui::Ui) -> Option<Gesture> {
-        let modifiers = ui.input(|i| i.modifiers);
         let t = self.transform;
-        if self.response.clicked() {
-            let at = t.to_job(self.response.interact_pointer_pos()?);
-            return Some(Gesture::Click {
-                at,
-                shift: modifiers.shift,
-            });
-        }
-        // egui forgets where a press started on the frame it is released, so remember it
-        let id = self.response.id;
-        if self.response.drag_started_by(PointerButton::Primary)
-            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
-        {
-            ui.data_mut(|d| d.insert_temp(id, origin));
-        }
-        let start: Pos2 = ui.data(|d| d.get_temp(id))?;
-        let end = ui.input(|i| i.pointer.latest_pos())?;
-        let drag = Drag {
-            start: t.to_job(start),
-            end: t.to_job(end),
-            from_center: modifiers.alt,
-            constrain: modifiers.command,
-        };
-        if self.response.drag_stopped_by(PointerButton::Primary) {
-            ui.data_mut(|d| d.remove::<Pos2>(id));
-            Some(Gesture::Dropped {
-                drag,
-                shift: modifiers.shift,
-            })
-        } else if self.response.dragged_by(PointerButton::Primary) {
-            Some(Gesture::Dragging(drag))
-        } else {
-            None
-        }
+        gesture_of(ui, &self.response, |at| Some(t.to_job(at)))
     }
 
     /// Draws the job, its datum, the vectors (selection dashed), toolpaths (`highlighted` in the

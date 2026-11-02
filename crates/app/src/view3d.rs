@@ -594,10 +594,14 @@ impl Camera {
         )
     }
 
-    /// The point on the material's top plane (z = 0) under `at` on screen, `None` when the
-    /// plane is seen edge-on.
-    pub(crate) fn on_floor(&self, at: Pos2) -> Option<DVec2> {
-        // the point at the middle's depth under `at`, then along the line of sight to z = 0
+    /// Points on screen per mm (at the middle's depth, in perspective).
+    pub(crate) fn scale(&self) -> f64 {
+        self.scale
+    }
+
+    /// The line of sight through `at` on screen: the point on it at the middle's depth, and
+    /// its direction away from the viewer.
+    fn sight(&self, at: Pos2) -> (DVec3, DVec3) {
         let off = at - self.centre;
         let seen = self.middle
             + self.orbit.to_world(DVec3::new(
@@ -609,7 +613,52 @@ impl Camera {
             .eye_at()
             .map_or(-self.orbit.towards_viewer(), |eye| seen - eye)
             .normalize();
+        (seen, along)
+    }
+
+    /// The point on the material's top plane (z = 0) under `at` on screen, `None` when the
+    /// plane is seen edge-on.
+    pub(crate) fn on_floor(&self, at: Pos2) -> Option<DVec2> {
+        // the point at the middle's depth under `at`, then along the line of sight to z = 0
+        let (seen, along) = self.sight(at);
         (along.z.abs() > EDGE_ON).then(|| (seen - along * (seen.z / along.z)).truncate())
+    }
+
+    /// Where the line of sight through `at` first meets the solid of `material` (unwrapped),
+    /// as a point on its plan: what a vector drawn there in the 3D view lies on. Off the
+    /// material, the top plane under `at` ([`Camera::on_floor`]).
+    // ponytail: stepped half a cell at a time, then halved down to a hair between the last
+    // step outside and the first inside, as `seen_of` steps; walk the cells if it shows
+    pub(crate) fn on_surface(&self, material: &Material, at: Pos2) -> Option<DVec2> {
+        let m = material;
+        let (seen, along) = self.sight(at);
+        let (lo, _) = extent(m, None);
+        let inside = |t: f64| {
+            let q = seen + along * t;
+            q.z >= lo.z && m.at(m.origin + q.truncate()).is_some_and(|h| q.z <= h)
+        };
+        // from outside the bounding sphere (or the eye, nearer) to past its far side
+        let from = self
+            .eye_at()
+            .map_or(-2.0 * self.radius, |eye| -(seen - eye).length());
+        let step = m.cell / 2.0;
+        let mut t = from;
+        while t < 2.0 * self.radius {
+            if inside(t) {
+                let (mut outside, mut within) = ((t - step).max(from), t);
+                for _ in 0..40 {
+                    let mid = f64::midpoint(outside, within);
+                    if inside(mid) {
+                        within = mid;
+                    } else {
+                        outside = mid;
+                    }
+                }
+                return Some((seen + along * within).truncate());
+            }
+            t += step;
+        }
+        self.on_floor(at)
     }
 
     /// Material coordinates to clip space over `area` (x and y across it, -1 to 1), placing
@@ -1731,6 +1780,42 @@ mod tests {
             None,
             "the plane seen edge-on"
         );
+    }
+
+    #[test]
+    fn a_screen_point_goes_to_the_surface_it_shows_not_the_plane_behind_it() {
+        let m = slotted();
+        let area = Rect::from_min_size(pos2(10.0, 20.0), Vec2::new(400.0, 300.0));
+        for perspective in [false, true] {
+            let framing = Framing {
+                zoom: 1.5,
+                pan: Vec2::new(7.0, -3.0),
+                perspective,
+            };
+            let camera = Camera::new(&m, Orbit::default(), framing, area, None);
+            // the slot's floor, 5 mm down, seen at a slant: the top plane under the same
+            // pixel is millimetres off it
+            for p in [
+                DVec3::new(50.0, 50.0, -5.0),
+                DVec3::new(20.0, 30.0, 0.0),
+                DVec3::new(75.0, 10.0, 0.0),
+            ] {
+                let at = camera.screen(p);
+                let back = camera.on_surface(&m, at).unwrap();
+                assert!(
+                    (back - p.truncate()).length() < 0.01,
+                    "perspective {perspective}: {p} came back as {back}"
+                );
+                if p.z < 0.0 {
+                    let plane = camera.on_floor(at).unwrap();
+                    assert!((plane - p.truncate()).length() > 1.0, "{plane}");
+                }
+            }
+            // off the material, the top plane carries on
+            let off = DVec3::new(130.0, 50.0, 0.0);
+            let back = camera.on_surface(&m, camera.screen(off)).unwrap();
+            assert!((back - off.truncate()).length() < 0.01, "{back}");
+        }
     }
 
     #[test]
