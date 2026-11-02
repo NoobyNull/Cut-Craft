@@ -1,5 +1,4 @@
-- Import 3D Model: move the model up and down in the material, Align in Material buttons, numbers that follow
-- Every dragged number in a form changes the model or shape as you drag, as one undo
-- Toolpaths: Trochoidal pocket clearing, Edit Passes, Edit Tabs, Climb + Conventional, Pocket Rings
-- Handles on every selection, Shift or Ctrl to constrain; status bar hints for every tool
-- Tool numbers and a Tool Changer window; Tapered Ball Nose; Vector Selector by circle diameter
+- Automatic updates: Help ▸ Check for Updates installs signed new versions after asking
+- Gadgets menu (Lua), draw in the 3D view, toolbox flyouts, Relief from Photo
+- Cut lists and part labels, Drill Bank toolpath, click inside a shape to pick it with its holes
+- Library tab: folders, tags, filters and 3D clipart previews
