@@ -75,31 +75,33 @@ fn span(lo: f32, hi: f32, count: u32) -> vec2<u32> {
 }
 
 // How far up from the tip the cutting edge is, r from the axis (r within reach).
+// One return at the end: DirectX's compiler refuses a value returned only inside a switch.
 fn profile(r: f32) -> f32 {
     if (P.taper > 0.0 && r > P.turn) {
         return P.rise + (r - P.turn) / P.taper;
     }
+    var up = 0.0;
     switch (P.shape) {
         case 0u: {
-            return 0.0;
+            up = 0.0;
         }
         case 1u: {
-            return P.radius - sqrt(max(P.radius * P.radius - r * r, 0.0));
+            up = P.radius - sqrt(max(P.radius * P.radius - r * r, 0.0));
         }
         case 2u: {
-            return r / P.vbit_slope;
+            up = r / P.vbit_slope;
         }
         case 3u: {
             let past = max(r - (P.radius - P.tip), 0.0);
-            return P.tip - sqrt(max(P.tip * P.tip - past * past, 0.0));
+            up = P.tip - sqrt(max(P.tip * P.tip - past * past, 0.0));
         }
         default: {
-            if (r <= P.tooth_core) {
-                return 0.0;
+            if (r > P.tooth_core) {
+                up = P.tooth_offset - (P.radius - r) * P.tooth_slope;
             }
-            return P.tooth_offset - (P.radius - r) * P.tooth_slope;
         }
     }
+    return up;
 }
 
 fn distance_to_line(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
