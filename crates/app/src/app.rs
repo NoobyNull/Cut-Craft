@@ -911,6 +911,9 @@ struct CutCraftApp {
     options_window: bool,
     /// The Options category shown, by its place in the list.
     options_page: usize,
+    /// Show advanced settings is ticked: the Advanced category lists. Off at every start, so
+    /// reaching them is always a deliberate step.
+    show_advanced: bool,
     /// Both views shown at once.
     split: Option<Split>,
     /// The Library tab.
@@ -1997,7 +2000,12 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             }
             app.load_tools();
             app.load_machines();
-            app.options = crate::options::Options::load();
+            let (options, tampered) = crate::options::Options::load_checked();
+            app.options = options;
+            app.options.advanced.apply();
+            if tampered {
+                app.status.set_message(crate::options::TAMPERED);
+            }
             app.options_path = crate::options::Options::path();
             app.words_path = files::config_dir().map(|d| d.join("words.txt"));
             app.addons_path = crate::depth::addons_dir();

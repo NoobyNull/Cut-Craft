@@ -24,6 +24,9 @@ rfd.workspace = true
 # Cut Craft's window handed to rfd, so its dialogs open as the window's own
 raw-window-handle = "0.6"
 schemars.workspace = true
+# Options ▸ Advanced: the check that shows they were edited outside Cut Craft
+hmac = "0.12"
+sha2 = "0.10"
 serde.workspace = true
 serde_json.workspace = true
 # File formats: one line per crate in crates/formats, registered in src/commands.rs

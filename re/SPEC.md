@@ -332,6 +332,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 - **[obs]** `ProductInfo.ini`: `[ProductInfo] product_name, product_version=12.0.0.9, install, update`.
 - **[obs]** The Options dialog has five sections: Window Layout, 3D View Settings, Toolpath Settings, General Settings, Confirmation Choices ("don't ask again" answers).
 - **[obs]** Snap settings and view-toolbar toggles persist between sessions.
+- **Cut Craft difference (deliberate):** Options adds an **Advanced** section that lists only while *Show advanced settings* is ticked (off at every start), under a warning. It holds system values (processor cores to use, and later 3D detail limits, gadget limits and toolpath accuracy) that can freeze the app or spoil a cut. Its values are saved with a keyed check; if `options.json` was edited outside Cut Craft they go back to their defaults and the status bar says why. Every Options page has **Reset to defaults** for that page. Aspire has neither; a novice should not meet these values by accident. `docs/settings-inventory.md` lists which hard-coded values become settings.
 - **Recommendation:** keep our `config/` but store **keyed** JSON (serde), never positional. Put user data under the XDG dirs (`$XDG_CONFIG_HOME/cut-craft`, `$XDG_DATA_HOME/cut-craft`) rather than the working directory. The current `main.rs` creates `assets/ config/ output/` in whatever directory the binary is launched from.
 
 ---

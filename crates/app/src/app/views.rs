@@ -2544,13 +2544,24 @@ impl CutCraftApp {
         let schema = serde_json::to_value(schemars::schema_for!(crate::options::Options))
             .expect("a schema serialises");
         let mut fields = crate::form::fields(&schema);
-        // Advanced only lists on the desktops its settings are for
-        if !crate::options::Advanced::applies() {
+        // Advanced lists only once asked for, and its Wayland choice only on Wayland
+        for f in &mut fields {
+            if let crate::form::Kind::Group(inner) = &mut f.kind
+                && f.key == "advanced"
+                && !crate::options::Advanced::wayland()
+            {
+                inner.retain(|f| f.key != "wayland_native");
+            }
+        }
+        if !self.show_advanced {
             fields.retain(|f| f.key != "advanced");
         }
         let mut values = serde_json::to_value(&self.options).expect("options serialise");
         let mut changed = None;
+        let mut reset = None;
+        let show_advanced = &mut self.show_advanced;
         let page = &mut self.options_page;
+        *page = (*page).min(fields.len().saturating_sub(1));
         let (id, size) = (egui::Id::unique("options"), dialog_size(ctx));
         // the categories down the left, the chosen one's settings beside them
         cut_craft_bug_report::dialog_with_panels(ctx, id, "Options", size, &mut open, |ui| {
@@ -2562,11 +2573,22 @@ impl CutCraftApp {
                             *page = i;
                         }
                     }
+                    ui.separator();
+                    ui.checkbox(show_advanced, "Show advanced settings")
+                        .on_hover_text(
+                            "List settings for how hard Cut Craft works your computer and how \
+                             exactly it cuts. Most people never need them.",
+                        );
                 });
             egui::CentralPanel::default().show(ui, |ui| {
                 let Some(category) = fields.get(*page) else {
                     return;
                 };
+                if category.key == "advanced" {
+                    ui.colored_label(ui.visuals().warn_fg_color, crate::options::WARNING);
+                    ui.label(crate::options::WARNING_MORE);
+                    ui.separator();
+                }
                 let look = crate::form::Look {
                     units: self.doc.job.units,
                     picture: &|_| None,
@@ -2574,6 +2596,17 @@ impl CutCraftApp {
                     tool: None,
                     group_end: None,
                 };
+                egui::Panel::bottom("options_reset").show(ui, |ui| {
+                    if ui
+                        .button("Reset to defaults")
+                        .on_hover_text(
+                            "Put every setting on this page back as Cut Craft first had it",
+                        )
+                        .clicked()
+                    {
+                        reset = Some(category.key.clone());
+                    }
+                });
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     let one = std::slice::from_ref(category);
                     if crate::form::show(ui, one, &mut values, &look) {
@@ -2582,6 +2615,9 @@ impl CutCraftApp {
                 });
             });
         });
+        if let Some(page) = reset {
+            changed = Some(self.options.reset(&page));
+        }
         self.options_window = open;
         if let Some(options) = changed {
             options.apply_to(&mut self.display);
@@ -2591,6 +2627,7 @@ impl CutCraftApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
             self.recent.truncate(options.recent_count());
+            options.advanced.apply();
             self.options = options;
             self.save_options();
         }

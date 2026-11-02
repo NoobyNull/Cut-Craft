@@ -154,6 +154,7 @@ impl CutCraftApp {
             options: crate::options::Options::default(),
             options_window: false,
             options_page: 0,
+            show_advanced: false,
             split: None,
             clipart: crate::clipart::Clipart::default(),
             import_queue: std::collections::VecDeque::new(),
