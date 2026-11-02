@@ -463,9 +463,18 @@ fn tools_loaded_in_a_tool_changer_take_their_slot_as_their_number() {
         ..ToolDatabase::default()
     };
     db.tools[2].number = 7;
-    let slots = [None, Some("B".to_owned()), Some("A".to_owned()), None];
+    let mut slots = vec![None, Some("B".to_owned()), Some("A".to_owned()), None];
     assert!(db.number_by_slots(&slots), "numbers changed");
     let numbers: Vec<u32> = db.tools.iter().map(|t| t.number).collect();
     assert_eq!(numbers, [3, 2, 7], "a tool not loaded keeps its own");
     assert!(!db.number_by_slots(&slots), "nothing more to change");
+    // A taken out keeps its last number while T3 is empty
+    slots[2] = None;
+    db.number_by_slots(&slots);
+    assert_eq!(db.tools[0].number, 3);
+    // C put in T3: A gives up 3, so no two tools share a number
+    slots[2] = Some("C".to_owned());
+    db.number_by_slots(&slots);
+    let numbers: Vec<u32> = db.tools.iter().map(|t| t.number).collect();
+    assert_eq!(numbers, [0, 2, 3]);
 }

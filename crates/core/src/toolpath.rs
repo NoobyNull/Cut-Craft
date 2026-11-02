@@ -647,20 +647,27 @@ impl ToolDatabase {
 
     /// The tool `name` as a toolpath takes it: cutting with the active material's data.
     /// Gives each tool loaded in a tool changer its slot (counted from 1) as its tool
-    /// number, so the number shown is the holder it sits in; tools not loaded keep theirs.
+    /// number, so the number shown is the holder it sits in. A tool not loaded keeps its
+    /// number unless a loaded tool now has it (it was displaced, or taken out and the slot
+    /// refilled): then it has none (0), so Load by Tool Number is never ambiguous.
     /// Whether any number changed.
     pub fn number_by_slots(&mut self, slots: &[Option<String>]) -> bool {
+        let slot_of = |name: &str| {
+            slots
+                .iter()
+                .position(|s| s.as_deref() == Some(name))
+                .and_then(|i| u32::try_from(i + 1).ok())
+        };
+        let taken: Vec<u32> = self.tools.iter().filter_map(|t| slot_of(&t.name)).collect();
         let mut changed = false;
-        for (i, slot) in slots.iter().enumerate() {
-            let (Some(name), Ok(number)) = (slot, u32::try_from(i + 1)) else {
-                continue;
+        for tool in &mut self.tools {
+            let number = match slot_of(&tool.name) {
+                Some(slot) => slot,
+                None if taken.contains(&tool.number) => 0,
+                None => tool.number,
             };
-            if let Some(tool) = self.tools.iter_mut().find(|t| &t.name == name)
-                && tool.number != number
-            {
-                tool.number = number;
-                changed = true;
-            }
+            changed |= tool.number != number;
+            tool.number = number;
         }
         changed
     }
