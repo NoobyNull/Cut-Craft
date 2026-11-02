@@ -240,8 +240,17 @@ pub fn csv(doc: &Document) -> String {
     out
 }
 
-/// `s` as one CSV field: quoted when it holds a comma, a quote or a line break.
+/// `s` as one CSV field: quoted when it holds a comma, a quote or a line break, and a name
+/// starting like a formula (`=`, `+`, `-`, `@`) led by an apostrophe, so a spreadsheet shows
+/// it as text instead of working it out.
 fn field(s: &str) -> String {
+    let guarded;
+    let s = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        guarded = format!("'{s}");
+        guarded.as_str()
+    } else {
+        s
+    };
     if s.contains([',', '"', '\n', '\r', ';']) {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
@@ -320,7 +329,12 @@ pub fn read(text: &str, units: Units) -> Result<Vec<Entry>, String> {
         .filter(|d| first.contains(*d))
         .unwrap_or(',');
     let records = split(text, delimiter);
-    let Some(head) = records.first() else {
+    // blank lines before the headings are skipped; rows keep their line numbers
+    let start = records
+        .iter()
+        .position(|r| r.iter().any(|f| !f.trim().is_empty()))
+        .unwrap_or(records.len());
+    let Some(head) = records.get(start) else {
         return Err("The cut list is empty.".into());
     };
     let scale = match units {
@@ -353,7 +367,7 @@ pub fn read(text: &str, units: Units) -> Result<Vec<Entry>, String> {
         }
     }
     let mut out = Vec::new();
-    for (i, record) in records.iter().enumerate().skip(usize::from(headed)) {
+    for (i, record) in records.iter().enumerate().skip(start + usize::from(headed)) {
         if record.iter().all(|f| f.trim().is_empty()) {
             continue;
         }
@@ -582,6 +596,15 @@ mod tests {
         // inches in an inch job
         let e = read("Top,24,12", Units::Inch).unwrap();
         assert!((e[0].length - 609.6).abs() < 1e-9 && e[0].quantity == 1);
+    }
+
+    #[test]
+    fn blank_lines_before_the_headings_and_formula_names_are_harmless() {
+        let e = read("\n\nName,Length,Width\nSide,10,10\n", Units::Mm).unwrap();
+        assert_eq!(e[0].name, "Side");
+        assert_eq!(field("=SUM(A1)"), "'=SUM(A1)");
+        assert_eq!(field("-1,5"), "\"'-1,5\"");
+        assert_eq!(field("Side"), "Side");
     }
 
     #[test]
