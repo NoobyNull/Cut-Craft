@@ -87,6 +87,13 @@ impl CutCraftApp {
             tool_manager: None,
             shots: None,
             space_mouse: None,
+            unsigned_gadgets: gadgets
+                .mine
+                .iter()
+                .map(|g| (g.id.clone(), g.label.clone()))
+                .collect(),
+            unsigned_gadgets_allowed: std::collections::HashSet::new(),
+            unsigned_gadget_ok: ask_to_run_unsigned,
             reporter: cut_craft_bug_report::Reporter::new(
                 super::BUG_REPO,
                 files::config_dir().map(|d| d.join("bug-reports")),
@@ -510,7 +517,25 @@ impl CutCraftApp {
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
             }
+            id if !self.may_run_gadget(id) => {}
             _ => self.start_command(id),
+        }
+    }
+
+    /// Whether gadget `id` may run: always for Cut Craft's own; for one from the My Gadgets
+    /// folder, once the user has been warned and said yes (asked once a session).
+    fn may_run_gadget(&mut self, id: &str) -> bool {
+        let Some(label) = self.unsigned_gadgets.get(id) else {
+            return true;
+        };
+        if self.unsigned_gadgets_allowed.contains(id) {
+            return true;
+        }
+        if (self.unsigned_gadget_ok)(label) {
+            self.unsigned_gadgets_allowed.insert(id.to_owned());
+            true
+        } else {
+            false
         }
     }
 
@@ -3890,4 +3915,29 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
         .on_hover_hint("Judge again what a cutter from above cannot reach")
         .on_disabled_hover_text("Tick Highlight undercuts first")
         .clicked()
+}
+
+/// What the user is told before an unsigned gadget first runs.
+pub(super) fn unsigned_warning(label: &str) -> String {
+    format!(
+        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder, \
+         not from a signed Cut Craft build, so nobody has checked what it does.\n\n\
+         Cut Craft and its author are not responsible for what this gadget does. It can only \
+         change the job that is open, and Undo takes back everything it did in one step. \
+         Check its result before you cut.\n\nRun it?"
+    )
+}
+
+/// Asks, in a system dialog, whether to run the unsigned gadget `label`.
+fn ask_to_run_unsigned(label: &str) -> bool {
+    let answer = super::message_dialog()
+        .set_title("Unsigned gadget")
+        .set_description(unsigned_warning(label))
+        .set_level(rfd::MessageLevel::Warning)
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            "Run Gadget".into(),
+            "Cancel".into(),
+        ))
+        .show();
+    matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
 }

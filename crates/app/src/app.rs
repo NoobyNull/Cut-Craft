@@ -776,6 +776,12 @@ struct CutCraftApp {
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
+    /// Gadgets from the My Gadgets folder, not from Cut Craft's own signed builds: id → label.
+    unsigned_gadgets: std::collections::HashMap<String, String>,
+    /// The unsigned gadgets the user has said yes to running this session.
+    unsigned_gadgets_allowed: std::collections::HashSet<String>,
+    /// Asks whether to run the unsigned gadget with this label (a dialog; tests answer).
+    unsigned_gadget_ok: fn(&str) -> bool,
     /// A SpaceMouse's moves, once the app is running (not in tests or screenshots).
     space_mouse: Option<std::sync::mpsc::Receiver<crate::spacemouse::Input>>,
     /// `--screenshots`: the README's pictures being taken.
