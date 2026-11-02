@@ -2205,6 +2205,7 @@ dependencies = [
  "cut-craft-core",
  "cut-craft-machines",
  "cut-craft-post",
+ "cut-craft-scripting",
  "cut-craft-tool-database",
  "cut-craft-vtdb",
  "eframe",

@@ -1072,6 +1072,51 @@ fn clicking_selects_without_adding_undo_steps() {
 }
 
 #[test]
+fn clicking_inside_a_shape_selects_it_with_its_holes() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 100.0, 100.0);
+    h.rectangle(20.0, 20.0, 20.0, 20.0);
+    h.rectangle(150.0, 10.0, 50.0, 50.0);
+    h.click(h.at(80.0, 80.0), Modifiers::NONE);
+    assert_eq!(
+        h.app.doc.selection.len(),
+        2,
+        "the outline and its hole, not the shape beside them"
+    );
+    h.click(h.at(175.0, 35.0), Modifiers::SHIFT);
+    assert_eq!(h.app.doc.selection.len(), 3, "Shift adds the shape beside");
+    h.click(h.at(80.0, 80.0), Modifiers::SHIFT);
+    assert_eq!(
+        h.app.doc.selection.len(),
+        1,
+        "Shift again takes the part away"
+    );
+    h.click(h.at(130.0, 300.0), Modifiers::NONE);
+    assert!(h.app.doc.selection.is_empty(), "outside every shape clears");
+}
+
+#[test]
+fn select_vectors_inside_adds_a_selected_shapes_holes() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 100.0, 100.0);
+    h.rectangle(20.0, 20.0, 20.0, 20.0);
+    h.rectangle(150.0, 10.0, 50.0, 50.0);
+    h.click(h.at(110.0, 60.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.selection.len(), 1, "the outline's edge alone");
+    let menu = |app: &CutCraftApp| app.menus.selection_menu(&app.doc);
+    h.choose(menu, &["Select Vectors Inside"]);
+    assert_eq!(h.app.doc.selection.len(), 2, "with its hole");
+    h.app.invoke(&h.ctx, "unselect_all");
+    h.app.invoke(&h.ctx, "select_vectors_inside");
+    assert!(h.app.doc.selection.is_empty());
+    assert!(
+        h.app.status.message.contains("closed shape"),
+        "{}",
+        h.app.status.message
+    );
+}
+
+#[test]
 fn shift_click_adds_and_removes() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
@@ -6757,4 +6802,36 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
         h.text_at("In loops turning clockwise: each loop cuts conventional")
             .is_some()
     );
+}
+
+#[test]
+fn the_gadgets_menu_runs_a_lua_gadget_as_one_undo_step() {
+    let mut h = Harness::new();
+    let gadgets = &h
+        .app
+        .menus
+        .menus
+        .iter()
+        .find(|m| m.name == "Gadgets")
+        .unwrap()
+        .items;
+    let hole_pattern = leaf(gadgets, &["Hole Pattern"]).action.clone();
+    assert!(gadgets.iter().any(|i| i.name == "My Gadgets"));
+    assert!(h.app.available(&hole_pattern));
+    h.app.invoke(&h.ctx, &hole_pattern);
+    let mut params = h
+        .app
+        .form
+        .as_ref()
+        .expect("its settings form")
+        .params
+        .clone();
+    assert_eq!(params["count"], 6, "the gadget's own default");
+    params["count"] = serde_json::json!(8);
+    let before = h.app.doc.vectors.len();
+    h.app.apply_form(&hole_pattern, &params).unwrap();
+    assert_eq!(h.app.doc.vectors.len(), before + 8);
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "undo");
+    assert_eq!(h.app.doc.vectors.len(), before, "one Undo takes all 8 away");
 }
