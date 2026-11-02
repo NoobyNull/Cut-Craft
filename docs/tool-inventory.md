@@ -115,7 +115,9 @@ say "not implemented yet".
   (Left To Right ... Bottom To Top; laid out in pick order, the first picked at the named start [inf]); Join Vectors, Group, Ungroup, Job Size and Position.
 - Selection: pick order kept; components picked in the Components tab; bitmaps picked in the
   2D view (Bitmap Properties: position and size; Delete removes them).
-- Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Bake
+- Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Relief
+  from Photo (Cut Craft's own: Estimate Depth runs the optional Depth add-on on the chosen
+  photo, then backdrop cut-off, lift, fine detail and smoothing shape it into a relief), Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL (its form: limit by tolerance or triangle count; back
   left open or closed by a flat plane, the inverted front or the other side; Triangulate shows

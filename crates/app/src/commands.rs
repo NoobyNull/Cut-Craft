@@ -84,6 +84,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_add_zero_plane::AddZeroPlane>();
     r.add::<cmd_scale_model_z_height::ScaleModelZHeight>();
     r.add::<cmd_create_component_from_bitmap::CreateComponentFromBitmap>();
+    r.add::<cmd_relief_from_photo::ReliefFromPhoto>();
     r.add::<cmd_bake_components::BakeComponents>();
     r.add::<cmd_create_component_from_visible_model::CreateComponentFromVisibleModel>();
     r.add::<cmd_smooth_selected_components::SmoothSelectedComponents>();

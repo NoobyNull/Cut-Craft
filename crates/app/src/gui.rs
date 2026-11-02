@@ -171,6 +171,7 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "texture_area",
                 "add_zero_plane",
                 "create_component_from_bitmap",
+                "relief_from_photo",
             ],
         ),
         group(

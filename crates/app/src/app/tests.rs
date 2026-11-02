@@ -650,6 +650,65 @@ fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
     );
 }
 
+/// Estimate Depth with a stand-in add-on (a shell script that answers with a fixed depth
+/// map): the photo gets its depth, undoably, and Relief from Photo can then use it.
+#[cfg(unix)]
+#[test]
+fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    use std::os::unix::fs::PermissionsExt;
+    let addons = std::env::temp_dir().join(format!("cutcraft-addons-test-{}", std::process::id()));
+    let dir = addons.join(crate::depth::ADDON_ID);
+    std::fs::create_dir_all(&dir).unwrap();
+    let answer = dir.join("answer.png");
+    image::ImageBuffer::<image::Luma<u16>, _>::from_raw(2, 1, vec![0_u16, 65_535])
+        .unwrap()
+        .save(&answer)
+        .unwrap();
+    let program = dir.join(crate::depth::program_name());
+    std::fs::write(
+        &program,
+        format!("#!/bin/sh\ncp '{}' \"$3\"\n", answer.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::write(dir.join(crate::depth::WEIGHTS), b"").unwrap();
+
+    let mut h = Harness::new();
+    h.app.addons_path = Some(addons.clone());
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "photo".into(),
+        columns: 2,
+        rows: 1,
+        grey: vec![30, 220],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(20.0, 10.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    let id = *h.app.doc.bitmaps.keys().next().unwrap();
+    let installed = crate::depth::find(&addons).expect("installed");
+    let photo = h.app.doc.bitmaps[&id].clone();
+    h.app.depth_estimate =
+        Some(crate::depth::Estimating::start(&installed, id, &photo, &h.ctx).unwrap());
+    for _ in 0..200 {
+        if h.app.depth_estimate.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.frame(vec![]);
+    }
+    assert!(h.app.depth_estimate.is_none(), "the add-on answered");
+    assert_eq!(h.app.doc.bitmaps[&id].depth, [0.0, 1.0]);
+    assert!(h.app.history.undo(&mut h.app.doc));
+    assert!(h.app.doc.bitmaps[&id].depth.is_empty(), "undone");
+    std::fs::remove_dir_all(addons).unwrap();
+}
+
 #[test]
 fn clicking_one_of_a_group_picks_the_group() {
     let mut h = Harness::new();

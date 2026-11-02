@@ -755,6 +755,10 @@ struct CutCraftApp {
     selected_group: Option<String>,
     /// Quick Engrave's Immediate Output: the post and side name it saves with.
     immediate_output: SaveForm,
+    /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
+    depth_estimate: Option<crate::depth::Estimating>,
+    /// Where add-ons are installed; `None` in tests.
+    addons_path: Option<std::path::PathBuf>,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,
@@ -1972,6 +1976,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.options = crate::options::Options::load();
             app.options_path = crate::options::Options::path();
             app.words_path = files::config_dir().map(|d| d.join("words.txt"));
+            app.addons_path = crate::depth::addons_dir();
             app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
