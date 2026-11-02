@@ -2195,6 +2195,125 @@ fn right_clicking_a_component_in_the_3d_view_picks_it_and_opens_its_menu() {
     assert_eq!(h.app.doc.components.len(), 1);
 }
 
+/// The domed document in the 3D view, seen at a slant, with drawing tool `tool` open, and
+/// where a point on the model's surface shows on screen.
+fn drawing_on_the_dome(tool: &str) -> (Harness, impl Fn(f64, f64) -> Pos2, f64) {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, tool);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let fit = h.app.fit_3d.expect("the 3D view has been drawn");
+    let surface = h.app.surface_3d().unwrap().into_owned();
+    let camera = view3d::Camera::new(&surface, h.app.orbit, h.app.framing, fit, None);
+    let cell = surface.cell;
+    let on_model = move |x: f64, y: f64| {
+        let z = surface.at(Point::new(x, y)).unwrap();
+        camera.screen(cut_craft_core::glam::DVec3::new(
+            x - surface.origin.x,
+            y - surface.origin.y,
+            z,
+        ))
+    };
+    (h, on_model, cell)
+}
+
+#[test]
+fn a_drag_with_a_drawing_tool_in_the_3d_view_draws_where_it_meets_the_model() {
+    let (mut h, on_model, cell) = drawing_on_the_dome("draw_rectangle");
+    let turned = h.app.orbit;
+    // on the dome's top, well up off the material's top plane
+    h.drag(on_model(18.0, 18.0), on_model(23.0, 21.0));
+    assert_eq!(
+        h.app.orbit, turned,
+        "the left button draws, it does not turn the view"
+    );
+    assert_eq!(
+        h.app.doc.vectors.len(),
+        1,
+        "{:?}",
+        h.app.form.as_ref().map(|f| &f.error)
+    );
+    let b = h.app.doc.vectors.values().next().unwrap().bounds();
+    let close = |a: Point, b: Point| a.distance(b) < 1.5 * cell;
+    assert!(
+        close(b.min, Point::new(18.0, 18.0)) && close(b.max, Point::new(23.0, 21.0)),
+        "{b:?}, cells of {cell}"
+    );
+    assert!(h.app.history.can_undo());
+    // the right button still turns it
+    let at = on_model(20.0, 20.0);
+    h.frame(vec![Event::PointerMoved(at)]);
+    let right = |pos, pressed| Event::PointerButton {
+        pos,
+        button: PointerButton::Secondary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    h.frame(vec![right(at, true)]);
+    h.frame(vec![Event::PointerMoved(at + vec2(40.0, 0.0))]);
+    h.frame(vec![Event::PointerMoved(at + vec2(80.0, 0.0))]);
+    h.frame(vec![right(at + vec2(80.0, 0.0), false)]);
+    assert_ne!(h.app.orbit, turned);
+    assert_eq!(h.app.doc.vectors.len(), 1, "turning draws nothing");
+}
+
+#[test]
+fn drawing_in_the_3d_view_meets_the_model_as_finely_as_the_settled_view_draws_it() {
+    let (mut h, _, _) = drawing_on_the_dome("draw_rectangle");
+    let fine = h.app.fine_surface();
+    let hit = h.app.drawing_surface().expect("a model to draw on");
+    assert_eq!((hit.columns, hit.rows), (fine.columns, fine.rows));
+    // cells off the model are NaN, so compare bit for bit
+    let bits = |m: &Material| m.heights.iter().map(|h| h.to_bits()).collect::<Vec<_>>();
+    assert_eq!(bits(&hit), bits(&fine));
+    let again = h.app.drawing_surface().unwrap();
+    assert!(
+        std::sync::Arc::ptr_eq(&hit, &again),
+        "kept while nothing changes"
+    );
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.invoke(&h.ctx, "delete");
+    assert!(h.app.drawing_surface().is_none(), "nothing left to draw on");
+}
+
+#[test]
+fn polyline_clicks_in_the_3d_view_place_its_points_on_the_model() {
+    let (mut h, on_model, cell) = drawing_on_the_dome("draw_polyline");
+    let corners = [(17.0, 18.0), (23.0, 18.0), (20.0, 23.0)];
+    for (x, y) in corners {
+        h.click(on_model(x, y), Modifiers::NONE);
+    }
+    // the first point again closes it
+    h.click(on_model(17.0, 18.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    let path = h.app.doc.vectors.values().next().unwrap();
+    assert!(path.closed);
+    let b = path.bounds();
+    let close = |a: f64, b: f64| (a - b).abs() < 1.5 * cell;
+    assert!(
+        close(b.min.x, 17.0)
+            && close(b.max.x, 23.0)
+            && close(b.min.y, 18.0)
+            && close(b.max.y, 23.0),
+        "{b:?}"
+    );
+}
+
+#[test]
+fn the_3d_view_tells_how_to_draw_and_turn_while_a_drawing_tool_is_open() {
+    let (mut h, on_model, _) = drawing_on_the_dome("draw_circle");
+    h.frame(vec![Event::PointerMoved(on_model(20.0, 20.0))]);
+    h.frame(vec![]);
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(
+        hint.starts_with("Draw Circle: drag from the centre"),
+        "{hint}"
+    );
+    assert!(hint.ends_with("right-drag turns the view"), "{hint}");
+}
+
 #[test]
 fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
     use cut_craft_core::handles::Handle;
@@ -6834,4 +6953,38 @@ fn the_gadgets_menu_runs_a_lua_gadget_as_one_undo_step() {
     h.app.form = None;
     h.app.invoke(&h.ctx, "undo");
     assert_eq!(h.app.doc.vectors.len(), before, "one Undo takes all 8 away");
+}
+
+#[test]
+fn an_unsigned_gadget_warns_once_before_it_runs() {
+    let mut h = Harness::new();
+    h.app.unsigned_gadgets = [("gadget_hole_pattern".to_owned(), "Hole Pattern".to_owned())].into();
+    // the user says no: nothing opens, and they are asked again next time
+    h.app.unsigned_gadget_ok = |_| false;
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_none(), "cancelled: no form");
+    // the user says yes: the form opens, and the gadget is not asked about again this session
+    h.app.unsigned_gadget_ok = |label| label == "Hole Pattern";
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_some());
+    h.app.form = None;
+    h.app.unsigned_gadget_ok = |_| panic!("asked twice");
+    h.app.invoke(&h.ctx, "gadget_hole_pattern");
+    assert!(h.app.form.is_some());
+}
+
+#[test]
+fn built_in_gadgets_need_no_warning() {
+    let mut h = Harness::new();
+    h.app.unsigned_gadget_ok = |_| panic!("a built-in gadget is signed with the app");
+    h.app.invoke(&h.ctx, "gadget_drill_grid");
+    assert!(h.app.form.is_some());
+}
+
+#[test]
+fn the_unsigned_warning_says_who_is_responsible() {
+    let text = super::actions::unsigned_warning("Star Burst");
+    assert!(text.contains("Star Burst"));
+    assert!(text.contains("not responsible"));
+    assert!(text.contains("Undo"));
 }
