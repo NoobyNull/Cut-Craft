@@ -374,5 +374,6 @@ larger businesses may not use it commercially. The full terms are in [LICENSE](L
 
 The terms are the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 plus a short Small Maker Permission. Third-party libraries and bundled icons, models and clipart
-keep their own licenses, listed under **Help ▸ Third Party Licenses**. This summary is for
+keep their own licenses: bundled assets are credited under **Help ▸ Third Party Licenses**, and
+each library's license ships with its own source (`Cargo.lock` lists them all). This summary is for
 convenience; the LICENSE file is what applies.

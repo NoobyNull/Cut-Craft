@@ -5,8 +5,9 @@ together with the Small Maker Permission that follows these notices.
 Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)
 
 These terms cover Cut Craft's own source code and assets. Third-party libraries, fonts, icons,
-models and clipart bundled with Cut Craft keep their own licenses, listed in the application
-under Help > Third Party Licenses.
+models and clipart used by Cut Craft keep their own licenses. Bundled icons, models and clipart
+are credited in the application under Help > Third Party Licenses; each library's license is in
+its own source package (see Cargo.lock for the full list).
 
 ## Small Maker Permission
 
