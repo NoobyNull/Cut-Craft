@@ -15,8 +15,21 @@ const PARALLEL_CELLS: usize = 4096;
 /// so work bunched in part of the grid does not leave the other cores waiting.
 const BANDS_PER_CORE: usize = 4;
 
-fn cores() -> usize {
-    std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+/// The most cores heavy work may use, set from Options ▸ Advanced; 0 means all of them.
+static CORE_LIMIT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Limits simulations, previews and imports to `limit` cores; 0 lets them use every core.
+pub fn set_core_limit(limit: usize) {
+    CORE_LIMIT.store(limit, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The cores heavy work may use: every core, or fewer when Options says so, never none.
+pub fn cores() -> usize {
+    let all = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    match CORE_LIMIT.load(std::sync::atomic::Ordering::Relaxed) {
+        0 => all,
+        limit => limit.min(all),
+    }
 }
 
 /// Runs `work` on each of `jobs`, a thread per core taking the next as it comes free.

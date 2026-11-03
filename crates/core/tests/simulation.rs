@@ -653,3 +653,15 @@ fn a_form_tool_cuts_the_shape_of_its_vector() {
         false
     )));
 }
+
+#[test]
+fn heavy_work_uses_no_more_cores_than_the_options_allow() {
+    use cut_craft_core::simulation::{cores, set_core_limit};
+    let all = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    set_core_limit(1);
+    assert_eq!(cores(), 1);
+    set_core_limit(all + 10);
+    assert_eq!(cores(), all, "never more than the computer has");
+    set_core_limit(0);
+    assert_eq!(cores(), all, "0 is every core");
+}

@@ -4759,14 +4759,59 @@ fn options_show_one_category_at_a_time() {
     h.frame(vec![]);
     assert!(h.text_at("Theme").is_some());
     assert!(h.text_at("Draw origin").is_none());
-    assert_eq!(
-        h.text_at("Advanced").is_some(),
-        crate::options::Advanced::applies(),
-        "Advanced lists only on a Wayland desktop"
+    assert!(
+        h.text_at("Advanced").is_none(),
+        "Advanced lists only once asked for"
     );
     assert!(
         h.text_at("Bug reports go to").is_none(),
         "reports always go to Cut Craft's repository"
+    );
+}
+
+#[test]
+fn advanced_options_show_only_once_ticked_and_warn_first() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let tick = h.text_at("Show advanced settings").expect("the tick box");
+    h.click(tick, Modifiers::NONE);
+    h.frame(vec![]);
+    let at = *h.texts_at("Advanced").last().expect("listed once ticked");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Processor cores to use (0 = all)").is_some());
+    assert!(
+        h.text_at(crate::options::WARNING).is_some(),
+        "a warning above them"
+    );
+    assert_eq!(
+        h.text_at("Use Wayland directly (no file drag and drop)")
+            .is_some(),
+        crate::options::Advanced::wayland(),
+        "the Wayland choice only on a Wayland desktop"
+    );
+}
+
+#[test]
+fn reset_to_defaults_puts_back_only_the_page_shown() {
+    let mut h = Harness::new();
+    h.app.options.appearance.theme = crate::options::Theme::Dark;
+    h.app.options.general.recent_file_list_size = 9;
+    h.app.invoke(&h.ctx, "options");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = *h.texts_at("Appearance").last().expect("listed");
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    let reset = h.text_at("Reset to defaults").expect("the page's reset");
+    h.click(reset, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.options.appearance.theme, crate::options::Theme::Light);
+    assert_eq!(
+        h.app.options.general.recent_file_list_size, 9,
+        "other pages kept"
     );
 }
 

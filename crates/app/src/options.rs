@@ -358,23 +358,82 @@ pub enum ModelTypes {
     Both,
 }
 
-/// Settings only some desktops need, listed only on those (not one of Aspire's).
+/// Settings that change how hard Cut Craft works the computer, or how exactly it cuts: listed
+/// only once Show advanced settings is ticked, and put back to their defaults when the file
+/// was changed outside Cut Craft (not one of Aspire's).
 // ponytail: wayland_native moved here from General; one saved there before starts off again
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Advanced {
     /// On a Wayland desktop, open the window there directly rather than through `XWayland`;
-    /// files cannot be dragged into it then (from the next start)
+    /// files cannot be dragged into it then (from the next start). Listed only on Wayland
     #[serde(default)]
     #[schemars(title = "Use Wayland directly (no file drag and drop)")]
     pub wayland_native: bool,
+    /// How many processor cores previews, simulations and imports may use at once; 0 uses
+    /// them all. Fewer keeps the computer responsive for other programs, but makes previews
+    /// slower
+    #[serde(default)]
+    #[schemars(title = "Processor cores to use (0 = all)", range(min = 0, max = 256))]
+    pub cores: u32,
 }
 
 impl Advanced {
-    /// Whether this desktop has any of these settings: a Wayland one on Linux or a BSD.
-    pub fn applies() -> bool {
+    /// Whether this desktop is a Wayland one on Linux or a BSD, where `wayland_native` applies.
+    pub fn wayland() -> bool {
         cfg!(all(unix, not(target_os = "macos"))) && std::env::var_os("WAYLAND_DISPLAY").is_some()
     }
+
+    /// Hands these settings to the code they steer.
+    pub fn apply(&self) {
+        cut_craft_core::simulation::set_core_limit(usize::try_from(self.cores).unwrap_or(0));
+    }
+
+    /// The check saved beside these settings: a keyed hash of them, so an edit made outside
+    /// Cut Craft shows. The key ships in the app, so it stops a hand edit, not a determined
+    /// one; that is all it is for.
+    fn seal(&self) -> String {
+        use hmac::Mac;
+        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(SEAL_KEY).expect("any key fits");
+        mac.update(&serde_json::to_vec(self).expect("settings serialise"));
+        mac.finalize()
+            .into_bytes()
+            .iter()
+            .fold(String::new(), |mut hex, b| {
+                use std::fmt::Write as _;
+                let _ = write!(hex, "{b:02x}");
+                hex
+            })
+    }
+
+    /// Whether `seal` is these settings' own. Options saved before the check have none: they
+    /// pass when only `wayland_native`, the one setting there was then, is set.
+    fn sealed_by(&self, seal: Option<&str>) -> bool {
+        match seal {
+            Some(seal) => seal == self.seal(),
+            None => {
+                *self
+                    == Self {
+                        wayland_native: self.wayland_native,
+                        ..Self::default()
+                    }
+            }
+        }
+    }
 }
+
+/// The key of [`Advanced::seal`], and the options file's name for it.
+const SEAL_KEY: &[u8] = b"Cut Craft advanced settings, v1";
+const SEAL: &str = "advanced_check";
+
+/// The warning above the advanced settings, and what it goes on to say.
+pub const WARNING: &str = "⚠ Changing these can freeze Cut Craft or spoil a cut.";
+pub const WARNING_MORE: &str = "They set how hard Cut Craft works your computer and how exactly \
+    it cuts. Leave them alone unless you know why you are changing one; Reset to defaults puts \
+    them all back.";
+
+/// What the status bar says when the advanced settings were changed outside Cut Craft.
+pub const TAMPERED: &str = "Advanced settings were changed outside Cut Craft, so they were put \
+    back to their safe defaults. Change them in Edit ▸ Options ▸ Advanced.";
 
 /// Help ▸ Check for Updates, and the check at startup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -518,14 +577,14 @@ pub struct Options {
     #[schemars(extend("x-section" = true))]
     pub appearance: Appearance,
     #[serde(default)]
-    #[schemars(extend("x-section" = true))]
-    pub advanced: Advanced,
-    #[serde(default)]
     #[schemars(title = "SpaceMouse", extend("x-section" = true))]
     pub space_mouse: SpaceMouse,
     #[serde(default)]
     #[schemars(title = "Updates", extend("x-section" = true))]
     pub updates: Updates,
+    #[serde(default)]
+    #[schemars(extend("x-section" = true))]
+    pub advanced: Advanced,
     /// Gadgets ▸ Job Setup Sheet Editor: how job sheets look.
     #[serde(default)]
     #[schemars(skip)]
@@ -638,10 +697,48 @@ impl Default for Options {
 impl Options {
     /// The options kept in the config folder; the defaults when there are none.
     pub fn load() -> Self {
-        path()
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default()
+        Self::load_checked().0
+    }
+
+    /// [`Self::load`], and whether the advanced settings had been changed outside Cut Craft
+    /// (and so were put back to their defaults).
+    pub fn load_checked() -> (Self, bool) {
+        path().and_then(|p| std::fs::read(p).ok()).map_or_else(
+            || (Self::default(), false),
+            |bytes| Self::from_bytes(&bytes),
+        )
+    }
+
+    /// Options read from a file's bytes, the advanced ones only if their check matches; the
+    /// defaults for a file that is not options at all.
+    pub fn from_bytes(bytes: &[u8]) -> (Self, bool) {
+        let Ok(mut file) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+            return (Self::default(), false);
+        };
+        let seal = file
+            .as_object_mut()
+            .and_then(|o| o.remove(SEAL))
+            .and_then(|s| s.as_str().map(String::from));
+        let Ok(mut options) = serde_json::from_value::<Self>(file) else {
+            return (Self::default(), false);
+        };
+        let tampered = !options.advanced.sealed_by(seal.as_deref());
+        if tampered {
+            options.advanced = Advanced::default();
+        }
+        (options, tampered)
+    }
+
+    /// These options with one page (`general`, `advanced`…) back to its defaults, as its
+    /// Reset to defaults button does; anything else kept.
+    #[must_use]
+    pub fn reset(&self, page: &str) -> Self {
+        let mut values = serde_json::to_value(self).expect("options serialise");
+        let defaults = serde_json::to_value(Self::default()).expect("options serialise");
+        if let Some(default) = defaults.get(page) {
+            values[page] = default.clone();
+        }
+        serde_json::from_value(values).unwrap_or_else(|_| self.clone())
     }
 
     /// Where the options are kept, when there is a config folder.
@@ -649,8 +746,11 @@ impl Options {
         path()
     }
 
+    /// Saves the options, with the check that keeps the advanced ones from hand edits.
     pub fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
-        let json = serde_json::to_vec_pretty(self).expect("options serialise");
+        let mut file = serde_json::to_value(self).expect("options serialise");
+        file[SEAL] = self.advanced.seal().into();
+        let json = serde_json::to_vec_pretty(&file).expect("options serialise");
         cut_craft_core::file::write_atomic(path, &json)
             .map_err(|e| format!("{}: {e}", path.display()))
     }
@@ -754,9 +854,9 @@ mod tests {
                 "Confirmation Choices",
                 "Importing Models",
                 "Appearance",
-                "Advanced",
                 "SpaceMouse",
-                "Updates"
+                "Updates",
+                "Advanced"
             ]
         );
         // what the check keeps for itself is not a setting to change
@@ -812,5 +912,73 @@ mod tests {
             (2, 11),
             "2D thinned, 3D kept whole at 0"
         );
+    }
+
+    /// `o` as saved to a file, read back.
+    fn saved(o: &Options) -> Vec<u8> {
+        static FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = FILES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("cc-options-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{n}.json"));
+        o.save_to(&path).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(path);
+        bytes
+    }
+
+    #[test]
+    fn advanced_settings_saved_by_cut_craft_load_back_as_saved() {
+        let mut o = Options::default();
+        o.advanced.cores = 2;
+        o.general.recent_file_list_size = 7;
+        let (back, tampered) = Options::from_bytes(&saved(&o));
+        assert!(!tampered);
+        assert_eq!(back, o);
+    }
+
+    #[test]
+    fn advanced_settings_edited_outside_cut_craft_go_back_to_their_defaults() {
+        let mut o = Options::default();
+        o.advanced.cores = 2;
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        file["advanced"]["cores"] = 64.into();
+        // a normal setting edited by hand is kept
+        file["general"]["recent_file_list_size"] = 9.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced, Advanced::default());
+        assert_eq!(back.general.recent_file_list_size, 9);
+        // taking the check away does not get round it
+        file.as_object_mut().unwrap().remove(SEAL);
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced, Advanced::default());
+    }
+
+    #[test]
+    fn options_saved_before_the_check_keep_their_wayland_choice() {
+        let older = r#"{ "view_3d": { "draw_origin": true, "draw_material_block": true,
+            "color_shaded_view": true, "shaded_background": true, "light_follows_viewer": true },
+            "toolpaths": { "auto_open_3d_view": true, "create_2d_previews": true,
+            "solid_2d_previews": false }, "general": { "recent_file_list_size": 4 },
+            "advanced": { "wayland_native": true } }"#;
+        let (back, tampered) = Options::from_bytes(older.as_bytes());
+        assert!(!tampered, "nothing to warn about");
+        assert!(back.advanced.wayland_native);
+    }
+
+    #[test]
+    fn a_page_resets_to_its_defaults_alone() {
+        let mut o = Options::default();
+        o.general.recent_file_list_size = 9;
+        o.advanced.cores = 3;
+        o.favourites.design = vec!["draw_circle".into()];
+        let general = o.reset("general");
+        assert_eq!(general.general, Options::default().general);
+        assert_eq!(general.advanced.cores, 3, "other pages kept");
+        assert_eq!(general.favourites.design, ["draw_circle"]);
+        assert_eq!(o.reset("advanced").advanced, Advanced::default());
+        assert_eq!(o.reset("no_such_page"), o);
     }
 }

@@ -2299,6 +2299,7 @@ dependencies = [
  "fmt-import-stl",
  "fmt-import-svg",
  "fmt-part-labels",
+ "hmac",
  "image",
  "log",
  "naga",
@@ -2307,6 +2308,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "sha2",
  "winit",
 ]
 

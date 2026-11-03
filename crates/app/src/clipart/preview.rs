@@ -455,10 +455,7 @@ impl Previews {
             .push((model.to_owned(), picture.map(Path::to_owned), stamp));
         drop(waiting);
         self.jobs.ready.notify_one();
-        let wanted = std::thread::available_parallelism()
-            .map_or(1, std::num::NonZero::get)
-            .saturating_sub(1)
-            .max(1);
+        let wanted = cut_craft_core::simulation::cores().saturating_sub(1).max(1);
         if self.workers < wanted {
             self.workers += 1;
             let (jobs, send, cache) = (self.jobs.clone(), self.send.clone(), self.cache.clone());
