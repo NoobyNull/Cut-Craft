@@ -2,17 +2,16 @@
 //! menus, the start page and the Design and Toolpaths pages.
 
 use super::{
-    APP_NAME, AUTOSAVE_SECONDS, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp,
-    DESIGN_PANEL_WIDTHS, DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info,
-    JOB_EXTENSION, Key, KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout,
-    MODEL_IMPORTERS, Menus, Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point,
-    RECENT_FILE_ICON, SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm,
-    Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
-    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands,
-    dialog_size, egui, file_dialog, file_name, files, form, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
-    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
-    toolpath_template_dialog, view3d,
+    APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_PANEL_WIDTHS,
+    DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
+    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout, MODEL_IMPORTERS, Menus,
+    Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm, Screen, Session,
+    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
+    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
+    file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
+    on_the_desktop, rest_section, selector_section, shortcut, side_panel, side_tabs, summary_table,
+    template_dialog, texture_dialog, tool_list, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -1563,7 +1562,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Once a frame: unsaved work copied to the recovery file every [`AUTOSAVE_SECONDS`],
+    /// Once a frame: unsaved work copied to the recovery file as often as Options says,
     /// on a thread of its own so a big job does not stall the window.
     pub(super) fn autosave(&mut self, ctx: &egui::Context) {
         if let Some(writing) = self.autosave.take() {
@@ -1583,7 +1582,7 @@ impl CutCraftApp {
             && self.session.is_dirty(&self.history)
             && self.history.revision() != self.autosaved.0;
         if unsaved
-            && now - self.autosaved.1 >= AUTOSAVE_SECONDS
+            && now - self.autosaved.1 >= self.options.general.autosave_interval()
             && self.autosave.is_none()
             && let Some(path) = self.recovery_path.clone()
         {

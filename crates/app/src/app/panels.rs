@@ -232,7 +232,7 @@ impl CutCraftApp {
     }
 
     /// A flyout's button: its face as [`Self::tool_button`] with an arrow in the corner. A
-    /// click on the arrow, a press held for [`crate::flyout::HOLD_SECONDS`], or Down while it
+    /// click on the arrow, a press held for Options ▸ General ▸ Hold to open a tool group, or Down while it
     /// has the focus opens the flyout: each of its tools by icon and name. The button's
     /// response, and the tool to run: the face on a plain click, or the one picked from the
     /// flyout.
@@ -242,7 +242,8 @@ impl CutCraftApp {
         button: &crate::flyout::Button,
         edge: f32,
     ) -> (egui::Response, Option<&'static str>) {
-        use crate::flyout::{HOLD_SECONDS, on_arrow, tooltip};
+        use crate::flyout::{on_arrow, tooltip};
+        let hold_for = self.options.general.flyout_hold();
         let id = button.face;
         let label = self.tool_label(id);
         let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
@@ -276,14 +277,14 @@ impl CutCraftApp {
         if response.is_pointer_button_down_on() {
             let held = ctx.input(|i| i.pointer.press_start_time().map(|t| i.time - t));
             match held {
-                Some(t) if t >= HOLD_SECONDS => {
+                Some(t) if t >= hold_for => {
                     if !ctx.data(|d| d.get_temp::<bool>(held_id).unwrap_or(false)) {
                         ctx.data_mut(|d| d.insert_temp(held_id, true));
                         open = true;
                     }
                 }
                 Some(t) => {
-                    ctx.request_repaint_after(std::time::Duration::from_secs_f64(HOLD_SECONDS - t));
+                    ctx.request_repaint_after(std::time::Duration::from_secs_f64(hold_for - t));
                 }
                 None => {}
             }
