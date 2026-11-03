@@ -7224,3 +7224,42 @@ fn the_unsigned_warning_says_who_is_responsible() {
     assert!(text.contains("not responsible"));
     assert!(text.contains("Undo"));
 }
+
+#[test]
+fn toolpath_forms_save_their_settings_and_load_them_back() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-form-settings-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("profile.ccsettings");
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let form = h.app.form.as_mut().expect("open");
+    let key = form
+        .params
+        .as_object()
+        .unwrap()
+        .iter()
+        .find(|(_, v)| v.is_f64())
+        .map(|(k, _)| k.clone())
+        .expect("a number setting");
+    form.params[&key] = serde_json::json!(7.25);
+    h.app.save_form_settings(&path);
+    assert!(h.app.status.message.starts_with("Saved the settings"));
+
+    h.app.form.as_mut().unwrap().params[&key] = serde_json::json!(1.0);
+    h.app.load_form_settings(&path);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params[&key], serde_json::json!(7.25));
+    assert!(form.dirty, "the loaded settings are yet to be applied");
+
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    let before = h.app.form.as_ref().unwrap().params.clone();
+    h.app.load_form_settings(&path);
+    assert_eq!(h.app.form.as_ref().unwrap().params, before, "left alone");
+    assert!(
+        h.app.status.message.starts_with("Could not load"),
+        "{}",
+        h.app.status.message
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
