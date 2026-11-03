@@ -459,12 +459,25 @@ pub fn load_form_settings(
     let (Some(saved), Some(params)) = (file["settings"].as_object(), params.as_object_mut()) else {
         return Err("the file holds no settings".into());
     };
+    merge_settings(params, saved);
+    Ok(())
+}
+
+/// `saved`'s values put into the `params` the form has, group by group, so a setting a
+/// newer version added inside a group keeps its default.
+fn merge_settings(
+    params: &mut serde_json::Map<String, serde_json::Value>,
+    saved: &serde_json::Map<String, serde_json::Value>,
+) {
     for (key, value) in saved {
-        if let Some(v) = params.get_mut(key) {
-            v.clone_from(value);
+        match (params.get_mut(key), value) {
+            (Some(serde_json::Value::Object(group)), serde_json::Value::Object(saved)) => {
+                merge_settings(group, saved);
+            }
+            (Some(v), _) => v.clone_from(value),
+            (None, _) => {}
         }
     }
-    Ok(())
 }
 
 /// Puts `path` first in `recent`, once, keeping the latest `keep` (Options; [`RECENT_COUNT`]
@@ -549,6 +562,19 @@ mod tests {
         assert!(
             super::load_form_settings("texture_toolpath", "Texture Toolpath", &mut params, b"{")
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn settings_added_inside_a_group_since_the_file_was_saved_keep_their_defaults() {
+        let saved = serde_json::json!({ "tab": { "number": 6 } });
+        let bytes = super::form_settings("profile_toolpath", "Profile Toolpath", &saved);
+        let mut params = serde_json::json!({ "tab": { "number": 4, "minimum": 2, "maximum": 9 } });
+        super::load_form_settings("profile_toolpath", "Profile Toolpath", &mut params, &bytes)
+            .unwrap();
+        assert_eq!(
+            params,
+            serde_json::json!({ "tab": { "number": 6, "minimum": 2, "maximum": 9 } })
         );
     }
 
