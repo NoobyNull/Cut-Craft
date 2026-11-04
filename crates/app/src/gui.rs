@@ -1444,6 +1444,11 @@ pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
                 ("Empty", Which::Empty),
             ],
         ),
+        MenuItem::run::<cmd_delete_layer::DeleteLayer>(
+            "Delete Layer",
+            &cmd_delete_layer::Params { layer: id },
+        )
+        .enabled(doc.layers.len() > 1),
         MenuItem::form::<LayerProperties>("Rename", &layer.clone().into()),
         MenuItem::run::<cmd_merge_visible_layers::MergeVisibleLayers>(
             "Merge Visible",
@@ -1531,7 +1536,7 @@ impl MenuSystem {
                                 k("Import Vectors / Bitmap...", "Ctrl+I"),
                                 i("Import Component / 3D Model..."),
                                 a("Segment 3D Model...", "segment_3d_model_file"),
-                                i("Import Toolpaths..."),
+                                a("Import Toolpaths...", "import_toolpaths_file"),
                                 a("Import Cut List (CSV)...", "import_cut_list"),
                             ],
                         ),

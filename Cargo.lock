@@ -1081,6 +1081,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-import-toolpaths"
+version = "0.5.1"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-inlay-toolpath"
 version = "0.5.1"
 dependencies = [
@@ -2182,6 +2192,7 @@ dependencies = [
  "cmd-group",
  "cmd-group-components",
  "cmd-group-properties",
+ "cmd-import-toolpaths",
  "cmd-inlay-toolpath",
  "cmd-insert-level",
  "cmd-insert-point",

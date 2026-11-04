@@ -38,6 +38,8 @@ struct Grid {
     rows: u32,
     cell: f64,
     bottom: f64,
+    /// The highest height on it: a ray to the light that has risen past it is in the open.
+    top: f64,
 }
 
 /// What goes to the card: a surface's heights (and the triangles over them), or a model's
@@ -100,6 +102,12 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
             rows: u32::try_from(m.rows).expect("a cell count"),
             cell: m.cell,
             bottom: m.bottom,
+            top: m
+                .heights
+                .iter()
+                .copied()
+                .filter(|h| !h.is_nan())
+                .fold(m.bottom, f64::max),
         }),
         ..Geometry::default()
     };
@@ -240,10 +248,13 @@ impl Draw {
             rows: 0,
             cell: 0.0,
             bottom: 0.0,
+            top: 0.0,
         });
         words(&mut uniform, &[g.columns, g.rows]);
         floats(&mut uniform, &[g.cell, g.bottom]);
         let wrap = look.wrap.filter(|_| grid.is_some());
+        // a flat surface's shadows are traced in the shader, up to its highest point
+        let shadows = look.shadows && wrap.is_none() && grid.is_some();
         words(
             &mut uniform,
             &[wrap.map_or(0, |w| if w.along_x { 1 } else { 2 })],
@@ -252,7 +263,7 @@ impl Draw {
             &mut uniform,
             &[
                 wrap.map_or(0.0, |w| w.radius),
-                wrap.map_or(0.0, |w| w.surface),
+                wrap.map_or(if shadows { g.top } else { 0.0 }, |w| w.surface),
                 DEPTH_SHADE,
             ],
         );
@@ -278,7 +289,7 @@ impl Draw {
                 u32::from(grid.is_none()),
                 u32::from(geometry.painted),
                 u32::from(geometry.undersided),
-                0,
+                u32::from(shadows),
             ],
         );
         debug_assert_eq!(uniform.len(), UNIFORM_BYTES);
@@ -562,6 +573,7 @@ mod tests {
             light: LIGHT,
             wrap: None,
             grain: None,
+            shadows: false,
         }
     }
 
@@ -861,6 +873,24 @@ mod tests {
             "its depth, faded"
         );
         assert_eq!(words[52], 0, "a surface");
+        assert_eq!(words[55], 0, "no shadows unless asked");
+        let shadowed = Draw::new(
+            Arc::new(surface(&m, None, true)),
+            &camera,
+            area,
+            DVec3::ZERO,
+            &Look {
+                shadows: true,
+                ..look
+            },
+            Color32::RED,
+        );
+        let (words, floats) = (u32s(&shadowed.uniform), f32s(&shadowed.uniform));
+        assert_eq!(words[55], 1, "shadows traced");
+        assert_eq!(
+            floats[38], 0.0,
+            "up to the surface's highest point, its top"
+        );
         let model_draw = Draw::new(
             Arc::new(model(&[([DVec3::ZERO, DVec3::X, DVec3::Y], false)])),
             &camera,

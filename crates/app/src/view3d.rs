@@ -301,6 +301,76 @@ pub fn brightness(material: &Material, column: usize, row: usize, light: DVec3) 
     lit(normal, light) * (1.0 - DEPTH_SHADE * depth)
 }
 
+/// The highest the surface goes: a ray to the light above it is in the open.
+pub fn shadow_top(material: &Material) -> f64 {
+    material
+        .heights
+        .iter()
+        .copied()
+        .filter(|h| !h.is_nan())
+        .fold(material.bottom, f64::max)
+}
+
+/// Whether the surface over a cell is hidden from `light` by the surface between it and
+/// the light (View ▸ Use Shadow Shading): a ray to the light, a cell at a time, passes under
+/// a higher cell before it rises over `top` ([`shadow_top`]).
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "cell positions"
+)]
+pub fn in_shadow(
+    material: &Material,
+    (column, row): (usize, usize),
+    light: DVec3,
+    top: f64,
+) -> bool {
+    let heights = &material.heights;
+    let own = heights[row * material.columns + column];
+    let across = light.truncate().length();
+    if own.is_nan() || across < 1e-9 || light.z <= 0.0 {
+        return false;
+    }
+    let step = light.truncate() / across;
+    let rise = light.z / across * material.cell;
+    // the ray, in cells across and up, and its height
+    let mut ray = DVec2::new(column as f64 + 0.5, row as f64 + 0.5);
+    let mut height = own;
+    loop {
+        ray += step;
+        height += rise;
+        if height > top || ray.x < 0.0 || ray.y < 0.0 {
+            return false;
+        }
+        let (over, up) = (ray.x as usize, ray.y as usize);
+        if over >= material.columns || up >= material.rows {
+            return false;
+        }
+        let under = heights[up * material.columns + over];
+        if !under.is_nan() && under > height {
+            return true;
+        }
+    }
+}
+
+/// [`brightness`], darkened to the light that reaches round the shadow where the cell is
+/// [`in_shadow`].
+pub fn shadowed_brightness(
+    material: &Material,
+    (column, row): (usize, usize),
+    light: DVec3,
+    top: f64,
+) -> f64 {
+    let lit = brightness(material, column, row, light);
+    if in_shadow(material, (column, row), light, top) {
+        // lit from below the surface: no direct light, only the ambient, still darker deeper
+        lit.min(brightness(material, column, row, DVec3::NEG_Z))
+    } else {
+        lit
+    }
+}
+
 /// Brightness of a surface facing `normal`, lit from `light`.
 fn lit(normal: DVec3, light: DVec3) -> f64 {
     AMBIENT + (1.0 - AMBIENT) * normal.normalize().dot(light.normalize()).max(0.0)
@@ -427,6 +497,8 @@ pub struct Look {
     pub wrap: Option<Wrap>,
     /// Wood's grain on the top, for a wood from Toolpaths ▸ Materials.
     pub grain: Option<Grain>,
+    /// View ▸ Use Shadow Shading: what the light cannot reach is drawn in shadow (flat jobs).
+    pub shadows: bool,
 }
 
 /// How far grain lines drift from straight, in line spacings, and over how many spacings
@@ -914,6 +986,8 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
             .collect(),
         None => vec![],
     };
+    // with shadows, the surface's highest point, found once
+    let highest = look.shadows.then(|| shadow_top(m));
     for row in (1..m.rows).filter(|_| look.wrap.is_none()) {
         for column in 1..m.columns {
             let corners = [
@@ -931,7 +1005,11 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
             }
             let grain = |c, r| look.grain.map_or(1.0, |g| g.on_cells(m.cell).at(top(c, r)));
             let colour = |c: usize, r: usize| {
-                let b = brightness(m, c, r, look.light);
+                let b = if let Some(highest) = highest {
+                    shadowed_brightness(m, (c, r), look.light, highest)
+                } else {
+                    brightness(m, c, r, look.light)
+                };
                 match paint_of(m, r * m.columns + c) {
                     Some(paint) => shaded(paint, b),
                     None => shade(b * grain(c, r)),
@@ -1567,6 +1645,7 @@ mod tests {
             light: LIGHT,
             wrap: None,
             grain: None,
+            shadows: false,
         }
     }
 
@@ -1860,6 +1939,33 @@ mod tests {
     }
 
     #[test]
+    fn shadow_shading_darkens_the_floor_behind_a_wall_from_the_light() {
+        let m = slotted();
+        let top = shadow_top(&m);
+        assert_eq!(top, 0.0, "the uncut top");
+        // the light comes from -x: the slot's floor by its -x wall is behind that wall
+        assert!(in_shadow(&m, (41, 50), LIGHT, top), "just behind the wall");
+        assert!(
+            !in_shadow(&m, (55, 50), LIGHT, top),
+            "far enough out from it"
+        );
+        assert!(!in_shadow(&m, (10, 50), LIGHT, top), "the flat top");
+        assert!(
+            !in_shadow(&m, (41, 50), DVec3::Z, top),
+            "a light straight above"
+        );
+        assert!(
+            shadowed_brightness(&m, (41, 50), LIGHT, top) < brightness(&m, 41, 50, LIGHT),
+            "drawn darker"
+        );
+        assert!(
+            (shadowed_brightness(&m, (55, 50), LIGHT, top) - brightness(&m, 55, 50, LIGHT)).abs()
+                < 1e-12,
+            "the lit floor unchanged"
+        );
+    }
+
+    #[test]
     fn walls_facing_the_light_are_brighter_than_flat_and_the_far_ones_darker() {
         let m = slotted();
         let flat = brightness(&m, 10, 50, LIGHT);
@@ -1903,6 +2009,7 @@ mod tests {
             sides: true,
             wrap: None,
             grain: None,
+            shadows: false,
         };
         for cells in [250, 500, 1000, 1500] {
             let t = std::time::Instant::now();
@@ -2373,6 +2480,7 @@ mod wrap_tests {
             light: LIGHT,
             wrap: Some(wrap()),
             grain: None,
+            shadows: false,
         };
         let quads = wrapped_quads(&m, wrap(), LIGHT);
         assert_eq!(

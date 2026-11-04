@@ -223,7 +223,11 @@ impl CutCraftApp {
                     || !self.doc.components.is_empty()
             }
             "edit_object" => self.object_to_edit().is_some() || self.shape_to_edit(),
-            "job_sheet_editor" => true,
+            "object_properties" => self.object_properties().is_some(),
+            "tile_windows_horizontal" | "tile_windows_vertical" | "cascade_windows" => {
+                self.screen == Screen::Job
+            }
+            "update_post_processor_database" | "job_sheet_editor" => true,
             "reset_preview" => self.simulation.is_some() || self.playback.is_some(),
             id if self.display.checked(id).is_some() => true,
             id if self.resolution_checked(id).is_some() => self.screen == Screen::Job,
@@ -289,6 +293,7 @@ impl CutCraftApp {
             | "import_vectors_bitmap"
             | "import_component_3d_model"
             | "segment_3d_model_file"
+            | "import_toolpaths_file"
             | "import_cut_list"
             | "install_post_processor"
             | "add_clipart_folder" => self.file_action(id),
@@ -479,6 +484,24 @@ impl CutCraftApp {
                     self.form = None;
                     self.start_command("create_shape");
                 }
+            }
+            "object_properties" => {
+                if let Some(id) = self.object_properties() {
+                    self.invoke(ctx, id);
+                }
+            }
+            // the 2D and 3D views tiled one above the other, side by side, or back to tabs
+            "tile_windows_horizontal" => self.split = Some(super::Split::Stacked),
+            "tile_windows_vertical" => self.split = Some(super::Split::SideBySide),
+            "cascade_windows" => self.split = None,
+            "update_post_processor_database" => {
+                // custom posts are read from their folder each time they are listed, and
+                // Cut Craft's own come with Cut Craft: an update check brings the newest
+                self.post_window = Some(cut_craft_machines::PostManager::default());
+                let skipped = self.options.updates.skipped_version.clone();
+                self.updates.check(ctx, true, skipped);
+                self.status
+                    .set_message(&post_database_message(&self.posts.entries()));
             }
             "save_shaded_image" => {
                 if let Some(path) = file_dialog()
@@ -883,6 +906,19 @@ impl CutCraftApp {
                     if let Some(form) = self.form.as_mut().filter(|f| f.id == "segment_3d_model") {
                         form.params["file"] = Value::from(path.display().to_string());
                     }
+                }
+            }
+            "import_toolpaths_file" => {
+                // G-code read back as toolpaths: the form opens on the file picked, to say
+                // which tool cut it
+                if let Some(path) = file_dialog()
+                    .add_filter(
+                        "G-code",
+                        &["nc", "tap", "gcode", "ngc", "cnc", "txt", "gc", "nc1"],
+                    )
+                    .pick_file()
+                {
+                    self.import_toolpaths_from(&path);
                 }
             }
             "install_post_processor" => {
@@ -2394,6 +2430,36 @@ impl CutCraftApp {
         let path = self.doc.vectors.get(&id)?;
         let (command, params) = self.registry.drawn_by(&self.doc, path)?;
         Some((id, command, params))
+    }
+
+    /// Import Toolpaths' form, open on G-code file `path` and named after it.
+    pub(super) fn import_toolpaths_from(&mut self, path: &std::path::Path) {
+        let id = <cmd_import_toolpaths::ImportToolpaths as cut_craft_core::Command>::ID;
+        self.start_command(id);
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == id) {
+            form.params["file"] = Value::from(path.display().to_string());
+            if let Some(stem) = path.file_stem() {
+                form.params["name"] = Value::from(stem.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    /// Object Properties on the selection: the form that edits what is selected, the one
+    /// way a beginner can always reach: the shape's own tool, a picture's, a component's,
+    /// else the selected vectors' position and size.
+    pub(super) fn object_properties(&self) -> Option<&'static str> {
+        let doc = &self.doc;
+        if self.object_to_edit().is_some() || self.shape_to_edit() {
+            Some("edit_object")
+        } else if !doc.selected_bitmaps.is_empty() {
+            Some("bitmap_properties")
+        } else if doc.selection.is_empty() && !doc.selected_components.is_empty() {
+            Some("component_properties")
+        } else if !doc.selection.is_empty() {
+            Some("set_size")
+        } else {
+            None
+        }
     }
 
     /// A component Create Shape made is picked (and no vector): E edits it in the form.
@@ -4176,4 +4242,20 @@ fn ask_to_run_unsigned(label: &str) -> bool {
         ))
         .show();
     matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Gadget")
+}
+
+/// What Update Post-Processor Database says once it has looked through the posts.
+pub(super) fn post_database_message(entries: &[cut_craft_machines::Entry]) -> String {
+    let custom = entries.iter().filter(|e| e.is_custom()).count();
+    let broken = entries.iter().filter(|e| e.broken.is_some()).count();
+    let unreadable = if broken > 0 {
+        format!("; {broken} could not be read: Post-Processor Management shows why")
+    } else {
+        String::new()
+    };
+    format!(
+        "{} post-processors ({custom} of your own){unreadable}; checking for a newer Cut \
+         Craft, which brings its newest post-processors",
+        entries.len()
+    )
 }
