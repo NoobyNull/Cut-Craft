@@ -7732,3 +7732,25 @@ fn a_preview_cut_off_the_windows_thread_becomes_the_preview() {
     assert!(cut.heights.iter().any(|&z| z < 0.0), "the profile is cut");
     assert!(h.app.status.message.starts_with("Previewed"));
 }
+
+#[test]
+fn a_double_sided_preview_cuts_the_other_side_off_the_windows_thread_too() {
+    let mut h = Harness::new();
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    let pocket = |h: &mut Harness| {
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.app.invoke(&h.ctx, "pocket_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("pocket_toolpath", &params).unwrap();
+        h.app.form = None;
+    };
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    until_not_busy(&mut h);
+    let preview = h.app.simulation.as_ref().expect("previewed");
+    assert!(preview.other_side.is_some(), "the other side is previewed too");
+}

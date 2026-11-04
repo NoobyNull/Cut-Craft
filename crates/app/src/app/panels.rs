@@ -806,25 +806,46 @@ impl CutCraftApp {
             return;
         }
         let (job, cells) = (self.doc.job, self.display.preview_cells());
-        let mut other = Material::new(&job, cells);
-        for t in self.doc.other_side.toolpaths.values() {
-            if t.visible || !visible_only {
-                other.cut(t);
-            }
-        }
-        let other = Some(std::sync::Arc::new(other));
-        if let Some(playback) = self.playback.as_mut() {
-            playback.set_other_side(other);
-        } else {
-            let material = self
-                .simulation
-                .get_or_insert_with(|| Material::new(&job, cells));
-            material.other_side = other;
-        }
-        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-        if self.display.auto_open_3d {
-            self.view = View::ThreeD;
-        }
+        let cuts: Vec<cut_craft_core::toolpath::Toolpath> =
+            (self.doc.other_side.toolpaths.values())
+                .filter(|t| t.visible || !visible_only)
+                .cloned()
+                .collect();
+        // cut off the window's thread, its progress shown, as the first side was
+        self.in_background(
+            "Previewing the other side",
+            move || {
+                let mut other = Material::new(&job, cells);
+                for (i, t) in cuts.iter().enumerate() {
+                    if cut_craft_core::progress::cancelled() {
+                        break;
+                    }
+                    cut_craft_core::progress::stage(&format!(
+                        "{} ({} of {})",
+                        t.name,
+                        i + 1,
+                        cuts.len()
+                    ));
+                    cut_craft_core::progress::part(i, cuts.len(), || other.cut(t));
+                }
+                other
+            },
+            move |app, other| {
+                let other = Some(std::sync::Arc::new(other));
+                if let Some(playback) = app.playback.as_mut() {
+                    playback.set_other_side(other);
+                } else {
+                    let material = app
+                        .simulation
+                        .get_or_insert_with(|| Material::new(&job, cells));
+                    material.other_side = other;
+                }
+                (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
+                if app.display.auto_open_3d {
+                    app.view = View::ThreeD;
+                }
+            },
+        );
     }
 
     /// What a preview cuts: the job's toolpaths, or (Toolpath Tiling with a tile active)
