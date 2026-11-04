@@ -235,7 +235,7 @@ fn bed_span(doc: &Document, toolpaths: &[&Toolpath]) -> Option<DVec3> {
         return Some(hi - lo);
     };
     let saved = Document {
-        job: doc.job.clone(),
+        job: doc.job,
         toolpaths: (1..)
             .map(crate::document::EntityId)
             .zip(toolpaths.iter().map(|&t| t.clone()))
