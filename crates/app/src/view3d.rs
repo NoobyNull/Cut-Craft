@@ -15,12 +15,12 @@ const LIGHT: DVec3 = DVec3::new(-1.0, 1.0, 1.0);
 const AMBIENT: f64 = 0.35;
 /// How much darker the full material thickness down is than the top.
 const DEPTH_SHADE: f64 = 0.5;
-/// How near the cursor, in pixels, a surface point picks at least.
-// ponytail: fixed until the 3D view has settings
-const PICK_REACH: f32 = 4.0;
-/// How wide (across the view's shorter side) the perspective view sees, radians.
-// ponytail: fixed until Options has a camera setting; 45 degrees is the usual lens
-const FIELD_OF_VIEW: f64 = std::f64::consts::FRAC_PI_4;
+/// How near the cursor, in pixels, a surface point picks at least, until Options says
+/// otherwise.
+pub const PICK_REACH: f32 = 4.0;
+/// How wide (across the view's shorter side) the perspective view sees, radians, until
+/// Options says otherwise: 45 degrees is the usual lens.
+pub const FIELD_OF_VIEW: f64 = std::f64::consts::FRAC_PI_4;
 /// View cube faces nearer edge-on than this (the cosine of their angle to the viewer) are
 /// left out: they have no area to click.
 const EDGE_ON: f64 = 1e-6;
@@ -206,6 +206,9 @@ pub struct Framing {
     pub pan: Vec2,
     /// Seen in perspective (nearer is larger) rather than orthographic.
     pub perspective: bool,
+    /// How wide the perspective view sees, across the view's shorter side, radians
+    /// (Options ▸ 3D View Settings ▸ Perspective angle).
+    pub field_of_view: f64,
 }
 
 impl Default for Framing {
@@ -214,6 +217,7 @@ impl Default for Framing {
             zoom: 1.0,
             pan: Vec2::ZERO,
             perspective: false,
+            field_of_view: FIELD_OF_VIEW,
         }
     }
 }
@@ -224,6 +228,7 @@ impl Framing {
     pub fn fitted(self) -> Self {
         Self {
             perspective: self.perspective,
+            field_of_view: self.field_of_view,
             ..Self::default()
         }
     }
@@ -538,7 +543,7 @@ fn extent(material: &Material, wrap: Option<Wrap>) -> (DVec3, DVec3) {
 
 /// How the view sees the material: its bounding sphere fitted into the view, so turning
 /// never changes its size, then zoomed and panned. In perspective the eye stands just far
-/// enough off for the sphere to fill [`FIELD_OF_VIEW`].
+/// enough off for the sphere to fill the framing's field of view.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Camera {
     orbit: Orbit,
@@ -563,7 +568,8 @@ impl Camera {
     ) -> Self {
         let (lo, hi) = extent(material, wrap);
         let radius = ((hi - lo).length() / 2.0).max(f64::EPSILON);
-        let half = FIELD_OF_VIEW / 2.0;
+        // kept short of 180°, where the eye would sit on the sphere itself
+        let half = framing.field_of_view.clamp(0.1, 3.0) / 2.0;
         // the sphere's outline, seen from the eye, is half the field of view off its middle
         let eye = framing.perspective.then(|| radius / half.sin());
         // how far from the middle, on the plane through it, the view's edge is
@@ -1241,7 +1247,7 @@ pub fn box_edges(lo: DVec3, hi: DVec3) -> Vec<[DVec3; 2]> {
 
 /// The cell of the drawn surface under `at` nearest the viewer, as (column, row); `None`
 /// when the click is off it. Cells count as under the cursor within the larger of one
-/// cell's size on screen and [`PICK_REACH`] pixels.
+/// cell's size on screen and `reach` pixels (Options ▸ 3D View Settings ▸ Click reach).
 #[expect(clippy::cast_precision_loss, reason = "cell indices fit f64")]
 pub fn pick(
     material: &Material,
@@ -1250,6 +1256,7 @@ pub fn pick(
     area: Rect,
     wrap: Option<Wrap>,
     at: Pos2,
+    reach: f32,
 ) -> Option<(usize, usize)> {
     let m = material;
     let round = if wrap.is_some_and(|w| w.along_x) {
@@ -1267,7 +1274,7 @@ pub fn pick(
     };
     let screen = screen_of(m, orbit, framing, area, wrap);
     let step = screen(place(0, 0)).distance(screen(place(1.min(m.columns - 1), 0)));
-    let reach = step.max(PICK_REACH);
+    let reach = step.max(reach);
     let near: Vec<((usize, usize), f64, f32)> = (0..m.rows)
         .flat_map(|row| (0..m.columns).map(move |column| (column, row)))
         .filter_map(|(column, row)| {
@@ -1775,6 +1782,7 @@ mod tests {
                 zoom: 1.5,
                 pan: Vec2::new(7.0, -3.0),
                 perspective,
+                ..Framing::default()
             };
             let camera = Camera::new(&m, Orbit::default(), framing, area, None);
             let p = DVec3::new(30.0, 70.0, 0.0);
@@ -1823,6 +1831,7 @@ mod tests {
                 zoom: 1.5,
                 pan: Vec2::new(7.0, -3.0),
                 perspective,
+                ..Framing::default()
             };
             let camera = Camera::new(&m, Orbit::default(), framing, area, None);
             // the slot's floor, 5 mm down, seen at a slant: the top plane under the same
@@ -2400,13 +2409,73 @@ mod pick_tests {
         let screen = screen_of(&m, Orbit::TOP, Framing::default(), area, None);
         let at = screen(DVec3::new(30.5, 10.5, 0.0));
         assert_eq!(
-            pick(&m, Orbit::TOP, Framing::default(), area, None, at),
+            pick(
+                &m,
+                Orbit::TOP,
+                Framing::default(),
+                area,
+                None,
+                at,
+                PICK_REACH
+            ),
             Some((30, 10))
         );
         let far = pos2(-50.0, -50.0);
         assert_eq!(
-            pick(&m, Orbit::TOP, Framing::default(), area, None, far),
+            pick(
+                &m,
+                Orbit::TOP,
+                Framing::default(),
+                area,
+                None,
+                far,
+                PICK_REACH
+            ),
             None
         );
+    }
+
+    #[test]
+    fn a_longer_click_reach_picks_the_edge_from_further_off() {
+        let job = Job {
+            width: 100.0,
+            height: 50.0,
+            ..Job::default()
+        };
+        let m = Material::new(&job, 100);
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let screen = screen_of(&m, Orbit::TOP, Framing::default(), area, None);
+        // ten points left of the block's left edge, halfway up
+        let off = screen(DVec3::new(0.0, 25.0, 0.0)) - eframe::egui::vec2(10.0, 0.0);
+        let pick_at = |reach| pick(&m, Orbit::TOP, Framing::default(), area, None, off, reach);
+        assert_eq!(pick_at(PICK_REACH), None, "too far off at the usual reach");
+        assert_eq!(pick_at(16.0).map(|(column, _)| column), Some(0));
+    }
+
+    #[test]
+    fn a_wider_perspective_angle_makes_near_things_larger() {
+        let job = Job {
+            width: 100.0,
+            height: 100.0,
+            thickness: 50.0,
+            ..Job::default()
+        };
+        let m = Material::new(&job, 50);
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 400.0));
+        // how much larger the block's top corner shows than its bottom one, from above
+        let spread = |degrees: f64| {
+            let framing = Framing {
+                perspective: true,
+                field_of_view: degrees.to_radians(),
+                ..Framing::default()
+            };
+            let screen = screen_of(&m, Orbit::TOP, framing, area, None);
+            let top = screen(DVec3::new(0.0, 0.0, 0.0));
+            let bottom = screen(DVec3::new(0.0, 0.0, -50.0));
+            let centre = screen(DVec3::new(50.0, 50.0, -25.0));
+            top.distance(centre) / bottom.distance(centre)
+        };
+        assert!(spread(80.0) > spread(45.0) && spread(45.0) > spread(20.0));
+        assert_eq!(Framing::default().field_of_view, FIELD_OF_VIEW);
     }
 }

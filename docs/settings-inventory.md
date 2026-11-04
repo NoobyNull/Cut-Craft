@@ -126,6 +126,9 @@ Grouped, with the reason.
    Reset to defaults for both sections.
 2. Appearance and general: text size, autosave interval, flyout hold time.
 3. 3D view: click reach, perspective angle, shading, detail while moving, settle time.
+   (Done: click reach, perspective angle, wait before full detail. Shading strengths go
+   through the GPU uniforms and detail while moving shares cached coarse surfaces, so both
+   are left for a follow-up.)
 4. Toolpaths and checks: preview speed, material-left warning, job sheet rapid fix.
 5. Snapping: rotate snap angles.
 6. Import: picture DPI, DXF spline detail.

@@ -377,8 +377,9 @@ fn dialog_size(ctx: &egui::Context) -> egui::Vec2 {
 
 /// Cut Craft's own mark, built in.
 const LOGO: &[u8] = include_bytes!("../../../assets/cut-craft.svg");
-/// How long the 3D view stays still before it is drawn finely, seconds.
-const SETTLE_SECONDS: f64 = 0.25;
+/// How long the 3D view stays still before it is drawn finely, seconds, until Options says
+/// otherwise.
+pub(crate) const SETTLE_SECONDS: f64 = 0.25;
 /// How often unsaved work is copied for recovery after a crash, seconds, until Options says
 /// otherwise.
 pub(crate) const AUTOSAVE_SECONDS: f64 = 30.0;

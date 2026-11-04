@@ -49,6 +49,55 @@ pub struct View3d {
     /// way without stops (not one of Aspire's)
     #[serde(default)]
     pub rotation: Rotation,
+    /// How near the pointer must be to the model, in screen pixels, for a click to pick a
+    /// point on it (drawing on the model, placing a fade's anchor). Larger is easier to hit,
+    /// smaller is more exact (not one of Aspire's)
+    #[serde(default = "click_reach")]
+    #[schemars(extend("x-unit" = "px"), range(min = 1, max = 20))]
+    pub click_reach: f32,
+    /// How wide the Perspective view sees, as a camera lens does: wider makes near things
+    /// look larger and far ones smaller, narrower looks flatter (not one of Aspire's)
+    #[serde(default = "perspective_angle")]
+    #[schemars(extend("x-unit" = "°"), range(min = 20, max = 90))]
+    pub perspective_angle: f64,
+    /// With Simplify on, how long the view must be still before it is drawn at full detail
+    /// again (not one of Aspire's)
+    #[serde(default = "settle_seconds")]
+    #[schemars(
+        title = "Wait before drawing full detail",
+        extend("x-unit" = "s", "x-show-when" = {"simplify_while_moving": "true"}),
+        range(min = 0.05, max = 2)
+    )]
+    pub settle_seconds: f64,
+}
+
+fn click_reach() -> f32 {
+    crate::view3d::PICK_REACH
+}
+
+fn perspective_angle() -> f64 {
+    crate::view3d::FIELD_OF_VIEW.to_degrees()
+}
+
+fn settle_seconds() -> f64 {
+    crate::app::SETTLE_SECONDS
+}
+
+impl View3d {
+    /// The click reach in pixels, kept to the setting's range.
+    pub fn pick_reach(&self) -> f32 {
+        self.click_reach.clamp(1.0, 20.0)
+    }
+
+    /// The perspective angle in radians, kept to the setting's range.
+    pub fn field_of_view(&self) -> f64 {
+        self.perspective_angle.clamp(20.0, 90.0).to_radians()
+    }
+
+    /// Seconds still before full detail, kept to the setting's range.
+    pub fn settle(&self) -> f64 {
+        self.settle_seconds.clamp(0.05, 2.0)
+    }
 }
 
 /// How dragging (and a SpaceMouse) turns the 3D view.
@@ -726,6 +775,9 @@ impl Default for Options {
                 anti_aliasing: AntiAliasing::default(),
                 simplify_while_moving: false,
                 rotation: Rotation::default(),
+                click_reach: click_reach(),
+                perspective_angle: perspective_angle(),
+                settle_seconds: settle_seconds(),
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,
@@ -1079,5 +1131,22 @@ mod tests {
         assert!((a.text_scale() - 0.8).abs() < 1e-6, "no smaller than 80%");
         a.text_size = 900;
         assert!((a.text_scale() - 2.0).abs() < 1e-6, "no larger than 200%");
+    }
+
+    #[test]
+    fn the_3d_view_settings_start_as_the_values_they_replace() {
+        let v = Options::default().view_3d;
+        assert!((v.pick_reach() - crate::view3d::PICK_REACH).abs() < 1e-6);
+        assert!((v.field_of_view() - crate::view3d::FIELD_OF_VIEW).abs() < 1e-9);
+        assert!((v.settle() - crate::app::SETTLE_SECONDS).abs() < 1e-9);
+        let wild = View3d {
+            click_reach: 500.0,
+            perspective_angle: 179.0,
+            settle_seconds: 0.0,
+            ..v
+        };
+        assert!((wild.pick_reach() - 20.0).abs() < 1e-6);
+        assert!((wild.field_of_view() - 90_f64.to_radians()).abs() < 1e-9);
+        assert!((wild.settle() - 0.05).abs() < 1e-9);
     }
 }

@@ -5,10 +5,9 @@ use super::RING_SHARE;
 use super::{
     Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
-    Material, Menus, PLAYBACK_SPEEDS, Page, Point, SETTLE_SECONDS, Screen, Settings3d,
-    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui,
-    file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
-    wrap_for,
+    Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
+    TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
+    gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
 };
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{MachinedArea, Units};
@@ -1348,6 +1347,7 @@ impl CutCraftApp {
     }
 
     pub(super) fn view_3d(&mut self, ui: &mut egui::Ui) {
+        self.framing.field_of_view = self.options.view_3d.field_of_view();
         cut_craft_bug_report::mark(ui, "3D view");
         self.playback_bar(ui);
         if self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty() {
@@ -1525,11 +1525,12 @@ impl CutCraftApp {
     ) -> egui::Mesh {
         let since = ui.input(|i| i.time) - self.moved_3d;
         let simplify = self.options.view_3d.simplify_while_moving;
-        if self.playback.is_none() && (!simplify || since >= SETTLE_SECONDS) {
+        let settle = self.options.view_3d.settle();
+        if self.playback.is_none() && (!simplify || since >= settle) {
             return self.fine_mesh(orbit, framing, look, fit);
         }
         ui.ctx()
-            .request_repaint_after(std::time::Duration::from_secs_f64(SETTLE_SECONDS));
+            .request_repaint_after(std::time::Duration::from_secs_f64(settle));
         view3d::mesh(surface, orbit, framing, &look, fit)
     }
 
@@ -2215,7 +2216,15 @@ impl CutCraftApp {
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
         let surface = self.surface_3d().map(Cow::into_owned)?;
         let wrap = wrap_for(&job, on, true, &surface);
-        let (column, row) = view3d::pick(&surface, orbit, framing, fit, wrap, at)?;
+        let (column, row) = view3d::pick(
+            &surface,
+            orbit,
+            framing,
+            fit,
+            wrap,
+            at,
+            self.options.view_3d.pick_reach(),
+        )?;
         Some(surface.centre(column, row))
     }
 
@@ -2226,7 +2235,15 @@ impl CutCraftApp {
             return false;
         };
         let wrap = wrap_for(&job, on, true, &surface);
-        let Some((column, row)) = view3d::pick(&surface, orbit, framing, fit, wrap, at) else {
+        let Some((column, row)) = view3d::pick(
+            &surface,
+            orbit,
+            framing,
+            fit,
+            wrap,
+            at,
+            self.options.view_3d.pick_reach(),
+        ) else {
             return false;
         };
         let p = surface.centre(column, row);
@@ -2391,7 +2408,15 @@ impl CutCraftApp {
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
         let surface = self.surface_3d()?.into_owned();
         let wrap = wrap_for(&job, on, previewing, &surface);
-        let (column, row) = view3d::pick(&surface, orbit, framing, fit, wrap, at)?;
+        let (column, row) = view3d::pick(
+            &surface,
+            orbit,
+            framing,
+            fit,
+            wrap,
+            at,
+            self.options.view_3d.pick_reach(),
+        )?;
         Some(surface.centre(column, row))
     }
 
