@@ -2,6 +2,7 @@
 //! document, its undo history and the command registry.
 
 mod actions;
+mod background;
 mod cutting;
 mod draw3d;
 mod guide;
@@ -715,7 +716,7 @@ struct CutCraftApp {
     screen: Screen,
     doc: Document,
     history: History,
-    registry: Registry,
+    registry: std::sync::Arc<Registry>,
     icons: Icons,
     menus: gui::MenuSystem,
     /// The menus with no job open.
@@ -772,6 +773,11 @@ struct CutCraftApp {
     immediate_output: SaveForm,
     /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
     depth_estimate: Option<crate::depth::Estimating>,
+    /// A slow job running off the window's thread, its progress shown over the window.
+    busy: Option<crate::busy::Busy<CutCraftApp>>,
+    /// How long a job may take before its progress is shown; quicker ones finish as if
+    /// run in place.
+    wait_before_showing: std::time::Duration,
     /// Where add-ons are installed; `None` in tests.
     addons_path: Option<std::path::PathBuf>,
     /// The machines (Machine Configuration), the active one's default post saving

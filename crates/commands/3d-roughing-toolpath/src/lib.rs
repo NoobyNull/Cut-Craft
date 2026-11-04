@@ -7,6 +7,7 @@ use cut_craft_core::compute::compute;
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{Entry, Ramp, Ramping, path_moves};
 use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::progress;
 use cut_craft_core::simulation::Material;
 use cut_craft_core::toolpath::{
     Drop, Move, MoveKind, Tool, cut_points, follow, made_by, raster_lines,
@@ -173,6 +174,7 @@ impl Command for RoughingToolpath3d {
             ));
         }
         // what must be left: the model and the allowance on top of it
+        progress::stage("Placing the model");
         let mut leave = placed_model(doc, tool)?;
         let lowest = leave.heights.iter().copied().fold(0.0, f64::min);
         for height in &mut leave.heights {
@@ -207,10 +209,13 @@ impl Command for RoughingToolpath3d {
         } else {
             vec![]
         };
+        let steps = levels.len() + 2; // the bar: placing the model, each level, linking
+        progress::report_steps(1, steps);
         let runs: Vec<Vec<Vec<DVec3>>> = levels
             .iter()
             .enumerate()
             .map(|(i, &level)| {
+                on_level(i, levels.len())?;
                 let ceiling = if z_level {
                     level
                 } else if p.avoid_machined_areas && i > 0 {
@@ -228,9 +233,12 @@ impl Command for RoughingToolpath3d {
                     // a 3D raster still cuts up to where it rides over the last pass's cut
                     over_ceiling: !z_level,
                 };
-                level_runs(&drop, &lines, &inside, profile, &tips)
+                Ok(progress::part(i + 1, steps, || {
+                    level_runs(&drop, &lines, &inside, profile, &tips)
+                }))
             })
-            .collect();
+            .collect::<Result<_, CommandError>>()?;
+        progress::stage("Linking the passes");
         let order = if depth_first_order {
             depth_first(&leave, &levels, &runs, &tips)
         } else {
@@ -258,6 +266,13 @@ impl Command for RoughingToolpath3d {
         ));
         Ok(c.finish())
     }
+}
+
+/// The progress bar on to level `i` of `count`, unless the person pressed Cancel.
+fn on_level(i: usize, count: usize) -> Result<(), CommandError> {
+    progress::stop_if_cancelled()?;
+    progress::stage(&format!("Level {} of {count}", i + 1));
+    Ok(())
 }
 
 /// One level's runs: along the raster lines, with a profile pass round the edge of what the

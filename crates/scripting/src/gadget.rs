@@ -6,7 +6,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::{Change, CommandError, Drag, DynCommand, Meta, Registry};
 use serde_json::{Map, Value, json};
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// A loaded gadget, ready to join the [`Registry`] with [`Registry::add_dyn`].
 pub struct GadgetCommand {
@@ -17,7 +17,7 @@ pub struct GadgetCommand {
     file_name: String,
     source: String,
     /// The commands the gadget may run (gadgets cannot run other gadgets).
-    commands: Rc<Registry>,
+    commands: Arc<Registry>,
 }
 
 /// Reads the gadget in `source` (from the file `file_name`), checking its `settings`, so a
@@ -25,7 +25,7 @@ pub struct GadgetCommand {
 pub fn load_gadget(
     file_name: &str,
     source: &str,
-    commands: Rc<Registry>,
+    commands: Arc<Registry>,
 ) -> Result<GadgetCommand, ScriptError> {
     let (about, settings) = describe(file_name, source)?;
     let stem = file_name.strip_suffix(".lua").unwrap_or(file_name);
