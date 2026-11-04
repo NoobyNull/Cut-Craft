@@ -428,6 +428,58 @@ pub fn load_toolpath_template(doc: &Document, bytes: &[u8]) -> Result<Change, St
     Ok(c.finish())
 }
 
+/// A toolpath form's settings, saved to load back into the same form later.
+pub const FORM_SETTINGS_EXTENSION: &str = "ccsettings";
+
+/// The settings `params` of the form `id` (shown as `label`) as a settings file.
+pub fn form_settings(id: &str, label: &str, params: &serde_json::Value) -> Vec<u8> {
+    serde_json::to_vec_pretty(
+        &serde_json::json!({ "form": id, "label": label, "settings": params }),
+    )
+    .expect("settings serialise")
+}
+
+/// A settings file's values put into the form `id`'s `params`: only the settings the form
+/// has, so a file from an older version still loads.
+pub fn load_form_settings(
+    id: &str,
+    label: &str,
+    params: &mut serde_json::Value,
+    bytes: &[u8],
+) -> Result<(), String> {
+    let file: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|e| format!("this is not a toolpath settings file ({e})"))?;
+    let form = file["form"].as_str().unwrap_or_default();
+    if form != id {
+        let theirs = file["label"].as_str().unwrap_or(form);
+        return Err(format!(
+            "these settings are for {theirs}, not {label}: open {theirs} to load them"
+        ));
+    }
+    let (Some(saved), Some(params)) = (file["settings"].as_object(), params.as_object_mut()) else {
+        return Err("the file holds no settings".into());
+    };
+    merge_settings(params, saved);
+    Ok(())
+}
+
+/// `saved`'s values put into the `params` the form has, group by group, so a setting a
+/// newer version added inside a group keeps its default.
+fn merge_settings(
+    params: &mut serde_json::Map<String, serde_json::Value>,
+    saved: &serde_json::Map<String, serde_json::Value>,
+) {
+    for (key, value) in saved {
+        match (params.get_mut(key), value) {
+            (Some(serde_json::Value::Object(group)), serde_json::Value::Object(saved)) => {
+                merge_settings(group, saved);
+            }
+            (Some(v), _) => v.clone_from(value),
+            (None, _) => {}
+        }
+    }
+}
+
 /// Puts `path` first in `recent`, once, keeping the latest `keep` (Options; [`RECENT_COUNT`]
 /// by default).
 pub fn remember(recent: &mut Vec<PathBuf>, path: &Path, keep: usize) {
@@ -490,6 +542,42 @@ mod increment_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn form_settings_load_back_into_the_same_form_only() {
+        let saved = serde_json::json!({ "max_cut_depth": 2.5, "gone": 1 });
+        let bytes = super::form_settings("texture_toolpath", "Texture Toolpath", &saved);
+        let mut params = serde_json::json!({ "max_cut_depth": 1.5, "seed": 3 });
+        super::load_form_settings("texture_toolpath", "Texture Toolpath", &mut params, &bytes)
+            .unwrap();
+        // only the settings the form has, so a file from an older version still loads
+        assert_eq!(
+            params,
+            serde_json::json!({ "max_cut_depth": 2.5, "seed": 3 })
+        );
+        let wrong =
+            super::load_form_settings("profile_toolpath", "Profile Toolpath", &mut params, &bytes)
+                .unwrap_err();
+        assert!(wrong.contains("Texture Toolpath"), "{wrong}");
+        assert!(wrong.contains("Profile Toolpath"), "{wrong}");
+        assert!(
+            super::load_form_settings("texture_toolpath", "Texture Toolpath", &mut params, b"{")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn settings_added_inside_a_group_since_the_file_was_saved_keep_their_defaults() {
+        let saved = serde_json::json!({ "tab": { "number": 6 } });
+        let bytes = super::form_settings("profile_toolpath", "Profile Toolpath", &saved);
+        let mut params = serde_json::json!({ "tab": { "number": 4, "minimum": 2, "maximum": 9 } });
+        super::load_form_settings("profile_toolpath", "Profile Toolpath", &mut params, &bytes)
+            .unwrap();
+        assert_eq!(
+            params,
+            serde_json::json!({ "tab": { "number": 6, "minimum": 2, "maximum": 9 } })
+        );
+    }
+
     #[test]
     fn toolpath_templates_keep_settings_and_drop_moves() {
         let mut doc = cut_craft_core::testing::with_toolpath();
