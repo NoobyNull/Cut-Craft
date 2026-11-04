@@ -2992,7 +2992,7 @@ fn the_join_icons_join_two_vectors_their_way() {
         .toolbar
         .groups
         .iter()
-        .find(|g| g.name == "Edit Objects")
+        .find(|g| g.name == "Join, Combine and Trim")
         .unwrap();
     assert!(edit.tools.contains(&"join_move_end_points"));
 }
@@ -3338,6 +3338,147 @@ fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
     );
     h.app.invoke(&h.ctx, "sculpt");
     assert_eq!(gui::DESIGN_SUBTABS[h.app.design_subtab].name, "Model");
+}
+
+#[test]
+fn a_tool_that_works_on_a_selection_says_what_to_select_first() {
+    let h = Harness::new();
+    let tip = h
+        .app
+        .tool_tip("pocket_toolpath", gui::about("pocket_toolpath").unwrap());
+    assert_eq!(tip.label, "Pocket Toolpath");
+    assert_eq!(
+        tip.next.as_deref(),
+        Some("Select the closed vectors to pocket"),
+        "the toolpath's own words"
+    );
+    assert!(
+        !tip.about.starts_with("Pocket Toolpath"),
+        "the description loses the label the box shows over it: {}",
+        tip.about
+    );
+    let tip = h
+        .app
+        .tool_tip("align_left", gui::about("align_left").unwrap());
+    assert_eq!(
+        tip.next.as_deref(),
+        Some(guide::SELECT_FIRST),
+        "a tool that says only that nothing is selected"
+    );
+    let tip = h
+        .app
+        .tool_tip("draw_circle", gui::about("draw_circle").unwrap());
+    assert_eq!(
+        tip.next.as_deref(),
+        Some("Drag from the centre out to the radius; Shift-click one this tool drew to edit it"),
+        "a drawing tool says how to draw with it"
+    );
+    assert_eq!(
+        tip.status(),
+        "Draw Circle: Drag from the centre out to the radius; Shift-click one this tool drew to \
+         edit it",
+        "the status bar's line"
+    );
+    let tip = h.app.tool_tip("undo", "Undo");
+    assert_eq!(tip.next, None, "a tool that just runs has no next step");
+    assert_eq!(tip.status(), "Undo");
+}
+
+#[test]
+fn every_tool_on_the_pages_can_be_asked_its_first_step() {
+    let h = Harness::new();
+    let mut with_step = 0;
+    for group in h
+        .app
+        .toolbar
+        .all_design_groups()
+        .iter()
+        .chain(&h.app.toolbar.toolpath_groups)
+    {
+        for id in group.tools {
+            if h.app.first_step_of(id).is_some() {
+                with_step += 1;
+            }
+        }
+    }
+    assert!(with_step >= 40, "{with_step} tools say what to select");
+    for id in ["weld_vectors", "two_rail_sweep", "profile_toolpath", "move"] {
+        assert!(h.app.first_step_of(id).is_some(), "{id}");
+    }
+    for id in ["draw_rectangle", "job_setup", "zoom_to_job", "undo"] {
+        assert_eq!(h.app.first_step_of(id), None, "{id}");
+    }
+}
+
+#[test]
+fn a_form_opens_saying_what_to_select_until_something_is() {
+    let mut h = Harness::new();
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    assert_eq!(
+        h.app.form_guidance().as_deref(),
+        Some("Select the closed vectors to pocket")
+    );
+    assert_eq!(
+        h.app.next_step().as_deref(),
+        Some("Select the closed vectors to pocket"),
+        "the status bar's step in the view says the same"
+    );
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    assert!(h.text_at("Next:").is_some(), "the form shows it at the top");
+    assert!(h.text_at("Select the closed vectors to pocket").is_some());
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    assert_eq!(
+        h.app.form_guidance(),
+        None,
+        "with a selection, the settings are the next step"
+    );
+    h.app.invoke(&h.ctx, "draw_circle");
+    assert_eq!(
+        h.app.form_guidance().as_deref(),
+        Some("Drag from the centre out to the radius; Shift-click one this tool drew to edit it"),
+        "a drawing tool's form says how to draw"
+    );
+    h.app.invoke(&h.ctx, "job_setup");
+    assert_eq!(h.app.form_guidance(), None, "a settings form has no step");
+}
+
+#[test]
+fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // nothing hovered: the tool in hand, Select, and its next step
+    assert!(
+        h.text_at("Select").is_some(),
+        "the tip box names the tool in hand"
+    );
+    assert!(h.text_at("Next:").is_some());
+    assert!(
+        h.texts_at("Next:").len() == 1,
+        "one box: {:?}",
+        h.texts_at("Next:")
+    );
+    // hovering Draw Circle's button: its description, its next step, and the status bar's line
+    flyout_arrow_naming(&mut h, "Draw Circle");
+    let hovered = guide::hovered(&h.ctx).expect("a hovered tool");
+    assert_eq!(hovered.label, "Draw Circle");
+    assert!(
+        hovered
+            .next
+            .as_deref()
+            .unwrap()
+            .starts_with("Drag from the centre"),
+        "{hovered:?}"
+    );
+    assert!(h.text_at("Draw Circle").is_some(), "the box shows its name");
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(
+        hint.starts_with("Draw Circle: Drag from the centre"),
+        "{hint}"
+    );
 }
 
 #[test]
@@ -6924,8 +7065,13 @@ fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
     h.app.invoke(&h.ctx, "profile_toolpath");
     h.frame(vec![]);
     h.frame(vec![]);
-    // down the form to its Tabs, the button at their foot
-    let over = h.text_at("Profile Toolpath").expect("the form");
+    // down the form to its Tabs, the button at their foot (the form is on the Toolpaths page,
+    // to the right; the Design page's tip box names the tool in hand too)
+    let over = h
+        .texts_at("Profile Toolpath")
+        .into_iter()
+        .max_by(|a, b| a.x.total_cmp(&b.x))
+        .expect("the form");
     for _ in 0..30 {
         if h.text_at("Edit Tabs…").is_some_and(|b| b.y < 700.0) {
             break;
@@ -7052,13 +7198,13 @@ fn flyout_arrows(h: &Harness) -> Vec<Pos2> {
         .collect()
 }
 
-/// The corner arrow of the flyout button whose tooltip names `tool`.
+/// The corner arrow of the flyout button whose tip names `tool` (its face or one it holds).
 fn flyout_arrow_naming(h: &mut Harness, tool: &str) -> Pos2 {
     for arrow in flyout_arrows(h) {
         let over = arrow - vec2(12.0, 12.0);
         h.frame(vec![Event::PointerMoved(over)]);
         h.frame(vec![]);
-        if cut_craft_bug_report::hint::current(&h.ctx).is_some_and(|t| t.contains(tool)) {
+        if guide::hovered(&h.ctx).is_some_and(|t| t.about.contains(tool)) {
             return arrow;
         }
     }
