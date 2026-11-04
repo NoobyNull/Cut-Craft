@@ -314,6 +314,51 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Window layout")]
     pub layout: WindowLayout,
+    /// How often unsaved work is copied, so it can be opened again after a crash or a power
+    /// cut. Shorter loses less work; longer writes to the disk less often
+    #[serde(default = "autosave_seconds")]
+    #[schemars(
+        title = "Keep a recovery copy every",
+        extend("x-unit" = "s"),
+        range(min = 10, max = 600)
+    )]
+    pub autosave_seconds: u32,
+    /// How long to press and hold a toolbox button with a small arrow before its group of
+    /// tools opens; a quick click runs the tool shown. Longer if groups open by accident
+    #[serde(default = "flyout_hold_seconds")]
+    #[schemars(
+        title = "Hold to open a tool group",
+        extend("x-unit" = "s"),
+        range(min = 0.2, max = 1.5)
+    )]
+    pub flyout_hold_seconds: f64,
+}
+
+fn autosave_seconds() -> u32 {
+    // a whole number of seconds
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "30"
+    )]
+    let seconds = crate::app::AUTOSAVE_SECONDS as u32;
+    seconds
+}
+
+fn flyout_hold_seconds() -> f64 {
+    crate::flyout::HOLD_SECONDS
+}
+
+impl General {
+    /// Seconds between recovery copies, kept to the setting's range.
+    pub fn autosave_interval(&self) -> f64 {
+        f64::from(self.autosave_seconds.clamp(10, 600))
+    }
+
+    /// Seconds a toolbox button is held before its flyout opens, kept to the setting's range.
+    pub fn flyout_hold(&self) -> f64 {
+        self.flyout_hold_seconds.clamp(0.2, 1.5)
+    }
 }
 
 /// Importing 3D models: what Orientate 3D Model offers (not one of Aspire's).
@@ -481,6 +526,16 @@ pub struct Appearance {
     #[serde(default = "grid_point_size")]
     #[schemars(range(min = 0.5, max = 10))]
     pub grid_point_size: f32,
+    /// How big text, buttons and lines are, as a percentage: larger is easier to read and to
+    /// click, smaller fits more on a small screen (from the next start)
+    #[serde(default = "text_size")]
+    #[schemars(title = "Text size", extend("x-unit" = "%"), range(min = 80, max = 200))]
+    pub text_size: u32,
+}
+
+/// The size Cut Craft has always drawn its text at: egui's, plus 15%.
+fn text_size() -> u32 {
+    115
 }
 
 impl Default for Appearance {
@@ -490,7 +545,17 @@ impl Default for Appearance {
             system_title_bar: false,
             grid_color: grid_color(),
             grid_point_size: grid_point_size(),
+            text_size: text_size(),
         }
+    }
+}
+
+impl Appearance {
+    /// What egui's text and control sizes are multiplied by, kept between 80% and 200%.
+    pub fn text_scale(&self) -> f32 {
+        #[expect(clippy::cast_precision_loss, reason = "80 to 200")]
+        let percent = self.text_size.clamp(80, 200) as f32;
+        percent / 100.0
     }
 }
 
@@ -677,6 +742,8 @@ impl Default for Options {
                 preload_icons: on(),
                 file_dialog_default: FileDialogDefault::default(),
                 layout: WindowLayout::default(),
+                autosave_seconds: autosave_seconds(),
+                flyout_hold_seconds: flyout_hold_seconds(),
             },
             confirmations: Confirmations::default(),
             job_sheet: fmt_create_job_sheet::Style::default(),
@@ -980,5 +1047,37 @@ mod tests {
         assert_eq!(general.favourites.design, ["draw_circle"]);
         assert_eq!(o.reset("advanced").advanced, Advanced::default());
         assert_eq!(o.reset("no_such_page"), o);
+    }
+
+    #[test]
+    fn new_settings_start_as_the_values_they_replace() {
+        let o = Options::default();
+        assert_eq!(
+            f64::from(o.general.autosave_seconds),
+            crate::app::AUTOSAVE_SECONDS
+        );
+        assert!((o.general.flyout_hold_seconds - crate::flyout::HOLD_SECONDS).abs() < 1e-9);
+        assert_eq!(o.appearance.text_size, 115);
+        assert!((o.appearance.text_scale() - 1.15).abs() < 1e-6);
+        // options saved before these settings get the same
+        let older = r#"{ "view_3d": { "draw_origin": true, "draw_material_block": true,
+            "color_shaded_view": true, "shaded_background": true, "light_follows_viewer": true },
+            "toolpaths": { "auto_open_3d_view": true, "create_2d_previews": true,
+            "solid_2d_previews": false }, "general": { "recent_file_list_size": 4 } }"#;
+        let (older, _) = Options::from_bytes(older.as_bytes());
+        assert_eq!(older.general.autosave_seconds, o.general.autosave_seconds);
+        assert!((older.general.flyout_hold_seconds - o.general.flyout_hold_seconds).abs() < 1e-9);
+        assert_eq!(older.appearance.text_size, 115);
+    }
+
+    #[test]
+    fn text_size_stays_readable_whatever_the_file_says() {
+        let mut a = Appearance {
+            text_size: 5,
+            ..Appearance::default()
+        };
+        assert!((a.text_scale() - 0.8).abs() < 1e-6, "no smaller than 80%");
+        a.text_size = 900;
+        assert!((a.text_scale() - 2.0).abs() < 1e-6, "no larger than 200%");
     }
 }

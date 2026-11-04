@@ -4238,6 +4238,25 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
         writing.join().unwrap().unwrap();
         assert!(recovery.exists());
     };
+    // a longer interval in the options waits longer
+    let mut h = Harness::new();
+    h.app.options.general.autosave_seconds = 120;
+    h.app.recovery_path = Some(dir.join("later.ccjob"));
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.frame(vec![]);
+    h.time += AUTOSAVE_SECONDS;
+    h.frame(vec![]);
+    assert!(h.app.autosave.is_none(), "not after the default interval");
+    h.time += 120.0;
+    h.frame(vec![]);
+    h.app
+        .autosave
+        .take()
+        .expect("written once the options' interval is up")
+        .join()
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_file(dir.join("later.ccjob"));
     // closing the job on purpose leaves nothing to recover
     let mut h = Harness::new();
     autosaved(&mut h);
