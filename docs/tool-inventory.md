@@ -152,8 +152,12 @@ say "not implemented yet".
   machine's default first, else Cut Craft's own FluidNC posts: tool changer, rotary jobs
   wrapped onto A in inverse time); the selected toolpath, the shown ones to one file, or each
   shown one to a file of its own (`name_N_Toolpath`), Group Where Possible putting toolpaths
-  in a row with one tool together; Add Side to Toolpath Name on double-sided jobs. A file
-  mixing tools needs a post with a TOOLCHANGE block, else it is refused.
+  in a row with one tool together; Add Side to Toolpath Name on double-sided jobs. With a
+  post that cannot change tools (no TOOLCHANGE block) each run of one tool gets a file of its
+  own, named after the tool (`name_N_Tool`), and the form says so. Merge Toolpaths That Use
+  the Same Tool runs each tool's toolpaths together (tools in the order they first come) and
+  lists what now runs out of turn. The checks before cutting are listed in the form; Save
+  is greyed while any must be fixed.
 - Checks before saving (Cut Craft's own, `core/preflight`): the toolpaths are simulated in
   cutting order. Errors stop the save: a rapid move into material still there (crash), a
   toolpath with no moves, no feed or plunge rate, toolpaths wider than the machine's bed or

@@ -1485,6 +1485,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         group: false,
         post: None,
         add_side: false,
+        merge: false,
     };
     let path = std::env::temp_dir().join(format!("cut-craft-keep-out-{}.nc", std::process::id()));
     let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
@@ -5471,6 +5472,7 @@ fn save_toolpaths_opens_its_form_and_saves_each_shown_toolpath_to_a_file_of_its_
         group: false,
         post: None,
         add_side: false,
+        merge: false,
     };
     let post = h.app.output_post().unwrap();
     let done = h
@@ -6547,6 +6549,7 @@ fn toolpath_groups_are_listed_picked_previewed_saved_as_one_and_joined_by_new_to
         None,
         Some("Group 1"),
         false,
+        false,
     );
     assert_eq!(plan.unwrap(), [vec![EntityId(1), EntityId(2)]]);
     // a toolpath made while the group is picked joins it
@@ -6633,6 +6636,7 @@ fn quick_engraves_immediate_output_saves_the_toolpath_calculated_last() {
         group: false,
         post: None,
         add_side: false,
+        merge: false,
     };
     let post = h.app.output_post().unwrap();
     let done = h
@@ -7640,6 +7644,7 @@ fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_and_says_how_to_fix_
         group: false,
         post: None,
         add_side: false,
+        merge: false,
     };
     let post = h.app.output_post().unwrap();
     let path = std::env::temp_dir().join(format!("cut-craft-too-big-{}.nc", std::process::id()));
@@ -7649,4 +7654,80 @@ fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_and_says_how_to_fix_
         "{refused}"
     );
     assert!(!path.exists(), "nothing written");
+}
+
+/// Two profile toolpaths, First with a 6 mm end mill and Second with a 3 mm one.
+fn two_tools(h: &mut Harness) {
+    for (x, name, diameter) in [(10.0, "First", 6.0), (80.0, "Second", 3.0)] {
+        h.rectangle(x, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        h.frame(vec![]);
+        let mut params = h.app.form.as_ref().unwrap().params.clone();
+        params["name"] = name.into();
+        params["tool"]["diameter"] = diameter.into();
+        params["tool"]["name"] = format!("{diameter} mm End Mill").into();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+    }
+}
+
+#[test]
+fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let plain = cut_craft_post::Post::parse(
+        "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
+         begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\
+         begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
+    )
+    .unwrap();
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        merge: false,
+    };
+    let dir = std::env::temp_dir().join(format!("cut-craft-per-tool-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let done = h
+        .app
+        .save_toolpaths_to(&form, &plain, &dir.join("sign.nc"))
+        .unwrap();
+    assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
+    for name in ["sign_1_6_mm_End_Mill.nc", "sign_2_3_mm_End_Mill.nc"] {
+        assert!(dir.join(name).exists(), "{name}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn save_toolpaths_shows_what_must_be_fixed_and_will_not_save_until_it_is() {
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    h.app.machines.add();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.name = "Desktop".into();
+    (machine.width, machine.height) = (60.0, 60.0);
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let shown = h
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().to_string()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(shown.contains("Checks before cutting"), "{shown}");
+    assert!(shown.contains("Must fix: The toolpaths cover"), "{shown}");
+    let checked = h.app.save_checks.as_ref().unwrap().revision;
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.save_checks.as_ref().unwrap().revision,
+        checked,
+        "the checks are kept between frames"
+    );
 }

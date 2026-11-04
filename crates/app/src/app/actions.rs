@@ -6,12 +6,12 @@ use super::{
     DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
     KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout, MODEL_IMPORTERS, Menus,
     Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
-    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm, Screen, Session,
-    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
-    file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
-    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen,
+    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands,
+    dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog,
+    menu_items, message_dialog, on_the_desktop, rest_section, selector_section, shortcut,
+    side_panel, side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
     toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
@@ -76,6 +76,7 @@ impl CutCraftApp {
                 group: false,
                 post: None,
                 add_side: false,
+                merge: false,
             },
             depth_estimate: None,
             addons_path: None,
@@ -125,6 +126,7 @@ impl CutCraftApp {
             stl_result: None,
             layers_on_sheet: false,
             save_form: None,
+            save_checks: None,
             before_preview: None,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
@@ -1037,6 +1039,7 @@ impl CutCraftApp {
                     group: false,
                     post: None,
                     add_side: self.doc.job.double_sided.is_some(),
+                    merge: false,
                 });
             }
             _ => unreachable!("not a toolpath action: {id}"),
@@ -1067,21 +1070,11 @@ impl CutCraftApp {
     /// Save Toolpaths' Save: the checks before cutting, a file name, then each file of the
     /// form's plan through its post (and each tile, when the job is tiled).
     pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
-        let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name),
-            None => self.output_post(),
-        };
-        let post = match post {
+        let post = match self.form_post(form) {
             Ok(post) => post,
             Err(e) => return self.status.set_message(&e),
         };
-        let plan = match files::save_plan(
-            &self.doc,
-            form.mode,
-            self.selected_toolpath,
-            self.selected_group.as_deref(),
-            form.group,
-        ) {
+        let plan = match self.plan(form, &post) {
             Ok(plan) => plan,
             Err(e) => return self.status.set_message(&e),
         };
@@ -1124,22 +1117,90 @@ impl CutCraftApp {
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
-        let plan = self.plan(form)?;
+        let plan = self.plan(form, post)?;
         match Self::refused(&self.preflight(&plan)) {
             Some(refused) => Err(refused),
             None => self.write_toolpaths(form, post, path),
         }
     }
 
-    /// The form's toolpaths, file by file.
-    fn plan(&self, form: &SaveForm) -> Result<Vec<Vec<EntityId>>, String> {
-        files::save_plan(
+    /// The post the form saves through: the one picked, else the machine's default.
+    pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
+        match form.post.as_deref() {
+            Some(name) => self.posts.load(name),
+            None => self.output_post(),
+        }
+    }
+
+    /// The form's toolpaths, file by file; a file for each tool in turn when `post` cannot
+    /// change tools.
+    pub(super) fn plan(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+    ) -> Result<Vec<Vec<EntityId>>, String> {
+        let plan = files::save_plan(
             &self.doc,
             form.mode,
             self.selected_toolpath,
             self.selected_group.as_deref(),
             form.group,
+            form.merge,
+        )?;
+        Ok(if post.changes_tools() {
+            plan
+        } else {
+            files::by_tool(&self.doc, plan)
+        })
+    }
+
+    /// What `form`'s Merge moved ahead in `plan` (none without Merge): "A now runs before B".
+    pub(super) fn reordered(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        plan: &[Vec<EntityId>],
+    ) -> Vec<String> {
+        let unmerged = SaveForm {
+            merge: false,
+            ..form.clone()
+        };
+        if !form.merge {
+            return vec![];
+        }
+        let flat = |p: &[Vec<EntityId>]| p.iter().flatten().copied().collect::<Vec<_>>();
+        self.plan(&unmerged, post).map_or_else(
+            |_| vec![],
+            |before| files::moved(&self.doc, &flat(&before), &flat(plan)),
         )
+    }
+
+    /// Whether files are split per tool for `post` alone (not by the form's choice), and so
+    /// named after their tool.
+    pub(super) fn split_for(form: &SaveForm, post: &cut_craft_post::Post) -> bool {
+        !post.changes_tools() && form.mode != files::SaveMode::VisibleToMultipleFiles
+    }
+
+    /// The checks before cutting for Save Toolpaths' `plan`, worked out again only when the
+    /// plan, the job or the machine changed.
+    pub(super) fn save_checks(
+        &mut self,
+        plan: &[Vec<EntityId>],
+    ) -> &[cut_craft_core::preflight::Finding] {
+        let (revision, machine) = (self.history.revision(), self.machines.active);
+        let fresh = self
+            .save_checks
+            .as_ref()
+            .is_some_and(|c| c.plan == plan && c.revision == revision && c.machine == machine);
+        if !fresh {
+            self.save_checks = Some(SaveChecks {
+                plan: plan.to_vec(),
+                revision,
+                machine,
+                found: self.preflight(plan),
+            });
+        }
+        &self.save_checks.as_ref().expect("just filled").found
     }
 
     /// What the checks before cutting find in `plan`'s toolpaths, cut in its order on the
@@ -1158,7 +1219,7 @@ impl CutCraftApp {
 
     /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
     /// there are none.
-    fn refused(found: &[cut_craft_core::preflight::Finding]) -> Option<String> {
+    pub(super) fn refused(found: &[cut_craft_core::preflight::Finding]) -> Option<String> {
         let errors: Vec<&str> = found
             .iter()
             .filter(|f| f.severity == cut_craft_core::preflight::Severity::Error)
@@ -1175,7 +1236,7 @@ impl CutCraftApp {
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
-        let plan = self.plan(form)?;
+        let plan = self.plan(form, post)?;
         // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
         let crossing = self.not_kept_out(&plan);
         if !crossing.is_empty() {
@@ -1195,7 +1256,8 @@ impl CutCraftApp {
         );
         let job = self.session.path.as_deref();
         let slots = self.slots();
-        let parts = files::save_files(post, &thinned, &plan, path, side)?;
+        let per_tool = Self::split_for(form, post);
+        let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
         for (path, part) in &parts {
             match self.doc.tiling {
                 // one file per tile, each tile moved to the job's corner

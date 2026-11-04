@@ -2694,8 +2694,21 @@ impl CutCraftApp {
         let mut machine_changed = None;
         let choices = self.post_choices();
         let default = self.output_post().map(|p| p.name);
-        let (picked, group) = (self.selected_toolpath, self.selected_group.as_deref());
-        let plan = files::save_plan(&self.doc, form.mode, picked, group, form.group);
+        let post = self.form_post(&form);
+        let plan = post
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(|p| self.plan(&form, p));
+        let split = post.as_ref().is_ok_and(|p| Self::split_for(&form, p));
+        let reordered = match (&plan, &post) {
+            (Ok(now), Ok(post)) => self.reordered(&form, post, now),
+            _ => vec![],
+        };
+        let found = match &plan {
+            Ok(plan) => self.save_checks(plan).to_vec(),
+            Err(_) => vec![],
+        };
+        let errors = Self::refused(&found).is_some();
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong("Machine and post-processor");
@@ -2730,29 +2743,30 @@ impl CutCraftApp {
                 egui::Checkbox::new(&mut form.group, "Group where possible"),
             )
             .on_hover_hint("Toolpaths in a row that use the same tool go in one file");
+            ui.checkbox(&mut form.merge, "Merge toolpaths that use the same tool")
+                .on_hover_hint(
+                    "Runs all of each tool's toolpaths together, so the tool is changed fewer \
+                     times. This changes the cutting order: tools run in the order they first \
+                     appear in the list",
+                );
             if self.doc.job.double_sided.is_some() {
                 ui.checkbox(&mut form.add_side, "Add side to toolpath name");
             }
             ui.separator();
-            match &plan {
-                Ok(plan) => {
-                    for (n, ids) in plan.iter().enumerate() {
-                        let names: Vec<String> = ids
-                            .iter()
-                            .filter_map(|id| self.doc.toolpaths.get(id))
-                            .map(|t| format!("{} ({})", t.name, t.tool.name))
-                            .collect();
-                        ui.label(format!("File {}: {}", n + 1, names.join(", ")));
-                    }
-                }
-                Err(e) => {
-                    ui.colored_label(ui.visuals().warn_fg_color, e);
-                }
-            }
+            files_section(ui, &self.doc, &plan, split, &reordered);
+            checks_section(ui, &found);
             ui.add_space(ui.spacing().item_spacing.y);
-            save = ui
-                .add_enabled(plan.is_ok(), egui::Button::new("Save Toolpaths..."))
-                .clicked();
+            let response = ui.add_enabled(
+                plan.is_ok() && !errors,
+                egui::Button::new("Save Toolpaths..."),
+            );
+            save = if errors {
+                response
+                    .on_disabled_hover_text("Fix the problems marked Must fix to save")
+                    .clicked()
+            } else {
+                response.clicked()
+            };
         });
         if let Some(n) = machine_changed {
             self.machines.active = n;
@@ -3232,4 +3246,62 @@ pub(super) fn immediate_output(
             .clicked();
     });
     save
+}
+
+/// Save Toolpaths' checks before cutting: each error (Must fix) and warning (Check) with
+/// how to put it right.
+fn checks_section(ui: &mut egui::Ui, found: &[cut_craft_core::preflight::Finding]) {
+    use cut_craft_core::preflight::Severity;
+    if found.is_empty() {
+        return;
+    }
+    ui.separator();
+    ui.strong("Checks before cutting");
+    for f in found {
+        let (colour, kind) = match f.severity {
+            Severity::Error => (ui.visuals().error_fg_color, "Must fix"),
+            Severity::Warning => (ui.visuals().warn_fg_color, "Check"),
+        };
+        ui.colored_label(colour, format!("{kind}: {}", f.message));
+    }
+}
+
+/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and what
+/// merging moved ahead.
+fn files_section(
+    ui: &mut egui::Ui,
+    doc: &cut_craft_core::document::Document,
+    plan: &Result<Vec<Vec<EntityId>>, String>,
+    split: bool,
+    reordered: &[String],
+) {
+    let warn = ui.visuals().warn_fg_color;
+    if split && plan.as_ref().is_ok_and(|p| p.len() > 1) {
+        ui.colored_label(
+            warn,
+            "This post-processor cannot change tools, so each tool gets a file of its own. \
+             Run them in order, changing the tool between files.",
+        );
+    }
+    for line in reordered {
+        ui.colored_label(
+            warn,
+            format!("{line}: check nothing it needs is cut by a later toolpath."),
+        );
+    }
+    match plan {
+        Ok(plan) => {
+            for (n, ids) in plan.iter().enumerate() {
+                let names: Vec<String> = ids
+                    .iter()
+                    .filter_map(|id| doc.toolpaths.get(id))
+                    .map(|t| format!("{} ({})", t.name, t.tool.name))
+                    .collect();
+                ui.label(format!("File {}: {}", n + 1, names.join(", ")));
+            }
+        }
+        Err(e) => {
+            ui.colored_label(warn, e);
+        }
+    }
 }
