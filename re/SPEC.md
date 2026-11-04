@@ -180,10 +180,15 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   shortcut or Find Tool opens its sub-tab, so it shows highlighted where it lives. Favourites,
   the Rail and Ribbon layouts and Find Tool are as before. The sub-tabs are `DESIGN_SUBTABS`
   in `crates/app/src/gui.rs`.
-- **Icon style** [inf]: every icon is drawn by `scripts/make_icons.py` (and the 3D ones by
-  `scripts/make_3d_icons.py`) in one style: one slate ink for outlines, pale cool fills, one
-  warm accent for what the tool does, green for toolpaths, no stroke thinner than two units
-  of 48, so each reads as one shape in a 36-pixel button on either theme.
+- **Icon style** [inf]: every icon is drawn by `scripts/make_icons.py` (the seven in
+  `scripts/draw_icons.py` match it; `scripts/make_3d_icons.py` keeps only Interactive
+  Rotation's shaded pictures) in one clean line style: one steel-blue ink that reads on the
+  light and the dark theme, even 2.5-unit strokes of 48 with round caps, open shapes with no
+  fills, and one small warm accent only on the part a tool makes or moves. The 3D tools are
+  flat wood shapes, toolpaths green on a wood slab, so the Modeling and Toolpaths families
+  tell apart from the drawing tools at a glance. Cut Craft 0.1.0 to 0.2.1 used icons traced
+  from Aspire's (see ACKNOWLEDGEMENTS.md); this set keeps their quiet, single-colour feel
+  with drawings of Cut Craft's own.
 
 ### Create Fillets [obs] (help: Create Fillets, V12.5; Aspire 12.5 trial, 2026-10-25)
 - Fillets corners where two **straight** spans meet; corners touching arcs or curves cannot be filleted. The form: **Fillet / Tool Radius** and a type: **Normal** (a rounded corner of the radius), **Dog-Bone** (a relief circle the radius whose edge touches the sharp corner: for slots clearly wider than the cutter), **T-Bone** (the relief circle pushed sideways into one side: for slots about as wide as the cutter; the trial put it in the longer side when the corner itself was clicked) and **Plasma / Drag Knife** (the two sides run on past the corner and join in a loop outside it, so the cutter turns there).
