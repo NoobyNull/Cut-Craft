@@ -176,8 +176,9 @@ impl CutCraftApp {
                 None => egui::Button::new(&label),
             }
             .selected(self.status.current_tool == label);
-            let response = ui
-                .add_enabled(self.available(id), button)
+            let response = ui.add_enabled(self.available(id), button);
+            let response = self
+                .with_guidance(response, id)
                 .on_disabled_hover_text(format!("{label}: not implemented yet"));
             if response.clicked() {
                 clicked = Some(id);

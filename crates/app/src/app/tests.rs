@@ -3482,6 +3482,35 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
 }
 
 #[test]
+fn the_rails_tool_rows_and_a_flyouts_list_carry_the_guidance_too() {
+    let mut h = Harness::new();
+    h.app.options.general.layout = crate::options::WindowLayout::Rail;
+    h.frame(vec![]);
+    let groups = h.app.all_groups();
+    h.app.rail_group = groups.iter().position(|g| g.name == "Create Vectors");
+    h.frame(vec![]);
+    // the Rail's list of Create Vectors: its rows name each tool
+    let row = h.text_at("Draw Rectangle").expect("a tool row");
+    h.frame(vec![Event::PointerMoved(row)]);
+    h.frame(vec![]);
+    let hovered = guide::hovered(&h.ctx).expect("the row's tip");
+    assert_eq!(hovered.label, "Draw Rectangle");
+    assert!(
+        hovered
+            .next
+            .as_deref()
+            .unwrap()
+            .starts_with("Drag from one corner"),
+        "{hovered:?}"
+    );
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(
+        hint.starts_with("Draw Rectangle: Drag from one corner"),
+        "{hint}"
+    );
+}
+
+#[test]
 fn the_components_tab_is_the_component_list() {
     let mut h = Harness::new();
     h.app.pages = Pages::design_layout();

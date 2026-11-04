@@ -131,6 +131,17 @@ impl CutCraftApp {
         step
     }
 
+    /// A tool's button or row once drawn: its guidance on hover (the tip box, the status
+    /// bar) and its tooltip, what it does then its next step. Every way a tool is offered
+    /// (a page's icons, the Rail's rows, a flyout's list) goes through here.
+    pub(super) fn with_guidance(&self, response: egui::Response, id: &str) -> egui::Response {
+        let label = self.tool_label(id);
+        let about = crate::gui::about(id).unwrap_or(&label);
+        let tip = self.tool_tip(id, about);
+        hover(&response, &tip);
+        response.on_hover_text(tooltip(about, tip.next.as_deref()))
+    }
+
     /// The guidance for tool `id` with description `about`: what it does and, for a tool
     /// that works on a selection, what to select; for a drawing tool, how to draw with it.
     pub(super) fn tool_tip(&self, id: &str, about: &str) -> Tip {

@@ -226,14 +226,8 @@ impl CutCraftApp {
         let button = self
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
-        let tip = self.tool_tip(id, gui::about(id).unwrap_or(&label));
         let response = ui.add_enabled(self.available(id), button);
-        super::guide::hover(&response, &tip);
-        response
-            .on_hover_text(super::guide::tooltip(
-                gui::about(id).unwrap_or(&label),
-                tip.next.as_deref(),
-            ))
+        self.with_guidance(response, id)
             .on_disabled_hover_text(format!("{label}: not implemented yet"))
     }
 
@@ -353,9 +347,9 @@ impl CutCraftApp {
                 None => egui::Button::new(&name),
             }
             .selected(member == button.face);
-            let row = ui
-                .add_enabled(self.available(member), row)
-                .on_hover_hint(gui::about(member).unwrap_or(&name))
+            let row = ui.add_enabled(self.available(member), row);
+            let row = self
+                .with_guidance(row, member)
                 .on_disabled_hover_text(format!("{name}: not implemented yet"));
             if opened && member == button.face {
                 row.request_focus();
