@@ -38,6 +38,82 @@ fn group(name: &'static str, tools: &'static [&'static str]) -> ToolGroup {
     ToolGroup { name, tools }
 }
 
+/// A sub-tab of the Design page: a few of its tool groups, one job at a time, so the page
+/// shows a couple of dozen buttons instead of every icon at once. Aspire shows them all down
+/// one long page; a beginner finds a tool faster under a word that says what it is for
+/// (`re/SPEC.md`, Design sub-tabs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SubTab {
+    pub name: &'static str,
+    /// What its tools are for, in a beginner's words: the sub-tab's tooltip.
+    pub hint: &'static str,
+    /// The groups it shows, by name, in order.
+    pub groups: &'static [&'static str],
+}
+
+/// The groups the Design page shows over the sub-tabs whichever is open: the job's files and
+/// the view, wanted at any stage.
+pub const ALWAYS_SHOWN: &[&str] = &["File Operations", "2D View Control"];
+
+/// The Design page's sub-tabs, in order; the first is open when the app starts.
+pub const DESIGN_SUBTABS: &[SubTab] = &[
+    SubTab {
+        name: "Create",
+        hint: "Draw shapes, lines, curves and text",
+        groups: &["Create Vectors"],
+    },
+    SubTab {
+        name: "Edit",
+        hint: "Select, reshape, join, trim, move, rotate and resize what you drew",
+        groups: &["Edit Objects", "Transform Objects"],
+    },
+    SubTab {
+        name: "Arrange",
+        hint: "Line things up, space them out, offset them, nest them and make copies",
+        groups: &["Align Objects", "Offset and Layout", "Array Objects"],
+    },
+    SubTab {
+        name: "Model",
+        hint: "Build and shape the 3D parts to carve",
+        groups: &["Shape Creation", "Shape Editing"],
+    },
+];
+
+impl Toolbar {
+    /// Every group the Design page can show: the drawing then the modeling tools.
+    pub fn all_design_groups(&self) -> Vec<ToolGroup> {
+        self.groups
+            .iter()
+            .chain(&self.modeling_groups)
+            .copied()
+            .collect()
+    }
+
+    /// Sub-tab `tab`'s own groups; none for a tab out of range.
+    pub fn subtab_groups(&self, tab: usize) -> Vec<ToolGroup> {
+        self.named(DESIGN_SUBTABS.get(tab).map_or(&[][..], |t| t.groups))
+    }
+
+    /// The groups called `names`, in that order.
+    pub fn named(&self, names: &[&str]) -> Vec<ToolGroup> {
+        let all = self.all_design_groups();
+        names
+            .iter()
+            .filter_map(|name| all.iter().find(|g| g.name == *name).copied())
+            .collect()
+    }
+
+    /// The sub-tab `id` is on, if any: where to look for a tool picked some other way.
+    pub fn subtab_of(&self, id: &str) -> Option<usize> {
+        let all = self.all_design_groups();
+        DESIGN_SUBTABS.iter().position(|t| {
+            t.groups
+                .iter()
+                .any(|name| all.iter().any(|g| g.name == *name && g.tools.contains(&id)))
+        })
+    }
+}
+
 /// Aspire's Drawing tab. Group names and which tool sits in which group follow the help
 /// topics and the trial (see `re/SPEC.md`). Ids match
 /// the icon file names, so unimplemented tools still show their icon.
@@ -1793,6 +1869,78 @@ mod tests {
             .map(|c| c.iter().map(|i| i.name.as_str()).collect())
             .collect();
         assert_eq!(names, [vec!["Undo", "Redo"], vec!["Delete"]]);
+    }
+
+    #[test]
+    fn every_design_group_is_on_exactly_one_sub_tab_or_always_shown() {
+        let toolbar = super::Toolbar::new();
+        let placed: Vec<&str> = super::ALWAYS_SHOWN
+            .iter()
+            .chain(super::DESIGN_SUBTABS.iter().flat_map(|t| t.groups.iter()))
+            .copied()
+            .collect();
+        for group in toolbar.all_design_groups() {
+            let n = placed.iter().filter(|p| **p == group.name).count();
+            assert_eq!(n, 1, "{} is placed {n} times", group.name);
+        }
+        for name in &placed {
+            assert!(
+                toolbar.all_design_groups().iter().any(|g| g.name == *name),
+                "{name} is no group"
+            );
+        }
+        assert_eq!(
+            super::DESIGN_SUBTABS[0].name,
+            "Create",
+            "drawing comes first"
+        );
+    }
+
+    #[test]
+    fn a_sub_tab_shows_its_own_groups_and_far_fewer_buttons() {
+        let toolbar = super::Toolbar::new();
+        let names = |tab: usize| -> Vec<&str> {
+            toolbar.subtab_groups(tab).iter().map(|g| g.name).collect()
+        };
+        assert_eq!(
+            names(2),
+            ["Align Objects", "Offset and Layout", "Array Objects"]
+        );
+        assert!(names(99).is_empty(), "a tab out of range shows nothing");
+        let always: Vec<&str> = toolbar
+            .named(super::ALWAYS_SHOWN)
+            .iter()
+            .map(|g| g.name)
+            .collect();
+        assert_eq!(always, super::ALWAYS_SHOWN);
+        let faces = crate::flyout::Faces::new();
+        let count = |groups: Vec<super::ToolGroup>| -> usize {
+            groups
+                .iter()
+                .map(|g| crate::flyout::buttons(g.tools, &faces).len())
+                .sum()
+        };
+        let whole = count(toolbar.all_design_groups());
+        for tab in 0..super::DESIGN_SUBTABS.len() {
+            let mut shown = toolbar.named(super::ALWAYS_SHOWN);
+            shown.extend(toolbar.subtab_groups(tab));
+            let n = count(shown);
+            assert!(
+                n <= 36 && n * 2 < whole,
+                "{}: {n} of {whole}",
+                super::DESIGN_SUBTABS[tab].name
+            );
+        }
+    }
+
+    #[test]
+    fn a_tool_is_found_on_its_sub_tab() {
+        let toolbar = super::Toolbar::new();
+        assert_eq!(toolbar.subtab_of("align_left"), Some(2));
+        assert_eq!(toolbar.subtab_of("move"), Some(1));
+        assert_eq!(toolbar.subtab_of("sculpt"), Some(3));
+        assert_eq!(toolbar.subtab_of("save"), None, "always shown");
+        assert_eq!(toolbar.subtab_of("no_such_tool"), None);
     }
 
     #[test]
