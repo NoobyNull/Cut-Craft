@@ -218,24 +218,55 @@ fn on_machine(toolpath: &Toolpath, laser: bool, limits: &Limits, found: &mut Vec
     }
 }
 
+/// The lowest and highest corners of what `moves` reach; `None` without any.
+fn bounds<'a>(moves: impl Iterator<Item = &'a crate::toolpath::Move>) -> Option<(DVec3, DVec3)> {
+    moves.fold(None, |reached, m| {
+        Some(reached.map_or((m.to, m.to), |(lo, hi): (DVec3, DVec3)| {
+            (lo.min(m.to), hi.max(m.to))
+        }))
+    })
+}
+
+/// How far across and along the bed the toolpaths go in one file: in a tiled job, each tile
+/// is saved on its own, so the largest tile's.
+fn bed_span(doc: &Document, toolpaths: &[&Toolpath]) -> Option<DVec3> {
+    let Some(tiling) = doc.tiling else {
+        let (lo, hi) = bounds(toolpaths.iter().flat_map(|t| &t.moves))?;
+        return Some(hi - lo);
+    };
+    let saved = Document {
+        job: doc.job.clone(),
+        toolpaths: (1..)
+            .map(crate::document::EntityId)
+            .zip(toolpaths.iter().map(|&t| t.clone()))
+            .collect(),
+        ..Document::default()
+    };
+    tiling
+        .tiles(doc.job.area())
+        .into_iter()
+        .filter_map(|tile| {
+            let part = tiling.tiled(&saved, tile);
+            let (lo, hi) = bounds(part.toolpaths.values().flat_map(|t| &t.moves))?;
+            Some(hi - lo)
+        })
+        .reduce(DVec3::max)
+}
+
 /// Whether the toolpaths fit the machine's bed and Z travel.
 fn machine(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits, found: &mut Vec<Finding>) {
-    let moves = || toolpaths.iter().flat_map(|t| &t.moves);
-    let Some(first) = moves().next() else {
+    let Some((lo, hi)) = bounds(toolpaths.iter().flat_map(|t| &t.moves)) else {
         return;
     };
-    let (lo, hi) = moves().fold((first.to, first.to), |(lo, hi), m| {
-        (lo.min(m.to), hi.max(m.to))
-    });
-    let span = hi - lo;
+    let span = bed_span(doc, toolpaths).unwrap_or(hi - lo);
     let [width, height] = limits.bed;
     // a rotary job's moves go round the material, not along the bed
     let wraps = doc.job.rotary.is_some();
     if !wraps && width > 0.0 && height > 0.0 && (span.x > width || span.y > height) {
         found.push(Finding::error(format!(
             "The toolpaths cover {:.0} × {:.0} mm, more than the bed of {} ({width:.0} × \
-             {height:.0} mm). Make the job smaller, split it with Toolpath Tiling, or pick \
-             the right machine",
+             {height:.0} mm). Make the job smaller, split it with Toolpath Tiling (or make \
+             its tiles smaller), or pick the right machine",
             span.x, span.y, limits.name
         )));
     }
@@ -552,6 +583,33 @@ mod tests {
                 .iter()
                 .any(|m| m.contains("not loaded in the tool changer"))
         );
+    }
+
+    #[test]
+    fn a_tiled_job_fits_the_bed_when_each_tile_does() {
+        let limits = Limits {
+            name: "Desktop".into(),
+            bed: [100.0, 100.0],
+            ..Limits::default()
+        };
+        let wide = slot("Slot", 50.0, 20.0, 180.0, 3.0);
+        let mut doc = job();
+        assert_eq!(check(&doc, &[&wide], &limits).len(), 1, "too wide untiled");
+        doc.tiling = Some(crate::tiling::Tiling {
+            width: 80.0,
+            height: 80.0,
+            overlap: 0.0,
+            ..crate::tiling::Tiling::default()
+        });
+        assert_eq!(check(&doc, &[&wide], &limits), vec![]);
+        // tiles bigger than the bed still do not fit
+        doc.tiling = Some(crate::tiling::Tiling {
+            width: 150.0,
+            height: 150.0,
+            overlap: 0.0,
+            ..crate::tiling::Tiling::default()
+        });
+        assert_eq!(check(&doc, &[&wide], &limits).len(), 1);
     }
 
     #[test]
