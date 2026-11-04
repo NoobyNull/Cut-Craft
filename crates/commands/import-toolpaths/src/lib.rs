@@ -143,6 +143,13 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
     let mut next_tool = None;
     for (line_number, raw) in (1usize..).zip(text.lines()) {
         let words = words(raw).map_err(|e| format!("line {line_number}: {e}"))?;
+        // a post that changes tools by hand names the next tool in a comment, then pauses
+        if let Some(t) = tool_in(&comment_of(raw)) {
+            next_tool = Some(t);
+            if let Some(first) = parts.last_mut().filter(|p| p.moves.is_empty()) {
+                first.tool = Some(t.round() as u32);
+            }
+        }
         if words.is_empty() {
             continue;
         }
@@ -171,7 +178,8 @@ pub fn parse(text: &str, job: &Job) -> Result<Vec<Part>, String> {
                         _ => {}
                     }
                 }
-                'M' if v.round() as i64 == 6 => {
+                // M6, or a pause (M0 / M1): how grbl's posts change tools by hand
+                'M' if matches!(v.round() as i64, 0 | 1 | 6) => {
                     new_part(&mut parts, value('T').or(next_tool));
                 }
                 'T' => {
@@ -281,6 +289,43 @@ fn new_part(parts: &mut Vec<Part>, tool: Option<f64>) {
             ..Part::default()
         }),
     }
+}
+
+/// The tool number a comment names (`(Change to T3: 6mm End Mill)`): a `T` standing on
+/// its own before digits, as posts that change tools by hand write it.
+fn tool_in(comment: &str) -> Option<f64> {
+    let bytes = comment.as_bytes();
+    (0..bytes.len()).find_map(|i| {
+        let alone = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
+        if !(alone && bytes[i].eq_ignore_ascii_case(&b'T')) {
+            return None;
+        }
+        let digits: String = comment[i + 1..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        let after = comment[i + 1 + digits.len()..].chars().next();
+        if digits.is_empty() || after.is_some_and(|c| c.is_ascii_alphanumeric()) {
+            return None;
+        }
+        digits.parse().ok()
+    })
+}
+
+/// A line's comments (in brackets or after `;`), run together.
+fn comment_of(line: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0;
+    for ch in line.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth = (depth - 1).max(0),
+            ';' if depth == 0 => depth = 1,
+            _ if depth > 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// A line's words, a letter and its number each, comments and line numbers left out.
@@ -485,6 +530,19 @@ mod tests {
         assert_eq!((parts[0].tool, parts[1].tool), (Some(1), Some(2)));
         assert_eq!(parts[0].spindle, Some(18000.0));
         assert_eq!((parts[0].feed, parts[1].feed), (Some(500.0), Some(800.0)));
+    }
+
+    #[test]
+    fn a_pause_for_a_tool_changed_by_hand_starts_a_part_named_from_its_comment() {
+        // as Cut Craft's grbl posts write a tool change
+        let text = "(First tool T1: 6mm End Mill, fitted and zeroed before starting)\n\
+                    G0 X0 Y0 Z5\nG1 Z-1 F500\nM5\n\
+                    (Change to T4: 60 V-Bit, zero it, then resume)\nM0\nG0 X5 Y5\nG1 Z-1\n";
+        let parts = parse(text, &job()).unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!((parts[0].tool, parts[1].tool), (Some(1), Some(4)));
+        assert_eq!(tool_in("Toolpath: Text, tool: 3mm"), None, "no T number");
+        assert_eq!(tool_in("Test T12"), Some(12.0));
     }
 
     #[test]

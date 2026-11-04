@@ -354,16 +354,25 @@ pub fn in_shadow(
     }
 }
 
-/// [`brightness`], darkened to the light that reaches round the shadow where the cell is
-/// [`in_shadow`].
+/// For each cell, row by row, whether it is [`in_shadow`]: traced once for a whole mesh,
+/// each cell's ray walked a single time however many quads share it.
+pub fn shadow_map(material: &Material, light: DVec3) -> Vec<bool> {
+    let top = shadow_top(material);
+    (0..material.rows)
+        .flat_map(|row| (0..material.columns).map(move |column| (column, row)))
+        .map(|cell| in_shadow(material, cell, light, top))
+        .collect()
+}
+
+/// [`brightness`], darkened to the ambient light alone where the cell is `shadowed`.
 pub fn shadowed_brightness(
     material: &Material,
     (column, row): (usize, usize),
     light: DVec3,
-    top: f64,
+    shadowed: bool,
 ) -> f64 {
     let lit = brightness(material, column, row, light);
-    if in_shadow(material, (column, row), light, top) {
+    if shadowed {
         // lit from below the surface: no direct light, only the ambient, still darker deeper
         lit.min(brightness(material, column, row, DVec3::NEG_Z))
     } else {
@@ -987,7 +996,7 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
         None => vec![],
     };
     // with shadows, the surface's highest point, found once
-    let highest = look.shadows.then(|| shadow_top(m));
+    let shadows = look.shadows.then(|| shadow_map(m, look.light));
     for row in (1..m.rows).filter(|_| look.wrap.is_none()) {
         for column in 1..m.columns {
             let corners = [
@@ -1005,8 +1014,8 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
             }
             let grain = |c, r| look.grain.map_or(1.0, |g| g.on_cells(m.cell).at(top(c, r)));
             let colour = |c: usize, r: usize| {
-                let b = if let Some(highest) = highest {
-                    shadowed_brightness(m, (c, r), look.light, highest)
+                let b = if let Some(shadows) = &shadows {
+                    shadowed_brightness(m, (c, r), look.light, shadows[r * m.columns + c])
                 } else {
                     brightness(m, c, r, look.light)
                 };
@@ -1954,12 +1963,16 @@ mod tests {
             !in_shadow(&m, (41, 50), DVec3::Z, top),
             "a light straight above"
         );
+        let map = shadow_map(&m, LIGHT);
+        let at = |c: usize| map[50 * m.columns + c];
+        assert!(at(41) && !at(55) && !at(10), "the map agrees, cell by cell");
         assert!(
-            shadowed_brightness(&m, (41, 50), LIGHT, top) < brightness(&m, 41, 50, LIGHT),
+            shadowed_brightness(&m, (41, 50), LIGHT, at(41)) < brightness(&m, 41, 50, LIGHT),
             "drawn darker"
         );
         assert!(
-            (shadowed_brightness(&m, (55, 50), LIGHT, top) - brightness(&m, 55, 50, LIGHT)).abs()
+            (shadowed_brightness(&m, (55, 50), LIGHT, at(55)) - brightness(&m, 55, 50, LIGHT))
+                .abs()
                 < 1e-12,
             "the lit floor unchanged"
         );
