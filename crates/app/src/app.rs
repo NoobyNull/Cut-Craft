@@ -379,8 +379,9 @@ fn dialog_size(ctx: &egui::Context) -> egui::Vec2 {
 const LOGO: &[u8] = include_bytes!("../../../assets/cut-craft.svg");
 /// How long the 3D view stays still before it is drawn finely, seconds.
 const SETTLE_SECONDS: f64 = 0.25;
-/// How often unsaved work is copied for recovery after a crash, seconds.
-const AUTOSAVE_SECONDS: f64 = 30.0;
+/// How often unsaved work is copied for recovery after a crash, seconds, until Options says
+/// otherwise.
+pub(crate) const AUTOSAVE_SECONDS: f64 = 30.0;
 /// Drawing tools that take the whole path the pointer was dragged along, as `points`.
 const STROKE_TOOLS: [&str; 3] = ["draw_freehand", "sculpt", "interactive_vector_trim"];
 /// How far one notch of a mouse wheel scrolls, in points, as egui reports a line.
@@ -441,10 +442,8 @@ const TOP_BAR_TOGGLES: [&str; 5] = [
 /// The level menu's Select Components and Export as 3D Clipart: these, then the level's id.
 pub const SELECT_LEVEL: &str = "select_level_components:";
 pub const EXPORT_LEVEL: &str = "export_level_clipart:";
-/// Text sizes and control heights are egui's times this, to read easily.
-// ponytail: fixed until Options has a text size
-const TEXT_SCALE: f32 = 1.15;
-/// Lines (widget outlines, the 2D view's vectors) are egui's widths times this.
+/// Lines (widget outlines, the 2D view's vectors) are egui's widths times this, at the
+/// standard text size; they grow and shrink with it.
 const LINE_SCALE: f32 = 1.5;
 /// Easy-to-read UI fonts, the first installed used; egui's own stay behind for symbols.
 const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
@@ -722,6 +721,8 @@ struct CutCraftApp {
     toolbar: gui::Toolbar,
     status: gui::StatusBar,
     design_tab: usize,
+    /// The Design tab's open sub-tab (see [`gui::DESIGN_SUBTABS`]).
+    design_subtab: usize,
     view: View,
     cursor: Option<Point>,
     form: Option<OpenForm>,
@@ -934,7 +935,7 @@ struct CutCraftApp {
     import_queue: std::collections::VecDeque<(std::path::PathBuf, Option<crate::clipart::ToLevel>)>,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
     recent_path: Option<std::path::PathBuf>,
-    /// Where unsaved work is copied every [`AUTOSAVE_SECONDS`] for the next run to recover;
+    /// Where unsaved work is copied (as often as Options says) for the next run to recover;
     /// `None` keeps no copy (tests).
     recovery_path: Option<std::path::PathBuf>,
     /// The history revision and input time (seconds) of the last recovery copy.
@@ -1366,9 +1367,11 @@ fn shortcut_label<'a>(ctx: &egui::Context, text: &'a str) -> Cow<'a, str> {
     }
 }
 
-/// An easier-to-read look: a heavier system font, larger text and thicker lines; on a Mac,
-/// the Mac's own font and look ([`mac`]).
-fn readable(ctx: &egui::Context) {
+/// An easier-to-read look: a heavier system font, text and controls `text_scale` times egui's
+/// (Options ▸ Appearance ▸ Text size), and lines thicker to match; on a Mac, the Mac's own
+/// font and look ([`mac`]).
+fn readable(ctx: &egui::Context, text_scale: f32) {
+    let line_scale = LINE_SCALE * text_scale / 1.15;
     let mut fonts = egui::FontDefinitions::default();
     let families: &[&str] = if mac::is_mac(ctx) {
         &mac::UI_FONTS
@@ -1390,9 +1393,9 @@ fn readable(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
     ctx.all_styles_mut(|style| {
         for font in style.text_styles.values_mut() {
-            font.size *= TEXT_SCALE;
+            font.size *= text_scale;
         }
-        style.spacing.interact_size *= TEXT_SCALE;
+        style.spacing.interact_size *= text_scale;
         let v = &mut style.visuals;
         for w in [
             &mut v.widgets.noninteractive,
@@ -1401,11 +1404,11 @@ fn readable(ctx: &egui::Context) {
             &mut v.widgets.active,
             &mut v.widgets.open,
         ] {
-            w.fg_stroke.width *= LINE_SCALE;
-            w.bg_stroke.width *= LINE_SCALE;
+            w.fg_stroke.width *= line_scale;
+            w.bg_stroke.width *= line_scale;
         }
-        v.window_stroke.width *= LINE_SCALE;
-        v.selection.stroke.width *= LINE_SCALE;
+        v.window_stroke.width *= line_scale;
+        v.selection.stroke.width *= line_scale;
     });
     if mac::is_mac(ctx) {
         mac::style(ctx);
@@ -1972,6 +1975,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     let settings = crate::options::Options::load();
     let (wayland, theme) = (settings.advanced.wayland_native, settings.appearance.theme);
     let frame = settings.appearance.system_title_bar;
+    let text_scale = settings.appearance.text_scale();
     let x11 = !wayland && std::env::var_os("DISPLAY").is_some();
     let options = eframe::NativeOptions {
         event_loop_builder: Some(Box::new(move |builder| {
@@ -2023,7 +2027,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         Box::new(|cc| {
             cc.egui_ctx.set_theme(theme.preference());
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            readable(&cc.egui_ctx);
+            readable(&cc.egui_ctx, text_scale);
             let mut app = CutCraftApp::new();
             app.title_bar_at_start = frame;
             if let Some(rs) = &cc.wgpu_render_state {

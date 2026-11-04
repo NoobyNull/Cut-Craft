@@ -170,6 +170,20 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   tool on its own. The groups are `FLYOUTS` in `crates/app/src/flyout.rs`. Two variants are
   Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle from
   Edge (the drag is the diameter).
+- **Design sub-tabs** (Cut Craft's own choice, not Aspire's) [inf]: Aspire's Drawing and
+  Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
+  Operations and 2D View Control at the top, then four sub-tabs across the page: **Create**
+  (Create Vectors), **Edit** (Edit Objects, Transform Objects), **Arrange** (Align Objects,
+  Offset and Layout, Array Objects) and **Model** (Shape Creation, Shape Editing), so a page
+  shows a couple of dozen buttons instead of sixty-odd and a beginner looks under a word that
+  says what the tools are for. Each sub-tab says so on hover. A tool run from a menu, a
+  shortcut or Find Tool opens its sub-tab, so it shows highlighted where it lives. Favourites,
+  the Rail and Ribbon layouts and Find Tool are as before. The sub-tabs are `DESIGN_SUBTABS`
+  in `crates/app/src/gui.rs`.
+- **Icon style** [inf]: every icon is drawn by `scripts/make_icons.py` (and the 3D ones by
+  `scripts/make_3d_icons.py`) in one style: one slate ink for outlines, pale cool fills, one
+  warm accent for what the tool does, green for toolpaths, no stroke thinner than two units
+  of 48, so each reads as one shape in a 36-pixel button on either theme.
 
 ### Create Fillets [obs] (help: Create Fillets, V12.5; Aspire 12.5 trial, 2026-10-25)
 - Fillets corners where two **straight** spans meet; corners touching arcs or curves cannot be filleted. The form: **Fillet / Tool Radius** and a type: **Normal** (a rounded corner of the radius), **Dog-Bone** (a relief circle the radius whose edge touches the sharp corner: for slots clearly wider than the cutter), **T-Bone** (the relief circle pushed sideways into one side: for slots about as wide as the cutter; the trial put it in the longer side when the corner itself was clicked) and **Plasma / Drag Knife** (the two sides run on past the corner and join in a loop outside it, so the cutter turns there).

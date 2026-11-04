@@ -10,7 +10,8 @@ use cut_craft_core::Drag;
 use eframe::egui;
 use std::collections::BTreeMap;
 
-/// How long a press on a flyout's button opens it instead of running the tool shown, in seconds.
+/// How long a press on a flyout's button opens it instead of running the tool shown, in
+/// seconds, until Options ▸ General says otherwise.
 pub const HOLD_SECONDS: f64 = 0.4;
 
 /// The share of a button's side its corner arrow takes, measured from the bottom-right corner.

@@ -6,20 +6,25 @@ Stdlib only. Icons are 48 x 48 SVGs; the dialog pictures are the same, drawn lar
 import math, os, sys
 
 # ---- style -------------------------------------------------------------------------------
-INK = "#2b63c6"      # vectors and outlines
-LIGHT = "#dbe8fb"    # fills behind vectors
-ACC = "#f28c28"      # what the tool does: the new part, the arrow, the highlight
-TP = "#16a05a"       # toolpaths
-TPL = "#c9efd9"
-RED = "#e04646"
-GREY = "#8a93a3"
-DARK = "#3b4352"
-WOOD = "#f1d6a8"     # material
-WOODD = "#b8874c"
-MODEL = "#9ec0ee"    # 3D components
-MODELD = "#5b8fd8"
+# A calm set: one slate ink for every outline, one warm accent for what the tool does, pale
+# cool fills, and nothing thinner than two units, so each icon reads as one shape in a
+# 36-pixel button on either theme (the orange and the blue used to fight for attention).
+INK = "#3d4a5f"      # vectors and outlines
+LIGHT = "#e4eaf2"    # fills behind vectors
+ACC = "#e2892e"      # what the tool does: the new part, the arrow, the highlight
+ACCL = "#fbe7d0"     # fills behind the new part
+TP = "#2f9a67"       # toolpaths
+TPL = "#d2eedd"
+RED = "#d9534f"
+GREY = "#9aa3b2"
+DARK = "#2f3a4a"
+WOOD = "#ecd3a6"     # material
+WOODD = "#a9804f"
+MODEL = "#b3c8e4"    # 3D components
+MODELD = "#6c8fc0"
 WHITE = "#ffffff"
-SW = 3               # the stroke width every icon shares
+SW = 3.2             # the stroke width every icon shares
+MIN_SW = 2           # no stroke thinner: 1.5 units all but vanished in a button
 
 
 def attrs(**a):
@@ -32,8 +37,10 @@ def attrs(**a):
 
 
 def stroke(c, w, dash, fill="none", cap="round"):
-    return dict(stroke=c, stroke_width=w, fill=fill, stroke_linecap=cap,
-                stroke_linejoin="round", stroke_dasharray=dash)
+    # `fill=None` once left the attribute out, which SVG reads as black: a dashed box that
+    # should have been see-through came out as a black square
+    return dict(stroke=c, stroke_width=max(w, MIN_SW) if w else w, fill=fill or "none",
+                stroke_linecap=cap, stroke_linejoin="round", stroke_dasharray=dash)
 
 
 def line(x1, y1, x2, y2, c=INK, w=SW, dash=None):
@@ -228,7 +235,7 @@ def magnifier(cx=20, cy=20, r=12, c=DARK):
 
 
 def picture(x=6, y=9, w=36, h=30, c=INK):
-    return (rect(x, y, w, h, 2, c, 2.5, "#e9f2ff")
+    return (rect(x, y, w, h, 2, c, 2.5, LIGHT)
             + solid(f"M{x + 2},{y + h - 2} L{x + w * 0.35},{y + h * 0.45} L{x + w * 0.55},{y + h * 0.72} L{x + w * 0.7},{y + h * 0.55} L{x + w - 2},{y + h - 2} Z", "#7fb07a")
             + dot(x + w * 0.75, y + h * 0.3, 3.5, "#f2b632"))
 
@@ -240,20 +247,20 @@ def clipboard(x=9, y=6, w=30, h=36):
 
 def bit(kind, x=24, top=6, bottom=42, r=8, c=DARK):
     """A cutter in side view: its shank, then the cutting end."""
-    shank = rect(x - r * 0.55, top, r * 1.1, (bottom - top) * 0.45, 1, c, 2, "#c9ced8")
+    shank = rect(x - r * 0.55, top, r * 1.1, (bottom - top) * 0.45, 1, c, 2, "#d2d7df")
     y0 = top + (bottom - top) * 0.45
     if kind == "end_mill":
-        cut = path(f"M{x - r},{y0} H{x + r} V{bottom} H{x - r} Z", c, 2.5, "#aab3c2")
+        cut = path(f"M{x - r},{y0} H{x + r} V{bottom} H{x - r} Z", c, 2.5, "#b4bcc8")
     elif kind == "ball_nose":
-        cut = path(f"M{x - r},{y0} H{x + r} V{bottom - r} A{r},{r} 0 0 1 {x - r},{bottom - r} Z", c, 2.5, "#aab3c2")
+        cut = path(f"M{x - r},{y0} H{x + r} V{bottom - r} A{r},{r} 0 0 1 {x - r},{bottom - r} Z", c, 2.5, "#b4bcc8")
     elif kind == "tapered_ball_nose":
         t = r * 0.35
-        cut = path(f"M{x - r},{y0} H{x + r} L{x + t},{bottom - t} A{t},{t} 0 0 1 {x - t},{bottom - t} Z", c, 2.5, "#aab3c2")
+        cut = path(f"M{x - r},{y0} H{x + r} L{x + t},{bottom - t} A{t},{t} 0 0 1 {x - t},{bottom - t} Z", c, 2.5, "#b4bcc8")
     elif kind == "radiused":
         k = r * 0.45
-        cut = path(f"M{x - r},{y0} H{x + r} V{bottom - k} Q{x + r},{bottom} {x + r - k},{bottom} H{x - r + k} Q{x - r},{bottom} {x - r},{bottom - k} Z", c, 2.5, "#aab3c2")
+        cut = path(f"M{x - r},{y0} H{x + r} V{bottom - k} Q{x + r},{bottom} {x + r - k},{bottom} H{x - r + k} Q{x - r},{bottom} {x - r},{bottom - k} Z", c, 2.5, "#b4bcc8")
     else:  # v_bit
-        cut = path(f"M{x - r},{y0} H{x + r} V{y0 + 3} L{x},{bottom} L{x - r},{y0 + 3} Z", c, 2.5, "#aab3c2")
+        cut = path(f"M{x - r},{y0} H{x + r} V{y0 + 3} L{x},{bottom} L{x - r},{y0 + 3} Z", c, 2.5, "#b4bcc8")
     flutes = line(x - r * 0.5, y0 + 4, x + r * 0.4, y0 + (bottom - y0) * 0.55, c, 1.5)
     return shank + cut + flutes
 
@@ -309,7 +316,7 @@ def bars(horizontal, ref, lengths, offsets, c=INK, fill=LIGHT):
 def greyed(svg):
     for colour in (INK, ACC, TP, MODELD, RED):
         svg = svg.replace(colour, GREY)
-    for colour in (LIGHT, TPL, MODEL):
+    for colour in (LIGHT, TPL, MODEL, ACCL):
         svg = svg.replace(colour, "#e6e8ec")
     return svg
 
@@ -328,7 +335,7 @@ def icon(name):
 # common
 I["common/add.svg"] = lambda: [badge(24, 24, 19, TP), plus(24, 24, 10, WHITE, 5)]
 I["common/add_tool.svg"] = lambda: [bit("end_mill", 18, 5, 43, 7), badge(35, 33, 10, TP, plus(35, 33, 5, WHITE, 3.5))]
-I["common/copy_duplicate.svg"] = lambda: [rect(6, 6, 24, 24, 3, INK, SW, LIGHT), rect(18, 18, 24, 24, 3, ACC, SW, "#ffe9d2")]
+I["common/copy_duplicate.svg"] = lambda: [rect(6, 6, 24, 24, 3, INK, SW, LIGHT), rect(18, 18, 24, 24, 3, ACC, SW, ACCL)]
 I["common/delete.svg"] = lambda: [path("M12,14 L14,42 H34 L36,14 Z", RED, SW, "#fde2e2"), line(8, 12, 40, 12, RED), path("M19,12 V7 H29 V12", RED, 2.5),
                                   line(20, 20, 21, 36, RED, 2.5), line(28, 20, 27, 36, RED, 2.5)]
 I["common/edit.svg"] = lambda: [line(8, 41, 30, 41, GREY, 2.5), pencil(8, 40, 1.35)]
@@ -374,11 +381,11 @@ def spacing(direction):
     boxes = []
     if direction in ("lr", "rl"):
         for i, x in enumerate((5, 19, 33)):
-            boxes.append(rect(x, 22, 10, 10, 1.5, INK, 2.5, LIGHT if i else "#ffe9d2"))
+            boxes.append(rect(x, 22, 10, 10, 1.5, INK, 2.5, LIGHT if i else ACCL))
         a = arrow(8, 13, 40, 13) if direction == "lr" else arrow(40, 13, 8, 13)
     else:
         for i, y in enumerate((5, 19, 33)):
-            boxes.append(rect(22, y, 10, 10, 1.5, INK, 2.5, LIGHT if i else "#ffe9d2"))
+            boxes.append(rect(22, y, 10, 10, 1.5, INK, 2.5, LIGHT if i else ACCL))
         a = arrow(13, 8, 13, 40) if direction == "tb" else arrow(13, 40, 13, 8)
     return boxes + [a]
 
@@ -391,6 +398,9 @@ I["drawing/align/bottom_to_top.svg"] = lambda: spacing("bt")
 # create vectors
 cv = "drawing/create_vectors/"
 I[cv + "draw_circle.svg"] = lambda: [circ(24, 24, 17, INK, SW, LIGHT), node(24, 24, 4.5, ACC), node(41, 24)]
+# the flyout variants (crates/app/src/flyout.rs): the same shape, drawn from its edge or middle
+I[cv + "draw_circle_from_edge.svg"] = lambda: [circ(24, 24, 17, INK, SW, LIGHT), line(7, 24, 41, 24, INK, 2.5, "4 3"), node(7, 24, 4.5, ACC), node(41, 24)]
+I[cv + "draw_rectangle_from_center.svg"] = lambda: [rect(6, 11, 36, 26, 0, INK, SW, LIGHT), line(24, 24, 42, 37, INK, 2.5, "4 3"), node(24, 24, 4.5, ACC), node(42, 37)]
 I[cv + "draw_ellipse.svg"] = lambda: [ell(24, 24, 19, 12, INK, SW, LIGHT), node(24, 24, 4.5, ACC)]
 I[cv + "draw_rectangle.svg"] = lambda: [rect(6, 11, 36, 26, 0, INK, SW, LIGHT), node(6, 11), node(42, 37, 4.5, ACC)]
 I[cv + "draw_polygon.svg"] = lambda: [pl(poly_pts(24, 24, 18), INK, SW, LIGHT, True)] + [node(x, y) for x, y in poly_pts(24, 24, 18)]
@@ -404,18 +414,20 @@ I[cv + "draw_text.svg"] = lambda: [text("T", 11, 7, 32, INK, 5), line(6, 43, 42,
 I[cv + "edit_text.svg"] = lambda: [text("T", 5, 6, 28, INK, 4.5), pencil(23, 42, 0.95)]
 I[cv + "convert_text_to_curves.svg"] = lambda: [pl([(8, 42), (24, 6), (40, 42), (33, 42), (29, 33), (19, 33), (15, 42)], INK, 2.5, LIGHT, True),
                                                 pl([(21, 27), (24, 19), (27, 27)], INK, 2.5, WHITE, True)] + [node(x, y, 4, ACC) for x, y in [(8, 42), (24, 6), (40, 42), (15, 42), (33, 42)]]
-I[cv + "auto_layout_text.svg"] = lambda: [rect(5, 5, 38, 38, 2, ACC, 2.5, None, "4 3"), text("TA", 9, 10, 12, INK, 3), text("AT", 9, 26, 12, INK, 3)]
+# text flowed to fill a box: a dashed boundary, a T, and lines of text sized to its width
+I[cv + "auto_layout_text.svg"] = lambda: [rect(5, 5, 38, 38, 2, ACC, 2.5, None, "4 3"), text("T", 10, 10, 14, INK, 3.5),
+                                          line(24, 13, 38, 13, INK, 2.5), line(24, 20, 38, 20, INK, 2.5), line(10, 29, 38, 29, INK, 2.5), line(10, 36, 30, 36, INK, 2.5)]
 I[cv + "text_on_a_curve.svg"] = lambda: [path("M5,40 Q24,8 43,40", GREY, 2, dash="3 3")] + [
     group([text("T", -4, -12, 10, INK, 3)], f"translate({x},{y}) rotate({r})") for x, y, r in [(11, 30, -45), (24, 22, 0), (37, 30, 45)]]
-I[cv + "array_copy.svg"] = lambda: [rect(5 + 14 * c, 8 + 14 * r, 10, 10, 1.5, INK if (r, c) == (0, 0) else ACC, 2.5, LIGHT if (r, c) == (0, 0) else "#ffe9d2") for r in range(3) for c in range(3) if r < 2 or True][:9]
-I[cv + "circular_copy.svg"] = lambda: [circ(24, 24, 15, GREY, 1.5, dash="3 3")] + [circ(24 + 15 * math.cos(math.radians(a)), 24 + 15 * math.sin(math.radians(a)), 4.5, INK if a == -90 else ACC, 2.5, LIGHT if a == -90 else "#ffe9d2") for a in range(-90, 270, 60)]
+I[cv + "array_copy.svg"] = lambda: [rect(5 + 14 * c, 8 + 14 * r, 10, 10, 1.5, INK if (r, c) == (0, 0) else ACC, 2.5, LIGHT if (r, c) == (0, 0) else ACCL) for r in range(3) for c in range(3) if r < 2 or True][:9]
+I[cv + "circular_copy.svg"] = lambda: [circ(24, 24, 15, GREY, 1.5, dash="3 3")] + [circ(24 + 15 * math.cos(math.radians(a)), 24 + 15 * math.sin(math.radians(a)), 4.5, INK if a == -90 else ACC, 2.5, LIGHT if a == -90 else ACCL) for a in range(-90, 270, 60)]
 # Two open ends run on at an angle until they cross: the crossing point is where they get closed.
 I[cv + "close_extend_vector.svg"] = lambda: [
     line(6, 42, 16, 26), line(42, 42, 32, 26),
     line(16, 26, 24.1, 13, ACC, 2.5, "3 3"), line(32, 26, 23.9, 13, ACC, 2.5, "3 3"),
     line(24.1, 13, 27.9, 7, ACC, 1.5), line(23.9, 13, 20.1, 7, ACC, 1.5),
     dot(24, 13, 3.2), node(16, 26), node(32, 26)]
-I[cv + "copy_along_vectors.svg"] = lambda: [path("M5,38 C14,6 32,44 43,10", GREY, 2, dash="3 3")] + [rect(x - 4, y - 4, 8, 8, 1, ACC, 2.5, "#ffe9d2") for x, y in [(8, 30), (17, 20), (26, 25), (35, 26), (42, 14)]]
+I[cv + "copy_along_vectors.svg"] = lambda: [path("M5,38 C14,6 32,44 43,10", GREY, 2, dash="3 3")] + [rect(x - 4, y - 4, 8, 8, 1, ACC, 2.5, ACCL) for x, y in [(8, 30), (17, 20), (26, 25), (35, 26), (42, 14)]]
 I[cv + "create_fillets.svg"] = lambda: [pl([(8, 6), (8, 40), (42, 40)], GREY, 2, dash="3 3"), path("M8,6 V24 A16,16 0 0 0 24,40 H42", INK, SW), path("M8,24 A16,16 0 0 0 24,40", ACC, 4)]
 I[cv + "dimensions.svg"] = lambda: [rect(8, 22, 32, 18, 0, INK, 2.5, LIGHT), line(8, 8, 8, 20, GREY, 1.5), line(40, 8, 40, 20, GREY, 1.5), darrow(9, 13, 39, 13)]
 I[cv + "distort_object.svg"] = lambda: [path("M6,8 Q24,2 42,8 Q48,24 42,40 Q24,46 6,40 Q0,24 6,8 Z", INK, SW, LIGHT),
@@ -429,7 +441,7 @@ I[cv + "fit_curves_to_vectors.svg"] = lambda: [
 I[cv + "group.svg"] = lambda: [rect(4, 4, 40, 40, 4, ACC, 2.5, None, "5 3"), rect(10, 10, 15, 15, 1.5, INK, 2.5, LIGHT), circ(30, 30, 8, INK, 2.5, LIGHT)]
 I[cv + "measure_inspect.svg"] = lambda: [group([rect(-21, -6, 42, 12, 2, WOODD, 2.5, "#fbe3a9")] + [line(x, -6, x, -6 + (6 if x % 10 == 0 else 3), WOODD, 1.5) for x in range(-16, 20, 5)], "translate(24,24) rotate(-45)")]
 I[cv + "rounded_shape_span.svg"] = lambda: [path("M15,14 H33 A10,10 0 0 1 33,34 H15 A10,10 0 0 1 15,14 Z", INK, SW, LIGHT), path("M33,14 A10,10 0 0 1 33,34", ACC, 4)]
-I[cv + "shapes.svg"] = lambda: [circ(15, 15, 9, INK, 2.5, LIGHT), rect(26, 6, 17, 17, 1.5, INK, 2.5, LIGHT), pl([(6, 42), (15, 27), (24, 42)], INK, 2.5, LIGHT, True), pl(star_pts(34, 35, 9, 4), ACC, 2.5, "#ffe9d2", True)]
+I[cv + "shapes.svg"] = lambda: [circ(15, 15, 9, INK, 2.5, LIGHT), rect(26, 6, 17, 17, 1.5, INK, 2.5, LIGHT), pl([(6, 42), (15, 27), (24, 42)], INK, 2.5, LIGHT, True), pl(star_pts(34, 35, 9, 4), ACC, 2.5, ACCL, True)]
 I[cv + "trace_bitmap.svg"] = lambda: [rect(6 + 6 * c, 6 + 6 * r, 6, 6, 0, None, 0, "#9aa6b8" if (r - 2.5) ** 2 + (c - 2.5) ** 2 < 7 else "#e3e7ee") for r in range(6) for c in range(6)] + [circ(24, 24, 13, ACC, 3)]
 I[cv + "vector_boundary.svg"] = lambda: [rect(10, 12, 12, 12, 1.5, INK, 2.5, LIGHT), circ(31, 30, 8, INK, 2.5, LIGHT), path("M7,9 H25 L42,24 V38 Q42,41 39,41 H10 Q7,41 7,38 Z", ACC, 2.5, dash="4 3")]
 I[cv + "vector_texture.svg"] = lambda: [rect(5, 5, 38, 38, 2, INK, 2.5, LIGHT)] + [path(f"M8,{y} q5,-4 10,0 t10,0 t10,0", INK, 2) for y in (13, 21, 29, 37)]
@@ -443,7 +455,7 @@ I[eo + "node_edit.svg"] = lambda: [path("M5,36 C10,10 30,10 36,30", INK, SW), no
 I[eo + "transform.svg"] = lambda: [rect(10, 10, 28, 28, 0, INK, 2.5, LIGHT, "4 3")] + [rect(x - 3, y - 3, 6, 6, 0, ACC, 2, WHITE) for x in (10, 24, 38) for y in (10, 24, 38) if (x, y) != (24, 24)] + [dot(24, 24, 2.5, ACC)]
 I[eo + "move.svg"] = lambda: [arrow(24, 24, 24, 5), arrow(24, 24, 24, 43), arrow(24, 24, 5, 24), arrow(24, 24, 43, 24), dot(24, 24, 4, DARK)]
 I[eo + "rotate.svg"] = lambda: [rect(14, 14, 20, 20, 1.5, INK, 2.5, LIGHT), path("M8,18 A17,17 0 0 1 36,9", ACC, SW), pl([(30, 4), (37, 9), (31, 15)], ACC, SW)]
-I[eo + "mirror.svg"] = lambda: [line(24, 4, 24, 44, GREY, 2, "4 3"), pl([(20, 10), (20, 38), (6, 38)], INK, 2.5, LIGHT, True), pl([(28, 10), (28, 38), (42, 38)], ACC, 2.5, "#ffe9d2", True)]
+I[eo + "mirror.svg"] = lambda: [line(24, 4, 24, 44, GREY, 2, "4 3"), pl([(20, 10), (20, 38), (6, 38)], INK, 2.5, LIGHT, True), pl([(28, 10), (28, 38), (42, 38)], ACC, 2.5, ACCL, True)]
 I[eo + "set_size.svg"] = lambda: [rect(6, 14, 26, 26, 1.5, INK, 2.5, LIGHT), darrow(6, 8, 32, 8), darrow(40, 14, 40, 40)]
 I[eo + "job_size_and_position.svg"] = lambda: [material(6, 10, 36, 30), dot(6, 40, 4, ACC), darrow(6, 5, 42, 5, INK), darrow(46, 10, 46, 40, INK)]
 I[eo + "interactive_vector_trim.svg"] = lambda: [line(6, 14, 42, 14, INK, SW), line(24, 6, 24, 42, INK, SW), line(24, 14, 42, 14, RED, 4, "3 3"),
@@ -470,24 +482,24 @@ I[wo + "overlap_intersect.svg"] = lambda: [circ(18, 21, 12, GREY, 2), circ(30, 2
                                            path("M24.0,12.9 A12,12 0 0 1 24.0,35.1 A12,12 0 0 1 24.0,12.9 Z", INK, SW, LIGHT)]
 I[wo + "offset_vectors.svg"] = lambda: [rect(14, 14, 20, 20, 2, INK, SW, LIGHT), rect(6, 6, 36, 36, 9, ACC, 2.5, None, "4 3")]
 I[wo + "name_part.svg"] = lambda: [rect(5, 16, 30, 26, 2, INK, SW, LIGHT), line(31, 19, 35, 24, DARK, 2),
-                                   path("M27,22 L35,28 L43,22 V8 H27 Z", ACC, 2.5, "#ffe9d2"), circ(35, 13, 2.2, ACC, 2, WHITE)]
+                                   path("M27,22 L35,28 L43,22 V8 H27 Z", ACC, 2.5, ACCL), circ(35, 13, 2.2, ACC, 2, WHITE)]
 I[wo + "engrave_part_names.svg"] = lambda: [rect(5, 8, 38, 32, 2, INK, SW, LIGHT), text("A1", 11, 16, 16, ACC, 3.5)]
 I[wo + "vector_texture_fill.svg"] = lambda: [circ(24, 24, 18, INK, SW, LIGHT)] + [line(10 + i * 6, 12 + abs(i - 2) * 1.5, 10 + i * 6, 36 - abs(i - 2) * 1.5, ACC, 2.5) for i in range(5)]
 
 # dialog pictures (were Aspire's bitmaps): grey shape, the dimension in orange
 df = "drawing_forms/"
-I[df + "circle_center.svg"] = lambda: [circ(24, 24, 16, GREY, 2.5, "#f1f3f6"), line(17, 24, 31, 24, ACC, 2.5), line(24, 17, 24, 31, ACC, 2.5), dot(24, 24, 3.5)]
-I[df + "circle_radius.svg"] = lambda: [circ(24, 24, 16, GREY, 2.5, "#f1f3f6"), dot(24, 24, 2.5, GREY), arrow(24, 24, 40, 24)]
-I[df + "width.svg"] = lambda: [rect(8, 16, 32, 24, 0, GREY, 2.5, "#f1f3f6"), darrow(8, 9, 40, 9)]
-I[df + "height.svg"] = lambda: [rect(8, 8, 24, 32, 0, GREY, 2.5, "#f1f3f6"), darrow(39, 8, 39, 40)]
+I[df + "circle_center.svg"] = lambda: [circ(24, 24, 16, GREY, 2.5, "#eef1f5"), line(17, 24, 31, 24, ACC, 2.5), line(24, 17, 24, 31, ACC, 2.5), dot(24, 24, 3.5)]
+I[df + "circle_radius.svg"] = lambda: [circ(24, 24, 16, GREY, 2.5, "#eef1f5"), dot(24, 24, 2.5, GREY), arrow(24, 24, 40, 24)]
+I[df + "width.svg"] = lambda: [rect(8, 16, 32, 24, 0, GREY, 2.5, "#eef1f5"), darrow(8, 9, 40, 9)]
+I[df + "height.svg"] = lambda: [rect(8, 8, 24, 32, 0, GREY, 2.5, "#eef1f5"), darrow(39, 8, 39, 40)]
 I[df + "corner_square.svg"] = lambda: [path("M8,40 V8 H40", GREY, 2.5), path("M8,22 V8 H22", ACC, 4)]
 I[df + "corner_rounded.svg"] = lambda: [path("M8,40 V22 A14,14 0 0 1 22,8 H40", GREY, 2.5), path("M8,24 V22 A14,14 0 0 1 22,8 H24", ACC, 4)]
 I[df + "corner_notched.svg"] = lambda: [path("M8,40 V22 H22 V8 H40", GREY, 2.5), path("M8,24 V22 H22 V8 H24", ACC, 4)]
-I[df + "polygon_center.svg"] = lambda: [pl(poly_pts(24, 24, 17), GREY, 2.5, "#f1f3f6", True), line(18, 24, 30, 24, ACC, 2.5), line(24, 18, 24, 30, ACC, 2.5), dot(24, 24, 3.5)]
-I[df + "polygon_radius.svg"] = lambda: [pl(poly_pts(24, 24, 17), GREY, 2.5, "#f1f3f6", True), dot(24, 24, 2.5, GREY), arrow(24, 24, 24, 7)]
-I[df + "star_center.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5, "#f1f3f6", True), line(19, 25, 29, 25, ACC, 2.5), line(24, 20, 24, 30, ACC, 2.5), dot(24, 25, 3.5)]
-I[df + "star_outer_radius.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5, "#f1f3f6", True), dot(24, 25, 2.5, GREY), arrow(24, 25, 24, 6)]
-I[df + "star_inner_radius.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5, "#f1f3f6", True), dot(24, 25, 2.5, GREY),
+I[df + "polygon_center.svg"] = lambda: [pl(poly_pts(24, 24, 17), GREY, 2.5, "#eef1f5", True), line(18, 24, 30, 24, ACC, 2.5), line(24, 18, 24, 30, ACC, 2.5), dot(24, 24, 3.5)]
+I[df + "polygon_radius.svg"] = lambda: [pl(poly_pts(24, 24, 17), GREY, 2.5, "#eef1f5", True), dot(24, 24, 2.5, GREY), arrow(24, 24, 24, 7)]
+I[df + "star_center.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5, "#eef1f5", True), line(19, 25, 29, 25, ACC, 2.5), line(24, 20, 24, 30, ACC, 2.5), dot(24, 25, 3.5)]
+I[df + "star_outer_radius.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5, "#eef1f5", True), dot(24, 25, 2.5, GREY), arrow(24, 25, 24, 6)]
+I[df + "star_inner_radius.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5, "#eef1f5", True), dot(24, 25, 2.5, GREY),
                                            arrow(24, 25, 24 + 8 * math.cos(math.radians(-54)), 25 + 8 * math.sin(math.radians(-54)), ACC, 2.5, 5)]
 
 # file
@@ -586,10 +598,10 @@ for k in ("round", "angled", "flat", "smooth"):
 I[md + "add_zero_plane.svg"] = lambda: [path("M4,30 L14,18 H44 L34,30 Z", INK, 2.5, LIGHT), plus(38, 38, 6, ACC, 3.5)]
 I[md + "add_draft_to_model.svg"] = lambda: [plane(40), path("M8,38 L16,12 H32 L40,38 Z", INK, SW, MODEL), line(16, 12, 16, 38, ACC, 2, "3 2"), line(32, 12, 32, 38, ACC, 2, "3 2")]
 I[md + "bake_components.svg"] = lambda: [dome(16, 30, 20, 14), dome(30, 30, 20, 14), arrow(24, 32, 24, 42, ACC, 2.5, 6)]
-I[md + "component_levels.svg"] = lambda: [path(f"M4,{y} L14,{y - 8} H44 L34,{y} Z", INK, 2.5, c) for y, c in ((40, LIGHT), (30, MODEL), (20, "#ffe9d2"))]
+I[md + "component_levels.svg"] = lambda: [path(f"M4,{y} L14,{y - 8} H44 L34,{y} Z", INK, 2.5, c) for y, c in ((40, LIGHT), (30, MODEL), (20, ACCL))]
 I[md + "create_component_from_bitmap.svg"] = lambda: [picture(3, 4, 22, 18), arrow(14, 25, 22, 32, ACC, 2.5, 6), dome(32, 44, 26, 16)]
 # a portrait photo, then that person raised as a relief: a head and shoulders on a slab
-I[md + "relief_from_photo.svg"] = lambda: [rect(3, 3, 22, 19, 2, INK, 2.5, "#e9f2ff"), circ(14, 10, 3.5, "#5a4a3c", 0, "#5a4a3c"),
+I[md + "relief_from_photo.svg"] = lambda: [rect(3, 3, 22, 19, 2, INK, 2.5, LIGHT), circ(14, 10, 3.5, "#5a4a3c", 0, "#5a4a3c"),
                                            solid("M7,20 C8,15 11,14.5 14,14.5 S20,15 21,20 Z", "#5a4a3c"),
                                            arrow(18, 24, 24, 30, ACC, 2.5, 6),
                                            path("M18,44 L24,38 H46 L40,44 Z", INK, 2.5, MODEL),
@@ -777,9 +789,9 @@ I[vw + "2d_view.svg"] = lambda: [rect(4, 8, 40, 32, 2, INK, 2.5, LIGHT), text("2
 I[vw + "3d_view.svg"] = lambda: [path("M24,4 L42,13 V35 L24,44 L6,35 V13 Z", INK, 2.5, LIGHT), path("M6,13 L24,22 L42,13 M24,22 V44", INK, 2.5), path("M24,4 L42,13 L24,22 L6,13 Z", INK, 2.5, MODEL)]
 I[vw + "pan.svg"] = lambda: [path("M16,26 V12 A3,3 0 0 1 22,12 V24 V8 A3,3 0 0 1 28,8 V24 V11 A3,3 0 0 1 34,11 V26 V17 A3,3 0 0 1 40,17 V30 Q40,44 28,44 H24 Q17,44 13,37 L8,28 A3,3 0 0 1 13,25 Z", DARK, 2.5, WHITE)]
 I[vw + "zoom_box.svg"] = lambda: [rect(4, 4, 24, 20, 0, ACC, 2.5, None, "4 3"), magnifier(26, 26, 10)]
-I[vw + "zoom_selected.svg"] = lambda: [magnifier(20, 20, 14), pl(star_pts(20, 20, 9, 4), ACC, 2.5, "#ffe9d2", True)]
+I[vw + "zoom_selected.svg"] = lambda: [magnifier(20, 20, 14), pl(star_pts(20, 20, 9, 4), ACC, 2.5, ACCL, True)]
 I[vw + "zoom_to_job.svg"] = lambda: [magnifier(20, 20, 14), rect(12, 14, 16, 12, 1, WOODD, 2, WOOD)]
-I[vw + "layers.svg"] = lambda: [path(f"M24,{y} L44,{y + 9} L24,{y + 18} L4,{y + 9} Z", INK, 2.5, c) for y, c in ((20, LIGHT), (13, MODEL), (6, "#ffe9d2"))]
+I[vw + "layers.svg"] = lambda: [path(f"M24,{y} L44,{y + 9} L24,{y + 18} L4,{y + 9} Z", INK, 2.5, c) for y, c in ((20, LIGHT), (13, MODEL), (6, ACCL))]
 I[vw + "component_levels.svg"] = I[md + "component_levels.svg"]
 I[vw + "expand.svg"] = lambda: [rect(6, 6, 36, 36, 4, DARK, 2.5, WHITE), plus(24, 24, 10, DARK, 4)]
 I[vw + "collapse.svg"] = lambda: [rect(6, 6, 36, 36, 4, DARK, 2.5, WHITE), line(14, 24, 34, 24, DARK, 4)]
