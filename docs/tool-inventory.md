@@ -394,7 +394,14 @@ say "not implemented yet".
   - Design sub-tabs (Cut Craft's own; Aspire runs every group down one page): File
     Operations and 2D View Control stay at the top; Create, Edit, Arrange and Model across
     the page each show a few groups (`DESIGN_SUBTABS` in `crates/app/src/gui.rs`). A tool
-    run from a menu, a shortcut or Find Tool opens its sub-tab.
+    run from a menu, a shortcut or Find Tool opens its sub-tab. Edit splits Aspire's Edit
+    Objects into Select and Edit, and Join, Combine and Trim.
+  - Next-step guidance (Cut Craft's own): a box in the room under a page's icons names the
+    hovered tool, what it does and what to do next ("Select the closed vectors to pocket",
+    "Drag from the centre out to the radius"); with nothing hovered, the tool in hand's. The
+    status bar carries the same line, each tooltip ends with it, and a form opens with it
+    at the top while its tool has nothing selected. The step is the tool's own: run on an
+    empty job, a command says what to select (`crates/app/src/app/guide.rs`).
   - Edit ▸ Edit Object (E) opens the tool that drew the one selected vector on it, and a
     Shift-click in a drawing tool's form edits another shape that tool drew; a change to
     the form then changes that shape. Rectangles (square, rounded or notched corners, not

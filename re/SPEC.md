@@ -173,13 +173,24 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 - **Design sub-tabs** (Cut Craft's own choice, not Aspire's) [inf]: Aspire's Drawing and
   Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
   Operations and 2D View Control at the top, then four sub-tabs across the page: **Create**
-  (Create Vectors), **Edit** (Edit Objects, Transform Objects), **Arrange** (Align Objects,
+  (Create Vectors), **Edit** (Select and Edit; Join, Combine and Trim; Transform Objects), **Arrange** (Align Objects,
   Offset and Layout, Array Objects) and **Model** (Shape Creation, Shape Editing), so a page
   shows a couple of dozen buttons instead of sixty-odd and a beginner looks under a word that
   says what the tools are for. Each sub-tab says so on hover. A tool run from a menu, a
   shortcut or Find Tool opens its sub-tab, so it shows highlighted where it lives. Favourites,
   the Rail and Ribbon layouts and Find Tool are as before. The sub-tabs are `DESIGN_SUBTABS`
   in `crates/app/src/gui.rs`.
+- **Next-step guidance** (Cut Craft's own) [inf]: Aspire's status bar shows a tool's tooltip.
+  Cut Craft adds a box in the room left under a page's icons: the hovered tool's name, what
+  it does and its next step (a flyout's names the tools it holds too), else the tool in
+  hand's; the status bar carries the same line, each tooltip ends with "Next: …", and a
+  tool's form opens with the step at its top while its tool has nothing to work on ("Select
+  the closed vectors to pocket"; "Select the object to copy first, then the vectors to copy
+  it along"; a drawing tool's "Drag from the centre out to the radius"). The step is the
+  command's own complaint when run on an empty job, so every tool that works on a selection
+  says what to select without a list to keep (`crates/app/src/app/guide.rs`). Once something
+  is selected the form shows its settings alone; a wrong selection is still reported by
+  Apply.
 - **Icon style** [inf]: every icon is drawn by `scripts/make_icons.py` (the seven in
   `scripts/draw_icons.py` match it; `scripts/make_3d_icons.py` keeps only Interactive
   Rotation's shaded pictures) in one clean line style: one steel-blue ink that reads on the

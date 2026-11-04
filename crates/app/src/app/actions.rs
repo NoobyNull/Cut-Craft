@@ -46,6 +46,7 @@ impl CutCraftApp {
             status,
             design_tab: 0,
             design_subtab: 0,
+            first_steps: std::cell::RefCell::default(),
             view: View::TwoD,
             cursor: None,
             form: None,
@@ -2898,13 +2899,15 @@ impl CutCraftApp {
     pub(super) fn design_page(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Design page");
         self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
+        let tab = DESIGN_TABS[self.design_tab];
+        let form_open = self.form.as_ref().is_some_and(|f| f.page == Page::Design);
         egui::ScrollArea::vertical().show(ui, |ui| {
             // a tool's form takes the page's place, as Aspire's does
-            if self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
+            if form_open {
                 self.command_form(ui);
                 return;
             }
-            match DESIGN_TABS[self.design_tab] {
+            match tab {
                 "Design" => {
                     if self.options.favourites.of(Page::Design).1 {
                         // favourites name every tool, whatever sub-tab it is on
@@ -2925,6 +2928,10 @@ impl CutCraftApp {
                 }
             }
         });
+        // the hovered tool's guidance, or the tool in hand's, in the room left under the icons
+        if tab == "Design" && !form_open {
+            self.tip_box(ui);
+        }
     }
 
     /// The tool groups a design tab shows: Design has the drawing then the modeling tools.
@@ -3308,11 +3315,10 @@ impl CutCraftApp {
             .set_message(&format!("{} cancelled", form.label));
     }
 
-    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
-        let form = self.form.as_ref().map_or("none", |f| f.label);
-        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
-        let slots = self.slots();
-        let Some(open) = &mut self.form else { return };
+    /// A form's heading: its tool's icon and name, then what to do first while the tool has
+    /// nothing to work on, or how to draw with it (see [`Self::form_guidance`]).
+    fn form_heading(&self, ui: &mut egui::Ui) {
+        let Some(open) = &self.form else { return };
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
                 let edge = ui.spacing().interact_size.y;
@@ -3324,6 +3330,20 @@ impl CutCraftApp {
             }
             ui.strong(open.label);
         });
+        if let Some(step) = self.form_guidance() {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("Next:");
+                ui.label(step);
+            });
+        }
+    }
+
+    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
+        let form = self.form.as_ref().map_or("none", |f| f.label);
+        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
+        let slots = self.slots();
+        self.form_heading(ui);
+        let Some(open) = &mut self.form else { return };
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
         let picture = |path: &str| {
