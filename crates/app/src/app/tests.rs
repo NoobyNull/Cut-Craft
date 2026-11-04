@@ -316,6 +316,64 @@ fn drawing_snaps_to_nearby_corners() {
 }
 
 #[test]
+fn a_drawn_circle_snaps_its_edge_square_onto_a_side() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 40.0);
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    let scale = h.app.view_transform.unwrap().scale;
+    let near = 2.0 / f64::from(scale); // two pixels off the side
+    let drag = Drag {
+        start: Point::new(50.0, 22.0),
+        end: Point::new(30.0 + near, 22.0 + near),
+        from_center: true,
+        constrain: false,
+    };
+    let mut snapped = None;
+    let ctx = h.ctx.clone();
+    headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            snapped = h.app.snapped(ui, Some(Gesture::Dragging(drag)), scale);
+        });
+    }));
+    let Some(Gesture::Dragging(d)) = snapped else {
+        panic!("still a drag")
+    };
+    assert_eq!(d.end, Point::new(30.0, 22.0), "the circle touches the side");
+}
+
+#[test]
+fn a_freehand_stroke_does_not_snap_square_onto_a_side() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 40.0);
+    h.app.invoke(&h.ctx, "draw_freehand");
+    h.frame(vec![]);
+    let scale = h.app.view_transform.unwrap().scale;
+    let near = 2.0 / f64::from(scale);
+    let drag = Drag {
+        start: Point::new(50.0, 22.0),
+        end: Point::new(30.0 + near, 22.0 + near),
+        from_center: false,
+        constrain: false,
+    };
+    let mut snapped = None;
+    let ctx = h.ctx.clone();
+    headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            snapped = h.app.snapped(ui, Some(Gesture::Dragging(drag)), scale);
+        });
+    }));
+    let Some(Gesture::Dragging(d)) = snapped else {
+        panic!("still a drag")
+    };
+    assert_ne!(
+        d.end,
+        Point::new(30.0, 22.0),
+        "a stroke's samples snap as points"
+    );
+}
+
+#[test]
 fn clicking_a_component_in_the_2d_view_selects_it() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::domed();
@@ -3321,6 +3379,26 @@ fn the_side_tabs_are_aspire_12s_with_drawing_and_modeling_on_design() {
 }
 
 #[test]
+fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
+    let mut h = Harness::new();
+    assert_eq!(h.app.design_subtab, 0, "Create is open at the start");
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "align_left");
+    assert_eq!(
+        gui::DESIGN_SUBTABS[h.app.design_subtab].name,
+        "Arrange",
+        "an alignment from the Edit menu shows the Arrange sub-tab"
+    );
+    h.app.invoke(&h.ctx, "zoom_to_job");
+    assert_eq!(
+        h.app.design_subtab, 2,
+        "a tool always shown changes nothing"
+    );
+    h.app.invoke(&h.ctx, "sculpt");
+    assert_eq!(gui::DESIGN_SUBTABS[h.app.design_subtab].name, "Model");
+}
+
+#[test]
 fn the_components_tab_is_the_component_list() {
     let mut h = Harness::new();
     h.app.pages = Pages::design_layout();
@@ -4238,6 +4316,25 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
         writing.join().unwrap().unwrap();
         assert!(recovery.exists());
     };
+    // a longer interval in the options waits longer
+    let mut h = Harness::new();
+    h.app.options.general.autosave_seconds = 120;
+    h.app.recovery_path = Some(dir.join("later.ccjob"));
+    h.rectangle(10.0, 10.0, 20.0, 20.0);
+    h.frame(vec![]);
+    h.time += AUTOSAVE_SECONDS;
+    h.frame(vec![]);
+    assert!(h.app.autosave.is_none(), "not after the default interval");
+    h.time += 120.0;
+    h.frame(vec![]);
+    h.app
+        .autosave
+        .take()
+        .expect("written once the options' interval is up")
+        .join()
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_file(dir.join("later.ccjob"));
     // closing the job on purpose leaves nothing to recover
     let mut h = Harness::new();
     autosaved(&mut h);

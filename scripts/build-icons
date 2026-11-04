@@ -2,7 +2,8 @@
 # Draw every icon and write it to assets/icons as a transparent PNG.
 #   scripts/build-icons                         the drawings; the model pictures stay as they are
 #   scripts/build-icons HAND.stl STATUE.stl     the model pictures too, rendered from those models
-# Needs python3 with numpy, and rsvg-convert. Toolbar icons are 128 px, dialog pictures 256 px.
+# Needs python3 with numpy, ImageMagick (`magick`), and rsvg-convert or the cairosvg module.
+# Toolbar icons are 128 px, dialog pictures 256 px.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 icons=$here/../assets/icons
@@ -23,7 +24,11 @@ find . -name '*.svg' | sort | while read -r svg; do
         *) size=128 ;;
     esac
     mkdir -p "$icons/$(dirname "$name")"
-    rsvg-convert -w "$size" -h "$size" "$svg" -o "$icons/$name.png"
+    if command -v rsvg-convert >/dev/null; then
+        rsvg-convert -w "$size" -h "$size" "$svg" -o "$icons/$name.png"
+    else
+        python3 -I -c 'import sys, cairosvg; cairosvg.svg2png(url=sys.argv[1], write_to=sys.argv[2], output_width=int(sys.argv[3]), output_height=int(sys.argv[3]))' "$svg" "$icons/$name.png" "$size"
+    fi
 done
 if [[ $# -eq 2 ]]; then
     python3 -I "$here/model_pictures.py" "$1" "$2" "$icons" 256

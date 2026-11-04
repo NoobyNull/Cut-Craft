@@ -2528,9 +2528,19 @@ impl CutCraftApp {
             return gesture;
         }
         let reach = self.snap.snapping_radius / f64::from(scale);
+        // a drawn shape's far end also snaps square onto spans and tangent to arcs; a node
+        // dragged starts from the node itself, and a stroke's samples are not a shape's
+        // end, so those snap as points
+        let drawing = self
+            .drawing_tool()
+            .is_some_and(|id| !STROKE_TOOLS.contains(&id));
         let snap = |mut drag: Drag| {
             drag.start = self.snap.snap(&self.doc, drag.start, reach);
-            drag.end = self.snap.snap(&self.doc, drag.end, reach);
+            drag.end = if drawing {
+                self.snap.snap_from(&self.doc, drag.start, drag.end, reach)
+            } else {
+                self.snap.snap(&self.doc, drag.end, reach)
+            };
             drag
         };
         gesture.map(|g| match g {

@@ -391,6 +391,10 @@ say "not implemented yet".
     do one job different ways share a button with an arrow in its corner, showing the one
     picked last; click the arrow, hold the button, or press Down on it for the rest
     (`crates/app/src/flyout.rs`). Drawing tab 78 buttons to 44, Modeling 23 to 20.
+  - Design sub-tabs (Cut Craft's own; Aspire runs every group down one page): File
+    Operations and 2D View Control stay at the top; Create, Edit, Arrange and Model across
+    the page each show a few groups (`DESIGN_SUBTABS` in `crates/app/src/gui.rs`). A tool
+    run from a menu, a shortcut or Find Tool opens its sub-tab.
   - Edit ▸ Edit Object (E) opens the tool that drew the one selected vector on it, and a
     Shift-click in a drawing tool's form edits another shape that tool drew; a change to
     the form then changes that shape. Rectangles (square, rounded or notched corners, not
