@@ -154,6 +154,14 @@ say "not implemented yet".
   shown one to a file of its own (`name_N_Toolpath`), Group Where Possible putting toolpaths
   in a row with one tool together; Add Side to Toolpath Name on double-sided jobs. A file
   mixing tools needs a post with a TOOLCHANGE block, else it is refused.
+- Checks before saving (Cut Craft's own, `core/preflight`): the toolpaths are simulated in
+  cutting order. Errors stop the save: a rapid move into material still there (crash), a
+  toolpath with no moves, no feed or plunge rate, toolpaths wider than the machine's bed or
+  deeper than its Z travel. Warnings ask first (or go to the status bar, per Options): air
+  cutting (30% and 100 mm or more of a toolpath's cutting takes nothing off), out-of-date
+  toolpaths, no spindle speed, speeds outside the machine's spindle range or over its max
+  rates, a tool not loaded in the tool changer, cuts over 1 mm into the spoilboard, plus
+  the flute-length and taper checks.
 - Toolpaths menu: Show Toolpaths Tab, Recalculate All, Toolpath Drawing (2D previews, solid
   previews, auto-open 3D view, rapid / plunge / retract / join moves; a join is a feed move above the material [inf]), Preview Simulation Quality,
   Merge Visible Toolpaths, Tool Database.

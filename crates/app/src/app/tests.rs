@@ -7618,3 +7618,35 @@ fn toolpath_forms_save_their_settings_and_load_them_back() {
     );
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_and_says_how_to_fix_it() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 150.0, 150.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.frame(vec![]);
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Desktop".into(),
+        width: 100.0,
+        height: 100.0,
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+    };
+    let post = h.app.output_post().unwrap();
+    let path = std::env::temp_dir().join(format!("cut-craft-too-big-{}.nc", std::process::id()));
+    let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
+    assert!(
+        refused.starts_with("Not saved:") && refused.contains("more than the bed of Desktop"),
+        "{refused}"
+    );
+    assert!(!path.exists(), "nothing written");
+}

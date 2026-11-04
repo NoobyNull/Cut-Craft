@@ -1085,12 +1085,11 @@ impl CutCraftApp {
             Ok(plan) => plan,
             Err(e) => return self.status.set_message(&e),
         };
-        let saving: Vec<EntityId> = plan.iter().flatten().copied().collect();
-        let problems: Vec<String> = saving
-            .iter()
-            .filter_map(|id| self.doc.toolpaths.get(id))
-            .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
-            .collect();
+        let found = self.preflight(&plan);
+        if let Some(refused) = Self::refused(&found) {
+            return self.status.set_message(&refused);
+        }
+        let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
         let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
         if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
             return self.status.set_message("Toolpaths not saved");
@@ -1111,26 +1110,72 @@ impl CutCraftApp {
         } else {
             format!(" (check before cutting: {})", problems.join("; "))
         };
-        let result = self.save_toolpaths_to(form, &post, &path.with_extension(&extension));
+        let result = self.write_toolpaths(form, &post, &path.with_extension(&extension));
         self.status
             .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
     }
 
-    /// Saves the form's plan through `post` at `path`: each file, or each tile of each file
-    /// when the job is tiled, and says what was saved.
+    /// Saves the form's plan through `post` at `path`, unless the checks before cutting
+    /// find an error, and says what was saved: Save Toolpaths' Save short of its dialogs.
+    #[cfg(test)]
     pub(super) fn save_toolpaths_to(
         &self,
         form: &SaveForm,
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
-        let plan = files::save_plan(
+        let plan = self.plan(form)?;
+        match Self::refused(&self.preflight(&plan)) {
+            Some(refused) => Err(refused),
+            None => self.write_toolpaths(form, post, path),
+        }
+    }
+
+    /// The form's toolpaths, file by file.
+    fn plan(&self, form: &SaveForm) -> Result<Vec<Vec<EntityId>>, String> {
+        files::save_plan(
             &self.doc,
             form.mode,
             self.selected_toolpath,
             self.selected_group.as_deref(),
             form.group,
-        )?;
+        )
+    }
+
+    /// What the checks before cutting find in `plan`'s toolpaths, cut in its order on the
+    /// active machine.
+    pub(super) fn preflight(
+        &self,
+        plan: &[Vec<EntityId>],
+    ) -> Vec<cut_craft_core::preflight::Finding> {
+        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = plan
+            .iter()
+            .flatten()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .collect();
+        cut_craft_core::preflight::check(&self.doc, &toolpaths, &self.limits())
+    }
+
+    /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
+    /// there are none.
+    fn refused(found: &[cut_craft_core::preflight::Finding]) -> Option<String> {
+        let errors: Vec<&str> = found
+            .iter()
+            .filter(|f| f.severity == cut_craft_core::preflight::Severity::Error)
+            .map(|f| f.message.as_str())
+            .collect();
+        (!errors.is_empty()).then(|| format!("Not saved: {}", errors.join("; ")))
+    }
+
+    /// Writes the form's plan through `post` at `path`: each file, or each tile of each file
+    /// when the job is tiled, and says what was saved.
+    fn write_toolpaths(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<String, String> {
+        let plan = self.plan(form)?;
         // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
         let crossing = self.not_kept_out(&plan);
         if !crossing.is_empty() {
@@ -1218,6 +1263,22 @@ impl CutCraftApp {
                     machine.name
                 ),
             })
+    }
+
+    /// What the active machine can do, for the checks before cutting; nothing is checked
+    /// against a machine without one.
+    pub(super) fn limits(&self) -> cut_craft_core::preflight::Limits {
+        self.machines
+            .active()
+            .map(|m| cut_craft_core::preflight::Limits {
+                name: m.name.clone(),
+                bed: [m.width, m.height],
+                z_travel: m.depth,
+                max_rate: m.max_rate,
+                spindle: m.spindle,
+                slots: m.slots.clone(),
+            })
+            .unwrap_or_default()
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.
