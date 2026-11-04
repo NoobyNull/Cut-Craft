@@ -125,11 +125,12 @@ Grouped, with the reason.
 1. Settings framework: Advanced section with *Show advanced settings*, warning, tamper check,
    Reset to defaults for both sections.
 2. Appearance and general: text size, autosave interval, flyout hold time.
-3. 3D view: click reach, perspective angle, shading, detail while moving, settle time.
+3. (Done, #186) 3D view: click reach, perspective angle, shading, detail while moving, settle time.
    (Done: click reach, perspective angle, wait before full detail. Shading strengths go
    through the GPU uniforms and detail while moving shares cached coarse surfaces, so both
    are left for a follow-up.)
-4. Toolpaths and checks: preview speed, material-left warning, job sheet rapid fix.
+4. Toolpaths and checks: preview speed, material-left warning, job sheet rapid fix. (Done:
+   the job sheet's times use Toolpath Summary's rapid rate.)
 5. Snapping: rotate snap angles.
 6. Import: picture DPI, DXF spline detail.
 7. Performance (Advanced): threads, most 3D detail, clipart and cache limits.

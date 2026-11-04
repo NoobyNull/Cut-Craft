@@ -1088,7 +1088,13 @@ impl CutCraftApp {
         let problems: Vec<String> = saving
             .iter()
             .filter_map(|id| self.doc.toolpaths.get(id))
-            .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
+            .flat_map(|t| {
+                cut_craft_core::checks::problems_over(
+                    &self.doc,
+                    t,
+                    self.options.confirmations.left(),
+                )
+            })
             .collect();
         let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
         if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
@@ -1790,7 +1796,11 @@ impl CutCraftApp {
                     t.name
                 ));
             }
-            warnings.extend(cut_craft_core::checks::problems(&self.doc, t));
+            warnings.extend(cut_craft_core::checks::problems_over(
+                &self.doc,
+                t,
+                self.options.confirmations.left(),
+            ));
         }
         if !warnings.is_empty() {
             self.status
@@ -2368,16 +2378,17 @@ impl CutCraftApp {
         let stem = path
             .file_stem()
             .map_or_else(|| "job".into(), |s| s.to_string_lossy().into_owned());
-        let result = fmt_create_job_sheet::sheets(&self.doc, &self.options.job_sheet)
-            .map_err(|e| e.to_string())
-            .and_then(|pages| {
-                for (suffix, html) in &pages {
-                    let file = path.with_file_name(format!("{stem}{suffix}.html"));
-                    cut_craft_core::file::write_atomic(&file, html.as_bytes())
-                        .map_err(|e| format!("could not write {}: {e}", file.display()))?;
-                }
-                Ok(pages.len())
-            });
+        let result =
+            fmt_create_job_sheet::sheets(&self.doc, &self.options.job_sheet, self.summary.rapid)
+                .map_err(|e| e.to_string())
+                .and_then(|pages| {
+                    for (suffix, html) in &pages {
+                        let file = path.with_file_name(format!("{stem}{suffix}.html"));
+                        cut_craft_core::file::write_atomic(&file, html.as_bytes())
+                            .map_err(|e| format!("could not write {}: {e}", file.display()))?;
+                    }
+                    Ok(pages.len())
+                });
         self.status.set_message(&result.map_or_else(
             |e| e,
             |n| format!("Saved {n} job sheet{}", if n == 1 { "" } else { "s" }),
