@@ -3379,6 +3379,26 @@ fn the_side_tabs_are_aspire_12s_with_drawing_and_modeling_on_design() {
 }
 
 #[test]
+fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
+    let mut h = Harness::new();
+    assert_eq!(h.app.design_subtab, 0, "Create is open at the start");
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "align_left");
+    assert_eq!(
+        gui::DESIGN_SUBTABS[h.app.design_subtab].name,
+        "Arrange",
+        "an alignment from the Edit menu shows the Arrange sub-tab"
+    );
+    h.app.invoke(&h.ctx, "zoom_to_job");
+    assert_eq!(
+        h.app.design_subtab, 2,
+        "a tool always shown changes nothing"
+    );
+    h.app.invoke(&h.ctx, "sculpt");
+    assert_eq!(gui::DESIGN_SUBTABS[h.app.design_subtab].name, "Model");
+}
+
+#[test]
 fn the_components_tab_is_the_component_list() {
     let mut h = Harness::new();
     h.app.pages = Pages::design_layout();

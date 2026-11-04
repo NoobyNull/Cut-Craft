@@ -720,6 +720,8 @@ struct CutCraftApp {
     toolbar: gui::Toolbar,
     status: gui::StatusBar,
     design_tab: usize,
+    /// The Design tab's open sub-tab (see [`gui::DESIGN_SUBTABS`]).
+    design_subtab: usize,
     view: View,
     cursor: Option<Point>,
     form: Option<OpenForm>,

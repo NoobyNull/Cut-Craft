@@ -45,6 +45,7 @@ impl CutCraftApp {
             toolbar: gui::Toolbar::new(),
             status,
             design_tab: 0,
+            design_subtab: 0,
             view: View::TwoD,
             cursor: None,
             form: None,
@@ -251,6 +252,7 @@ impl CutCraftApp {
     /// the command registry.
     #[expect(clippy::too_many_lines, reason = "the one dispatch of every action")]
     pub(super) fn invoke(&mut self, ctx: &egui::Context, id: &str) {
+        self.show_subtab_of(id);
         // right-click menu items: a command with params chosen by the menu
         if let Some((form, command, params)) = gui::command_action(id) {
             if form {
@@ -2904,8 +2906,15 @@ impl CutCraftApp {
             }
             match DESIGN_TABS[self.design_tab] {
                 "Design" => {
-                    let groups = self.design_groups("Design");
-                    self.tools_or_favourites(ui, &groups, Page::Design);
+                    if self.options.favourites.of(Page::Design).1 {
+                        // favourites name every tool, whatever sub-tab it is on
+                        let groups = self.design_groups("Design");
+                        self.tools_or_favourites(ui, &groups, Page::Design);
+                    } else {
+                        self.design_subtabs(ui);
+                        let groups = self.toolbar.subtab_groups(self.design_subtab);
+                        self.tool_groups(ui, &groups, Page::Design);
+                    }
                 }
                 "Sheets" => self.sheets_panel(ui),
                 "Library" => self.clipart_panel(ui),
@@ -2921,16 +2930,41 @@ impl CutCraftApp {
     /// The tool groups a design tab shows: Design has the drawing then the modeling tools.
     pub(super) fn design_groups(&self, tab: &str) -> Vec<gui::ToolGroup> {
         match tab {
-            "Design" => {
-                let toolbar = &self.toolbar;
-                toolbar
-                    .groups
-                    .iter()
-                    .chain(&toolbar.modeling_groups)
-                    .copied()
-                    .collect()
-            }
+            "Design" => self.toolbar.all_design_groups(),
             _ => vec![],
+        }
+    }
+
+    /// The Design tab's sub-tabs across the page, under the groups always shown: Create,
+    /// Edit, Arrange, Model. Each names what its tools are for on hover, so a beginner
+    /// looks under a word rather than down one long page of icons.
+    pub(super) fn design_subtabs(&mut self, ui: &mut egui::Ui) {
+        cut_craft_bug_report::mark(ui, "Design sub-tabs");
+        let always = self.toolbar.named(gui::ALWAYS_SHOWN);
+        self.tool_groups(ui, &always, Page::Design);
+        ui.separator();
+        let mut picked = None;
+        ui.horizontal_wrapped(|ui| {
+            for (i, tab) in gui::DESIGN_SUBTABS.iter().enumerate() {
+                let response = ui
+                    .selectable_label(i == self.design_subtab, tab.name)
+                    .on_hover_hint(tab.hint);
+                if response.clicked() {
+                    picked = Some(i);
+                }
+            }
+        });
+        ui.add_space(ui.spacing().item_spacing.y);
+        if let Some(i) = picked {
+            self.design_subtab = i;
+        }
+    }
+
+    /// Opens the sub-tab `id` is on, so a tool picked from Find Tool, a menu or a shortcut
+    /// shows highlighted where it lives.
+    pub(super) fn show_subtab_of(&mut self, id: &str) {
+        if let Some(tab) = self.toolbar.subtab_of(id, self.design_subtab) {
+            self.design_subtab = tab;
         }
     }
 
