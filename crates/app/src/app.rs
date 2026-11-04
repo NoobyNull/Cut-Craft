@@ -6,6 +6,7 @@ mod cutting;
 mod draw3d;
 mod help;
 mod layouts;
+mod mac;
 mod panels;
 mod passes;
 #[path = "screenshots.rs"]
@@ -942,6 +943,9 @@ struct CutCraftApp {
     autosave: Option<std::thread::JoinHandle<Result<(), String>>>,
     /// Window title last sent to the viewport.
     title: String,
+    /// Whether the window opened with the desktop's title bar. A Mac keeps the window it opened
+    /// with until Cut Craft restarts, so its menu row follows this rather than Options.
+    title_bar_at_start: bool,
 }
 
 /// A sheet's size in the Sheets List: one decimal in mm, as Aspire's, three in inches.
@@ -1338,7 +1342,7 @@ fn menu_items(
         .iter()
         .map(|i| {
             let shortcut = (menus.shortcut_of)(&i.action).unwrap_or(&i.shortcut);
-            text(&i.name) + text(shortcut) + room
+            text(&i.name) + text(&shortcut_label(ui.ctx(), shortcut)) + room
         })
         .fold(0.0, f32::max);
     for category in gui::categories(items) {
@@ -1353,10 +1357,25 @@ fn menu_items(
     }
 }
 
-/// An easier-to-read look: a heavier system font, larger text and thicker lines.
+/// A menu item's shortcut as the system writes them: as Aspire does, or ⌘Z on a Mac.
+fn shortcut_label<'a>(ctx: &egui::Context, text: &'a str) -> Cow<'a, str> {
+    if mac::is_mac(ctx) {
+        Cow::Owned(mac::shortcut_text(text))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+/// An easier-to-read look: a heavier system font, larger text and thicker lines; on a Mac,
+/// the Mac's own font and look ([`mac`]).
 fn readable(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    if let Some((name, data, index)) = cut_craft_core::font::system_face(&UI_FONTS) {
+    let families: &[&str] = if mac::is_mac(ctx) {
+        &mac::UI_FONTS
+    } else {
+        &UI_FONTS
+    };
+    if let Some((name, data, index)) = cut_craft_core::font::system_face(families) {
         let mut data = egui::FontData::from_owned(data);
         data.index = index;
         fonts
@@ -1388,6 +1407,9 @@ fn readable(ctx: &egui::Context) {
         v.window_stroke.width *= LINE_SCALE;
         v.selection.stroke.width *= LINE_SCALE;
     });
+    if mac::is_mac(ctx) {
+        mac::style(ctx);
+    }
 }
 
 /// Where the keyboard focus ring goes: round the control Tab has focused, if any.
@@ -1849,7 +1871,10 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
             }
             None => egui::Button::new(&item.name),
         }
-        .shortcut_text((menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut))
+        .shortcut_text(shortcut_label(
+            ui.ctx(),
+            (menus.shortcut_of)(&item.action).unwrap_or(&item.shortcut),
+        ))
         .selected((menus.checked)(&item.action).unwrap_or(item.is_checked));
         let available = (menus.available)(&item.action);
         let mut response = ui.add_enabled(item.is_enabled && available, button);
@@ -1928,6 +1953,16 @@ impl eframe::App for CutCraftApp {
     }
 }
 
+/// The main window's frame: the desktop's title bar or Cut Craft's own (`system_title_bar`);
+/// a Mac's window always keeps its traffic lights ([`mac::viewport`]).
+fn window_frame(builder: egui::ViewportBuilder, system_title_bar: bool) -> egui::ViewportBuilder {
+    if egui::os::OperatingSystem::from_target_os() == egui::os::OperatingSystem::Mac {
+        mac::viewport(builder, system_title_bar)
+    } else {
+        builder.with_decorations(system_title_bar)
+    }
+}
+
 /// Opens the main window and runs until it is closed; with `shots`, takes the README's
 /// pictures into that folder instead and quits ([`screenshots`]).
 pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
@@ -1949,14 +1984,16 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             #[cfg(not(all(unix, not(target_os = "macos"))))]
             let _ = (builder, x11);
         })),
-        viewport: match shots {
-            // the same size each time, whatever window size the user's runs keep
-            Some(_) => egui::ViewportBuilder::default().with_inner_size(screenshots::WINDOW),
-            None => egui::ViewportBuilder::default(),
-        }
-        .with_title(title)
-        .with_app_id(APP_ID)
-        .with_decorations(frame),
+        viewport: window_frame(
+            match shots {
+                // the same size each time, whatever window size the user's runs keep
+                Some(_) => egui::ViewportBuilder::default().with_inner_size(screenshots::WINDOW),
+                None => egui::ViewportBuilder::default(),
+            }
+            .with_title(title)
+            .with_app_id(APP_ID),
+            frame,
+        ),
         persist_window: shots.is_none(),
         renderer: eframe::Renderer::Wgpu,
         multisampling: settings.view_3d.anti_aliasing.samples(),
@@ -1988,6 +2025,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx);
             let mut app = CutCraftApp::new();
+            app.title_bar_at_start = frame;
             if let Some(rs) = &cc.wgpu_render_state {
                 let info = rs.adapter.get_info();
                 log::info!(
