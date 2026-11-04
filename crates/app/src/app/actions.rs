@@ -2964,7 +2964,7 @@ impl CutCraftApp {
     /// Opens the sub-tab `id` is on, so a tool picked from Find Tool, a menu or a shortcut
     /// shows highlighted where it lives.
     pub(super) fn show_subtab_of(&mut self, id: &str) {
-        if let Some(tab) = self.toolbar.subtab_of(id) {
+        if let Some(tab) = self.toolbar.subtab_of(id, self.design_subtab) {
             self.design_subtab = tab;
         }
     }

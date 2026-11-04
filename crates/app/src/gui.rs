@@ -103,14 +103,20 @@ impl Toolbar {
             .collect()
     }
 
-    /// The sub-tab `id` is on, if any: where to look for a tool picked some other way.
-    pub fn subtab_of(&self, id: &str) -> Option<usize> {
+    /// The sub-tab `id` is on, if any: where to look for a tool picked some other way. A
+    /// tool on two sub-tabs (Distort Object is under Transform Objects and Shape Editing)
+    /// stays on `open` when it is there, else is found on the first.
+    pub fn subtab_of(&self, id: &str, open: usize) -> Option<usize> {
         let all = self.all_design_groups();
-        DESIGN_SUBTABS.iter().position(|t| {
+        let on = |t: &SubTab| {
             t.groups
                 .iter()
                 .any(|name| all.iter().any(|g| g.name == *name && g.tools.contains(&id)))
-        })
+        };
+        if DESIGN_SUBTABS.get(open).is_some_and(on) {
+            return Some(open);
+        }
+        DESIGN_SUBTABS.iter().position(on)
     }
 }
 
@@ -1936,11 +1942,15 @@ mod tests {
     #[test]
     fn a_tool_is_found_on_its_sub_tab() {
         let toolbar = super::Toolbar::new();
-        assert_eq!(toolbar.subtab_of("align_left"), Some(2));
-        assert_eq!(toolbar.subtab_of("move"), Some(1));
-        assert_eq!(toolbar.subtab_of("sculpt"), Some(3));
-        assert_eq!(toolbar.subtab_of("save"), None, "always shown");
-        assert_eq!(toolbar.subtab_of("no_such_tool"), None);
+        assert_eq!(toolbar.subtab_of("align_left", 0), Some(2));
+        assert_eq!(toolbar.subtab_of("move", 0), Some(1));
+        assert_eq!(toolbar.subtab_of("sculpt", 0), Some(3));
+        assert_eq!(toolbar.subtab_of("save", 0), None, "always shown");
+        assert_eq!(toolbar.subtab_of("no_such_tool", 0), None);
+        // Distort Object is on Edit and on Model: it stays where it was started from
+        assert_eq!(toolbar.subtab_of("distort_object", 3), Some(3));
+        assert_eq!(toolbar.subtab_of("distort_object", 1), Some(1));
+        assert_eq!(toolbar.subtab_of("distort_object", 0), Some(1));
     }
 
     #[test]
