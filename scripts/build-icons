@@ -11,9 +11,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 python3 -I "$here/make_icons.py" "$work"
-# the shaded solids stay only for Interactive Rotation's pictures; the 3D tools' icons are
-# flat wood shapes from make_icons.py, in the same line style as the rest
-python3 -I "$here/make_3d_icons.py" "$work" import/turn_view import/turn_xyz import/turn_x import/turn_y import/turn_z
+python3 -I "$here/make_3d_icons.py" "$work"
 # drawn from models (scripts/model_pictures.py), so never from their flat stand-ins
 models=" import/pointing_hand import/model_size_xyz import/position_relative_to_modeling_plane import/initial_orientation "
 cd "$work"

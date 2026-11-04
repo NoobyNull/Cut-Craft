@@ -185,8 +185,9 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   Rotation's shaded pictures) in one clean line style: one steel-blue ink that reads on the
   light and the dark theme, even 2.5-unit strokes of 48 with round caps, open shapes with no
   fills, and one small warm accent only on the part a tool makes or moves. The 3D tools are
-  flat wood shapes, toolpaths green on a wood slab, so the Modeling and Toolpaths families
-  tell apart from the drawing tools at a glance. Cut Craft 0.1.0 to 0.2.1 used icons traced
+  small shaded renders of wood solids (`scripts/make_3d_icons.py`), toolpaths green on a
+  wood slab, so the Modeling and Toolpaths families tell apart from the drawing tools at a
+  glance. Cut Craft 0.1.0 to 0.2.1 used icons traced
   from Aspire's (see ACKNOWLEDGEMENTS.md); this set keeps their quiet, single-colour feel
   with drawings of Cut Craft's own.
 
