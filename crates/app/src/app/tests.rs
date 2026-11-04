@@ -1485,7 +1485,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         group: false,
         post: None,
         add_side: false,
-        merge: false,
+        changes: crate::files::ToolChanges::ToolChanger,
     };
     let path = std::env::temp_dir().join(format!("cut-craft-keep-out-{}.nc", std::process::id()));
     let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
@@ -5472,7 +5472,7 @@ fn save_toolpaths_opens_its_form_and_saves_each_shown_toolpath_to_a_file_of_its_
         group: false,
         post: None,
         add_side: false,
-        merge: false,
+        changes: crate::files::ToolChanges::ToolChanger,
     };
     let post = h.app.output_post().unwrap();
     let done = h
@@ -6549,7 +6549,6 @@ fn toolpath_groups_are_listed_picked_previewed_saved_as_one_and_joined_by_new_to
         None,
         Some("Group 1"),
         false,
-        false,
     );
     assert_eq!(plan.unwrap(), [vec![EntityId(1), EntityId(2)]]);
     // a toolpath made while the group is picked joins it
@@ -6636,7 +6635,7 @@ fn quick_engraves_immediate_output_saves_the_toolpath_calculated_last() {
         group: false,
         post: None,
         add_side: false,
-        merge: false,
+        changes: crate::files::ToolChanges::ToolChanger,
     };
     let post = h.app.output_post().unwrap();
     let done = h
@@ -7644,7 +7643,7 @@ fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_and_says_how_to_fix_
         group: false,
         post: None,
         add_side: false,
-        merge: false,
+        changes: crate::files::ToolChanges::ToolChanger,
     };
     let post = h.app.output_post().unwrap();
     let path = std::env::temp_dir().join(format!("cut-craft-too-big-{}.nc", std::process::id()));
@@ -7686,7 +7685,7 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
         group: false,
         post: None,
         add_side: false,
-        merge: false,
+        changes: crate::files::ToolChanges::ToolChanger,
     };
     let dir = std::env::temp_dir().join(format!("cut-craft-per-tool-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -7729,5 +7728,60 @@ fn save_toolpaths_shows_what_must_be_fixed_and_will_not_save_until_it_is() {
         h.app.save_checks.as_ref().unwrap().revision,
         checked,
         "the checks are kept between frames"
+    );
+}
+
+#[test]
+fn tool_changes_go_to_files_of_their_own_the_tool_changer_or_a_pause() {
+    use crate::files::{SaveMode, ToolChanges};
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let dir = std::env::temp_dir().join(format!("cut-craft-changes-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let save = |h: &Harness, changes, name: &str| {
+        let form = SaveForm {
+            mode: SaveMode::VisibleToOneFile,
+            group: false,
+            post: None,
+            add_side: false,
+            changes,
+        };
+        let post = h.app.form_post(&form).unwrap();
+        h.app
+            .save_toolpaths_to(&form, &post, &dir.join(name))
+            .unwrap()
+    };
+    // Cut Craft's own post has a tool changer: separate files still splits by tool
+    let done = save(&h, ToolChanges::SeparateFiles, "apart.nc");
+    assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
+    assert!(dir.join("apart_1_6_mm_End_Mill.nc").exists());
+    let gcode = std::fs::read_to_string(dir.join("apart_2_3_mm_End_Mill.nc")).unwrap();
+    assert!(!gcode.contains("M6"), "no tool change in a file: {gcode}");
+    // the tool changer: one file, M6
+    save(&h, ToolChanges::ToolChanger, "atc.nc");
+    let gcode = std::fs::read_to_string(dir.join("atc.nc")).unwrap();
+    assert!(gcode.contains("M6"), "{gcode}");
+    // a pause: one file, M0 and no M6
+    save(&h, ToolChanges::Pause, "pause.nc");
+    let gcode = std::fs::read_to_string(dir.join("pause.nc")).unwrap();
+    assert!(gcode.contains("\nM0") && !gcode.contains("M6"), "{gcode}");
+    assert!(gcode.contains("Change to"), "{gcode}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_machine_with_a_tool_changer_uses_it_by_default_and_one_without_saves_files_per_tool() {
+    let mut h = Harness::new();
+    h.app.machines.add();
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    assert_eq!(
+        h.app.save_form.as_ref().unwrap().changes,
+        crate::files::ToolChanges::SeparateFiles
+    );
+    h.app.machines.active_mut().unwrap().set_slot_count(4);
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    assert_eq!(
+        h.app.save_form.as_ref().unwrap().changes,
+        crate::files::ToolChanges::ToolChanger
     );
 }

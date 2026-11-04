@@ -272,8 +272,8 @@ pub(super) struct SaveForm {
     post: Option<String>,
     /// Double-sided jobs: Top or Bottom on the end of each file name.
     add_side: bool,
-    /// Each tool's toolpaths run together, for fewer tool changes (the order changes).
-    merge: bool,
+    /// How tools are changed: a file for each, the tool changer, or a pause.
+    changes: files::ToolChanges,
 }
 
 /// What the checks before cutting found in Save Toolpaths' plan, kept while the plan, the
@@ -281,6 +281,7 @@ pub(super) struct SaveForm {
 #[derive(Clone, Debug)]
 pub(super) struct SaveChecks {
     plan: Vec<Vec<EntityId>>,
+    changes: files::ToolChanges,
     revision: u64,
     machine: usize,
     found: Vec<cut_craft_core::preflight::Finding>,

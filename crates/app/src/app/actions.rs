@@ -76,7 +76,7 @@ impl CutCraftApp {
                 group: false,
                 post: None,
                 add_side: false,
-                merge: false,
+                changes: files::ToolChanges::SeparateFiles,
             },
             depth_estimate: None,
             addons_path: None,
@@ -1039,7 +1039,7 @@ impl CutCraftApp {
                     group: false,
                     post: None,
                     add_side: self.doc.job.double_sided.is_some(),
-                    merge: false,
+                    changes: self.default_changes(),
                 });
             }
             _ => unreachable!("not a toolpath action: {id}"),
@@ -1078,7 +1078,7 @@ impl CutCraftApp {
             Ok(plan) => plan,
             Err(e) => return self.status.set_message(&e),
         };
-        let found = self.preflight(&plan);
+        let found = self.preflight(&plan, form.changes);
         if let Some(refused) = Self::refused(&found) {
             return self.status.set_message(&refused);
         }
@@ -1118,22 +1118,41 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<String, String> {
         let plan = self.plan(form, post)?;
-        match Self::refused(&self.preflight(&plan)) {
+        match Self::refused(&self.preflight(&plan, form.changes)) {
             Some(refused) => Err(refused),
             None => self.write_toolpaths(form, post, path),
         }
     }
 
-    /// The post the form saves through: the one picked, else the machine's default.
-    pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
-        match form.post.as_deref() {
-            Some(name) => self.posts.load(name),
-            None => self.output_post(),
+    /// How tools are changed unless the form says otherwise: by the tool changer when the
+    /// active machine has one, else a file for each tool.
+    pub(super) fn default_changes(&self) -> files::ToolChanges {
+        if self.machines.active().is_some_and(|m| !m.slots.is_empty()) {
+            files::ToolChanges::ToolChanger
+        } else {
+            files::ToolChanges::SeparateFiles
         }
     }
 
-    /// The form's toolpaths, file by file; a file for each tool in turn when `post` cannot
-    /// change tools.
+    /// The post the form saves through: the one picked, else the machine's default, with
+    /// its tool changes made pauses when the form says to pause, or tools are changed by
+    /// hand between files on a machine without a tool changer.
+    pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
+        let post = match form.post.as_deref() {
+            Some(name) => self.posts.load(name),
+            None => self.output_post(),
+        }?;
+        let changer = self.machines.active().is_some_and(|m| !m.slots.is_empty());
+        Ok(match form.changes {
+            files::ToolChanges::Pause => post.with_pauses(),
+            // changed by hand between files: no tool changer call (M6) for the first tool
+            files::ToolChanges::SeparateFiles if !changer => post.with_pauses(),
+            _ => post,
+        })
+    }
+
+    /// The form's toolpaths, file by file: a file for each tool in turn unless the tool
+    /// changer or pauses change them (and the post can).
     pub(super) fn plan(
         &self,
         form: &SaveForm,
@@ -1145,40 +1164,23 @@ impl CutCraftApp {
             self.selected_toolpath,
             self.selected_group.as_deref(),
             form.group,
-            form.merge,
         )?;
-        Ok(if post.changes_tools() {
-            plan
-        } else {
+        Ok(if Self::by_tool(form, post) {
             files::by_tool(&self.doc, plan)
+        } else {
+            plan
         })
     }
 
-    /// What `form`'s Merge moved ahead in `plan` (none without Merge): "A now runs before B".
-    pub(super) fn reordered(
-        &self,
-        form: &SaveForm,
-        post: &cut_craft_post::Post,
-        plan: &[Vec<EntityId>],
-    ) -> Vec<String> {
-        let unmerged = SaveForm {
-            merge: false,
-            ..form.clone()
-        };
-        if !form.merge {
-            return vec![];
-        }
-        let flat = |p: &[Vec<EntityId>]| p.iter().flatten().copied().collect::<Vec<_>>();
-        self.plan(&unmerged, post).map_or_else(
-            |_| vec![],
-            |before| files::moved(&self.doc, &flat(&before), &flat(plan)),
-        )
+    /// Whether each tool gets files of its own: chosen, or the post cannot change tools.
+    fn by_tool(form: &SaveForm, post: &cut_craft_post::Post) -> bool {
+        form.changes == files::ToolChanges::SeparateFiles || !post.changes_tools()
     }
 
-    /// Whether files are split per tool for `post` alone (not by the form's choice), and so
-    /// named after their tool.
+    /// Whether files are split per tool (not by the form's Multiple Files), and so named
+    /// after their tool.
     pub(super) fn split_for(form: &SaveForm, post: &cut_craft_post::Post) -> bool {
-        !post.changes_tools() && form.mode != files::SaveMode::VisibleToMultipleFiles
+        Self::by_tool(form, post) && form.mode != files::SaveMode::VisibleToMultipleFiles
     }
 
     /// The checks before cutting for Save Toolpaths' `plan`, worked out again only when the
@@ -1186,35 +1188,41 @@ impl CutCraftApp {
     pub(super) fn save_checks(
         &mut self,
         plan: &[Vec<EntityId>],
+        changes: files::ToolChanges,
     ) -> &[cut_craft_core::preflight::Finding] {
         let (revision, machine) = (self.history.revision(), self.machines.active);
-        let fresh = self
-            .save_checks
-            .as_ref()
-            .is_some_and(|c| c.plan == plan && c.revision == revision && c.machine == machine);
+        let fresh = self.save_checks.as_ref().is_some_and(|c| {
+            c.plan == plan && c.changes == changes && c.revision == revision && c.machine == machine
+        });
         if !fresh {
             self.save_checks = Some(SaveChecks {
                 plan: plan.to_vec(),
+                changes,
                 revision,
                 machine,
-                found: self.preflight(plan),
+                found: self.preflight(plan, changes),
             });
         }
         &self.save_checks.as_ref().expect("just filled").found
     }
 
     /// What the checks before cutting find in `plan`'s toolpaths, cut in its order on the
-    /// active machine.
+    /// active machine; its tool changer's slots are checked only when it changes the tools.
     pub(super) fn preflight(
         &self,
         plan: &[Vec<EntityId>],
+        changes: files::ToolChanges,
     ) -> Vec<cut_craft_core::preflight::Finding> {
         let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = plan
             .iter()
             .flatten()
             .filter_map(|id| self.doc.toolpaths.get(id))
             .collect();
-        cut_craft_core::preflight::check(&self.doc, &toolpaths, &self.limits())
+        let mut limits = self.limits();
+        if changes != files::ToolChanges::ToolChanger {
+            limits.slots.clear();
+        }
+        cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits)
     }
 
     /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when

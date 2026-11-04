@@ -105,6 +105,19 @@ pub fn save_through(
         .map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
+/// How a file's tool changes are made, on Save Toolpaths' form.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ToolChanges {
+    /// A file for each tool in turn, the tool changed between files (no tool change in a
+    /// file): the safest without a tool changer.
+    #[default]
+    SeparateFiles,
+    /// One file; the machine's tool changer changes them (its post's `TOOLCHANGE`).
+    ToolChanger,
+    /// One file; the machine stops at each change for the tool to be changed by hand.
+    Pause,
+}
+
 /// How Save Toolpaths splits the toolpaths into files (Aspire's Save Toolpaths form).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SaveMode {
@@ -120,14 +133,12 @@ pub enum SaveMode {
 /// The toolpaths each file holds, in list order: the selected toolpath (or the toolpaths of
 /// the selected group, as one file); every shown one; or each shown one alone, where `group`
 /// puts toolpaths in a row that use the same tool in one file (Aspire's Group Where Possible).
-/// `merge` first runs each tool's toolpaths together ([`merged`]), for fewer tool changes.
 pub fn save_plan(
     doc: &Document,
     mode: SaveMode,
     selected: Option<EntityId>,
     selected_group: Option<&str>,
     group: bool,
-    merge: bool,
 ) -> Result<Vec<Vec<EntityId>>, String> {
     let visible: Vec<EntityId> = doc
         .toolpaths
@@ -135,16 +146,10 @@ pub fn save_plan(
         .filter(|(_, t)| t.visible)
         .map(|(&id, _)| id)
         .collect();
-    let visible = if merge {
-        merged(doc, &visible)
-    } else {
-        visible
-    };
     let plan = match mode {
         SaveMode::Selected => match (selected_group, selected) {
             (Some(name), _) => match doc.toolpaths_in_group(name) {
                 ids if ids.is_empty() => return Err(format!("{name} has no toolpaths")),
-                ids if merge => vec![merged(doc, &ids)],
                 ids => vec![ids],
             },
             (None, Some(id)) if doc.toolpaths.contains_key(&id) => vec![vec![id]],
@@ -167,42 +172,6 @@ pub fn save_plan(
         return Err("no toolpaths are shown: tick the ones to save".into());
     }
     Ok(plan)
-}
-
-/// `ids` with each tool's toolpaths run together, tools in the order they first come and
-/// each tool's toolpaths in their own order: fewer tool changes, a different cutting order.
-pub fn merged(doc: &Document, ids: &[EntityId]) -> Vec<EntityId> {
-    let tool = |id: &EntityId| doc.toolpaths[id].tool.name.as_str();
-    let mut tools: Vec<&str> = vec![];
-    for id in ids {
-        if !tools.contains(&tool(id)) {
-            tools.push(tool(id));
-        }
-    }
-    tools
-        .into_iter()
-        .flat_map(|t| ids.iter().filter(move |id| tool(id) == t).copied())
-        .collect()
-}
-
-/// What runs earlier in `now` than in `before`: "A now runs before B" for each toolpath
-/// that moved ahead, naming the first it moved ahead of.
-pub fn moved(doc: &Document, before: &[EntityId], now: &[EntityId]) -> Vec<String> {
-    let at = |id: &EntityId| before.iter().position(|b| b == id);
-    now.iter()
-        .enumerate()
-        .filter_map(|(n, id)| {
-            let was = at(id)?;
-            // the first toolpath it now runs before that used to run before it
-            let passed = now[n + 1..]
-                .iter()
-                .find(|o| at(o).is_some_and(|o| o < was))?;
-            Some(format!(
-                "{} now runs before {}",
-                doc.toolpaths[id].name, doc.toolpaths[passed].name
-            ))
-        })
-        .collect()
 }
 
 /// `plan` with each file split where its tool changes, for a post that cannot change tools:
@@ -706,7 +675,7 @@ mod tests {
     #[test]
     fn save_plans_take_the_selected_or_shown_toolpaths_in_list_order() {
         let (doc, ids) = four_toolpaths();
-        let plan = |mode, group| save_plan(&doc, mode, Some(ids[2]), None, group, false).unwrap();
+        let plan = |mode, group| save_plan(&doc, mode, Some(ids[2]), None, group).unwrap();
         assert_eq!(plan(SaveMode::Selected, false), vec![vec![ids[2]]]);
         assert_eq!(
             plan(SaveMode::VisibleToOneFile, false),
@@ -721,50 +690,19 @@ mod tests {
             plan(SaveMode::VisibleToMultipleFiles, true),
             vec![vec![ids[0], ids[1]], vec![ids[2]], vec![ids[3]]]
         );
-        assert!(save_plan(&doc, SaveMode::Selected, None, None, false, false).is_err());
+        assert!(save_plan(&doc, SaveMode::Selected, None, None, false).is_err());
         let mut hidden = doc.clone();
         hidden
             .toolpaths
             .values_mut()
             .for_each(|t| t.visible = false);
-        assert!(
-            save_plan(
-                &hidden,
-                SaveMode::VisibleToOneFile,
-                None,
-                None,
-                false,
-                false
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn merging_runs_each_tools_toolpaths_together_in_the_order_tools_first_come() {
-        let (doc, ids) = four_toolpaths();
-        let plan = |mode, group| save_plan(&doc, mode, None, None, group, true).unwrap();
-        // End Mill (Pocket, Drill, Cut Out) first, then V-Bit (Text)
-        let merged = vec![ids[0], ids[1], ids[3], ids[2]];
-        assert_eq!(
-            plan(SaveMode::VisibleToOneFile, false),
-            vec![merged.clone()]
-        );
-        assert_eq!(
-            plan(SaveMode::VisibleToMultipleFiles, true),
-            vec![vec![ids[0], ids[1], ids[3]], vec![ids[2]]]
-        );
-        assert_eq!(
-            moved(&doc, &ids[..4], &merged),
-            vec!["Cut Out now runs before Text".to_string()]
-        );
-        assert_eq!(moved(&doc, &merged, &merged), Vec::<String>::new());
+        assert!(save_plan(&hidden, SaveMode::VisibleToOneFile, None, None, false).is_err());
     }
 
     #[test]
     fn a_post_without_tool_changes_gets_a_file_for_each_tool_in_turn() {
         let (doc, ids) = four_toolpaths();
-        let one = save_plan(&doc, SaveMode::VisibleToOneFile, None, None, false, false).unwrap();
+        let one = save_plan(&doc, SaveMode::VisibleToOneFile, None, None, false).unwrap();
         // the order is kept: the last end mill runs after the V-bit, in a file of its own
         assert_eq!(
             by_tool(&doc, one),

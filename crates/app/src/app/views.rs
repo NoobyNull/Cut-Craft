@@ -2699,13 +2699,19 @@ impl CutCraftApp {
             .as_ref()
             .map_err(Clone::clone)
             .and_then(|p| self.plan(&form, p));
-        let split = post.as_ref().is_ok_and(|p| Self::split_for(&form, p));
-        let reordered = match (&plan, &post) {
-            (Ok(now), Ok(post)) => self.reordered(&form, post, now),
-            _ => vec![],
+        let split = match &post {
+            Ok(p) if Self::split_for(&form, p) => Some(if p.changes_tools() {
+                "Each tool gets a file of its own. Run them in order, changing the tool \
+                 between files."
+            } else {
+                "This post-processor cannot change tools, so each tool gets a file of its own. \
+                 Run them in order, changing the tool between files."
+            }),
+            _ => None,
         };
+        let changer = self.machines.active().is_none_or(|m| !m.slots.is_empty());
         let found = match &plan {
-            Ok(plan) => self.save_checks(plan).to_vec(),
+            Ok(plan) => self.save_checks(plan, form.changes).to_vec(),
             Err(_) => vec![],
         };
         let errors = Self::refused(&found).is_some();
@@ -2740,20 +2746,21 @@ impl CutCraftApp {
             }
             ui.add_enabled(
                 form.mode == SaveMode::VisibleToMultipleFiles,
-                egui::Checkbox::new(&mut form.group, "Group where possible"),
+                egui::Checkbox::new(
+                    &mut form.group,
+                    "Merge toolpaths in a row that use the same tool",
+                ),
             )
-            .on_hover_hint("Toolpaths in a row that use the same tool go in one file");
-            ui.checkbox(&mut form.merge, "Merge toolpaths that use the same tool")
-                .on_hover_hint(
-                    "Runs all of each tool's toolpaths together, so the tool is changed fewer \
-                     times. This changes the cutting order: tools run in the order they first \
-                     appear in the list",
-                );
+            .on_hover_hint(
+                "Toolpaths next to each other in the list that use the same tool go in one \
+                 file. The cutting order never changes (Aspire's Group Where Possible)",
+            );
+            tool_changes_section(ui, &mut form.changes, changer);
             if self.doc.job.double_sided.is_some() {
                 ui.checkbox(&mut form.add_side, "Add side to toolpath name");
             }
             ui.separator();
-            files_section(ui, &self.doc, &plan, split, &reordered);
+            files_section(ui, &self.doc, &plan, split);
             checks_section(ui, &found);
             ui.add_space(ui.spacing().item_spacing.y);
             let response = ui.add_enabled(
@@ -2771,6 +2778,7 @@ impl CutCraftApp {
         if let Some(n) = machine_changed {
             self.machines.active = n;
             form.post = None;
+            form.changes = self.default_changes();
             self.machines_changed("Machine changed");
         }
         if save {
@@ -3266,28 +3274,50 @@ fn checks_section(ui: &mut egui::Ui, found: &[cut_craft_core::preflight::Finding
     }
 }
 
-/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and what
-/// merging moved ahead.
+/// Save Toolpaths' tool changes: a file for each tool, the tool changer (when the machine
+/// has one), or a pause to change the tool by hand.
+fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has_changer: bool) {
+    use files::ToolChanges;
+    ui.strong("Tool changes");
+    ui.radio_value(
+        changes,
+        ToolChanges::SeparateFiles,
+        "Separate file for each tool",
+    )
+    .on_hover_hint(
+        "The safest without a tool changer: change the tool and set Z zero between files",
+    );
+    ui.add_enabled_ui(has_changer, |ui| {
+        ui.radio_value(changes, ToolChanges::ToolChanger, "Tool changer (ATC)")
+            .on_hover_hint("One file; the machine's tool changer changes the tools")
+            .on_disabled_hover_text(
+                "This machine has no tool changer: add its slots in Machine Configuration",
+            );
+    });
+    ui.radio_value(
+        changes,
+        ToolChanges::Pause,
+        "One file, pause to change the tool",
+    )
+    .on_hover_hint(
+        "The machine stops (M0) at each tool change; change the tool, set Z zero, then \
+         resume. Some controllers (GRBL among them) cannot jog while stopped, which makes \
+         setting Z zero hard: use separate files there",
+    );
+}
+
+/// Save Toolpaths' files: what goes in each, and why there is a file for each tool.
 fn files_section(
     ui: &mut egui::Ui,
     doc: &cut_craft_core::document::Document,
     plan: &Result<Vec<Vec<EntityId>>, String>,
-    split: bool,
-    reordered: &[String],
+    split: Option<&str>,
 ) {
     let warn = ui.visuals().warn_fg_color;
-    if split && plan.as_ref().is_ok_and(|p| p.len() > 1) {
-        ui.colored_label(
-            warn,
-            "This post-processor cannot change tools, so each tool gets a file of its own. \
-             Run them in order, changing the tool between files.",
-        );
-    }
-    for line in reordered {
-        ui.colored_label(
-            warn,
-            format!("{line}: check nothing it needs is cut by a later toolpath."),
-        );
+    if let Some(why) = split
+        && plan.as_ref().is_ok_and(|p| p.len() > 1)
+    {
+        ui.colored_label(warn, why);
     }
     match plan {
         Ok(plan) => {
