@@ -13,9 +13,9 @@ use std::fmt::Write as _;
 
 pub struct JobSheet;
 
-/// The rapid rate the time estimates assume, mm/min.
-// ponytail: Toolpath Summary's default; the sheet does not read the window's own setting
-const RAPID: f64 = 5000.0;
+/// The rapid rate the time estimates assume when none is given, mm/min: Toolpath Summary's
+/// starting one.
+pub const RAPID: f64 = 5000.0;
 
 /// The Job Setup Sheet Editor's settings: how every job sheet looks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -81,14 +81,18 @@ impl Exporter for JobSheet {
     };
 
     fn export(doc: &Document) -> Result<Vec<u8>, CommandError> {
-        Ok(sheet(doc, &Style::default())?.into_bytes())
+        Ok(sheet(doc, &Style::default(), RAPID)?.into_bytes())
     }
 }
 
 /// A page for each sheet of `doc` with toolpaths (the active sheet's when it has only one),
 /// each with what goes after the file's name: the sheet's name when there are several, and
-/// `_Top` or `_Bottom` in a double-sided job.
-pub fn sheets(doc: &Document, style: &Style) -> Result<Vec<(String, String)>, CommandError> {
+/// `_Top` or `_Bottom` in a double-sided job. Times assume rapids at `rapid` mm/min.
+pub fn sheets(
+    doc: &Document,
+    style: &Style,
+    rapid: f64,
+) -> Result<Vec<(String, String)>, CommandError> {
     let side = |d: &Document| {
         d.job
             .double_sided
@@ -96,7 +100,7 @@ pub fn sheets(doc: &Document, style: &Style) -> Result<Vec<(String, String)>, Co
             .unwrap_or_default()
     };
     if doc.sheets.len() <= 1 {
-        return Ok(vec![(side(doc).to_owned(), sheet(doc, style)?)]);
+        return Ok(vec![(side(doc).to_owned(), sheet(doc, style, rapid)?)]);
     }
     let mut out = vec![];
     for (i, s) in doc.sheets.iter().enumerate() {
@@ -113,13 +117,14 @@ pub fn sheets(doc: &Document, style: &Style) -> Result<Vec<(String, String)>, Co
             .chars()
             .map(|ch| if ch.is_alphanumeric() { ch } else { '_' })
             .collect();
-        out.push((format!("_{name}{}", side(&on)), sheet(&on, style)?));
+        out.push((format!("_{name}{}", side(&on)), sheet(&on, style, rapid)?));
     }
     Ok(out)
 }
 
-/// The page for `doc`'s active sheet and side, as `style` has it.
-pub fn sheet(doc: &Document, style: &Style) -> Result<String, CommandError> {
+/// The page for `doc`'s active sheet and side, as `style` has it, its times assuming rapids
+/// at `rapid` mm/min.
+pub fn sheet(doc: &Document, style: &Style, rapid: f64) -> Result<String, CommandError> {
     let job = &doc.job;
     let len = |mm: f64| match job.units {
         Units::Mm => format!("{mm:.2} mm"),
@@ -157,7 +162,7 @@ pub fn sheet(doc: &Document, style: &Style) -> Result<String, CommandError> {
     }
     let visible: Vec<_> = doc.toolpaths.values().filter(|t| t.visible).collect();
     if style.summary {
-        let total: f64 = visible.iter().map(|t| t.machining_minutes(RAPID)).sum();
+        let total: f64 = visible.iter().map(|t| t.machining_minutes(rapid)).sum();
         let _ = write!(
             h,
             "<h2>Toolpaths Summary</h2><p>{} toolpaths, estimated time {}</p>",
@@ -178,7 +183,7 @@ pub fn sheet(doc: &Document, style: &Style) -> Result<String, CommandError> {
             tool.feed_rate,
             tool.plunge_rate,
             tool.spindle_speed,
-            hms(t.machining_minutes(RAPID)),
+            hms(t.machining_minutes(rapid)),
         );
     }
     let _ = writeln!(h, "<footer>{title}</footer></body></html>");
@@ -256,6 +261,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_time_estimates_use_the_rapid_rate_given() {
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        // a long rapid, so the rate shows in the time
+        for x in [0.0, 10_000.0] {
+            t.moves.push(cut_craft_core::toolpath::Move {
+                kind: cut_craft_core::toolpath::MoveKind::Rapid,
+                to: cut_craft_core::glam::DVec3::new(x, 0.0, 5.0),
+            });
+        }
+        let time = |rapid| {
+            let page = sheet(&doc, &Style::default(), rapid).unwrap();
+            page.split("estimated time ").nth(1).unwrap()[..7].to_owned()
+        };
+        assert_ne!(time(1000.0), time(10_000.0), "a slower rapid takes longer");
+        let exported = String::from_utf8(JobSheet::export(&doc).unwrap()).unwrap();
+        assert!(exported.contains(&format!("estimated time {}", time(RAPID))));
+    }
+
+    #[test]
     fn the_sheet_has_the_layout_setup_and_each_toolpath() {
         let mut doc = cut_craft_core::testing::with_toolpath();
         doc.notes = "Glue <first>".into();
@@ -284,7 +309,7 @@ mod tests {
             toolpaths: false,
             ..Style::default()
         };
-        let html = sheet(&doc, &style).unwrap();
+        let html = sheet(&doc, &style, RAPID).unwrap();
         assert!(
             html.contains("<h1>Shop Sheet</h1>") && html.contains("header{background:#ff0000}")
         );
@@ -298,14 +323,14 @@ mod tests {
     fn a_double_sided_job_names_its_side_and_several_sheets_get_a_page_each() {
         let mut doc = cut_craft_core::testing::with_toolpath();
         doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
-        let pages = sheets(&doc, &Style::default()).unwrap();
+        let pages = sheets(&doc, &Style::default(), RAPID).unwrap();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].0, "_Top");
         assert!(pages[0].1.contains("<th>Side</th><td>Top</td>"));
         // a second sheet without toolpaths gets no page; with the first one, two pages
         let mut two = cut_craft_core::testing::two_sheets();
         two.toolpaths = doc.toolpaths.clone();
-        let pages = sheets(&two, &Style::default()).unwrap();
+        let pages = sheets(&two, &Style::default(), RAPID).unwrap();
         assert_eq!(pages.len(), 1, "only the sheet with toolpaths");
         assert!(pages[0].0.starts_with('_'));
     }

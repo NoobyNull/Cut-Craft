@@ -258,6 +258,22 @@ pub struct ToolpathSettings {
     #[serde(default = "tolerance")]
     #[schemars(title = "VCarve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance_vcarve: f64,
+    /// How fast a toolpath preview plays when it starts, in mm of tool travel a second; the
+    /// slider under the preview changes it while it plays (not one of Aspire's)
+    #[serde(default = "preview_speed")]
+    #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
+    pub preview_speed: f64,
+}
+
+fn preview_speed() -> f64 {
+    crate::app::PLAYBACK_SPEED
+}
+
+impl ToolpathSettings {
+    /// The preview's starting speed, mm/s, kept to the slider's range.
+    pub fn preview_speed(&self) -> f64 {
+        self.preview_speed.clamp(5.0, 20_000.0)
+    }
 }
 
 fn solid_colour() -> [u8; 3] {
@@ -299,7 +315,7 @@ impl ToolpathSettings {
 }
 
 /// Aspire's Confirmation Choices: what happens when something looks wrong.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Confirmations {
     /// Crossing vectors chosen for a V-carve or pocket toolpath
     #[serde(default)]
@@ -317,6 +333,39 @@ pub struct Confirmations {
     #[serde(default)]
     #[schemars(title = "Checks before cutting")]
     pub cutting_checks: CuttingChecks,
+    /// The checks before cutting warn when a tool's taper or shape will leave more material
+    /// than this on the model. Raise it if the warnings are about bits too small to matter
+    /// (not one of Aspire's)
+    #[serde(default = "material_left")]
+    #[schemars(
+        title = "Warn when material left is over",
+        extend("x-unit" = "mm"),
+        range(min = 0, max = 10)
+    )]
+    pub material_left: f64,
+}
+
+impl Default for Confirmations {
+    fn default() -> Self {
+        Self {
+            toolpath_intersections: IntersectionCheck::default(),
+            radiused_offset_intersections: IntersectionCheck::default(),
+            sharp_offset_intersections: IntersectionCheck::default(),
+            cutting_checks: CuttingChecks::default(),
+            material_left: material_left(),
+        }
+    }
+}
+
+fn material_left() -> f64 {
+    cut_craft_core::checks::LEFT
+}
+
+impl Confirmations {
+    /// The material-left threshold, mm, kept to the setting's range.
+    pub fn left(&self) -> f64 {
+        self.material_left.clamp(0.0, 10.0)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -787,6 +836,7 @@ impl Default for Options {
                 tolerance_2d: tolerance(),
                 tolerance_3d: tolerance(),
                 tolerance_vcarve: tolerance(),
+                preview_speed: preview_speed(),
             },
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
@@ -1148,5 +1198,23 @@ mod tests {
         assert!((wild.pick_reach() - 20.0).abs() < 1e-6);
         assert!((wild.field_of_view() - 90_f64.to_radians()).abs() < 1e-9);
         assert!((wild.settle() - 0.05).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_toolpath_settings_start_as_the_values_they_replace() {
+        let o = Options::default();
+        assert!((o.toolpaths.preview_speed() - crate::app::PLAYBACK_SPEED).abs() < 1e-9);
+        assert!((o.confirmations.left() - cut_craft_core::checks::LEFT).abs() < 1e-9);
+        let older: Confirmations = serde_json::from_str(r#"{ "cutting_checks": "ask" }"#).unwrap();
+        assert_eq!(
+            older,
+            Confirmations::default(),
+            "older options get the same"
+        );
+        let wild = ToolpathSettings {
+            preview_speed: 1e9,
+            ..o.toolpaths
+        };
+        assert!((wild.preview_speed() - 20_000.0).abs() < 1e-9);
     }
 }
