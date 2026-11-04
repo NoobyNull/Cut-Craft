@@ -743,6 +743,7 @@ mod tests {
             zoom: 1.5,
             pan: eframe::egui::vec2(20.0, -10.0),
             perspective: false,
+            ..Framing::default()
         };
         for perspective in [false, true] {
             let framing = Framing {

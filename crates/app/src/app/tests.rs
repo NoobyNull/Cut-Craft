@@ -5123,10 +5123,28 @@ fn ctrl_shift_v_pastes_in_place() {
 
 #[test]
 fn a_moving_3d_view_keeps_full_detail_unless_simplifying_is_on() {
+    let moving = |simplify: bool| moved_ago(simplify, 0.0, None);
+    assert!(moving(false), "full detail while it turns, by default");
+    assert!(!moving(true), "coarser while it turns, when asked");
+    // full detail once the view has been still as long as the options say
+    assert!(moved_ago(true, 0.3, None), "after the usual quarter second");
+    assert!(
+        !moved_ago(true, 0.3, Some(1.0)),
+        "not yet, when told to wait longer"
+    );
+    assert!(moved_ago(true, 1.1, Some(1.0)));
+}
+
+/// Whether the 3D view draws the model at full detail `ago` seconds after it last turned,
+/// simplifying while moving or not, and waiting `settle` seconds when given.
+fn moved_ago(simplify: bool, ago: f64, settle: Option<f64>) -> bool {
     use cut_craft_core::component::{Combine, Component};
-    let moving = |simplify: bool| {
+    {
         let mut h = Harness::new();
         h.app.options.view_3d.simplify_while_moving = simplify;
+        if let Some(settle) = settle {
+            h.app.options.view_3d.settle_seconds = settle;
+        }
         let o = h.app.doc.job.area().min;
         let rect = cut_craft_core::geometry::Rect::new(
             o + Point::new(150.0, 100.0),
@@ -5143,13 +5161,10 @@ fn a_moving_3d_view_keeps_full_detail_unless_simplifying_is_on() {
         ));
         h.app.record(Ok(c.finish()), "added");
         h.app.view = View::ThreeD;
-        // turned just now
-        h.app.moved_3d = h.time;
+        h.app.moved_3d = h.time - ago;
         h.frame(vec![]);
         h.app.fine_3d.is_some()
-    };
-    assert!(moving(false), "full detail while it turns, by default");
-    assert!(!moving(true), "coarser while it turns, when asked");
+    }
 }
 
 #[test]
