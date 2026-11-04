@@ -665,3 +665,55 @@ fn heavy_work_uses_no_more_cores_than_the_options_allow() {
     set_core_limit(0);
     assert_eq!(cores(), all, "0 is every core");
 }
+
+/// A zigzag of `count` points over the material, dipping a little deeper each time.
+fn zigzag(count: u32) -> Vec<(f64, f64, f64)> {
+    (0..count)
+        .map(|i| {
+            let f = f64::from(i) / f64::from(count);
+            let x = if i % 2 == 0 { 5.0 } else { 95.0 };
+            (x, 5.0 + 90.0 * f, -0.5 - 3.0 * f)
+        })
+        .collect()
+}
+
+#[test]
+fn a_long_path_is_cut_in_stretches_that_join_up() {
+    use cut_craft_core::simulation::stretches;
+    assert_eq!(stretches(0), vec![0..0]);
+    assert_eq!(stretches(10), vec![0..10], "a short path in one go");
+    let long = stretches(10_000);
+    assert!(long.len() > 10 && long.len() <= 40, "{}", long.len());
+    assert_eq!(long[0].start, 0);
+    assert_eq!(long.last().unwrap().end, 10_000);
+    for pair in long.windows(2) {
+        assert_eq!(
+            pair[0].end,
+            pair[1].start + 1,
+            "each starts where the last ended"
+        );
+    }
+}
+
+#[test]
+fn a_long_path_cut_in_stretches_cuts_what_it_would_in_one_go() {
+    use cut_craft_core::compute::{Compute, Cpu};
+    let path = toolpath(&zigzag(5_000));
+    let mut whole = material();
+    Cpu.cut_along(&mut whole, &path.tool, &path.moves);
+    let mut stretched = material();
+    let progress = cut_craft_core::progress::Progress::new();
+    progress.track(|| stretched.cut(&path));
+    assert_eq!(stretched.heights, whole.heights);
+    assert_eq!(progress.fraction(), Some(1.0), "it said how far it got");
+}
+
+#[test]
+fn a_cancelled_preview_stops_cutting() {
+    let path = toolpath(&zigzag(5_000));
+    let mut m = material();
+    let progress = cut_craft_core::progress::Progress::new();
+    progress.cancel();
+    progress.track(|| m.cut(&path));
+    assert!(m.heights.iter().all(|&z| z == 0.0), "nothing was cut");
+}

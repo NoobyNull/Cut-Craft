@@ -648,9 +648,20 @@ impl CutCraftApp {
             self.apply_live();
             return;
         }
-        let change = files::import(&self.registry, &self.doc, path)
-            .map_err(cut_craft_core::CommandError::Failed);
-        self.record(change, &format!("Imported {}", path.display()));
+        // a big drawing or picture is read off the window's thread, its progress shown
+        let (registry, doc, reading) = (
+            std::sync::Arc::clone(&self.registry),
+            self.doc.clone(),
+            path.to_owned(),
+        );
+        let done = format!("Imported {}", path.display());
+        self.in_background(
+            &format!("Importing {}", super::file_name(path)),
+            move || files::import(&registry, &doc, &reading),
+            move |app, change| {
+                app.record(change.map_err(cut_craft_core::CommandError::Failed), &done);
+            },
+        );
     }
 
     /// The Sheets tab: Aspire's Sheets List (each sheet's name and size, the active one
@@ -760,24 +771,32 @@ impl CutCraftApp {
             .filter(|(_, t)| t.visible || !visible_only)
             .map(|(&id, _)| id)
             .collect();
-        self.preview_ids(&visible);
-        self.preview_other_side(visible_only);
+        if self.display.animate_preview {
+            self.preview_ids(&visible);
+            self.preview_other_side(visible_only);
+        } else {
+            self.preview_fresh(&visible, move |app| app.preview_other_side(visible_only));
+        }
     }
 
     /// Previews `ids` in order on fresh material, as one preview to undo.
     pub(super) fn preview_ids(&mut self, ids: &[EntityId]) {
-        self.finish_playback();
-        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
-        if self.display.animate_preview {
-            self.play(ids);
+        if !self.display.animate_preview {
+            self.preview_fresh(ids, |_| {});
             return;
         }
-        let before = self.before_preview.take();
-        for &id in ids {
-            self.preview_toolpath(id);
-        }
-        // the cascade is one preview to undo
-        self.before_preview = before;
+        self.finish_playback();
+        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
+        self.play(ids);
+    }
+
+    /// Cuts `ids` in order into fresh material, as one preview to undo, then `then`.
+    fn preview_fresh(&mut self, ids: &[EntityId], then: impl FnOnce(&mut Self) + 'static) {
+        self.finish_playback();
+        // the preview before stays shown until this one is cut
+        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        let fresh = Material::new(&self.doc.job, self.display.preview_cells());
+        self.preview_in_background(ids, fresh, then);
     }
 
     /// A double-sided job's other side previewed too (its shown toolpaths, or all), cut
@@ -810,7 +829,7 @@ impl CutCraftApp {
 
     /// What a preview cuts: the job's toolpaths, or (Toolpath Tiling with a tile active)
     /// only the active tile's moves, at the machine's corner or in their original place.
-    fn preview_source(&self) -> Cow<'_, cut_craft_core::document::Document> {
+    pub(super) fn preview_source(&self) -> Cow<'_, cut_craft_core::document::Document> {
         match self.doc.tiling.and_then(|t| t.preview(&self.doc)) {
             Some(tiled) => Cow::Owned(tiled),
             None => Cow::Borrowed(&self.doc),
@@ -864,21 +883,16 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        let Some(toolpath) = self.preview_source().toolpaths.get(&id).cloned() else {
+        if !self.preview_source().toolpaths.contains_key(&id) {
             return;
-        };
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-        let material = self
-            .simulation
-            .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()));
-        material.cutting = super::preview_mark(id);
-        material.cut(&toolpath);
-        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-        if self.display.auto_open_3d {
-            self.view = View::ThreeD;
         }
-        self.status
-            .set_message(&format!("Previewed {}", toolpath.name));
+        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        // cut into the preview so far
+        let start = self
+            .simulation
+            .clone()
+            .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
+        self.preview_in_background(&[id], start, |_| {});
     }
 
     /// Aspire's Preview Control while a preview plays: Run / Pause, Single Step, Run to

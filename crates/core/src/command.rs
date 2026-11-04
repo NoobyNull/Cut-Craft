@@ -144,7 +144,7 @@ pub trait Interactive: Command {
 pub struct NoParams {}
 
 /// A command with its types erased, as the app and plugins see it.
-pub trait DynCommand {
+pub trait DynCommand: Send + Sync {
     fn id(&self) -> &'static str;
     fn meta(&self) -> Meta;
     fn schema(&self) -> Value;
@@ -408,7 +408,24 @@ impl Registry {
     /// Every toolpath recalculated: one [`Registry::recalculate`] each, chained.
     pub fn recalculate_all(&self, doc: &Document) -> Result<Change, CommandError> {
         let ids: Vec<EntityId> = doc.toolpaths.keys().copied().collect();
-        Change::chain_over(doc, &ids, |d, &id| self.recalculate(d, id))
+        self.recalculate_each(doc, &ids)
+    }
+
+    /// Toolpaths `ids` recalculated in turn, chained, each a share of the progress bar
+    /// ([`crate::progress`]) named as it goes; stops early once asked to.
+    pub fn recalculate_each(
+        &self,
+        doc: &Document,
+        ids: &[EntityId],
+    ) -> Result<Change, CommandError> {
+        let steps: Vec<(usize, EntityId)> = ids.iter().copied().enumerate().collect();
+        Change::chain_over(doc, &steps, |d, &(i, id)| {
+            crate::progress::stop_if_cancelled()?;
+            if let Some(t) = d.toolpaths.get(&id) {
+                crate::progress::stage(&format!("{} ({} of {})", t.name, i + 1, steps.len()));
+            }
+            crate::progress::part(i, steps.len(), || self.recalculate(d, id))
+        })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &dyn DynCommand> {
