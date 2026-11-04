@@ -7652,16 +7652,20 @@ fn a_slow_job_shows_a_progress_window_that_cancels_with_nothing_changed() {
     h.app.wait_before_showing = std::time::Duration::ZERO;
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     let (go, wait) = std::sync::mpsc::channel::<()>();
+    let (reported, said) = std::sync::mpsc::channel::<()>();
     let before = h.app.history.revision();
     h.app.in_background(
         "Calculating Slow Toolpath",
         move || {
             cut_craft_core::progress::report(0.4);
+            reported.send(()).ok();
             wait.recv().ok();
         },
         |app, ()| app.status.set_message("used"),
     );
     assert!(h.app.busy.is_some(), "still running");
+    // the job's thread may start late (Windows): the bar is drawn once it has reported
+    said.recv().unwrap();
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Calculating Slow Toolpath…").is_some());
@@ -7752,5 +7756,8 @@ fn a_double_sided_preview_cuts_the_other_side_off_the_windows_thread_too() {
     h.app.invoke(&h.ctx, "preview_all_toolpaths");
     until_not_busy(&mut h);
     let preview = h.app.simulation.as_ref().expect("previewed");
-    assert!(preview.other_side.is_some(), "the other side is previewed too");
+    assert!(
+        preview.other_side.is_some(),
+        "the other side is previewed too"
+    );
 }
