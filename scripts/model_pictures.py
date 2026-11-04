@@ -9,8 +9,8 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import stlrender
 
-INK, RED, GREEN, ACC, GREY = "#2b63c6", "#e04646", "#16a05a", "#f28c28", "#8a93a3"
-WOOD, WOODD, BODY = "#f1d6a8", "#b8874c", "#7aa6e4"
+INK, RED, GREEN, ACC, GREY = "#4d7ec4", "#d9534f", "#2f9a67", "#ef8f2a", "#9aa3b2"
+WOOD, WOODD, BODY = "#e9cf9e", "#b08a55", "#d9b985"
 AZ, EL = -35, 28
 
 hand_model, model, icons = sys.argv[1], sys.argv[2], sys.argv[3]

@@ -12,16 +12,16 @@ from PIL import Image, ImageDraw
 SIZE = 128
 SCALE = 4  # drawn large, then scaled down for smooth edges
 # the same calm palette as make_icons.py (INK, ACC, LIGHT, TP, WOOD, WOODD), as 8-bit RGBA
-BLUE = (61, 74, 95, 255)
-ORANGE = (226, 137, 46, 255)
+BLUE = (77, 126, 196, 255)
+ORANGE = (239, 143, 42, 255)
 WHITE = (255, 255, 255, 255)
-PALE = (228, 234, 242, 255)
+PALE = (0, 0, 0, 0)
 STROKE = 10  # at 128 px, as the existing icons
 NODE = 11
 GREEN = (47, 154, 103, 255)
-WOOD = (236, 211, 166, 255)
+WOOD = (233, 207, 158, 255)
 WOOD_SIDE = (226, 198, 148, 255)
-EDGE = (169, 128, 79, 255)
+EDGE = (176, 138, 85, 255)
 
 
 def canvas():
