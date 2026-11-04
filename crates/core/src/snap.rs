@@ -2,7 +2,8 @@
 //! Options (F4) choose them: geometry (span ends and middles, arc centres, object centres),
 //! the job's centre and corners, and a grid. Smart snapping lines the pointer up with those
 //! points across or up and down when none is near, and puts it on the tangent of a span
-//! where the span ends, or square to that tangent.
+//! where the span ends, or square to that tangent. A line's far end also snaps to where the
+//! line would meet a span square on, or touch an arc.
 
 use crate::document::Document;
 use crate::geometry::{Point, Segment};
@@ -139,6 +140,73 @@ impl SnapOptions {
         }
     }
 
+    /// Where the end of a line drawn from `from` snaps: as [`Self::snap`], and with smart
+    /// snapping also to where the line would meet a span square on, or touch an arc.
+    pub fn snap_from(&self, doc: &Document, from: Point, at: Point, reach: f64) -> Point {
+        self.points(doc)
+            .into_iter()
+            .chain(self.square_and_tangent(doc, from))
+            .map(|q| (q, q.distance(at)))
+            .filter(|(_, d)| *d <= reach)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map_or_else(|| self.snap(doc, at, reach), |(q, _)| q)
+    }
+
+    /// Points on the spans where a line from `from` would meet them at a right angle, or
+    /// touch an arc.
+    /// ponytail: lines and arcs only; Béziers would need a root finder
+    fn square_and_tangent(&self, doc: &Document, from: Point) -> Vec<Point> {
+        use crate::geometry::{angle, in_sweep};
+        let mut out = Vec::new();
+        if !(self.smart_snapping && self.geometry_snapping) {
+            return out;
+        }
+        for (id, path) in &doc.vectors {
+            if !doc.shown(*id) {
+                continue;
+            }
+            let mut start = path.start;
+            for span in &path.segments {
+                let end = span.end();
+                match *span {
+                    Segment::Line { .. } => {
+                        let d = end - start;
+                        if d.length_squared() > 1e-18 {
+                            let t = (from - start).dot(d) / d.length_squared();
+                            if (0.0..=1.0).contains(&t) {
+                                out.push(start + d * t);
+                            }
+                        }
+                    }
+                    Segment::Arc { center, ccw, .. } => {
+                        let (r, v) = ((start - center).length(), from - center);
+                        let dist = v.length();
+                        if dist > 1e-9 {
+                            let u = v / dist;
+                            // square on: the nearest and farthest points; touching: the two
+                            // tangent points, when `from` is outside the circle
+                            let mut on = vec![center + u * r, center - u * r];
+                            if dist > r {
+                                let turn = (r / dist).acos();
+                                for t in [turn, -turn] {
+                                    on.push(center + u.rotate(glam::DVec2::from_angle(t)) * r);
+                                }
+                            }
+                            let (a0, a1) = (angle(start - center), angle(end - center));
+                            out.extend(
+                                on.into_iter()
+                                    .filter(|q| in_sweep(a0, a1, ccw, angle(*q - center))),
+                            );
+                        }
+                    }
+                    Segment::Cubic { .. } => {}
+                }
+                start = end;
+            }
+        }
+        out
+    }
+
     /// The nearest point within `reach` of `at` on a line through a span's end along the
     /// span's direction there (its tangent), or square to it.
     fn tangent_snap(&self, doc: &Document, at: Point, reach: f64) -> Option<Point> {
@@ -232,6 +300,30 @@ impl SnapOptions {
 mod tests {
     use super::*;
     use crate::testing::{document_with, square};
+
+    #[test]
+    fn a_line_end_snaps_square_onto_a_span_and_onto_a_tangent() {
+        let doc = document_with(vec![
+            square(10.0, 10.0, 20.0),
+            crate::geometry::Path::circle(Point::new(50.0, 70.0), 10.0),
+        ]);
+        let s = SnapOptions::default();
+        let (from, at) = (Point::new(50.0, 14.0), Point::new(30.4, 14.5));
+        assert_eq!(
+            s.snap_from(&doc, from, at, 1.0),
+            Point::new(30.0, 14.0),
+            "square onto the right side"
+        );
+        assert_eq!(s.snap(&doc, at, 1.0), Point::new(30.0, 14.5), "no start");
+        let tangent = Point::new(55.0, 70.0 - 75.0_f64.sqrt());
+        let got = s.snap_from(&doc, Point::new(70.0, 70.0), Point::new(55.3, 61.6), 1.0);
+        assert!(got.distance(tangent) < 1e-9, "{got:?}");
+        let off = SnapOptions {
+            smart_snapping: false,
+            ..SnapOptions::default()
+        };
+        assert_eq!(off.snap_from(&doc, from, at, 1.0), at);
+    }
 
     #[test]
     fn points_snap_to_corners_middles_centres_and_the_grid() {

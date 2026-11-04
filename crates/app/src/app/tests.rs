@@ -316,6 +316,64 @@ fn drawing_snaps_to_nearby_corners() {
 }
 
 #[test]
+fn a_drawn_circle_snaps_its_edge_square_onto_a_side() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 40.0);
+    h.app.invoke(&h.ctx, "draw_circle");
+    h.frame(vec![]);
+    let scale = h.app.view_transform.unwrap().scale;
+    let near = 2.0 / f64::from(scale); // two pixels off the side
+    let drag = Drag {
+        start: Point::new(50.0, 22.0),
+        end: Point::new(30.0 + near, 22.0 + near),
+        from_center: true,
+        constrain: false,
+    };
+    let mut snapped = None;
+    let ctx = h.ctx.clone();
+    headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            snapped = h.app.snapped(ui, Some(Gesture::Dragging(drag)), scale);
+        });
+    }));
+    let Some(Gesture::Dragging(d)) = snapped else {
+        panic!("still a drag")
+    };
+    assert_eq!(d.end, Point::new(30.0, 22.0), "the circle touches the side");
+}
+
+#[test]
+fn a_freehand_stroke_does_not_snap_square_onto_a_side() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 40.0);
+    h.app.invoke(&h.ctx, "draw_freehand");
+    h.frame(vec![]);
+    let scale = h.app.view_transform.unwrap().scale;
+    let near = 2.0 / f64::from(scale);
+    let drag = Drag {
+        start: Point::new(50.0, 22.0),
+        end: Point::new(30.0 + near, 22.0 + near),
+        from_center: false,
+        constrain: false,
+    };
+    let mut snapped = None;
+    let ctx = h.ctx.clone();
+    headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            snapped = h.app.snapped(ui, Some(Gesture::Dragging(drag)), scale);
+        });
+    }));
+    let Some(Gesture::Dragging(d)) = snapped else {
+        panic!("still a drag")
+    };
+    assert_ne!(
+        d.end,
+        Point::new(30.0, 22.0),
+        "a stroke's samples snap as points"
+    );
+}
+
+#[test]
 fn clicking_a_component_in_the_2d_view_selects_it() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::domed();
