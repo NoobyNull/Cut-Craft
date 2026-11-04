@@ -623,18 +623,33 @@ fn grid_point_size() -> f32 {
         .width
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Theme {
     /// Light, as Aspire is, whatever the desktop's theme
-    #[default]
     Light,
     Dark,
     /// The desktop's own light or dark theme
     System,
 }
 
+impl Default for Theme {
+    fn default() -> Self {
+        Self::for_system(egui::os::OperatingSystem::from_target_os())
+    }
+}
+
 impl Theme {
+    /// Light, as Aspire is; on a Mac the desktop's own, as Mac users expect apps to follow
+    /// their light or dark appearance.
+    pub fn for_system(os: egui::os::OperatingSystem) -> Self {
+        if os == egui::os::OperatingSystem::Mac {
+            Self::System
+        } else {
+            Self::Light
+        }
+    }
+
     pub fn preference(self) -> egui::ThemePreference {
         match self {
             Self::Light => egui::ThemePreference::Light,
@@ -903,6 +918,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_mac_starts_following_the_desktops_light_or_dark() {
+        use egui::os::OperatingSystem;
+        assert_eq!(Theme::for_system(OperatingSystem::Mac), Theme::System);
+        assert_eq!(Theme::for_system(OperatingSystem::Windows), Theme::Light);
+        assert_eq!(Theme::for_system(OperatingSystem::Nix), Theme::Light);
+    }
+
+    #[test]
     fn the_window_layout_is_classic_unless_the_options_say_otherwise() {
         assert_eq!(Options::default().general.layout, WindowLayout::Classic);
         let mut o = Options::default();
@@ -954,8 +977,8 @@ mod tests {
         );
         assert_eq!(
             older.appearance.theme,
-            Theme::Light,
-            "light, as before themes"
+            Theme::default(),
+            "the system's starting theme, as before themes"
         );
         let fields =
             crate::form::fields(&serde_json::to_value(schemars::schema_for!(Options)).unwrap());

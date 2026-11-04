@@ -7512,6 +7512,74 @@ fn the_unsigned_warning_says_who_is_responsible() {
     assert!(text.contains("Undo"));
 }
 
+/// The harness on a Mac, as egui sees the system.
+fn on_a_mac() -> Harness {
+    let mut h = Harness::new();
+    h.ctx.set_os(egui::os::OperatingSystem::Mac);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h
+}
+
+#[test]
+fn on_a_mac_the_menus_leave_room_for_the_traffic_lights() {
+    let h = Harness::new();
+    let file = h.text_at("File").expect("the File menu");
+    assert!(
+        file.x < super::mac::TRAFFIC_LIGHTS,
+        "Windows and Linux: at the left"
+    );
+    let mut mac = on_a_mac();
+    let file = mac.text_at("File").expect("the File menu");
+    assert!(
+        file.x > super::mac::TRAFFIC_LIGHTS,
+        "after the window's buttons"
+    );
+    let title = mac.app.title.clone();
+    let at = mac.text_at(&title).expect("the title in the menus' row");
+    assert!((at.y - file.y).abs() < 1.0);
+    // with the desktop's title bar, the menus start at the left again
+    mac.app.title_bar_at_start = true;
+    mac.frame(vec![]);
+    let file = mac.text_at("File").expect("the File menu");
+    assert!(file.x < super::mac::TRAFFIC_LIGHTS);
+}
+
+#[test]
+fn on_a_mac_the_delete_key_deletes_the_selection() {
+    for mac in [false, true] {
+        let mut h = if mac { on_a_mac() } else { Harness::new() };
+        h.rectangle(10.0, 10.0, 20.0, 10.0);
+        let before = h.app.doc.vectors.len();
+        assert!(!h.app.doc.selection.is_empty(), "the rectangle is selected");
+        h.frame(vec![key(Key::Backspace)]);
+        h.frame(vec![]);
+        let after = h.app.doc.vectors.len();
+        if mac {
+            assert!(after < before, "the Mac's delete key is egui's Backspace");
+        } else {
+            assert_eq!(after, before, "Backspace isn't Delete on Windows or Linux");
+        }
+    }
+}
+
+#[test]
+fn on_a_mac_menus_show_shortcuts_with_the_command_key() {
+    for mac in [false, true] {
+        let mut h = if mac { on_a_mac() } else { Harness::new() };
+        let edit = h.text_at("Edit").expect("the Edit menu");
+        h.click(edit, Modifiers::NONE);
+        h.frame(vec![]);
+        let (shown, hidden) = if mac {
+            ("⌘Z", "Ctrl+Z")
+        } else {
+            ("Ctrl+Z", "⌘Z")
+        };
+        assert!(h.text_at(shown).is_some(), "{shown}");
+        assert!(h.text_at(hidden).is_none(), "{hidden}");
+    }
+}
+
 #[test]
 fn toolpath_forms_save_their_settings_and_load_them_back() {
     let mut h = Harness::new();

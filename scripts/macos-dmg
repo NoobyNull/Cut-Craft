@@ -16,12 +16,17 @@ app="dist/Cut Craft.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 lipo -create -output "$app/Contents/MacOS/cut-craft" \
     target/aarch64-apple-darwin/release/cut-craft target/x86_64-apple-darwin/release/cut-craft
-# the app's icon, from the logo, at each size macOS asks for
+# the app's icon, from the logo, at each size macOS asks for. A Mac's icons sit on Apple's
+# grid: the rounded square 824 of 1024 wide, centred, with a soft shadow below, so the logo
+# (which fills its square edge to edge) is shrunk onto it to sit in line with the Dock's others
 iconset=dist/AppIcon.iconset
 mkdir -p "$iconset"
+mac_svg=dist/AppIcon.svg
+sed -e 's|viewBox="0 0 256 256">|viewBox="0 0 1024 1024"><defs><filter id="mac-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.3"/></filter></defs><g filter="url(#mac-shadow)"><g transform="translate(72.53 72.53) scale(3.4333)">|' \
+    -e 's|</svg>|</g></g></svg>|' assets/cut-craft.svg > "$mac_svg"
 for size in 16 32 128 256 512; do
-    rsvg-convert -w "$size" -h "$size" assets/cut-craft.svg -o "$iconset/icon_${size}x${size}.png"
-    rsvg-convert -w $((size * 2)) -h $((size * 2)) assets/cut-craft.svg \
+    rsvg-convert -w "$size" -h "$size" "$mac_svg" -o "$iconset/icon_${size}x${size}.png"
+    rsvg-convert -w $((size * 2)) -h $((size * 2)) "$mac_svg" \
         -o "$iconset/icon_${size}x${size}@2x.png"
 done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
@@ -41,6 +46,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>${version}</string>
     <key>LSMinimumSystemVersion</key><string>11.0</string>
     <key>NSHighResolutionCapable</key><true/>
+    <key>LSApplicationCategoryType</key><string>public.app-category.graphics-design</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>

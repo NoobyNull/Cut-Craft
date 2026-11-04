@@ -168,6 +168,7 @@ impl CutCraftApp {
             autosaved: (0, 0.0),
             autosave: None,
             title: String::new(),
+            title_bar_at_start: false,
         }
     }
 
@@ -2677,7 +2678,7 @@ impl CutCraftApp {
         if !ctx.egui_wants_keyboard_input() {
             let job = self.screen == Screen::Job;
             let fired: Vec<String> = self
-                .bindings()
+                .bindings(ctx)
                 .into_iter()
                 .filter(|(id, _)| job || ["new", "open"].contains(&id.as_str()))
                 .filter(|(_, keys)| ctx.input_mut(|i| i.consume_shortcut(keys)))
@@ -2725,8 +2726,9 @@ impl CutCraftApp {
         });
     }
 
-    /// Every key binding: each command's own shortcut, plus the built-ins as the menus spell them.
-    pub(super) fn bindings(&self) -> Vec<(String, KeyboardShortcut)> {
+    /// Every key binding: each command's own shortcut, plus the built-ins as the menus spell them,
+    /// and on a Mac its own keys for some of them ([`super::mac::extra_bindings`]).
+    pub(super) fn bindings(&self, ctx: &egui::Context) -> Vec<(String, KeyboardShortcut)> {
         let commands = self
             .registry
             .iter()
@@ -2740,7 +2742,12 @@ impl CutCraftApp {
         let layouts = LAYOUT_KEYS
             .iter()
             .filter_map(|&(id, keys)| Some((id.to_owned(), shortcut::parse(keys)?)));
-        commands.chain(built_ins).chain(layouts).collect()
+        let mut bindings: Vec<_> = commands.chain(built_ins).chain(layouts).collect();
+        if super::mac::is_mac(ctx) {
+            let extra = super::mac::extra_bindings(&bindings);
+            bindings.extend(extra);
+        }
+        bindings
     }
 
     pub(super) fn menu_bar(&mut self, ui: &mut egui::Ui) {
@@ -2754,7 +2761,16 @@ impl CutCraftApp {
                 gui::MenuItem::with_action(&file_name(path), &format!("open_recent:{i}"))
             })
             .collect();
+        // on a Mac without its title bar, the menus share the title bar's row with the window's
+        // traffic-light buttons, which sit at the left
+        let mac_row = super::mac::is_mac(ui.ctx()) && !self.title_bar_at_start;
         egui::MenuBar::new().ui(ui, |ui| {
+            if mac_row {
+                ui.allocate_space(egui::vec2(
+                    super::mac::TRAFFIC_LIGHTS,
+                    super::mac::TITLE_BAR_HEIGHT - 2.0 * f32::from(ui.spacing().menu_margin.top),
+                ));
+            }
             for menu in &self.current_menus().menus {
                 ui.menu_button(&menu.name, |ui| {
                     menu_items(
@@ -2777,7 +2793,9 @@ impl CutCraftApp {
                     );
                 });
             }
-            if !self.options.appearance.system_title_bar {
+            if mac_row {
+                super::title_bar::title_and_drag(ui, &self.title);
+            } else if !self.options.appearance.system_title_bar && !super::mac::is_mac(ui.ctx()) {
                 super::title_bar::controls(ui, &self.title);
             }
         });
@@ -3884,7 +3902,7 @@ impl CutCraftApp {
         };
         let shortcuts: Vec<(String, String)> = if info == Info::Shortcuts {
             let mut rows: Vec<(String, String)> = self
-                .bindings()
+                .bindings(ctx)
                 .into_iter()
                 .map(|(id, keys)| {
                     let label = self
