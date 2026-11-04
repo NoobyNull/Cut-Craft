@@ -65,7 +65,11 @@ pub const DESIGN_SUBTABS: &[SubTab] = &[
     SubTab {
         name: "Edit",
         hint: "Select, reshape, join, trim, move, rotate and resize what you drew",
-        groups: &["Edit Objects", "Transform Objects"],
+        groups: &[
+            "Select and Edit",
+            "Join, Combine and Trim",
+            "Transform Objects",
+        ],
     },
     SubTab {
         name: "Arrange",
@@ -177,28 +181,35 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "trace_bitmap",
             ],
         ),
+        // Aspire's Edit Objects section, in two: picking and reshaping, then the tools that
+        // make one vector of several or cut them (each a job a beginner names differently)
         group(
-            "Edit Objects",
+            "Select and Edit",
             &[
                 "select",
                 "node_edit",
                 "transform",
                 "group",
+                "measure_inspect",
+                "fit_curves_to_vectors",
+                "vector_validator",
+                "edit_picture",
+                "crop_bitmap",
+            ],
+        ),
+        group(
+            "Join, Combine and Trim",
+            &[
                 "join_vectors",
                 "join_straight_line",
                 "join_smooth_curve",
                 "join_move_end_points",
+                "close_extend_vector",
                 "weld_vectors",
                 "subtract_vectors",
                 "overlap_intersect",
                 "interactive_vector_trim",
                 "trim_objects",
-                "close_extend_vector",
-                "fit_curves_to_vectors",
-                "vector_validator",
-                "measure_inspect",
-                "edit_picture",
-                "crop_bitmap",
             ],
         ),
         // Aspire's Align Objects section (help: Alignment Tools): the common alignments

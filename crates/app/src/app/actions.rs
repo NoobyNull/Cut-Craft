@@ -9,9 +9,10 @@ use super::{
     SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm, Screen, Session,
     Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
     VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
-    file_dialog, file_name, files, form, gui, job_dialog, menu_items, message_dialog,
-    on_the_desktop, rest_section, selector_section, shortcut, side_panel, side_tabs, summary_table,
-    template_dialog, texture_dialog, tool_list, tool_picker, toolpath_template_dialog, view3d,
+    file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
+    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
+    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
+    toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -46,6 +47,7 @@ impl CutCraftApp {
             status,
             design_tab: 0,
             design_subtab: 0,
+            first_steps: std::cell::RefCell::default(),
             view: View::TwoD,
             cursor: None,
             form: None,
@@ -2916,13 +2918,15 @@ impl CutCraftApp {
     pub(super) fn design_page(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Design page");
         self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
+        let tab = DESIGN_TABS[self.design_tab];
+        let form_open = self.form.as_ref().is_some_and(|f| f.page == Page::Design);
         egui::ScrollArea::vertical().show(ui, |ui| {
             // a tool's form takes the page's place, as Aspire's does
-            if self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
+            if form_open {
                 self.command_form(ui);
                 return;
             }
-            match DESIGN_TABS[self.design_tab] {
+            match tab {
                 "Design" => {
                     if self.options.favourites.of(Page::Design).1 {
                         // favourites name every tool, whatever sub-tab it is on
@@ -2943,6 +2947,10 @@ impl CutCraftApp {
                 }
             }
         });
+        // the hovered tool's guidance, or the tool in hand's, in the room left under the icons
+        if tab == "Design" && !form_open {
+            self.tip_box(ui);
+        }
     }
 
     /// The tool groups a design tab shows: Design has the drawing then the modeling tools.
@@ -3236,6 +3244,19 @@ impl CutCraftApp {
         // what the form has done that Cancel would take back
         let done = self.history.undo_depth() > open.undo_from;
         let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
+        let (mut save, mut load) = (false, false);
+        if open.page == Page::Toolpaths {
+            ui.horizontal(|ui| {
+                save = ui
+                    .button("Save Settings…")
+                    .on_hover_hint("Save this form's settings to a file, to use again later")
+                    .clicked();
+                load = ui
+                    .button("Load Settings…")
+                    .on_hover_hint("Fill this form from settings you saved before")
+                    .clicked();
+            });
+        }
         ui.horizontal(|ui| {
             apply = ui.button(apply_label).clicked();
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -3270,6 +3291,10 @@ impl CutCraftApp {
             self.cancel_form();
             return;
         }
+        if save || load {
+            self.form_settings_file(save);
+            return;
+        }
         match (new_job, apply, close) {
             (true, true, _) => self.job_setup_ok(),
             (true, _, true) => self.job_setup_cancel(),
@@ -3287,6 +3312,52 @@ impl CutCraftApp {
             }
             _ => {}
         }
+    }
+
+    /// Save Settings… (or Load Settings… when not `save`) on a toolpath's form.
+    fn form_settings_file(&mut self, save: bool) {
+        let Some(form) = &self.form else { return };
+        let dialog = form_settings_dialog();
+        if save {
+            let Some(path) = dialog
+                .set_file_name(format!("{}.{}", form.label, files::FORM_SETTINGS_EXTENSION))
+                .save_file()
+            else {
+                return;
+            };
+            self.save_form_settings(&path.with_extension(files::FORM_SETTINGS_EXTENSION));
+        } else if let Some(path) = dialog.pick_file() {
+            self.load_form_settings(&path);
+        }
+    }
+
+    /// The open form's settings saved to `path`, saying so in the status bar.
+    pub(super) fn save_form_settings(&mut self, path: &std::path::Path) {
+        let Some(form) = &self.form else { return };
+        let bytes = files::form_settings(form.id, form.label, &form.params);
+        let message = match cut_craft_core::file::write_atomic(path, &bytes) {
+            Ok(()) => format!("Saved the settings as {}", path.display()),
+            Err(e) => format!("Could not save the settings to {}: {e}", path.display()),
+        };
+        self.status.set_message(&message);
+    }
+
+    /// The open form filled from the settings saved at `path`, saying so in the status bar.
+    pub(super) fn load_form_settings(&mut self, path: &std::path::Path) {
+        let Some(form) = &mut self.form else { return };
+        let loaded = std::fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                files::load_form_settings(form.id, form.label, &mut form.params, &bytes)
+            });
+        let message = match loaded {
+            Ok(()) => {
+                form.dirty = true;
+                format!("Loaded the settings from {}", path.display())
+            }
+            Err(e) => format!("Could not load {}: {e}", path.display()),
+        };
+        self.status.set_message(&message);
     }
 
     /// Import 3D Model's buttons: Import keeps the model as placed and closes; Cancel takes
@@ -3326,11 +3397,10 @@ impl CutCraftApp {
             .set_message(&format!("{} cancelled", form.label));
     }
 
-    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
-        let form = self.form.as_ref().map_or("none", |f| f.label);
-        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
-        let slots = self.slots();
-        let Some(open) = &mut self.form else { return };
+    /// A form's heading: its tool's icon and name, then what to do first while the tool has
+    /// nothing to work on, or how to draw with it (see [`Self::form_guidance`]).
+    fn form_heading(&self, ui: &mut egui::Ui) {
+        let Some(open) = &self.form else { return };
         ui.horizontal(|ui| {
             if let Some(path) = self.icons.find(open.icon, open.id) {
                 let edge = ui.spacing().interact_size.y;
@@ -3342,6 +3412,20 @@ impl CutCraftApp {
             }
             ui.strong(open.label);
         });
+        if let Some(step) = self.form_guidance() {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("Next:");
+                ui.label(step);
+            });
+        }
+    }
+
+    pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
+        let form = self.form.as_ref().map_or("none", |f| f.label);
+        cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
+        let slots = self.slots();
+        self.form_heading(ui);
+        let Some(open) = &mut self.form else { return };
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
         let picture = |path: &str| {

@@ -226,8 +226,8 @@ impl CutCraftApp {
         let button = self
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
-        ui.add_enabled(self.available(id), button)
-            .on_hover_hint(gui::about(id).unwrap_or(&label))
+        let response = ui.add_enabled(self.available(id), button);
+        self.with_guidance(response, id)
             .on_disabled_hover_text(format!("{label}: not implemented yet"))
     }
 
@@ -259,13 +259,16 @@ impl CutCraftApp {
             .collect();
         let about = gui::about(id).unwrap_or(&label).to_owned();
         let any_available = button.members.iter().any(|m| self.available(m));
-        let response = ui
-            .add_enabled(
-                any_available,
-                self.icon_button(explicit, id, &label, edge)
-                    .selected(in_hand),
-            )
-            .on_hover_hint(tooltip(&about, &others))
+        // the tip names the tools the flyout holds too, so they are found without opening it
+        let tip = self.tool_tip(id, &tooltip(&about, &others));
+        let response = ui.add_enabled(
+            any_available,
+            self.icon_button(explicit, id, &label, edge)
+                .selected(in_hand),
+        );
+        super::guide::hover(&response, &tip);
+        let response = response
+            .on_hover_text(super::guide::tooltip(&tip.about, tip.next.as_deref()))
             .on_disabled_hover_text(format!("{label}: not implemented yet"));
         let r = response.rect;
         flyout_arrow(ui, &response);
@@ -345,9 +348,9 @@ impl CutCraftApp {
                 None => egui::Button::new(&name),
             }
             .selected(member == button.face);
-            let row = ui
-                .add_enabled(self.available(member), row)
-                .on_hover_hint(gui::about(member).unwrap_or(&name))
+            let row = ui.add_enabled(self.available(member), row);
+            let row = self
+                .with_guidance(row, member)
                 .on_disabled_hover_text(format!("{name}: not implemented yet"));
             if opened && member == button.face {
                 row.request_focus();
@@ -2822,6 +2825,8 @@ impl CutCraftApp {
                 .auto_shrink(false)
                 .show(ui, |ui| {
                     self.tools_or_favourites(ui, &groups, Page::Toolpaths);
+                    // the hovered tool's guidance under the icons, scrolling with them
+                    self.tip_contents(ui);
                 });
         });
         let (rect, divider) = ui.allocate_exact_size(egui::vec2(width, strip), egui::Sense::drag());

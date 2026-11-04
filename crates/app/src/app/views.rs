@@ -1153,15 +1153,13 @@ impl CutCraftApp {
         let gesture = gesture.filter(|_| !guided);
         let gesture = self.snapped(ui, gesture, canvas.transform.scale);
         self.track_stroke(gesture);
-        let placing_tabs = self.placing_tabs();
-        let filleting = self.filleting();
-        let tracing = self.tracing();
-        // the selection's box and handles, whenever nothing else uses the view's clicks
-        let handled = self.view_tool.is_none()
-            && self.drawing_tool().is_none()
-            && !tracing
-            && !filleting
-            && !placing_tabs;
+        let modes = self.modes();
+        let Modes {
+            handled,
+            tracing,
+            filleting,
+            placing_tabs,
+        } = modes;
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
             // Trace Bitmap: a box dragged over the picture is the part traced
             (Some(Gesture::Dragging(drag)), None, None) if tracing => Overlay::Window {
@@ -1212,17 +1210,7 @@ impl CutCraftApp {
         };
         self.paint_2d(ui, &canvas, &overlay);
         self.datum_mark(ui, &canvas, area, job.offset);
-        self.handles_and_hints(
-            ui,
-            &canvas,
-            reach,
-            Modes {
-                handled,
-                tracing,
-                filleting,
-                placing_tabs,
-            },
-        );
+        self.handles_and_hints(ui, &canvas, reach, modes);
         self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
@@ -1230,19 +1218,7 @@ impl CutCraftApp {
         self.view_transform = Some(canvas.transform);
         self.view_area = Some(area);
         self.cursor = canvas.cursor();
-        self.act_2d(
-            ui,
-            gesture,
-            &canvas,
-            reach,
-            area,
-            Modes {
-                handled,
-                tracing,
-                filleting,
-                placing_tabs,
-            },
-        );
+        self.act_2d(ui, gesture, &canvas, reach, area, modes);
     }
 
     /// What a gesture in the 2D view does, once the view is drawn.
@@ -1797,6 +1773,13 @@ impl CutCraftApp {
                     .into(),
             );
         }
+        // a form whose tool wants a selection it has not got says what to select
+        if let Some(form) = &self.form
+            && self.doc.selection.is_empty()
+            && let Some(step) = self.first_step_of(form.id)
+        {
+            return Some(step);
+        }
         // a toolbox variant says how it reads the drag
         if let Some(form) = self.form.as_ref().filter(|f| f.way != DragWay::AsIs)
             && let Some(variant) = crate::flyout::VARIANTS
@@ -1805,47 +1788,92 @@ impl CutCraftApp {
         {
             return drag(variant.hint);
         }
-        match self.drawing_tool() {
-            Some("draw_polyline") if self.polyline.is_empty() => Some(
+        if let Some(id) = self.drawing_tool() {
+            return self.drawing_step(id, self.polyline.is_empty());
+        }
+        if !modes.handled {
+            None
+        } else if self.doc.selection.is_empty() {
+            Some(
+                "Click a vector to select it, Shift-click to add more, or drag a box round \
+                 several (right to left takes those it touches too)"
+                    .into(),
+            )
+        } else {
+            Some(
+                "Drag the selection to move it, a handle to scale or rotate; Shift-click to add \
+                 or take away"
+                    .into(),
+            )
+        }
+    }
+
+    /// How drawing tool `id` is used: its next click or drag (a polyline's by whether it has
+    /// started); for any other drawing tool, its description and a drag; nothing for a tool
+    /// that is not drawn with the mouse.
+    pub(super) fn drawing_step(&self, id: &str, polyline_empty: bool) -> Option<String> {
+        const EDIT: &str = "; Shift-click one this tool drew to edit it";
+        let drag = |what: &str| Some(format!("{what}{EDIT}"));
+        match id {
+            "draw_polyline" if polyline_empty => Some(
                 "Draw Polyline: click the first point (drag for a curved span)".into(),
             ),
-            Some("draw_polyline") => Some(
+            "draw_polyline" => Some(
                 "Click the next point (drag for a curved span); click the first point to close it, \
                  or right-click, Space or Escape to finish it open; Backspace takes a point back"
                     .into(),
             ),
-            Some("draw_rectangle") => drag("Draw Rectangle: drag from one corner to the opposite one"),
-            Some("draw_circle") => drag("Draw Circle: drag from the centre out to the radius"),
-            Some("draw_ellipse") => drag("Draw Ellipse: drag a box for it to fit"),
-            Some("draw_polygon") => drag("Draw Polygon: drag from the centre out to a corner"),
-            Some("draw_star") => drag("Draw Star: drag from the centre out to a point"),
-            Some("dimensions") => drag("Dimensions: drag from the first point to the second"),
-            Some("draw_freehand") => Some("Draw Freehand: drag to draw".into()),
-            Some("sculpt") => Some("Sculpting: drag over the model to work it with the brush".into()),
-            Some("cross_section") => Some("Cross Section: drag a line across the model".into()),
-            Some("interactive_vector_trim") => Some(
+            "draw_rectangle" => drag("Draw Rectangle: drag from one corner to the opposite one"),
+            "draw_circle" => drag("Draw Circle: drag from the centre out to the radius"),
+            "draw_ellipse" => drag("Draw Ellipse: drag a box for it to fit"),
+            "draw_polygon" => drag("Draw Polygon: drag from the centre out to a corner"),
+            "draw_star" => drag("Draw Star: drag from the centre out to a point"),
+            "dimensions" => drag("Dimensions: drag from the first point to the second"),
+            "draw_freehand" => Some("Draw Freehand: drag to draw".into()),
+            "sculpt" => Some("Sculpting: drag over the model to work it with the brush".into()),
+            "cross_section" => Some("Cross Section: drag a line across the model".into()),
+            "interactive_vector_trim" => Some(
                 "Trim: click a piece of a vector to cut it away back to the crossings either \
                  side, or drag across pieces to cut each one"
                     .into(),
             ),
-            Some("draw_text") => Some(
+            "draw_text" => Some(
                 "Draw Text: click to place the text; click between two letters to bring them \
                  together (Shift: apart, Ctrl: by more); Shift-click text to edit it"
                     .into(),
             ),
-            Some(id) => gui::about(id).map(|about| format!("{about}: drag in the view")),
-            None if !modes.handled => None,
-            None if self.doc.selection.is_empty() => Some(
-                "Click a vector to select it, Shift-click to add more, or drag a box round \
-                 several (right to left takes those it touches too)"
-                    .into(),
-            ),
-            None => Some(
-                "Drag the selection to move it, a handle to scale or rotate; Shift-click to add \
-                 or take away"
-                    .into(),
-            ),
+            id => gui::about(id)
+                .filter(|_| {
+                    self.registry
+                        .get(id)
+                        .is_some_and(cut_craft_core::DynCommand::interactive)
+                })
+                .map(|about| format!("{about}: drag in the view")),
         }
+    }
+
+    /// What the 2D view's clicks go to now (see [`Modes`]).
+    pub(super) fn modes(&self) -> Modes {
+        let placing_tabs = self.placing_tabs();
+        let filleting = self.filleting();
+        let tracing = self.tracing();
+        // the selection's box and handles, whenever nothing else uses the view's clicks
+        let handled = self.view_tool.is_none()
+            && self.drawing_tool().is_none()
+            && !tracing
+            && !filleting
+            && !placing_tabs;
+        Modes {
+            handled,
+            tracing,
+            filleting,
+            placing_tabs,
+        }
+    }
+
+    /// What the tool in hand does next, as [`Self::step_hint`] has it, away from the view.
+    pub(super) fn next_step(&self) -> Option<String> {
+        self.step_hint(self.modes())
     }
 
     /// Whether `at` is on one of the selection's scale or rotate handles.

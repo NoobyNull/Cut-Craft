@@ -4,6 +4,7 @@
 mod actions;
 mod cutting;
 mod draw3d;
+mod guide;
 mod help;
 mod layouts;
 mod mac;
@@ -723,6 +724,8 @@ struct CutCraftApp {
     design_tab: usize,
     /// The Design tab's open sub-tab (see [`gui::DESIGN_SUBTABS`]).
     design_subtab: usize,
+    /// Each tool's first step, once asked for (see [`guide::first_step`]).
+    first_steps: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     view: View,
     cursor: Option<Point>,
     form: Option<OpenForm>,
@@ -1245,6 +1248,15 @@ fn toolpath_template_dialog() -> rfd::FileDialog {
     settings_dialog(
         "Toolpath template",
         files::TOOLPATH_TEMPLATE_EXTENSION,
+        "templates",
+    )
+}
+
+/// A toolpath form's saved settings, in the same `templates` folder.
+fn form_settings_dialog() -> rfd::FileDialog {
+    settings_dialog(
+        "Toolpath settings",
+        files::FORM_SETTINGS_EXTENSION,
         "templates",
     )
 }

@@ -13,9 +13,9 @@ import stlrender
 from make_icons import (ACC, DARK, GREY, INK, RED, TP, WHITE, WOODD, arrow, circ, combine_mark, curved_arrow, darrow, dot,
                         eye, folder, line, path, picture, pl, pencil, plus, rect, solid)
 
-BODY = "#8fb0dc"   # a 3D component, as in the model pictures
-WOOD = "#ecd3a6"   # material
-PALE = "#c7d3e3"   # a component as it was, or one that is hidden
+BODY = "#d9b985"   # a 3D component: wood, as the material it will be carved from
+WOOD = "#e9cf9e"   # material
+PALE = "#e8dcc6"   # a component as it was, or one that is hidden
 AZ, EL = -35, 32
 PX = 4             # rendered pixels per icon unit: 48 units become 192 pixels
 
@@ -289,7 +289,7 @@ def _():
 @icon("modeling/add_zero_plane")
 def _():
     ic = Icon(fit=(0.04, 0.08, 0.86, 0.9))
-    ic.add([(box(-1, -1, -0.03, 1, 1, 0), "#aabfdf")], 0.75)
+    ic.add([(box(-1, -1, -0.03, 1, 1, 0), "#c9ab78")], 0.75)
     ic.add([(shape(dome_fn(r=0.55, h=0.5)), BODY)])
     ic.marks.append(plus(40, 39, 6, ACC, 3.5))
     return ic
@@ -305,7 +305,7 @@ def _():
 def levels():
     ic = Icon(fit=(0.08, 0.04, 0.92, 0.96))
     solids = []
-    for k, (z, c) in enumerate(((0.0, "#aabfdf"), (0.42, BODY), (0.84, "#aabfdf"))):
+    for k, (z, c) in enumerate(((0.0, "#c9ab78"), (0.42, BODY), (0.84, "#c9ab78"))):
         solids.append((shift(box(-0.8, -0.8, 0, 0.8, 0.8, 0.1), dz=z), c))
     solids.append((shift(shape(dome_fn(r=0.45, h=0.22)), dz=0.94), BODY))
     return ic.add(solids)
@@ -417,14 +417,14 @@ def _():
     xs = np.linspace(-1, 1, 60)
     a = np.stack([xs, -0.25 + 0 * xs, 0.25 + 0.18 * np.sin(xs * math.pi * 1.5)], -1)
     b = np.stack([xs, 0.25 + 0 * xs, 0.25 - 0.18 * np.sin(xs * math.pi * 1.5)], -1)
-    return Icon().add([(tube(a, 0.15), BODY), (tube(b, 0.15), "#aabfdf")])
+    return Icon().add([(tube(a, 0.15), BODY), (tube(b, 0.15), "#c9ab78")])
 
 
 @icon("modeling/offset_model")
 def _():
     ic = Icon(bounds=((-0.95, -0.95, 0), (0.95, 0.95, 0.85)))
     ic.add([(shape(dome_fn(r=0.65, h=0.55)), BODY)])
-    ic.add([(shape(dome_fn(r=0.92, h=0.82)), "#aabfdf")], 0.4)
+    ic.add([(shape(dome_fn(r=0.92, h=0.82)), "#c9ab78")], 0.4)
     ring = ring3(0, 0, 0.92, 0.0)
     ic.marks.append(stroke3(ic, ring, ACC, 1.8, "3 2.5"))
     return ic
@@ -433,7 +433,7 @@ def _():
 @icon("modeling/replace_below")
 def _():
     ic = Icon(fit=(0.06, 0.04, 0.94, 0.96))
-    ic.add([(box(-0.8, -0.8, 0, 0.8, 0.8, 0.35), "#aabfdf"), (shift(shape(dome_fn(r=0.8, h=0.6)), dz=0.35), BODY)])
+    ic.add([(box(-0.8, -0.8, 0, 0.8, 0.8, 0.35), "#c9ab78"), (shift(shape(dome_fn(r=0.8, h=0.6)), dz=0.35), BODY)])
     sq = [(-0.8, -0.8), (0.8, -0.8), (0.8, 0.8)]
     ic.marks.append(stroke3(ic, [(x, y, 0.35) for x, y in sq], ACC, 2.2, "3 2.5"))
     return ic
@@ -466,7 +466,7 @@ def _():
     solids = []
     for k, (a, b) in enumerate(((0, 0.32), (0.32, 0.64), (0.64, 0.95))):
         t = grid(lambda X, Y, b=b: np.minimum(fn(X, Y), b), -0.9, 0.9, -0.9, 0.9, n=64, base=a, keep_flat=False)
-        solids.append((shift(t, dz=k * 0.16), BODY if k != 1 else "#aabfdf"))
+        solids.append((shift(t, dz=k * 0.16), BODY if k != 1 else "#c9ab78"))
     return Icon().add(solids)
 
 
@@ -548,7 +548,7 @@ def combined(mode, fn, ghosts=()):
     """The result of combining, on the model under it, with the shapes it came from pale
     behind it where it is lower, and the mode's sign in the corner; all five framed alike."""
     ic = Icon(fit=(0.02, 0.1, 0.86, 0.98), bounds=((-1, -1, -0.05), (1, 1, 0.75)))
-    ic.add([(box(-1, -1, -0.05, 1, 1, 0), "#aabfdf")], 0.75)
+    ic.add([(box(-1, -1, -0.05, 1, 1, 0), "#c9ab78")], 0.75)
     for g in ghosts:
         ic.add([(shape(g), PALE)], 0.45)
     ic.add([(shape(fn), BODY)])
