@@ -14,11 +14,12 @@ version() { # write Cargo.toml with this version and commit it
   g add Cargo.toml && g commit -qm "$2"
 }
 work() { echo "$1" >>"$repo/work.txt" && g add work.txt && g commit -qm "$1"; }
-expect() {
-  local want=$1 got
-  got=$(cd "$repo" && "$here/release-commit" 2>&1) || got="(fails) $got"
+expect() { # want, what, then release-commit's arguments
+  local want=$1 what=$2 got
+  shift 2
+  got=$(cd "$repo" && "$here/release-commit" "$@" 2>&1) || got="(fails) $got"
   if [[ $got != "$want" ]]; then
-    echo "FAIL: $2: got \"$got\", want \"$want\""
+    echo "FAIL: $what: got \"$got\", want \"$want\""
     failed=1
   fi
 }
@@ -52,5 +53,20 @@ g switch -q main
 g merge -q --no-ff -m "Merge pull request #200" version-0.6.1 >/dev/null 2>&1 \
   || { g checkout -q --theirs Cargo.toml && g add Cargo.toml && g commit -qm "Merge pull request #200"; }
 expect "0.6.1 $(g rev-parse HEAD)" "a version pull request from an older branch"
+
+# untagged: every version since the newest tag, oldest first, so none is skipped when two
+# versions merge before the tagging job runs
+g tag v0.5.1 "$first"
+v060=$(g rev-list --first-parent -1 --grep="^Version 0.6.0" HEAD)
+v061=$(g rev-parse HEAD)
+expect "0.5.2 $merge
+0.6.0 $v060
+0.6.1 $v061" "untagged: every version since the last tag" untagged
+g tag v0.5.2 "$merge"
+g tag v0.6.0 "$v060"
+expect "0.6.1 $v061" "untagged: only the newest left" untagged
+g tag v0.6.1 "$v061"
+work "after the last version"
+expect "" "untagged: all tagged" untagged
 
 exit $failed

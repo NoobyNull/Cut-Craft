@@ -1,7 +1,7 @@
 # Tags each version as it lands on main, so no one has to push a tag by hand.
-# When main's Cargo.toml version has no vX.Y.Z tag yet (a "chore: version X.Y.Z" pull request
-# just merged, or a tag was never pushed), it tags the commit that version arrived in
-# (scripts/release-commit) and starts Builds on that tag, which builds, signs and publishes the
+# Each version on main's line since the last tag that has no vX.Y.Z tag yet (a "chore: version
+# X.Y.Z" pull request just merged, or a tag was never pushed) is tagged on the commit it arrived
+# in (scripts/release-commit untagged), and Builds is started on that tag, which builds, signs and publishes the
 # release. A version that already has its tag is left alone: v* tags are never moved or deleted.
 #
 # The tag is pushed with the workflow's own token. "Protect release tags" lets anyone make a new
@@ -33,35 +33,40 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Tag the version if it has no tag yet
+      - name: Tag each version that has no tag yet
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          read -r version commit < <(scripts/release-commit HEAD)
-          tag="v$version"
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
-            echo "$tag is already tagged: nothing to release." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          newest=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1)
-          if [[ -n $newest ]] && [[ $(printf '%s\n' "${newest#v}" "$version" | sort -V | tail -1) != "$version" ]]; then
-            echo "::warning::main says $version but $newest is newer; not tagging an older version."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" "$commit" -m "Cut Craft $version"
-          if ! git push origin "refs/tags/$tag"; then
-            # another run (or the nightly job) made it a moment ago: fine, it starts its own build
+          newest=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1)
+          # oldest first; more than one when versions merged faster than this job ran
+          versions=$(scripts/release-commit untagged HEAD)
+          if [[ -z $versions ]]; then
+            echo "main's version is already tagged: nothing to release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          while read -r version commit; do
+            tag="v$version"
+            if [[ -n $newest ]] && [[ $(printf '%s\n' "${newest#v}" "$version" | sort -V | tail -1) != "$version" ]]; then
+              echo "::warning::$version arrived on ${commit::7} but $newest is newer; not tagging an older version."
+              continue
+            fi
             if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
               echo "$tag was made meanwhile by another run." >> "$GITHUB_STEP_SUMMARY"
-              exit 0
+              continue
             fi
-            echo "::error::Could not push $tag. Check Settings → Rules → Rulesets: \"Protect release tags\" must allow creating v* tags."
-            exit 1
-          fi
-          gh workflow run builds.yml --ref "$tag"
-          {
-            echo "Tagged $tag on ${commit::7} and started **Builds** on it."
-            echo "The release appears on the Releases page when Builds finishes."
-          } >> "$GITHUB_STEP_SUMMARY"
+            git tag -a "$tag" "$commit" -m "Cut Craft $version"
+            if ! git push origin "refs/tags/$tag"; then
+              # another run (or the nightly job) made it a moment ago: fine, it starts its own build
+              if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+                echo "$tag was made meanwhile by another run." >> "$GITHUB_STEP_SUMMARY"
+                continue
+              fi
+              echo "::error::Could not push $tag. Check Settings → Rules → Rulesets: \"Protect release tags\" must allow creating v* tags."
+              exit 1
+            fi
+            gh workflow run builds.yml --ref "$tag"
+            echo "Tagged $tag on ${commit::7} and started **Builds** on it." >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$versions"
+          echo "Each release appears on the Releases page when its Builds run finishes." >> "$GITHUB_STEP_SUMMARY"
