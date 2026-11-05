@@ -4207,11 +4207,8 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
     }
     assert!(h.app.machine_window.is_some() && h.app.post_window.is_some());
     assert!(h.text_at("Associated Post-Processors").is_some());
-    // machines come from Cut Craft's own packages; posts have no online database
-    assert!(
-        !h.app.available("update_post_processor_database"),
-        "needs Vectric's service"
-    );
+    // Cut Craft's own posts come with Cut Craft: updating them is an update check
+    assert!(h.app.available("update_post_processor_database"));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -4294,8 +4291,11 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 29] = [
+    const ASKS: [&str; 31] = [
         "save_shaded_image",
+        "import_toolpaths_file",
+        // opens the browser
+        "print_job_sheet",
         "add_clipart_folder",
         "segment_3d_model_file",
         "new",
@@ -7617,4 +7617,146 @@ fn toolpath_forms_save_their_settings_and_load_them_back() {
         h.app.status.message
     );
     std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn the_window_items_tile_the_2d_and_3d_views_and_cascade_puts_them_back_in_tabs() {
+    let mut h = Harness::new();
+    for (id, split) in [
+        ("tile_windows_horizontal", Some(Split::Stacked)),
+        ("tile_windows_vertical", Some(Split::SideBySide)),
+        ("cascade_windows", None),
+    ] {
+        assert!(h.app.available(id), "{id}");
+        h.app.invoke(&h.ctx, id);
+        assert_eq!(h.app.split, split, "{id}");
+    }
+}
+
+#[test]
+fn keep_out_zones_and_shadows_in_the_3d_view_turn_on_and_off_from_the_view_menu() {
+    let mut h = Harness::new();
+    for (id, on) in [
+        ("draw_keep_out_zones_in_3d_view", true),
+        ("use_shadow_shading", false),
+    ] {
+        assert!(h.app.available(id), "{id}");
+        assert_eq!(h.app.display.checked(id), Some(on), "{id} as it starts");
+        h.app.invoke(&h.ctx, id);
+        assert_eq!(h.app.display.checked(id), Some(!on), "{id} turned over");
+    }
+    assert!(h.app.display.shadows && !h.app.display.keep_out_3d);
+}
+
+#[test]
+fn object_properties_opens_the_form_for_what_is_selected() {
+    let mut h = Harness::new();
+    assert!(!h.app.available("object_properties"), "nothing selected");
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    assert!(!h.app.doc.selection.is_empty());
+    assert!(h.app.available("object_properties"));
+    h.app.invoke(&h.ctx, "object_properties");
+    let form = h.app.form.as_ref().expect("a form opens").id;
+    assert!(
+        form == "draw_rectangle" || form == "set_size",
+        "the rectangle's own tool, or its position and size: {form}"
+    );
+}
+
+#[test]
+fn delete_layer_is_on_the_layer_menu_once_there_is_another_layer() {
+    let mut h = Harness::new();
+    let layer = |h: &Harness, i: usize| h.app.doc.layers[i].clone();
+    let only = gui::layer_menu(&h.app.doc, &layer(&h, 0));
+    let item = only
+        .iter()
+        .find(|i| i.name == "Delete Layer")
+        .expect("listed");
+    assert!(!item.is_enabled, "the last layer stays");
+    h.app
+        .apply("add_layer", &serde_json::json!({ "name": "Top" }))
+        .unwrap();
+    let top = layer(&h, h.app.doc.layers.len() - 1);
+    let menu = gui::layer_menu(&h.app.doc, &top);
+    let item = menu.iter().find(|i| i.name == "Delete Layer").unwrap();
+    assert!(item.is_enabled);
+    let action = item.action.clone();
+    h.app.invoke(&h.ctx, &action);
+    assert!(h.app.doc.layers.iter().all(|l| l.id != top.id), "deleted");
+}
+
+#[test]
+fn import_toolpaths_opens_its_form_on_the_file_and_adds_its_toolpaths() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-import-app-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("nameplate.nc");
+    std::fs::write(&file, "G21 G90\nG0 X10 Y10 Z5\nG1 Z-1 F600\nX40\n").unwrap();
+    h.app.import_toolpaths_from(&file);
+    let form = h.app.form.as_ref().expect("its form");
+    assert_eq!(form.id, "import_toolpaths");
+    assert_eq!(form.params["name"], "nameplate");
+    let params = form.params.clone();
+    h.app.apply("import_toolpaths", &params).unwrap();
+    let toolpath = h.app.doc.toolpaths.values().next().expect("added");
+    assert_eq!(toolpath.name, "nameplate");
+    assert_eq!(toolpath.tool.feed_rate, 600.0, "the file's feed rate");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn update_post_processor_database_says_what_it_found() {
+    let entries = h_posts();
+    let message = super::actions::post_database_message(&entries);
+    assert!(
+        message.contains(&format!("{} post-processors", entries.len())),
+        "{message}"
+    );
+    assert!(message.contains("newer Cut Craft"), "{message}");
+}
+
+fn h_posts() -> Vec<cut_craft_machines::Entry> {
+    cut_craft_machines::Library::new(None).entries()
+}
+
+/// Print Job Sheet's page names the job's file, the active machine, its post and its tool
+/// changer's slots.
+#[test]
+fn the_job_sheet_names_the_file_machine_post_and_slots() {
+    let mut h = Harness::new();
+    let dir = std::env::temp_dir().join(format!("cut-craft-job-sheet-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // not saved: no file of its own, so a copy goes to the recovery file
+    h.app.recovery_path = Some(dir.join("recovery.ccjob"));
+    let setup = h.app.job_setup();
+    assert_eq!(setup.job_file, "");
+    assert_eq!(
+        setup.job_copy,
+        dir.join("recovery.ccjob").display().to_string()
+    );
+    assert!(dir.join("recovery.ccjob").is_file());
+    let job = dir.join("Sign.ccraft");
+    std::fs::write(&job, b"job").unwrap();
+    h.app.session.path = Some(job.clone());
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Shop CNC".into(),
+        posts: vec!["FluidNC".into()],
+        slots: vec![None, Some("6 mm End Mill".into())],
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    let setup = h.app.job_setup();
+    assert_eq!(
+        (
+            setup.job_file.as_str(),
+            setup.machine.as_str(),
+            setup.post.as_str()
+        ),
+        (job.display().to_string().as_str(), "Shop CNC", "FluidNC")
+    );
+    assert_eq!(setup.job_copy, "", "saved: no copy needed");
+    assert_eq!(setup.slots.len(), 2);
+    assert!((setup.rapid - h.app.summary.rapid).abs() < 1e-9);
+    assert!(h.app.available("print_job_sheet"));
+    let _ = std::fs::remove_dir_all(&dir);
 }

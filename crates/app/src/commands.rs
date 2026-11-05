@@ -185,6 +185,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_copy_toolpath_to_sheet::CopyToolpathToSheet>();
     r.add::<cmd_name_part::NamePart>();
     r.add::<cmd_engrave_part_names::EngravePartNames>();
+    r.add::<cmd_import_toolpaths::ImportToolpaths>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
