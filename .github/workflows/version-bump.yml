@@ -3,15 +3,15 @@
 #   any feat: or "!" (rewrite, breaking)  -> 0.x+1.0
 #   otherwise any fix:/perf:/refactor:/revert:  -> 0.x.y+1
 #   only docs:/chore:/ci:/test:/style:/build:, or no merges  -> nothing is released
-# then commits "Version X.Y.Z" and tags vX.Y.Z. The tag starts Release and Builds, which build
-# and publish the release. "Run workflow" does the same now.
+# then commits "Version X.Y.Z" and tags vX.Y.Z. The tag starts Builds, which builds
+# and publishes the release. "Run workflow" does the same now.
 #
 # It starts once main's version has a tag (v0.5.1, cut by hand); until then it only reports.
 # Everything since the last tag counts, so a night that fails is made up the next night.
 # main is protected (no direct pushes), so the push goes through the deploy key in the
 # VERSION_BUMP_DEPLOY_KEY secret, the one thing the "Protect main" ruleset lets bypass it.
 # Unlike the workflow's own token, a deploy-key push starts workflows: CI checks the Version
-# commit, and the tag starts Release and Builds.
+# commit, and the tag starts Builds.
 name: Version bump
 
 on:

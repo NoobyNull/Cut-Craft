@@ -103,8 +103,9 @@ Do this once on a new machine or a fresh clone.
    git push gitea main
    ```
 
-   A push to `main` on GitHub starts **CI** (Linux, Windows and macOS tests) and **Release**,
-   which rebuilds the rolling `nightly` pre-release for Linux and Windows.
+   A push to `main` on GitHub starts **CI** (Linux, Windows and macOS tests), **Release**,
+   which rebuilds the rolling `nightly` pre-release for Linux and Windows, and **Release tag**,
+   which tags and releases `main`'s version if it has no tag yet.
 
 ## Build and run locally
 
@@ -140,21 +141,28 @@ Do this once on a new machine or a fresh clone.
 
 ## Cut a versioned release
 
-Versions are automatic. Each night **Version bump** reads the titles of the pull requests
-merged since the last version tag (see [CONTRIBUTING.md](CONTRIBUTING.md)), and if any of them
-changes the program it commits "Version X.Y.Z" and tags vX.Y.Z. The tag starts **Release**
-and **Builds**, which build and publish the release. To release before the night,
-open Actions → Version bump → **Run workflow**. Afterwards, `git pull` and push `main` and the
-new tag to the Gitea mirror too (`git push gitea main --tags`), since the bot pushes only to GitHub.
+Versions are automatic, and so are their tags. Each night **Version bump** reads the titles of
+the pull requests merged since the last version tag (see [CONTRIBUTING.md](CONTRIBUTING.md)),
+and if any of them changes the program it commits "Version X.Y.Z" and tags vX.Y.Z. The tag
+starts **Builds**, which builds, signs and publishes the release. To release before the night,
+open Actions → Version bump → **Run workflow**.
 
-The night's job starts working once `main`'s version has a tag, so the first one (0.5.1) is
-cut by hand, the same way you'd cut one to fix a failed night:
+Whenever `main`'s version has no tag yet, **Release tag** makes it: it tags the commit the
+version arrived in and starts **Builds** on that tag. So a version cut by hand needs nothing
+after its pull request merges. Nobody pushes tags by hand any more, and a `v*` tag is never
+moved or deleted (see "Repository protection").
+
+Afterwards, `git pull` and push `main` and the new tag to the Gitea mirror too
+(`git push gitea main --tags`), since the bots push only to GitHub.
+
+To cut a version by hand (to release now with your own "What's new" text, or after a failed
+night):
 
 1. Get the latest code and make sure the gate passes (see above), with `git status --short`
    printing nothing.
 
 2. Set the version. In the root `Cargo.toml`, under `[workspace.package]`, change the line
-   `version = "0.4.3"` to the new version, then update the lock file to match:
+   `version = "0.5.2"` to the new version, then update the lock file to match:
 
    ```bash
    cargo update -w
@@ -165,42 +173,22 @@ cut by hand, the same way you'd cut one to fix a failed night:
    links no longer fit and a test fails.
 
 4. `main` is protected, so the version goes in through a pull request like any other change.
-   Commit the three files on a branch and open a pull request titled `chore: version 0.5.1`
+   Commit the three files on a branch and open a pull request titled `chore: version 0.5.3`
    (`chore:` so the nightly job doesn't count it as another change):
 
    ```bash
-   git switch -c version-0.5.1
+   git switch -c version-0.5.3
    git add Cargo.toml Cargo.lock crates/app/whats-new.md
-   git commit -m "Version 0.5.1"
-   git push -u origin version-0.5.1
-   gh pr create --title "chore: version 0.5.1" --body "Version 0.5.1"
+   git commit -m "Version 0.5.3"
+   git push -u origin version-0.5.3
+   gh pr create --title "chore: version 0.5.3" --body "Version 0.5.3"
    ```
 
-5. When CI is green, merge it, then tag what landed on `main`:
+5. When CI is green, merge it. **Release tag** tags v0.5.3 on the merge and **Builds** makes
+   the macOS DMG, Linux `.tar.gz`, AppImage and Flatpak, and Windows `.zip`, signs each and
+   attaches them to the release on GitHub's Releases page. Watch with `gh run list --limit 6`.
 
-   ```bash
-   git switch main && git pull
-   git tag -a v0.5.1 -m "Cut Craft 0.5.1"
-   ```
-
-6. Push the tag to GitHub, and `main` and the tag to the Gitea mirror:
-
-   ```bash
-   git push origin v0.5.1
-   git push gitea main v0.5.1
-   ```
-
-7. Watch GitHub build the packages:
-
-   ```bash
-   gh run list --limit 6
-   ```
-
-   The tag starts **Release** (Linux `.tar.gz`, Windows `.zip`) and **Builds** (macOS DMG,
-   Linux AppImage and Flatpak, Windows). When they finish, the files are attached to the
-   release on GitHub's Releases page.
-
-8. Build the same version locally (see "Build and run locally").
+6. Build the same version locally (see "Build and run locally").
 
 ## Repository protection
 
@@ -212,7 +200,8 @@ Two rulesets (Settings → Rules → Rulesets) guard the GitHub repository:
   keys, which is how the nightly version gets its commit onto `main`. To override in an
   emergency, set the ruleset to Disabled and back to Active afterwards.
 - **Protect release tags**: a `v*` tag can't be deleted or moved once it exists. New tags can
-  still be made.
+  still be made, which is how **Release tag** makes them with the workflow's own token. Keep
+  "Restrict creations" off in this ruleset, or Release tag can't tag.
 
 ### Let the nightly version push to main
 
@@ -237,5 +226,9 @@ Without the secret the night that has something to release fails with a message 
   `git pull --rebase origin main`, then push again.
 - **GitHub says "This repository moved".** Point `origin` at the new address:
   `git remote set-url origin git@github.com:NoobyNull/Cut-Craft.git`.
-- **A tag was pushed on the wrong commit.** Delete it everywhere, then tag again:
-  `git tag -d v0.5.0`, `git push origin :refs/tags/v0.5.0`, `git push gitea :refs/tags/v0.5.0`.
+- **A release came out wrong.** Its tag can't be moved or deleted. Fix it on `main` and cut the
+  next version (a `fix:` merge does it overnight, or cut one by hand above).
+- **A version merged but no release appeared.** Open Actions → **Release tag** and read the run
+  for that merge; **Run workflow** there tries again. If the tag exists but **Builds** failed,
+  open Actions → Builds → **Run workflow** and pick the tag (not a branch) under "Use workflow
+  from".

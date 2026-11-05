@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: The version rule's own tests
         run: scripts/test-next-version
+      - name: Release tagging's own tests
+        run: scripts/test-release-commit
       - name: The title names a kind of change
         env:
           TITLE: ${{ github.event.pull_request.title }}
