@@ -1,0 +1,56 @@
+#!/bin/bash
+# Tests for scripts/release-commit: scripts/test-release-commit (CI runs it on each pull request).
+# Builds a throwaway repository shaped like main (version pull requests merged with merge commits)
+# and checks which commit each version is tagged on.
+set -uo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(mktemp -d)
+trap 'rm -rf "$repo"' EXIT
+failed=0
+
+g() { git -C "$repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"; }
+version() { # write Cargo.toml with this version and commit it
+  printf '[workspace.package]\nversion = "%s"\n\n[dependencies]\nfoo = { version = "1.0" }\n' "$1" >"$repo/Cargo.toml"
+  g add Cargo.toml && g commit -qm "$2"
+}
+work() { echo "$1" >>"$repo/work.txt" && g add work.txt && g commit -qm "$1"; }
+expect() {
+  local want=$1 got
+  got=$(cd "$repo" && "$here/release-commit" 2>&1) || got="(fails) $got"
+  if [[ $got != "$want" ]]; then
+    echo "FAIL: $2: got \"$got\", want \"$want\""
+    failed=1
+  fi
+}
+
+g init -q -b main
+version 0.5.1 "Version 0.5.1"
+first=$(g rev-parse HEAD)
+work "a fix"
+expect "0.5.1 $first" "the version's own commit, not later work"
+
+# a "chore: version 0.5.2" pull request, merged: tag the merge commit main got
+g switch -qc version-0.5.2
+version 0.5.2 "Version 0.5.2"
+g switch -q main
+work "merged meanwhile"
+g merge -q --no-ff -m "Merge pull request #188" version-0.5.2
+merge=$(g rev-parse HEAD)
+expect "0.5.2 $merge" "a merged version pull request"
+work "later work"
+work "more later work"
+expect "0.5.2 $merge" "later merges don't move it"
+
+# the nightly job's own commit straight onto main
+version 0.6.0 "Version 0.6.0"
+expect "0.6.0 $(g rev-parse HEAD)" "the nightly Version commit"
+
+# a version pull request whose branch was made before an earlier version: still the merge
+g switch -qc version-0.6.1 HEAD~1
+version 0.6.1 "Version 0.6.1"
+g switch -q main
+g merge -q --no-ff -m "Merge pull request #200" version-0.6.1 >/dev/null 2>&1 \
+  || { g checkout -q --theirs Cargo.toml && g add Cargo.toml && g commit -qm "Merge pull request #200"; }
+expect "0.6.1 $(g rev-parse HEAD)" "a version pull request from an older branch"
+
+exit $failed

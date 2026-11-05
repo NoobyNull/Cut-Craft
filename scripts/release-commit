@@ -1,0 +1,26 @@
+#!/bin/bash
+# Which commit a version is released from. Prints "VERSION SHA": the version in Cargo.toml at
+# REF (default HEAD), and the first commit on main's own line (first parent, so a merged
+# "chore: version X" pull request gives its merge commit) that has that version. Later merges
+# leave it where it is, so this answers the same however late it runs.
+#   scripts/release-commit            0.5.2 a628c9d...
+#   scripts/release-commit origin/main
+# .github/workflows/release-tag.yml tags that commit vVERSION when main has no such tag yet.
+set -euo pipefail
+
+ref=${1:-HEAD}
+version_at() {
+  git show "$1:Cargo.toml" 2>/dev/null | sed -n 's/^version = "\(.*\)"/\1/p' | head -1
+}
+
+version=$(version_at "$ref")
+if [[ -z $version ]]; then
+  echo "no version = \"...\" line in Cargo.toml at $ref" >&2
+  exit 1
+fi
+commit=$(git rev-parse "$ref^{commit}")
+for sha in $(git rev-list --first-parent "$ref"); do
+  [[ $(version_at "$sha") == "$version" ]] || break
+  commit=$sha
+done
+echo "$version $commit"
