@@ -4291,9 +4291,11 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
 /// save-changes question (the smoke test's job has unsaved work), the file manager and
 /// quitting. Running one in a test puts a real window on the desktop.
 fn needs_a_person(app: &CutCraftApp, id: &str) -> bool {
-    const ASKS: [&str; 30] = [
+    const ASKS: [&str; 31] = [
         "save_shaded_image",
         "import_toolpaths_file",
+        // opens the browser
+        "print_job_sheet",
         "add_clipart_folder",
         "segment_3d_model_file",
         "new",
@@ -7715,4 +7717,31 @@ fn update_post_processor_database_says_what_it_found() {
 
 fn h_posts() -> Vec<cut_craft_machines::Entry> {
     cut_craft_machines::Library::new(None).entries()
+}
+
+/// Print Job Sheet's page names the job's file, the active machine, its post and its tool
+/// changer's slots.
+#[test]
+fn the_job_sheet_names_the_file_machine_post_and_slots() {
+    let mut h = Harness::new();
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/Sign.ccraft"));
+    h.app.machines.machines.push(cut_craft_machines::Machine {
+        name: "Shop CNC".into(),
+        posts: vec!["FluidNC".into()],
+        slots: vec![None, Some("6 mm End Mill".into())],
+        ..cut_craft_machines::Machine::default()
+    });
+    h.app.machines.active = h.app.machines.machines.len() - 1;
+    let setup = h.app.job_setup();
+    assert_eq!(
+        (
+            setup.job_file.as_str(),
+            setup.machine.as_str(),
+            setup.post.as_str()
+        ),
+        ("Sign.ccraft", "Shop CNC", "FluidNC")
+    );
+    assert_eq!(setup.slots.len(), 2);
+    assert!((setup.rapid - h.app.summary.rapid).abs() < 1e-9);
+    assert!(h.app.available("print_job_sheet"));
 }

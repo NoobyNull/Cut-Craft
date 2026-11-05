@@ -531,6 +531,12 @@ say "not implemented yet".
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
   toolpaths summary and each toolpath's tool, feeds and estimated time (the sections of
   Aspire's job setup sheet), with the home position and, double-sided, the side and flip.
+  It also names the job's file, the active machine, its post and the time it was made,
+  totals the run time and tool changes, and lists each tool with its tool changer slot
+  ("By hand" for one not loaded) or, without a changer, the T number the post writes, with
+  the toolpaths that use it and their run time. Run times use the Toolpath Summary's rapid
+  rate (and the machine's accelerations when it allows for them). Toolpaths ▸ Print Job
+  Sheet opens it in the web browser to print.
   A job of several sheets gets a page for each sheet with toolpaths (`name_Sheet.html`); a
   double-sided job's page ends `_Top` or `_Bottom`. Gadgets ▸ Job Setup Sheet Editor sets
   the title, a logo (PNG, JPEG or GIF), the header and footer colours and which of the

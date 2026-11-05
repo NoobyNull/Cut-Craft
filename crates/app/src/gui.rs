@@ -1759,6 +1759,7 @@ impl MenuSystem {
                         ),
                         MenuItem::with_action("Merge Visible Toolpaths", "merged_toolpath"),
                         i("Create Job Sheet"),
+                        a("Print Job Sheet...", "print_job_sheet"),
                         a("Print Part Labels...", "part_labels"),
                         a("Save Cut List...", "cut_list"),
                         sep(),
