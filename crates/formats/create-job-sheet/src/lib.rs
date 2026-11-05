@@ -14,6 +14,9 @@ use std::fmt::Write as _;
 
 pub struct JobSheet;
 
+/// How a file the sheet names but this computer does not have is printed: red.
+const MISSING: &str = "<span class=\"missing\">NO LOCAL FILE</span>";
+
 /// The rapid rate the time estimates assume, mm/min.
 // ponytail: Toolpath Summary's default; the sheet does not read the window's own setting
 const RAPID: f64 = 5000.0;
@@ -66,14 +69,18 @@ impl Default for Style {
 /// the default rapid rate) leaves those rows out.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Setup {
-    /// The job's own file name, once saved.
+    /// Where the job's own file is; empty when it has none on this computer (never saved,
+    /// or moved since), which the sheet prints as NO LOCAL FILE in red.
     pub job_file: String,
+    /// Where a job without a file of its own had a copy kept (the recovery file), if any.
+    pub job_copy: String,
     /// The machine it is cut on.
     pub machine: String,
     /// The post-processor its toolpaths are saved through.
     pub post: String,
-    /// The toolpath files saved for it, in the order they are run.
-    pub outputs: Vec<String>,
+    /// The toolpath files saved for it, in the order they are run, each with whether it is
+    /// still there; none (or one not there) is printed as NO LOCAL FILE in red.
+    pub outputs: Vec<(String, bool)>,
     /// The machine's tool changer: the tool in each slot by name, slot 1 first; empty for
     /// none, when the tools are numbered as the post numbers them.
     pub slots: Vec<Option<String>>,
@@ -89,6 +96,7 @@ impl Default for Setup {
     fn default() -> Self {
         Self {
             job_file: String::new(),
+            job_copy: String::new(),
             machine: String::new(),
             post: String::new(),
             outputs: vec![],
@@ -189,7 +197,8 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
          header,footer{{color:#fff;padding:.6em 1em;display:flex;align-items:center;gap:1em}}\
          header{{background:{}}}footer{{background:{};margin-top:2em}}header img{{max-width:165px;max-height:52px}}\
          header h1{{margin:0}}@media print{{body{{max-width:none}}header,footer{{print-color-adjust:exact;\
-         -webkit-print-color-adjust:exact}}h3,table{{break-inside:avoid}}}}</style></head><body><header>",
+         -webkit-print-color-adjust:exact}}h3,table{{break-inside:avoid}}.missing{{print-color-adjust:exact;-webkit-print-color-adjust:exact}}}}\
+         .missing{{color:#c00;font-weight:bold}}</style></head><body><header>",
         hex(style.header),
         hex(style.footer),
     );
@@ -215,14 +224,29 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
         .filter(|pair| pair[0].tool.name != pair[1].tool.name)
         .count();
     h.push_str("<h2>Job</h2><table>");
-    let outputs = setup
-        .outputs
-        .iter()
-        .map(|o| escape(o))
-        .collect::<Vec<_>>()
-        .join("<br>");
+    let job_file = match (setup.job_file.as_str(), setup.job_copy.as_str()) {
+        ("", "") => format!("{MISSING}<br>The job has not been saved"),
+        ("", copy) => format!(
+            "{MISSING}<br>The job has not been saved; a copy is kept at {}",
+            escape(copy)
+        ),
+        (file, _) => escape(file),
+    };
+    let outputs = if setup.outputs.is_empty() {
+        format!("{MISSING}<br>The toolpaths have not been saved")
+    } else {
+        setup
+            .outputs
+            .iter()
+            .map(|(name, found)| {
+                let missing = if *found { "" } else { MISSING };
+                format!("{} {missing}", escape(name)).trim_end().to_owned()
+            })
+            .collect::<Vec<_>>()
+            .join("<br>")
+    };
     for (heading, value) in [
-        ("Job file", escape(&setup.job_file)),
+        ("Job file", job_file),
         ("Machine", escape(&setup.machine)),
         ("Post-processor", escape(&setup.post)),
         ("Toolpath files", outputs),
@@ -459,20 +483,20 @@ mod tests {
         doc.toolpaths
             .insert(cut_craft_core::document::EntityId(u64::MAX), carve);
         let setup = Setup {
-            job_file: "Sign.ccraft".into(),
+            job_file: "/jobs/Sign.ccraft".into(),
             machine: "Shop CNC".into(),
             post: "FluidNC ATC (mm)".into(),
-            outputs: vec!["Sign_T1.nc".into(), "Sign_T2.nc".into()],
+            outputs: vec![("Sign_T1.nc".into(), true), ("Sign_T2.nc".into(), false)],
             slots: vec![None, Some("60° V-Bit".into())],
             printed: "2026-11-05 09:30".into(),
             ..Setup::default()
         };
         let html = sheet_for(&doc, &Style::default(), &setup).unwrap();
         for part in [
-            "<th>Job file</th><td>Sign.ccraft</td>",
+            "<th>Job file</th><td>/jobs/Sign.ccraft</td>",
             "<th>Machine</th><td>Shop CNC</td>",
             "<th>Post-processor</th><td>FluidNC ATC (mm)</td>",
-            "<th>Toolpath files</th><td>Sign_T1.nc<br>Sign_T2.nc</td>",
+            "<th>Toolpath files</th><td>Sign_T1.nc<br>Sign_T2.nc <span class=\"missing\">NO LOCAL FILE</span></td>",
             "<th>Printed</th><td>2026-11-05 09:30</td>",
             "<th>Total run time</th>",
             "<h2>Tools</h2>",
@@ -493,5 +517,21 @@ mod tests {
             !plain.contains("<th>Machine</th>"),
             "nothing to say: no row"
         );
+        // an unsaved job and unsaved toolpaths are flagged in red, with where a copy is kept
+        assert!(plain.contains(
+            "<th>Job file</th><td><span class=\"missing\">NO LOCAL FILE</span><br>The job has not been saved</td>"
+        ));
+        assert!(
+            plain.contains(
+                "<th>Toolpath files</th><td><span class=\"missing\">NO LOCAL FILE</span>"
+            )
+        );
+        let kept = Setup {
+            job_copy: "/config/recovery.ccjob".into(),
+            ..Setup::default()
+        };
+        let html = sheet_for(&doc, &Style::default(), &kept).unwrap();
+        assert!(html.contains("a copy is kept at /config/recovery.ccjob"));
+        assert!(html.contains(".missing{color:#c00"));
     }
 }

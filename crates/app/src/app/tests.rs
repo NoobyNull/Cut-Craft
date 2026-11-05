@@ -7724,7 +7724,20 @@ fn h_posts() -> Vec<cut_craft_machines::Entry> {
 #[test]
 fn the_job_sheet_names_the_file_machine_post_and_slots() {
     let mut h = Harness::new();
-    h.app.session.path = Some(std::path::PathBuf::from("/jobs/Sign.ccraft"));
+    let dir = std::env::temp_dir().join(format!("cut-craft-job-sheet-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // not saved: no file of its own, so a copy goes to the recovery file
+    h.app.recovery_path = Some(dir.join("recovery.ccjob"));
+    let setup = h.app.job_setup();
+    assert_eq!(setup.job_file, "");
+    assert_eq!(
+        setup.job_copy,
+        dir.join("recovery.ccjob").display().to_string()
+    );
+    assert!(dir.join("recovery.ccjob").is_file());
+    let job = dir.join("Sign.ccraft");
+    std::fs::write(&job, b"job").unwrap();
+    h.app.session.path = Some(job.clone());
     h.app.machines.machines.push(cut_craft_machines::Machine {
         name: "Shop CNC".into(),
         posts: vec!["FluidNC".into()],
@@ -7739,9 +7752,11 @@ fn the_job_sheet_names_the_file_machine_post_and_slots() {
             setup.machine.as_str(),
             setup.post.as_str()
         ),
-        ("Sign.ccraft", "Shop CNC", "FluidNC")
+        (job.display().to_string().as_str(), "Shop CNC", "FluidNC")
     );
+    assert_eq!(setup.job_copy, "", "saved: no copy needed");
     assert_eq!(setup.slots.len(), 2);
     assert!((setup.rapid - h.app.summary.rapid).abs() < 1e-9);
     assert!(h.app.available("print_job_sheet"));
+    let _ = std::fs::remove_dir_all(&dir);
 }

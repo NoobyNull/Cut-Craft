@@ -537,6 +537,9 @@ say "not implemented yet".
   the toolpaths that use it and their run time. Run times use the Toolpath Summary's rapid
   rate (and the machine's accelerations when it allows for them). Toolpaths ▸ Print Job
   Sheet opens it in the web browser to print.
+  A job never saved (or whose file has gone) and toolpaths not yet saved are printed as
+  NO LOCAL FILE in red; the unsaved job is copied to the auto-recovery file first, and the
+  sheet gives that path.
   A job of several sheets gets a page for each sheet with toolpaths (`name_Sheet.html`); a
   double-sided job's page ends `_Top` or `_Bottom`. Gadgets ▸ Job Setup Sheet Editor sets
   the title, a logo (PNG, JPEG or GIF), the header and footer colours and which of the

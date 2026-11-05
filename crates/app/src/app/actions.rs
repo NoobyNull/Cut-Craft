@@ -2405,34 +2405,44 @@ impl CutCraftApp {
     /// the web browser, which prints it.
     pub(super) fn print_job_sheet(&mut self) {
         let path = std::env::temp_dir().join("cut-craft-job-sheet.html");
-        let opened =
-            fmt_create_job_sheet::sheet_for(&self.doc, &self.options.job_sheet, &self.job_setup())
-                .map_err(|e| e.to_string())
-                .and_then(|html| {
-                    cut_craft_core::file::write_atomic(&path, html.as_bytes())
-                        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-                    on_the_desktop();
-                    files::show_folder(&path).map_err(|e| e.to_string())
-                });
+        let setup = self.job_setup();
+        let opened = fmt_create_job_sheet::sheet_for(&self.doc, &self.options.job_sheet, &setup)
+            .map_err(|e| e.to_string())
+            .and_then(|html| {
+                cut_craft_core::file::write_atomic(&path, html.as_bytes())
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                on_the_desktop();
+                files::show_folder(&path).map_err(|e| e.to_string())
+            });
         self.status.set_message(&opened.map_or_else(
             |e| e,
             |()| "Job sheet opened in your web browser: print it from there".to_owned(),
         ));
     }
 
-    /// What the job sheet says about where the job is cut: the job's file, the active
-    /// machine, its post and tool changer, and the Toolpath Summary's rapid rate (and the
-    /// machine's accelerations when the summary allows for them).
-    pub(super) fn job_setup(&self) -> fmt_create_job_sheet::Setup {
+    /// What the job sheet says about where the job is cut: the job's file (when it is on
+    /// this computer; else the job is copied to the recovery file, and the sheet says
+    /// where), the active machine, its post and tool changer, and the Toolpath Summary's
+    /// rapid rate (and the machine's accelerations when the summary allows for them).
+    pub(super) fn job_setup(&mut self) -> fmt_create_job_sheet::Setup {
+        let job_file = self
+            .session
+            .path
+            .as_deref()
+            .filter(|p| p.is_file())
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let job_copy = match (&self.recovery_path, job_file.is_empty()) {
+            (Some(path), true) => {
+                cut_craft_core::file::write_atomic(path, &cut_craft_core::file::save_job(&self.doc))
+                    .map_or_else(|_| String::new(), |()| path.display().to_string())
+            }
+            _ => String::new(),
+        };
         let machine = self.machines.active();
         fmt_create_job_sheet::Setup {
-            job_file: self
-                .session
-                .path
-                .as_deref()
-                .and_then(std::path::Path::file_name)
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default(),
+            job_file,
+            job_copy,
             machine: machine.map(|m| m.name.clone()).unwrap_or_default(),
             post: machine
                 .and_then(|m| m.post())
@@ -2453,17 +2463,17 @@ impl CutCraftApp {
         let stem = path
             .file_stem()
             .map_or_else(|| "job".into(), |s| s.to_string_lossy().into_owned());
-        let result =
-            fmt_create_job_sheet::sheets(&self.doc, &self.options.job_sheet, &self.job_setup())
-                .map_err(|e| e.to_string())
-                .and_then(|pages| {
-                    for (suffix, html) in &pages {
-                        let file = path.with_file_name(format!("{stem}{suffix}.html"));
-                        cut_craft_core::file::write_atomic(&file, html.as_bytes())
-                            .map_err(|e| format!("could not write {}: {e}", file.display()))?;
-                    }
-                    Ok(pages.len())
-                });
+        let setup = self.job_setup();
+        let result = fmt_create_job_sheet::sheets(&self.doc, &self.options.job_sheet, &setup)
+            .map_err(|e| e.to_string())
+            .and_then(|pages| {
+                for (suffix, html) in &pages {
+                    let file = path.with_file_name(format!("{stem}{suffix}.html"));
+                    cut_craft_core::file::write_atomic(&file, html.as_bytes())
+                        .map_err(|e| format!("could not write {}: {e}", file.display()))?;
+                }
+                Ok(pages.len())
+            });
         self.status.set_message(&result.map_or_else(
             |e| e,
             |n| format!("Saved {n} job sheet{}", if n == 1 { "" } else { "s" }),
