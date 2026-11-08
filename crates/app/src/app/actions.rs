@@ -6,12 +6,12 @@ use super::{
     DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
     KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout, MODEL_IMPORTERS, Menus,
     Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
-    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveForm, Screen, Session,
-    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
-    file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
-    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen,
+    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
+    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands,
+    dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog,
+    menu_items, message_dialog, on_the_desktop, rest_section, selector_section, shortcut,
+    side_panel, side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
     toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
@@ -76,6 +76,7 @@ impl CutCraftApp {
                 group: false,
                 post: None,
                 add_side: false,
+                changes: files::ToolChanges::SeparateFiles,
             },
             depth_estimate: None,
             busy: None,
@@ -127,6 +128,7 @@ impl CutCraftApp {
             stl_result: None,
             layers_on_sheet: false,
             save_form: None,
+            save_checks: None,
             before_preview: None,
             picked_nodes: Vec::new(),
             node_mirror: [false, false],
@@ -1075,6 +1077,7 @@ impl CutCraftApp {
                     group: false,
                     post: None,
                     add_side: self.doc.job.double_sided.is_some(),
+                    changes: self.default_changes(),
                 });
             }
             _ => unreachable!("not a toolpath action: {id}"),
@@ -1105,36 +1108,19 @@ impl CutCraftApp {
     /// Save Toolpaths' Save: the checks before cutting, a file name, then each file of the
     /// form's plan through its post (and each tile, when the job is tiled).
     pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
-        let post = match form.post.as_deref() {
-            Some(name) => self.posts.load(name),
-            None => self.output_post(),
-        };
-        let post = match post {
+        let post = match self.form_post(form) {
             Ok(post) => post,
             Err(e) => return self.status.set_message(&e),
         };
-        let plan = match files::save_plan(
-            &self.doc,
-            form.mode,
-            self.selected_toolpath,
-            self.selected_group.as_deref(),
-            form.group,
-        ) {
+        let plan = match self.plan(form, &post) {
             Ok(plan) => plan,
             Err(e) => return self.status.set_message(&e),
         };
-        let saving: Vec<EntityId> = plan.iter().flatten().copied().collect();
-        let problems: Vec<String> = saving
-            .iter()
-            .filter_map(|id| self.doc.toolpaths.get(id))
-            .flat_map(|t| {
-                cut_craft_core::checks::problems_over(
-                    &self.doc,
-                    t,
-                    self.options.confirmations.left(),
-                )
-            })
-            .collect();
+        let found = self.preflight(&plan, form.changes);
+        if let Some(refused) = Self::refused(&found) {
+            return self.status.set_message(&refused);
+        }
+        let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
         let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
         if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
             return self.status.set_message("Toolpaths not saved");
@@ -1155,19 +1141,61 @@ impl CutCraftApp {
         } else {
             format!(" (check before cutting: {})", problems.join("; "))
         };
-        let result = self.save_toolpaths_to(form, &post, &path.with_extension(&extension));
+        let result = self.write_toolpaths(form, &post, &path.with_extension(&extension));
         self.status
             .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
     }
 
-    /// Saves the form's plan through `post` at `path`: each file, or each tile of each file
-    /// when the job is tiled, and says what was saved.
+    /// Saves the form's plan through `post` at `path`, unless the checks before cutting
+    /// find an error, and says what was saved: Save Toolpaths' Save short of its dialogs.
+    #[cfg(test)]
     pub(super) fn save_toolpaths_to(
         &self,
         form: &SaveForm,
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
+        let plan = self.plan(form, post)?;
+        match Self::refused(&self.preflight(&plan, form.changes)) {
+            Some(refused) => Err(refused),
+            None => self.write_toolpaths(form, post, path),
+        }
+    }
+
+    /// How tools are changed unless the form says otherwise: by the tool changer when the
+    /// active machine has one, else a file for each tool.
+    pub(super) fn default_changes(&self) -> files::ToolChanges {
+        if self.machines.active().is_some_and(|m| !m.slots.is_empty()) {
+            files::ToolChanges::ToolChanger
+        } else {
+            files::ToolChanges::SeparateFiles
+        }
+    }
+
+    /// The post the form saves through: the one picked, else the machine's default, with
+    /// its tool changes made pauses when the form says to pause, or tools are changed by
+    /// hand between files on a machine without a tool changer.
+    pub(super) fn form_post(&self, form: &SaveForm) -> Result<cut_craft_post::Post, String> {
+        let post = match form.post.as_deref() {
+            Some(name) => self.posts.load(name),
+            None => self.output_post(),
+        }?;
+        let changer = self.machines.active().is_some_and(|m| !m.slots.is_empty());
+        Ok(match form.changes {
+            files::ToolChanges::Pause => post.with_pauses(),
+            // changed by hand between files: no tool changer call (M6) for the first tool
+            files::ToolChanges::SeparateFiles if !changer => post.with_pauses(),
+            _ => post,
+        })
+    }
+
+    /// The form's toolpaths, file by file: a file for each tool in turn unless the tool
+    /// changer or pauses change them (and the post can).
+    pub(super) fn plan(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+    ) -> Result<Vec<Vec<EntityId>>, String> {
         let plan = files::save_plan(
             &self.doc,
             form.mode,
@@ -1175,6 +1203,86 @@ impl CutCraftApp {
             self.selected_group.as_deref(),
             form.group,
         )?;
+        Ok(if Self::by_tool(form, post) {
+            files::by_tool(&self.doc, plan)
+        } else {
+            plan
+        })
+    }
+
+    /// Whether each tool gets files of its own: chosen, or the post cannot change tools.
+    fn by_tool(form: &SaveForm, post: &cut_craft_post::Post) -> bool {
+        form.changes == files::ToolChanges::SeparateFiles || !post.changes_tools()
+    }
+
+    /// Whether files are split per tool (not by the form's Multiple Files), and so named
+    /// after their tool.
+    pub(super) fn split_for(form: &SaveForm, post: &cut_craft_post::Post) -> bool {
+        Self::by_tool(form, post) && form.mode != files::SaveMode::VisibleToMultipleFiles
+    }
+
+    /// The checks before cutting for Save Toolpaths' `plan`, worked out again only when the
+    /// plan, the job or the machine changed.
+    pub(super) fn save_checks(
+        &mut self,
+        plan: &[Vec<EntityId>],
+        changes: files::ToolChanges,
+    ) -> &[cut_craft_core::preflight::Finding] {
+        let (revision, machine) = (self.history.revision(), self.machines.active);
+        let fresh = self.save_checks.as_ref().is_some_and(|c| {
+            c.plan == plan && c.changes == changes && c.revision == revision && c.machine == machine
+        });
+        if !fresh {
+            self.save_checks = Some(SaveChecks {
+                plan: plan.to_vec(),
+                changes,
+                revision,
+                machine,
+                found: self.preflight(plan, changes),
+            });
+        }
+        &self.save_checks.as_ref().expect("just filled").found
+    }
+
+    /// What the checks before cutting find in `plan`'s toolpaths, cut in its order on the
+    /// active machine; its tool changer's slots are checked only when it changes the tools.
+    pub(super) fn preflight(
+        &self,
+        plan: &[Vec<EntityId>],
+        changes: files::ToolChanges,
+    ) -> Vec<cut_craft_core::preflight::Finding> {
+        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = plan
+            .iter()
+            .flatten()
+            .filter_map(|id| self.doc.toolpaths.get(id))
+            .collect();
+        let mut limits = self.limits();
+        if changes != files::ToolChanges::ToolChanger {
+            limits.slots.clear();
+        }
+        cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits)
+    }
+
+    /// Why toolpaths with `found` are not saved: the errors, each with its fix; `None` when
+    /// there are none.
+    pub(super) fn refused(found: &[cut_craft_core::preflight::Finding]) -> Option<String> {
+        let errors: Vec<&str> = found
+            .iter()
+            .filter(|f| f.severity == cut_craft_core::preflight::Severity::Error)
+            .map(|f| f.message.as_str())
+            .collect();
+        (!errors.is_empty()).then(|| format!("Not saved: {}", errors.join("; ")))
+    }
+
+    /// Writes the form's plan through `post` at `path`: each file, or each tile of each file
+    /// when the job is tiled, and says what was saved.
+    fn write_toolpaths(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<String, String> {
+        let plan = self.plan(form, post)?;
         // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
         let crossing = self.not_kept_out(&plan);
         if !crossing.is_empty() {
@@ -1194,7 +1302,8 @@ impl CutCraftApp {
         );
         let job = self.session.path.as_deref();
         let slots = self.slots();
-        let parts = files::save_files(post, &thinned, &plan, path, side)?;
+        let per_tool = Self::split_for(form, post);
+        let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
         for (path, part) in &parts {
             match self.doc.tiling {
                 // one file per tile, each tile moved to the job's corner
@@ -1262,6 +1371,26 @@ impl CutCraftApp {
                     machine.name
                 ),
             })
+    }
+
+    /// What the active machine can do, for the checks before cutting; nothing is checked
+    /// against a machine without one.
+    pub(super) fn limits(&self) -> cut_craft_core::preflight::Limits {
+        let mut limits = self
+            .machines
+            .active()
+            .map(|m| cut_craft_core::preflight::Limits {
+                name: m.name.clone(),
+                bed: [m.width, m.height],
+                z_travel: m.depth,
+                max_rate: m.max_rate,
+                spindle: m.spindle,
+                slots: m.slots.clone(),
+                left: None,
+            })
+            .unwrap_or_default();
+        limits.left = Some(self.options.confirmations.left());
+        limits
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.

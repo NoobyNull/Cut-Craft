@@ -397,6 +397,63 @@ impl Post {
         self.blocks.get("TOOLCHANGE").is_some_and(|b| !b.is_empty())
     }
 
+    /// Its tool changes stop the machine for the tool to be changed by hand: a `TOOLCHANGE`
+    /// block with a stop (`M0`/`M1`) and no automatic change (`M6`).
+    pub fn pauses_for_tools(&self) -> bool {
+        let has = |codes: &[&str]| {
+            self.blocks.get("TOOLCHANGE").is_some_and(|lines| {
+                lines.iter().any(|line| {
+                    line.split_whitespace()
+                        .any(|word| codes.contains(&word.to_ascii_uppercase().as_str()))
+                })
+            })
+        };
+        has(&["M0", "M00", "M1", "M01"]) && !has(&["M6", "M06"])
+    }
+
+    /// This post with each tool change a stop to change the tool by hand: its own tool
+    /// change when it already pauses, else one that lifts to the safe Z, stops the spindle,
+    /// names the next tool, stops (`M0`) and starts the spindle again, using only the
+    /// variables the post has. The header's tool change (`M6`) becomes a note to fit the
+    /// first tool before starting.
+    #[must_use]
+    pub fn with_pauses(&self) -> Self {
+        if self.pauses_for_tools() {
+            return self.clone();
+        }
+        let has = |label: &str| self.formats.contains_key(label);
+        let mut lines = vec![];
+        if has("SAFEZ") {
+            lines.push("G0 [SAFEZ]".to_owned());
+        }
+        lines.push("M5".to_owned());
+        let tool = if has("T") {
+            "[T]: [TOOLNAME]"
+        } else {
+            "[TOOLNAME]"
+        };
+        lines.push(format!("(Change to {tool}, set Z zero, then resume)"));
+        lines.push("M0".to_owned());
+        lines.push(if has("S") { "[S] M3" } else { "M3" }.to_owned());
+        // the spindle's time to come up to speed
+        lines.push("G4 P3".to_owned());
+        let mut post = self.clone();
+        post.blocks.insert("TOOLCHANGE".to_owned(), lines);
+        // the first tool is fitted by hand before starting, not loaded by the changer
+        let fitted = format!("(First tool {tool}, fitted and zeroed before starting)");
+        if let Some(header) = post.blocks.get_mut("HEADER") {
+            for line in header.iter_mut() {
+                if line
+                    .split_whitespace()
+                    .any(|w| matches!(w.to_ascii_uppercase().as_str(), "M6" | "M06"))
+                {
+                    line.clone_from(&fitted);
+                }
+            }
+        }
+        post
+    }
+
     /// The axis it wraps onto the rotary one (`X` or `Y`); `None` for a flat post.
     pub fn wraps(&self) -> Option<&str> {
         self.wrap.as_ref().map(|(axis, _)| *axis)
@@ -1383,6 +1440,16 @@ begin FOOTER
         job: cut_craft_core::document::Job,
         toolpaths: Vec<Toolpath>,
     ) -> Vec<String> {
+        let post = Post::parse(post).unwrap();
+        assert_eq!(post.line_ending, "\r\n", "LINE_ENDING is honoured");
+        render_with(&post, job, toolpaths)
+    }
+
+    fn render_with(
+        post: &Post,
+        job: cut_craft_core::document::Job,
+        toolpaths: Vec<Toolpath>,
+    ) -> Vec<String> {
         let mut doc = Document {
             job,
             ..Document::default()
@@ -1401,9 +1468,8 @@ begin FOOTER
             made,
             slots: &[],
         };
-        let text = Post::parse(post).unwrap().render(&doc, &file).unwrap();
-        assert!(text.ends_with("\r\n"), "LINE_ENDING is honoured");
-        text.split("\r\n")
+        let text = post.render(&doc, &file).unwrap();
+        text.lines()
             .filter(|l| !l.is_empty())
             .map(String::from)
             .collect()
@@ -1507,6 +1573,40 @@ begin FOOTER
         let lines = render(BASIC, vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")]);
         assert!(lines.contains(&"(change to 3 mm)".to_owned()), "{lines:#?}");
         assert_eq!(lines.iter().filter(|l| *l == "M0").count(), 1);
+    }
+
+    #[test]
+    fn pausing_for_tools_swaps_a_tool_changer_for_a_stop_to_change_by_hand() {
+        let job = cut_craft_core::document::Job::default();
+        let two = || vec![toolpath("A", "6 mm"), toolpath("B", "3 mm")];
+        let atc = Post::parse(include_str!("../posts/fluidnc_atc_mm.pp")).unwrap();
+        assert!(!atc.pauses_for_tools(), "an ATC post changes tools itself");
+        let paused = atc.with_pauses();
+        assert!(paused.pauses_for_tools());
+        let lines = render_with(&paused, job, two());
+        assert!(!lines.iter().any(|l| l.contains("M6")), "{lines:#?}");
+        assert!(
+            lines.iter().any(|l| l.starts_with("(First tool T1: 6 mm")),
+            "{lines:#?}"
+        );
+        let at = lines.iter().position(|l| l == "M0").expect("a stop");
+        assert!(lines[at - 1].contains("3 mm"), "names the tool: {lines:#?}");
+        // a post that already pauses keeps its own tool change
+        let grbl = Post::parse(include_str!("../posts/grbl_straight_mm.pp")).unwrap();
+        assert!(grbl.pauses_for_tools());
+        assert_eq!(grbl.with_pauses().blocks, grbl.blocks);
+        // one without any tool change gets one
+        let plain = Post::parse(
+            "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
+             begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\
+             begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
+        )
+        .unwrap();
+        assert!(!plain.changes_tools());
+        let paused = plain.with_pauses();
+        assert!(paused.changes_tools() && paused.pauses_for_tools());
+        let lines = render_with(&paused, job, two());
+        assert_eq!(lines.iter().filter(|l| *l == "M0").count(), 1, "{lines:#?}");
     }
 
     #[test]
