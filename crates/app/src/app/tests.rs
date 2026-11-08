@@ -3427,7 +3427,7 @@ fn a_design_sub_tab_can_have_a_section_of_its_own() {
     assert_eq!(back.design_sections, ["Model", "Import"]);
     // and all back in one row
     h.app.invoke(&h.ctx, &format!("{}*:row", gui::SUBTAB_PLACE));
-    assert!(h.app.options.design_sections.is_empty());
+    assert_eq!(h.app.options.design_sections, Vec::<String>::new());
     h.frame(vec![]);
     assert!(h.text_at("Shape Creation").is_none());
 }

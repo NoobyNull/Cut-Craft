@@ -2161,11 +2161,7 @@ mod tests {
             super::placed(&two, "subtab_place:Import:row").unwrap(),
             ["Edit"]
         );
-        assert!(
-            super::placed(&two, "subtab_place:*:row")
-                .unwrap()
-                .is_empty()
-        );
+        assert_eq!(super::placed(&two, "subtab_place:*:row"), Some(vec![]));
         assert_eq!(super::placed(&two, "subtab_place:Nothing:row"), None);
         assert_eq!(super::placed(&two, "favourite:design:add:x"), None);
         // the menu offers the move that applies, and ticks the layout in use
