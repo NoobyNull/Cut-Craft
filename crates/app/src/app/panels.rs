@@ -2625,6 +2625,7 @@ impl CutCraftApp {
                 .grain()
                 .filter(|_| shown.colour_shaded)
                 .map(|(spacing, depth)| view3d::Grain { spacing, depth }),
+            shadows: shown.shadows,
         };
         let (orbit, framing) = (self.orbit, self.framing);
         let painter = ui.painter_at(area);
@@ -2812,7 +2813,12 @@ impl CutCraftApp {
         }
         // the keep-out zones in red, closed, over whatever they cover, as Aspire shows them
         let danger = egui::Stroke::new(2.0 * stroke.width, ui.visuals().error_fg_color);
-        for zone in self.doc.keep_out_zones() {
+        let zones = if shown.keep_out_3d {
+            self.doc.keep_out_zones()
+        } else {
+            vec![]
+        };
+        for zone in zones {
             let mut points = zone.flatten(cut_craft_core::polygon::TOLERANCE);
             points.extend(points.first().copied());
             let z = view3d::vector_plane(surface, &points);
