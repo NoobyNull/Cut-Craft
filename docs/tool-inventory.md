@@ -123,7 +123,9 @@ say "not implemented yet".
   the selected closed shapes. Not yet in the 3D view.
 - Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Relief
   from Photo (Cut Craft's own: Estimate Depth runs the optional Depth add-on on the chosen
-  photo, then backdrop cut-off, lift, fine detail and smoothing shape it into a relief), Bake
+  photo, then backdrop cut-off, lift, fine detail and smoothing shape it into a relief), Depth
+  to STL (runs the Depth to STL add-on through its plugin API; its form comes from the add-on's
+  own settings schema), Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL (its form: limit by tolerance or triangle count; back
   left open or closed by a flat plane, the inverted front or the other side; Triangulate shows

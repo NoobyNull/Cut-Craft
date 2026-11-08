@@ -49,6 +49,9 @@ please report them (see [Reporting bugs](#reporting-bugs)).
   (which face is up, rotation, size, position, depth) move and resize it as you change them.
 - Reliefs from pictures. 16-bit PNG and TIFF, and 32-bit floating point TIFF depth maps, are
   read at full precision, so smooth reliefs don't come out stepped.
+- **Model ▸ Depth to STL** runs the free Depth to STL add-on (Help ▸ Add-ons downloads and
+  installs it) on a depth map: background removed, fine detail lifted, and the whole relief
+  sized for your carving bit's tip and taper, added as a component.
 - Sculpting, smoothing, slicing, offset models, draft, baking components together.
 - Segment a 3D model into pieces for a 3-axis machine: cut any piece again, and choose
   which face of each piece is up.

@@ -2,6 +2,7 @@
 //! document, its undo history and the command registry.
 
 mod actions;
+mod addons;
 mod background;
 mod cutting;
 mod draw3d;
@@ -145,7 +146,7 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 97] = [
+const BUILT_INS: [&str; 99] = [
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",
@@ -206,6 +207,8 @@ const BUILT_INS: [&str; 97] = [
     "third_party_licenses",
     "about_cut_craft",
     "check_for_updates",
+    "add_ons",
+    "depth_to_stl",
     "undo",
     "redo",
     "exit",
@@ -788,6 +791,10 @@ struct CutCraftApp {
     immediate_output: SaveForm,
     /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
     depth_estimate: Option<crate::depth::Estimating>,
+    /// Help ▸ Add-ons.
+    add_ons: crate::addons::AddOns,
+    /// Model ▸ Depth to STL, and its run while the add-on works on a picture.
+    depth2stl: crate::depth2stl::Window,
     /// A slow job running off the window's thread, its progress shown over the window.
     busy: Option<crate::busy::Busy<CutCraftApp>>,
     /// How long a job may take before its progress is shown; quicker ones finish as if

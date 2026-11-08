@@ -3,6 +3,7 @@
 //! GitHub's checksum, and swaps it in for the running program, ready for a restart. Only
 //! GitHub is asked, never a mirror.
 
+pub mod addons;
 mod install;
 mod package;
 mod release;

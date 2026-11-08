@@ -3,12 +3,14 @@
 // release builds on Windows open no console window behind the app
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod addons;
 mod app;
 mod busy;
 mod clipart;
 mod commands;
 mod compute;
 mod depth;
+mod depth2stl;
 mod display;
 mod files;
 mod flyout;

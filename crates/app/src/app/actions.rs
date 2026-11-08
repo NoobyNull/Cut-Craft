@@ -79,6 +79,8 @@ impl CutCraftApp {
                 changes: files::ToolChanges::SeparateFiles,
             },
             depth_estimate: None,
+            add_ons: crate::addons::AddOns::default(),
+            depth2stl: crate::depth2stl::Window::default(),
             busy: None,
             wait_before_showing: crate::busy::SHOW_AFTER,
             addons_path: None,
@@ -437,6 +439,8 @@ impl CutCraftApp {
             | "help_contents"
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
+            "add_ons" => self.add_ons.show(ctx, self.addons_path.as_deref()),
+            "depth_to_stl" => self.depth2stl.show(self.addons_path.as_deref(), ctx),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);
