@@ -26,6 +26,45 @@ impl Grid {
     }
 }
 
+/// `grid` shrunk to `columns` by `rows` (no bigger than it is), each new pixel the average
+/// of the old ones under it: shaping runs at the relief's own resolution, not the photo's.
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "pixel counts"
+)]
+pub fn shrunk(grid: &Grid, columns: usize, rows: usize) -> Grid {
+    let (columns, rows) = (
+        columns.clamp(1, grid.columns.max(1)),
+        rows.clamp(1, grid.rows.max(1)),
+    );
+    if (columns, rows) == (grid.columns, grid.rows) {
+        return grid.clone();
+    }
+    // the source pixels under destination pixel `i` of `n`, along a side `of` long
+    let span = |i: usize, n: usize, of: usize| {
+        let start = (i as f64 * of as f64 / n as f64).floor() as usize;
+        let end = (((i + 1) as f64 * of as f64 / n as f64).ceil() as usize).clamp(start + 1, of);
+        start..end
+    };
+    let mut values = Vec::with_capacity(columns * rows);
+    for r in 0..rows {
+        let ys = span(r, rows, grid.rows);
+        for c in 0..columns {
+            let xs = span(c, columns, grid.columns);
+            let mut sum = 0.0;
+            for y in ys.clone() {
+                for x in xs.clone() {
+                    sum += grid.at(x, y);
+                }
+            }
+            values.push(sum / (ys.len() * xs.len()) as f32);
+        }
+    }
+    Grid::new(columns, rows, values)
+}
+
 /// Separable Gaussian blur, clamped at the edges.
 pub fn gaussian(grid: &Grid, sigma: f32) -> Grid {
     #[expect(
@@ -122,18 +161,25 @@ pub fn subject(light: &Grid, cut_off: f32) -> Vec<bool> {
     if cut_off <= 0.0 {
         return vec![true; light.values.len()];
     }
+    largest_patch(&differs(light, cut_off), light.columns, light.rows)
+}
+
+/// Pixels whose tone differs from the backdrop's by more than `cut_off`.
+fn differs(light: &Grid, cut_off: f32) -> Vec<bool> {
     let backdrop = backdrop_tone(light);
-    let differs: Vec<bool> = light
+    light
         .values
         .iter()
         .map(|v| (v - backdrop).abs() > cut_off)
-        .collect();
-    // the largest patch, by flood fill
-    let (columns, rows) = (light.columns, light.rows);
-    let mut patch = vec![usize::MAX; differs.len()];
+        .collect()
+}
+
+/// Only the largest connected patch of `mask` (4 neighbours), found by flood fill.
+fn largest_patch(mask: &[bool], columns: usize, rows: usize) -> Vec<bool> {
+    let mut patch = vec![usize::MAX; mask.len()];
     let (mut best, mut best_size) = (usize::MAX, 0);
-    for start in 0..differs.len() {
-        if !differs[start] || patch[start] != usize::MAX {
+    for start in 0..mask.len() {
+        if !mask[start] || patch[start] != usize::MAX {
             continue;
         }
         let mut size = 0;
@@ -143,7 +189,7 @@ pub fn subject(light: &Grid, cut_off: f32) -> Vec<bool> {
             size += 1;
             let (c, r) = (at % columns, at / columns);
             let mut visit = |next: usize| {
-                if differs[next] && patch[next] == usize::MAX {
+                if mask[next] && patch[next] == usize::MAX {
                     patch[next] = start;
                     stack.push(next);
                 }
@@ -166,6 +212,33 @@ pub fn subject(light: &Grid, cut_off: f32) -> Vec<bool> {
         }
     }
     patch.iter().map(|&p| p == best).collect()
+}
+
+/// `values` from 0 (the farthest, ignoring the farthest half percent) to 1 (the nearest,
+/// likewise), clamped.
+fn normalised(values: &[f32]) -> Vec<f32> {
+    let mut sorted = values.to_vec();
+    let (lo, hi) = (
+        percentile(&mut sorted, 0.005),
+        percentile(&mut sorted, 0.995),
+    );
+    let span = (hi - lo).max(1e-6);
+    values
+        .iter()
+        .map(|v| ((v - lo) / span).clamp(0.0, 1.0))
+        .collect()
+}
+
+/// `mask` grown by one pixel (8 neighbours).
+fn dilate(mask: &[bool], columns: usize, rows: usize) -> Vec<bool> {
+    (0..mask.len())
+        .map(|at| {
+            let (c, r) = (at % columns, at / columns);
+            (r.saturating_sub(1)..=(r + 1).min(rows - 1)).any(|rr| {
+                (c.saturating_sub(1)..=(c + 1).min(columns - 1)).any(|cc| mask[rr * columns + cc])
+            })
+        })
+        .collect()
 }
 
 /// The `fraction` (0 to 1) percentile of `values`, nearest rank.
@@ -260,10 +333,21 @@ pub fn shading_detail(light: &Grid, subject: &[bool], radius: f32) -> Grid {
 }
 
 /// How to shape an estimate.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Shaping {
     /// See [`subject`].
     pub cut_off: f32,
+    /// Depth cut-off, 0 to 1: everything farther than this share of the way from the
+    /// farthest to the nearest point is background (depth2stl's floor). 0 cuts nothing.
+    pub far: f32,
+    /// Near and far swapped: for a depth map drawn black-nearest.
+    pub invert: bool,
+    /// How much to sharpen the relief's own detail finer than `radius` (depth2stl's
+    /// boost), 0 for none.
+    pub sharpen: f32,
+    /// Pixels round the subject over which its edge slopes down to the background instead
+    /// of dropping as a wall (depth2stl's fade); 0 for a wall.
+    pub soft_edge: usize,
     /// Height of the subject's lowest point above the backdrop, 0 to 1.
     pub lift: f32,
     /// How much of the photo's shading detail to add, 0 for none.
@@ -283,12 +367,28 @@ pub fn heights(light: &Grid, depth: &Grid, shaping: &Shaping) -> Grid {
         (depth.columns, depth.rows),
         "photo and depth the same size"
     );
-    let mut fig = subject(light, shaping.cut_off);
+    let (columns, rows) = (depth.columns, depth.rows);
+    let depth: Vec<f32> = if shaping.invert {
+        depth.values.iter().map(|d| -d).collect()
+    } else {
+        depth.values.clone()
+    };
+    // the background: what differs too little from the border's tone, or lies too far
+    let mut keep = if shaping.cut_off > 0.0 {
+        differs(light, shaping.cut_off)
+    } else {
+        vec![true; depth.len()]
+    };
+    if shaping.far > 0.0 {
+        for (k, d) in keep.iter_mut().zip(normalised(&depth)) {
+            *k &= d > shaping.far;
+        }
+    }
+    let mut fig = largest_patch(&keep, columns, rows);
     if !fig.contains(&true) {
         fig = vec![true; fig.len()];
     }
     let mut inside: Vec<f32> = depth
-        .values
         .iter()
         .zip(&fig)
         .filter(|&(_, &f)| f)
@@ -301,7 +401,6 @@ pub fn heights(light: &Grid, depth: &Grid, shaping: &Shaping) -> Grid {
     );
     let span = (hi - lo).max(1e-6);
     let mut h: Vec<f32> = depth
-        .values
         .iter()
         .map(|d| ((d - lo) / span).clamp(0.0, 1.0))
         .collect();
@@ -311,11 +410,19 @@ pub fn heights(light: &Grid, depth: &Grid, shaping: &Shaping) -> Grid {
             *h = (*h + shaping.detail * 0.5 * d).clamp(0.0, 1.0);
         }
     }
+    if shaping.sharpen > 0.0 {
+        let blurred = gaussian(&Grid::new(columns, rows, h.clone()), shaping.radius);
+        for ((h, b), &f) in h.iter_mut().zip(&blurred.values).zip(&fig) {
+            if f {
+                *h = (*h + shaping.sharpen * (*h - b)).clamp(0.0, 1.0);
+            }
+        }
+    }
     let lift = shaping.lift.clamp(0.0, 1.0);
     for (h, &f) in h.iter_mut().zip(&fig) {
         *h = if f { lift + (1.0 - lift) * *h } else { 0.0 };
     }
-    let mut grid = Grid::new(depth.columns, depth.rows, h);
+    let mut grid = Grid::new(columns, rows, h);
     for _ in 0..shaping.smoothing {
         grid = diffuse(&grid, EDGE);
     }
@@ -324,7 +431,29 @@ pub fn heights(light: &Grid, depth: &Grid, shaping: &Shaping) -> Grid {
             *h = 0.0;
         }
     }
+    if shaping.soft_edge > 0 {
+        soften(&mut grid, &fig, lift, shaping.soft_edge);
+    }
     grid
+}
+
+/// Round the subject, a slope from `top` down to 0 over `width` pixels (smoothstep), so
+/// the relief has no wall at its outline.
+#[expect(clippy::cast_precision_loss, reason = "a few pixels")]
+fn soften(grid: &mut Grid, fig: &[bool], top: f32, width: usize) {
+    let (columns, rows) = (grid.columns, grid.rows);
+    let mut reached = fig.to_vec();
+    for step in 1..=width {
+        let grown = dilate(&reached, columns, rows);
+        let r = 1.0 - step as f32 / (width + 1) as f32;
+        let height = top * r * r * (3.0 - 2.0 * r);
+        for ((h, &g), &was) in grid.values.iter_mut().zip(&grown).zip(&reached) {
+            if g && !was {
+                *h = height;
+            }
+        }
+        reached = grown;
+    }
 }
 
 #[cfg(test)]
@@ -352,6 +481,13 @@ mod tests {
                 })
                 .collect(),
         )
+    }
+
+    #[test]
+    fn shrinking_averages_the_pixels_under_each_new_one() {
+        let grid = Grid::new(4, 2, vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
+        assert_eq!(shrunk(&grid, 2, 1).values, [2.5, 4.5]);
+        assert_eq!(shrunk(&grid, 8, 8), grid, "never grown");
     }
 
     #[test]
@@ -429,6 +565,123 @@ mod tests {
         assert!(close(detail.at(4, 10), 0.0), "the outline gets none");
     }
 
+    /// A busy backdrop (tones all over) round a centred square that is near; the
+    /// backdrop's depth wanders but stays far.
+    fn busy_photo() -> (Grid, Grid) {
+        let light = Grid::new(
+            12,
+            12,
+            (0..144_u16)
+                .map(|i| f32::from(i * 37 % 100) / 100.0)
+                .collect(),
+        );
+        let near = square(12, 6, 0.0, 1.0);
+        let depth = Grid::new(
+            12,
+            12,
+            near.values
+                .iter()
+                .zip(0_u16..)
+                .map(|(n, i)| n * 10.0 + 5.0 + f32::from(i % 3))
+                .collect(),
+        );
+        (light, depth)
+    }
+
+    #[test]
+    fn the_depth_cut_off_drops_what_is_far_whatever_its_tone() {
+        let (light, depth) = busy_photo();
+        let shaping = Shaping {
+            far: 0.3,
+            lift: 0.2,
+            radius: 3.0,
+            ..Shaping::default()
+        };
+        let h = heights(&light, &depth, &shaping);
+        assert!(
+            close(h.at(0, 0), 0.0) && close(h.at(1, 10), 0.0),
+            "far backdrop cut"
+        );
+        assert!(
+            h.at(5, 5) >= 0.2 - 1e-4,
+            "near subject kept: {}",
+            h.at(5, 5)
+        );
+        let kept = h.values.iter().filter(|&&v| v > 0.0).count();
+        assert_eq!(kept, 36, "only the near square");
+    }
+
+    #[test]
+    fn invert_swaps_near_and_far() {
+        let light = Grid::new(3, 1, vec![0.5; 3]);
+        let depth = Grid::new(3, 1, vec![0.0, 1.0, 2.0]);
+        let plain = heights(&light, &depth, &Shaping::default());
+        let swapped = heights(
+            &light,
+            &depth,
+            &Shaping {
+                invert: true,
+                ..Shaping::default()
+            },
+        );
+        assert!(plain.at(2, 0) > plain.at(0, 0));
+        assert!(swapped.at(0, 0) > swapped.at(2, 0));
+    }
+
+    #[test]
+    fn sharpen_makes_a_small_bump_stand_out_more() {
+        let light = Grid::new(15, 15, vec![0.5; 225]);
+        let mut depth = Grid::new(
+            15,
+            15,
+            (0..225_u16).map(|i| f32::from(i % 15) / 14.0).collect(),
+        );
+        depth.values[7 * 15 + 7] += 0.1;
+        let bump = |g: &Grid| g.at(7, 7) - f32::midpoint(g.at(6, 7), g.at(8, 7));
+        let base = Shaping {
+            radius: 3.0,
+            ..Shaping::default()
+        };
+        let plain = heights(&light, &depth, &base);
+        let sharp = heights(
+            &light,
+            &depth,
+            &Shaping {
+                sharpen: 1.0,
+                ..base
+            },
+        );
+        assert!(
+            bump(&sharp) > bump(&plain) * 1.5,
+            "{} {}",
+            bump(&sharp),
+            bump(&plain)
+        );
+    }
+
+    #[test]
+    fn a_soft_edge_slopes_down_round_the_subject() {
+        let light = square(16, 6, 0.95, 0.3);
+        let depth = Grid::new(16, 16, vec![1.0; 256]);
+        let shaping = Shaping {
+            cut_off: 0.1,
+            lift: 0.5,
+            radius: 3.0,
+            soft_edge: 3,
+            ..Shaping::default()
+        };
+        let h = heights(&light, &depth, &shaping);
+        // the subject spans columns 5 to 10; row 8 runs out to the right
+        let out: Vec<f32> = (10..16).map(|c| h.at(c, 8)).collect();
+        assert!(out[0] >= 0.5 - 1e-4, "inside, lifted: {out:?}");
+        assert!(out[1] > 0.0 && out[1] < 0.5, "sloping: {out:?}");
+        assert!(out.windows(2).all(|w| w[1] <= w[0]), "downhill: {out:?}");
+        assert!(
+            close(out[4], 0.0) && close(out[5], 0.0),
+            "flat beyond: {out:?}"
+        );
+    }
+
     #[test]
     fn heights_put_the_backdrop_at_zero_and_the_subject_from_the_lift_up() {
         let light = square(12, 6, 0.95, 0.4);
@@ -443,9 +696,8 @@ mod tests {
         let shaping = Shaping {
             cut_off: 0.1,
             lift: 0.2,
-            detail: 0.0,
             radius: 3.0,
-            smoothing: 0,
+            ..Shaping::default()
         };
         let h = heights(&light, &depth, &shaping);
         assert!(
