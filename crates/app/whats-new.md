@@ -1,4 +1,4 @@
-- Design page sub-tabs (Create, Edit, Arrange, Model) with clean new line icons
-- Tool tips, forms and the status bar say what to do next
-- Shapes snap square onto lines and tangent to arcs; toolpath forms save and load settings
-- Options: text size, recovery copy, flyout hold, 3D view; a native look on macOS
+- Save Toolpaths checks for crashes, air cuts and machine limits, and can save a file per tool
+- Slow toolpaths show a progress window with Cancel
+- Every menu item now works, and Print Job Sheet makes a shop printout
+- Options: preview speed and how much leftover material to warn about
