@@ -8,12 +8,17 @@ use crate::toolpath::{MoveKind, Tool, Toolpath};
 /// The 3D Finishing strategy, whose toolpaths follow the model.
 const FINISHING: &str = "3d_finishing_toolpath";
 
-/// Material left that is worth a mention, mm.
-// ponytail: one figure for every job; a setting if it proves too fussy or too lax
-const LEFT: f64 = 0.1;
+/// Material left that is worth a mention, mm, until Options says otherwise.
+pub const LEFT: f64 = 0.1;
 
 /// What may go wrong cutting `toolpath`, one sentence each; empty when nothing was found.
 pub fn problems(doc: &Document, toolpath: &Toolpath) -> Vec<String> {
+    problems_over(doc, toolpath, LEFT)
+}
+
+/// [`problems`], mentioning material left behind only where it is more than `left` mm
+/// (Options ▸ Confirmation Choices).
+pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<String> {
     let (name, tool) = (&toolpath.name, &toolpath.tool);
     let mut found = vec![];
     // the material's surface is z 0
@@ -50,7 +55,7 @@ pub fn problems(doc: &Document, toolpath: &Toolpath) -> Vec<String> {
             .iter()
             .zip(&alone.heights)
             .map(|(t, a)| t - a)
-            .filter(|&d| d > LEFT)
+            .filter(|&d| d > left)
             .fold((0_u32, 0.0_f64), |(n, most), d| (n + 1, most.max(d)));
         if cells > 0 {
             let area = f64::from(cells) * model.cell * model.cell;
@@ -144,5 +149,20 @@ mod tests {
         assert!(found[0].contains("too steep"), "{found:?}");
         // a taper narrow enough for the dome's 90° foot still leaves nothing extra on its top
         assert!(!found[0].contains("0.0 cm²"), "{found:?}");
+        // told to mention only more material than the taper leaves, nothing is found
+        let lax = problems_over(&doc, &toolpath(tapered_again(), FINISHING, 8.0), 50.0);
+        assert_eq!(lax, Vec::<String>::new());
+    }
+
+    fn tapered_again() -> Tool {
+        Tool {
+            name: "ball".into(),
+            shape: ToolShape::BallNose,
+            diameter: 2.0,
+            flute_length: 30.0,
+            taper: 20.0,
+            shank_diameter: 8.0,
+            ..Tool::default()
+        }
     }
 }

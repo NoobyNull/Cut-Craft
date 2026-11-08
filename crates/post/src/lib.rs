@@ -1112,6 +1112,18 @@ fn tool_numbers<'a>(
     }
 }
 
+/// Each tool `toolpaths` use, in the order first used, with the `[T]` a post writes for it
+/// on a machine with these tool changer `slots` (empty for none): its slot, or 0 for a bit
+/// changed by hand; without a changer its own number, else the order it is first used.
+pub fn tools_and_numbers(toolpaths: &[&Toolpath], slots: &[Option<String>]) -> Vec<(String, u32)> {
+    let tools = tools_used(toolpaths);
+    let number = tool_numbers(&tools, slots);
+    tools
+        .iter()
+        .map(|&(name, _)| (name.to_owned(), number(name)))
+        .collect()
+}
+
 fn tools_used<'a>(toolpaths: &[&'a cut_craft_core::toolpath::Toolpath]) -> Vec<(&'a str, u32)> {
     let mut tools: Vec<(&str, u32)> = vec![];
     for t in toolpaths {
@@ -1374,6 +1386,24 @@ begin FOOTER
             kind,
             to: DVec3::new(x, y, z),
         }
+    }
+
+    #[test]
+    fn the_tools_used_are_listed_once_each_with_their_number() {
+        let (first, v) = (
+            toolpath("Profile", "6 mm End Mill"),
+            toolpath("Carve", "V-Bit"),
+        );
+        let toolpaths = [&first, &v, &first];
+        let names = |numbers: [u32; 2]| {
+            vec![
+                ("6 mm End Mill".to_owned(), numbers[0]),
+                ("V-Bit".to_owned(), numbers[1]),
+            ]
+        };
+        assert_eq!(tools_and_numbers(&toolpaths, &[]), names([1, 2]));
+        let slots = [None, None, Some("V-Bit".to_owned())];
+        assert_eq!(tools_and_numbers(&toolpaths, &slots), names([0, 3]));
     }
 
     fn toolpath(name: &str, tool: &str) -> Toolpath {

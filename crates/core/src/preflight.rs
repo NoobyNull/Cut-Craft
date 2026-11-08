@@ -4,7 +4,7 @@
 //! changer) and for settings that cannot cut (no moves, no feed rate). Aspire makes none of
 //! these; they are Cut Craft's own. Every message says how to put the problem right.
 
-use crate::checks::problems;
+use crate::checks::{LEFT, problems_over};
 use crate::document::Document;
 use crate::simulation::Material;
 use crate::toolpath::{MoveKind, Toolpath};
@@ -85,6 +85,9 @@ pub struct Limits {
     pub spindle: [f64; 2],
     /// The tool loaded in each tool changer slot; empty without a tool changer.
     pub slots: Vec<Option<String>>,
+    /// Material left behind is mentioned only where it is more than this, mm (Options ▸
+    /// Confirmation Choices); `None` for the usual [`crate::checks::LEFT`].
+    pub left: Option<f64>,
 }
 
 /// Everything found checking `toolpaths`, cut in the order given, on `limits`' machine:
@@ -157,7 +160,11 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
              material thickness in Job Setup and the toolpath's cut depth"
         )));
     }
-    found.extend(problems(doc, toolpath).into_iter().map(Finding::warning));
+    found.extend(
+        problems_over(doc, toolpath, limits.left.unwrap_or(LEFT))
+            .into_iter()
+            .map(Finding::warning),
+    );
 }
 
 /// Whether one toolpath's speeds suit the machine and its tool is in the tool changer.
@@ -555,6 +562,7 @@ mod tests {
             max_rate: [1000.0, 1200.0, 300.0],
             spindle: [10000.0, 16000.0],
             slots: vec![Some("3 mm Ball Nose".into()), None],
+            left: None,
         };
         let found = check(&job(), &[&slot("Slot", 50.0, 20.0, 180.0, 3.0)], &limits);
         let errors = messages(&found, Severity::Error);

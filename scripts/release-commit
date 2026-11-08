@@ -1,0 +1,47 @@
+#!/bin/bash
+# Which commit a version is released from: the first commit on main's own line (first parent,
+# so a merged "chore: version X" pull request gives its merge commit) that has that version in
+# Cargo.toml. Later merges leave it where it is, so this answers the same however late it runs.
+#   scripts/release-commit [REF]           "VERSION SHA" for the version at REF (default HEAD)
+#   scripts/release-commit untagged [REF]  one "VERSION SHA" line for each version on REF's line
+#                                          newer than its last tagged one, oldest first; nothing
+#                                          when all are tagged
+# .github/workflows/release-tag.yml tags each untagged version vVERSION on its commit.
+set -euo pipefail
+
+version_at() {
+  git show "$1:Cargo.toml" 2>/dev/null | sed -n 's/^version = "\(.*\)"/\1/p' | head -1
+}
+tagged() { git rev-parse -q --verify "refs/tags/v$1" >/dev/null; }
+
+# Walks REF's first-parent line back, printing "VERSION SHA" for each version it passes (newest
+# first) and stopping after the first one, or at a tagged one when $1 is "untagged".
+walk() {
+  local mode=$1 ref=$2 version="" commit="" v sha
+  for sha in $(git rev-list --first-parent "$ref"); do
+    v=$(version_at "$sha")
+    if [[ $v != "$version" ]]; then
+      if [[ -n $version ]]; then
+        echo "$version $commit"
+        [[ $mode == untagged ]] || return 0
+      fi
+      if [[ -z $v ]] || { [[ $mode == untagged ]] && tagged "$v"; }; then
+        return 0
+      fi
+      version=$v
+    fi
+    commit=$sha
+  done
+  if [[ -n $version ]]; then echo "$version $commit"; fi
+}
+
+if [[ ${1:-} == untagged ]]; then
+  walk untagged "${2:-HEAD}" | tac
+else
+  ref=${1:-HEAD}
+  if [[ -z $(version_at "$ref") ]]; then
+    echo "no version = \"...\" line in Cargo.toml at $ref" >&2
+    exit 1
+  fi
+  walk one "$ref"
+fi

@@ -96,7 +96,8 @@ item either runs a tool by id or is `run:<command>:<json>` (apply it with those 
   stays), Rename Level, Properties (Level Properties: name, combine mode, visible, base
   height, mirror mode, wrapping). Select Components and Export as 3D Clipart are not done.
 - **2D view (318, plus ours):** Undo, Redo, Cut / Copy / Paste (greyed), Delete, Move to
-  Layer ▸ each layer, Weld, Subtract, Overlap, Join, Align ▸. Object Properties is greyed.
+  Layer ▸ each layer, Weld, Subtract, Overlap, Join, Align ▸. Object Properties opens the selection's own form (its drawing tool, Bitmap or Component
+  Properties, else Set Size).
 
 Not built from Aspire's menus yet: toolpath Show All With This Tool; component 2D preview
 order, Re-Import, Copy, Move to Front / Back; the no-item menus (layers 982, components 614).
@@ -142,7 +143,10 @@ say "not implemented yet".
   skip rotary posts. Post-Processor Management's Inspect has Edit for custom
   posts (Customize opens its copy in it): saved to the file, warning while it would not load
   or after a rename. Changelog shows a post's "+ History" comment rows, and the list shows
-  its version (the date of its last change).
+  its version (the date of its last change). Machine ▸ Update Post-Processor Database opens
+  Post-Processor Management, says how many posts there are (and how many will not load), and
+  checks for a newer Cut Craft, which is how Cut Craft's own posts are updated (custom posts
+  are read from their folder each time).
 - Job Setup: single-sided and rotary jobs. The form changes with the job type as Aspire's
   does: Width / Height / Thickness for a flat job; Length (L), Diameter (D) and the
   Orientation section for a rotary one (forms hide or show a field with `x-show-when` /
@@ -540,6 +544,15 @@ say "not implemented yet".
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
   toolpaths summary and each toolpath's tool, feeds and estimated time (the sections of
   Aspire's job setup sheet), with the home position and, double-sided, the side and flip.
+  It also names the job's file, the active machine, its post and the time it was made,
+  totals the run time and tool changes, and lists each tool with its tool changer slot
+  ("By hand" for one not loaded) or, without a changer, the T number the post writes, with
+  the toolpaths that use it and their run time. Run times use the Toolpath Summary's rapid
+  rate (and the machine's accelerations when it allows for them). Toolpaths ▸ Print Job
+  Sheet opens it in the web browser to print.
+  A job never saved (or whose file has gone) and toolpaths not yet saved are printed as
+  NO LOCAL FILE in red; the unsaved job is copied to the auto-recovery file first, and the
+  sheet gives that path.
   A job of several sheets gets a page for each sheet with toolpaths (`name_Sheet.html`); a
   double-sided job's page ends `_Top` or `_Bottom`. Gadgets ▸ Job Setup Sheet Editor sets
   the title, a logo (PNG, JPEG or GIF), the header and footer colours and which of the
@@ -732,12 +745,8 @@ say "not implemented yet".
 
 **Not built yet.** (Probe 2026-11-01: every menu item run, those that say "not
 implemented yet" listed.)
-- Edit ▸ Object Properties; the component menu's Move to Group; the selection menu's Copy
-  to Sheet.
-- View: Draw Keep-Out Zones in 3D View, Use Shadow Shading; Window: Tile Horizontal / Vertical,
-  Cascade.
-- Toolpaths ▸ Import Toolpaths (format unknown); Machine ▸ Update Post Processor Database (a
-  vendor service).
+- File ▸ Import ▸ Import Toolpaths of Vectric's PhotoVCarve / Machinist / Cut3D files (it
+  reads G-code now).
 - Gadgets beyond the rotary layouts and Celtic Weave.
 - Feeds and speeds: cutting data per machine (it is per material now), Lua-scripted posts;
   toolpath forms still show feeds in mm/min or in/min, not the tool's own units.

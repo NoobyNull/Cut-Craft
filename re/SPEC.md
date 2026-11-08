@@ -71,6 +71,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   - With no component under the pointer: Paste, Import, Show All, Hide All.
 - **Levels:** Combine Mode, Show / Hide, Select Components, Clipping, Mirror Mode, Wrapping, Insert New Level, Delete Level, Rename Level, Export as 3D Clipart.
 - **2D selection:** Undo, Redo, Cut, Copy, Paste, Delete, Move to Front / Back, Ungroup Component, Object Properties.
+  - **[inf]** Cut Craft's Object Properties opens the form that edits what is selected: a shape's or text's own tool, Bitmap Properties for a picture, Component Properties for components, else Set Size for the selected vectors' position and size.
 - **Node editing:** span to Line / Bezier / Arc, insert / delete / smooth point, cut vector, make start point, mirror, close or join with a line / curve / moved end points, reverse direction, exit node editing.
 - **Also:** sheets, post-processor list (make default), clipart library.
 
@@ -96,6 +97,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 - **View:** Toolbar, Zoom to Drawing (F6), Refresh 2D (F5), Guides ▸ visible / delete all / lock / unlock.
   - Draw Origin / Modeling Plane / Material Block / Vectors in 3D / Keep-Out Zones.
   - Auto-Wrapping, Colour Shaded, Shaded Background, Light Follows Viewer, Shadow Shading, Save Shaded Image, Tile H/V, Cascade.
+  - **[inf]** Cut Craft: Use Shadow Shading (off at first) traces a ray to the light from each cell of a flat job's surface, drawing what a wall or raised part hides from the light at the ambient level only (rotary views are not shadowed). Draw Keep-Out Zones in 3D View (on at first) shows or hides their red outlines. Cut Craft has one window holding the 2D and 3D views, so Tile Windows Horizontal (PgDn) puts them one above the other, Tile Windows Vertical (PgUp) side by side (the top bar's split buttons), and Cascade Windows puts them back in tabs.
 - **Help:** contents, shortcuts, tutorials, licence, updates, about. Licensing and vendor web links are out of scope.
   - **Check for Updates [inf]** (Aspire checks Vectric's own servers and has the user download and run a new installer). Cut Craft's differs on purpose, for a novice who will not go looking for a download page: it checks GitHub's releases by itself at startup (about once a day, off in Options ▸ Updates), only says something when there is a newer version, and installs in place after one click, checking the download's minisign signature (the release key is built in; releases are signed in CI by `scripts/sign-release`) and GitHub's SHA-256 checksum first. Nothing downloads or restarts without the user pressing Update Now and Restart Now; restarting goes through the usual "Save changes?" question.
 
@@ -122,6 +124,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 - **Bitmaps:** BMP, JPG, TIF, GIF, PNG. Used to trace over, auto-trace into vectors, or turn into a 3D component (greyscale → height).
 - **3D:** CRV3D, 3DCLIP, V3M (placed at their saved size and position), plus STL, 3D-mesh DXF, 3DS, 3DM (render meshes only), SKP. Third-party meshes open an **Orientate 3D Model** step first (orientation, scaling, then conversion to a component).
 - **[unk]** SVG import: SVG appears under Export, but the import help page doesn't list it.
+- **Toolpaths [inf]:** Aspire's File ▸ Import ▸ Import Toolpaths reads PhotoVCarve, Machinist and Cut3D toolpath files. Cut Craft's reads G-code instead (any post's `.nc`, `.tap`, `.gcode`, `.ngc`, `.cnc`): G0 to G3 (XY arcs by I J or R), G20 / G21, G90 / G91, F, S and T with M6, a toolpath for each tool, z put back from the job's Z zero onto the material surface. The form asks which tool cut it, for the preview; the file's feed, spindle speed and tool number are used where it gives them. Recalculate reads the file again. Drilling cycles (G81 to G89) are refused with a message rather than guessed at. Deliberate difference: G-code is what a hobbyist has from every program, and it lets a file be previewed and checked before it runs. The Vectric formats are still to do.
 
 ### Export [obs]
 - **Vectors:** EPS, DXF, AI, SVG, PDF.

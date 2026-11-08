@@ -38,8 +38,9 @@ struct Camera {
     painted: u32,
     // 1: then each cell's underside height (a double-sided preview), drawn as its own grid
     under: u32,
-    // to a whole 16 bytes (scalars: a vec3 would be aligned to 16 and grow the struct)
-    pad_c: u32,
+    // 1: a flat surface's cells the light cannot reach are drawn in shadow (View ▸ Use
+    // Shadow Shading); `surface` is then its highest point
+    shadows: u32,
 };
 
 @group(0) @binding(0) var<uniform> camera: Camera;
@@ -55,12 +56,15 @@ struct Placed {
     normal: vec3<f32>,
     // linear
     colour: vec3<f32>,
+    // 1 where the light cannot reach (0 by default: lit)
+    shadow: f32,
 };
 
 struct Fragment {
     @builtin(position) clip: vec4<f32>,
     @location(0) normal: vec3<f32>,
     @location(1) colour: vec3<f32>,
+    @location(2) shadow: f32,
 };
 
 @vertex
@@ -75,6 +79,7 @@ fn vs_main(@builtin(vertex_index) i: u32) -> Fragment {
     out.clip = camera.clip * vec4<f32>(placed.p, 1.0);
     out.normal = placed.normal;
     out.colour = placed.colour;
+    out.shadow = placed.shadow;
     return out;
 }
 
@@ -161,6 +166,9 @@ fn surface_vertex(i: u32) -> Placed {
         normal = -normal;
     }
     out.normal = normal;
+    if camera.shadows == 1u && camera.wrap == 0u {
+        out.shadow = shadowed(c, r, own);
+    }
     var depth = 0.0;
     if camera.bottom < 0.0 {
         if camera.wrap == 0u {
@@ -186,6 +194,38 @@ fn surface_vertex(i: u32) -> Placed {
         }
     }
     return out;
+}
+
+// the longest a ray to the light is followed, in cells
+const SHADOW_STEPS: u32 = 2048u;
+
+// 1 when the surface between cell (c, r) and the light rises over the ray to it, as
+// in_shadow in view3d.rs: a cell at a time, until the ray is over the highest point
+fn shadowed(c: u32, r: u32, own: f32) -> f32 {
+    let across = length(camera.light.xy);
+    if own <= EMPTY || across < 1.0e-6 || camera.light.z <= 0.0 {
+        return 0.0;
+    }
+    let step = camera.light.xy / across;
+    let rise = camera.light.z / across * camera.cell;
+    var p = vec2<f32>(f32(c) + 0.5, f32(r) + 0.5);
+    var z = own;
+    for (var i = 0u; i < SHADOW_STEPS; i++) {
+        p += step;
+        z += rise;
+        if z > camera.surface || p.x < 0.0 || p.y < 0.0 {
+            return 0.0;
+        }
+        let at = vec2<u32>(p);
+        if at.x >= camera.columns || at.y >= camera.rows {
+            return 0.0;
+        }
+        let h = data[at.y * camera.columns + at.x];
+        if h > EMPTY && h > z {
+            return 1.0;
+        }
+    }
+    return 0.0;
 }
 
 // where a cell's underside is: the block's bottom, or (a double-sided preview) cut from below
@@ -289,7 +329,7 @@ fn turned_away(normal: vec3<f32>) -> bool {
 
 // the fragment's colour, linear
 fn lit(f: Fragment, normal: vec3<f32>) -> vec3<f32> {
-    let facing = max(dot(normal, camera.light), 0.0);
+    let facing = max(dot(normal, camera.light), 0.0) * (1.0 - f.shadow);
     return f.colour * (camera.ambient + (1.0 - camera.ambient) * facing);
 }
 
