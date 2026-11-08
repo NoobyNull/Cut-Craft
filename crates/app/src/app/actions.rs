@@ -40,7 +40,7 @@ impl CutCraftApp {
             start_menus: menus.without_job(),
             doc: Document::default(),
             history: History::default(),
-            registry,
+            registry: std::sync::Arc::new(registry),
             icons: Icons::default_set(),
             menus,
             toolbar: gui::Toolbar::new(),
@@ -78,6 +78,8 @@ impl CutCraftApp {
                 add_side: false,
             },
             depth_estimate: None,
+            busy: None,
+            wait_before_showing: crate::busy::SHOW_AFTER,
             addons_path: None,
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
@@ -1022,9 +1024,11 @@ impl CutCraftApp {
     /// are, and any that still cannot keep out is warned about.
     pub(super) fn keep_out_changed(&mut self) {
         if !self.doc.toolpaths.is_empty() {
-            self.toolpath_action("recalculate_all_toolpaths");
             let ids: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
-            self.warn(&ids, &[]);
+            let warned = ids.clone();
+            self.recalculate_in_background(ids, "All toolpaths recalculated", move |app| {
+                app.warn(&warned, &[]);
+            });
         }
     }
 
@@ -1043,21 +1047,18 @@ impl CutCraftApp {
         match id {
             "recalculate_toolpath" => {
                 if let Some(id) = self.selected_toolpath {
-                    let result = self.registry.recalculate(&self.doc, id);
-                    self.record(result, "Toolpath recalculated");
+                    self.recalculate_in_background(vec![id], "Toolpath recalculated", |_| {});
                 }
             }
             // the cascade: Recalculate on each shown toolpath
             "recalculate_visible_toolpaths" => {
                 let shown = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
                 let ids: Vec<EntityId> = shown.map(|(&id, _)| id).collect();
-                let result =
-                    Change::chain_over(&self.doc, &ids, |d, &id| self.registry.recalculate(d, id));
-                self.record(result, "Visible toolpaths recalculated");
+                self.recalculate_in_background(ids, "Visible toolpaths recalculated", |_| {});
             }
             "recalculate_all_toolpaths" => {
-                let result = self.registry.recalculate_all(&self.doc);
-                self.record(result, "All toolpaths recalculated");
+                let ids: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
+                self.recalculate_in_background(ids, "All toolpaths recalculated", |_| {});
             }
             // the toolpath list's button: the Delete Toolpath command on the selected one
             "delete_toolpath" => {
@@ -1549,11 +1550,36 @@ impl CutCraftApp {
         }
     }
 
-    /// Opens a job file in place of whatever is open (already confirmed); whether it opened.
+    /// Opens a job file in place of whatever is open (already confirmed); whether it opened
+    /// (or, a big one, is still opening). A big job is read off the window's thread, its
+    /// progress shown; one that will not open leaves the recent files.
     pub(super) fn open_path(&mut self, path: &std::path::Path) -> bool {
-        let mut session = Session::default();
-        match session.open(path) {
-            Ok((doc, history)) => {
+        let outcome = std::rc::Rc::new(std::cell::Cell::new(None));
+        let told = std::rc::Rc::clone(&outcome);
+        let (reading, path) = (path.to_owned(), path.to_owned());
+        let what = format!("Opening {}", super::file_name(&path));
+        self.in_background(
+            &what,
+            move || {
+                let mut session = Session::default();
+                session
+                    .open(&reading)
+                    .map(|(doc, history)| (session, doc, history))
+            },
+            move |app, opened| told.set(Some(app.opened(&path, opened))),
+        );
+        outcome.get().unwrap_or(true)
+    }
+
+    /// A job file read (or why it could not be) put in place of whatever is open; whether
+    /// it opened.
+    fn opened(
+        &mut self,
+        path: &std::path::Path,
+        opened: Result<(Session, Document, History), String>,
+    ) -> bool {
+        match opened {
+            Ok((mut session, doc, history)) => {
                 self.reset_job();
                 let template = path
                     .extension()
@@ -1574,6 +1600,10 @@ impl CutCraftApp {
             }
             Err(e) => {
                 self.status.set_message(&e);
+                if self.recent.iter().any(|p| p == path) {
+                    self.recent.retain(|p| p != path);
+                    self.save_recent();
+                }
                 false
             }
         }
@@ -1584,9 +1614,8 @@ impl CutCraftApp {
         let Some(path) = self.recent.get(index).cloned() else {
             return;
         };
-        if self.confirm_discard() && !self.open_path(&path) {
-            self.recent.retain(|p| p != &path);
-            self.save_recent();
+        if self.confirm_discard() {
+            self.open_path(&path);
         }
     }
 
@@ -1849,7 +1878,7 @@ impl CutCraftApp {
     /// Asks whether to save toolpaths the checks before cutting found `problems` in.
     /// Crossing vectors chosen for a V-carve or pocket toolpath, or for an offset: what the
     /// Options' confirmation choices say to do. An error stops the command.
-    fn crossings_allowed(&mut self, id: &str, params: &Value) -> Result<(), String> {
+    pub(super) fn crossings_allowed(&mut self, id: &str, params: &Value) -> Result<(), String> {
         let c = &self.options.confirmations;
         let check = match id {
             "pocket_toolpath" | "vcarve_engrave_toolpath" | "vcarve_inlay_toolpath" => {
@@ -2103,10 +2132,8 @@ impl CutCraftApp {
     /// the form's settings, in its place.
     pub(super) fn apply_form(&mut self, id: &str, params: &Value) -> Result<(), String> {
         if let Some(toolpath) = self.form.as_ref().and_then(|f| f.editing) {
-            let change = self.registry.edit(&self.doc, toolpath, Some(params));
-            let failed = change.as_ref().err().map(ToString::to_string);
-            self.record(change, "Toolpath edited");
-            return failed.map_or(Ok(()), Err);
+            self.edit_in_background(id, toolpath, params);
+            return Ok(());
         }
         let before = self.entity_ids();
         let same = self.form.as_ref().and_then(|f| f.applied.as_ref()) == Some(params);
@@ -2114,7 +2141,10 @@ impl CutCraftApp {
             // the shape already follows these settings: nothing to do again
             Some(_) if same => return Ok(()),
             Some(old) => self.redraw(id, params, old)?,
-            None => self.apply(id, params)?,
+            // a shape or model the form goes on changing is made in place; anything else
+            // (a toolpath, a relief) may take a while, so it shows its progress
+            None if self.makes_one(id) => self.apply(id, params)?,
+            None => self.apply_in_background(id, params)?,
         }
         self.remember_drawn(&before);
         if let Some(form) = &mut self.form {
@@ -2588,27 +2618,24 @@ impl CutCraftApp {
     /// Runs a command and records it for undo.
     pub(super) fn apply(&mut self, id: &str, params: &Value) -> Result<(), String> {
         self.crossings_allowed(id, params)?;
+        let change = super::background::command_change(&self.registry, &self.doc, id, params);
+        self.applied(id, params, change)
+    }
+
+    /// What command `id` made with `params` (or why it made nothing) put into the job: onto
+    /// the import level, into the picked toolpath group, as one undo; then whatever the
+    /// command goes on to do.
+    pub(super) fn applied(
+        &mut self,
+        id: &str,
+        params: &Value,
+        change: Result<Change, String>,
+    ) -> Result<(), String> {
+        let change = change?;
         let cmd = self
             .registry
             .get(id)
             .expect("only registered commands are applied");
-        // a toolpath with a Vector Selector is made from whatever vectors pass it
-        let change = match cut_craft_core::selector::Selector::of(params) {
-            Some(selector) => {
-                let mut sources = self.doc.clone();
-                sources.selection = selector.picked(&self.doc).into_iter().collect();
-                if sources.selection.is_empty() {
-                    return Err("no vectors pass the Vector Selector".into());
-                }
-                cmd.run_json(&sources, params)
-            }
-            None => cmd.run_json(&self.doc, params),
-        }
-        .map_err(|e| e.to_string())?;
-        // rest machining, for any toolpath whose settings ask for it
-        let change = cut_craft_core::rest::with_rest(&self.doc.job, params, change)
-            .map_err(|e| e.to_string())?;
-        let change = cut_craft_core::selector::kept(params, change);
         let change = self.onto_import_level(id, change);
         // a toolpath made while a group is picked in the list joins it
         let change = match &self.selected_group {
@@ -2773,6 +2800,10 @@ impl CutCraftApp {
     }
 
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
+        // while a slow job runs, the window only shows its progress
+        if self.busy.is_some() {
+            return;
+        }
         // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
         // clipboard carries what Copy took, so another Cut Craft window pastes it too
         let (cut, copy, pasted) = ctx.input(|i| {
@@ -3435,9 +3466,13 @@ impl CutCraftApp {
             (true, _, true) => self.job_setup_cancel(),
             (false, true, _) => {
                 let (id, params) = (open.id, open.params.clone());
-                let result = self.apply_form(id, &params);
+                // a job that goes on in the background puts what goes wrong on the form
                 if let Some(open) = &mut self.form {
-                    open.error = result.err();
+                    open.error = None;
+                }
+                let result = self.apply_form(id, &params);
+                if let (Err(why), Some(open)) = (result, &mut self.form) {
+                    open.error = Some(why);
                 }
             }
             (false, _, true) => {

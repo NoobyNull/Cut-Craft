@@ -21,6 +21,7 @@ pub mod packed;
 pub mod params;
 pub mod playback;
 pub mod polygon;
+pub mod progress;
 pub mod random;
 pub mod rest;
 pub mod selection;

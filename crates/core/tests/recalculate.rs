@@ -198,3 +198,32 @@ fn changing_the_model_makes_only_the_toolpaths_that_cut_it_stale() {
         "a flat toolpath does not cut the model"
     );
 }
+
+#[test]
+fn recalculating_each_says_how_far_it_has_got_and_stops_when_cancelled() {
+    use cut_craft_core::progress::Progress;
+    let (mut doc, first) = job();
+    let mut c = Change::builder(&doc);
+    c.select([EntityId(2)]);
+    doc.apply(&c.finish()).unwrap();
+    doc.apply(&Centres::run(&doc, &NoParams {}).unwrap())
+        .unwrap();
+    let ids: Vec<EntityId> = doc.toolpaths.keys().copied().collect();
+    move_vector(&mut doc, EntityId(1), Point::new(0.0, 20.0));
+    let progress = Progress::new();
+    let change = progress
+        .track(|| registry().recalculate_each(&doc, &ids))
+        .unwrap();
+    assert_eq!(progress.fraction(), Some(1.0));
+    assert_eq!(progress.stage(), "Centres (2 of 2)", "named as it goes");
+    doc.apply(&change).unwrap();
+    assert_eq!(plunge(&doc, first), Point::new(5.0, 25.0));
+    let stopped = Progress::new();
+    stopped.cancel();
+    assert!(
+        stopped
+            .track(|| registry().recalculate_each(&doc, &ids))
+            .is_err(),
+        "a cancelled recalculation makes nothing"
+    );
+}

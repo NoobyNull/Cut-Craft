@@ -4,7 +4,7 @@
 use cut_craft_core::{DynCommand, Registry};
 use cut_craft_scripting::load_gadget;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// The gadgets that come with Cut Craft: file name and Lua source.
 const BUILT_IN: [(&str, &str); 2] = [
@@ -40,7 +40,7 @@ pub struct Loaded {
 /// Loads the built-in gadgets and every `.lua` file in `mine` into `registry`. A gadget runs
 /// only Cut Craft's own commands, never another gadget.
 pub fn load(registry: &mut Registry, mine: Option<&Path>) -> Loaded {
-    let commands = Rc::new(crate::commands::registry());
+    let commands = Arc::new(crate::commands::registry());
     let mut loaded = Loaded::default();
     for (file, source) in BUILT_IN {
         match add(registry, file, source, &commands) {
@@ -68,10 +68,10 @@ fn add(
     registry: &mut Registry,
     file: &str,
     source: &str,
-    commands: &Rc<Registry>,
+    commands: &Arc<Registry>,
 ) -> Result<Listed, String> {
     let gadget =
-        load_gadget(file, source, Rc::clone(commands)).map_err(|e| format!("{file}: {e}"))?;
+        load_gadget(file, source, Arc::clone(commands)).map_err(|e| format!("{file}: {e}"))?;
     if registry.get(gadget.id()).is_some() {
         return Err(format!(
             "{file}: skipped, another gadget already has the name \"{}\"",

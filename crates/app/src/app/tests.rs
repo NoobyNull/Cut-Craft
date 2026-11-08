@@ -871,6 +871,8 @@ impl Harness {
         };
         // previews appear cut at once unless a test plays one
         h.app.display.animate_preview = false;
+        // slow jobs finish in place, as quick ones do, unless a test waits on one
+        h.app.wait_before_showing = std::time::Duration::from_mins(10);
         // no browser opens from a test
         h.app.reporter.browser = false;
         // nor a question about crossing vectors: the controls are clicked with whatever is
@@ -7759,4 +7761,145 @@ fn the_job_sheet_names_the_file_machine_post_and_slots() {
     assert!((setup.rapid - h.app.summary.rapid).abs() < 1e-9);
     assert!(h.app.available("print_job_sheet"));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Frames until the slow job running now is done and its answer used.
+fn until_not_busy(h: &mut Harness) {
+    for _ in 0..2000 {
+        if h.app.busy.is_none() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        h.frame(vec![]);
+    }
+    panic!("the job never finished");
+}
+
+#[test]
+fn a_toolpath_that_takes_a_while_shows_its_progress_then_lands_in_the_job() {
+    let mut h = Harness::new();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("profile_toolpath", &params).unwrap();
+    until_not_busy(&mut h);
+    assert_eq!(h.app.doc.toolpaths.len(), 1, "made once the job was done");
+    assert!(h.app.history.can_undo(), "as one undo, like any other");
+}
+
+#[test]
+fn a_slow_job_shows_a_progress_window_that_cancels_with_nothing_changed() {
+    let mut h = Harness::new();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    let (reported, said) = std::sync::mpsc::channel::<()>();
+    let before = h.app.history.revision();
+    h.app.in_background(
+        "Calculating Slow Toolpath",
+        move || {
+            cut_craft_core::progress::report(0.4);
+            reported.send(()).ok();
+            wait.recv().ok();
+        },
+        |app, ()| app.status.set_message("used"),
+    );
+    assert!(h.app.busy.is_some(), "still running");
+    // the job's thread may start late (Windows): the bar is drawn once it has reported
+    said.recv().unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Calculating Slow Toolpath…").is_some());
+    assert!(h.text_at("40%").is_some());
+    // keys do nothing under the window
+    let undo = Event::Key {
+        key: Key::Z,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::COMMAND,
+    };
+    h.frame_holding(Modifiers::COMMAND, vec![undo]);
+    assert_eq!(
+        h.app.history.revision(),
+        before,
+        "no undo behind the window"
+    );
+    let cancel = h.text_at("Cancel").expect("a Cancel button");
+    h.click(cancel, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.busy.is_none(), "the window is gone at once");
+    assert!(
+        h.app.status.message.contains("cancelled"),
+        "{}",
+        h.app.status.message
+    );
+    go.send(()).ok();
+    h.frame(vec![]);
+    assert_ne!(h.app.status.message, "used", "what it made was let go");
+}
+
+#[test]
+fn what_a_slow_job_made_is_not_used_if_the_job_changed_meanwhile() {
+    let mut h = Harness::new();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    h.app.in_background(
+        "Calculating",
+        move || {
+            wait.recv().ok();
+        },
+        |app, ()| app.status.set_message("used"),
+    );
+    h.app.invoke(&h.ctx, "undo");
+    go.send(()).unwrap();
+    until_not_busy(&mut h);
+    assert!(
+        h.app.status.message.contains("was not used"),
+        "{}",
+        h.app.status.message
+    );
+}
+
+#[test]
+fn a_preview_cut_off_the_windows_thread_becomes_the_preview() {
+    let mut h = Harness::new();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply_form("profile_toolpath", &params).unwrap();
+    until_not_busy(&mut h);
+    h.app.preview_all(false);
+    until_not_busy(&mut h);
+    let cut = h.app.simulation.as_ref().expect("a preview");
+    assert!(cut.heights.iter().any(|&z| z < 0.0), "the profile is cut");
+    assert!(h.app.status.message.starts_with("Previewed"));
+}
+
+#[test]
+fn a_double_sided_preview_cuts_the_other_side_off_the_windows_thread_too() {
+    let mut h = Harness::new();
+    h.app.doc.job.double_sided = Some(cut_craft_core::document::DoubleSided::default());
+    let pocket = |h: &mut Harness| {
+        h.rectangle(10.0, 10.0, 40.0, 40.0);
+        h.app.invoke(&h.ctx, "pocket_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("pocket_toolpath", &params).unwrap();
+        h.app.form = None;
+    };
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    pocket(&mut h);
+    h.app.apply("swap_sides", &serde_json::json!({})).unwrap();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    until_not_busy(&mut h);
+    let preview = h.app.simulation.as_ref().expect("previewed");
+    assert!(
+        preview.other_side.is_some(),
+        "the other side is previewed too"
+    );
 }
