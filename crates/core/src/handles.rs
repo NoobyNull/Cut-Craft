@@ -16,20 +16,51 @@ pub enum Handle {
 }
 
 /// The keys held while dragging. Shift or Ctrl constrains any handle (scale in proportion,
-/// rotate in steps of 5.625° with Shift or 1° with Ctrl, move along one axis); without them a handle goes freely. Alt scales
-/// about the centre.
+/// rotate in the [`Steps`] chosen in Snapping Options, move along one axis); without them a
+/// handle goes freely. Alt scales about the centre.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Keys {
     pub alt: bool,
     pub shift: bool,
     pub ctrl: bool,
+    /// The angles rotation snaps to with Shift and Ctrl.
+    pub steps: Steps,
 }
 
-/// The angle rotation snaps to with Shift, degrees: a sixty-fourth of a turn.
+/// The angle rotation snaps to with Shift unless Snapping Options says otherwise, degrees:
+/// a sixty-fourth of a turn.
 pub const ROTATE_STEP: f64 = 360.0 / 64.0;
 
-/// The angle rotation snaps to with Ctrl, degrees.
+/// The angle rotation snaps to with Ctrl unless Snapping Options says otherwise, degrees.
 pub const FINE_ROTATE_STEP: f64 = 1.0;
+
+/// The angles, in degrees, a rotate drag snaps to: `shift` with Shift held, `fine` with Ctrl.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Steps {
+    pub shift: f64,
+    pub fine: f64,
+}
+
+impl Steps {
+    /// Cut Craft's own: 5.625° with Shift, 1° with Ctrl.
+    pub const STANDARD: Self = Self {
+        shift: ROTATE_STEP,
+        fine: FINE_ROTATE_STEP,
+    };
+}
+
+impl Default for Steps {
+    fn default() -> Self {
+        Self::STANDARD
+    }
+}
+
+/// An angle for the status bar: whole degrees bare, others to at most three places.
+fn degrees(angle: f64) -> String {
+    let text = format!("{angle:.3}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    format!("{text}°")
+}
 
 impl Keys {
     /// Whether the drag is constrained: Shift or Ctrl held.
@@ -37,30 +68,37 @@ impl Keys {
         self.shift || self.ctrl
     }
 
-    /// The step rotation snaps to, degrees: 1° with Ctrl, 5.625° with Shift, none freely.
+    /// The step rotation snaps to, degrees: the fine step with Ctrl, the Shift step with
+    /// Shift, none freely. A step of nothing or less snaps nowhere.
     pub fn rotate_step(self) -> Option<f64> {
-        if self.ctrl {
-            Some(FINE_ROTATE_STEP)
+        let step = if self.ctrl {
+            self.steps.fine
         } else if self.shift {
-            Some(ROTATE_STEP)
+            self.steps.shift
         } else {
-            None
-        }
+            return None;
+        };
+        (step > 0.0).then_some(step)
     }
 }
 
 impl Handle {
-    /// What it does and the keys that change it, for the status bar.
-    pub fn hint(self) -> &'static str {
+    /// What it does and the keys that change it, for the status bar; a rotation handle
+    /// names the angles of `steps`.
+    pub fn hint(self, steps: Steps) -> String {
         match self {
-            Self::Move => "Move: drag. Hold Shift or Ctrl to keep to one axis",
+            Self::Move => "Move: drag. Hold Shift or Ctrl to keep to one axis".to_owned(),
             Self::Scale { x, y } if x != 0 && y != 0 => {
-                "Scale: drag. Hold Shift or Ctrl to keep the proportions, Alt to scale about the centre"
+                "Scale: drag. Hold Shift or Ctrl to keep the proportions, Alt to scale about the centre".to_owned()
             }
             Self::Scale { .. } => {
-                "Scale one way: drag. Hold Shift or Ctrl to scale both ways in proportion, Alt to scale about the centre"
+                "Scale one way: drag. Hold Shift or Ctrl to scale both ways in proportion, Alt to scale about the centre".to_owned()
             }
-            Self::Rotate { .. } => "Rotate: drag. Hold Shift to snap to 5.625°, or Ctrl to 1°",
+            Self::Rotate { .. } => format!(
+                "Rotate: drag. Hold Shift to snap to {}, or Ctrl to {}",
+                degrees(steps.shift),
+                degrees(steps.fine)
+            ),
         }
     }
 }
@@ -230,16 +268,19 @@ mod tests {
         alt: false,
         shift: true,
         ctrl: false,
+        steps: Steps::STANDARD,
     };
     const CTRL: Keys = Keys {
         alt: false,
         shift: false,
         ctrl: true,
+        steps: Steps::STANDARD,
     };
     const ALT: Keys = Keys {
         alt: true,
         shift: false,
         ctrl: false,
+        steps: Steps::STANDARD,
     };
 
     #[test]
@@ -325,6 +366,60 @@ mod tests {
                 "{dragged}°"
             );
         }
+    }
+
+    #[test]
+    fn rotation_snaps_to_the_steps_chosen() {
+        let h = Handle::Rotate { x: 1, y: 1 };
+        let centre = BOX.center();
+        let steps = Steps {
+            shift: 15.0,
+            fine: 0.5,
+        };
+        // with Shift 20° snaps to 15° and 25° to 30°; with Ctrl 7.3° to 7.5°; a step of
+        // nothing leaves it free
+        for (keys, dragged, snapped) in [
+            (Keys { steps, ..SHIFT }, 20.0, 15.0),
+            (Keys { steps, ..SHIFT }, 25.0, 30.0),
+            (Keys { steps, ..CTRL }, 7.3, 7.5),
+            (
+                Keys {
+                    steps: Steps {
+                        shift: 0.0,
+                        fine: 1.0,
+                    },
+                    ..SHIFT
+                },
+                7.3,
+                7.3,
+            ),
+        ] {
+            let to =
+                centre + Point::new(10.0, 0.0).rotate(Point::from_angle(f64::to_radians(dragged)));
+            let t = transform(BOX, h, centre + Point::new(10.0, 0.0), to, keys);
+            let turned = t.transform_point2(centre + Point::new(1.0, 0.0)) - centre;
+            assert!(
+                (turned.to_angle().to_degrees() - snapped).abs() < 1e-9,
+                "{dragged}°"
+            );
+        }
+    }
+
+    #[test]
+    fn the_rotate_hint_names_the_steps() {
+        let h = Handle::Rotate { x: 1, y: 1 };
+        assert_eq!(
+            h.hint(Steps::STANDARD),
+            "Rotate: drag. Hold Shift to snap to 5.625°, or Ctrl to 1°"
+        );
+        let steps = Steps {
+            shift: 15.0,
+            fine: 0.5,
+        };
+        assert!(
+            h.hint(steps)
+                .ends_with("Shift to snap to 15°, or Ctrl to 0.5°")
+        );
     }
 
     #[test]

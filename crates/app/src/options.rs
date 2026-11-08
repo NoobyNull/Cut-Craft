@@ -763,6 +763,11 @@ pub struct Options {
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub advanced: Advanced,
+    /// Snapping Options (F4): what the pointer snaps to, nudge distances and rotate snap
+    /// angles, kept from one run to the next.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub snapping: cut_craft_core::snap::SnapOptions,
     /// Gadgets ▸ Job Setup Sheet Editor: how job sheets look.
     #[serde(default)]
     #[schemars(skip)]
@@ -863,6 +868,7 @@ impl Default for Options {
                 flyout_hold_seconds: flyout_hold_seconds(),
             },
             confirmations: Confirmations::default(),
+            snapping: cut_craft_core::snap::SnapOptions::default(),
             job_sheet: fmt_create_job_sheet::Style::default(),
             part_labels: fmt_part_labels::Style::default(),
             stl: fmt_export_as_stl::Settings::default(),
@@ -1030,6 +1036,18 @@ mod tests {
             Theme::default(),
             "the system's starting theme, as before themes"
         );
+        assert_eq!(
+            older.snapping,
+            cut_craft_core::snap::SnapOptions::default(),
+            "the standard snapping, as before it was kept"
+        );
+        // snapping is kept from one run to the next, rotate snap angles and all
+        let mut snapped = Options::default();
+        snapped.snapping.rotate_step = 15.0;
+        snapped.snapping.snap_to_grid = true;
+        let back: Options =
+            serde_json::from_str(&serde_json::to_string(&snapped).unwrap()).unwrap();
+        assert_eq!(back.snapping, snapped.snapping);
         let fields =
             crate::form::fields(&serde_json::to_value(schemars::schema_for!(Options)).unwrap());
         let sections: Vec<&str> = fields

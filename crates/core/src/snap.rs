@@ -37,10 +37,34 @@ pub struct SnapOptions {
     #[serde(default = "nudge")]
     #[schemars(title = "Fixed nudge distance", extend("x-unit" = "mm"), range(min = 0))]
     pub fixed_nudge: f64,
+    /// The angle a rotate drag snaps to while Shift is held
+    #[serde(default = "rotate_step")]
+    #[schemars(
+        title = "Rotate snap angle with Shift",
+        extend("x-unit" = "°"),
+        range(min = 0.1, max = 90)
+    )]
+    pub rotate_step: f64,
+    /// The finer angle a rotate drag snaps to while Ctrl is held
+    #[serde(default = "fine_rotate_step")]
+    #[schemars(
+        title = "Rotate snap angle with Ctrl",
+        extend("x-unit" = "°"),
+        range(min = 0.1, max = 45)
+    )]
+    pub fine_rotate_step: f64,
 }
 
 fn nudge() -> f64 {
     1.0
+}
+
+fn rotate_step() -> f64 {
+    crate::handles::ROTATE_STEP
+}
+
+fn fine_rotate_step() -> f64 {
+    crate::handles::FINE_ROTATE_STEP
 }
 
 fn on() -> bool {
@@ -62,11 +86,21 @@ impl Default for SnapOptions {
             // ponytail: Aspire's slider runs Small to Large; 8 px is our middle [inf]
             snapping_radius: 8.0,
             fixed_nudge: nudge(),
+            rotate_step: rotate_step(),
+            fine_rotate_step: fine_rotate_step(),
         }
     }
 }
 
 impl SnapOptions {
+    /// The angles a rotate drag snaps to with Shift and Ctrl.
+    pub fn steps(&self) -> crate::handles::Steps {
+        crate::handles::Steps {
+            shift: self.rotate_step,
+            fine: self.fine_rotate_step,
+        }
+    }
+
     /// Where `at` snaps to: the nearest snap point within `reach` (job mm), else the grid
     /// when it is on, else `at` itself.
     pub fn snap(&self, doc: &Document, at: Point, reach: f64) -> Point {
@@ -300,6 +334,19 @@ impl SnapOptions {
 mod tests {
     use super::*;
     use crate::testing::{document_with, square};
+
+    #[test]
+    fn rotate_snap_angles_default_to_the_standard_steps_and_load_when_missing() {
+        let s = SnapOptions::default();
+        assert_eq!(s.steps(), crate::handles::Steps::STANDARD);
+        // options saved before the angles existed still load, with the standard ones
+        let mut old = serde_json::to_value(&s).expect("serialises");
+        let map = old.as_object_mut().expect("an object");
+        map.remove("rotate_step");
+        map.remove("fine_rotate_step");
+        let loaded: SnapOptions = serde_json::from_value(old).expect("loads");
+        assert_eq!(loaded, s);
+    }
 
     #[test]
     fn a_line_end_snaps_square_onto_a_span_and_onto_a_tangent() {

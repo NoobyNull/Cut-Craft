@@ -25,7 +25,7 @@ moves them again.
 | Toolpath save tolerances (2D, 3D, V-carve: 0.00254 mm) | Options ▸ Toolpath Settings |
 | Recent files kept (`files::RECENT_COUNT` = 4) | Options ▸ General |
 | Imported model preview faces (250,000) | Options ▸ Importing Models |
-| Snap radius, nudge distances, grid | Snapping Options |
+| Snap radius, nudge distances, grid, rotate snap angles | Snapping Options (kept between runs) |
 | Job defaults: clearance 5 mm, home, sizes | Job Setup ▸ Set as Default |
 | Tool feeds, speeds, stepovers | Tool Database |
 | Each toolpath's own defaults (stepover, passes, tabs) | the toolpath's form; tool database |
@@ -129,9 +129,12 @@ Grouped, with the reason.
    (Done: click reach, perspective angle, wait before full detail. Shading strengths go
    through the GPU uniforms and detail while moving shares cached coarse surfaces, so both
    are left for a follow-up.)
-4. Toolpaths and checks: preview speed, material-left warning, job sheet rapid fix. (Done:
-   the job sheet's times use Toolpath Summary's rapid rate.)
-5. Snapping: rotate snap angles.
+4. (Done, #187) Toolpaths and checks: preview speed, material-left warning, job sheet rapid fix.
+   (The job sheet's times use Toolpath Summary's rapid rate.)
+5. Snapping: rotate snap angles. (Done: Snapping Options ▸ *Rotate snap angle with Shift*
+   (5.625°, 0.1 to 90°) and *with Ctrl* (1°, 0.1 to 45°). The Shift default stays 5.625°
+   until Matthew says otherwise. Snapping Options are now kept between runs in
+   `options.json`, where before they reset at every start.)
 6. Import: picture DPI, DXF spline detail.
 7. Performance (Advanced): threads, most 3D detail, clipart and cache limits.
 8. CAM accuracy (Advanced): curve accuracy, 3D accuracy, rest threshold, nesting limits.
