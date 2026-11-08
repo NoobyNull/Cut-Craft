@@ -264,8 +264,12 @@ pub fn unpack(zip: &[u8], addons: &Path, id: &str) -> Result<Manifest, String> {
     for (name, bytes) in &files {
         let path = fresh.join(name);
         fs::write(&path, bytes).map_err(|e| fail("write", &path, e))?;
+        // the program runs: its exec bit on Unix (Windows needs nothing)
+        #[cfg(unix)]
         if manifest.files.first() == Some(name) {
-            executable(&path).map_err(|e| fail("make runnable", &path, e))?;
+            use std::os::unix::fs::PermissionsExt as _;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+                .map_err(|e| fail("make runnable", &path, e))?;
         }
     }
     let dir = addons.join(id);
@@ -286,20 +290,6 @@ pub fn unpack(zip: &[u8], addons: &Path, id: &str) -> Result<Manifest, String> {
     }
     let _ = fs::remove_dir_all(&old);
     Ok(manifest)
-}
-
-/// Lets the program run: its exec bit on Unix; nothing to do on Windows.
-fn executable(path: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o755))
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-        Ok(())
-    }
 }
 
 /// Takes the add-on `id` out of `addons`.
