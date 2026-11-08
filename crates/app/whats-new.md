@@ -1,4 +1,4 @@
-- Automatic updates: Help ▸ Check for Updates installs signed new versions after asking
-- Gadgets menu (Lua), draw in the 3D view, toolbox flyouts, Relief from Photo
-- Cut lists and part labels, Drill Bank toolpath, click inside a shape to pick it with its holes
-- Library tab: folders, tags, filters and 3D clipart previews
+- Design page sub-tabs (Create, Edit, Arrange, Model) with clean new line icons
+- Tool tips, forms and the status bar say what to do next
+- Shapes snap square onto lines and tangent to arcs; toolpath forms save and load settings
+- Options: text size, recovery copy, flyout hold, 3D view; a native look on macOS

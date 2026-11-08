@@ -39,35 +39,50 @@ pub(super) fn controls(ui: &mut egui::Ui, title: &str) {
                 });
             }
         }
-        // the buttons' row, from the menus to the buttons
-        let rest = Rect::from_x_y_ranges(
-            ui.available_rect_before_wrap().x_range(),
-            ui.min_rect().y_range(),
-        );
-        let drag = ui.interact(
-            rest,
-            ui.scope_id().with("title_drag"),
-            Sense::click_and_drag(),
-        );
-        if drag.drag_started_by(egui::PointerButton::Primary) {
-            ctx.send_viewport_cmd(ViewportCommand::StartDrag);
-        }
-        if drag.double_clicked() {
-            ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximised));
-        }
-        let colour = ui.visuals().text_color();
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let galley = ui.painter().layout_no_wrap(title.to_owned(), font, colour);
-        // centred on the window, or failing that in the space it has; left out if neither fits
-        let on_window = egui::pos2(ctx.content_rect().center().x, rest.center().y);
-        let place = [on_window, rest.center()]
-            .map(|centre| Rect::from_center_size(centre, galley.size()))
-            .into_iter()
-            .find(|at| rest.contains_rect(*at));
-        if let Some(at) = place {
-            ui.painter().galley(at.min, galley, colour);
-        }
+        let row = ui.min_rect().y_range();
+        title_and_drag_space(ui, title, maximised, row);
     });
+}
+
+/// After the menus, in a Mac's menu row (which shares the title bar with the system's own
+/// buttons): the window's title centred, and the space to drag the window by.
+pub(super) fn title_and_drag(ui: &mut egui::Ui, title: &str) {
+    let maximised = maximised(ui.ctx());
+    // the menus' row, as tall as the title bar beside the traffic lights
+    let row = ui.min_rect().y_range();
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        title_and_drag_space(ui, title, maximised, row);
+    });
+}
+
+/// The rest of the menus' row (`row`, top to bottom): dragged, it moves the window; twice
+/// clicked, it maximises.
+fn title_and_drag_space(ui: &mut egui::Ui, title: &str, maximised: bool, row: egui::Rangef) {
+    let ctx = ui.ctx().clone();
+    let rest = Rect::from_x_y_ranges(ui.available_rect_before_wrap().x_range(), row);
+    let drag = ui.interact(
+        rest,
+        ui.scope_id().with("title_drag"),
+        Sense::click_and_drag(),
+    );
+    if drag.drag_started_by(egui::PointerButton::Primary) {
+        ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+    }
+    if drag.double_clicked() {
+        ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximised));
+    }
+    let colour = ui.visuals().text_color();
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let galley = ui.painter().layout_no_wrap(title.to_owned(), font, colour);
+    // centred on the window, or failing that in the space it has; left out if neither fits
+    let on_window = egui::pos2(ctx.content_rect().center().x, rest.center().y);
+    let place = [on_window, rest.center()]
+        .map(|centre| Rect::from_center_size(centre, galley.size()))
+        .into_iter()
+        .find(|at| rest.contains_rect(*at));
+    if let Some(at) = place {
+        ui.painter().galley(at.min, galley, colour);
+    }
 }
 
 fn window_button(ui: &mut egui::Ui, button: Button, maximised: bool) -> egui::Response {

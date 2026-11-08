@@ -20,6 +20,11 @@ pub struct Display {
     pub modeling_plane: bool,
     pub material_block: bool,
     pub vectors_3d: bool,
+    /// The keep-out zones outlined in red over the 3D view.
+    pub keep_out_3d: bool,
+    /// Parts of the surface the light cannot reach (behind a wall or a raised part) are
+    /// drawn in shadow.
+    pub shadows: bool,
     pub light_follows: bool,
     pub colour_shaded: bool,
     pub shaded_background: bool,
@@ -48,6 +53,8 @@ impl Default for Display {
             modeling_plane: false,
             material_block: true,
             vectors_3d: true,
+            keep_out_3d: true,
+            shadows: false,
             light_follows: false,
             colour_shaded: true,
             shaded_background: true,
@@ -91,6 +98,8 @@ impl Display {
             "draw_modeling_plane" => &mut self.modeling_plane,
             "draw_material_block" => &mut self.material_block,
             "draw_vectors_in_3d_view" => &mut self.vectors_3d,
+            "draw_keep_out_zones_in_3d_view" => &mut self.keep_out_3d,
+            "use_shadow_shading" => &mut self.shadows,
             "light_follows_viewer" => &mut self.light_follows,
             "color_shaded_view" => &mut self.colour_shaded,
             "use_shaded_background" => &mut self.shaded_background,

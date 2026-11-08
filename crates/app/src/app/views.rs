@@ -273,7 +273,8 @@ impl CutCraftApp {
         self.shortcuts(ctx);
         egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));
-        if !self.options.appearance.system_title_bar {
+        // a Mac's window always has its own edges to resize by
+        if !self.options.appearance.system_title_bar && !super::mac::is_mac(ctx) {
             super::title_bar::resize_edges(ctx);
         }
         self.tool_database_window(ctx);
@@ -2667,7 +2668,13 @@ impl CutCraftApp {
             ctx.set_theme(options.appearance.theme.preference());
             let frame = options.appearance.system_title_bar;
             if frame != self.options.appearance.system_title_bar {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
+                if super::mac::is_mac(ctx) {
+                    // a Mac's window can't change its title bar while open
+                    self.status
+                        .set_message("The title bar changes next time Cut Craft starts.");
+                } else {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
+                }
             }
             self.recent.truncate(options.recent_count());
             if options.toolpaths.preview_speed != self.options.toolpaths.preview_speed {

@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/app", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/updater", "crates/machines", "crates/calib", "crates/depth-addon", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
-version = "0.5.1"
+version = "0.5.2"
 edition = "2024"
 license-file = "LICENSE"
 
