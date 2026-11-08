@@ -437,21 +437,38 @@ pub fn heights(light: &Grid, depth: &Grid, shaping: &Shaping) -> Grid {
     grid
 }
 
-/// Round the subject, a slope from `top` down to 0 over `width` pixels (smoothstep), so
-/// the relief has no wall at its outline.
+/// Round the subject, a slope down to 0 over `width` pixels (smoothstep) from the height of
+/// the outline it leaves, but never from below `floor`, so the relief has no wall there.
 #[expect(clippy::cast_precision_loss, reason = "a few pixels")]
-fn soften(grid: &mut Grid, fig: &[bool], top: f32, width: usize) {
+fn soften(grid: &mut Grid, fig: &[bool], floor: f32, width: usize) {
     let (columns, rows) = (grid.columns, grid.rows);
     let mut reached = fig.to_vec();
+    // the height each reached pixel slopes down from: the outline's, carried outward
+    let mut from: Vec<f32> = grid
+        .values
+        .iter()
+        .zip(fig)
+        .map(|(&h, &f)| if f { h.max(floor) } else { 0.0 })
+        .collect();
     for step in 1..=width {
         let grown = dilate(&reached, columns, rows);
         let r = 1.0 - step as f32 / (width + 1) as f32;
-        let height = top * r * r * (3.0 - 2.0 * r);
-        for ((h, &g), &was) in grid.values.iter_mut().zip(&grown).zip(&reached) {
-            if g && !was {
-                *h = height;
-            }
+        let fall = r * r * (3.0 - 2.0 * r);
+        let mut next = from.clone();
+        for at in (0..reached.len()).filter(|&at| grown[at] && !reached[at]) {
+            let (c, row) = (at % columns, at / columns);
+            let top = (row.saturating_sub(1)..=(row + 1).min(rows - 1))
+                .flat_map(|rr| {
+                    (c.saturating_sub(1)..=(c + 1).min(columns - 1))
+                        .map(move |cc| rr * columns + cc)
+                })
+                .filter(|&n| reached[n])
+                .map(|n| from[n])
+                .fold(0.0, f32::max);
+            next[at] = top;
+            grid.values[at] = top * fall;
         }
+        from = next;
         reached = grown;
     }
 }
@@ -680,6 +697,24 @@ mod tests {
             close(out[4], 0.0) && close(out[5], 0.0),
             "flat beyond: {out:?}"
         );
+    }
+
+    #[test]
+    fn a_soft_edge_starts_from_the_rim_s_own_height() {
+        // the subject's right side stands at full height: the slope begins up there
+        let light = square(16, 6, 0.95, 0.3);
+        let depth = Grid::new(16, 16, (0..256_u16).map(|i| f32::from(i % 16)).collect());
+        let shaping = Shaping {
+            cut_off: 0.1,
+            lift: 0.2,
+            radius: 3.0,
+            soft_edge: 3,
+            ..Shaping::default()
+        };
+        let h = heights(&light, &depth, &shaping);
+        let (rim, first) = (h.at(10, 8), h.at(11, 8));
+        assert!(rim > 0.9, "{rim}");
+        assert!(first > 0.5 * rim && first < rim, "no wall: {rim} {first}");
     }
 
     #[test]

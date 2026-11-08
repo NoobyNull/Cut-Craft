@@ -157,13 +157,7 @@ fn shaped(photo: &Bitmap, p: &Params, cell: f64) -> Bitmap {
         photo.rows,
         photo.grey.iter().map(|&g| f32::from(g) / 255.0).collect(),
     );
-    // a depth map's own tones at full precision when it has them, else its greys
-    let depth = if photo.depth.len() == photo.grey.len() {
-        photo.depth.clone()
-    } else {
-        light.values.clone()
-    };
-    let depth = Grid::new(photo.columns, photo.rows, depth);
+    let depth = Grid::new(photo.columns, photo.rows, source(photo, p));
     // shaped at the relief's resolution: finer pixels than its cells only cost time
     let size = photo.rect.size();
     let (columns, rows) = (
@@ -199,6 +193,25 @@ fn shaped(photo: &Bitmap, p: &Params, cell: f64) -> Bitmap {
         depth: heights.values,
         rgb: Vec::new(),
         ..photo.clone()
+    }
+}
+
+/// The depth to shape: the estimate for Estimated, and for Picture the picture's own tones,
+/// at full precision when it was imported with them (its depth then matches its greys to
+/// within a level, which an estimate never does), else its greys.
+fn source(photo: &Bitmap, p: &Params) -> Vec<f32> {
+    let greys = || photo.grey.iter().map(|&g| f32::from(g) / 255.0);
+    let has_depth = photo.depth.len() == photo.grey.len();
+    let own_tones = has_depth
+        && photo
+            .depth
+            .iter()
+            .zip(greys())
+            .all(|(d, g)| (d - g).abs() <= 1.0 / 255.0);
+    match p.depth_from {
+        DepthFrom::Estimated if has_depth => photo.depth.clone(),
+        DepthFrom::Picture if own_tones => photo.depth.clone(),
+        _ => greys().collect(),
     }
 }
 
@@ -310,6 +323,45 @@ mod tests {
             at(12.0, 12.0) > at(1.0, 1.0) + 5.0,
             "inverted, black is high"
         );
+    }
+
+    #[test]
+    fn picture_uses_the_picture_even_with_an_estimate_attached() {
+        // with_photo's estimate rises left to right; its picture is a dark square on light
+        let params = Params {
+            depth_from: DepthFrom::Picture,
+            background_cut_off: 0.0,
+            depth_cut_off: 0.0,
+            fine_detail: 0.0,
+            smoothness: 0,
+            lift: 0.0,
+            ..Params::default()
+        };
+        let mut doc = with_photo();
+        let r = relief(&mut doc, &params);
+        let at = |x: f64, y: f64| r.height_at(Point::new(x, y)).unwrap();
+        assert!(at(1.0, 12.0) > at(12.0, 12.0) + 5.0, "white is high");
+        assert!(
+            (at(7.0, 12.0) - at(17.0, 12.0)).abs() < 1e-6,
+            "not the estimate"
+        );
+    }
+
+    #[test]
+    fn picture_keeps_a_16_bit_depth_map_s_own_tones() {
+        // a depth map imported at full precision: its depth is its own greys, finer
+        let mut photo = without_depth().bitmaps.values().next().unwrap().clone();
+        photo.depth = photo
+            .grey
+            .iter()
+            .enumerate()
+            .map(|(i, &g)| (f32::from(g) + if i % 2 == 0 { 0.3 } else { -0.3 }) / 255.0)
+            .collect();
+        let p = Params {
+            depth_from: DepthFrom::Picture,
+            ..Params::default()
+        };
+        assert_eq!(source(&photo, &p), photo.depth);
     }
 
     #[test]
