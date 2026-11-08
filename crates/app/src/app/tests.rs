@@ -3436,8 +3436,12 @@ fn a_design_sub_tab_can_have_a_section_of_its_own() {
 fn the_clipart_library_button_opens_the_library_tab() {
     let mut h = Harness::new();
     assert!(h.app.available("clipart_library"));
-    h.app.invoke(&h.ctx, "clipart_library");
+    // picked from a flown-out Design page, the page stays out on the Library tab
+    h.app.pages.set_pinned(Page::Design, false);
+    h.app.pages.open(Page::Design);
+    h.app.pick(&h.ctx, Page::Design, "clipart_library");
     assert_eq!(DESIGN_TABS[h.app.design_tab], "Library");
+    assert_ne!(h.app.pages.shown(Page::Design), Shown::Hidden);
     assert_eq!(h.app.tool_label("import_cut_list"), "Import Cut List");
 }
 

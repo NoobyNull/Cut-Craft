@@ -3474,7 +3474,9 @@ impl CutCraftApp {
     /// tool opened a form there.
     pub(super) fn pick(&mut self, ctx: &egui::Context, page: Page, id: &str) {
         self.invoke(ctx, id);
-        if self.form.is_none() {
+        // a button that opens another design tab leaves the page out to show it
+        let navigates = matches!(id, "clipart_library" | "component_levels");
+        if self.form.is_none() && !navigates {
             self.pages.done_with(page);
         }
     }
