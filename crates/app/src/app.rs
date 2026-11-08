@@ -144,7 +144,7 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model"];
 
-const BUILT_INS: [&str; 95] = [
+const BUILT_INS: [&str; 97] = [
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",
@@ -179,6 +179,8 @@ const BUILT_INS: [&str; 95] = [
     "unlock_all_existing_guides",
     "options",
     "segment_3d_model_file",
+    "import_toolpaths_file",
+    "print_job_sheet",
     "import_cut_list",
     "snap_options",
     "node_edit",

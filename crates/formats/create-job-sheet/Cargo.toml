@@ -11,6 +11,7 @@ cut-craft-core.workspace = true
 schemars.workspace = true
 serde.workspace = true
 fmt-export-svg = { path = "../export-svg" }
+cut-craft-post = { path = "../../post" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }
