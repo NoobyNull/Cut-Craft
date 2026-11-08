@@ -74,6 +74,7 @@ impl CutCraftApp {
             w.message = None;
             match crate::depth2stl::Running::start(
                 &program,
+                id,
                 &self.doc.bitmaps[&id],
                 &w.settings,
                 ctx,
@@ -97,6 +98,13 @@ impl CutCraftApp {
         };
         let sent = self.depth2stl.running.take().expect("answered");
         let result = answer.and_then(|made| {
+            // another job opened, or the picture edited or deleted, while the add-on worked:
+            // the relief is for that picture alone
+            if self.doc.bitmaps.get(&sent.bitmap) != Some(&sent.photo) {
+                return Err(
+                    "the picture changed while Depth to STL worked on it; try again".to_owned(),
+                );
+            }
             let centre = sent.photo.rect.center();
             let heights = made.bitmap("Depth to STL", centre);
             let relief = Component::from_fn(

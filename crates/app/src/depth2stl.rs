@@ -219,6 +219,7 @@ pub enum Said {
 
 /// A run in the background, for the picture `bitmap`.
 pub struct Running {
+    pub bitmap: EntityId,
     /// The picture as it was sent, to place the answer on.
     pub photo: Bitmap,
     /// The newest step it reported.
@@ -227,10 +228,11 @@ pub struct Running {
 }
 
 impl Running {
-    /// Starts the add-on `program` on `bitmap` with `settings`; `ctx` is woken as it
+    /// Starts the add-on `program` on `bitmap` (`id`) with `settings`; `ctx` is woken as it
     /// reports.
     pub fn start(
         program: &Path,
+        id: EntityId,
         bitmap: &Bitmap,
         settings: &Value,
         ctx: &eframe::egui::Context,
@@ -250,6 +252,7 @@ impl Running {
             })
             .map_err(|e| e.to_string())?;
         Ok(Self {
+            bitmap: id,
             photo: bitmap.clone(),
             step: None,
             said,
