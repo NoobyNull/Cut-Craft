@@ -1,8 +1,10 @@
 # Cut Craft for macOS (a DMG, Apple Silicon and Intel in one app), Linux (x86-64: .tar.gz,
 # AppImage and Flatpak) and Windows (x86-64, .zip), built side by side on GitHub's runners. It runs when the
 # packaging changes on a pushed branch and from the Actions tab (once on the default
-# branch); each build is the run's artifact. A pushed tag such as v0.1.0 attaches them all
-# to that release. Unsigned: macOS and Windows ask before the first open.
+# branch); each build is the run's artifact. On a v* tag (pushed, or started on the tag by
+# Release tag) it signs them all and attaches them to that release; it is the only workflow
+# that publishes versioned releases. Unsigned by Apple/Microsoft: macOS and Windows ask before
+# the first open.
 name: Builds
 
 on:
@@ -19,6 +21,11 @@ on:
 
 permissions:
   contents: write
+
+# one build per branch or tag at a time; a tag's build is never cancelled part-way
+concurrency:
+  group: builds-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   macos:
@@ -121,6 +128,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: The tag matches the version it was built from
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME is on a commit whose Cargo.toml says $version; not publishing."
+            exit 1
+          fi
       - uses: actions/download-artifact@v4
         with:
           path: dist

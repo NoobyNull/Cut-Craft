@@ -1,13 +1,12 @@
-# Release builds for Linux and Windows.
-#   push to main, the nightly schedule, or "Run workflow" -> the rolling "nightly" pre-release
-#   push a tag v*  (git tag v0.2.0 && git push origin v0.2.0) -> a versioned release
-# The nightly schedule skips the build when nightly already points at the latest commit.
+# The rolling "nightly" pre-release for Linux and Windows, from a push to main, the nightly
+# schedule, or "Run workflow". The schedule skips the build when nightly already points at the
+# latest commit. Versioned releases (v* tags) are built and published by Builds alone, so each
+# file is attached to a release once (Release tag and Version bump start it).
 name: Release
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   schedule:
     - cron: '17 10 * * *' # 03:17 Pacific (daylight time) / 02:17 (standard time)
   workflow_dispatch:
@@ -33,11 +32,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-            echo "build=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           echo "tag=nightly" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             built=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" --jq .object.sha 2>/dev/null || true)
@@ -119,13 +113,12 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # FILE.minisig beside each download: Help > Check for Updates installs nothing unsigned.
-      # A versioned release fails here without the key; the nightly goes out unsigned.
+      # FILE.minisig beside each download when the key is there; the nightly may go out unsigned.
       - name: Sign the downloads
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
-          REQUIRE_SIGNING: ${{ needs.plan.outputs.tag == 'nightly' && '0' || '1' }}
+          REQUIRE_SIGNING: '0'
         run: scripts/sign-release dist
 
       - name: Publish release
@@ -135,12 +128,8 @@ jobs:
           TAG: ${{ needs.plan.outputs.tag }}
         run: |
           ls -l dist
-          if [[ "$TAG" == nightly ]]; then
-            # move the rolling nightly release to this commit
-            gh release delete nightly --cleanup-tag --yes || true
-            gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" \
-              --title "Nightly ($(date -u +%Y-%m-%d) ${GITHUB_SHA::7})" \
-              --notes "Automatic build of ${GITHUB_SHA} from main. Unsigned and untested beyond CI; for testing only."
-          else
-            gh release create "$TAG" dist/* --verify-tag --generate-notes --title "Cut Craft $TAG"
-          fi
+          # move the rolling nightly release to this commit
+          gh release delete nightly --cleanup-tag --yes || true
+          gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" \
+            --title "Nightly ($(date -u +%Y-%m-%d) ${GITHUB_SHA::7})" \
+            --notes "Automatic build of ${GITHUB_SHA} from main. Unsigned and untested beyond CI; for testing only."
