@@ -3937,14 +3937,26 @@ impl CutCraftApp {
             let b = &self.doc.bitmaps[&id];
             !b.grey.is_empty() && b.depth.len() == b.grey.len()
         });
+        let from_picture = self
+            .form
+            .as_ref()
+            .is_some_and(|f| f.params["depth_from"] == "picture");
         let mut start = false;
         ui.group(|ui| {
             ui.set_width(ui.available_width());
             ui.strong("Depth");
+            if from_picture {
+                ui.label(
+                    "The picture is used as the depth map itself (white nearest), so no \
+                     estimate is needed. Tick Invert if its black is nearest.",
+                );
+                return;
+            }
             let Some(_) = &installed else {
                 ui.label(
                     "Turning a photo into a relief needs the free Depth add-on \
-                     (about 100 MB, downloaded once).",
+                     (about 100 MB, downloaded once). If the picture is already a depth \
+                     map, set Depth from to Picture instead.",
                 );
                 let folder = self
                     .addons_path

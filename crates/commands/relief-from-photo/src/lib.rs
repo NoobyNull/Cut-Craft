@@ -14,16 +14,40 @@ use shape::{Grid, Shaping};
 
 pub struct ReliefFromPhoto;
 
+/// Where the heights come from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DepthFrom {
+    /// The depth Estimate Depth worked out for the photo
+    #[default]
+    Estimated,
+    /// The picture is already a depth map (white nearest), made elsewhere
+    Picture,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
 pub struct Params {
     pub name: String,
-    /// How different from the background a part of the photo must be to count as the
-    /// subject. Raise it if bits of background are kept; 0 keeps the whole photo
+    /// Heights from the estimated depth, or from the picture itself when it is a depth map
+    pub depth_from: DepthFrom,
+    /// Background by colour: how different from the photo's border a part must be to count
+    /// as the subject. Raise it if bits of background are kept; 0 turns it off
     #[schemars(range(min = 0, max = 1))]
     pub background_cut_off: f64,
+    /// Background by distance: everything farther back than this share of the way from
+    /// the farthest point to the nearest is dropped. Raise it for a busy background; 0
+    /// turns it off
+    #[schemars(range(min = 0, max = 0.9))]
+    pub depth_cut_off: f64,
+    /// Near and far swapped, for a depth map drawn with black nearest
+    pub invert: bool,
     /// Fine texture (hair, fur, scales) taken from the photo's light and shade. 0 for none
     #[schemars(range(min = 0, max = 2))]
     pub fine_detail: f64,
+    /// Makes the relief's own small details stand out more. 0 for none
+    #[schemars(range(min = 0, max = 2))]
+    pub sharpen: f64,
     /// Evens out speckle while keeping edges crisp. 0 for none
     #[schemars(range(min = 0, max = 50))]
     pub smoothness: u32,
@@ -33,6 +57,13 @@ pub struct Params {
     /// Height of the subject's lowest point, so it stands clear of the background
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub lift: f64,
+    /// How far the subject's edge slopes down to the background instead of dropping
+    /// straight down (easier to carve and to print). 0 for a straight drop
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub soft_edge: f64,
+    /// A flat slab under the whole picture, for a plaque or a printed base. 0 for none
+    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    pub base_height: f64,
     pub combine: Combine,
 }
 
@@ -40,11 +71,17 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             name: "Photo relief".into(),
+            depth_from: DepthFrom::Estimated,
             background_cut_off: 0.1,
+            depth_cut_off: 0.1,
+            invert: false,
             fine_detail: 0.5,
+            sharpen: 0.0,
             smoothness: 4,
             max_height: 10.0,
             lift: 0.8,
+            soft_edge: 0.0,
+            base_height: 0.0,
             combine: Combine::Add,
         }
     }
@@ -73,18 +110,33 @@ impl Command for ReliefFromPhoto {
         let Some(photo) = doc.chosen_bitmap() else {
             return Err(CommandError::Failed("import the photo first".into()));
         };
-        if photo.depth.len() != photo.grey.len() || photo.grey.is_empty() {
+        if photo.grey.is_empty() {
+            return Err(CommandError::Failed("the picture is empty".into()));
+        }
+        let estimated = photo.depth.len() == photo.grey.len();
+        if p.depth_from == DepthFrom::Estimated && !estimated {
             return Err(CommandError::Failed(
-                "this photo has no depth yet: use Estimate Depth on it first".into(),
+                "this photo has no depth yet: use Estimate Depth on it first, or choose \
+                 'Picture' under Depth from if the picture is already a depth map"
+                    .into(),
             ));
         }
-        let shaped = shaped(photo, p);
+        if p.soft_edge < 0.0 || p.base_height < 0.0 {
+            return Err(CommandError::InvalidParams(
+                "the soft edge and base cannot be below 0".into(),
+            ));
+        }
+        let shaped = shaped(photo, p, doc.job.model_cell());
         let relief = Component::from_fn(
             &p.name,
             p.combine,
             shaped.rect,
             doc.job.model_cell(),
-            |at| shaped.tone(at).map(|tone| p.max_height * tone),
+            |at| {
+                shaped
+                    .tone(at)
+                    .map(|tone| p.base_height + p.max_height * tone)
+            },
         );
         let mut c = Change::builder(doc);
         c.add_component(relief);
@@ -93,26 +145,73 @@ impl Command for ReliefFromPhoto {
 }
 
 /// The photo with its depth shaped into heights 0 to 1, as a depth map.
-#[expect(clippy::cast_possible_truncation, reason = "settings near 0..1")]
-fn shaped(photo: &Bitmap, p: &Params) -> Bitmap {
-    let (columns, rows) = (photo.columns, photo.rows);
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "settings near 0..1, and a soft edge of a few pixels"
+)]
+fn shaped(photo: &Bitmap, p: &Params, cell: f64) -> Bitmap {
     let light = Grid::new(
-        columns,
-        rows,
+        photo.columns,
+        photo.rows,
         photo.grey.iter().map(|&g| f32::from(g) / 255.0).collect(),
     );
-    let depth = Grid::new(columns, rows, photo.depth.clone());
+    let depth = Grid::new(photo.columns, photo.rows, source(photo, p));
+    // shaped at the relief's resolution: finer pixels than its cells only cost time
+    let size = photo.rect.size();
+    let (columns, rows) = (
+        (size.x / cell).ceil().max(1.0) as usize,
+        (size.y / cell).ceil().max(1.0) as usize,
+    );
+    let (light, depth) = (
+        shape::shrunk(&light, columns, rows),
+        shape::shrunk(&depth, columns, rows),
+    );
+    let (columns, rows) = (light.columns, light.rows);
+    let pixels_per_mm = columns as f64 / size.x.max(f64::EPSILON);
     let shaping = Shaping {
         cut_off: p.background_cut_off as f32,
+        far: p.depth_cut_off as f32,
+        invert: p.invert,
         lift: (p.lift / p.max_height) as f32,
         detail: p.fine_detail as f32,
+        sharpen: p.sharpen as f32,
         radius: radius(columns.max(rows)),
         smoothing: p.smoothness as usize,
+        soft_edge: (p.soft_edge * pixels_per_mm).round().max(0.0) as usize,
     };
     let heights = shape::heights(&light, &depth, &shaping);
     Bitmap {
+        columns,
+        rows,
+        grey: light
+            .values
+            .iter()
+            .map(|&l| (l * 255.0).round() as u8)
+            .collect(),
         depth: heights.values,
+        rgb: Vec::new(),
         ..photo.clone()
+    }
+}
+
+/// The depth to shape: the estimate for Estimated, and for Picture the picture's own tones,
+/// at full precision when it was imported with them (its depth then matches its greys to
+/// within a level, which an estimate never does), else its greys.
+fn source(photo: &Bitmap, p: &Params) -> Vec<f32> {
+    let greys = || photo.grey.iter().map(|&g| f32::from(g) / 255.0);
+    let has_depth = photo.depth.len() == photo.grey.len();
+    let own_tones = has_depth
+        && photo
+            .depth
+            .iter()
+            .zip(greys())
+            .all(|(d, g)| (d - g).abs() <= 1.0 / 255.0);
+    match p.depth_from {
+        DepthFrom::Estimated if has_depth => photo.depth.clone(),
+        DepthFrom::Picture if own_tones => photo.depth.clone(),
+        _ => greys().collect(),
     }
 }
 
@@ -185,6 +284,100 @@ mod tests {
         );
     }
 
+    /// `with_photo`'s picture with no estimate: its greys are all there is.
+    fn without_depth() -> Document {
+        let mut doc = with_photo();
+        let id = *doc.bitmaps.keys().next().unwrap();
+        let mut plain = doc.bitmaps[&id].clone();
+        plain.depth.clear();
+        let mut c = Change::builder(&doc);
+        c.replace_bitmap(id, plain);
+        doc.apply(&c.finish()).unwrap();
+        doc
+    }
+
+    #[test]
+    fn a_depth_map_made_elsewhere_is_used_as_it_is() {
+        // the 12 x 12 picture: the light background high, the dark square low
+        let mut doc = without_depth();
+        let params = Params {
+            depth_from: DepthFrom::Picture,
+            background_cut_off: 0.0,
+            depth_cut_off: 0.0,
+            fine_detail: 0.0,
+            smoothness: 0,
+            lift: 0.0,
+            ..Params::default()
+        };
+        let r = relief(&mut doc, &params);
+        let at = |x: f64, y: f64| r.height_at(Point::new(x, y)).unwrap();
+        assert!(at(1.0, 1.0) > at(12.0, 12.0) + 5.0, "white is high");
+        let inverted = Params {
+            invert: true,
+            ..params
+        };
+        let mut doc = without_depth();
+        let r = relief(&mut doc, &inverted);
+        let at = |x: f64, y: f64| r.height_at(Point::new(x, y)).unwrap();
+        assert!(
+            at(12.0, 12.0) > at(1.0, 1.0) + 5.0,
+            "inverted, black is high"
+        );
+    }
+
+    #[test]
+    fn picture_uses_the_picture_even_with_an_estimate_attached() {
+        // with_photo's estimate rises left to right; its picture is a dark square on light
+        let params = Params {
+            depth_from: DepthFrom::Picture,
+            background_cut_off: 0.0,
+            depth_cut_off: 0.0,
+            fine_detail: 0.0,
+            smoothness: 0,
+            lift: 0.0,
+            ..Params::default()
+        };
+        let mut doc = with_photo();
+        let r = relief(&mut doc, &params);
+        let at = |x: f64, y: f64| r.height_at(Point::new(x, y)).unwrap();
+        assert!(at(1.0, 12.0) > at(12.0, 12.0) + 5.0, "white is high");
+        assert!(
+            (at(7.0, 12.0) - at(17.0, 12.0)).abs() < 1e-6,
+            "not the estimate"
+        );
+    }
+
+    #[test]
+    fn picture_keeps_a_16_bit_depth_map_s_own_tones() {
+        // a depth map imported at full precision: its depth is its own greys, finer
+        let mut photo = without_depth().bitmaps.values().next().unwrap().clone();
+        photo.depth = photo
+            .grey
+            .iter()
+            .enumerate()
+            .map(|(i, &g)| (f32::from(g) + if i % 2 == 0 { 0.3 } else { -0.3 }) / 255.0)
+            .collect();
+        let p = Params {
+            depth_from: DepthFrom::Picture,
+            ..Params::default()
+        };
+        assert_eq!(source(&photo, &p), photo.depth);
+    }
+
+    #[test]
+    fn the_base_lies_under_the_whole_picture() {
+        let mut doc = with_photo();
+        let params = Params {
+            base_height: 1.5,
+            fine_detail: 0.0,
+            smoothness: 0,
+            ..Params::default()
+        };
+        let r = relief(&mut doc, &params);
+        let background = r.height_at(Point::new(1.0, 1.0)).unwrap();
+        assert!((background - 1.5).abs() < 1e-6, "{background}");
+    }
+
     #[test]
     fn a_photo_without_depth_says_what_to_do() {
         let mut doc = with_photo();
@@ -199,6 +392,7 @@ mod tests {
             panic!("should fail");
         };
         assert!(message.contains("Estimate Depth"), "{message}");
+        assert!(message.contains("depth map"), "{message}");
     }
 
     #[test]

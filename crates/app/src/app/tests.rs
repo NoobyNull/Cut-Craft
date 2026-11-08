@@ -724,6 +724,45 @@ fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
     );
 }
 
+/// Relief from Photo follows its settings once applied, as depth2stl's preview did: one
+/// relief, made again as a setting changes, never a pile of them.
+#[test]
+fn relief_from_photo_follows_its_settings_as_one_relief() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "map".into(),
+        columns: 4,
+        rows: 4,
+        grey: vec![0, 0, 0, 0, 0, 120, 255, 0, 0, 180, 220, 0, 0, 0, 0, 0],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(40.0, 40.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["depth_from"] = "picture".into();
+    form.params["max_height"] = 10.0.into();
+    let params = form.params.clone();
+    h.app.apply_form("relief_from_photo", &params).unwrap();
+    assert_eq!(h.app.doc.components.len(), 1);
+    let top = |h: &Harness| {
+        let k = h.app.doc.components.values().next().unwrap();
+        k.height_range().unwrap().1
+    };
+    let before = top(&h);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["max_height"] = 20.0.into();
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "made again in place");
+    assert!(top(&h) > before + 5.0, "{before} -> {}", top(&h));
+}
+
 /// Estimate Depth with a stand-in add-on (a shell script that answers with a fixed depth
 /// map): the photo gets its depth, undoably, and Relief from Photo can then use it.
 #[cfg(unix)]
