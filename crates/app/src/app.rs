@@ -451,9 +451,9 @@ pub const EXPORT_LEVEL: &str = "export_level_clipart:";
 const LINE_SCALE: f32 = 1.5;
 /// Easy-to-read UI fonts, the first installed used; egui's own stay behind for symbols.
 const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
-/// A playing preview's speed to start with, in mm of tool travel a second, and its range.
-// ponytail: fixed starting speed; the bar's slider changes it
-const PLAYBACK_SPEED: f64 = 200.0;
+/// A playing preview's speed to start with, in mm of tool travel a second, until Options says
+/// otherwise, and the slider's range.
+pub(crate) const PLAYBACK_SPEED: f64 = 200.0;
 const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 5.0..=20_000.0;
 /// The tool drawn in the 3D view while a preview plays: this many diameters tall.
 const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
@@ -2070,6 +2070,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             let (options, tampered) = crate::options::Options::load_checked();
             app.options = options;
             app.options.advanced.apply();
+            app.playback_speed = app.options.toolpaths.preview_speed();
             if tampered {
                 app.status.set_message(crate::options::TAMPERED);
             }

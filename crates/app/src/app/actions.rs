@@ -1126,7 +1126,13 @@ impl CutCraftApp {
         let problems: Vec<String> = saving
             .iter()
             .filter_map(|id| self.doc.toolpaths.get(id))
-            .flat_map(|t| cut_craft_core::checks::problems(&self.doc, t))
+            .flat_map(|t| {
+                cut_craft_core::checks::problems_over(
+                    &self.doc,
+                    t,
+                    self.options.confirmations.left(),
+                )
+            })
             .collect();
         let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
         if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
@@ -1828,7 +1834,11 @@ impl CutCraftApp {
                     t.name
                 ));
             }
-            warnings.extend(cut_craft_core::checks::problems(&self.doc, t));
+            warnings.extend(cut_craft_core::checks::problems_over(
+                &self.doc,
+                t,
+                self.options.confirmations.left(),
+            ));
         }
         if !warnings.is_empty() {
             self.status

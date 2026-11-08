@@ -2677,6 +2677,9 @@ impl CutCraftApp {
                 }
             }
             self.recent.truncate(options.recent_count());
+            if options.toolpaths.preview_speed != self.options.toolpaths.preview_speed {
+                self.playback_speed = options.toolpaths.preview_speed();
+            }
             options.advanced.apply();
             self.options = options;
             self.save_options();

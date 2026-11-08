@@ -419,6 +419,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_time_estimates_use_the_rapid_rate_given() {
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        let t = doc.toolpaths.values_mut().next().unwrap();
+        // a long rapid, so the rate shows in the time
+        for x in [0.0, 10_000.0] {
+            t.moves.push(cut_craft_core::toolpath::Move {
+                kind: cut_craft_core::toolpath::MoveKind::Rapid,
+                to: cut_craft_core::glam::DVec3::new(x, 0.0, 5.0),
+            });
+        }
+        let time = |rapid| {
+            let setup = Setup {
+                rapid,
+                ..Setup::default()
+            };
+            let page = sheet_for(&doc, &Style::default(), &setup).unwrap();
+            page.split("estimated time ").nth(1).unwrap()[..7].to_owned()
+        };
+        assert_ne!(time(1000.0), time(10_000.0), "a slower rapid takes longer");
+        let exported = String::from_utf8(JobSheet::export(&doc).unwrap()).unwrap();
+        assert!(exported.contains(&format!("estimated time {}", time(RAPID))));
+    }
+
+    #[test]
     fn the_sheet_has_the_layout_setup_and_each_toolpath() {
         let mut doc = cut_craft_core::testing::with_toolpath();
         doc.notes = "Glue <first>".into();
