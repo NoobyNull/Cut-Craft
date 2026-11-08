@@ -440,7 +440,7 @@ impl CutCraftApp {
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
             "add_ons" => self.add_ons.show(ctx, self.addons_path.as_deref()),
-            "depth_to_stl" => self.depth2stl.show(self.addons_path.as_deref(), ctx),
+            "depth_to_stl" => self.depth_to_stl(ctx),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);

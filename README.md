@@ -51,7 +51,8 @@ please report them (see [Reporting bugs](#reporting-bugs)).
   read at full precision, so smooth reliefs don't come out stepped.
 - **Model ▸ Depth to STL** runs the free Depth to STL add-on (Help ▸ Add-ons downloads and
   installs it) on a depth map: background removed, fine detail lifted, and the whole relief
-  sized for your carving bit's tip and taper, added as a component.
+  sized for your carving bit's tip and taper, added as a component. Without the add-on it
+  opens Cut Craft's own Relief from Photo (for a photo) or Create Component from Bitmap.
 - Sculpting, smoothing, slicing, offset models, draft, baking components together.
 - Segment a 3D model into pieces for a 3-axis machine: cut any piece again, and choose
   which face of each piece is up.

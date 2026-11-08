@@ -17,6 +17,32 @@ impl CutCraftApp {
         }
     }
 
+    /// Model ▸ Depth to STL: the add-on's window when it is installed, else Cut Craft's own
+    /// tool for the picture: Relief from Photo for a colour photo, Create Component from
+    /// Bitmap for a depth map.
+    pub(super) fn depth_to_stl(&mut self, ctx: &egui::Context) {
+        let folder = self.addons_path.clone();
+        if folder.as_deref().and_then(crate::depth2stl::find).is_some() {
+            self.depth2stl.show(folder.as_deref(), ctx);
+            return;
+        }
+        let photo = self
+            .depth2stl_picture()
+            .is_some_and(|id| !self.doc.bitmaps[&id].rgb.is_empty());
+        let (id, name) = if photo {
+            ("relief_from_photo", "Relief from Photo")
+        } else {
+            (
+                "create_component_from_bitmap",
+                "Create Component from Bitmap",
+            )
+        };
+        self.invoke(ctx, id);
+        self.status.set_message(&format!(
+            "Depth to STL is not installed, so {name} is used instead. Help ▸ Add-ons installs it."
+        ));
+    }
+
     /// The picture Depth to STL works on: the one picked last, else the newest.
     fn depth2stl_picture(&self) -> Option<EntityId> {
         self.doc

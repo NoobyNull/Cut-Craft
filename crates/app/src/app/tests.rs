@@ -846,6 +846,48 @@ impl egui::DroppedFile for Dropped {
     }
 }
 
+/// Model ▸ Depth to STL without the add-on falls back to Cut Craft's own relief tools.
+#[test]
+fn depth_to_stl_falls_back_without_the_add_on() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    h.app.addons_path =
+        Some(std::env::temp_dir().join(format!("cutcraft-none-{}", std::process::id())));
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "depth map".into(),
+        columns: 2,
+        rows: 1,
+        grey: vec![30, 220],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(20.0, 10.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "depth_to_stl");
+    h.frame(vec![]);
+    assert!(!h.app.depth2stl.open);
+    assert_eq!(
+        h.app.form.as_ref().unwrap().id,
+        "create_component_from_bitmap"
+    );
+    let mut c = Change::builder(&h.app.doc);
+    c.add_bitmap(Bitmap {
+        name: "photo".into(),
+        columns: 2,
+        rows: 1,
+        grey: vec![30, 220],
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(20.0, 10.0)),
+        depth: Vec::new(),
+        rgb: vec![9; 6],
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "depth_to_stl");
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().unwrap().id, "relief_from_photo");
+}
+
 struct Harness {
     ctx: egui::Context,
     app: CutCraftApp,
