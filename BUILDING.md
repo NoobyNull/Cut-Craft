@@ -230,5 +230,6 @@ Without the secret the night that has something to release fails with a message 
   next version (a `fix:` merge does it overnight, or cut one by hand above).
 - **A version merged but no release appeared.** Open Actions → **Release tag** and read the run
   for that merge; **Run workflow** there tries again. If the tag exists but **Builds** failed,
-  open Actions → Builds → **Run workflow** and pick the tag (not a branch) under "Use workflow
-  from".
+  open Actions → Builds → **Run workflow**, leave "Use workflow from" on `main`, and type the
+  tag (such as `v0.5.3`) in the box. A release goes out once Linux and Windows are built; when
+  GitHub couldn't start the macOS build, run it again the same way later to add the DMG.
