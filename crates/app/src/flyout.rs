@@ -20,12 +20,7 @@ pub const ARROW_SHARE: f32 = 0.35;
 /// Each flyout's tools, the one shown until another is picked first. A tool is in one flyout
 /// at most; a flyout only holds tools that do one job different ways.
 pub const FLYOUTS: &[&[&str]] = &[
-    // Drawing tab
-    &[
-        "import_vectors_bitmap",
-        "import_vectors",
-        "import_component_3d_model",
-    ],
+    // Drawing tab (the imports have a sub-tab of their own, each named on its own button)
     &["zoom_to_job", "zoom_box", "zoom_selected"],
     &["draw_polyline", "draw_curve", "draw_arc", "draw_freehand"],
     &["draw_rectangle", "draw_rectangle_from_center"],
@@ -304,7 +299,15 @@ mod tests {
                 .map(|g| buttons(g.tools, &Faces::new()).len())
                 .sum()
         };
-        assert!(count(&toolbar.groups) <= 45, "{}", count(&toolbar.groups));
+        // the Import sub-tab's tools are each a button of their own, so a beginner sees them
+        // all at once: the rest stay well under Aspire's count
+        let (import, rest): (Vec<_>, Vec<_>) = toolbar
+            .groups
+            .iter()
+            .copied()
+            .partition(|g| g.name == "Import");
+        assert!(count(&rest) <= 45, "{}", count(&rest));
+        assert_eq!(count(&import), import[0].tools.len());
         // the four Create Shape buttons become one
         let modeling: usize = toolbar.modeling_groups.iter().map(|g| g.tools.len()).sum();
         assert_eq!(count(&toolbar.modeling_groups), modeling - 3);

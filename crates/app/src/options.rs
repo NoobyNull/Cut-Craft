@@ -785,6 +785,11 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub favourites: Favourites,
+    /// The Design sub-tabs shown as sections of their own under the tab row rather than in
+    /// it, by name (right-click a sub-tab). None to start with: every one in the row.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub design_sections: Vec<String>,
     /// The tool each toolbox flyout shows: the one picked from it last.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
@@ -873,6 +878,7 @@ impl Default for Options {
             updates: Updates::default(),
             default_job: None,
             favourites: Favourites::default(),
+            design_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
         }
     }

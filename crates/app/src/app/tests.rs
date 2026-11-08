@@ -3402,6 +3402,46 @@ fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
 }
 
 #[test]
+fn a_design_sub_tab_can_have_a_section_of_its_own() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.pages.open(Page::Design);
+    h.frame(vec![]);
+    assert!(h.text_at("Create Vectors").is_some(), "Create is open");
+    assert!(h.text_at("Shape Creation").is_none(), "Model is a tab");
+    h.app
+        .invoke(&h.ctx, &format!("{}Model:section", gui::SUBTAB_PLACE));
+    h.app
+        .invoke(&h.ctx, &format!("{}Import:section", gui::SUBTAB_PLACE));
+    assert_eq!(h.app.options.design_sections, ["Model", "Import"]);
+    h.frame(vec![]);
+    for group in ["Create Vectors", "Shape Creation", "Import"] {
+        assert!(h.text_at(group).is_some(), "{group} shows");
+    }
+    // a tool on a section leaves the row's tab as it was
+    h.app.invoke(&h.ctx, "sculpt");
+    assert_eq!(h.app.design_subtab, 0);
+    // kept between runs
+    let json = serde_json::to_string(&h.app.options).unwrap();
+    let (back, _) = crate::options::Options::from_bytes(json.as_bytes());
+    assert_eq!(back.design_sections, ["Model", "Import"]);
+    // and all back in one row
+    h.app.invoke(&h.ctx, &format!("{}*:row", gui::SUBTAB_PLACE));
+    assert!(h.app.options.design_sections.is_empty());
+    h.frame(vec![]);
+    assert!(h.text_at("Shape Creation").is_none());
+}
+
+#[test]
+fn the_clipart_library_button_opens_the_library_tab() {
+    let mut h = Harness::new();
+    assert!(h.app.available("clipart_library"));
+    h.app.invoke(&h.ctx, "clipart_library");
+    assert_eq!(DESIGN_TABS[h.app.design_tab], "Library");
+    assert_eq!(h.app.tool_label("import_cut_list"), "Import Cut List");
+}
+
+#[test]
 fn a_tool_that_works_on_a_selection_says_what_to_select_first() {
     let h = Harness::new();
     let tip = h
@@ -7344,7 +7384,7 @@ fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last(
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
-        flyout_arrows(&h).len() >= 10,
+        flyout_arrows(&h).len() >= 9,
         "the Drawing tab's flyouts show their arrows"
     );
     let arrow = flyout_arrow_naming(&mut h, "Draw Circle from Edge");

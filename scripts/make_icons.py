@@ -522,6 +522,13 @@ I[fl + "job_setup.svg"] = lambda: [slab(4, 24, 30, 10, 9), darrow(4, 40, 34, 40,
 I[fl + "import_vectors.svg"] = lambda: [pl(star_pts(30, 28, 13, 6), INK, 2.5, LIGHT, True), arrow(4, 8, 18, 22)]
 I[fl + "export_vectors.svg"] = lambda: [pl(star_pts(18, 28, 13, 6), INK, 2.5, LIGHT, True), arrow(28, 20, 43, 5)]
 I[fl + "import_vectors_bitmap.svg"] = lambda: [picture(14, 14, 30, 26), arrow(3, 4, 16, 17)]
+# the Import sub-tab's own: an orange arrow coming in onto what is brought in
+I[fl + "import_toolpaths_file.svg"] = lambda: [zigzag(16, 18, 26, 22, 4), arrow(3, 4, 15, 16)]
+I[fl + "import_cut_list.svg"] = lambda: [rect(14, 14, 30, 28, 2, INK, 2.5), line(14, 23, 44, 23), line(14, 32, 44, 32),
+                                         line(27, 14, 27, 42), arrow(3, 4, 15, 16)]
+I[fl + "clipart_library.svg"] = lambda: [rect(5, 5, 17, 17, 3), rect(26, 5, 17, 17, 3), rect(5, 26, 17, 17, 3), rect(26, 26, 17, 17, 3),
+                                         pl(star_pts(13.5, 14.2, 6, 2.6), INK, 2, LIGHT, True), circ(34.5, 13.5, 4.5),
+                                         path("M8.5,39 C8.5,30 18.5,30 18.5,39", INK, 2.5), pl(poly_pts(34.5, 34.5, 5), ACC, 2.5, "none", True)]
 I[fl + "export_as_3d_clipart.svg"] = lambda: [dome(18, 40, 28, 18), arrow(28, 18, 43, 4)]
 I[fl + "facebook_link.svg"] = lambda: [rect(5, 5, 38, 38, 9, None, 0, "#1877f2"), path("M27,41 V25 H33 L34,19 H27 V15 Q27,12 30,12 H34 V7 H29 Q21,7 21,15 V19 H16 V25 H21 V41", WHITE, 0, WHITE)]
 I[fl + "instagram_link.svg"] = lambda: [rect(6, 6, 36, 36, 10, "#d6249f", 4), circ(24, 24, 8, "#d6249f", 4), dot(34, 14, 2.5, "#d6249f")]
