@@ -42,6 +42,8 @@ impl CutCraftApp {
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
+        // a slow job's progress, over everything else
+        self.busy_window(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         self.next_import();

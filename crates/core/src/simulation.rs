@@ -388,9 +388,20 @@ impl Material {
     /// Removes what `tool` cuts away following `moves`, on the GPU when there is one, else a
     /// band of rows per core: a cell ends at the lowest any move reaches there, whichever
     /// order the moves come in.
+    ///
+    /// A long path is cut a stretch at a time, saying how far it has got
+    /// ([`crate::progress`]) and stopping early once asked to.
     pub fn cut_along(&mut self, moves: &[Move], tool: &Tool) {
         let before = self.heights.clone();
-        crate::compute::compute().cut_along(self, tool, moves);
+        let compute = crate::compute::compute();
+        let stretches = stretches(moves.len());
+        for (i, stretch) in stretches.iter().enumerate() {
+            if crate::progress::cancelled() {
+                break;
+            }
+            compute.cut_along(self, tool, &moves[stretch.clone()]);
+            crate::progress::report_steps(i + 1, stretches.len());
+        }
         self.mark_cut(&before);
     }
 
@@ -744,4 +755,20 @@ fn span_in(area: &[usize], of: impl Fn(usize) -> usize) -> usize {
     let lo = area.iter().map(|&i| of(i)).min().unwrap_or(0);
     let hi = area.iter().map(|&i| of(i)).max().unwrap_or(0);
     hi - lo + 1
+}
+
+/// The moves cut together at a time: all of a short path, or (a long one) about a fortieth
+/// of it per stretch so a preview can say how far it has got. Each stretch starts where
+/// the last ended, as a move is swept from the one before it.
+pub fn stretches(moves: usize) -> Vec<std::ops::Range<usize>> {
+    const MOST: usize = 40;
+    const SHORTEST: usize = 2_000;
+    if moves <= SHORTEST {
+        return std::iter::once(0..moves).collect();
+    }
+    let each = moves.div_ceil(MOST);
+    (0..moves - 1)
+        .step_by(each)
+        .map(|start| start..(start + each + 1).min(moves))
+        .collect()
 }
