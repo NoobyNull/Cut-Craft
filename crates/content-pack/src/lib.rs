@@ -109,6 +109,8 @@ pub enum PackError {
     BadPath(String),
     Duplicate(String),
     BadChecksum(String),
+    /// A CC BY item without the source its credit must name.
+    NoSource(String),
     Empty,
 }
 
@@ -138,6 +140,11 @@ impl fmt::Display for PackError {
             Self::BadChecksum(p) => write!(
                 f,
                 "the checksum of \"{p}\" must be 64 lower-case hex digits (SHA-256)"
+            ),
+            Self::NoSource(p) => write!(
+                f,
+                "\"{p}\" is under a CC BY licence, so its source (where it came from) must be \
+                 listed for its credit"
             ),
             Self::Empty => f.write_str("the pack lists no files"),
         }
@@ -285,6 +292,10 @@ impl Pack {
                 && (item.sha256.bytes()).all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
             if !hex {
                 return Err(PackError::BadChecksum(item.file.clone()));
+            }
+            let sourced = item.source.as_deref().is_some_and(|s| !s.trim().is_empty());
+            if self.licence_of(item).needs_credit() && !sourced {
+                return Err(PackError::NoSource(item.file.clone()));
             }
         }
         Ok(())
@@ -485,6 +496,18 @@ mod tests {
             pack.addon_toml(),
             "id = \"staunton-chess\"\nname = \"Chess \\\"Staunton\\\"\"\nkind = \"content\"\nversion = \"1.0.0\"\n"
         );
+    }
+
+    #[test]
+    fn a_cc_by_item_must_say_where_it_came_from() {
+        let mut pack = sample();
+        pack.items[0].licence = Some(Licence::CcBy4);
+        assert_eq!(
+            Pack::parse(&pack.to_json()),
+            Err(PackError::NoSource("Pieces/Pawn half.stl".into()))
+        );
+        pack.items[0].source = Some("https://example.org/pawn".into());
+        assert!(Pack::parse(&pack.to_json()).is_ok());
     }
 
     #[test]
