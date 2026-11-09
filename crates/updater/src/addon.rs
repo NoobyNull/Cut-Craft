@@ -390,6 +390,20 @@ fn unpack(
     archive: &mut zip::ZipArchive<std::io::Cursor<&Vec<u8>>>,
     dir: &Path,
 ) -> Result<(), String> {
+    unpack_within(archive, dir, MAX_UNPACKED)
+}
+
+/// What an add-on's zip may unpack to in all; large files belong in `downloads`.
+const MAX_UNPACKED: u64 = 1024 * 1024 * 1024;
+
+/// [`unpack`], refusing a zip that unpacks to more than `limit` bytes (however small it is
+/// packed), streamed to disk so nothing large is held in memory.
+fn unpack_within(
+    archive: &mut zip::ZipArchive<std::io::Cursor<&Vec<u8>>>,
+    dir: &Path,
+    limit: u64,
+) -> Result<(), String> {
+    let mut left = limit;
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
@@ -408,10 +422,17 @@ fn unpack(
         if let Some(parent) = to.parent() {
             fs::create_dir_all(parent).map_err(|e| cannot(dir, &e))?;
         }
-        let mut bytes = vec![];
-        file.read_to_end(&mut bytes)
+        let mut out = fs::File::create(&to).map_err(|e| cannot(dir, &e))?;
+        // one byte past what is left shows it would go over
+        let written = std::io::copy(&mut (&mut file).take(left + 1), &mut out)
             .map_err(|e| format!("the add-on's .zip is damaged ({e})"))?;
-        fs::write(&to, bytes).map_err(|e| cannot(dir, &e))?;
+        if written > left {
+            return Err(format!(
+                "the add-on's .zip unpacks to more than {} MB, so it is not installed",
+                limit / (1024 * 1024)
+            ));
+        }
+        left -= written;
     }
     Ok(())
 }
@@ -793,6 +814,18 @@ mod tests {
         assert!(Manifest::parse(&sneaky).unwrap_err().contains("odd file"));
         assert!(!addons.exists() || fs::read_dir(&addons).unwrap().next().is_none());
         let _ = fs::remove_dir_all(addons);
+    }
+
+    #[test]
+    fn a_zip_that_unpacks_too_big_is_refused() {
+        let big = zip(&[("a.bin", &[0_u8; 600][..]), ("b.bin", &[0_u8; 600][..])]);
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&big)).unwrap();
+        let dir = scratch("bomb");
+        let e = unpack_within(&mut archive, &dir, 1000).unwrap_err();
+        assert!(e.contains("unpacks to more than"), "{e}");
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&big)).unwrap();
+        assert_eq!(unpack_within(&mut archive, &dir, 1200), Ok(()));
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
