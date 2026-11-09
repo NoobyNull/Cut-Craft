@@ -21,6 +21,11 @@ const PASS_BY: f64 = 0.01;
 /// of the outline (which counts as inside) even where its round corners are flattened.
 const CLIP_MARGIN: f64 = 0.05;
 
+/// How close the cutter's edge may come to a zone before it counts as touching it, mm, so a
+/// cut running exactly along a zone's outline (a profile round the vector the zone was made
+/// from) is caught however the outline's edges round off.
+const TOUCH: f64 = 0.001;
+
 /// What a zone is called when it was made without a name (jobs saved before zones had them).
 pub const UNNAMED: &str = "Zone";
 
@@ -106,7 +111,8 @@ pub fn enters(zones: &[Path], moves: &[Move], radius: f64) -> bool {
     if centre.is_empty() || moves.is_empty() {
         return false;
     }
-    let edge = grown_rings(zones, radius.max(0.0));
+    // a cutter whose edge only just touches a zone counts: it grazes the clamp
+    let edge = grown_rings(zones, radius.max(0.0) + TOUCH);
     let mut from = moves[0].to;
     moves.iter().enumerate().any(|(i, m)| {
         let (a, b) = (Point::new(from.x, from.y), plan(*m));
@@ -546,6 +552,13 @@ mod tests {
         let beside = [rapid(0.0, 8.0), plunge(0.0, 8.0), path(&[(30.0, 8.0)])[0]];
         assert!(enters(&zone, &beside, 3.0));
         assert!(!enters(&zone, &beside, 1.0));
+        // its edge running exactly along the zone's outline touches it
+        let along = [rapid(0.0, 7.0), plunge(0.0, 7.0), path(&[(30.0, 7.0)])[0]];
+        assert!(enters(&zone, &along, 3.0));
+        assert!(
+            enters(&zone, &[plunge(15.0, 7.0)], 3.0),
+            "a plunge just touching it"
+        );
         // a rapid over it only counts by the tool's centre: it goes round at the safe height
         assert!(!enters(&zone, &[rapid(0.0, 8.0), rapid(30.0, 8.0)], 3.0));
         assert!(enters(&zone, &[rapid(0.0, 15.0), rapid(30.0, 15.0)], 3.0));
