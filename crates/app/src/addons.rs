@@ -103,6 +103,19 @@ impl Addons {
     /// Whether the installed add-on `id` (called `name`) may run now: a signed one always;
     /// an unsigned one once the user has said yes this session, asked the first time. An
     /// add-on with no install record (put in place by hand) counts as unsigned.
+    /// Removes an installed add-on, and forgets that the user let it run, so whatever is
+    /// put in its place is asked about afresh. Whether there was a folder to remove from.
+    fn remove(&mut self, id: &str) -> bool {
+        let Some(dir) = &self.dir else { return false };
+        self.phase = match addon::remove(dir, id) {
+            Ok(()) => Phase::Done("The add-on is removed.".into()),
+            Err(e) => Phase::Failed(e),
+        };
+        self.updates.remove(id);
+        self.allowed.remove(id);
+        true
+    }
+
     pub fn may_run(&mut self, id: &str, name: &str) -> bool {
         let signed = self
             .dir
@@ -249,16 +262,7 @@ impl Addons {
                 }
             }
             Press::Cancel => self.phase = Phase::Idle,
-            Press::Remove(id) => {
-                if let Some(dir) = &self.dir {
-                    self.phase = match addon::remove(dir, &id) {
-                        Ok(()) => Phase::Done("The add-on is removed.".into()),
-                        Err(e) => Phase::Failed(e),
-                    };
-                    self.updates.remove(&id);
-                    changed = true;
-                }
-            }
+            Press::Remove(id) => changed = self.remove(&id),
         }
         if !open {
             self.open = false;
@@ -657,6 +661,14 @@ mod tests {
         assert!(a.may_run("unsigned", "Unsigned"));
         a.ask_to_run = |_| panic!("asked twice in a session");
         assert!(a.may_run("unsigned", "Unsigned"));
+        // removed, then other code put in its place by hand: asked again
+        a.remove("unsigned");
+        std::fs::create_dir_all(dir.join("unsigned")).unwrap();
+        a.ask_to_run = |_| false;
+        assert!(
+            !a.may_run("unsigned", "Unsigned"),
+            "a removed add-on's yes is forgotten"
+        );
         // put in place by hand: no record, so unsigned
         a.ask_to_run = |_| false;
         assert!(!a.may_run("loose", "Loose"));
