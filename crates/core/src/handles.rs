@@ -28,8 +28,8 @@ pub struct Keys {
 }
 
 /// The angle rotation snaps to with Shift unless Snapping Options says otherwise, degrees:
-/// a sixty-fourth of a turn.
-pub const ROTATE_STEP: f64 = 360.0 / 64.0;
+/// a sixteenth of a turn.
+pub const ROTATE_STEP: f64 = 360.0 / 16.0;
 
 /// The angle rotation snaps to with Ctrl unless Snapping Options says otherwise, degrees.
 pub const FINE_ROTATE_STEP: f64 = 1.0;
@@ -42,7 +42,7 @@ pub struct Steps {
 }
 
 impl Steps {
-    /// Cut Craft's own: 5.625° with Shift, 1° with Ctrl.
+    /// Cut Craft's own: 22.5° with Shift, 1° with Ctrl.
     pub const STANDARD: Self = Self {
         shift: ROTATE_STEP,
         fine: FINE_ROTATE_STEP,
@@ -350,10 +350,10 @@ mod tests {
             (turned - (centre + Point::new(0.0, 1.0))).length() < 1e-9,
             "a quarter turn"
         );
-        // with Shift 7° snaps to 5.625° and 10° to 11.25°; with Ctrl to whole degrees
+        // with Shift 10° snaps to 0° and 12° to 22.5°; with Ctrl to whole degrees
         for (keys, dragged, snapped) in [
-            (SHIFT, 7.0, 5.625),
-            (SHIFT, 10.0, 11.25),
+            (SHIFT, 10.0, 0.0),
+            (SHIFT, 12.0, 22.5),
             (CTRL, 7.4, 7.0),
             (CTRL, 10.6, 11.0),
         ] {
@@ -410,7 +410,7 @@ mod tests {
         let h = Handle::Rotate { x: 1, y: 1 };
         assert_eq!(
             h.hint(Steps::STANDARD),
-            "Rotate: drag. Hold Shift to snap to 5.625°, or Ctrl to 1°"
+            "Rotate: drag. Hold Shift to snap to 22.5°, or Ctrl to 1°"
         );
         let steps = Steps {
             shift: 15.0,

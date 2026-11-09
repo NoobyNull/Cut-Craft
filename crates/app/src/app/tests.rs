@@ -1511,7 +1511,7 @@ fn a_selection_always_has_its_handles_to_scale_and_rotate_by() {
     h.frame(vec![Event::PointerMoved(handle)]);
     let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
     assert!(
-        hint.contains("Hold Shift to snap to 5.625°, or Ctrl to 1°"),
+        hint.contains("Hold Shift to snap to 22.5°, or Ctrl to 1°"),
         "{hint}"
     );
     // a quarter turn about the middle
@@ -2710,7 +2710,7 @@ fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
     assert!((scaled.max - grown).length() < 0.5, "{scaled:?}");
     h.app.invoke(&h.ctx, "undo");
     h.frame(vec![]);
-    // the rotation arrow with Shift held turns in 5.625° steps: dragged about 20° round the
+    // the rotation arrow with Shift held turns in 22.5° steps: dragged about 20° round the
     // middle, the box turns 22.5°, so its bounds grow by cos 22.5° + sin 22.5°
     let (middle, from) = (at(&h, Handle::Move), at(&h, Handle::Rotate { x: 0, y: 1 }));
     let to = middle + egui::emath::Rot2::from_angle(20f32.to_radians()) * (from - middle);
@@ -2741,7 +2741,7 @@ fn the_rotate_snap_angle_comes_from_snapping_options() {
     h.app.doc.selected_components = [EntityId(1)].into();
     h.app.orbit = view3d::Orbit::TOP;
     h.app.view = View::ThreeD;
-    h.app.options.snapping.rotate_step = 15.0;
+    h.app.options.snapping.rotate_step = cut_craft_core::snap::RotateSnap::Ten;
     h.app.invoke(&h.ctx, "transform");
     h.frame(vec![]);
     h.frame(vec![]);
@@ -2759,12 +2759,12 @@ fn the_rotate_snap_angle_comes_from_snapping_options() {
     h.frame(vec![Event::PointerMoved(from)]);
     let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
     assert!(
-        hint.contains("Hold Shift to snap to 15°, or Ctrl to 1°"),
+        hint.contains("Hold Shift to snap to 10°, or Ctrl to 1°"),
         "{hint}"
     );
-    // dragged about 20° round the middle with Shift held, the box turns 15°, so its bounds
-    // grow by cos 15° + sin 15°
-    let to = middle + egui::emath::Rot2::from_angle(20f32.to_radians()) * (from - middle);
+    // dragged about 27° round the middle with Shift held, the box turns 30°, so its bounds
+    // grow by cos 30° + sin 30°
+    let to = middle + egui::emath::Rot2::from_angle(27f32.to_radians()) * (from - middle);
     let shift = Modifiers::SHIFT;
     h.frame_holding(shift, vec![Event::PointerMoved(from)]);
     h.press(from, true, shift);
@@ -2772,7 +2772,7 @@ fn the_rotate_snap_angle_comes_from_snapping_options() {
     h.press(to, false, shift);
     h.frame_holding(shift, vec![]);
     let turned = h.app.doc.components[&EntityId(1)].extent();
-    let (sin, cos) = 15f64.to_radians().sin_cos();
+    let (sin, cos) = 30f64.to_radians().sin_cos();
     let wide = before.size().x * (cos + sin);
     assert!(
         (turned.size().x - wide).abs() < 0.3,

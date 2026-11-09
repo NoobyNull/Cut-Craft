@@ -1200,7 +1200,7 @@ mod tests {
         );
         // snapping is kept from one run to the next, rotate snap angles and all
         let mut snapped = Options::default();
-        snapped.snapping.rotate_step = 15.0;
+        snapped.snapping.rotate_step = cut_craft_core::snap::RotateSnap::Ten;
         snapped.snapping.snap_to_grid = true;
         let back: Options =
             serde_json::from_str(&serde_json::to_string(&snapped).unwrap()).unwrap();

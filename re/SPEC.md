@@ -422,7 +422,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   - **3D view differences:** the edge handles are black, and a rotation arrow sits on top.
   - **Cut Craft differs, deliberately:** one rule for the keys on every handle, 2D and 3D:
     Shift or Ctrl scales in proportion, moves along one axis, and snaps rotation (Shift to
-    5.625°, Ctrl to 1°); Alt scales about the centre. The status bar names the keys over
+    22.5° by default, or 90°, 45°, 10° or 5° as Snapping Options choose; Ctrl to 1°); Alt scales about the centre. The status bar names the keys over
     each handle. Aspire's Alt-for-15° and per-handle key meanings are harder to learn.
   - **Cut Craft's 3D handles** sit level with the highest surface inside the selection (on
     top of a raised component, not under it) inside a dashed box; they work on vectors
