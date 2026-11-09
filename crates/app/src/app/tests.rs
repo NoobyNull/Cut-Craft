@@ -376,6 +376,79 @@ fn a_polyline_click_snaps_to_an_end_marked_and_named_under_a_crosshair() {
     assert!(last.distance(Point::new(10.0, 10.0)) > 1e-6, "{last:?}");
 }
 
+/// Moves vector `id` by `by`, as the Move tool would.
+fn move_vector(h: &mut Harness, id: EntityId, by: Point) {
+    h.app.doc.selection = cut_craft_core::selection::Selection::new();
+    h.app.doc.selection.insert(id);
+    let change = Change::transform_selected(&h.app.doc, |_| {
+        cut_craft_core::glam::DAffine2::from_translation(by)
+    });
+    h.app.record(change, "Moved");
+}
+
+#[test]
+fn a_line_drawn_to_a_snapped_corner_stays_on_it_until_its_mark_is_deleted() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let square = *h.app.doc.vectors.keys().next().unwrap();
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    let scale = f64::from(h.app.view_transform.unwrap().scale);
+    let near = 2.0 / scale;
+    h.click(h.at(60.0, 60.0), Modifiers::SHIFT);
+    h.click(h.at(30.0 + near, 20.0 - near), Modifiers::NONE);
+    h.app.finish_polyline(false);
+    h.app.form = None;
+    h.frame(vec![]);
+    let line = *h.app.doc.vectors.keys().last().unwrap();
+    assert_eq!(h.app.doc.constraints.len(), 1, "the snapped end is kept");
+    move_vector(&mut h, square, Point::new(5.0, 5.0));
+    let end = h.app.doc.vectors[&line].segments[0].end();
+    assert_eq!(end, Point::new(35.0, 25.0), "the end followed the corner");
+    // its mark picked and deleted: the line stays, the snap goes
+    h.frame(vec![]);
+    h.click(h.at(35.0, 25.0), Modifiers::NONE);
+    assert_eq!(h.app.picked_constraint, Some(0));
+    h.app.invoke(&h.ctx, "delete");
+    assert!(h.app.doc.constraints.is_empty());
+    assert_eq!(h.app.doc.vectors.len(), 2, "nothing deleted");
+    move_vector(&mut h, square, Point::new(5.0, 5.0));
+    let end = h.app.doc.vectors[&line].segments[0].end();
+    assert_eq!(
+        end,
+        Point::new(35.0, 25.0),
+        "free now: it stays where it was"
+    );
+}
+
+#[test]
+fn a_rectangle_drawn_from_a_snapped_corner_moves_whole_with_it() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let first = *h.app.doc.vectors.keys().next().unwrap();
+    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.frame(vec![]);
+    let scale = f64::from(h.app.view_transform.unwrap().scale);
+    let near = 2.0 / scale;
+    h.drag(h.at(30.0 + near, 20.0 - near), h.at(45.123, 37.456));
+    h.app.form = None;
+    h.frame(vec![]);
+    let second = *h.app.doc.vectors.keys().last().unwrap();
+    assert_ne!(first, second);
+    let before = h.app.doc.vectors[&second].bounds();
+    assert_eq!(
+        h.app.doc.constraints.len(),
+        1,
+        "{:?}",
+        h.app.doc.constraints
+    );
+    move_vector(&mut h, first, Point::new(-4.0, 3.0));
+    let after = h.app.doc.vectors[&second].bounds();
+    assert!((after.size() - before.size()).length() < 1e-9, "same size");
+    let moved = after.min - before.min;
+    assert!(moved.distance(Point::new(-4.0, 3.0)) < 1e-9, "{moved:?}");
+}
+
 #[test]
 fn a_polylines_next_point_snaps_tangent_to_a_circle() {
     let mut h = Harness::new();
