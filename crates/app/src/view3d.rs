@@ -388,8 +388,14 @@ fn lit(normal: DVec3, light: DVec3) -> f64 {
 /// `colour` at `brightness` (0 to 1), shaded in linear light.
 #[expect(clippy::cast_possible_truncation, reason = "brightness fits f32")]
 fn shaded(colour: Color32, brightness: f64) -> Color32 {
+    // premultiplied: a see-through colour stays as see-through
     let (base, b) = (Rgba::from(colour), brightness as f32);
-    Color32::from(Rgba::from_rgb(base.r() * b, base.g() * b, base.b() * b))
+    Color32::from(Rgba::from_rgba_premultiplied(
+        base.r() * b,
+        base.g() * b,
+        base.b() * b,
+        base.a(),
+    ))
 }
 
 /// `material` with at most `most` cells along its longer side, each the deepest of the
@@ -1288,6 +1294,77 @@ pub fn triangles(
     mesh
 }
 
+/// A model's faces split at the material's edges (`area`, in plan): the parts over it,
+/// each keeping whether a cutter can reach it, and the parts past its edges, which the 3D
+/// view shows as a faint red ghost rather than leaving out. A face across an edge is cut
+/// along it, its pieces keeping its winding.
+pub fn split_at_edges(
+    faces: &[cmd_orientate_3d_model::Seen],
+    area: cut_craft_core::geometry::Rect,
+) -> (Vec<cmd_orientate_3d_model::Seen>, Vec<[DVec3; 3]>) {
+    let (mut over, mut past) = (Vec::with_capacity(faces.len()), vec![]);
+    // each edge as an axis (0 x, 1 y), where it is, and which side is the material's
+    let edges = [
+        (0, area.min.x, 1.0),
+        (0, area.max.x, -1.0),
+        (1, area.min.y, 1.0),
+        (1, area.max.y, -1.0),
+    ];
+    for &(t, marked) in faces {
+        let inside = |v: &DVec3| {
+            edges
+                .iter()
+                .all(|&(axis, at, side)| (v[axis] - at) * side >= 0.0)
+        };
+        if t.iter().all(inside) {
+            over.push((t, marked));
+            continue;
+        }
+        let mut kept = t.to_vec();
+        for &(axis, at, side) in &edges {
+            let (keep, cut) = halves(&kept, |v| (v[axis] - at) * side);
+            past.extend(fan(&cut));
+            kept = keep;
+            if kept.len() < 3 {
+                break;
+            }
+        }
+        over.extend(fan(&kept).into_iter().map(|t| (t, marked)));
+    }
+    (over, past)
+}
+
+/// A convex polygon cut by a line: the part where `side` is not negative, and the rest.
+fn halves(polygon: &[DVec3], side: impl Fn(&DVec3) -> f64) -> (Vec<DVec3>, Vec<DVec3>) {
+    let (mut keep, mut cut) = (vec![], vec![]);
+    for (i, &a) in polygon.iter().enumerate() {
+        let b = polygon[(i + 1) % polygon.len()];
+        let (sa, sb) = (side(&a), side(&b));
+        // a corner on the line belongs to both
+        if sa >= 0.0 {
+            keep.push(a);
+        }
+        if sa <= 0.0 {
+            cut.push(a);
+        }
+        if (sa > 0.0 && sb < 0.0) || (sa < 0.0 && sb > 0.0) {
+            let crossing = a + (b - a) * (sa / (sa - sb));
+            keep.push(crossing);
+            cut.push(crossing);
+        }
+    }
+    (keep, cut)
+}
+
+/// A convex polygon as triangles fanned from its first corner, leaving out slivers with
+/// no area (a polygon only touching the line, or under three corners, makes none).
+fn fan(polygon: &[DVec3]) -> Vec<[DVec3; 3]> {
+    (1..polygon.len().saturating_sub(1))
+        .map(|i| [polygon[0], polygon[i], polygon[i + 1]])
+        .filter(|t| (t[1] - t[0]).cross(t[2] - t[0]).length_squared() > 0.0)
+        .collect()
+}
+
 /// The lines along a rotary stock's wireframe, and the sides of each end's ring.
 const CYLINDER_SIDES: usize = 24;
 
@@ -1656,6 +1733,88 @@ mod tests {
             grain: None,
             shadows: false,
         }
+    }
+
+    fn area_of(t: &[DVec3; 3]) -> f64 {
+        (t[1] - t[0]).cross(t[2] - t[0]).length() / 2.0
+    }
+
+    #[test]
+    fn a_see_through_look_draws_see_through_faces() {
+        let face = [DVec3::ZERO, DVec3::X, DVec3::Y];
+        let look = Look {
+            colour: Color32::from_rgba_unmultiplied(255, 0, 0, 13),
+            ..plain()
+        };
+        let orbit = Orbit::default();
+        let mesh = triangles(
+            &[(face, false)],
+            |p| pos2(p.as_vec3().x, p.as_vec3().y),
+            orbit,
+            &look,
+            Color32::RED,
+        );
+        assert_eq!(mesh.vertices.len(), 3);
+        let c = mesh.vertices[0].color;
+        assert_eq!(c.a(), 13, "{c:?}");
+        assert!(c.r() > 0 && c.g() == 0, "red: {c:?}");
+    }
+
+    #[test]
+    fn a_model_is_split_at_the_material_edges_into_what_is_over_it_and_what_is_past() {
+        use cut_craft_core::geometry::Rect;
+        let area = Rect::new(Point::new(0.0, 0.0), Point::new(10.0, 10.0));
+        let inside = [
+            DVec3::new(1.0, 1.0, 0.0),
+            DVec3::new(4.0, 1.0, 1.0),
+            DVec3::new(1.0, 4.0, 2.0),
+        ];
+        let outside = [
+            DVec3::new(11.0, 1.0, 0.0),
+            DVec3::new(14.0, 1.0, 0.0),
+            DVec3::new(11.0, 4.0, 0.0),
+        ];
+        // across the right edge, and across a corner
+        let across = [
+            DVec3::new(6.0, 2.0, 0.0),
+            DVec3::new(14.0, 2.0, 0.0),
+            DVec3::new(6.0, 6.0, 0.0),
+        ];
+        let corner = [
+            DVec3::new(8.0, 8.0, 3.0),
+            DVec3::new(12.0, 8.0, 3.0),
+            DVec3::new(8.0, 12.0, 3.0),
+        ];
+        let faces = [
+            (inside, true),
+            (outside, false),
+            (across, false),
+            (corner, true),
+        ];
+        let (over, past) = split_at_edges(&faces, area);
+        assert_eq!(
+            over[0],
+            (inside, true),
+            "a face over the material is kept as it is"
+        );
+        assert!(past.contains(&outside), "a face past it goes whole");
+        let within = |v: &DVec3| {
+            (-1e-9..=10.0 + 1e-9).contains(&v.x) && (-1e-9..=10.0 + 1e-9).contains(&v.y)
+        };
+        assert!(over.iter().all(|(t, _)| t.iter().all(within)));
+        assert!(
+            past.iter().all(|t| !within(&((t[0] + t[1] + t[2]) / 3.0))),
+            "every piece past is outside"
+        );
+        // nothing is lost or doubled, and the pieces face the way their face did
+        let total: f64 = faces.iter().map(|(t, _)| area_of(t)).sum();
+        let split: f64 = over.iter().map(|(t, _)| area_of(t)).sum::<f64>()
+            + past.iter().map(area_of).sum::<f64>();
+        assert!((total - split).abs() < 1e-9, "{total} vs {split}");
+        let up = |t: &[DVec3; 3]| (t[1] - t[0]).cross(t[2] - t[0]).z > 0.0;
+        assert!(over.iter().all(|(t, _)| up(t)) && past.iter().all(up));
+        // the corner's piece over the material stays marked
+        assert!(over.iter().filter(|(_, m)| *m).count() >= 2);
     }
 
     #[test]

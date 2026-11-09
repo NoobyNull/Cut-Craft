@@ -1801,17 +1801,7 @@ impl CutCraftApp {
         &mut self,
         model: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
-        if let Some(kept) = &self.model_gpu
-            && std::sync::Arc::ptr_eq(&kept.model, model)
-        {
-            return std::sync::Arc::clone(&kept.geometry);
-        }
-        let geometry = std::sync::Arc::new(view3d::gpu::model(model));
-        self.model_gpu = Some(super::ModelGpu {
-            model: std::sync::Arc::clone(model),
-            geometry: std::sync::Arc::clone(&geometry),
-        });
-        geometry
+        faces_geometry(&mut self.model_gpu, model)
     }
 
     /// Transform mode's handles in the 3D view, over whatever is selected: Aspire's 3D
@@ -2794,7 +2784,7 @@ impl CutCraftApp {
             .gpu_3d
             .is_some()
             .then(|| painter.add(egui::Shape::Noop));
-        let (mut surface_draw, mut model_draw) = (None, None);
+        let (mut surface_draw, mut model_draw, mut ghost_draw) = (None, None, None);
         if slot.is_some() {
             let geometry = self.surface_geometry(look.wrap, look.sides);
             let at = cut_craft_core::glam::DVec3::ZERO;
@@ -2812,6 +2802,7 @@ impl CutCraftApp {
             }
         } else {
             self.paint_flat(ui, area, &surface, &camera, look, tool_at, gpu);
+            ghost_draw = self.paint_ghost(ui, area, &surface, &camera, look, slot.is_some());
         }
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
@@ -2823,8 +2814,52 @@ impl CutCraftApp {
                 view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
             });
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
-            painter.set(slot, gpu.paint(area, surface_draw, model_draw, body_draw));
+            let shape = gpu.paint(area, surface_draw, model_draw, body_draw, ghost_draw);
+            painter.set(slot, shape);
         }
+    }
+
+    /// A model being imported: its parts past the material's edges, in see-through red
+    /// (Options ▸ Out-of-bounds opacity) over the rest, so a model placed partly off the
+    /// material is seen whole. Given to the GPU when the view has one, else painted.
+    fn paint_ghost(
+        &mut self,
+        ui: &egui::Ui,
+        area: egui::Rect,
+        surface: &Material,
+        camera: &view3d::Camera,
+        look: view3d::Look,
+        on_gpu: bool,
+    ) -> Option<view3d::gpu::Draw> {
+        let Some(ghost) = self
+            .form
+            .as_ref()
+            .and_then(|f| f.beyond.clone())
+            .filter(|g| !g.is_empty())
+        else {
+            self.ghost_gpu = None;
+            return None;
+        };
+        let red = self.options.import.out_of_bounds_colour();
+        let look = view3d::Look {
+            colour: red,
+            sides: false,
+            wrap: None,
+            grain: None,
+            shadows: false,
+            ..look
+        };
+        let origin = cut_craft_core::glam::DVec3::new(-surface.origin.x, -surface.origin.y, 0.0);
+        if on_gpu {
+            let geometry = faces_geometry(&mut self.ghost_gpu, &ghost);
+            return Some(view3d::gpu::Draw::new(
+                geometry, camera, area, origin, &look, red,
+            ));
+        }
+        let screen = |p| camera.screen(p + origin);
+        let mesh = view3d::triangles(&ghost, screen, self.orbit, &look, red);
+        ui.painter_at(area).add(mesh);
+        None
     }
 
     /// Over the unwrapped surface: the model being imported in the material's outline, a
@@ -3567,4 +3602,22 @@ fn box_corners(bounds: cut_craft_core::geometry::Rect) -> [Point; 4] {
         bounds.max,
         Point::new(bounds.min.x, bounds.max.y),
     ]
+}
+
+/// `faces` on the GPU, made once and `kept` while the faces stay the same.
+fn faces_geometry(
+    kept: &mut Option<super::ModelGpu>,
+    faces: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+) -> std::sync::Arc<view3d::gpu::Geometry> {
+    if let Some(kept) = kept
+        && std::sync::Arc::ptr_eq(&kept.model, faces)
+    {
+        return std::sync::Arc::clone(&kept.geometry);
+    }
+    let geometry = std::sync::Arc::new(view3d::gpu::model(faces));
+    *kept = Some(super::ModelGpu {
+        model: std::sync::Arc::clone(faces),
+        geometry: std::sync::Arc::clone(&geometry),
+    });
+    geometry
 }
