@@ -1,4 +1,4 @@
-- Save Toolpaths checks for crashes, air cuts and machine limits, and can save a file per tool
-- Slow toolpaths show a progress window with Cancel
-- Every menu item now works, and Print Job Sheet makes a shop printout
-- Options: preview speed and how much leftover material to warn about
+- Every tool is back in view: tools that do one job different ways sit together in a labelled box (Options ▸ General folds them into one button again)
+- New Import tab on the Design page gathers every way to bring something in, and any Design tab can be shown as its own section
+- Relief from Photo catches up with depth2stl
+- Add-ons install from a GitHub repository's newest release; unsigned ones run with a warning
