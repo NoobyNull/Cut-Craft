@@ -2,11 +2,10 @@
 //! picked (and the folders in it; in all of them when none is) as tiles: pictures and 3D
 //! models as previews, drawings by their kind. Tiles are picked with a click (Ctrl or
 //! Shift for more), added to the project with a double-click or by dragging, and a
-//! right-click menu adds, locates, tags or deletes the ones picked, or shows one's Properties.
+//! right-click menu adds, locates, tags or deletes the ones picked.
 
 mod network;
 mod preview;
-mod properties;
 mod tags;
 
 use cut_craft_bug_report::hint::HoverHint;
@@ -19,8 +18,6 @@ use std::time::{Duration, Instant};
 /// A thumbnail's edge, in rows of the theme's interactive height.
 // ponytail: one size; Aspire's three view sizes can come with a setting
 const THUMBNAIL_ROWS: f32 = 4.0;
-/// The pop-up preview's edge, in rows of buttons.
-const LARGE_ROWS: f32 = 16.0;
 /// Pictures drawn as themselves (at the tile's size); the rest ([`BITMAPS`]) are shrunk
 /// once and kept, as a model's preview is, so a folder of big photos doesn't fill the
 /// memory, nor a huge scan go past the graphics card's largest texture (which stops the app).
@@ -63,8 +60,6 @@ pub struct Clipart {
     store: Option<PathBuf>,
     /// Models' and pictures' previews, made in the background.
     previews: preview::Previews,
-    /// Larger previews, for the pop-up over the tile the pointer rests on.
-    large: preview::Enlarged,
     /// Everything in the folders as last read: which folders, when, and what.
     listing: Option<(Vec<PathBuf>, Instant, Listing)>,
     /// The folders being read in the background.
@@ -89,8 +84,6 @@ pub struct Clipart {
     greys: Greys,
     /// The last thing that went wrong, until the next action.
     trouble: Option<String>,
-    /// Properties: the file shown in the window, while it is open.
-    properties: Option<properties::Properties>,
     /// How many tiles were drawn last.
     #[cfg(test)]
     drawn: usize,
@@ -214,8 +207,7 @@ impl Clipart {
                 .spawn(move || preview::prune(&cache, preview::UNUSED));
         }
         Self {
-            previews: preview::Previews::new(cache.clone()),
-            large: preview::Enlarged::new(cache),
+            previews: preview::Previews::new(cache),
             tags: tags::Tags::load(crate::files::library_tags_path()),
             ..Self::kept(crate::files::clipart_folders_path())
         }
@@ -633,7 +625,6 @@ pub fn panel(
     levels: &[(u64, String)],
 ) -> Option<Picked> {
     clipart.previews.update(ui.ctx());
-    clipart.large.update(ui.ctx());
     clipart.refresh(ui.ctx(), importable);
     #[cfg(test)]
     {
@@ -651,10 +642,7 @@ pub fn panel(
     if clipart.listing.is_none() {
         clipart.listing = taken;
     }
-    match properties::window(ui.ctx(), &mut clipart.properties) {
-        Some(properties::Asked::Locate(file)) => Some(Picked::Locate(file)),
-        None => picked,
-    }
+    picked
 }
 
 /// What the folder tree asks for.
@@ -1133,83 +1121,23 @@ fn clip(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
             }
         });
     }
-    let tags: Vec<String> = clipart.tags.of(file).map(str::to_owned).collect();
-    if thumbnail.hovered() || caption.hovered() {
-        cut_craft_bug_report::hint::hint(
-            ui.ctx(),
-            &format!(
-                "{label}: double-click to add it to the project, or drag it onto a view. Click \
-                 to pick it (Ctrl or Shift for more), right-click for more."
-            ),
-        );
+    let mut hint = label.clone();
+    let tags: Vec<&str> = clipart.tags.of(file).collect();
+    if !tags.is_empty() {
+        hint = format!("{hint}\nTags: {}", tags.join(", "));
     }
-    // the pop-up hangs off the tile, not the pointer, so it holds still while looked at
-    for response in [thumbnail, caption] {
-        response.on_hover_ui(|ui| {
-            enlarged(ui, clipart, tile.entry, &tags, trouble.as_deref());
-        });
+    hint = format!(
+        "{hint}\nDouble-click to add it to the project, or drag it onto a view. Click to pick \
+         it (Ctrl or Shift for more), right-click for more."
+    );
+    if let Some(trouble) = trouble {
+        hint = format!("{hint}\nNo preview: {trouble}");
     }
+    thumbnail.on_hover_hint(hint);
     if picked.is_some() {
         clipart.trouble = None;
     }
     picked
-}
-
-/// The pop-up over a tile the pointer rests on: the file larger, its whole name, its tags,
-/// and why it has no preview if it hasn't. Always the same size whether its picture is in
-/// yet or not, so it doesn't jump about.
-fn enlarged(
-    ui: &mut egui::Ui,
-    clipart: &mut Clipart,
-    entry: &Entry,
-    tags: &[String],
-    trouble: Option<&str>,
-) {
-    let edge = ui.spacing().interact_size.y * LARGE_ROWS;
-    let square = egui::vec2(edge, edge);
-    let extension = preview::extension(&entry.file);
-    let picture = BITMAPS.contains(&extension.as_str());
-    let model = preview::MODELS.contains(&extension.as_str());
-    if DRAWN.contains(&extension.as_str()) {
-        let uri = format!("file://{}", entry.file.display());
-        let (rect, _) = ui.allocate_exact_size(square, egui::Sense::hover());
-        ui.put(rect, egui::Image::new(uri).fit_to_exact_size(square));
-    } else if (picture || model) && trouble.is_none() {
-        let source = if picture {
-            Some(entry.file.as_path())
-        } else {
-            entry.picture.as_deref()
-        };
-        let (rect, _) = ui.allocate_exact_size(square, egui::Sense::hover());
-        let large = match clipart.large.get(&entry.file, source, entry.stamp) {
-            preview::Preview::Ready(texture) => Some(texture.clone()),
-            _ => None,
-        };
-        // the tile's own preview, stretched, until the larger one is in
-        let shown =
-            large.or_else(
-                || match clipart.previews.get(&entry.file, source, entry.stamp) {
-                    preview::Preview::Ready(texture) => Some(texture.clone()),
-                    _ => None,
-                },
-            );
-        match shown {
-            Some(texture) => {
-                ui.put(rect, egui::Image::new(&texture).fit_to_exact_size(square));
-            }
-            None => {
-                egui::Spinner::new().paint_at(ui, rect.shrink(edge / 3.0));
-            }
-        }
-    }
-    ui.set_max_width(edge.max(ui.spacing().tooltip_width));
-    ui.strong(name(&entry.file));
-    if !tags.is_empty() {
-        ui.weak(format!("Tags: {}", tags.join(", ")));
-    }
-    if let Some(trouble) = trouble {
-        ui.weak(format!("No preview: {trouble}"));
-    }
 }
 
 /// The right-click menu, for the files picked (the one right-clicked among them).
@@ -1280,22 +1208,6 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
         }
         picked = Some(Picked::Delete(doomed));
     }
-    ui.separator();
-    if ui
-        .button("Properties")
-        .on_hover_hint("Its size, date, tags and where it is.")
-        .clicked()
-    {
-        let file = &tile.entry.file;
-        clipart.properties = Some(properties::Properties::new(
-            file,
-            clipart.kind(tile.entry),
-            tile.entry.picture.as_deref(),
-            clipart.tags.of(file).map(str::to_owned).collect(),
-            &clipart.folders,
-            Some(ui.ctx()),
-        ));
-    }
     picked
 }
 
@@ -1323,8 +1235,9 @@ fn thumbnail(
     let size = egui::vec2(edge, edge);
     let extension = preview::extension(&entry.file);
     if DRAWN.contains(&extension.as_str()) {
-        let image = egui::Image::new(format!("file://{}", entry.file.display()));
-        return (pictured(ui, image, size, chosen), None);
+        let image =
+            egui::Image::new(format!("file://{}", entry.file.display())).fit_to_exact_size(size);
+        return (ui.add(egui::Button::image(image).selected(chosen)), None);
     }
     let model = preview::MODELS.contains(&extension.as_str());
     let picture = BITMAPS.contains(&extension.as_str());
@@ -1346,7 +1259,8 @@ fn thumbnail(
     };
     match previews.get(&entry.file, source, entry.stamp) {
         preview::Preview::Ready(texture) => {
-            (pictured(ui, egui::Image::new(texture), size, chosen), None)
+            let image = egui::Image::new(texture).fit_to_exact_size(size);
+            (ui.add(egui::Button::image(image).selected(chosen)), None)
         }
         preview::Preview::Waiting => {
             let button = ui.add_sized(size, egui::Button::new("").selected(chosen));
@@ -1359,19 +1273,6 @@ fn thumbnail(
             (ui.add_sized(size, button), Some(e))
         }
     }
-}
-
-/// A tile `size` across showing `image`: the picture shrunk by the button's padding, so the
-/// tile is no wider than the room for it and its name (cut to fit) keeps clear of the next.
-fn pictured(
-    ui: &mut egui::Ui,
-    image: egui::Image,
-    size: egui::Vec2,
-    chosen: bool,
-) -> egui::Response {
-    let inner = (size - 2.0 * ui.spacing().button_padding).max(egui::Vec2::ZERO);
-    let button = egui::Button::image(image.fit_to_exact_size(inner)).selected(chosen);
-    ui.add_sized(size, button)
 }
 
 #[cfg(test)]
@@ -1416,146 +1317,6 @@ mod tests {
         out.textures_delta.clear();
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(used.width() <= 300.0, "{used:?} is wider than the panel");
-    }
-
-    /// Every piece of text painted in `shapes`, and where.
-    fn texts<'a>(shapes: impl Iterator<Item = &'a egui::Shape>) -> Vec<(String, egui::Rect, bool)> {
-        let mut found = Vec::new();
-        for shape in shapes {
-            match shape {
-                egui::Shape::Text(text) => {
-                    let galley = &text.galley;
-                    found.push((
-                        galley.text().to_owned(),
-                        galley.rect.translate(text.pos.to_vec2()),
-                        galley.elided,
-                    ));
-                }
-                egui::Shape::Vec(inner) => found.extend(texts(inner.iter())),
-                _ => {}
-            }
-        }
-        found
-    }
-
-    /// A name too long for its tile ends in "..." with a gap before the next tile's name,
-    /// not run into it: a tile with a picture is wider than its picture by the button's
-    /// padding, and the name was cut to that.
-    #[test]
-    fn long_names_are_cut_short() {
-        let dir = folder("long-names");
-        let long = "0355. UK-1-final with a very long name indeed.png";
-        for name in [long, "0356. UK-2-final.png"] {
-            image::RgbImage::new(64, 64).save(dir.join(name)).unwrap();
-        }
-        let png = importable(&["png"]);
-        let mut clipart = Clipart {
-            folders: vec![dir.clone()],
-            ..Clipart::default()
-        };
-        clipart.read_now(&png);
-        let ctx = egui::Context::default();
-        let (mut edge, mut gap) = (0.0, 0.0);
-        let mut frame = |clipart: &mut Clipart| {
-            let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(600.0, 2000.0),
-                )),
-                ..Default::default()
-            };
-            let mut out = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show(ui, |ui| {
-                    edge = ui.spacing().interact_size.y * THUMBNAIL_ROWS;
-                    gap = ui.spacing().item_spacing.x;
-                    panel(ui, clipart, &png, &[]);
-                });
-            });
-            out.textures_delta.clear();
-            out
-        };
-        // until both pictures' previews are in, so the tiles are drawn with them
-        let started = Instant::now();
-        while clipart.previews.ready() < 2 && started.elapsed() < Duration::from_secs(10) {
-            frame(&mut clipart);
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        let out = frame(&mut clipart);
-        std::fs::remove_dir_all(&dir).unwrap();
-        let captions: Vec<_> = texts(out.shapes.iter().map(|c| &c.shape))
-            .into_iter()
-            .filter(|(text, ..)| text.starts_with("035"))
-            .collect();
-        assert_eq!(captions.len(), 2, "{captions:?}");
-        let (text, first, elided) = &captions[0];
-        assert!(elided, "{text:?} isn't cut short");
-        assert!(
-            first.width() <= edge,
-            "{first:?} is wider than a tile ({edge})"
-        );
-        let next = captions[1].1;
-        assert!(
-            next.left() - first.right() >= gap,
-            "{first:?} runs into {next:?}"
-        );
-    }
-
-    /// Resting the pointer on a tile pops up a larger preview with the whole name; only
-    /// the tile under the pointer asks for one.
-    #[test]
-    fn hovering_shows_it_larger() {
-        let dir = folder("hover");
-        let long = "0355. UK-1-final with a very long name indeed.png";
-        for name in [long, "0356. UK-2-final.png"] {
-            image::RgbImage::new(600, 400).save(dir.join(name)).unwrap();
-        }
-        let png = importable(&["png"]);
-        let mut clipart = Clipart {
-            folders: vec![dir.clone()],
-            ..Clipart::default()
-        };
-        clipart.read_now(&png);
-        let ctx = egui::Context::default();
-        ctx.global_style_mut(|s| s.interaction.tooltip_delay = 0.0);
-        let frame = |clipart: &mut Clipart, at: Option<egui::Pos2>| {
-            let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(600.0, 2000.0),
-                )),
-                events: at.map(egui::Event::PointerMoved).into_iter().collect(),
-                ..Default::default()
-            };
-            let mut out = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show(ui, |ui| {
-                    panel(ui, clipart, &png, &[]);
-                });
-            });
-            out.textures_delta.clear();
-            out
-        };
-        let out = frame(&mut clipart, None);
-        assert_eq!(clipart.large.asked(), 0, "nothing hovered, nothing asked");
-        // the first tile: where its name is painted, and the picture above it
-        let (_, name, _) = texts(out.shapes.iter().map(|c| &c.shape))
-            .into_iter()
-            .find(|(t, ..)| t == long)
-            .unwrap();
-        let over = egui::pos2(name.left() + 20.0, name.top() - 20.0);
-        let mut out = frame(&mut clipart, Some(over));
-        let started = Instant::now();
-        while clipart.large.ready() < 1 && started.elapsed() < Duration::from_secs(10) {
-            std::thread::sleep(Duration::from_millis(10));
-            out = frame(&mut clipart, None);
-        }
-        std::fs::remove_dir_all(&dir).unwrap();
-        assert_eq!(clipart.large.asked(), 1, "only the tile hovered");
-        assert_eq!(clipart.large.ready(), 1);
-        let whole = texts(out.shapes.iter().map(|c| &c.shape))
-            .into_iter()
-            .filter(|(t, _, elided)| t == long && !elided)
-            .count();
-        assert_eq!(whole, 1, "the whole name, in the pop-up");
     }
 
     /// A model's picture beside it (same name, any case) is its preview, not a tile of its
@@ -1874,99 +1635,6 @@ mod tests {
             Clipart::kept(Some(store)).folders,
             std::slice::from_ref(&dir)
         );
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    /// Where `text` is drawn in `shapes`, if it is.
-    fn text_at(shapes: &[egui::epaint::ClippedShape], text: &str) -> Option<egui::Pos2> {
-        shapes.iter().find_map(|c| match &c.shape {
-            egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos + t.galley.size() / 2.0),
-            _ => None,
-        })
-    }
-
-    /// Right-click ▸ Properties, at the bottom of a tile's menu, opens a window about the
-    /// file: its kind, size, tags and where it is. Escape closes it.
-    #[test]
-    fn properties_from_the_menu() {
-        let dir = folder("properties");
-        let file = dir.join("eagle.stl");
-        std::fs::write(&file, "").unwrap();
-        let stl = importable(&["stl"]);
-        let mut clipart = Clipart {
-            folders: vec![dir.clone()],
-            ..Clipart::default()
-        };
-        clipart
-            .tags
-            .add(std::slice::from_ref(&file), "birds")
-            .unwrap();
-        clipart.read_now(&stl);
-        let ctx = egui::Context::default();
-        let frame = |clipart: &mut Clipart, events: Vec<egui::Event>| {
-            let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(800.0, 800.0),
-                )),
-                events,
-                ..Default::default()
-            };
-            let mut out = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show(ui, |ui| {
-                    panel(ui, clipart, &stl, &[]);
-                });
-            });
-            out.textures_delta.clear();
-            out.shapes
-        };
-        let click = |at: egui::Pos2, button: egui::PointerButton| {
-            [true, false].map(|pressed| egui::Event::PointerButton {
-                pos: at,
-                button,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            })
-        };
-        let shapes = frame(&mut clipart, vec![]);
-        let tile = text_at(&shapes, "eagle.stl").expect("the tile's name");
-        frame(&mut clipart, vec![egui::Event::PointerMoved(tile)]);
-        for e in click(tile, egui::PointerButton::Secondary) {
-            frame(&mut clipart, vec![e]);
-        }
-        // a new menu is drawn unseen for a frame while egui sizes it
-        frame(&mut clipart, vec![]);
-        let shapes = frame(&mut clipart, vec![]);
-        let item = text_at(&shapes, "Properties").expect("Properties in the menu");
-        let report = text_at(&shapes, "Report a Bug Here…").expect("the bug report item");
-        assert!(item.y < report.y, "Properties comes before Report a Bug");
-        frame(&mut clipart, vec![egui::Event::PointerMoved(item)]);
-        for e in click(item, egui::PointerButton::Primary) {
-            frame(&mut clipart, vec![e]);
-        }
-        clipart
-            .properties
-            .as_mut()
-            .expect("the window is open")
-            .wait();
-        frame(&mut clipart, vec![]);
-        let shapes = frame(&mut clipart, vec![]);
-        for text in ["3D model (STL file)", "birds", "0 bytes"] {
-            assert!(text_at(&shapes, text).is_some(), "{text} is shown");
-        }
-        assert!(
-            text_at(&shapes, &file.display().to_string()).is_some(),
-            "its path"
-        );
-        let escape = egui::Event::Key {
-            key: egui::Key::Escape,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::NONE,
-        };
-        frame(&mut clipart, vec![escape]);
-        assert!(clipart.properties.is_none(), "Escape closes it");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

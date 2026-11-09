@@ -538,14 +538,6 @@ impl StatusBar {
     }
 }
 
-/// `text` on one line for the status bar: its lines joined with " · ", blank ones dropped.
-pub fn one_line(text: &str) -> String {
-    let lines: Vec<&str> = (text.lines().map(str::trim))
-        .filter(|l| !l.is_empty())
-        .collect();
-    lines.join(" · ")
-}
-
 /// Menu system for application controls
 pub struct MenuSystem {
     pub menus: Vec<Menu>,
@@ -2076,15 +2068,6 @@ impl MenuSystem {
 #[cfg(test)]
 mod tests {
     use super::MenuItem;
-
-    #[test]
-    fn status_text_goes_on_one_line() {
-        assert_eq!(super::one_line("Ready"), "Ready");
-        assert_eq!(
-            super::one_line("0331. Flowers.STL\nDouble-click to add it\r\n\n  "),
-            "0331. Flowers.STL · Double-click to add it"
-        );
-    }
 
     #[test]
     fn separators_split_a_menu_into_categories() {

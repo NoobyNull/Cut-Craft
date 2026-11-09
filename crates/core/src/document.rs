@@ -583,9 +583,6 @@ pub struct Document {
     /// labels call the part the group belongs to (added with part labels).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub part_names: BTreeMap<u64, String>,
-    /// Points kept on what they were snapped to when drawn (added with constraints).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub constraints: Vec<crate::constraint::Constraint>,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -725,7 +722,6 @@ impl Default for Document {
             guides: vec![],
             toolpath_groups: vec![],
             part_names: BTreeMap::new(),
-            constraints: vec![],
             tiling: None,
             bottom_side: false,
             other_side: SheetObjects::default(),

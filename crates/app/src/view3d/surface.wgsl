@@ -13,8 +13,7 @@ struct Camera {
     towards: vec3<f32>,
     // leave out faces turned away from the viewer (a model's backs)
     cull: u32,
-    // the material's or model's colour (its alpha how solid it is drawn: under 1 only
-    // for a see-through ghost), and a model's marked faces', linear and not premultiplied
+    // the material's or model's colour, and a model's marked faces', linear
     colour: vec4<f32>,
     mark: vec4<f32>,
     // the surface's grid: cells across and up, a cell's edge, the block's bottom
@@ -341,7 +340,7 @@ fn fs_linear(f: Fragment) -> @location(0) vec4<f32> {
     if turned_away(normal) {
         discard;
     }
-    return vec4<f32>(lit(f, normal), camera.colour.a);
+    return vec4<f32>(lit(f, normal), 1.0);
 }
 
 // a framebuffer that takes sRGB (egui's preference)
@@ -351,7 +350,7 @@ fn fs_gamma(f: Fragment) -> @location(0) vec4<f32> {
     if turned_away(normal) {
         discard;
     }
-    return vec4<f32>(gamma_from_linear(lit(f, normal)), camera.colour.a);
+    return vec4<f32>(gamma_from_linear(lit(f, normal)), 1.0);
 }
 
 // the sRGB transfer curve, and back

@@ -3,7 +3,7 @@
 
 use super::RING_SHARE;
 use super::{
-    Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FineKey, HEIGHT_DRAG_EVERY,
+    Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
     Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
     TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
@@ -1288,24 +1288,19 @@ impl CutCraftApp {
         }
     }
 
-    /// What the 3D view shows, at Options' detail while moving: the toolpath preview if
-    /// there is one, else the model (kept until it changes: it is asked for several times a
-    /// frame, and a big model takes long to mix).
+    /// What the 3D view shows: the toolpath preview if there is one, else the model.
+    // ponytail: rebuilt on every call, measured at about 0.1 ms of a 7.5 ms frame; cache it on
+    // the history revision if that grows
     pub(super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
-        let cells = self.options.view_3d.moving_cells();
         if let Some(playback) = &self.playback {
-            let coarse = view3d::coarse(playback.material(), cells);
+            let coarse = view3d::coarse(playback.material(), MESH_CELLS);
             return Some(Cow::Owned(self.painted(coarse)));
         }
         if let Some(material) = &self.simulation {
-            if self
-                .simulation_coarse
-                .as_ref()
-                .is_none_or(|(made, _)| *made != cells)
-            {
-                self.simulation_coarse = Some((cells, view3d::coarse(material, cells)));
+            if self.simulation_coarse.is_none() {
+                self.simulation_coarse = Some(view3d::coarse(material, MESH_CELLS));
             }
-            let (_, coarse) = self.simulation_coarse.as_ref().expect("made above");
+            let coarse = self.simulation_coarse.as_ref().expect("made above");
             if self.doc.job.machined_area == MachinedArea::MaterialColor
                 && coarse.other_side.is_none()
             {
@@ -1313,31 +1308,8 @@ impl CutCraftApp {
             }
             return Some(Cow::Owned(self.painted(coarse.clone())));
         }
-        // before a preview, the model alone: nothing where no component is; made once a
-        // change, not every frame
-        if self.doc.components.is_empty() {
-            return None;
-        }
-        let key = super::RoughKey {
-            revision: self.history.revision(),
-            job: self.doc.job,
-            cells,
-            importing: self.importing_whole(),
-        };
-        if self.rough_3d.as_ref().is_none_or(|(kept, _)| *kept != key) {
-            let shape = self.model_shape(cells);
-            self.rough_3d = Some((key, shape));
-        }
-        self.rough_3d
-            .as_ref()
-            .map(|(_, shape)| Cow::Borrowed(shape))
-    }
-
-    /// Whether an imported model is shown whole, in place of its component.
-    fn importing_whole(&self) -> bool {
-        self.form
-            .as_ref()
-            .is_some_and(|f| f.model.is_some() && f.model_whole)
+        // before a preview, the model alone: nothing where no component is
+        (!self.doc.components.is_empty()).then(|| Cow::Owned(self.model_shape(MESH_CELLS)))
     }
 
     /// The preview's `material` painted as the job's Machined Area Color has it: in the
@@ -1725,13 +1697,15 @@ impl CutCraftApp {
     ) -> egui::Mesh {
         let key = FineKey {
             revision: self.history.revision(),
-            cells: self.options.view_3d.still_cells(),
             job: self.doc.job,
             orbit,
             framing,
             fit,
             look,
-            importing: self.importing_whole(),
+            importing: self
+                .form
+                .as_ref()
+                .is_some_and(|f| f.model.is_some() && f.model_whole),
         };
         if let Some((kept, mesh)) = &self.fine_3d
             && *kept == key
@@ -1744,12 +1718,11 @@ impl CutCraftApp {
         mesh
     }
 
-    /// The preview's material, or the model's shape, at its own detail up to Options' detail
-    /// when still.
+    /// The preview's material, or the model's shape, at its own detail up to
+    /// [`FINE_MESH_CELLS`].
     pub(super) fn fine_surface(&mut self) -> Material {
-        let most = self.options.view_3d.still_cells();
         if let Some(material) = &self.simulation {
-            return self.painted(view3d::coarse(material, most));
+            return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
         }
         let job = &self.doc.job;
         #[expect(
@@ -1758,7 +1731,7 @@ impl CutCraftApp {
             reason = "a small cell count"
         )]
         let own = (job.width.max(job.height) / job.model_cell()).ceil() as usize;
-        self.model_shape(own.clamp(MESH_CELLS.min(most), most))
+        self.model_shape(own.clamp(MESH_CELLS, FINE_MESH_CELLS))
     }
 
     /// The 3D view's surface as the GPU draws it: at its own detail, built once and kept
@@ -1768,27 +1741,19 @@ impl CutCraftApp {
         wrap: Option<view3d::Wrap>,
         sides: bool,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
-        // while a handle drags the model about, the quick surface, kept by the change it
-        // shows, so the fine one is made once the drag ends
-        let dragging = self.drag_base.is_some();
-        let view = &self.options.view_3d;
-        let cells = if dragging {
-            view.moving_cells()
-        } else {
-            view.still_cells()
-        };
         let key = super::GeometryKey {
             revision: self.history.revision(),
             job: self.doc.job,
             wrap,
             sides,
-            importing: self.importing_whole(),
-            cells,
+            importing: self
+                .form
+                .as_ref()
+                .is_some_and(|f| f.model.is_some() && f.model_whole),
         };
         if let Some(playback) = &self.playback {
             self.solid_gpu = None;
-            let moving = self.options.view_3d.moving_cells();
-            let surface = self.painted(view3d::coarse(playback.material(), moving));
+            let surface = self.painted(view3d::coarse(playback.material(), MESH_CELLS));
             return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
         }
         if let Some((kept, geometry)) = &self.surface_gpu
@@ -1796,14 +1761,13 @@ impl CutCraftApp {
         {
             return std::sync::Arc::clone(geometry);
         }
-        let mut surface = match (dragging, self.simulation.is_none()) {
-            // the model alone: the quick surface the view keeps
-            (true, true) => match self.surface_3d().map(Cow::into_owned) {
-                Some(quick) => quick,
-                None => self.model_shape(cells),
-            },
-            (true, false) => self.model_shape(cells),
-            (false, _) => self.fine_surface(),
+        // while a handle drags the model about, the quick surface, made again each frame
+        // and not kept, so the fine one is made once the drag ends
+        let dragging = self.drag_base.is_some();
+        let mut surface = if dragging {
+            self.model_shape(MESH_CELLS)
+        } else {
+            self.fine_surface()
         };
         // the components' own colours (Solid Color), where the model is theirs: painted as a
         // preview paints the toolpaths' colours
@@ -1826,7 +1790,9 @@ impl CutCraftApp {
             .is_none()
             .then(|| std::sync::Arc::new(view3d::gpu::model(&view3d::solid(&surface, wrap))));
         let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
-        self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+        if !dragging {
+            self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
+        }
         geometry
     }
 
@@ -1835,7 +1801,17 @@ impl CutCraftApp {
         &mut self,
         model: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
-        faces_geometry(&mut self.model_gpu, model)
+        if let Some(kept) = &self.model_gpu
+            && std::sync::Arc::ptr_eq(&kept.model, model)
+        {
+            return std::sync::Arc::clone(&kept.geometry);
+        }
+        let geometry = std::sync::Arc::new(view3d::gpu::model(model));
+        self.model_gpu = Some(super::ModelGpu {
+            model: std::sync::Arc::clone(model),
+            geometry: std::sync::Arc::clone(&geometry),
+        });
+        geometry
     }
 
     /// Transform mode's handles in the 3D view, over whatever is selected: Aspire's 3D
@@ -2108,15 +2084,13 @@ impl CutCraftApp {
         if self.drag_3d.take().is_none() {
             return;
         }
-        self.height_applied_at = None;
         if let Some((.., Some(_))) = self.drag_base.take() {
             self.history.undo(&mut self.doc);
         }
         self.status.set_message("Cancelled: nothing was changed");
     }
 
-    /// A height handle's drag: the component follows the pointer (made again at most every
-    /// [`HEIGHT_DRAG_EVERY`] seconds), its total, shape or base
+    /// A height handle's drag: the component follows the pointer, its total, shape or base
     /// height set through Component Properties each frame the pointer moves (the last
     /// setting undone first, so the whole drag is one undo), its value in the status bar.
     /// A drag up a quarter of the view doubles, as the wheel's zoom does; the base height
@@ -2160,13 +2134,7 @@ impl CutCraftApp {
         };
         let params = serde_json::to_value(&p).expect("component properties serialize");
         let (same, undo) = (applied.as_ref() == Some(&params), applied.is_some());
-        // the model is made again at most ten times a second while the drag goes on (the
-        // value in the status bar follows the pointer every frame), and as let go
-        let time = ui.input(|i| i.time);
-        let since = self.height_applied_at.map_or(f64::INFINITY, |t| time - t);
-        let due = released || since >= HEIGHT_DRAG_EVERY;
-        let mut failed = false;
-        if !same && due {
+        if !same {
             if undo {
                 self.history.undo(&mut self.doc);
             }
@@ -2174,28 +2142,19 @@ impl CutCraftApp {
                 Ok(()) => Some(params),
                 Err(e) => {
                     self.status.set_message(&e);
-                    failed = true;
                     None
                 }
             };
             if let Some((.., applied)) = &mut self.drag_base {
                 *applied = done;
             }
-            self.height_applied_at = Some(time);
-        } else if !same {
-            // a value not yet shown: shown once the wait is over, though the pointer stops
-            ui.ctx()
-                .request_repaint_after(std::time::Duration::from_secs_f64(
-                    HEIGHT_DRAG_EVERY - since,
-                ));
         }
-        if !failed {
+        if same || self.drag_base.as_ref().is_some_and(|d| d.2.is_some()) {
             self.status.set_message(&message);
         }
         if released {
             self.drag_3d = None;
             self.drag_base = None;
-            self.height_applied_at = None;
         }
     }
 
@@ -2835,7 +2794,7 @@ impl CutCraftApp {
             .gpu_3d
             .is_some()
             .then(|| painter.add(egui::Shape::Noop));
-        let (mut surface_draw, mut model_draw, mut ghost_draw) = (None, None, None);
+        let (mut surface_draw, mut model_draw) = (None, None);
         if slot.is_some() {
             let geometry = self.surface_geometry(look.wrap, look.sides);
             let at = cut_craft_core::glam::DVec3::ZERO;
@@ -2853,7 +2812,6 @@ impl CutCraftApp {
             }
         } else {
             self.paint_flat(ui, area, &surface, &camera, look, tool_at, gpu);
-            ghost_draw = self.paint_ghost(ui, area, &surface, &camera, look, slot.is_some());
         }
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
@@ -2865,52 +2823,8 @@ impl CutCraftApp {
                 view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
             });
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
-            let shape = gpu.paint(area, surface_draw, model_draw, body_draw, ghost_draw);
-            painter.set(slot, shape);
+            painter.set(slot, gpu.paint(area, surface_draw, model_draw, body_draw));
         }
-    }
-
-    /// A model being imported: its parts past the material's edges, in see-through red
-    /// (Options ▸ Out-of-bounds opacity) over the rest, so a model placed partly off the
-    /// material is seen whole. Given to the GPU when the view has one, else painted.
-    fn paint_ghost(
-        &mut self,
-        ui: &egui::Ui,
-        area: egui::Rect,
-        surface: &Material,
-        camera: &view3d::Camera,
-        look: view3d::Look,
-        on_gpu: bool,
-    ) -> Option<view3d::gpu::Draw> {
-        let Some(ghost) = self
-            .form
-            .as_ref()
-            .and_then(|f| f.beyond.clone())
-            .filter(|g| !g.is_empty())
-        else {
-            self.ghost_gpu = None;
-            return None;
-        };
-        let red = self.options.import.out_of_bounds_colour();
-        let look = view3d::Look {
-            colour: red,
-            sides: false,
-            wrap: None,
-            grain: None,
-            shadows: false,
-            ..look
-        };
-        let origin = cut_craft_core::glam::DVec3::new(-surface.origin.x, -surface.origin.y, 0.0);
-        if on_gpu {
-            let geometry = faces_geometry(&mut self.ghost_gpu, &ghost);
-            return Some(view3d::gpu::Draw::new(
-                geometry, camera, area, origin, &look, red,
-            ));
-        }
-        let screen = |p| camera.screen(p + origin);
-        let mesh = view3d::triangles(&ghost, screen, self.orbit, &look, red);
-        ui.painter_at(area).add(mesh);
-        None
     }
 
     /// Over the unwrapped surface: the model being imported in the material's outline, a
@@ -3336,28 +3250,14 @@ impl CutCraftApp {
         }
     }
 
-    /// One fixed-height row: the hint (or last message) on the left, cut short with … when
-    /// it does not fit, its whole text on hover; the tool, units and version on the right.
     pub(super) fn status_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Status bar");
         let mut swap = false;
-        // what the pointer is over or the next step, else the last message; while the
-        // pointer is on the bar, to read it, what it said last stays
-        let kept = egui::Id::unique("status_bar_shown");
-        let fresh = cut_craft_bug_report::hint::current(ui.ctx())
-            .unwrap_or_else(|| self.status.message.clone());
-        let on_bar = ui.rect_contains_pointer(ui.max_rect());
-        let full = match ui.data(|d| d.get_temp::<String>(kept)) {
-            Some(last) if on_bar => last,
-            _ => fresh,
-        };
-        ui.data_mut(|d| d.insert_temp(kept, full.clone()));
-        let row = ui.spacing().interact_size.y;
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), row),
-            Layout::right_to_left(Align::Center),
-            |ui| {
-                ui.set_height(row);
+        ui.horizontal(|ui| {
+            // what the pointer is over or the next step, else the last message
+            let hint = cut_craft_bug_report::hint::current(ui.ctx());
+            ui.label(hint.as_deref().unwrap_or(&self.status.message));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // the version, at the far right, as Help ▸ About gives it
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
                     .on_hover_hint("Cut Craft's version (Help ▸ About)");
@@ -3378,23 +3278,8 @@ impl CutCraftApp {
                     ui.separator();
                 }
                 ui.label(format!("Tool: {}", self.status.current_tool));
-                ui.separator();
-                // the rest of the row, never more than one line
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    let galley = egui::WidgetText::from(gui::one_line(&full)).into_galley(
-                        ui,
-                        Some(egui::TextWrapMode::Truncate),
-                        ui.available_width(),
-                        egui::TextStyle::Body,
-                    );
-                    let cut = galley.elided || full.contains('\n');
-                    let label = ui.add(egui::Label::new(galley).selectable(false));
-                    if cut {
-                        label.on_hover_text(full);
-                    }
-                });
-            },
-        );
+            });
+        });
         if swap {
             let to = match self.doc.job.units {
                 Units::Mm => "units_inch",
@@ -3688,22 +3573,4 @@ fn box_corners(bounds: cut_craft_core::geometry::Rect) -> [Point; 4] {
         bounds.max,
         Point::new(bounds.min.x, bounds.max.y),
     ]
-}
-
-/// `faces` on the GPU, made once and `kept` while the faces stay the same.
-fn faces_geometry(
-    kept: &mut Option<super::ModelGpu>,
-    faces: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
-) -> std::sync::Arc<view3d::gpu::Geometry> {
-    if let Some(kept) = kept
-        && std::sync::Arc::ptr_eq(&kept.model, faces)
-    {
-        return std::sync::Arc::clone(&kept.geometry);
-    }
-    let geometry = std::sync::Arc::new(view3d::gpu::model(faces));
-    *kept = Some(super::ModelGpu {
-        model: std::sync::Arc::clone(faces),
-        geometry: std::sync::Arc::clone(&geometry),
-    });
-    geometry
 }
