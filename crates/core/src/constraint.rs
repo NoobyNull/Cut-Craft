@@ -235,10 +235,32 @@ impl After {
                 Edit::SetConstraints { after: kept, .. } => {
                     kept.clone_into(&mut after.constraints);
                 }
+                // switching sheets or sides puts vectors away rather than deleting them
+                Edit::SetSheets {
+                    after: (sheets, _), ..
+                } => {
+                    for sheet in sheets {
+                        after.put_away(&sheet.objects);
+                    }
+                }
+                Edit::SetSide {
+                    after: (_, objects),
+                    ..
+                } => after.put_away(objects),
                 _ => {}
             }
         }
         after
+    }
+
+    /// Vectors kept in `objects` (another sheet or side) are not deleted.
+    fn put_away(&mut self, objects: &crate::document::SheetObjects) {
+        for id in objects.vectors.keys() {
+            self.removed.remove(id);
+        }
+        if let Some(other) = &objects.other_side {
+            self.put_away(other);
+        }
     }
 
     /// Lets go of the constraints on vectors the change deleted, and on vectors given
@@ -250,7 +272,10 @@ impl After {
         let vectors = &self.vectors;
         let renumbered = |id: EntityId| {
             let count = |v: &BTreeMap<EntityId, Path>| v.get(&id).map(|p| p.segments.len());
-            count(&doc.vectors).is_some() && count(&doc.vectors) != count(vectors)
+            matches!(
+                (count(&doc.vectors), count(vectors)),
+                (Some(was), Some(now)) if was != now
+            )
         };
         let before = self.constraints.len();
         self.constraints
@@ -635,6 +660,50 @@ mod tests {
         assert_eq!(doc.constraints, []);
         h.undo(&mut doc);
         assert_eq!(doc.constraints.len(), 1, "undo brings it back");
+    }
+
+    #[test]
+    fn switching_sheets_keeps_the_snaps_of_what_is_put_away() {
+        let mut doc = document_with(vec![
+            square(10.0, 10.0, 20.0),
+            Path::polyline(&[p(0.0, 0.0), p(30.0, 30.0)], false),
+        ]);
+        let [sq, line] = ids(&doc)[..] else { panic!() };
+        let mut h = History::default();
+        let to = Anchor::End {
+            vector: sq,
+            node: 2,
+        };
+        let pin = Pin::Node { node: 1 };
+        constrain(
+            &mut doc,
+            &mut h,
+            vec![Constraint {
+                vector: line,
+                pin,
+                to,
+            }],
+        );
+        // the vectors go onto the sheet being left: removed here, kept there
+        let mut sheets = doc.sheets.clone();
+        sheets.push(crate::document::Sheet::new("Two", doc.job));
+        for id in [sq, line] {
+            let path = doc.vectors[&id].clone();
+            let stored = crate::document::StoredVector {
+                path,
+                layer: None,
+                group: None,
+            };
+            sheets[0].objects.vectors.insert(id, stored);
+        }
+        let mut c = Change::builder(&doc);
+        for id in [sq, line] {
+            c.remove(id);
+        }
+        c.set_sheets(sheets, 1);
+        let c = c.finish();
+        h.apply(&mut doc, c).unwrap();
+        assert_eq!(doc.constraints.len(), 1, "kept for when the sheet is back");
     }
 
     #[test]
