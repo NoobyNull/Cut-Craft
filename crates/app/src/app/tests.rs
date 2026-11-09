@@ -343,6 +343,61 @@ fn a_drawn_circle_snaps_its_edge_square_onto_a_side() {
 }
 
 #[test]
+fn a_polyline_click_snaps_to_an_end_marked_and_named_under_a_crosshair() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    let scale = f64::from(h.app.view_transform.unwrap().scale);
+    let near = 2.0 / scale; // two pixels off the corner
+    let corner = h.at(30.0 + near, 20.0 - near);
+    // hovering: the status bar names the snap, and the pointer is a crosshair
+    h.time += 0.1;
+    let input = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+        time: Some(h.time),
+        events: vec![Event::PointerMoved(corner)],
+        ..Default::default()
+    };
+    let out = headless(h.ctx.run_ui(input, |ui| h.app.pass(ui)));
+    assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Crosshair);
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(hint.starts_with("Snapped to End"), "{hint}");
+    h.click(corner, Modifiers::NONE);
+    assert_eq!(h.app.polyline.points, vec![Point::new(30.0, 20.0)]);
+    // Shift places it freely
+    let other = h.at(10.0 + near, 10.0 + near);
+    h.click(other, Modifiers::SHIFT);
+    let last = *h.app.polyline.points.last().unwrap();
+    assert!(last.distance(Point::new(10.0, 10.0)) > 1e-6, "{last:?}");
+}
+
+#[test]
+fn a_polylines_next_point_snaps_tangent_to_a_circle() {
+    let mut h = Harness::new();
+    let circle = serde_json::json!({ "center": { "x": 50.0, "y": 70.0 }, "radius": 10.0 });
+    h.app.apply("draw_circle", &circle).unwrap();
+    h.app.form = None;
+    h.app.snap.job_center_and_corners = false;
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    h.app.polyline.click(Point::new(70.0, 70.0));
+    let scale = h.app.view_transform.unwrap().scale;
+    let near = Point::new(55.3, 61.6);
+    let mut found = None;
+    let ctx = h.ctx.clone();
+    headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            found = h.app.snapping(ui, None, scale, Some(near)).1;
+        });
+    }));
+    let hit = found.expect("a snap");
+    assert_eq!(hit.kind, cut_craft_core::snap::SnapKind::Tangent);
+    let tangent = Point::new(55.0, 70.0 - 75.0_f64.sqrt());
+    assert!(hit.at.distance(tangent) < 1e-6, "{hit:?}");
+}
+
+#[test]
 fn a_freehand_stroke_does_not_snap_square_onto_a_side() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 40.0);

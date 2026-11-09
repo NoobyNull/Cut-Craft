@@ -45,6 +45,10 @@ impl CutCraftApp {
         self.track_stroke(gesture);
         let hovered = response.hover_pos().and_then(to_job);
         self.cursor = hovered;
+        // drawing: a crosshair, to place points by
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        }
         let preview = self.preview_3d(gesture, hovered, id, reach);
         let stroke = ui.visuals().selection.stroke;
         let painter = ui.painter_at(area);
