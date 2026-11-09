@@ -2,9 +2,11 @@
 //! picked (and the folders in it; in all of them when none is) as tiles: pictures and 3D
 //! models as previews, drawings by their kind. Tiles are picked with a click (Ctrl or
 //! Shift for more), added to the project with a double-click or by dragging, and a
-//! right-click menu adds, locates, tags or deletes the ones picked.
+//! right-click menu adds, locates, tags or deletes the ones picked, or shows one's Properties.
 
+mod network;
 mod preview;
+mod properties;
 mod tags;
 
 use cut_craft_bug_report::hint::HoverHint;
@@ -29,6 +31,8 @@ const BITMAPS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff"];
 const LOCKED: [&str; 2] = ["3dclip", "v3m"];
 /// How often the folders are read again, for files added, moved or taken away meanwhile.
 const RELIST: Duration = Duration::from_secs(5);
+/// How often a network folder that couldn't be reached is tried again.
+const RETRY: Duration = Duration::from_secs(30);
 /// At most this many files are listed, so a folder as big as a whole drive can't swamp it.
 const MOST: usize = 100_000;
 /// The folder tree's height at most, in rows of the theme's interactive height.
@@ -38,13 +42,20 @@ const TREE_ROWS: f32 = 10.0;
 pub type Importable = HashSet<String>;
 /// Whether each picture is greyscale (a depth map), by the [`preview::stamp`] it had.
 type Greys = HashMap<PathBuf, (u64, bool)>;
-/// Folders read in the background: which, what is in them, and the greys learnt.
-type Read = (Vec<PathBuf>, Listing, Greys);
+/// Folders read in the background: which, what is in them, the greys learnt, and each
+/// folder that wasn't there looked for again (a network share): where it is now, if found.
+type Read = (
+    Vec<PathBuf>,
+    Listing,
+    Greys,
+    Vec<(PathBuf, Option<PathBuf>)>,
+);
 
 /// The library's folders, kept between runs, and the one being looked in.
 #[derive(Default)]
 pub struct Clipart {
-    /// The folders added to the library: the tree's roots.
+    /// The folders added to the library: the tree's roots. One on a network share that
+    /// hasn't been found on this computer yet is its location (`smb://host/share/...`).
     pub folders: Vec<PathBuf>,
     /// The folder looked in, with the folders in it; `None`: all of them.
     pub open: Option<PathBuf>,
@@ -60,6 +71,9 @@ pub struct Clipart {
     reading: Option<mpsc::Receiver<Read>>,
     /// Read the folders again as soon as they can be (a file was deleted).
     again: bool,
+    /// The network folders looked for and not reached, and when that was.
+    unreached: HashSet<PathBuf>,
+    tried: Option<Instant>,
     /// Only files whose names or tags have this in them are shown.
     pub search: String,
     /// Only files of this kind are shown.
@@ -75,6 +89,8 @@ pub struct Clipart {
     greys: Greys,
     /// The last thing that went wrong, until the next action.
     trouble: Option<String>,
+    /// Properties: the file shown in the window, while it is open.
+    properties: Option<properties::Properties>,
     /// How many tiles were drawn last.
     #[cfg(test)]
     drawn: usize,
@@ -243,7 +259,7 @@ impl Clipart {
         }
         self.open = folder;
         if let Some(store) = &self.store
-            && let Ok(bytes) = serde_json::to_vec(&self.open)
+            && let Ok(bytes) = serde_json::to_vec(&self.open.as_deref().map(network::kept))
         {
             // only a convenience: not remembered, all the folders are shown next time
             let _ = cut_craft_core::file::write_atomic(&open_path(store), &bytes);
@@ -253,7 +269,10 @@ impl Clipart {
     /// Adds `folder` and looks in it. One inside a folder already added is only looked in
     /// (it is in the tree already); the folders inside one added are in it, so they go.
     pub fn add(&mut self, folder: PathBuf) -> Result<(), String> {
-        let saved = if self.folders.iter().any(|f| folder.starts_with(f)) {
+        let kept = network::kept(&folder);
+        let saved = if (self.folders.iter())
+            .any(|f| folder.starts_with(f) || kept.starts_with(network::kept(f)))
+        {
             Ok(())
         } else {
             self.folders.push(folder.clone());
@@ -275,7 +294,10 @@ impl Clipart {
 
     fn save(&self) -> Result<(), String> {
         match &self.store {
-            Some(path) => crate::files::save_recent(&self.folders, path),
+            Some(path) => {
+                let kept: Vec<PathBuf> = self.folders.iter().map(|f| network::kept(f)).collect();
+                crate::files::save_recent(&kept, path)
+            }
             None => Ok(()),
         }
     }
@@ -298,13 +320,15 @@ impl Clipart {
             let roots = self.folders.clone();
             let importable = importable.clone();
             let mut greys = std::mem::take(&mut self.greys);
+            let look = self.tried.is_none_or(|at| at.elapsed() > RETRY);
             let (send, receive) = mpsc::channel();
             let ctx = ctx.clone();
             let spawned = std::thread::Builder::new()
                 .name("library reading".into())
                 .spawn(move || {
+                    let found = if look { look_for(&roots) } else { Vec::new() };
                     let listing = read_all(&roots, &importable, &mut greys);
-                    let _ = send.send((roots, listing, greys));
+                    let _ = send.send((roots, listing, greys, found));
                     ctx.request_repaint();
                 });
             if spawned.is_ok() {
@@ -315,9 +339,10 @@ impl Clipart {
     }
 
     /// Folders read: shown from now on.
-    fn read(&mut self, (roots, listing, greys): Read) {
+    fn read(&mut self, (roots, listing, greys, found): Read) {
         self.reading = None;
         self.greys = greys;
+        self.found(found);
         // files gone since (deleted or moved elsewhere) are no longer picked
         let there: HashSet<&Path> = (listing.entries.iter()).map(|e| e.file.as_path()).collect();
         self.selected.retain(|f| there.contains(f.as_path()));
@@ -329,8 +354,47 @@ impl Clipart {
     pub(crate) fn read_now(&mut self, importable: &Importable) {
         let roots = self.folders.clone();
         let mut greys = std::mem::take(&mut self.greys);
+        let found = look_for(&roots);
         let listing = read_all(&roots, importable, &mut greys);
-        self.read((roots, listing, greys));
+        self.read((roots, listing, greys, found));
+    }
+
+    /// Folders looked for again: each found takes the place of the location (or the old
+    /// path) it was kept as, and the folder looked in moves with it; those not found are
+    /// tried again after [`RETRY`].
+    fn found(&mut self, found: Vec<(PathBuf, Option<PathBuf>)>) {
+        if found.is_empty() {
+            return;
+        }
+        self.unreached.clear();
+        for (was, now) in found {
+            let Some(now) = now else {
+                self.unreached.insert(was);
+                continue;
+            };
+            if now == was {
+                continue;
+            }
+            for folder in &mut self.folders {
+                if *folder == was {
+                    folder.clone_from(&now);
+                }
+            }
+            if let Some(open) = &mut self.open
+                && let Ok(rest) = open.strip_prefix(&was)
+            {
+                *open = now.join(rest);
+            }
+        }
+        self.folders = outermost(&self.folders);
+        self.tried = (!self.unreached.is_empty()).then(Instant::now);
+    }
+
+    /// Whether `folder` (one of the roots) is on a network share that is being connected
+    /// to (`Some(false)`) or couldn't be reached (`Some(true)`); `None` if it isn't one.
+    fn unreachable(&self, folder: &Path) -> Option<bool> {
+        let network = network::is_location(folder) || network::location(folder).is_some();
+        network.then(|| self.unreached.contains(folder))
     }
 
     /// `file` clicked: picked alone, or (`toggle`, Ctrl) in or out of what is picked, or
@@ -396,6 +460,21 @@ impl Clipart {
             entry.kind
         }
     }
+}
+
+/// Where each of `roots` that isn't there (a network location, or a share's old mount)
+/// is now, if it can be found.
+fn look_for(roots: &[PathBuf]) -> Vec<(PathBuf, Option<PathBuf>)> {
+    (roots.iter())
+        .filter(|r| !there(r))
+        .map(|r| (r.clone(), network::find(r)))
+        .collect()
+}
+
+/// Whether `folder` is a folder on this computer now (a network location isn't, until it
+/// is found mounted).
+fn there(folder: &Path) -> bool {
+    !network::is_location(folder) && folder.is_dir()
 }
 
 /// `folders` without any inside another of them (or the same again): each is in the
@@ -572,7 +651,10 @@ pub fn panel(
     if clipart.listing.is_none() {
         clipart.listing = taken;
     }
-    picked
+    match properties::window(ui.ctx(), &mut clipart.properties) {
+        Some(properties::Asked::Locate(file)) => Some(Picked::Locate(file)),
+        None => picked,
+    }
 }
 
 /// What the folder tree asks for.
@@ -612,7 +694,20 @@ fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Optio
                     tree.all = true;
                 }
                 for root in &clipart.folders {
-                    node(ui, root, true, listing, clipart.open.as_deref(), &mut tree);
+                    let tag = (!there(root)).then(|| match clipart.unreachable(root) {
+                        Some(false) => "connecting...",
+                        Some(true) => "can't reach",
+                        None => "not found",
+                    });
+                    node(
+                        ui,
+                        root,
+                        true,
+                        tag,
+                        listing,
+                        clipart.open.as_deref(),
+                        &mut tree,
+                    );
                 }
             });
     }
@@ -655,20 +750,21 @@ fn folders(ui: &mut egui::Ui, clipart: &mut Clipart, listing: &Listing) -> Optio
 }
 
 /// A folder in the tree, named with how many files are in it (and the folders in it), and
-/// the folders in it below it, folded away until opened.
+/// the folders in it below it, folded away until opened. `missing` says why a root folder
+/// isn't there (`None` for one that is, and for the folders in a root).
 fn node(
     ui: &mut egui::Ui,
     folder: &Path,
     root: bool,
+    missing: Option<&str>,
     listing: &Listing,
     open: Option<&Path>,
     tree: &mut Tree,
 ) {
     let count = listing.counts.get(folder).copied().unwrap_or(0);
-    let text = if root && !folder.is_dir() {
-        egui::RichText::new(format!("{} (not found)", name(folder))).weak()
-    } else {
-        egui::RichText::new(format!("{} ({count})", name(folder)))
+    let text = match missing {
+        Some(why) => egui::RichText::new(format!("{} ({why})", name(folder))).weak(),
+        None => egui::RichText::new(format!("{} ({count})", name(folder))),
     };
     // the folders in it come straight after it, in order
     let inside: Vec<&PathBuf> = (listing.counts.range(folder.to_path_buf()..))
@@ -711,7 +807,7 @@ fn node(
         .show_header(ui, |ui| label(ui, tree))
         .body(|ui| {
             for f in inside {
-                node(ui, f, false, listing, open, tree);
+                node(ui, f, false, None, listing, open, tree);
             }
         });
 }
@@ -726,16 +822,44 @@ fn files(
     levels: &[(u64, String)],
 ) -> Option<Picked> {
     if let Some(open) = &clipart.open
-        && !open.is_dir()
+        && !there(open)
     {
-        ui.colored_label(
-            ui.visuals().warn_fg_color,
-            format!(
-                "{} isn't there. If it's on a drive that isn't plugged in, plug it in; if it \
-                 was moved, use Remove Folder and add it again from where it is now.",
-                open.display()
-            ),
-        );
+        let root = (clipart.folders.iter()).find(|f| open.starts_with(f));
+        let warn = ui.visuals().warn_fg_color;
+        match root.and_then(|r| clipart.unreachable(r)) {
+            Some(false) => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.weak(format!(
+                        "Connecting to {}...",
+                        network::kept(open).display()
+                    ));
+                });
+            }
+            Some(true) => {
+                ui.colored_label(
+                    warn,
+                    format!(
+                        "Can't reach {} on the network right now. Check that the computer or \
+                         NAS it's on is turned on and that you're on the same network. If your \
+                         file manager asks for a password for it, open it there once. It shows \
+                         up here again by itself as soon as it can be reached.",
+                        network::kept(open).display()
+                    ),
+                );
+            }
+            None => {
+                ui.colored_label(
+                    warn,
+                    format!(
+                        "{} isn't there. If it's on a drive that isn't plugged in, plug it in; \
+                         if it was moved, use Remove Folder and add it again from where it is \
+                         now.",
+                        open.display()
+                    ),
+                );
+            }
+        }
         return None;
     }
     let under = |f: &Path| match &clipart.open {
@@ -1155,6 +1279,22 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
             }
         }
         picked = Some(Picked::Delete(doomed));
+    }
+    ui.separator();
+    if ui
+        .button("Properties")
+        .on_hover_hint("Its size, date, tags and where it is.")
+        .clicked()
+    {
+        let file = &tile.entry.file;
+        clipart.properties = Some(properties::Properties::new(
+            file,
+            clipart.kind(tile.entry),
+            tile.entry.picture.as_deref(),
+            clipart.tags.of(file).map(str::to_owned).collect(),
+            &clipart.folders,
+            Some(ui.ctx()),
+        ));
     }
     picked
 }
@@ -1735,6 +1875,138 @@ mod tests {
             std::slice::from_ref(&dir)
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Where `text` is drawn in `shapes`, if it is.
+    fn text_at(shapes: &[egui::epaint::ClippedShape], text: &str) -> Option<egui::Pos2> {
+        shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos + t.galley.size() / 2.0),
+            _ => None,
+        })
+    }
+
+    /// Right-click ▸ Properties, at the bottom of a tile's menu, opens a window about the
+    /// file: its kind, size, tags and where it is. Escape closes it.
+    #[test]
+    fn properties_from_the_menu() {
+        let dir = folder("properties");
+        let file = dir.join("eagle.stl");
+        std::fs::write(&file, "").unwrap();
+        let stl = importable(&["stl"]);
+        let mut clipart = Clipart {
+            folders: vec![dir.clone()],
+            ..Clipart::default()
+        };
+        clipart
+            .tags
+            .add(std::slice::from_ref(&file), "birds")
+            .unwrap();
+        clipart.read_now(&stl);
+        let ctx = egui::Context::default();
+        let frame = |clipart: &mut Clipart, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 800.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    panel(ui, clipart, &stl, &[]);
+                });
+            });
+            out.textures_delta.clear();
+            out.shapes
+        };
+        let click = |at: egui::Pos2, button: egui::PointerButton| {
+            [true, false].map(|pressed| egui::Event::PointerButton {
+                pos: at,
+                button,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            })
+        };
+        let shapes = frame(&mut clipart, vec![]);
+        let tile = text_at(&shapes, "eagle.stl").expect("the tile's name");
+        frame(&mut clipart, vec![egui::Event::PointerMoved(tile)]);
+        for e in click(tile, egui::PointerButton::Secondary) {
+            frame(&mut clipart, vec![e]);
+        }
+        // a new menu is drawn unseen for a frame while egui sizes it
+        frame(&mut clipart, vec![]);
+        let shapes = frame(&mut clipart, vec![]);
+        let item = text_at(&shapes, "Properties").expect("Properties in the menu");
+        let report = text_at(&shapes, "Report a Bug Here…").expect("the bug report item");
+        assert!(item.y < report.y, "Properties comes before Report a Bug");
+        frame(&mut clipart, vec![egui::Event::PointerMoved(item)]);
+        for e in click(item, egui::PointerButton::Primary) {
+            frame(&mut clipart, vec![e]);
+        }
+        clipart
+            .properties
+            .as_mut()
+            .expect("the window is open")
+            .wait();
+        frame(&mut clipart, vec![]);
+        let shapes = frame(&mut clipart, vec![]);
+        for text in ["3D model (STL file)", "birds", "0 bytes"] {
+            assert!(text_at(&shapes, text).is_some(), "{text} is shown");
+        }
+        assert!(
+            text_at(&shapes, &file.display().to_string()).is_some(),
+            "its path"
+        );
+        let escape = egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(&mut clipart, vec![escape]);
+        assert!(clipart.properties.is_none(), "Escape closes it");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A folder added from a network share's FUSE mount (as KDE's file dialog gives it) is
+    /// kept by its share's location, not by the mount, whose name changes every session; a
+    /// share that can't be reached stays in the Library, and comes back where it's mounted
+    /// now when it can be.
+    #[test]
+    fn network_folders_last() {
+        let store = folder("network").join("clipart.json");
+        let monday = PathBuf::from("/run/user/1000/kio-fuse-UrUqhD/smb/synology.local/STL/A-Team");
+        let mut library = Clipart::kept(Some(store.clone()));
+        library.add(monday.join("02_CLUB A")).unwrap();
+        assert_eq!(library.folders, [monday.join("02_CLUB A")]);
+        let url = PathBuf::from("smb://synology.local/STL/A-Team/02_CLUB A");
+        assert_eq!(
+            crate::files::load_recent(&store),
+            std::slice::from_ref(&url)
+        );
+        // the same folder from tomorrow's mount isn't added again
+        let tuesday = PathBuf::from("/run/user/1000/kio-fuse-NeWtOk/smb/synology.local/STL/A-Team");
+        library.add(tuesday.join("02_CLUB A")).unwrap();
+        assert_eq!(library.folders.len(), 1);
+
+        // next run: kept, and looked in, while the share isn't reached
+        let mut again = Clipart::kept(Some(store.clone()));
+        assert_eq!(again.folders, std::slice::from_ref(&url));
+        assert_eq!(again.open, Some(url.clone()));
+        assert_eq!(again.unreachable(&url), Some(false), "connecting at first");
+        again.found(vec![(url.clone(), None)]);
+        assert_eq!(again.folders, std::slice::from_ref(&url), "not dropped");
+        assert_eq!(again.unreachable(&url), Some(true));
+        // ... and found mounted somewhere new
+        let now = folder("network-mount");
+        again.found(vec![(url.clone(), Some(now.clone()))]);
+        assert_eq!(again.folders, std::slice::from_ref(&now));
+        assert_eq!(again.open, Some(now.clone()));
+        assert_eq!(again.unreachable(&now), None);
+        // a local folder that's gone is only not found
+        assert_eq!(again.unreachable(Path::new("/media/usb/STL")), None);
     }
 
     /// The folders in the folders added are read too, however deep, and counted for the
