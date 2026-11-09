@@ -4,6 +4,7 @@
 use cut_craft_core::Drag;
 use cut_craft_core::document::{Document, EntityId, Job, Units};
 use cut_craft_core::geometry::{Path, Point, Rect as JobRect};
+use cut_craft_core::glam::DAffine2;
 use cut_craft_core::toolpath::MoveKind;
 use eframe::egui::{self, PointerButton, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2};
 use std::f32::consts::FRAC_PI_2;
@@ -187,6 +188,12 @@ pub enum Overlay {
     None,
     /// What the active drawing tool would create.
     Preview(Vec<Path>),
+    /// A drag moving, scaling or turning the selection: the outlines as they will be, and
+    /// each model with the transform carrying it.
+    Moving {
+        paths: Vec<Path>,
+        components: Vec<(EntityId, DAffine2)>,
+    },
     /// Node editing: handles on the selected vectors' nodes, and a node's drag in progress.
     Nodes {
         at: Vec<Point>,
@@ -387,41 +394,50 @@ impl Canvas {
         );
     }
 
-    /// Every visible component as a greyscale depth map.
-    fn paint_components(&self, ui: &egui::Ui, painter: &egui::Painter, doc: &Document) {
+    /// Every visible component as a greyscale depth map; one being dragged (in `moving`)
+    /// faint where it is and drawn as the drag will leave it.
+    fn paint_components(
+        &self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        doc: &Document,
+        stamp: Stamp,
+        moving: &[(EntityId, DAffine2)],
+    ) {
         let t = self.transform;
-        // components as greyscale depth maps, as Aspire's 2D view shows them; the texture is
-        // remade when the shaped heights change (their bit pattern is hashed each frame)
-        for (id, component) in doc.components.iter().filter(|(_, c)| c.visible) {
-            let hash = component
-                .shaped_heights()
-                .into_iter()
-                .fold(0xcbf2_9ce4_8422_2325_u64, |h, z| {
-                    (h ^ z.to_bits()).wrapping_mul(0x0100_0000_01b3)
-                });
-            let key = egui::Id::unique(("component", id.0, hash));
-            let ctx = ui.ctx();
-            let texture = ctx
-                .data_mut(|d| d.get_temp::<egui::TextureHandle>(key))
-                .unwrap_or_else(|| {
-                    let pixels: Vec<egui::Color32> = component
-                        .shade()
-                        .into_iter()
-                        .map(|g| g.map_or(egui::Color32::TRANSPARENT, egui::Color32::from_gray))
-                        .collect();
-                    let image = egui::ColorImage::new([component.columns, component.rows], pixels);
-                    let texture = ctx.load_texture(
-                        format!("component {}", id.0),
-                        fitting(ctx, image),
-                        egui::TextureOptions::LINEAR,
-                    );
-                    ctx.data_mut(|d| d.insert_temp(key, texture.clone()));
-                    texture
-                });
+        let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+        for (&id, component) in doc.components.iter().filter(|(_, c)| c.visible) {
+            let texture = component_texture(ui.ctx(), id, component, stamp);
             let e = component.extent();
             let at = Rect::from_two_pos(t.to_screen(e.min), t.to_screen(e.max));
-            let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-            painter.image(texture.id(), at, whole, egui::Color32::WHITE);
+            let Some((_, by)) = moving.iter().find(|(m, _)| *m == id) else {
+                painter.image(texture.id(), at, whole, egui::Color32::WHITE);
+                continue;
+            };
+            painter.image(
+                texture.id(),
+                at,
+                whole,
+                egui::Color32::from_white_alpha(MOVING_FADE),
+            );
+            // the picture's corners carried by the drag: turned, stretched or mirrored with it
+            let mut mesh = egui::Mesh::with_texture(texture.id());
+            let corners = [
+                (Point::new(e.min.x, e.max.y), pos2(0.0, 0.0)),
+                (e.max, pos2(1.0, 0.0)),
+                (Point::new(e.max.x, e.min.y), pos2(1.0, 1.0)),
+                (e.min, pos2(0.0, 1.0)),
+            ];
+            for (corner, uv) in corners {
+                mesh.vertices.push(egui::epaint::Vertex {
+                    pos: t.to_screen(by.transform_point2(corner)),
+                    uv,
+                    color: egui::Color32::WHITE,
+                });
+            }
+            mesh.add_triangle(0, 1, 2);
+            mesh.add_triangle(0, 2, 3);
+            painter.add(Shape::mesh(mesh));
         }
     }
 
@@ -596,10 +612,16 @@ impl Canvas {
                 painter.add(Shape::line(screen(&v.path.transformed(&turn)), faint));
             }
         }
-        // keep-out zones in the warning colour, heavier than vectors
+        // keep-out zones in the warning colour, heavier than vectors, each named at its
+        // top-left corner while labels are shown
         let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
-        for path in &doc.keep_out_zones() {
-            painter.add(Shape::line(screen(path), zone));
+        for z in doc.named_keep_out() {
+            painter.add(Shape::line(screen(&z.path), zone));
+            if display.keep_out_labels {
+                let b = z.path.bounds();
+                let corner = t.to_screen(Point::new(b.min.x, b.max.y));
+                zone_label(painter, ui, corner, &z.label());
+            }
         }
     }
 
@@ -627,6 +649,7 @@ impl Canvas {
         overlay: &Overlay,
         highlighted: Option<EntityId>,
         display: &crate::display::Display,
+        stamp: Stamp,
     ) {
         let painter = ui.painter_at(self.area);
         let visuals = ui.visuals();
@@ -644,7 +667,11 @@ impl Canvas {
             let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
             painter.image(texture.id(), at, whole, egui::Color32::WHITE);
         }
-        self.paint_components(ui, &painter, doc);
+        let moving = match overlay {
+            Overlay::Moving { components, .. } => components.as_slice(),
+            _ => &[],
+        };
+        self.paint_components(ui, &painter, doc, stamp, moving);
         let datum = visuals.widgets.noninteractive.fg_stroke;
         let (o, area) = (t.origin, self.area);
         for line in [
@@ -681,7 +708,7 @@ impl Canvas {
 
         match overlay {
             Overlay::None => {}
-            Overlay::Preview(paths) => {
+            Overlay::Preview(paths) | Overlay::Moving { paths, .. } => {
                 for path in paths {
                     painter.add(Shape::line(screen(path), selected));
                 }
@@ -723,6 +750,69 @@ impl Canvas {
             }
         }
     }
+}
+
+/// How faint a dragged component is drawn where it was, out of 255.
+const MOVING_FADE: u8 = 70;
+
+/// Which job and which change of it the 2D view draws: what it keeps of the job (its
+/// models' pictures) is checked again only when this changes.
+pub type Stamp = (u64, u64);
+
+/// A component's picture as last drawn: for which [`Stamp`], from which heights (their
+/// hash), and the texture itself (one a component: a new picture lets the old one go).
+#[derive(Clone)]
+struct ComponentPicture {
+    stamp: Stamp,
+    hash: u64,
+    texture: egui::TextureHandle,
+}
+
+/// Component `id`'s picture: its heights hashed only when the job has changed since it
+/// was last drawn, and the picture made again only when they have.
+fn component_texture(
+    ctx: &egui::Context,
+    id: EntityId,
+    component: &cut_craft_core::component::Component,
+    stamp: Stamp,
+) -> egui::TextureHandle {
+    let key = egui::Id::unique(("component picture", id.0));
+    let kept = ctx.data(|d| d.get_temp::<ComponentPicture>(key));
+    if let Some(kept) = &kept
+        && kept.stamp == stamp
+    {
+        return kept.texture.clone();
+    }
+    let hash = component
+        .shaped_heights()
+        .into_iter()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |h, z| {
+            (h ^ z.to_bits()).wrapping_mul(0x0100_0000_01b3)
+        })
+        ^ ((component.columns as u64) << 32 | component.rows as u64);
+    let texture = match kept {
+        Some(kept) if kept.hash == hash => kept.texture,
+        _ => {
+            let pixels: Vec<egui::Color32> = component
+                .shade()
+                .into_iter()
+                .map(|g| g.map_or(egui::Color32::TRANSPARENT, egui::Color32::from_gray))
+                .collect();
+            let image = egui::ColorImage::new([component.columns, component.rows], pixels);
+            ctx.load_texture(
+                format!("component {}", id.0),
+                fitting(ctx, image),
+                egui::TextureOptions::LINEAR,
+            )
+        }
+    };
+    let picture = ComponentPicture {
+        stamp,
+        hash,
+        texture: texture.clone(),
+    };
+    ctx.data_mut(|d| d.insert_temp(key, picture));
+    texture
 }
 
 /// `bitmap`'s texture: uploaded once, and kept while the bitmap is the same size.
@@ -777,6 +867,20 @@ fn to_f32(v: f64) -> f32 {
 
 /// How strongly the active toolpath tile is shaded in the 2D view.
 const ACTIVE_TILE_SHADE: f32 = 0.15;
+
+/// A keep-out zone's label ("Keep-out: Clamp 1"), small, in the warning colour on the
+/// panel's background so it reads over whatever is under it, its top-left corner just in
+/// from `corner`.
+pub fn zone_label(painter: &egui::Painter, ui: &egui::Ui, corner: Pos2, text: &str) {
+    let visuals = ui.visuals();
+    let font = egui::TextStyle::Small.resolve(ui.style());
+    let galley = painter.layout_no_wrap(text.to_owned(), font, visuals.error_fg_color);
+    let pad = ui.spacing().item_spacing.x / 2.0;
+    let at = corner + egui::vec2(2.0 * pad, 2.0 * pad);
+    let back = egui::Rect::from_min_size(at, galley.size()).expand(pad);
+    painter.rect_filled(back, pad, visuals.panel_fill.gamma_multiply(0.85));
+    painter.galley(at, galley, visuals.error_fg_color);
+}
 
 #[cfg(test)]
 mod tests {

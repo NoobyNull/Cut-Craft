@@ -281,7 +281,8 @@ say "not implemented yet".
   job's); and Confirmation Choices: crossing vectors for pocket and V-carve toolpaths and for
   radiused and sharp offsets (ask, open the Vector Validator, or don't check), and whether the
   checks before cutting ask before saving.
-- Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
+- Keep-Out Zones (Toolpaths menu; named, with labels in both views; a toolpath that would cut
+  into one is not made unless Options allow clipping it there), Transform mode
   (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
 - View ▸ Save Shaded Image: the 3D view (the model, or the preview) saved as a PNG, cut
   from the window's picture once the 3D view is shown.
@@ -409,10 +410,13 @@ say "not implemented yet".
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Cut Craft's own Rectangle
     from Center and Circle from Edge (the drag is the diameter).
-  - Toolbox flyouts (Cut Craft's own; Aspire shows every tool as its own icon): tools that
-    do one job different ways share a button with an arrow in its corner, showing the one
-    picked last; click the arrow, hold the button, or press Down on it for the rest
-    (`crates/app/src/flyout.rs`). Drawing tab 78 buttons to 44, Modeling 23 to 20.
+  - Toolbox tool groups (Cut Craft's own; Aspire shows every tool as a loose icon): tools
+    that do one job different ways sit together in a box captioned with what they are for,
+    every tool its own button (`crates/app/src/flyout.rs`). Options ▸ General ▸ Fold tool
+    groups into one button (or a toolbox button's right-click menu) folds each box into a
+    flyout button with an arrow in its corner, showing the one picked last; click the arrow,
+    hold the button, or press Down on it for the rest. Folded: Drawing tab 78 buttons to 44,
+    Modeling 23 to 20.
   - Design sub-tabs (Cut Craft's own; Aspire runs every group down one page): File
     Operations and 2D View Control stay at the top; Create, Edit, Arrange and Model across
     the page each show a few groups (`DESIGN_SUBTABS` in `crates/app/src/gui.rs`). A tool
