@@ -8233,3 +8233,244 @@ fn gadgets_ends_with_add_ons_which_opens_its_window() {
     h.app.invoke(&h.ctx, "addons");
     assert!(h.app.addons.open);
 }
+
+/// The screen boxes of the pictures the last frame drew in full (models; one being dragged
+/// is also drawn faint where it was).
+fn textured_meshes(h: &Harness) -> Vec<Rect> {
+    h.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Mesh(m)
+                if m.texture_id != egui::TextureId::default()
+                    && m.vertices.iter().all(|v| v.color == egui::Color32::WHITE) =>
+            {
+                let mut r = Rect::NOTHING;
+                for v in &m.vertices {
+                    r.extend_with(v.pos);
+                }
+                Some(r)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A 60 × 40 mm model at (100, 100) on a new job, picked and drawn.
+fn picked_model(h: &mut Harness) -> cut_craft_core::geometry::Rect {
+    use cut_craft_core::component::{Combine, Component};
+    let o = h.app.doc.job.area().min;
+    let rect = cut_craft_core::geometry::Rect::new(
+        o + Point::new(100.0, 100.0),
+        o + Point::new(160.0, 140.0),
+    );
+    let mut c = Change::builder(&h.app.doc);
+    let id = c.add_component(Component::from_fn("model", Combine::Add, rect, 1.0, |p| {
+        Some(1.0 + (p.x - rect.min.x) / 10.0)
+    }));
+    h.app.record(Ok(c.finish()), "added");
+    h.app.doc.selected_components = [id].into();
+    h.frame(vec![]);
+    rect
+}
+
+#[test]
+fn a_model_follows_a_2d_handle_drag_as_it_goes_and_changes_only_when_let_go() {
+    let mut h = Harness::new();
+    let rect = picked_model(&mut h);
+    let o = h.app.doc.job.area().min;
+    let at = |h: &Harness, p: Point| h.at(p.x - o.x, p.y - o.y);
+    let (corner, far) = (at(&h, rect.max), at(&h, rect.max + Point::new(30.0, 20.0)));
+    let before = h.app.doc.components.values().next().unwrap().extent();
+    h.frame(vec![Event::PointerMoved(corner)]);
+    h.press(corner, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(corner.lerp(far, 0.5))]);
+    h.frame(vec![Event::PointerMoved(far)]);
+    // mid-drag: the model's picture is drawn stretched to the pointer, the model unchanged
+    let drawn = textured_meshes(&h);
+    assert_eq!(drawn.len(), 1, "the model drawn as it will be: {drawn:?}");
+    assert!(
+        (drawn[0].right() - far.x).abs() < 2.0 && (drawn[0].top() - far.y).abs() < 2.0,
+        "{drawn:?} reaches the pointer at {far:?}"
+    );
+    assert_eq!(
+        h.app.doc.components.values().next().unwrap().extent(),
+        before,
+        "nothing changes until let go"
+    );
+    h.press(far, false, Modifiers::NONE);
+    h.frame(vec![]);
+    let drawn = textured_meshes(&h);
+    assert_eq!(drawn.len(), 1, "drawn once, where it now is: {drawn:?}");
+    let after = h.app.doc.components.values().next().unwrap().extent();
+    assert!(
+        (after.max - (rect.max + Point::new(30.0, 20.0))).length() < 1.5,
+        "{after:?}"
+    );
+}
+
+#[test]
+fn a_model_dragged_in_the_2d_view_is_drawn_where_it_is_going() {
+    let mut h = Harness::new();
+    let rect = picked_model(&mut h);
+    let o = h.app.doc.job.area().min;
+    let at = |h: &Harness, p: Point| h.at(p.x - o.x, p.y - o.y);
+    let (from, to) = (
+        at(&h, rect.center()),
+        at(&h, rect.center() + Point::new(40.0, 0.0)),
+    );
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+    h.frame(vec![Event::PointerMoved(to)]);
+    let drawn = textured_meshes(&h);
+    assert_eq!(drawn.len(), 1, "{drawn:?}");
+    assert!(
+        (drawn[0].center().x - to.x).abs() < 2.0,
+        "{drawn:?} at {to:?}"
+    );
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+}
+
+#[test]
+fn editing_a_model_again_and_again_keeps_one_picture_of_it() {
+    let mut h = Harness::new();
+    picked_model(&mut h);
+    let textures = |h: &Harness| h.ctx.tex_manager().read().num_allocated();
+    let before = textures(&h);
+    for _ in 0..4 {
+        let change = Change::transform_selected(&h.app.doc, |_| {
+            cut_craft_core::glam::DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(1.1))
+        });
+        h.app.record(change, "scaled");
+        h.frame(vec![]);
+    }
+    assert_eq!(textures(&h), before, "the old pictures are let go");
+}
+
+#[test]
+fn the_3d_views_quick_surface_is_kept_until_the_model_changes() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let kept = h.app.rough_3d.as_ref().map(|(key, _)| *key);
+    assert!(kept.is_some(), "made once");
+    h.frame(vec![]);
+    assert_eq!(h.app.rough_3d.as_ref().map(|(key, _)| *key), kept, "kept");
+    h.app.doc.selected_components = [EntityId(1)].into();
+    let change = Change::transform_selected(&h.app.doc, |_| {
+        cut_craft_core::glam::DAffine2::from_translation(cut_craft_core::glam::DVec2::X)
+    });
+    h.app.record(change, "moved");
+    h.frame(vec![]);
+    assert_ne!(
+        h.app.rough_3d.as_ref().map(|(key, _)| *key),
+        kept,
+        "made again"
+    );
+}
+
+#[test]
+fn the_detail_while_moving_is_two_steps_below_the_detail_when_still_unless_picked() {
+    use crate::options::{Detail, MovingDetail};
+    let mut v = crate::options::Options::default().view_3d;
+    assert_eq!(v.still_detail, Detail::VeryHigh);
+    assert_eq!(v.moving_detail, MovingDetail::TwoStepsLower);
+    assert_eq!(
+        v.moving_cells(),
+        Detail::Medium.cells(),
+        "Very High drops to Medium"
+    );
+    assert_eq!(v.still_cells(), Detail::VeryHigh.cells());
+    v.still_detail = Detail::Medium;
+    assert_eq!(v.moving_cells(), Detail::Low.cells(), "never below Low");
+    v.moving_detail = MovingDetail::High;
+    assert_eq!(
+        v.moving_cells(),
+        Detail::Medium.cells(),
+        "never finer while moving than when still"
+    );
+    v.still_detail = Detail::VeryHigh;
+    assert_eq!(v.moving_cells(), Detail::High.cells());
+    assert!(Detail::Low.cells() < Detail::Medium.cells());
+    assert!(Detail::High.cells() < Detail::VeryHigh.cells());
+}
+
+#[test]
+fn a_height_handle_drag_applies_its_height_at_most_ten_times_a_second() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let from = h
+        .app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == Handle3d::Height)
+        .map(|(_, at)| *at)
+        .expect("the height handle");
+    let quarter = h.app.fit_3d.unwrap().height() / VIEW_ZOOM_QUARTERS;
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    // ten moves a fiftieth of a second apart: a fifth of a second in all
+    let mut revisions = std::collections::BTreeSet::new();
+    for i in 1..=10u8 {
+        h.time -= 0.08;
+        let to = from - vec2(0.0, quarter * f32::from(i) / 10.0);
+        h.frame(vec![Event::PointerMoved(to)]);
+        revisions.insert(h.app.history.revision());
+    }
+    assert!(
+        revisions.len() <= 3,
+        "applied {} times in a fifth of a second",
+        revisions.len()
+    );
+    let to = from - vec2(0.0, quarter);
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+    let height = h.app.doc.components[&EntityId(1)].shaping.shape_height;
+    assert!(
+        (height - 200.0).abs() < 5.0,
+        "the last height is applied: {height}"
+    );
+}
+
+#[test]
+fn moving_what_a_toolpath_was_made_from_says_it_is_out_of_date() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 30.0);
+    let vector = *h.app.doc.vectors.keys().next().unwrap();
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(cut_craft_core::toolpath::Toolpath {
+        name: "Profile 1".into(),
+        strategy: "test".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![vector],
+        moves: vec![],
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+    });
+    h.app.record(Ok(c.finish()), "made");
+    h.frame(vec![]);
+    assert!(!h.app.status.message.contains("out of date"));
+    h.app.doc.selection = [vector].into();
+    h.frame(vec![]);
+    let (from, to) = (h.at(30.0, 25.0), h.at(40.0, 25.0));
+    h.drag(from, to);
+    h.frame(vec![]);
+    let message = &h.app.status.message;
+    assert!(
+        message.contains("1 toolpath is now out of date") && message.contains("G-code"),
+        "{message}"
+    );
+}
