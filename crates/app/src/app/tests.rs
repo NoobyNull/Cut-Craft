@@ -343,6 +343,65 @@ fn a_drawn_circle_snaps_its_edge_square_onto_a_side() {
 }
 
 #[test]
+fn a_polyline_click_snaps_to_an_end_marked_and_named_under_a_crosshair() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    let scale = f64::from(h.app.view_transform.unwrap().scale);
+    let near = 2.0 / scale; // two pixels off the corner
+    let corner = h.at(30.0 + near, 20.0 - near);
+    // hovering: the status bar names the snap, and the pointer is a crosshair
+    h.time += 0.1;
+    let input = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+        time: Some(h.time),
+        events: vec![Event::PointerMoved(corner)],
+        ..Default::default()
+    };
+    let out = headless(h.ctx.run_ui(input, |ui| h.app.pass(ui)));
+    assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Crosshair);
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(
+        hint.starts_with("Draw Polyline: click the first point"),
+        "{hint}"
+    );
+    assert!(hint.contains("snapped to End"), "{hint}");
+    h.click(corner, Modifiers::NONE);
+    assert_eq!(h.app.polyline.points, vec![Point::new(30.0, 20.0)]);
+    // Shift places it freely
+    let other = h.at(10.0 + near, 10.0 + near);
+    h.click(other, Modifiers::SHIFT);
+    let last = *h.app.polyline.points.last().unwrap();
+    assert!(last.distance(Point::new(10.0, 10.0)) > 1e-6, "{last:?}");
+}
+
+#[test]
+fn a_polylines_next_point_snaps_tangent_to_a_circle() {
+    let mut h = Harness::new();
+    let circle = serde_json::json!({ "center": { "x": 50.0, "y": 70.0 }, "radius": 10.0 });
+    h.app.apply("draw_circle", &circle).unwrap();
+    h.app.form = None;
+    h.app.snap.job_center_and_corners = false;
+    h.app.invoke(&h.ctx, "draw_polyline");
+    h.frame(vec![]);
+    h.app.polyline.click(Point::new(70.0, 70.0));
+    let scale = h.app.view_transform.unwrap().scale;
+    let near = Point::new(55.3, 61.6);
+    let mut found = None;
+    let ctx = h.ctx.clone();
+    headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
+            found = h.app.snapping(ui, None, scale, Some(near)).1;
+        });
+    }));
+    let hit = found.expect("a snap");
+    assert_eq!(hit.kind, cut_craft_core::snap::SnapKind::Tangent);
+    let tangent = Point::new(55.0, 70.0 - 75.0_f64.sqrt());
+    assert!(hit.at.distance(tangent) < 1e-6, "{hit:?}");
+}
+
+#[test]
 fn a_freehand_stroke_does_not_snap_square_onto_a_side() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 40.0);
@@ -1446,22 +1505,75 @@ fn every_command_has_a_line_saying_what_it_does() {
 }
 
 #[test]
-fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
+fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
+    use cut_craft_core::keep_out::KeepOutZone;
+    use cut_craft_core::toolpath::MoveKind;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
+    // a clamp over the rectangle's right-hand side
     let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
-    h.app.doc.keep_out = vec![zone];
+    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
     h.app.invoke(&h.ctx, "profile_toolpath");
     let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
+    let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
     assert!(
-        h.app.status.message.contains("keep-out"),
-        "{}",
-        h.app.status.message
+        refused.starts_with(super::actions::KEEP_OUT_REFUSED),
+        "{refused}"
     );
+    assert!(refused.contains("\"Clamp 1\""), "names the zone: {refused}");
+    assert!(
+        refused.contains("Clip toolpaths at keep-out zones"),
+        "{refused}"
+    );
+    assert_eq!(h.app.doc.toolpaths.len(), 0, "nothing made");
+    // clipping turned on in Options: made, the part under the clamp left uncut
+    h.app.options.toolpaths.clip_at_keep_out_zones = true;
+    assert!(h.app.sync_machine_keep_out());
+    h.app.apply("profile_toolpath", &params).unwrap();
+    let made = h.app.doc.toolpaths.values().next().expect("a toolpath");
+    assert_eq!(
+        h.app.zones_entered(made),
+        [] as [String; 0],
+        "{:?}",
+        made.moves
+    );
+    let cuts = made.moves.iter().filter(|m| m.kind == MoveKind::Cut);
+    assert!(
+        cuts.clone().any(|m| m.to.x > 55.0),
+        "still cut past the clamp"
+    );
+    assert!(cuts.clone().any(|m| m.to.x < 20.0));
+    // no zones: made as it was, with no warning
+    h.app.options.toolpaths.clip_at_keep_out_zones = false;
+    h.app.sync_machine_keep_out();
     h.app.doc.keep_out.clear();
     h.app.apply("profile_toolpath", &params).unwrap();
     assert!(!h.app.status.message.contains("keep-out"));
+}
+
+#[test]
+fn keep_out_zone_labels_turn_on_and_off_and_are_remembered() {
+    let mut h = Harness::new();
+    assert!(h.app.display.keep_out_labels, "shown to start with");
+    assert_eq!(
+        h.app.display.checked("show_keep_out_zone_labels"),
+        Some(true)
+    );
+    h.app.invoke(&h.ctx, "show_keep_out_zone_labels");
+    assert!(!h.app.display.keep_out_labels);
+    assert!(
+        !h.app.options.toolpaths.keep_out_labels,
+        "kept with the options"
+    );
+    // over a zone the 2D view's menu names it and says where it is edited
+    let job = crate::gui::keep_out_menu("Keep-out: Clamp 1", false, false);
+    assert_eq!(job[0].name, "Keep-out: Clamp 1");
+    assert!(!job[0].is_enabled);
+    assert_eq!(job[1].action, "keep_out_zones");
+    assert_eq!(job[2].name, "Show Keep-Out Zone Labels");
+    let machine = crate::gui::keep_out_menu("Keep-out: Machine clamp 1", true, true);
+    assert_eq!(machine[1].action, "machine_configuration");
+    assert_eq!(machine[2].name, "Hide Keep-Out Zone Labels");
 }
 
 #[test]
@@ -1507,6 +1619,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         y: 0.0,
         width: 20.0,
         height: 60.0,
+        name: String::new(),
     }];
     assert!(h.app.sync_machine_keep_out());
     h.app.keep_out_changed();
@@ -8285,4 +8398,62 @@ fn gadgets_ends_with_add_ons_which_opens_its_window() {
     assert!(h.app.available("addons"));
     h.app.invoke(&h.ctx, "addons");
     assert!(h.app.addons.open);
+}
+
+/// The status bar's text that contains `part`: its middle and how many rows it was laid in.
+fn status_text(h: &Harness, part: &str) -> Option<(Pos2, usize)> {
+    h.shapes.iter().find_map(|clipped| match &clipped.shape {
+        egui::Shape::Text(t) if t.galley.text().contains(part) && t.pos.y > 700.0 => {
+            Some((t.pos + t.galley.size() / 2.0, t.galley.rows.len()))
+        }
+        _ => None,
+    })
+}
+
+#[test]
+fn the_status_bar_stays_one_line_however_long_its_text() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+    let short = h.text_at(version).expect("the version");
+    // a Library tile's hint: its name, then on a new line what can be done with it
+    let long = format!(
+        "0331. Flowers.STL\nDouble-click to add it to the project, or drag it onto a view. {}",
+        "Click to pick it (Ctrl or Shift for more), right-click for more. ".repeat(6)
+    );
+    h.app.status.set_message(&long);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (_, rows) = status_text(&h, "Flowers.STL").expect("the status text");
+    assert_eq!(rows, 1, "one row");
+    let after = h.text_at(version).expect("the version");
+    assert!(
+        (after.y - short.y).abs() < 0.5,
+        "the bar keeps its height: {short:?} then {after:?}"
+    );
+}
+
+#[test]
+fn the_status_bar_keeps_its_hint_while_the_pointer_is_on_it() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    let hint = "0331. Flowers.STL\nDouble-click to add it to the project";
+    cut_craft_bug_report::hint::hint(&h.ctx, hint);
+    h.frame(vec![]);
+    let (at, _) = status_text(&h, "Flowers.STL").expect("the hint is shown");
+    // moving onto the bar to read it: nothing sets a hint now, yet it stays
+    h.frame(vec![Event::PointerMoved(at)]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        status_text(&h, "Flowers.STL").is_some(),
+        "the hint stays while the pointer is on the bar"
+    );
+    // and goes once the pointer leaves
+    h.frame(vec![Event::PointerMoved(egui::pos2(640.0, 300.0))]);
+    h.frame(vec![]);
+    assert!(status_text(&h, "Flowers.STL").is_none(), "gone after");
 }

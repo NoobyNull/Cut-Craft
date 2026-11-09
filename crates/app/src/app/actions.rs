@@ -431,6 +431,13 @@ impl CutCraftApp {
                 }
                 self.tool_manager = Some(manager);
             }
+            // the labels' setting is kept with the options, so they stay as left
+            "show_keep_out_zone_labels" => {
+                self.display.toggle(id);
+                self.options.toolpaths.keep_out_labels = self.display.keep_out_labels;
+                self.save_options();
+                ctx.request_repaint();
+            }
             id if self.display.toggle(id) => ctx.request_repaint(),
             id if self.resolution_checked(id).is_some() => self.set_resolution(id),
             id if self.units_checked(id).is_some() => self.set_units(id),
@@ -1035,7 +1042,8 @@ impl CutCraftApp {
     }
 
     /// The active machine's keep-out zones put on the job, as job millimetres (the G-code's,
-    /// which they are given in); true when they changed.
+    /// which they are given in), and whether Options allow clipping toolpaths at them; true
+    /// when either changed.
     pub(super) fn sync_machine_keep_out(&mut self) -> bool {
         let zones: Vec<_> = self
             .machines
@@ -1043,11 +1051,14 @@ impl CutCraftApp {
             .map(|m| m.keep_out.as_slice())
             .unwrap_or_default()
             .iter()
-            .filter(|z| z.width > 0.0 && z.height > 0.0)
-            .map(|z| z.path())
+            .enumerate()
+            .filter(|(_, z)| z.width > 0.0 && z.height > 0.0)
+            .map(|(i, z)| cut_craft_core::keep_out::KeepOutZone::new(z.name_at(i), z.path()))
             .collect();
-        let changed = zones != self.doc.machine_keep_out;
+        let clip = self.options.toolpaths.clip_at_keep_out_zones;
+        let changed = zones != self.doc.machine_keep_out || clip != self.doc.clip_keep_out;
         self.doc.machine_keep_out = zones;
+        self.doc.clip_keep_out = clip;
         changed
     }
 
@@ -1065,13 +1076,47 @@ impl CutCraftApp {
 
     /// The toolpaths of `plan` that pass over a keep-out zone, by name.
     pub(super) fn not_kept_out(&self, plan: &[Vec<EntityId>]) -> Vec<String> {
-        let zones = self.doc.keep_out_zones();
         plan.iter()
             .flatten()
             .filter_map(|id| self.doc.toolpaths.get(id))
-            .filter(|t| cut_craft_core::keep_out::crossed(&zones, &t.moves))
+            .filter(|t| !self.zones_entered(t).is_empty())
             .map(|t| t.name.clone())
             .collect()
+    }
+
+    /// The names of the keep-out zones `toolpath` cuts into (its cutter's edge reaching
+    /// one) or rapids over.
+    pub(super) fn zones_entered(
+        &self,
+        toolpath: &cut_craft_core::toolpath::Toolpath,
+    ) -> Vec<String> {
+        let radius = toolpath.tool.diameter / 2.0;
+        cut_craft_core::keep_out::entered(self.doc.named_keep_out(), &toolpath.moves, radius)
+            .into_iter()
+            .map(|z| format!("\"{}\"", z.name))
+            .collect()
+    }
+
+    /// Why `change` may not be made: a toolpath it makes would cut into a keep-out zone,
+    /// Options not allowing it to be clipped there (or it being a laser or drill bank
+    /// toolpath, which are not clipped). A clamp is never cut by mistake.
+    pub(super) fn keep_out_refusal(&self, change: &Change) -> Option<String> {
+        let refused: Vec<String> = change
+            .toolpaths_making()
+            .filter_map(|t| {
+                let zones = self.zones_entered(t);
+                (!zones.is_empty())
+                    .then(|| format!("{} would cut into {}", t.name, zones.join(" and ")))
+            })
+            .collect();
+        let way = if self.doc.clip_keep_out {
+            "Move the part or the zone (laser and drill bank toolpaths are not clipped)"
+        } else {
+            &format!(
+                "Move the part or the zone, or let toolpaths be clipped there ({CLIP_SETTING})"
+            )
+        };
+        (!refused.is_empty()).then(|| format!("{KEEP_OUT_REFUSED}: {}. {way}", refused.join("; ")))
     }
 
     pub(super) fn toolpath_action(&mut self, id: &str) {
@@ -1316,8 +1361,9 @@ impl CutCraftApp {
         let crossing = self.not_kept_out(&plan);
         if !crossing.is_empty() {
             return Err(format!(
-                "Not saved: {} could not abide by the keep-out zones. Check the keep-out zones \
-                 and their clearance are right",
+                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
+                 their clearance are right, or turn on clipping ({CLIP_SETTING}) and \
+                 recalculate",
                 crossing.join(", ")
             ));
         }
@@ -2016,10 +2062,13 @@ impl CutCraftApp {
     pub(super) fn warn(&mut self, made: &[EntityId], notes: &[String]) {
         let mut warnings = notes.to_vec();
         for t in made.iter().filter_map(|id| self.doc.toolpaths.get(id)) {
-            if cut_craft_core::keep_out::crossed(&self.doc.keep_out_zones(), &t.moves) {
+            let zones = self.zones_entered(t);
+            if !zones.is_empty() {
                 warnings.push(format!(
-                    "{} could not be made without passing over a keep-out zone",
-                    t.name
+                    "{} cuts into keep-out zone {} and will not be saved: move the part or the \
+                     zone, or turn on clipping ({CLIP_SETTING})",
+                    t.name,
+                    zones.join(" and ")
                 ));
             }
             warnings.extend(cut_craft_core::checks::problems_over(
@@ -2797,6 +2846,9 @@ impl CutCraftApp {
         change: Result<Change, String>,
     ) -> Result<(), String> {
         let change = change?;
+        if let Some(why) = self.keep_out_refusal(&change) {
+            return Err(why);
+        }
         let cmd = self
             .registry
             .get(id)
@@ -3880,7 +3932,11 @@ impl CutCraftApp {
         open.dirty |= listed.get();
         let (id, new_job) = (open.id, open.new_job);
         if let Some(error) = &open.error {
-            ui.colored_label(ui.visuals().error_fg_color, error);
+            let shown = ui.colored_label(ui.visuals().error_fg_color, error);
+            // a toolpath kept out of a zone: how to let it be clipped instead
+            if error.starts_with(KEEP_OUT_REFUSED) {
+                shown.on_hover_text(CLIP_HOW);
+            }
         }
         let (chosen, edit_tool) = asked.into_inner();
         let edit_listed = edit_listed.into_inner();
@@ -4638,3 +4694,20 @@ fn model_size(faces: &[cmd_orientate_3d_model::Seen]) -> Option<[f64; 3]> {
     let hi = corners.copied().reduce(cut_craft_core::glam::DVec3::max)?;
     Some((hi - lo).to_array())
 }
+
+/// How a toolpath refused for cutting into a keep-out zone is said to be (the form's message
+/// then explains how to allow clipping when hovered).
+pub(super) const KEEP_OUT_REFUSED: &str = "Not made, to keep out of a keep-out zone";
+
+/// Where clipping at keep-out zones is turned on.
+pub(super) const CLIP_SETTING: &str =
+    "Edit ▸ Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones";
+
+/// What turning clipping on does, and how: the tooltip on a toolpath refused for a zone.
+pub(super) const CLIP_HOW: &str = "Keep-out zones (red outlines, such as clamps) are kept \
+    safe: a toolpath that would cut into one is not made.\n\nTo make it anyway with the part \
+    under the zone left uncut, open Edit ▸ Options, and under Toolpath Settings tick \
+    \"Clip toolpaths at keep-out zones\". The tool then lifts over each zone and comes back \
+    down past it, as if the zone were cut out of whatever is under it.\n\nTo change a zone \
+    instead: Toolpaths ▸ Keep-Out Zones… for the job's, Machine Configuration for the \
+    machine's.";

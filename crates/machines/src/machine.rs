@@ -43,18 +43,31 @@ pub struct Machine {
     pub drill_bank: Option<cut_craft_core::drill_bank::DrillBank>,
 }
 
-/// A rectangle of the bed kept out of: its lower-left corner and its size, mm.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// A rectangle of the bed kept out of: its lower-left corner and its size, mm, and what its
+/// label calls it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Zone {
     pub x: f64,
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    /// Its name ("Front clamp"); empty for "Machine clamp 1" and so on, by its place.
+    pub name: String,
 }
 
 impl Zone {
+    /// What its label calls zone `index` (from 0) of a machine's.
+    pub fn name_at(&self, index: usize) -> String {
+        if self.name.trim().is_empty() {
+            format!("Machine clamp {}", index + 1)
+        } else {
+            self.name.trim().to_owned()
+        }
+    }
+
     /// The zone as a closed path.
-    pub fn path(self) -> cut_craft_core::geometry::Path {
+    pub fn path(&self) -> cut_craft_core::geometry::Path {
         use cut_craft_core::geometry::{Path, Point};
         let (a, b) = (
             Point::new(self.x, self.y),

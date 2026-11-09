@@ -1,7 +1,7 @@
 # The rolling "nightly" pre-release for Linux and Windows, from a push to main, the nightly
 # schedule, or "Run workflow". The schedule skips the build when nightly already points at the
 # latest commit. Versioned releases (v* tags) are built and published by Builds alone, so each
-# file is attached to a release once (Release tag and Version bump start it).
+# file is attached to a release once (Release tag starts it).
 name: Release
 
 on:
