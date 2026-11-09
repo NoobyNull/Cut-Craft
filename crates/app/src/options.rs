@@ -54,8 +54,32 @@ pub struct View3d {
     /// a handle, playing a preview): lower keeps it smooth on a slower computer. Never finer
     /// than the detail when still (not one of Aspire's)
     #[serde(default)]
-    #[schemars(title = "Detail while moving")]
+    #[schemars(
+        title = "Detail while moving",
+        extend("x-hide-when" = {"adjust_to_frame_rate": "true"})
+    )]
     pub moving_detail: MovingDetail,
+    /// While the view moves, draw the model as finely as this computer can keep smooth:
+    /// coarser when frames come slowly, finer again when they come quickly, never finer
+    /// than the detail when still (not one of Aspire's)
+    #[serde(default = "yes")]
+    #[schemars(title = "Adjust detail to keep the view smooth")]
+    pub adjust_to_frame_rate: bool,
+    /// How many pictures a second the 3D view aims for while it moves: higher is smoother
+    /// and coarser, lower sharper and choppier. 30 suits most; films run at 24 (not one of
+    /// Aspire's)
+    #[serde(default = "target_fps")]
+    #[schemars(
+        title = "Smoothness to aim for",
+        extend("x-unit" = "frames/s", "x-show-when" = {"adjust_to_frame_rate": "true"}),
+        range(min = 10, max = 120)
+    )]
+    pub target_fps: f64,
+    /// Show the 3D view's detail and frames a second at the foot of the window, to see what
+    /// the setting above does (not one of Aspire's)
+    #[serde(default)]
+    #[schemars(title = "Show detail and frame rate in the status bar")]
+    pub show_frame_rate: bool,
     /// How dragging turns the view: about the job's vertical with its up kept up, or any
     /// way without stops (not one of Aspire's)
     #[serde(default)]
@@ -71,12 +95,12 @@ pub struct View3d {
     #[serde(default = "perspective_angle")]
     #[schemars(extend("x-unit" = "°"), range(min = 20, max = 90))]
     pub perspective_angle: f64,
-    /// With Simplify on, how long the view must be still before it is drawn at full detail
-    /// again (not one of Aspire's)
+    /// How long the view must be still before it is drawn at the detail when still again
+    /// (not one of Aspire's)
     #[serde(default = "settle_seconds")]
     #[schemars(
         title = "Wait before drawing full detail",
-        extend("x-unit" = "s", "x-show-when" = {"simplify_while_moving": "true"}),
+        extend("x-unit" = "s"),
         range(min = 0.05, max = 2)
     )]
     pub settle_seconds: f64,
@@ -89,6 +113,17 @@ fn click_reach() -> f32 {
 fn perspective_angle() -> f64 {
     crate::view3d::FIELD_OF_VIEW.to_degrees()
 }
+
+fn yes() -> bool {
+    true
+}
+
+fn target_fps() -> f64 {
+    TARGET_FPS
+}
+
+/// Frames a second the 3D view aims for while it moves, until Options says otherwise.
+pub const TARGET_FPS: f64 = 30.0;
 
 fn settle_seconds() -> f64 {
     crate::app::SETTLE_SECONDS
@@ -108,6 +143,11 @@ impl View3d {
     /// Seconds still before full detail, kept to the setting's range.
     pub fn settle(&self) -> f64 {
         self.settle_seconds.clamp(0.05, 2.0)
+    }
+
+    /// Frames a second wanted while moving, kept to the setting's range.
+    pub fn fps_wanted(&self) -> f64 {
+        self.target_fps.clamp(10.0, 120.0)
     }
 
     /// Mesh cells along the job's longer side once the view is still, at most.
@@ -162,10 +202,28 @@ impl Detail {
         }
     }
 
+    /// Its name, as Options lists it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Low => "Low",
+            Self::Medium => "Medium",
+            Self::High => "High",
+            Self::VeryHigh => "Very High",
+        }
+    }
+
     /// `steps` levels coarser, Low at the coarsest.
-    fn lower(self, steps: usize) -> Self {
-        let at = Self::ALL.iter().position(|&d| d == self).unwrap_or(0);
-        Self::ALL[at.saturating_sub(steps)]
+    pub fn lower(self, steps: usize) -> Self {
+        Self::ALL[self.at().saturating_sub(steps)]
+    }
+
+    /// `steps` levels finer, Very High at the finest.
+    pub fn higher(self, steps: usize) -> Self {
+        Self::ALL[(self.at() + steps).min(Self::ALL.len() - 1)]
+    }
+
+    fn at(self) -> usize {
+        Self::ALL.iter().position(|&d| d == self).unwrap_or(0)
     }
 }
 
@@ -980,6 +1038,9 @@ impl Default for Options {
                 simplify_while_moving: false,
                 still_detail: Detail::default(),
                 moving_detail: MovingDetail::default(),
+                adjust_to_frame_rate: true,
+                target_fps: TARGET_FPS,
+                show_frame_rate: false,
                 rotation: Rotation::default(),
                 click_reach: click_reach(),
                 perspective_angle: perspective_angle(),
