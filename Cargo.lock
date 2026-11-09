@@ -2350,7 +2350,7 @@ dependencies = [
 
 [[package]]
 name = "cut-craft-content-pack"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4880,7 +4880,7 @@ dependencies = [
 
 [[package]]
 name = "pack-staunton-chess"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "cmd-3d-finishing-toolpath",
  "cmd-3d-roughing-toolpath",
