@@ -3,7 +3,7 @@
 
 use super::RING_SHARE;
 use super::{
-    Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FINE_MESH_CELLS, FineKey,
+    Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FineKey, HEIGHT_DRAG_EVERY,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
     Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
     TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
@@ -152,7 +152,8 @@ impl CutCraftApp {
 
     /// Headed sections of tool buttons; a right-click on one adds it to `page`'s favourites
     /// or takes it off (`among` them, it moves along them too). Tools that do one job
-    /// different ways share a flyout button (see [`crate::flyout`]).
+    /// different ways show together in a labelled box, or share a flyout button when
+    /// Options ▸ General folds tool groups (see [`crate::flyout`]).
     fn tool_sections(
         &mut self,
         ui: &mut egui::Ui,
@@ -161,11 +162,17 @@ impl CutCraftApp {
         among: bool,
     ) {
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
+        let folded = self.options.general.fold_tool_groups;
         let mut clicked = None;
         let mut chosen = None;
         // plain sections, as Aspire's tool pages have: a heading over its tools
         for (name, tools) in sections {
             ui.strong(*name);
+            if !among && !folded {
+                self.spread_tools(ui, tools, page, edge, &mut clicked, &mut chosen);
+                ui.add_space(ui.spacing().item_spacing.y);
+                continue;
+            }
             ui.horizontal_wrapped(|ui| {
                 // favourites name each tool on its own, flyout or not
                 let buttons = if among {
@@ -194,10 +201,7 @@ impl CutCraftApp {
                         }
                         response
                     };
-                    let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
-                    if let Some(action) =
-                        self.popup(&response, || gui::tool_menu(page, id, favourite, among))
-                    {
+                    if let Some(action) = self.tool_menu_on(&response, page, id, among, folded) {
                         chosen = Some(action);
                     }
                 }
@@ -215,6 +219,119 @@ impl CutCraftApp {
         }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
+        }
+    }
+
+    /// A tool button's right-click menu, and the action picked from it.
+    fn tool_menu_on(
+        &self,
+        response: &egui::Response,
+        page: Page,
+        id: &str,
+        among: bool,
+        folded: bool,
+    ) -> Option<String> {
+        let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
+        self.popup(response, || {
+            gui::tool_menu(page, id, favourite, among, folded)
+        })
+    }
+
+    /// A section's tools spread out: every tool its own button, those that do one job
+    /// different ways in a box captioned with what they are for, so a beginner sees them
+    /// all without knowing to open anything. A box goes to the next row whole when the row
+    /// has no room for it.
+    fn spread_tools(
+        &self,
+        ui: &mut egui::Ui,
+        tools: &[&'static str],
+        page: Page,
+        edge: f32,
+        clicked: &mut Option<&'static str>,
+        chosen: &mut Option<String>,
+    ) {
+        let full = ui.available_width();
+        let spacing = ui.spacing().item_spacing;
+        let button = edge + 2.0 * ui.spacing().button_padding.x;
+        let margin = 4.0;
+        let caption_font = egui::TextStyle::Small.resolve(ui.style());
+        let caption_color = ui.visuals().weak_text_color();
+        let caption_height = ui.fonts_mut(|f| f.row_height(&caption_font));
+        let clusters = crate::flyout::clusters(tools);
+        let captions: Vec<&str> = clusters
+            .iter()
+            .map(|c| c.name.unwrap_or_default())
+            .collect();
+        let widths: Vec<f32> = clusters
+            .iter()
+            .zip(&captions)
+            .map(|(cluster, caption)| {
+                let n = f32::from(u16::try_from(cluster.tools.len()).unwrap_or(u16::MAX));
+                let caption_width = ui
+                    .painter()
+                    .layout_no_wrap((*caption).to_owned(), caption_font.clone(), caption_color)
+                    .size()
+                    .x;
+                let icons = n * button + (n - 1.0).max(0.0) * spacing.x;
+                (icons.max(caption_width) + 2.0 * margin + 2.0).min(full)
+            })
+            .collect();
+        // the rows the boxes go in, a box going to the next row whole when this one has
+        // no room for it
+        let mut rows: Vec<Vec<usize>> = Vec::new();
+        let mut left = 0.0;
+        for (i, &width) in widths.iter().enumerate() {
+            if rows.is_empty() || left < width {
+                rows.push(Vec::new());
+                left = full;
+            }
+            left -= width + spacing.x;
+            rows.last_mut().expect("a row").push(i);
+        }
+        for row in rows {
+            // loose tools line up with the tools of a box beside them
+            let boxed_row = row.iter().any(|&i| clusters[i].name.is_some());
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                for i in row {
+                    let (cluster, width) = (&clusters[i], widths[i]);
+                    let frame = egui::Frame::group(ui.style()).inner_margin(margin);
+                    let frame = if cluster.name.is_some() {
+                        frame
+                    } else {
+                        frame.stroke(egui::Stroke::NONE)
+                    };
+                    frame.show(ui, |ui| {
+                        ui.set_max_width(width - 2.0 * margin - 2.0);
+                        ui.vertical(|ui| {
+                            if cluster.name.is_some() {
+                                let text = egui::RichText::new(captions[i])
+                                    .small()
+                                    .color(caption_color);
+                                ui.add(
+                                    egui::Label::new(text)
+                                        .selectable(false)
+                                        .wrap_mode(egui::TextWrapMode::Extend),
+                                );
+                            } else if boxed_row {
+                                ui.add_space(caption_height + spacing.y);
+                            }
+                            ui.horizontal_wrapped(|ui| {
+                                for &id in &cluster.tools {
+                                    let response = self.tool_button(ui, id, edge);
+                                    if response.clicked() {
+                                        *clicked = Some(id);
+                                    }
+                                    if let Some(action) =
+                                        self.tool_menu_on(&response, page, id, false, false)
+                                    {
+                                        *chosen = Some(action);
+                                    }
+                                }
+                            });
+                        });
+                    });
+                }
+            });
         }
     }
 
@@ -648,9 +765,20 @@ impl CutCraftApp {
             self.apply_live();
             return;
         }
-        let change = files::import(&self.registry, &self.doc, path)
-            .map_err(cut_craft_core::CommandError::Failed);
-        self.record(change, &format!("Imported {}", path.display()));
+        // a big drawing or picture is read off the window's thread, its progress shown
+        let (registry, doc, reading) = (
+            std::sync::Arc::clone(&self.registry),
+            self.doc.clone(),
+            path.to_owned(),
+        );
+        let done = format!("Imported {}", path.display());
+        self.in_background(
+            &format!("Importing {}", super::file_name(path)),
+            move || files::import(&registry, &doc, &reading),
+            move |app, change| {
+                app.record(change.map_err(cut_craft_core::CommandError::Failed), &done);
+            },
+        );
     }
 
     /// The Sheets tab: Aspire's Sheets List (each sheet's name and size, the active one
@@ -760,24 +888,32 @@ impl CutCraftApp {
             .filter(|(_, t)| t.visible || !visible_only)
             .map(|(&id, _)| id)
             .collect();
-        self.preview_ids(&visible);
-        self.preview_other_side(visible_only);
+        if self.display.animate_preview {
+            self.preview_ids(&visible);
+            self.preview_other_side(visible_only);
+        } else {
+            self.preview_fresh(&visible, move |app| app.preview_other_side(visible_only));
+        }
     }
 
     /// Previews `ids` in order on fresh material, as one preview to undo.
     pub(super) fn preview_ids(&mut self, ids: &[EntityId]) {
-        self.finish_playback();
-        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
-        if self.display.animate_preview {
-            self.play(ids);
+        if !self.display.animate_preview {
+            self.preview_fresh(ids, |_| {});
             return;
         }
-        let before = self.before_preview.take();
-        for &id in ids {
-            self.preview_toolpath(id);
-        }
-        // the cascade is one preview to undo
-        self.before_preview = before;
+        self.finish_playback();
+        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
+        self.play(ids);
+    }
+
+    /// Cuts `ids` in order into fresh material, as one preview to undo, then `then`.
+    fn preview_fresh(&mut self, ids: &[EntityId], then: impl FnOnce(&mut Self) + 'static) {
+        self.finish_playback();
+        // the preview before stays shown until this one is cut
+        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        let fresh = Material::new(&self.doc.job, self.display.preview_cells());
+        self.preview_in_background(ids, fresh, then);
     }
 
     /// A double-sided job's other side previewed too (its shown toolpaths, or all), cut
@@ -787,30 +923,51 @@ impl CutCraftApp {
             return;
         }
         let (job, cells) = (self.doc.job, self.display.preview_cells());
-        let mut other = Material::new(&job, cells);
-        for t in self.doc.other_side.toolpaths.values() {
-            if t.visible || !visible_only {
-                other.cut(t);
-            }
-        }
-        let other = Some(std::sync::Arc::new(other));
-        if let Some(playback) = self.playback.as_mut() {
-            playback.set_other_side(other);
-        } else {
-            let material = self
-                .simulation
-                .get_or_insert_with(|| Material::new(&job, cells));
-            material.other_side = other;
-        }
-        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-        if self.display.auto_open_3d {
-            self.view = View::ThreeD;
-        }
+        let cuts: Vec<cut_craft_core::toolpath::Toolpath> =
+            (self.doc.other_side.toolpaths.values())
+                .filter(|t| t.visible || !visible_only)
+                .cloned()
+                .collect();
+        // cut off the window's thread, its progress shown, as the first side was
+        self.in_background(
+            "Previewing the other side",
+            move || {
+                let mut other = Material::new(&job, cells);
+                for (i, t) in cuts.iter().enumerate() {
+                    if cut_craft_core::progress::cancelled() {
+                        break;
+                    }
+                    cut_craft_core::progress::stage(&format!(
+                        "{} ({} of {})",
+                        t.name,
+                        i + 1,
+                        cuts.len()
+                    ));
+                    cut_craft_core::progress::part(i, cuts.len(), || other.cut(t));
+                }
+                other
+            },
+            move |app, other| {
+                let other = Some(std::sync::Arc::new(other));
+                if let Some(playback) = app.playback.as_mut() {
+                    playback.set_other_side(other);
+                } else {
+                    let material = app
+                        .simulation
+                        .get_or_insert_with(|| Material::new(&job, cells));
+                    material.other_side = other;
+                }
+                (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
+                if app.display.auto_open_3d {
+                    app.view = View::ThreeD;
+                }
+            },
+        );
     }
 
     /// What a preview cuts: the job's toolpaths, or (Toolpath Tiling with a tile active)
     /// only the active tile's moves, at the machine's corner or in their original place.
-    fn preview_source(&self) -> Cow<'_, cut_craft_core::document::Document> {
+    pub(super) fn preview_source(&self) -> Cow<'_, cut_craft_core::document::Document> {
         match self.doc.tiling.and_then(|t| t.preview(&self.doc)) {
             Some(tiled) => Cow::Owned(tiled),
             None => Cow::Borrowed(&self.doc),
@@ -864,21 +1021,16 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        let Some(toolpath) = self.preview_source().toolpaths.get(&id).cloned() else {
+        if !self.preview_source().toolpaths.contains_key(&id) {
             return;
-        };
-        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-        let material = self
-            .simulation
-            .get_or_insert_with(|| Material::new(&self.doc.job, self.display.preview_cells()));
-        material.cutting = super::preview_mark(id);
-        material.cut(&toolpath);
-        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-        if self.display.auto_open_3d {
-            self.view = View::ThreeD;
         }
-        self.status
-            .set_message(&format!("Previewed {}", toolpath.name));
+        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        // cut into the preview so far
+        let start = self
+            .simulation
+            .clone()
+            .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
+        self.preview_in_background(&[id], start, |_| {});
     }
 
     /// Aspire's Preview Control while a preview plays: Run / Pause, Single Step, Run to
@@ -1136,19 +1288,24 @@ impl CutCraftApp {
         }
     }
 
-    /// What the 3D view shows: the toolpath preview if there is one, else the model.
-    // ponytail: rebuilt on every call, measured at about 0.1 ms of a 7.5 ms frame; cache it on
-    // the history revision if that grows
+    /// What the 3D view shows, at Options' detail while moving: the toolpath preview if
+    /// there is one, else the model (kept until it changes: it is asked for several times a
+    /// frame, and a big model takes long to mix).
     pub(super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
+        let cells = self.options.view_3d.moving_cells();
         if let Some(playback) = &self.playback {
-            let coarse = view3d::coarse(playback.material(), MESH_CELLS);
+            let coarse = view3d::coarse(playback.material(), cells);
             return Some(Cow::Owned(self.painted(coarse)));
         }
         if let Some(material) = &self.simulation {
-            if self.simulation_coarse.is_none() {
-                self.simulation_coarse = Some(view3d::coarse(material, MESH_CELLS));
+            if self
+                .simulation_coarse
+                .as_ref()
+                .is_none_or(|(made, _)| *made != cells)
+            {
+                self.simulation_coarse = Some((cells, view3d::coarse(material, cells)));
             }
-            let coarse = self.simulation_coarse.as_ref().expect("made above");
+            let (_, coarse) = self.simulation_coarse.as_ref().expect("made above");
             if self.doc.job.machined_area == MachinedArea::MaterialColor
                 && coarse.other_side.is_none()
             {
@@ -1156,8 +1313,31 @@ impl CutCraftApp {
             }
             return Some(Cow::Owned(self.painted(coarse.clone())));
         }
-        // before a preview, the model alone: nothing where no component is
-        (!self.doc.components.is_empty()).then(|| Cow::Owned(self.model_shape(MESH_CELLS)))
+        // before a preview, the model alone: nothing where no component is; made once a
+        // change, not every frame
+        if self.doc.components.is_empty() {
+            return None;
+        }
+        let key = super::RoughKey {
+            revision: self.history.revision(),
+            job: self.doc.job,
+            cells,
+            importing: self.importing_whole(),
+        };
+        if self.rough_3d.as_ref().is_none_or(|(kept, _)| *kept != key) {
+            let shape = self.model_shape(cells);
+            self.rough_3d = Some((key, shape));
+        }
+        self.rough_3d
+            .as_ref()
+            .map(|(_, shape)| Cow::Borrowed(shape))
+    }
+
+    /// Whether an imported model is shown whole, in place of its component.
+    fn importing_whole(&self) -> bool {
+        self.form
+            .as_ref()
+            .is_some_and(|f| f.model.is_some() && f.model_whole)
     }
 
     /// The preview's `material` painted as the job's Machined Area Color has it: in the
@@ -1545,15 +1725,13 @@ impl CutCraftApp {
     ) -> egui::Mesh {
         let key = FineKey {
             revision: self.history.revision(),
+            cells: self.options.view_3d.still_cells(),
             job: self.doc.job,
             orbit,
             framing,
             fit,
             look,
-            importing: self
-                .form
-                .as_ref()
-                .is_some_and(|f| f.model.is_some() && f.model_whole),
+            importing: self.importing_whole(),
         };
         if let Some((kept, mesh)) = &self.fine_3d
             && *kept == key
@@ -1566,11 +1744,12 @@ impl CutCraftApp {
         mesh
     }
 
-    /// The preview's material, or the model's shape, at its own detail up to
-    /// [`FINE_MESH_CELLS`].
+    /// The preview's material, or the model's shape, at its own detail up to Options' detail
+    /// when still.
     pub(super) fn fine_surface(&mut self) -> Material {
+        let most = self.options.view_3d.still_cells();
         if let Some(material) = &self.simulation {
-            return self.painted(view3d::coarse(material, FINE_MESH_CELLS));
+            return self.painted(view3d::coarse(material, most));
         }
         let job = &self.doc.job;
         #[expect(
@@ -1579,7 +1758,7 @@ impl CutCraftApp {
             reason = "a small cell count"
         )]
         let own = (job.width.max(job.height) / job.model_cell()).ceil() as usize;
-        self.model_shape(own.clamp(MESH_CELLS, FINE_MESH_CELLS))
+        self.model_shape(own.clamp(MESH_CELLS.min(most), most))
     }
 
     /// The 3D view's surface as the GPU draws it: at its own detail, built once and kept
@@ -1589,19 +1768,27 @@ impl CutCraftApp {
         wrap: Option<view3d::Wrap>,
         sides: bool,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
+        // while a handle drags the model about, the quick surface, kept by the change it
+        // shows, so the fine one is made once the drag ends
+        let dragging = self.drag_base.is_some();
+        let view = &self.options.view_3d;
+        let cells = if dragging {
+            view.moving_cells()
+        } else {
+            view.still_cells()
+        };
         let key = super::GeometryKey {
             revision: self.history.revision(),
             job: self.doc.job,
             wrap,
             sides,
-            importing: self
-                .form
-                .as_ref()
-                .is_some_and(|f| f.model.is_some() && f.model_whole),
+            importing: self.importing_whole(),
+            cells,
         };
         if let Some(playback) = &self.playback {
             self.solid_gpu = None;
-            let surface = self.painted(view3d::coarse(playback.material(), MESH_CELLS));
+            let moving = self.options.view_3d.moving_cells();
+            let surface = self.painted(view3d::coarse(playback.material(), moving));
             return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
         }
         if let Some((kept, geometry)) = &self.surface_gpu
@@ -1609,13 +1796,14 @@ impl CutCraftApp {
         {
             return std::sync::Arc::clone(geometry);
         }
-        // while a handle drags the model about, the quick surface, made again each frame
-        // and not kept, so the fine one is made once the drag ends
-        let dragging = self.drag_base.is_some();
-        let mut surface = if dragging {
-            self.model_shape(MESH_CELLS)
-        } else {
-            self.fine_surface()
+        let mut surface = match (dragging, self.simulation.is_none()) {
+            // the model alone: the quick surface the view keeps
+            (true, true) => match self.surface_3d().map(Cow::into_owned) {
+                Some(quick) => quick,
+                None => self.model_shape(cells),
+            },
+            (true, false) => self.model_shape(cells),
+            (false, _) => self.fine_surface(),
         };
         // the components' own colours (Solid Color), where the model is theirs: painted as a
         // preview paints the toolpaths' colours
@@ -1638,9 +1826,7 @@ impl CutCraftApp {
             .is_none()
             .then(|| std::sync::Arc::new(view3d::gpu::model(&view3d::solid(&surface, wrap))));
         let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
-        if !dragging {
-            self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
-        }
+        self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
         geometry
     }
 
@@ -1649,17 +1835,7 @@ impl CutCraftApp {
         &mut self,
         model: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
-        if let Some(kept) = &self.model_gpu
-            && std::sync::Arc::ptr_eq(&kept.model, model)
-        {
-            return std::sync::Arc::clone(&kept.geometry);
-        }
-        let geometry = std::sync::Arc::new(view3d::gpu::model(model));
-        self.model_gpu = Some(super::ModelGpu {
-            model: std::sync::Arc::clone(model),
-            geometry: std::sync::Arc::clone(&geometry),
-        });
-        geometry
+        faces_geometry(&mut self.model_gpu, model)
     }
 
     /// Transform mode's handles in the 3D view, over whatever is selected: Aspire's 3D
@@ -1936,13 +2112,15 @@ impl CutCraftApp {
         if self.drag_3d.take().is_none() {
             return;
         }
+        self.height_applied_at = None;
         if let Some((.., Some(_))) = self.drag_base.take() {
             self.history.undo(&mut self.doc);
         }
         self.status.set_message("Cancelled: nothing was changed");
     }
 
-    /// A height handle's drag: the component follows the pointer, its total, shape or base
+    /// A height handle's drag: the component follows the pointer (made again at most every
+    /// [`HEIGHT_DRAG_EVERY`] seconds), its total, shape or base
     /// height set through Component Properties each frame the pointer moves (the last
     /// setting undone first, so the whole drag is one undo), its value in the status bar.
     /// A drag up a quarter of the view doubles, as the wheel's zoom does; the base height
@@ -1986,7 +2164,13 @@ impl CutCraftApp {
         };
         let params = serde_json::to_value(&p).expect("component properties serialize");
         let (same, undo) = (applied.as_ref() == Some(&params), applied.is_some());
-        if !same {
+        // the model is made again at most ten times a second while the drag goes on (the
+        // value in the status bar follows the pointer every frame), and as let go
+        let time = ui.input(|i| i.time);
+        let since = self.height_applied_at.map_or(f64::INFINITY, |t| time - t);
+        let due = released || since >= HEIGHT_DRAG_EVERY;
+        let mut failed = false;
+        if !same && due {
             if undo {
                 self.history.undo(&mut self.doc);
             }
@@ -1994,19 +2178,28 @@ impl CutCraftApp {
                 Ok(()) => Some(params),
                 Err(e) => {
                     self.status.set_message(&e);
+                    failed = true;
                     None
                 }
             };
             if let Some((.., applied)) = &mut self.drag_base {
                 *applied = done;
             }
+            self.height_applied_at = Some(time);
+        } else if !same {
+            // a value not yet shown: shown once the wait is over, though the pointer stops
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_secs_f64(
+                    HEIGHT_DRAG_EVERY - since,
+                ));
         }
-        if same || self.drag_base.as_ref().is_some_and(|d| d.2.is_some()) {
+        if !failed {
             self.status.set_message(&message);
         }
         if released {
             self.drag_3d = None;
             self.drag_base = None;
+            self.height_applied_at = None;
         }
     }
 
@@ -2646,7 +2839,7 @@ impl CutCraftApp {
             .gpu_3d
             .is_some()
             .then(|| painter.add(egui::Shape::Noop));
-        let (mut surface_draw, mut model_draw) = (None, None);
+        let (mut surface_draw, mut model_draw, mut ghost_draw) = (None, None, None);
         if slot.is_some() {
             let geometry = self.surface_geometry(look.wrap, look.sides);
             let at = cut_craft_core::glam::DVec3::ZERO;
@@ -2664,6 +2857,7 @@ impl CutCraftApp {
             }
         } else {
             self.paint_flat(ui, area, &surface, &camera, look, tool_at, gpu);
+            ghost_draw = self.paint_ghost(ui, area, &surface, &camera, look, slot.is_some());
         }
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
@@ -2675,8 +2869,52 @@ impl CutCraftApp {
                 view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
             });
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
-            painter.set(slot, gpu.paint(area, surface_draw, model_draw, body_draw));
+            let shape = gpu.paint(area, surface_draw, model_draw, body_draw, ghost_draw);
+            painter.set(slot, shape);
         }
+    }
+
+    /// A model being imported: its parts past the material's edges, in see-through red
+    /// (Options ▸ Out-of-bounds opacity) over the rest, so a model placed partly off the
+    /// material is seen whole. Given to the GPU when the view has one, else painted.
+    fn paint_ghost(
+        &mut self,
+        ui: &egui::Ui,
+        area: egui::Rect,
+        surface: &Material,
+        camera: &view3d::Camera,
+        look: view3d::Look,
+        on_gpu: bool,
+    ) -> Option<view3d::gpu::Draw> {
+        let Some(ghost) = self
+            .form
+            .as_ref()
+            .and_then(|f| f.beyond.clone())
+            .filter(|g| !g.is_empty())
+        else {
+            self.ghost_gpu = None;
+            return None;
+        };
+        let red = self.options.import.out_of_bounds_colour();
+        let look = view3d::Look {
+            colour: red,
+            sides: false,
+            wrap: None,
+            grain: None,
+            shadows: false,
+            ..look
+        };
+        let origin = cut_craft_core::glam::DVec3::new(-surface.origin.x, -surface.origin.y, 0.0);
+        if on_gpu {
+            let geometry = faces_geometry(&mut self.ghost_gpu, &ghost);
+            return Some(view3d::gpu::Draw::new(
+                geometry, camera, area, origin, &look, red,
+            ));
+        }
+        let screen = |p| camera.screen(p + origin);
+        let mesh = view3d::triangles(&ghost, screen, self.orbit, &look, red);
+        ui.painter_at(area).add(mesh);
+        None
     }
 
     /// Over the unwrapped surface: the model being imported in the material's outline, a
@@ -2782,18 +3020,24 @@ impl CutCraftApp {
         }
         // the keep-out zones in red, closed, over whatever they cover, as Aspire shows them
         let danger = egui::Stroke::new(2.0 * stroke.width, ui.visuals().error_fg_color);
-        let zones = if shown.keep_out_3d {
-            self.doc.keep_out_zones()
+        let zones: Vec<_> = if shown.keep_out_3d {
+            self.doc.named_keep_out().collect()
         } else {
             vec![]
         };
         for zone in zones {
-            let mut points = zone.flatten(cut_craft_core::polygon::TOLERANCE);
+            let mut points = zone.path.flatten(cut_craft_core::polygon::TOLERANCE);
             points.extend(points.first().copied());
             let z = view3d::vector_plane(surface, &points);
             let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
             for run in in_sight(&line) {
                 painter.add(egui::Shape::line(run, danger));
+            }
+            // its name at its top-left corner, as in the 2D view
+            if shown.keep_out_labels {
+                let b = zone.path.bounds();
+                let corner = local(cut_craft_core::geometry::Point::new(b.min.x, b.max.y), z);
+                crate::view2d::zone_label(painter, ui, screen(corner), &zone.label());
             }
         }
         let size = view3d::plan_size(surface);
@@ -3096,14 +3340,28 @@ impl CutCraftApp {
         }
     }
 
+    /// One fixed-height row: the hint (or last message) on the left, cut short with … when
+    /// it does not fit, its whole text on hover; the tool, units and version on the right.
     pub(super) fn status_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Status bar");
         let mut swap = false;
-        ui.horizontal(|ui| {
-            // what the pointer is over or the next step, else the last message
-            let hint = cut_craft_bug_report::hint::current(ui.ctx());
-            ui.label(hint.as_deref().unwrap_or(&self.status.message));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        // what the pointer is over or the next step, else the last message; while the
+        // pointer is on the bar, to read it, what it said last stays
+        let kept = egui::Id::unique("status_bar_shown");
+        let fresh = cut_craft_bug_report::hint::current(ui.ctx())
+            .unwrap_or_else(|| self.status.message.clone());
+        let on_bar = ui.rect_contains_pointer(ui.max_rect());
+        let full = match ui.data(|d| d.get_temp::<String>(kept)) {
+            Some(last) if on_bar => last,
+            _ => fresh,
+        };
+        ui.data_mut(|d| d.insert_temp(kept, full.clone()));
+        let row = ui.spacing().interact_size.y;
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), row),
+            Layout::right_to_left(Align::Center),
+            |ui| {
+                ui.set_height(row);
                 // the version, at the far right, as Help ▸ About gives it
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
                     .on_hover_hint("Cut Craft's version (Help ▸ About)");
@@ -3124,8 +3382,23 @@ impl CutCraftApp {
                     ui.separator();
                 }
                 ui.label(format!("Tool: {}", self.status.current_tool));
-            });
-        });
+                ui.separator();
+                // the rest of the row, never more than one line
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    let galley = egui::WidgetText::from(gui::one_line(&full)).into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Truncate),
+                        ui.available_width(),
+                        egui::TextStyle::Body,
+                    );
+                    let cut = galley.elided || full.contains('\n');
+                    let label = ui.add(egui::Label::new(galley).selectable(false));
+                    if cut {
+                        label.on_hover_text(full);
+                    }
+                });
+            },
+        );
         if swap {
             let to = match self.doc.job.units {
                 Units::Mm => "units_inch",
@@ -3419,4 +3692,22 @@ fn box_corners(bounds: cut_craft_core::geometry::Rect) -> [Point; 4] {
         bounds.max,
         Point::new(bounds.min.x, bounds.max.y),
     ]
+}
+
+/// `faces` on the GPU, made once and `kept` while the faces stay the same.
+fn faces_geometry(
+    kept: &mut Option<super::ModelGpu>,
+    faces: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+) -> std::sync::Arc<view3d::gpu::Geometry> {
+    if let Some(kept) = kept
+        && std::sync::Arc::ptr_eq(&kept.model, faces)
+    {
+        return std::sync::Arc::clone(&kept.geometry);
+    }
+    let geometry = std::sync::Arc::new(view3d::gpu::model(faces));
+    *kept = Some(super::ModelGpu {
+        model: std::sync::Arc::clone(faces),
+        geometry: std::sync::Arc::clone(&geometry),
+    });
+    geometry
 }

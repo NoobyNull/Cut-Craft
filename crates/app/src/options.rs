@@ -45,6 +45,17 @@ pub struct View3d {
     #[serde(default)]
     #[schemars(title = "Simplify the model while the view moves")]
     pub simplify_while_moving: bool,
+    /// How finely the model is drawn once the view is still: higher shows more detail and
+    /// takes longer to draw after each change (not one of Aspire's)
+    #[serde(default)]
+    #[schemars(title = "Detail when still")]
+    pub still_detail: Detail,
+    /// How finely the model is drawn while it or the view moves (turning the view, dragging
+    /// a handle, playing a preview): lower keeps it smooth on a slower computer. Never finer
+    /// than the detail when still (not one of Aspire's)
+    #[serde(default)]
+    #[schemars(title = "Detail while moving")]
+    pub moving_detail: MovingDetail,
     /// How dragging turns the view: about the job's vertical with its up kept up, or any
     /// way without stops (not one of Aspire's)
     #[serde(default)]
@@ -98,6 +109,82 @@ impl View3d {
     pub fn settle(&self) -> f64 {
         self.settle_seconds.clamp(0.05, 2.0)
     }
+
+    /// Mesh cells along the job's longer side once the view is still, at most.
+    pub fn still_cells(&self) -> usize {
+        self.still_detail.cells()
+    }
+
+    /// Mesh cells along the job's longer side while the model or the view moves.
+    pub fn moving_cells(&self) -> usize {
+        let still = self.still_detail;
+        let level = match self.moving_detail {
+            MovingDetail::OneStepLower => still.lower(1),
+            MovingDetail::TwoStepsLower => still.lower(2),
+            MovingDetail::Low => Detail::Low,
+            MovingDetail::Medium => Detail::Medium,
+            MovingDetail::High => Detail::High,
+            MovingDetail::VeryHigh => Detail::VeryHigh,
+        };
+        level.min(still).cells()
+    }
+}
+
+/// How finely the 3D view draws the model.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Detail {
+    /// Quickest: about 250 points across the job
+    Low,
+    /// About 500 points across the job
+    Medium,
+    /// About 800 points across the job
+    High,
+    /// Finest: about 1200 points across the job, or the model's own detail when that is less
+    #[default]
+    #[schemars(title = "Very High")]
+    VeryHigh,
+}
+
+impl Detail {
+    const ALL: [Self; 4] = [Self::Low, Self::Medium, Self::High, Self::VeryHigh];
+
+    /// Mesh cells along the job's longer side.
+    // ponytail: four fixed steps; the top one is the old fixed 1200, the bottom the old 250
+    pub fn cells(self) -> usize {
+        match self {
+            Self::Low => 250,
+            Self::Medium => 500,
+            Self::High => 800,
+            Self::VeryHigh => 1200,
+        }
+    }
+
+    /// `steps` levels coarser, Low at the coarsest.
+    fn lower(self, steps: usize) -> Self {
+        let at = Self::ALL.iter().position(|&d| d == self).unwrap_or(0);
+        Self::ALL[at.saturating_sub(steps)]
+    }
+}
+
+/// How finely the 3D view draws the model while it or the view moves.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MovingDetail {
+    /// One level below the detail when still
+    #[schemars(title = "One step lower")]
+    OneStepLower,
+    /// Two levels below the detail when still (Very High moves at Medium)
+    #[default]
+    #[schemars(title = "Two steps lower")]
+    TwoStepsLower,
+    Low,
+    Medium,
+    High,
+    #[schemars(title = "Very High")]
+    VeryHigh,
 }
 
 /// How dragging (and a SpaceMouse) turns the 3D view.
@@ -232,6 +319,10 @@ fn rgb(c: egui::Color32) -> [u8; 3] {
 
 /// Aspire's Toolpath Settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the dialog's own check boxes"
+)]
 pub struct ToolpathSettings {
     /// Swap to the 3D view after calculating a toolpath
     #[schemars(title = "Auto open 3D view")]
@@ -263,6 +354,17 @@ pub struct ToolpathSettings {
     #[serde(default = "preview_speed")]
     #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
     pub preview_speed: f64,
+    /// Write each keep-out zone's name on it in the 2D and 3D views ("Keep-out: Clamp 1").
+    /// The View menu turns them on and off too
+    #[serde(default = "on")]
+    #[schemars(title = "Show keep-out zone labels")]
+    pub keep_out_labels: bool,
+    /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
+    /// made. On: it is made with the part under the zone left uncut, the tool lifting over
+    /// the zone, as if the zone were cut out of whatever is under it
+    #[serde(default)]
+    #[schemars(title = "Clip toolpaths at keep-out zones")]
+    pub clip_at_keep_out_zones: bool,
 }
 
 fn preview_speed() -> f64 {
@@ -421,8 +523,9 @@ pub struct General {
         range(min = 10, max = 600)
     )]
     pub autosave_seconds: u32,
-    /// How long to press and hold a toolbox button with a small arrow before its group of
-    /// tools opens; a quick click runs the tool shown. Longer if groups open by accident
+    /// With tool groups folded: how long to press and hold a toolbox button with a small
+    /// arrow before its group of tools opens; a quick click runs the tool shown. Longer if
+    /// groups open by accident
     #[serde(default = "flyout_hold_seconds")]
     #[schemars(
         title = "Hold to open a tool group",
@@ -430,6 +533,12 @@ pub struct General {
         range(min = 0.2, max = 1.5)
     )]
     pub flyout_hold_seconds: f64,
+    /// Show each group of tools that do one job different ways (the circles, the text
+    /// tools, the joins…) as one button with a small arrow, to open for the rest. Off shows
+    /// every tool in a labelled box, so none is missed
+    #[serde(default)]
+    #[schemars(title = "Fold tool groups into one button")]
+    pub fold_tool_groups: bool,
 }
 
 fn autosave_seconds() -> u32 {
@@ -474,10 +583,30 @@ pub struct Import {
     #[serde(default = "preview_faces")]
     #[schemars(title = "Model preview faces", range(min = 1000))]
     pub preview_faces: u32,
+    /// How much of a model placed past the material's edges shows while it is imported:
+    /// that part is drawn in see-through red, this many percent solid, so it is not lost
+    /// from sight but does not hide the material either
+    #[serde(default = "out_of_bounds_percent")]
+    #[schemars(title = "Out-of-bounds opacity (%)", range(min = 1, max = 100))]
+    pub out_of_bounds_percent: u8,
 }
 
 fn preview_faces() -> u32 {
     250_000
+}
+
+fn out_of_bounds_percent() -> u8 {
+    5
+}
+
+impl Import {
+    /// The red a model's parts past the material's edges are drawn in: see-through, as
+    /// solid as Out-of-bounds opacity says (kept to 1 to 100 percent).
+    pub fn out_of_bounds_colour(&self) -> egui::Color32 {
+        let percent = u16::from(self.out_of_bounds_percent.clamp(1, 100));
+        let alpha = u8::try_from((percent * 255 + 50) / 100).unwrap_or(u8::MAX);
+        egui::Color32::from_rgba_unmultiplied(255, 0, 0, alpha)
+    }
 }
 
 impl Default for Import {
@@ -485,6 +614,7 @@ impl Default for Import {
         Self {
             model_types: ModelTypes::default(),
             preview_faces: preview_faces(),
+            out_of_bounds_percent: out_of_bounds_percent(),
         }
     }
 }
@@ -790,6 +920,11 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub favourites: Favourites,
+    /// The Design sub-tabs shown as sections of their own under the tab row rather than in
+    /// it, by name (right-click a sub-tab). None to start with: every one in the row.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub design_sections: Vec<String>,
     /// The tool each toolbox flyout shows: the one picked from it last.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
@@ -843,6 +978,8 @@ impl Default for Options {
                 image_file_path: String::new(),
                 anti_aliasing: AntiAliasing::default(),
                 simplify_while_moving: false,
+                still_detail: Detail::default(),
+                moving_detail: MovingDetail::default(),
                 rotation: Rotation::default(),
                 click_reach: click_reach(),
                 perspective_angle: perspective_angle(),
@@ -857,6 +994,8 @@ impl Default for Options {
                 tolerance_3d: tolerance(),
                 tolerance_vcarve: tolerance(),
                 preview_speed: preview_speed(),
+                keep_out_labels: d.keep_out_labels,
+                clip_at_keep_out_zones: false,
             },
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
@@ -866,6 +1005,7 @@ impl Default for Options {
                 layout: WindowLayout::default(),
                 autosave_seconds: autosave_seconds(),
                 flyout_hold_seconds: flyout_hold_seconds(),
+                fold_tool_groups: false,
             },
             confirmations: Confirmations::default(),
             snapping: cut_craft_core::snap::SnapOptions::default(),
@@ -879,6 +1019,7 @@ impl Default for Options {
             updates: Updates::default(),
             default_job: None,
             favourites: Favourites::default(),
+            design_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
         }
     }
@@ -957,6 +1098,7 @@ impl Options {
         d.previews_2d = t.create_2d_previews;
         d.solid_previews = t.solid_2d_previews;
         d.solid_colour = t.solid_2d_preview_color;
+        d.keep_out_labels = t.keep_out_labels;
     }
 
     /// How many recent files are kept.
@@ -979,6 +1121,21 @@ mod tests {
         assert_eq!(Theme::for_system(OperatingSystem::Mac), Theme::System);
         assert_eq!(Theme::for_system(OperatingSystem::Windows), Theme::Light);
         assert_eq!(Theme::for_system(OperatingSystem::Nix), Theme::Light);
+    }
+
+    #[test]
+    fn out_of_bounds_parts_are_five_percent_red_unless_the_options_say_otherwise() {
+        let mut import = Import::default();
+        assert_eq!(import.out_of_bounds_percent, 5);
+        let c = import.out_of_bounds_colour();
+        assert_eq!(c.to_srgba_unmultiplied(), [255, 0, 0, 13], "5% of 255");
+        import.out_of_bounds_percent = 0;
+        assert_eq!(import.out_of_bounds_colour().a(), 3, "never wholly hidden");
+        import.out_of_bounds_percent = 200;
+        assert_eq!(import.out_of_bounds_colour().a(), 255);
+        // options saved before the setting existed
+        let old: Import = serde_json::from_str(r#"{"preview_faces": 1000}"#).unwrap();
+        assert_eq!(old.out_of_bounds_percent, 5);
     }
 
     #[test]
@@ -1211,6 +1368,9 @@ mod tests {
         assert_eq!(older.general.autosave_seconds, o.general.autosave_seconds);
         assert!((older.general.flyout_hold_seconds - o.general.flyout_hold_seconds).abs() < 1e-9);
         assert_eq!(older.appearance.text_size, 115);
+        // every tool shows, in its group's box, unless folded on purpose
+        assert!(!o.general.fold_tool_groups);
+        assert!(!older.general.fold_tool_groups);
     }
 
     #[test]
@@ -1257,5 +1417,22 @@ mod tests {
             ..o.toolpaths
         };
         assert!((wild.preview_speed() - 20_000.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn keep_out_labels_show_and_clipping_is_off_until_turned_on() {
+        let o = Options::default();
+        assert!(o.toolpaths.keep_out_labels);
+        assert!(
+            !o.toolpaths.clip_at_keep_out_zones,
+            "clipping is off by default"
+        );
+        // options saved before these settings get the same
+        let mut saved = serde_json::to_value(&o.toolpaths).unwrap();
+        let fields = saved.as_object_mut().unwrap();
+        fields.remove("keep_out_labels");
+        fields.remove("clip_at_keep_out_zones");
+        let older: ToolpathSettings = serde_json::from_value(saved).unwrap();
+        assert_eq!(older, o.toolpaths);
     }
 }

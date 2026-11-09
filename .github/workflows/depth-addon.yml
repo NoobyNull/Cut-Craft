@@ -1,0 +1,84 @@
+# The Depth add-on's release, published on its own repository (DEPTH_REPO) so Gadgets >
+# Add-ons finds it as that repository's newest release (crates/updater/src/addon.rs):
+#   depth-linux-x86_64.zip, depth-windows-x86_64.zip   addon.toml and cutcraft-depth
+#   depth_anything_v2_vits.safetensors                 the weights, once for both
+# Unsigned by Matthew's choice: Cut Craft installs it after its "not responsible" warning.
+# Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs one
+# secret, ADDON_RELEASE_TOKEN: a token that may write releases on DEPTH_REPO (the
+# workflow's own token can only write to this repository).
+name: Depth add-on
+
+on:
+  push:
+    tags: ['depth-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  DEPTH_REPO: NoobyNull/CutCraft-Depth
+  # Depth Anything V2 Small (Apache 2.0); Base and Large are non-commercial, never these
+  WEIGHTS_URL: https://huggingface.co/depth-anything/Depth-Anything-V2-Small/resolve/main/depth_anything_v2_vits.pth
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04 keeps the program runnable on older glibc distributions
+          - os: ubuntu-22.04
+            name: linux-x86_64
+            exe: cutcraft-depth
+          - os: windows-latest
+            name: windows-x86_64
+            exe: cutcraft-depth.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p cut-craft-depth
+      - name: Zip
+        shell: bash
+        run: |
+          mkdir -p out pack
+          cp crates/depth-addon/addon.toml crates/depth-addon/README.md "target/release/${{ matrix.exe }}" pack/
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            (cd pack && 7z a -tzip "../out/depth-${{ matrix.name }}.zip" .)
+          else
+            (cd pack && zip -r "../out/depth-${{ matrix.name }}.zip" .)
+          fi
+      - name: Weights
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL --retry 3 -o vits.pth "$WEIGHTS_URL"
+          target/release/cutcraft-depth convert vits.pth out/depth_anything_v2_vits.safetensors
+      - uses: actions/upload-artifact@v4
+        with:
+          name: depth-${{ matrix.name }}
+          path: out/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.ADDON_RELEASE_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::ADDON_RELEASE_TOKEN is not set: add a token that may write releases on $DEPTH_REPO"
+            exit 1
+          fi
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/depth-addon/addon.toml)
+          gh release create "v$version" out/* --repo "$DEPTH_REPO" \
+            --title "Depth add-on $version" \
+            --notes "Estimates a photo's depth for Relief from Photo. Install it from Cut Craft: Gadgets > Add-ons."

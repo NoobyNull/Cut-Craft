@@ -1,4 +1,4 @@
-- Design page sub-tabs (Create, Edit, Arrange, Model) with clean new line icons
-- Tool tips, forms and the status bar say what to do next
-- Shapes snap square onto lines and tangent to arcs; toolpath forms save and load settings
-- Options: text size, recovery copy, flyout hold, 3D view; a native look on macOS
+- Every tool is back in view: tools that do one job different ways sit together in a labelled box (Options ▸ General folds them into one button again)
+- New Import tab on the Design page gathers every way to bring something in, and any Design tab can be shown as its own section
+- Relief from Photo catches up with depth2stl
+- Add-ons install from a GitHub repository's newest release; unsigned ones run with a warning

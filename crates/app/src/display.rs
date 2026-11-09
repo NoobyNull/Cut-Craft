@@ -22,6 +22,8 @@ pub struct Display {
     pub vectors_3d: bool,
     /// The keep-out zones outlined in red over the 3D view.
     pub keep_out_3d: bool,
+    /// Each keep-out zone's name written on it ("Keep-out: Clamp 1"), in both views.
+    pub keep_out_labels: bool,
     /// Parts of the surface the light cannot reach (behind a wall or a raised part) are
     /// drawn in shadow.
     pub shadows: bool,
@@ -54,6 +56,7 @@ impl Default for Display {
             material_block: true,
             vectors_3d: true,
             keep_out_3d: true,
+            keep_out_labels: true,
             shadows: false,
             light_follows: false,
             colour_shaded: true,
@@ -99,6 +102,7 @@ impl Display {
             "draw_material_block" => &mut self.material_block,
             "draw_vectors_in_3d_view" => &mut self.vectors_3d,
             "draw_keep_out_zones_in_3d_view" => &mut self.keep_out_3d,
+            "show_keep_out_zone_labels" => &mut self.keep_out_labels,
             "use_shadow_shading" => &mut self.shadows,
             "light_follows_viewer" => &mut self.light_follows,
             "color_shaded_view" => &mut self.colour_shaded,

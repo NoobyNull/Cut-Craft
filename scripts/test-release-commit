@@ -42,9 +42,9 @@ work "later work"
 work "more later work"
 expect "0.5.2 $merge" "later merges don't move it"
 
-# the nightly job's own commit straight onto main
+# a squash-merged version pull request: one commit straight onto main
 version 0.6.0 "Version 0.6.0"
-expect "0.6.0 $(g rev-parse HEAD)" "the nightly Version commit"
+expect "0.6.0 $(g rev-parse HEAD)" "a squash-merged version commit"
 
 # a version pull request whose branch was made before an earlier version: still the merge
 g switch -qc version-0.6.1 HEAD~1

@@ -6,9 +6,10 @@
 #
 # The tag is pushed with the workflow's own token. "Protect release tags" lets anyone make a new
 # v* tag; it only stops one being moved or deleted, so no key or secret is needed. A tag pushed
-# with that token starts no workflows by itself, so Builds is started on it explicitly.
-# The nightly Version bump pushes its commit and tag together, so by the time this runs for
-# that commit the tag is there and it does nothing.
+# with that token starts no workflows by itself, so Builds is started for it explicitly, with
+# main's copy of Builds (the newest fixes) building the tag's code.
+# Versions arrive only through "chore: version X.Y.Z" pull requests (scripts/release-version);
+# nothing bumps the version on its own.
 name: Release tag
 
 on:
@@ -58,7 +59,7 @@ jobs:
             fi
             git tag -a "$tag" "$commit" -m "Cut Craft $version"
             if ! git push origin "refs/tags/$tag"; then
-              # another run (or the nightly job) made it a moment ago: fine, it starts its own build
+              # another run made it a moment ago: fine, it starts its own build
               if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
                 echo "$tag was made meanwhile by another run." >> "$GITHUB_STEP_SUMMARY"
                 continue
@@ -66,7 +67,7 @@ jobs:
               echo "::error::Could not push $tag. Check Settings → Rules → Rulesets: \"Protect release tags\" must allow creating v* tags."
               exit 1
             fi
-            gh workflow run builds.yml --ref "$tag"
+            gh workflow run builds.yml --ref main -f tag="$tag"
             echo "Tagged $tag on ${commit::7} and started **Builds** on it." >> "$GITHUB_STEP_SUMMARY"
           done <<< "$versions"
           echo "Each release appears on the Releases page when its Builds run finishes." >> "$GITHUB_STEP_SUMMARY"

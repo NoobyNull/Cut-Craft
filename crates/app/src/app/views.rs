@@ -13,6 +13,7 @@ use crate::flyout::DragWay;
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
+use cut_craft_core::snap::Snap;
 
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.
 const ROTATE_OUT: f64 = 2.5;
@@ -37,11 +38,15 @@ impl CutCraftApp {
     /// can drive it headlessly.
     pub(super) fn pass(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
+        // an edit last frame left toolpaths out of date: the status bar says so
+        self.note_stale();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
+        // a slow job's progress, over everything else
+        self.busy_window(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
         self.next_import();
@@ -292,6 +297,7 @@ impl CutCraftApp {
         self.guide_window(ctx);
         self.tool_changer_window(ctx);
         self.updates_window(ctx);
+        self.addons.window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
@@ -1130,6 +1136,7 @@ impl CutCraftApp {
             overlay,
             self.selected_toolpath,
             &self.display,
+            (self.job_epoch, self.history.revision()),
         );
         if self.options.snapping.snap_to_grid {
             let look = &self.options.appearance;
@@ -1154,7 +1161,13 @@ impl CutCraftApp {
         // a guide being dragged takes the drag over
         let guided = self.guide_gesture(ui, &canvas, reach);
         let gesture = gesture.filter(|_| !guided);
-        let gesture = self.snapped(ui, gesture, canvas.transform.scale);
+        let (gesture, snap, placed) =
+            self.snapping(ui, gesture, canvas.transform.scale, canvas.cursor());
+        self.place_on_snaps(gesture, &placed);
+        // drawing: a crosshair, to place points by
+        if self.drawing_tool().is_some() && canvas.hover().is_some() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        }
         self.track_stroke(gesture);
         let modes = self.modes();
         let Modes {
@@ -1193,9 +1206,9 @@ impl CutCraftApp {
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Transform), _) => {
                 self.transform_overlay(ui, drag, reach)
             }
-            (gesture, None, Some("draw_polyline")) => {
-                Overlay::Preview(self.polyline_overlay(gesture, canvas.cursor()))
-            }
+            (gesture, None, Some("draw_polyline")) => Overlay::Preview(
+                self.polyline_overlay(gesture, snap.map(|s| s.at).or(canvas.cursor())),
+            ),
             (Some(Gesture::Dragging(drag)), _, Some(id)) => {
                 Overlay::Preview(match self.text_arc_drag(drag, reach) {
                     Some(bent) => self.text_preview(&bent),
@@ -1214,6 +1227,16 @@ impl CutCraftApp {
         self.paint_2d(ui, &canvas, &overlay);
         self.datum_mark(ui, &canvas, area, job.offset);
         self.handles_and_hints(ui, &canvas, reach, modes);
+        self.paint_kept_snaps(ui, &canvas, reach);
+        if let Some(hit) = snap.filter(|_| canvas.hover().is_some() || gesture.is_some()) {
+            Self::paint_snap(ui, &canvas, hit);
+            // after what the tool does next, so that stays first
+            let hint = match self.step_hint(modes) {
+                Some(step) => format!("{step}; {}", Self::snap_hint(hit)),
+                None => Self::snap_hint(hit),
+            };
+            cut_craft_bug_report::hint::hint(ui.ctx(), &hint);
+        }
         self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
@@ -1549,11 +1572,15 @@ impl CutCraftApp {
     pub(super) fn transform_overlay(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Overlay {
         if let Some(t) = self.handle_drag(ui, drag, reach) {
             let doc = &self.doc;
-            let moved = doc
+            let paths = doc
                 .selection
                 .iter()
-                .map(|id| doc.vectors[id].transformed(&t));
-            return Overlay::Preview(moved.collect());
+                .map(|id| doc.vectors[id].transformed(&t))
+                .collect();
+            return Overlay::Moving {
+                paths,
+                components: self.moving_components(doc.selected_components.iter(), t),
+            };
         }
         Overlay::Window {
             start: drag.start,
@@ -1622,12 +1649,31 @@ impl CutCraftApp {
             };
         };
         let by = cut_craft_core::glam::DAffine2::from_translation(drag.end - drag.start);
-        Overlay::Preview(
-            self.grabbed_outlines(grab)
+        let models: Vec<EntityId> = match grab {
+            Grab::Vector(_) => vec![],
+            Grab::Component(id) => vec![id],
+            Grab::Selection => self.doc.selected_components.iter().copied().collect(),
+        };
+        Overlay::Moving {
+            paths: self
+                .grabbed_outlines(grab)
                 .iter()
                 .map(|p| p.transformed(&by))
                 .collect(),
-        )
+            components: self.moving_components(models.iter(), by),
+        }
+    }
+
+    /// Each of `ids` still in the job with the transform `t` a drag carries it by (the same
+    /// one for each, as the transform let go applies it).
+    fn moving_components<'a>(
+        &self,
+        ids: impl Iterator<Item = &'a EntityId>,
+        t: DAffine2,
+    ) -> Vec<(EntityId, DAffine2)> {
+        ids.filter(|id| self.doc.components.contains_key(id))
+            .map(|&id| (id, t))
+            .collect()
     }
 
     /// A select-mode drag let go: what it took hold of moves (as one undo), as Aspire's
@@ -2334,13 +2380,42 @@ impl CutCraftApp {
         let node_target = pressed
             .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
             .and_then(|at| self.node_target(at, reach));
+        // over a keep-out zone: its name and where it is edited, first in the menu
+        let zone = pressed.and_then(|at| self.doc.keep_out_at(at));
         let selection_menu = || match (guide, node_target) {
             (Some(i), _) => gui::guide_menu(i, self.doc.guides[i].locked),
             (None, Some(target)) => gui::node_menu(&self.doc, &target),
-            (None, None) => self.menus.selection_menu(&self.doc),
+            (None, None) => {
+                let mut items = zone.map_or_else(Vec::new, |(z, machine)| {
+                    gui::keep_out_menu(&z.label(), machine, self.display.keep_out_labels)
+                });
+                items.extend(self.menus.selection_menu(&self.doc));
+                items
+            }
         };
         if let Some(action) = self.popup(canvas.response(), selection_menu) {
             self.invoke(ui.ctx(), &action);
+        }
+        self.keep_out_hint(canvas);
+    }
+
+    /// Resting the pointer on a keep-out zone in the 2D view: what it is and how to edit it.
+    fn keep_out_hint(&self, canvas: &Canvas) {
+        let response = canvas.response();
+        if response.dragged() || self.drawing_tool().is_some() {
+            return;
+        }
+        if let Some((zone, machine)) = canvas.cursor().and_then(|at| self.doc.keep_out_at(at)) {
+            let edit = if machine {
+                "a clamp of the machine's, edited in Machine Configuration"
+            } else {
+                "edited in Toolpaths ▸ Keep-Out Zones…"
+            };
+            response.clone().on_hover_text(format!(
+                "{}: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. \
+                 It is {edit}; right-click for a shortcut",
+                zone.label()
+            ));
         }
     }
 
@@ -2554,42 +2629,254 @@ impl CutCraftApp {
     }
 
     /// Drawing and node drags snap to the snap points (Shift holds snapping off).
+    #[cfg(test)]
     pub(super) fn snapped(
         &self,
         ui: &egui::Ui,
         gesture: Option<Gesture>,
         scale: f32,
     ) -> Option<Gesture> {
+        self.snapping(ui, gesture, scale, None).0
+    }
+
+    /// The gesture snapped as [`Self::snapped`] says, and what the pointer (a drag's end, or
+    /// `pointer` while hovering) snaps to, for the view's marker: drawing tools' clicks snap
+    /// too, and a polyline's next point snaps tangent or square on from the last.
+    pub(super) fn snapping(
+        &self,
+        ui: &egui::Ui,
+        gesture: Option<Gesture>,
+        scale: f32,
+        pointer: Option<Point>,
+    ) -> (Option<Gesture>, Option<Snap>, Vec<Snap>) {
         let snapping = self.drawing_tool().is_some() || self.view_tool == Some(ViewTool::NodeEdit);
         if !snapping || ui.input(|i| i.modifiers.shift) {
-            return gesture;
+            return (gesture, None, vec![]);
         }
         let reach = self.options.snapping.snapping_radius / f64::from(scale);
         // a drawn shape's far end also snaps square onto spans and tangent to arcs; a node
         // dragged starts from the node itself, and a stroke's samples are not a shape's
         // end, so those snap as points
-        let drawing = self
-            .drawing_tool()
-            .is_some_and(|id| !STROKE_TOOLS.contains(&id));
-        let snap = |mut drag: Drag| {
-            drag.start = self.options.snapping.snap(&self.doc, drag.start, reach);
-            drag.end = if drawing {
-                self.options
-                    .snapping
-                    .snap_from(&self.doc, drag.start, drag.end, reach)
-            } else {
-                self.options.snapping.snap(&self.doc, drag.end, reach)
-            };
-            drag
+        let tool = self.drawing_tool();
+        let drawing = tool.is_some_and(|id| !STROKE_TOOLS.contains(&id));
+        // a polyline's next point runs on from its last
+        let last = (tool == Some("draw_polyline"))
+            .then(|| self.polyline.points.last().copied())
+            .flatten();
+        let find =
+            |from: Option<Point>, at: Point| self.options.snapping.find(&self.doc, from, at, reach);
+        let to = |hit: Option<Snap>, at: Point| hit.map_or(at, |h| h.at);
+        let mut marker = None;
+        // where a point was placed on a snap: kept there once drawn
+        let mut placed = vec![];
+        let mut snap = |mut drag: Drag| {
+            let first = find(last, drag.start);
+            drag.start = to(first, drag.start);
+            let hit = find(drawing.then_some(drag.start), drag.end);
+            drag.end = to(hit, drag.end);
+            marker = hit;
+            (drag, first.into_iter().chain(hit))
         };
-        gesture.map(|g| match g {
-            Gesture::Dragging(drag) => Gesture::Dragging(snap(drag)),
-            Gesture::Dropped { drag, shift } => Gesture::Dropped {
-                drag: snap(drag),
-                shift,
-            },
+        let gesture = gesture.map(|g| match g {
+            Gesture::Dragging(drag) => Gesture::Dragging(snap(drag).0),
+            Gesture::Dropped { drag, shift } => {
+                let (drag, hits) = snap(drag);
+                placed.extend(hits);
+                Gesture::Dropped { drag, shift }
+            }
+            // a drawing tool's click places a point, so it snaps; node editing's picks
+            Gesture::Click { at, shift } if tool.is_some() => {
+                let hit = find(last, at);
+                placed.extend(hit);
+                Gesture::Click {
+                    at: to(hit, at),
+                    shift,
+                }
+            }
             click @ Gesture::Click { .. } => click,
-        })
+        });
+        if !matches!(gesture, Some(Gesture::Dragging(_))) {
+            marker = pointer.and_then(|at| find(last.filter(|_| drawing), at));
+        }
+        (gesture, marker, placed)
+    }
+
+    /// The snap marker where the pointer snapped: a shape for each kind (a square on an end,
+    /// a triangle on a middle, a circle where a line touches a curve, a right angle where it
+    /// meets one square on, a plus on a centre, a cross elsewhere) and its name beside it;
+    /// the status bar says what it means.
+    pub(super) fn paint_snap(ui: &egui::Ui, canvas: &Canvas, hit: Snap) {
+        const SIZE: f32 = 6.0;
+        let colour = egui::Color32::from_rgb(0, 160, 60);
+        let painter = ui.painter_at(canvas.area);
+        let at = canvas.transform.to_screen(hit.at);
+        Self::snap_mark(&painter, at, hit.kind, SIZE, egui::Stroke::new(2.0, colour));
+        painter.text(
+            at + egui::vec2(SIZE + 4.0, SIZE + 4.0),
+            egui::Align2::LEFT_TOP,
+            hit.kind.label(),
+            egui::FontId::proportional(12.0),
+            colour,
+        );
+    }
+
+    /// One snap marker of `kind`, `size` pixels from its middle to its edge.
+    fn snap_mark(
+        painter: &egui::Painter,
+        at: egui::Pos2,
+        kind: cut_craft_core::snap::SnapKind,
+        size: f32,
+        stroke: egui::Stroke,
+    ) {
+        use cut_craft_core::snap::SnapKind;
+        let v = egui::vec2;
+        match kind {
+            SnapKind::End | SnapKind::JobPoint => {
+                painter.rect_stroke(
+                    egui::Rect::from_center_size(at, v(2.0 * size, 2.0 * size)),
+                    0.0,
+                    stroke,
+                    egui::StrokeKind::Middle,
+                );
+            }
+            SnapKind::Mid => {
+                let points = vec![
+                    at + v(0.0, -size),
+                    at + v(size, 0.8 * size),
+                    at + v(-size, 0.8 * size),
+                ];
+                painter.add(egui::Shape::closed_line(points, stroke));
+            }
+            SnapKind::Tangent => {
+                painter.circle_stroke(at, size, stroke);
+                painter.line_segment([at + v(-size, -size), at + v(size, -size)], stroke);
+            }
+            SnapKind::Perpendicular => {
+                painter.line_segment([at + v(-size, size), at + v(size, size)], stroke);
+                painter.line_segment([at + v(-size, size), at + v(-size, -size)], stroke);
+                painter.line_segment([at + v(-size, 0.0), at + v(0.0, 0.0)], stroke);
+                painter.line_segment([at + v(0.0, 0.0), at + v(0.0, size)], stroke);
+            }
+            SnapKind::ArcCenter | SnapKind::ObjectCenter => {
+                painter.line_segment([at + v(-size, 0.0), at + v(size, 0.0)], stroke);
+                painter.line_segment([at + v(0.0, -size), at + v(0.0, size)], stroke);
+                painter.circle_stroke(at, size / 2.0, stroke);
+            }
+            SnapKind::Guide | SnapKind::Aligned | SnapKind::Grid => {
+                painter.line_segment([at + v(-size, -size), at + v(size, size)], stroke);
+                painter.line_segment([at + v(-size, size), at + v(size, -size)], stroke);
+            }
+        }
+    }
+
+    /// The marks of the points kept on their snaps: small blue snap markers; the picked one
+    /// orange and named, as is one under the pointer, which the status bar explains.
+    fn paint_kept_snaps(&self, ui: &egui::Ui, canvas: &Canvas, reach: f64) {
+        const SIZE: f32 = 4.0;
+        let blue = egui::Color32::from_rgb(30, 110, 220);
+        let orange = egui::Color32::from_rgb(240, 130, 0);
+        let painter = ui.painter_at(canvas.area);
+        let hover = canvas.cursor();
+        for (i, at, kind) in self.doc.constraint_marks() {
+            if !self.doc.shown(self.doc.constraints[i].vector) {
+                continue;
+            }
+            let picked = self.picked_constraint == Some(i);
+            let hovered = hover.is_some_and(|p| p.distance(at) <= reach);
+            let colour = if picked { orange } else { blue };
+            let screen = canvas.transform.to_screen(at);
+            let width = if picked { 2.5 } else { 1.5 };
+            Self::snap_mark(
+                &painter,
+                screen,
+                kind,
+                SIZE,
+                egui::Stroke::new(width, colour),
+            );
+            if picked || hovered {
+                painter.text(
+                    screen + egui::vec2(SIZE + 4.0, -SIZE - 4.0),
+                    egui::Align2::LEFT_BOTTOM,
+                    format!("Kept on {}", kind.label()),
+                    egui::FontId::proportional(12.0),
+                    colour,
+                );
+            }
+            if hovered && !picked {
+                cut_craft_bug_report::hint::hint(
+                    ui.ctx(),
+                    &format!(
+                        "This point stays on the {} it was snapped to, even when that moves. \
+                         Click the mark and press Delete to let it move freely.",
+                        kind.label().to_lowercase()
+                    ),
+                );
+            }
+        }
+    }
+
+    /// The snap mark (a point kept on its snap) within `reach` of `at`, nearest first.
+    pub(super) fn kept_snap_at(&self, at: Point, reach: f64) -> Option<usize> {
+        self.doc
+            .constraint_marks()
+            .into_iter()
+            .filter(|(i, _, _)| self.doc.shown(self.doc.constraints[*i].vector))
+            .map(|(i, p, _)| (i, p.distance(at)))
+            .filter(|(_, d)| *d <= reach)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(i, _)| i)
+    }
+
+    /// Delete with a snap mark picked: that point is let go, so it moves freely. False when
+    /// none is picked.
+    pub(super) fn release_picked_snap(&mut self) -> bool {
+        let Some(i) = self.picked_constraint.take() else {
+            return false;
+        };
+        let mut kept = self.doc.constraints.clone();
+        if i >= kept.len() {
+            return false;
+        }
+        let gone = kept.remove(i);
+        let mut c = Change::builder(&self.doc);
+        c.set_constraints(kept);
+        self.record(
+            Ok(c.finish()),
+            &format!(
+                "Let go of the {} snap: that point now moves freely",
+                gone.to.kind().label().to_lowercase()
+            ),
+        );
+        true
+    }
+
+    /// Points just placed on snaps by a drawing tool or a node drag (`placed`), remembered
+    /// so what is made from them keeps them there. A polyline gathers its points' snaps
+    /// from its first click; anything else keeps those of its last click or drag.
+    pub(super) fn place_on_snaps(&mut self, gesture: Option<Gesture>, placed: &[Snap]) {
+        let placing = matches!(
+            gesture,
+            Some(Gesture::Click { .. } | Gesture::Dropped { .. })
+        );
+        if !placing {
+            return;
+        }
+        let kept = placed.iter().filter_map(|s| Some((s.at, s.on?)));
+        if self.drawing_tool() == Some("draw_polyline") && !self.polyline.is_empty() {
+            self.placed.extend(kept);
+        } else {
+            self.placed = kept.collect();
+        }
+    }
+
+    /// The status bar's words for a snap: what it snapped to, and how to place a point
+    /// without it.
+    pub(super) fn snap_hint(hit: Snap) -> String {
+        format!(
+            "snapped to {}: {} (Shift places it freely)",
+            hit.kind.label(),
+            hit.kind.explain()
+        )
     }
 
     /// Edit ▸ Options: Aspire's sections; a change is saved and applied at once.
@@ -2693,6 +2980,10 @@ impl CutCraftApp {
             options.advanced.apply();
             self.options = options;
             self.save_options();
+            // clipping turned on or off: the toolpaths made again with or without it
+            if self.sync_machine_keep_out() {
+                self.keep_out_changed();
+            }
         }
     }
 
@@ -2707,8 +2998,27 @@ impl CutCraftApp {
         let mut machine_changed = None;
         let choices = self.post_choices();
         let default = self.output_post().map(|p| p.name);
-        let (picked, group) = (self.selected_toolpath, self.selected_group.as_deref());
-        let plan = files::save_plan(&self.doc, form.mode, picked, group, form.group);
+        let post = self.form_post(&form);
+        let plan = post
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(|p| self.plan(&form, p));
+        let split = match &post {
+            Ok(p) if Self::split_for(&form, p) => Some(if p.changes_tools() {
+                "Each tool gets a file of its own. Run them in order, changing the tool \
+                 between files."
+            } else {
+                "This post-processor cannot change tools, so each tool gets a file of its own. \
+                 Run them in order, changing the tool between files."
+            }),
+            _ => None,
+        };
+        let changer = self.machines.active().is_none_or(|m| !m.slots.is_empty());
+        let found = match &plan {
+            Ok(plan) => self.save_checks(plan, form.changes).to_vec(),
+            Err(_) => vec![],
+        };
+        let errors = Self::refused(&found).is_some();
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong("Machine and post-processor");
@@ -2740,36 +3050,39 @@ impl CutCraftApp {
             }
             ui.add_enabled(
                 form.mode == SaveMode::VisibleToMultipleFiles,
-                egui::Checkbox::new(&mut form.group, "Group where possible"),
+                egui::Checkbox::new(
+                    &mut form.group,
+                    "Merge toolpaths in a row that use the same tool",
+                ),
             )
-            .on_hover_hint("Toolpaths in a row that use the same tool go in one file");
+            .on_hover_hint(
+                "Toolpaths next to each other in the list that use the same tool go in one \
+                 file. The cutting order never changes (Aspire's Group Where Possible)",
+            );
+            tool_changes_section(ui, &mut form.changes, changer);
             if self.doc.job.double_sided.is_some() {
                 ui.checkbox(&mut form.add_side, "Add side to toolpath name");
             }
             ui.separator();
-            match &plan {
-                Ok(plan) => {
-                    for (n, ids) in plan.iter().enumerate() {
-                        let names: Vec<String> = ids
-                            .iter()
-                            .filter_map(|id| self.doc.toolpaths.get(id))
-                            .map(|t| format!("{} ({})", t.name, t.tool.name))
-                            .collect();
-                        ui.label(format!("File {}: {}", n + 1, names.join(", ")));
-                    }
-                }
-                Err(e) => {
-                    ui.colored_label(ui.visuals().warn_fg_color, e);
-                }
-            }
+            files_section(ui, &self.doc, &plan, split);
+            checks_section(ui, &found);
             ui.add_space(ui.spacing().item_spacing.y);
-            save = ui
-                .add_enabled(plan.is_ok(), egui::Button::new("Save Toolpaths..."))
-                .clicked();
+            let response = ui.add_enabled(
+                plan.is_ok() && !errors,
+                egui::Button::new("Save Toolpaths..."),
+            );
+            save = if errors {
+                response
+                    .on_disabled_hover_text("Fix the problems marked Must fix to save")
+                    .clicked()
+            } else {
+                response.clicked()
+            };
         });
         if let Some(n) = machine_changed {
             self.machines.active = n;
             form.post = None;
+            form.changes = self.default_changes();
             self.machines_changed("Machine changed");
         }
         if save {
@@ -3101,6 +3414,16 @@ impl CutCraftApp {
         shift: bool,
         tolerance: f64,
     ) {
+        // a snap mark: picked, for Delete to let its point go
+        self.picked_constraint = self.kept_snap_at(at, tolerance);
+        if let Some(i) = self.picked_constraint {
+            let kind = self.doc.constraints[i].to.kind();
+            self.status.set_message(&format!(
+                "Snap picked: this point is kept on the {}. Press Delete to let it go.",
+                kind.label().to_lowercase()
+            ));
+            return;
+        }
         let hit = self.doc.pick(at, tolerance);
         // a picture is picked where no vector is: click picks it, Shift-click adds or
         // takes it away
@@ -3246,4 +3569,84 @@ pub(super) fn immediate_output(
             .clicked();
     });
     save
+}
+
+/// Save Toolpaths' checks before cutting: each error (Must fix) and warning (Check) with
+/// how to put it right.
+fn checks_section(ui: &mut egui::Ui, found: &[cut_craft_core::preflight::Finding]) {
+    use cut_craft_core::preflight::Severity;
+    if found.is_empty() {
+        return;
+    }
+    ui.separator();
+    ui.strong("Checks before cutting");
+    for f in found {
+        let (colour, kind) = match f.severity {
+            Severity::Error => (ui.visuals().error_fg_color, "Must fix"),
+            Severity::Warning => (ui.visuals().warn_fg_color, "Check"),
+        };
+        ui.colored_label(colour, format!("{kind}: {}", f.message));
+    }
+}
+
+/// Save Toolpaths' tool changes: a file for each tool, the tool changer (when the machine
+/// has one), or a pause to change the tool by hand.
+fn tool_changes_section(ui: &mut egui::Ui, changes: &mut files::ToolChanges, has_changer: bool) {
+    use files::ToolChanges;
+    ui.strong("Tool changes");
+    ui.radio_value(
+        changes,
+        ToolChanges::SeparateFiles,
+        "Separate file for each tool",
+    )
+    .on_hover_hint(
+        "The safest without a tool changer: change the tool and set Z zero between files",
+    );
+    ui.add_enabled_ui(has_changer, |ui| {
+        ui.radio_value(changes, ToolChanges::ToolChanger, "Tool changer (ATC)")
+            .on_hover_hint("One file; the machine's tool changer changes the tools")
+            .on_disabled_hover_text(
+                "This machine has no tool changer: add its slots in Machine Configuration",
+            );
+    });
+    ui.radio_value(
+        changes,
+        ToolChanges::Pause,
+        "One file, pause to change the tool",
+    )
+    .on_hover_hint(
+        "The machine stops (M0) at each tool change; change the tool, set Z zero, then \
+         resume. Some controllers (GRBL among them) cannot jog while stopped, which makes \
+         setting Z zero hard: use separate files there",
+    );
+}
+
+/// Save Toolpaths' files: what goes in each, and why there is a file for each tool.
+fn files_section(
+    ui: &mut egui::Ui,
+    doc: &cut_craft_core::document::Document,
+    plan: &Result<Vec<Vec<EntityId>>, String>,
+    split: Option<&str>,
+) {
+    let warn = ui.visuals().warn_fg_color;
+    if let Some(why) = split
+        && plan.as_ref().is_ok_and(|p| p.len() > 1)
+    {
+        ui.colored_label(warn, why);
+    }
+    match plan {
+        Ok(plan) => {
+            for (n, ids) in plan.iter().enumerate() {
+                let names: Vec<String> = ids
+                    .iter()
+                    .filter_map(|id| doc.toolpaths.get(id))
+                    .map(|t| format!("{} ({})", t.name, t.tool.name))
+                    .collect();
+                ui.label(format!("File {}: {}", n + 1, names.join(", ")));
+            }
+        }
+        Err(e) => {
+            ui.colored_label(warn, e);
+        }
+    }
 }

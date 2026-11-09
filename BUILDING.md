@@ -141,50 +141,53 @@ Do this once on a new machine or a fresh clone.
 
 ## Cut a versioned release
 
-Versions are automatic, and so are their tags. Each night **Version bump** reads the titles of
-the pull requests merged since the last version tag (see [CONTRIBUTING.md](CONTRIBUTING.md)),
-and if any of them changes the program it commits "Version X.Y.Z" and tags vX.Y.Z. The tag
-starts **Builds**, which builds, signs and publishes the release. To release before the night,
-open Actions → Version bump → **Run workflow**.
+The version only changes when you decide to release, and then by one step. Merging pull
+requests never changes it; between releases the rolling `nightly` pre-release carries the
+newest code.
+
+- **patch** (the usual release): 0.6.0 → 0.6.1 → 0.6.2
+- **minor** (a milestone): 0.6.2 → 0.7.0
 
 Whenever `main`'s version has no tag yet, **Release tag** makes it: it tags the commit the
-version arrived in and starts **Builds** on that tag. So a version cut by hand needs nothing
-after its pull request merges. Nobody pushes tags by hand any more, and a `v*` tag is never
-moved or deleted (see "Repository protection").
+version arrived in and starts **Builds** on that tag, which builds, signs and publishes the
+release. Nobody pushes tags by hand, and a `v*` tag is never moved or deleted (see
+"Repository protection").
 
 Afterwards, `git pull` and push `main` and the new tag to the Gitea mirror too
 (`git push gitea main --tags`), since the bots push only to GitHub.
 
-To cut a version by hand (to release now with your own "What's new" text, or after a failed
-night):
+To cut a release:
 
 1. Get the latest code and make sure the gate passes (see above), with `git status --short`
-   printing nothing.
+   printing nothing. Run `git fetch --tags` so the last release's tag is there.
 
-2. Set the version. In the root `Cargo.toml`, under `[workspace.package]`, change the line
-   `version = "0.5.2"` to the new version, then update the lock file to match:
+2. Move the version one step:
 
    ```bash
-   cargo update -w
+   scripts/release-version          # 0.6.0 -> 0.6.1
+   scripts/release-version minor    # 0.6.0 -> 0.7.0, for a milestone
    ```
 
-3. Replace the bullets in `crates/app/whats-new.md` with this release's changes. The start
-   page shows them under "What's new". Keep it to about four short lines, or the start page's
-   links no longer fit and a test fails.
+   It updates `Cargo.toml` and `Cargo.lock`, and prints the pull requests merged since the last
+   release, sorted into New and Fixed by their titles. It refuses if the current version was
+   never released, since a version pull request is then already waiting.
+
+3. Replace the bullets in `crates/app/whats-new.md` with this release's changes, using that
+   list. The start page shows them under "What's new". Keep it to about four short lines, or
+   the start page's links no longer fit and a test fails.
 
 4. `main` is protected, so the version goes in through a pull request like any other change.
-   Commit the three files on a branch and open a pull request titled `chore: version 0.5.3`
-   (`chore:` so the nightly job doesn't count it as another change):
+   Commit the three files on a branch and open a pull request titled `chore: version 0.6.1`:
 
    ```bash
-   git switch -c version-0.5.3
+   git switch -c version-0.6.1
    git add Cargo.toml Cargo.lock crates/app/whats-new.md
-   git commit -m "Version 0.5.3"
-   git push -u origin version-0.5.3
-   gh pr create --title "chore: version 0.5.3" --body "Version 0.5.3"
+   git commit -m "Version 0.6.1"
+   git push -u origin version-0.6.1
+   gh pr create --title "chore: version 0.6.1" --body "Version 0.6.1"
    ```
 
-5. When CI is green, merge it. **Release tag** tags v0.5.3 on the merge and **Builds** makes
+5. When CI is green, merge it. **Release tag** tags v0.6.1 on the merge and **Builds** makes
    the macOS DMG, Linux `.tar.gz`, AppImage and Flatpak, and Windows `.zip`, signs each and
    attaches them to the release on GitHub's Releases page. Watch with `gh run list --limit 6`.
 
@@ -197,24 +200,11 @@ Two rulesets (Settings → Rules → Rulesets) guard the GitHub repository:
 - **Protect main**: `main` can't be deleted or force-pushed, and changes reach it only through
   pull requests whose CI (`check (ubuntu-latest)`, `check (windows-latest)`) and title check
   (`kind`) pass. No review is required. Nobody bypasses it, admins included, except deploy
-  keys, which is how the nightly version gets its commit onto `main`. To override in an
-  emergency, set the ruleset to Disabled and back to Active afterwards.
+  keys (none is set up, and nothing needs one). To override in an emergency, set the ruleset
+  to Disabled and back to Active afterwards.
 - **Protect release tags**: a `v*` tag can't be deleted or moved once it exists. New tags can
   still be made, which is how **Release tag** makes them with the workflow's own token. Keep
   "Restrict creations" off in this ruleset, or Release tag can't tag.
-
-### Let the nightly version push to main
-
-Version bump pushes with a deploy key, set up once:
-
-1. Make a key with no passphrase: `ssh-keygen -t ed25519 -N "" -C version-bump -f version-bump`
-2. Settings → Deploy keys → **Add deploy key**: title `Version bump`, paste `version-bump.pub`,
-   tick **Allow write access**.
-3. Settings → Secrets and variables → Actions → **New repository secret**: name
-   `VERSION_BUMP_DEPLOY_KEY`, paste the whole of the private file `version-bump`.
-4. Delete both files.
-
-Without the secret the night that has something to release fails with a message saying so.
 
 ## When something goes wrong
 
@@ -227,8 +217,9 @@ Without the secret the night that has something to release fails with a message 
 - **GitHub says "This repository moved".** Point `origin` at the new address:
   `git remote set-url origin git@github.com:NoobyNull/Cut-Craft.git`.
 - **A release came out wrong.** Its tag can't be moved or deleted. Fix it on `main` and cut the
-  next version (a `fix:` merge does it overnight, or cut one by hand above).
+  next version (`scripts/release-version`, above).
 - **A version merged but no release appeared.** Open Actions → **Release tag** and read the run
   for that merge; **Run workflow** there tries again. If the tag exists but **Builds** failed,
-  open Actions → Builds → **Run workflow** and pick the tag (not a branch) under "Use workflow
-  from".
+  open Actions → Builds → **Run workflow**, leave "Use workflow from" on `main`, and type the
+  tag (such as `v0.5.3`) in the box. A release goes out once Linux and Windows are built; when
+  GitHub couldn't start the macOS build, run it again the same way later to add the DMG.

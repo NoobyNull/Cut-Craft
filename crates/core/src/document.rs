@@ -552,13 +552,17 @@ pub struct Document {
     /// Edit ▸ Document Variables: named values sums in number fields use as `{name}`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub variables: BTreeMap<String, f64>,
-    /// Areas a tool must not pass over (clamps), closed paths of their own.
+    /// Areas a tool must not pass over (clamps), closed paths of their own, each named.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub keep_out: Vec<Path>,
+    pub keep_out: Vec<crate::keep_out::KeepOutZone>,
     /// The active machine's own keep-out zones (clamps fixed to its bed), in job
     /// millimetres: set by the app from Machine Configuration, never saved with the job.
     #[serde(skip)]
-    pub machine_keep_out: Vec<Path>,
+    pub machine_keep_out: Vec<crate::keep_out::KeepOutZone>,
+    /// Toolpaths are clipped by the keep-out zones, what is under a zone left uncut, instead
+    /// of not being made: set by the app from Options (off unless turned on), not saved.
+    #[serde(skip)]
+    pub clip_keep_out: bool,
     /// Double-sided jobs: the bottom side is being worked on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bottom_side: bool,
@@ -579,6 +583,9 @@ pub struct Document {
     /// labels call the part the group belongs to (added with part labels).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub part_names: BTreeMap<u64, String>,
+    /// Points kept on what they were snapped to when drawn (added with constraints).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constraints: Vec<crate::constraint::Constraint>,
 }
 
 /// A guide line in the 2D view: up and down at x = `at` when vertical, else across at
@@ -714,9 +721,11 @@ impl Default for Document {
             variables: BTreeMap::new(),
             keep_out: vec![],
             machine_keep_out: vec![],
+            clip_keep_out: false,
             guides: vec![],
             toolpath_groups: vec![],
             part_names: BTreeMap::new(),
+            constraints: vec![],
             tiling: None,
             bottom_side: false,
             other_side: SheetObjects::default(),
@@ -789,11 +798,24 @@ impl Document {
 
     /// Every keep-out zone a toolpath must abide by: the job's and the machine's.
     pub fn keep_out_zones(&self) -> Vec<Path> {
-        self.keep_out
-            .iter()
-            .chain(&self.machine_keep_out)
-            .cloned()
-            .collect()
+        self.named_keep_out().map(|z| z.path.clone()).collect()
+    }
+
+    /// Every keep-out zone with its name: the job's, then the machine's.
+    pub fn named_keep_out(&self) -> impl Iterator<Item = &crate::keep_out::KeepOutZone> {
+        self.keep_out.iter().chain(&self.machine_keep_out)
+    }
+
+    /// The keep-out zone `p` is in, if any, and whether it is the machine's (edited in
+    /// Machine Configuration) rather than the job's (Keep-Out Zones).
+    pub fn keep_out_at(&self, p: Point) -> Option<(&crate::keep_out::KeepOutZone, bool)> {
+        let job = self.keep_out.iter().find(|z| z.contains(p));
+        job.map(|z| (z, false)).or_else(|| {
+            self.machine_keep_out
+                .iter()
+                .find(|z| z.contains(p))
+                .map(|z| (z, true))
+        })
     }
 
     /// The component a "selected component" command works on: the last one picked, else the

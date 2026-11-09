@@ -7,6 +7,7 @@ use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_mo
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
 use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::progress;
 use cut_craft_core::simulation::rest_areas;
 use cut_craft_core::toolpath::{
     Drop, Tool, ToolDatabase, ToolShape, Toolpath, cut_points, follow_linked, made_by, raster_lines,
@@ -165,8 +166,9 @@ impl Command for FinishingToolpath3d {
         }
         let mut c = Change::builder(doc);
         // ponytail: each toolpath works out the rest areas of every tool before it again
-        for (tool, own) in &each {
-            c.add_toolpath(finish(doc, tool, own)?);
+        for (i, (tool, own)) in each.iter().enumerate() {
+            progress::stop_if_cancelled()?;
+            c.add_toolpath(progress::part(i, each.len(), || finish(doc, tool, own))?);
         }
         Ok(c.finish())
     }
@@ -181,10 +183,15 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
             "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
         ));
     }
+    progress::stage("Placing the model");
     let surface = placed_model(doc, tool)?;
     // where every earlier tool left material, each worked out on its own grid
     let mut rest = vec![];
+    if !p.after.is_empty() {
+        progress::stage("Finding what the earlier tools left");
+    }
     for earlier in &p.after {
+        progress::stop_if_cancelled()?;
         ensure_positive("earlier tool diameter", earlier.diameter)?;
         let model = placed_model(doc, earlier)?;
         let left = model.left_by(earlier);
@@ -230,7 +237,13 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
         ceiling: f64::INFINITY,
         over_ceiling: false,
     };
+    progress::report(0.2);
+    progress::stop_if_cancelled()?;
+    progress::stage("Following the model's surface");
     let runs = drop.along_all(&lines, &inside);
+    progress::report(0.7);
+    progress::stop_if_cancelled()?;
+    progress::stage("Linking the passes");
     // stay down from one line or ring to the next one beside it
     let lift = match p.strategy {
         Strategy::Offset => p.stepover_retract.max(0.0),

@@ -30,6 +30,7 @@ python3 -I re/help2txt.py "<Aspire install>/Language/ENU/Help" re/extracted/help
 
 - Aspire's gadgets are Lua scripts (help: Gadgets).
 - **Deliberate difference:** CutCraft gadgets are Lua 5.4 too, but call CutCraft's own commands by id (`cutcraft.run("draw_circle", {...})`) instead of Vectric's gadget API, run sandboxed (no files, programs or network), and each run is one Undo step. Aspire gadgets do not run unchanged.
+- **Add-ons** (Cut Craft only; Gadgets ▸ Add-ons): extras too big to ship with the app, such as the Depth add-on. The window lists the official add-ons with an Install button each (their GitHub repositories built in), and Install from GitHub takes any other repository as owner/name or a link. Each installs from its repository's newest release and shows Update to <version> when a newer one is out. An add-on signed with Cut Craft's release key installs straight away; an unsigned one only after a warning that Cut Craft is not responsible for it; a signature that does not match refuses it. Installed add-ons appear as ordinary Cut Craft tools, never with their own interface: a gadget add-on's gadgets join the Gadgets menu (a signed one's beside the built-in gadgets, an unsigned one's under My Gadgets, with its warning), and a tool add-on installs only when Cut Craft has a tool made for it (Depth for Relief from Photo). An add-on of a kind this version cannot use is refused before anything is installed, saying why.
 - Gadgets built into Cut Craft are signed with the app. A gadget from the user's My Gadgets folder is unsigned: before it first runs each session, Cut Craft warns that it is not responsible for what the gadget does, and the user picks Run Gadget or Cancel. Only gadgets from Cut Craft's own builds count as signed; any other gadget, from the folder or downloaded, is allowed after the same warning.
 
 Our equivalents so far: wgpu for the 3D view, winit for windows.
@@ -164,25 +165,39 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   3. A form offers the same values as exact typed input. Rectangle corners can be square, external-radius or internal-radius, with draggable green radius handles.
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
-- **Toolbox flyouts** (Cut Craft's own choice, not Aspire's) [inf]: Aspire shows each of these
-  tools as an icon of its own; Cut Craft groups tools that do one job different ways behind
-  one button so a beginner faces fewer, clearer buttons (Drawing tab 78 buttons to 44). The
-  button shows the tool picked from it last (kept in the options); a press held for 0.4 s, a
-  click on the arrow in its bottom-right corner, or Down with the button focused opens the
-  others, each by icon and name. Find Tool, the Rail layout and Favourites still name every
-  tool on its own. The groups are `FLYOUTS` in `crates/app/src/flyout.rs`. Two variants are
-  Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle from
-  Edge (the drag is the diameter).
+- **Toolbox tool groups** (Cut Craft's own choice, not Aspire's) [inf]: tools that do one job
+  different ways (the circles, the text tools, the joins, the alignments…) are gathered in
+  named groups (`FLYOUTS` in `crates/app/src/flyout.rs`). By default every tool shows: each
+  group is a small box captioned with what its tools are for ("Circles and Ellipses",
+  "Line Up Edges"), so a beginner sees every choice without knowing to open anything; a box
+  moves to the next row whole rather than splitting. Aspire shows the same tools as loose
+  icons with no grouping. Options ▸ General ▸ *Fold tool groups into one button* (also on any
+  toolbox button's right-click menu) folds each group into one flyout button instead, for a
+  compact page (Drawing tab 78 buttons to 44): the button shows the tool picked from it last
+  (kept in the options); a press held for 0.4 s, a click on the arrow in its bottom-right
+  corner, or Down with the button focused opens the others, each by icon and name. Find
+  Tool, the Rail layout and Favourites name every tool on its own either way. Two variants
+  are Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle
+  from Edge (the drag is the diameter). Flyouts were the default until Matthew found tools
+  hidden under them too easy to miss (2026-11-09).
 - **Design sub-tabs** (Cut Craft's own choice, not Aspire's) [inf]: Aspire's Drawing and
   Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
-  Operations and 2D View Control at the top, then four sub-tabs across the page: **Create**
+  Operations and 2D View Control at the top, then five sub-tabs across the page: **Create**
   (Create Vectors), **Edit** (Select and Edit; Join, Combine and Trim; Transform Objects), **Arrange** (Align Objects,
-  Offset and Layout, Array Objects) and **Model** (Shape Creation, Shape Editing), so a page
+  Offset and Layout, Array Objects), **Model** (Shape Creation, Shape Editing) and **Import**
+  (Import Vectors or Picture, Import Vectors, Import 3D Model, Clipart Library, Import
+  Toolpaths (G-code), Import Cut List: every way into the job, which Aspire spreads over the
+  File menu, the Drawing and Modeling tabs and its Clipart tab; each on its own button, with
+  the files it takes in its tooltip), so a page
   shows a couple of dozen buttons instead of sixty-odd and a beginner looks under a word that
   says what the tools are for. Each sub-tab says so on hover. A tool run from a menu, a
   shortcut or Find Tool opens its sub-tab, so it shows highlighted where it lives. Favourites,
   the Rail and Ribbon layouts and Find Tool are as before. The sub-tabs are `DESIGN_SUBTABS`
-  in `crates/app/src/gui.rs`.
+  in `crates/app/src/gui.rs`. A right-click on a sub-tab offers Show as Its Own Section (and
+  on a section's heading, Put Back in the Tab Row), plus All Tabs in One Row and Every Tab as
+  Its Own Section: a section sits under the tab row, folds up by its heading, and is always
+  shown, so tools used together (say Create and Model) need no switching. The choice is kept
+  in the options file (`design_sections`); every sub-tab is in the row to start with.
 - **Next-step guidance** (Cut Craft's own) [inf]: Aspire's status bar shows a tool's tooltip.
   Cut Craft adds a box in the room left under a page's icons: the hovered tool's name, what
   it does and its next step (a flyout's names the tools it holds too), else the tool in
@@ -232,7 +247,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 - **Component tree:** the composite model is built from the **bottom of the tree upwards**. Combine modes are **Add / Subtract / Merge / Multiply**. Each component belongs to one **Level**: components inside a level combine first, then levels combine with each other. Per-component settings include combine mode, Fade, Tilt and Appearance (colour or material). Blue arrows reorder components, and double-clicking a component opens Component Properties.
 - **Create Shape** (from closed vectors): Round, Angled, Flat, Custom and Smooth profiles. The other creation tools are in the Model menu: Two Rail Sweep, Extrude & Weave, Turn & Spin, Texture Area, Zero Plane and From Bitmap.
 - **Modify:** Sculpt, Smooth, Emboss, Distort, Offset Model, Slice, Add Draft, Scale Z Height, Replace Below, Split, Bake, Segment 3D Model.
-- **Relief from Photo** (Cut Craft only, not in Aspire): Aspire's From Bitmap reads grey as height, so it works only on a depth map made elsewhere. Cut Craft estimates a photo's depth with an optional add-on (Depth Anything V2 Small, run on the CPU, Apache 2.0 weights; the larger models are non-commercial and are not offered). It then cuts away the backdrop, which it finds from the photo's border so light and dark backdrops both work, and lifts the subject clear of it. It adds the photo's fine shading back as texture and smooths speckle while keeping edges (Perona-Malik). Settings: Background cut-off, Fine detail, Smoothness, Max height, Lift. This is a deliberate addition for novices: one tool goes from photo to relief, and STL comes from Export as STL.
+- **Relief from Photo** (Cut Craft only, not in Aspire): Aspire's From Bitmap reads grey as height, so it works only on a depth map made elsewhere. Cut Craft estimates a photo's depth with an optional add-on (Depth Anything V2 Small, run on the CPU, Apache 2.0 weights; the larger models are non-commercial and are not offered). It then cuts away the backdrop, which it finds from the photo's border so light and dark backdrops both work, and lifts the subject clear of it. It adds the photo's fine shading back as texture and smooths speckle while keeping edges (Perona-Malik). Settings: Depth from (the estimate, or the picture itself when it is already a depth map), Background cut-off (by colour against the photo's border), Depth cut-off (drops everything farther back than a share of the depth range, depth2stl's floor), Invert, Fine detail, Sharpen, Smoothness, Max height, Lift, Soft edge (the outline slopes down instead of dropping, depth2stl's fade), Base. The relief follows its settings live once applied, and shaping runs at the relief's own cell size. This is a deliberate addition for novices: one tool goes from photo to relief, and STL comes from Export as STL.
 
 ### Clipart tab (Cut Craft: Library) [inf] (help: Clipart Tab)
 - **[inf]** Aspire: the Clipart tab browses clipart libraries by folder, each piece shown as a thumbnail; a double-click imports one, and a thumbnail dragged onto the 2D or 3D view drops it there. Vectric's own `.3dclip` / `.v3m` files carry their previews.
@@ -242,6 +257,14 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 ### Toolpaths (beyond P4, listed for completeness) [obs]
 - **Strategies:** Profile, Pocket, Drilling, V-Carve, Quick Engrave (Ctrl+Q), Inlay / V-Carve Inlay, Fluting, Prism, Chamfer, Keyhole, Thread Milling, Drag Knife, Moulding/Extruded, Texture, Rough and Finish Machining (3D), Rounding, PhotoVCarve, Sketch Carving, Laser Cut/Fill and Laser Picture, Array Copy, Merged.
 - **Support:** Tool Database (with remote databases), Materials, Templates, Tabs, Keep-Out Zones, Toolpath Tiling, Preview (simulation), Job Sheet, Summary.
+
+### Keep-out zones [inf] (help: Keep-out Zones)
+- **[inf]** Aspire's keep-out zones are areas (clamps) its rapids go round; a toolpath that cannot keep out of one is not saved.
+- **Deliberate differences, for novices:** each zone has a name, written on it in both views as its label ("Keep-out: Clamp 1"; Keep-Out Zones' Name numbers several, Add Selection adds to the zones there are; a machine's clamps are named in Machine Configuration, "Machine clamp 1" when left blank). View ▸ Show Keep-Out Zone Labels (also in Options ▸ Toolpath Settings, remembered) hides them. Resting the pointer on a zone in the 2D view says what it is and where it is edited; right-click there names it with Edit Keep-Out Zones… (or Edit Machine Keep-Out Zones…) and the labels toggle first in the menu. A cutting move enters a zone when the cutter's edge (its radius) reaches it, not only its centre, since the edge is what hits a clamp; rapids only go round the outline. A toolpath that would cut into a zone is not made at all (the form says which zone, and its tooltip says how to allow it), rather than made, warned about, and refused at save. Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones (off by default) makes it instead with whatever is under the zone left uncut: the tool lifts to the safe height where it would enter and comes back down past the zone, as if the zone were cut out of what is under it (a cylinder under a clamp is cut as the cylinder less the zone). The zones are not a layer of vectors: subtracting them from the design itself would change the user's drawing for good, so they stay an overlay over everything that only the toolpaths are clipped by, and turning clipping on or off recalculates every toolpath. Laser and drill bank toolpaths are not clipped (their power and hits run move by move), so one that enters a zone is still not made.
+
+### Progress of slow jobs [inf] (help: Calculate buttons; trial use)
+- **[inf]** Aspire calculates a toolpath, previews and recalculates on the spot: the window waits, with a progress bar along the bottom for the long ones.
+- **Deliberate differences, for novices:** Cut Craft runs a job that takes more than about a quarter of a second (calculating or editing a toolpath, Relief from Photo and the other non-drawing forms, Recalculate, Preview without animation, opening a job, importing a drawing or picture) off the window's thread and shows a window over the app saying what it is doing (the toolpath's name, the 3D level it is on, "Placing the model"), a bar with the percentage where the job can tell, the time so far and about how long is left, and Cancel, which stops it with nothing in the job changed. Quicker jobs finish in place, so the window never flashes. While it is up, keys and clicks do nothing behind it; if the job changes anyway, what the slow job made is thrown away and the status bar says to try again. Not yet: saving a job and saving toolpaths still run in place, and a 3D model's Orientate 3D Model form reads its file in place.
 
 ### Tool database: feeds and speeds [obs] (help: Tool Database)
 - **Tool types:** V-Bit, Engraving, Tapered Ball Nose, Ball Nose, End Mill, Radiused End Mill (a toroidal or bull-nose cutter: flat bottom, rounded corners of a tip radius), Form Cutters (profile imported from vectors), Diamond Drag, Drills.
@@ -427,6 +450,8 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   - Geometry snaps: object centres, span end/mid points, arc centres, intersections, horizontal/vertical/angle alignment.
 - **Smart snapping:** hovering "wakes" nodes and vectors, and the most recent few take priority (with a cap on how many). It draws dashed snap lines for bounding boxes and centres, horizontal and vertical lines through nodes, tangents, perpendiculars to tangents, lines connecting two woken nodes (and their midpoint), the span geometry itself, angle constraints, and job edge and centre lines.
 - **Hold Shift** to turn snapping off temporarily.
+- **[inf]** Cut Craft differs on purpose: Tangent and Perpendicular (from the start of the line being drawn) are object snaps with their own check box in Snapping Options, on by default, not part of smart snapping, so a novice gets them without knowing the smart-snapping toggle. Each snap shows a CAD-style marker and its name at the pointer (square End, triangle Middle, circle Tangent, right angle Perpendicular, plus Center, cross for lined up, guide or grid), and the status bar says in plain words what it snapped to and that Shift places the point freely. Drawing tools show a crosshair pointer.
+- **[inf]** Cut Craft adds, on purpose, snaps that stay (Aspire's snaps only place the point; its documentation describes no lasting constraints): a point drawn on a snap keeps to it when what it snapped to moves, so a novice's line stays joined to the corner or tangent to the circle it was drawn to. A drawn line's point stretches the line; other drawn shapes move whole. Each kept point shows a small blue snap mark; clicking it and pressing Delete lets it go. A snap that can no longer be kept (a line that can no longer touch its circle) is let go with a status-bar note.
 
 ### Keyboard shortcuts [check] (help: keyboard shortcuts; to re-confirm in the trial)
 | Key | Command | Key | Command |
@@ -930,6 +955,9 @@ instead of half-cell steps.
 - **Model Scaling**: the bounding cylinder (blue) sized by length and diameter, units, lock ratio, scale to fit, reset, resize material block.
 - **[inf]** Cut Craft: Drag turns (XYZ view / XYZ model / X / Y / Z) with the turn in degrees shown and typed as X, Y, Z: a turning drag adds to them, the view's height a half turn (XYZ model: sideways about Z, up and down about X). Drag moves the axis with Across and Up in mm: a pan drag moves the model, the view's height about two diameters. The fine turn is applied after the initial orientation (about X, then Y, then Z). Not built: the view swinging to look along the chosen axis, cancelling the turns on a new initial orientation.
 
+### A model imported past the material's edges
+- **Deliberate difference, for novices:** while Orientate 3D Model is open on a flat job, the parts of the model placed past the material's edges are cut off along them and drawn as a faint red ghost (Options ▸ Importing Models ▸ Out-of-bounds opacity, 5% to start) over the 3D view, rather than simply disappearing where the material ends. A beginner sees the whole model and that part of it will not be cut, and can move or size it to fit. The ghost is also drawn past the model preview faces limit. Not built: the same for a rotary job, for components outside the import, or for 2D vectors.
+
 ### Text spacing in the 2D view [obs: course R2nhSGOSaoU]
 - With the text form open, the pointer between two letters shows arrows pointing together: a click brings the letters closer; Shift (arrows apart) moves them apart; Ctrl makes the step bigger; Alt applies the step to every pair of the text. Between two lines, up and down arrows: a click brings the lines together, Shift apart, Ctrl by more.
 - Right-click ▸ Text ▸ Break Block into Lines splits a block into one text per line, each selectable and editable on its own (then arced with its own handles). Kerning and editing keep an arc.
@@ -1017,3 +1045,12 @@ instead of half-cell steps.
 ### 3D view: the model solid [obs: Matthew, 2026-11-01]
 - The model should look solid down to the modeling plane (to the axis on a rotary job), not a skin.
 - **[inf]** Cut Craft: walls hang from the edge of the drawn surface (a quad edge with a quad on one side only) down to z = 0, with a bottom there; wrapped, down to the axis with no bottom. GPU only.
+
+### Checks before saving toolpaths [inf: Cut Craft's own; Aspire makes none of these]
+- Aspire saves whatever is asked and leaves crashes and air cutting to the preview. Cut Craft checks the toolpaths being saved first, simulating them in cutting order (file by file, in list order) from uncut material, as a novice cannot be expected to spot a rapid move into the material in a preview. A deliberate difference from Aspire.
+- **Errors stop the save**, with the fix in the message: a rapid move more than 0.5 mm into material still there (the cells are coarser than the cut, so a skim along a fresh wall is not one); a toolpath with no moves; no feed rate (with cutting moves) or plunge rate (with plunges); toolpaths covering more than the machine's bed (rotary jobs aside) or spanning more than its Z travel.
+- **Warnings** are asked about (or told in the status bar, per Options ▸ checks before cutting): air cutting, where 30% and 100 mm or more of a toolpath's cutting takes nothing off (the tool 0.5 mm clear of everything, or where an earlier toolpath already cut; a toolpath's own neighbouring rows do not count, as cells are coarser than a finishing stepover), with the time it wastes; an out-of-date toolpath; no spindle speed (not lasers); a spindle speed outside the machine's range; a feed or plunge rate over the machine's max rate; a tool not loaded in the tool changer; a cut over 1 mm below the material; and the flute-length and taper checks.
+- The checks are listed in the Save Toolpaths form as Must fix / Check lines, worked out again when the plan, the job or the machine changes; Save is greyed while there is a Must fix.
+- **Tool Changes** (Cut Craft's own; Aspire leaves it to the post): **Separate File for Each Tool** splits the plan wherever the tool changes into files run in order, named after the tool, with no tool changer call (M6) for the first tool on a machine without a tool changer; it is the default without one, and the only way with a post without a TOOLCHANGE block (Aspire refuses that save instead [inf]). **Tool Changer (ATC)**: one file through the post's TOOLCHANGE; the default when Machine Configuration has tool changer slots, greyed without. **One File, Pause to Change the Tool**: the post's TOOLCHANGE when it already stops (M0/M1, no M6), else lift to safe Z, M5, a note naming the tool, M0, spindle on, a 3 s dwell; the header's M6 becomes a note to fit the first tool. Its hint warns that GRBL cannot jog while stopped.
+- **Merge Toolpaths in a Row That Use the Same Tool** (Aspire's Group Where Possible, renamed): only toolpaths next to each other in the list share a file; the cutting order never changes (Matthew, 2026-11-04). In one file, toolpaths in a row with one tool never get a tool change between them.
+- Not checked yet: the tool holder or collet hitting the material (no holder sizes in the tool database), and moves past the machine's soft limits from the job's datum (the machine's home position is not known).

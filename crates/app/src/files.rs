@@ -105,6 +105,19 @@ pub fn save_through(
         .map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
+/// How a file's tool changes are made, on Save Toolpaths' form.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ToolChanges {
+    /// A file for each tool in turn, the tool changed between files (no tool change in a
+    /// file): the safest without a tool changer.
+    #[default]
+    SeparateFiles,
+    /// One file; the machine's tool changer changes them (its post's `TOOLCHANGE`).
+    ToolChanger,
+    /// One file; the machine stops at each change for the tool to be changed by hand.
+    Pause,
+}
+
 /// How Save Toolpaths splits the toolpaths into files (Aspire's Save Toolpaths form).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SaveMode {
@@ -161,16 +174,37 @@ pub fn save_plan(
     Ok(plan)
 }
 
+/// `plan` with each file split where its tool changes, for a post that cannot change tools:
+/// a file for each tool in turn, run in order.
+pub fn by_tool(doc: &Document, plan: Vec<Vec<EntityId>>) -> Vec<Vec<EntityId>> {
+    let tool = |id: &EntityId| &doc.toolpaths[id].tool.name;
+    let mut files: Vec<Vec<EntityId>> = vec![];
+    for file in plan {
+        let start = files.len();
+        for id in file {
+            let same =
+                files.len() > start && files.last().is_some_and(|l| tool(&l[0]) == tool(&id));
+            match files.last_mut() {
+                Some(last) if same => last.push(id),
+                _ => files.push(vec![id]),
+            }
+        }
+    }
+    files
+}
+
 /// Each file of `plan` as the path it is saved at and the job with only its toolpaths.
 /// One file keeps `path`; several get the number and first toolpath's name after the stem.
 /// `side` (Top or Bottom) goes on the end of each name. A file whose toolpaths use more than
-/// one tool needs a post that changes tools.
+/// one tool needs a post that changes tools. `per_tool` names several files after their
+/// tool instead (a file for each tool, for a post that cannot change tools).
 pub fn save_files(
     post: &Post,
     doc: &Document,
     plan: &[Vec<EntityId>],
     path: &Path,
     side: Option<&str>,
+    per_tool: bool,
 ) -> Result<Vec<(PathBuf, Document)>, String> {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     let extension = path.extension().unwrap_or_default().to_string_lossy();
@@ -191,7 +225,12 @@ pub fn save_files(
             }
             let mut name = stem.to_string();
             if plan.len() > 1 {
-                let first = &doc.toolpaths[&ids[0]].name;
+                let first = &doc.toolpaths[&ids[0]];
+                let first = if per_tool {
+                    &first.tool.name
+                } else {
+                    &first.name
+                };
                 let first: String = first
                     .chars()
                     .map(|c| {
@@ -661,13 +700,36 @@ mod tests {
     }
 
     #[test]
+    fn a_post_without_tool_changes_gets_a_file_for_each_tool_in_turn() {
+        let (doc, ids) = four_toolpaths();
+        let one = save_plan(&doc, SaveMode::VisibleToOneFile, None, None, false).unwrap();
+        // the order is kept: the last end mill runs after the V-bit, in a file of its own
+        assert_eq!(
+            by_tool(&doc, one),
+            vec![vec![ids[0], ids[1]], vec![ids[2]], vec![ids[3]]]
+        );
+        let path = Path::new("/out/sign.nc");
+        let job = cut_craft_core::document::Job::default();
+        let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
+        let files = save_files(&Post::default_for(&job), &doc, &plan, path, None, true).unwrap();
+        let names: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(
+            names,
+            [
+                path.with_file_name("sign_1_End_Mill.nc"),
+                path.with_file_name("sign_2_V-Bit.nc")
+            ]
+        );
+    }
+
+    #[test]
     fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tools() {
         let (doc, ids) = four_toolpaths();
         let job = cut_craft_core::document::Job::default();
         let changer = Post::default_for(&job);
         let path = Path::new("/out/widget.nc");
         let plan = vec![vec![ids[0], ids[1]], vec![ids[2]]];
-        let files = save_files(&changer, &doc, &plan, path, Some("Top")).unwrap();
+        let files = save_files(&changer, &doc, &plan, path, Some("Top"), false).unwrap();
         // compared as paths: Windows joins the folder and name with a backslash
         let names: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
         assert_eq!(
@@ -679,7 +741,7 @@ mod tests {
         );
         assert_eq!(files[0].1.toolpaths.len(), 2);
         assert!(files[1].1.toolpaths.contains_key(&ids[2]));
-        let one = save_files(&changer, &doc, &[ids[..3].to_vec()], path, None).unwrap();
+        let one = save_files(&changer, &doc, &[ids[..3].to_vec()], path, None, false).unwrap();
         assert_eq!(one[0].0, path);
         // a post without tool changes refuses a file mixing end mill and V-bit
         let no_changes = Post::parse(
@@ -688,9 +750,10 @@ mod tests {
              begin FEED_MOVE\n\"G1 [X] [Y] [Z]\"\n",
         )
         .unwrap();
-        let why = save_files(&no_changes, &doc, &[ids[..3].to_vec()], path, None).unwrap_err();
+        let why =
+            save_files(&no_changes, &doc, &[ids[..3].to_vec()], path, None, false).unwrap_err();
         assert!(why.contains("different tools"), "{why}");
-        assert!(save_files(&no_changes, &doc, &[ids[..2].to_vec()], path, None).is_ok());
+        assert!(save_files(&no_changes, &doc, &[ids[..2].to_vec()], path, None, false).is_ok());
     }
 
     use super::*;

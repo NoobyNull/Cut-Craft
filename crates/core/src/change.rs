@@ -160,8 +160,8 @@ pub enum Edit {
     },
     /// Replaces the keep-out zones.
     SetKeepOut {
-        before: Vec<Path>,
-        after: Vec<Path>,
+        before: Vec<crate::keep_out::KeepOutZone>,
+        after: Vec<crate::keep_out::KeepOutZone>,
     },
     /// Replaces the document variables.
     SetVariables {
@@ -172,6 +172,11 @@ pub enum Edit {
     SetSide {
         before: (bool, SheetObjects),
         after: (bool, SheetObjects),
+    },
+    /// Replaces the points kept on their snaps.
+    SetConstraints {
+        before: Vec<crate::constraint::Constraint>,
+        after: Vec<crate::constraint::Constraint>,
     },
     /// Replaces the sheet list and which sheet is active.
     SetSheets {
@@ -247,6 +252,10 @@ impl Edit {
                 after: before,
             },
             Self::SetGuides { before, after } => Self::SetGuides {
+                before: after,
+                after: before,
+            },
+            Self::SetConstraints { before, after } => Self::SetConstraints {
                 before: after,
                 after: before,
             },
@@ -579,6 +588,15 @@ impl Change {
         self
     }
 
+    /// The toolpaths this change adds, and those it replaces others with, as they will be.
+    pub fn toolpaths_making(&self) -> impl Iterator<Item = &Toolpath> {
+        self.edits.iter().filter_map(|e| match e {
+            Edit::AddToolpath { toolpath, .. } => Some(toolpath.as_ref()),
+            Edit::ReplaceToolpath { after, .. } => Some(after.as_ref()),
+            _ => None,
+        })
+    }
+
     /// The toolpaths this change adds or replaces.
     pub fn toolpaths_made(&self) -> Vec<EntityId> {
         self.edits
@@ -815,6 +833,7 @@ impl Document {
             Edit::SetVariables { after, .. } => self.variables.clone_from(after),
             Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
+            Edit::SetConstraints { after, .. } => self.constraints.clone_from(after),
             Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
             Edit::SetTiling { after, .. } => self.tiling = *after,
             _ => unreachable!("only settings come here"),
@@ -976,6 +995,7 @@ impl Document {
             | Edit::SetVariables { .. }
             | Edit::SetKeepOut { .. }
             | Edit::SetGuides { .. }
+            | Edit::SetConstraints { .. }
             | Edit::SetToolpathGroups { .. }
             | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
@@ -1162,11 +1182,17 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    /// `toolpath` with its rapids routed round the keep-out zones (laser toolpaths, whose
-    /// power runs move for move, as they are).
+    /// `toolpath` with its rapids routed round the keep-out zones, and when clipping is on,
+    /// what would cut into one left out (laser toolpaths, whose power runs move for move, as
+    /// they are; drill banks, whose hits are their moves, not clipped).
     fn kept_out(&self, mut toolpath: Toolpath) -> Toolpath {
         let zones = self.doc.keep_out_zones();
         if !zones.is_empty() && toolpath.power.is_empty() {
+            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() {
+                let radius = toolpath.tool.diameter / 2.0;
+                let safe = self.doc.job.clearance;
+                toolpath.moves = crate::keep_out::clip(&zones, &toolpath.moves, radius, safe);
+            }
             let (moves, origin, _) = crate::keep_out::route_indexed(&zones, &toolpath.moves);
             // a drill bank's plunges keep their moves, and the ways round that lead to them
             if let Some(bank) = &mut toolpath.drill_bank {
@@ -1496,7 +1522,15 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    pub fn set_keep_out(&mut self, after: Vec<Path>) {
+    /// The points kept on their snaps, all of them.
+    pub fn set_constraints(&mut self, after: Vec<crate::constraint::Constraint>) {
+        if self.doc.constraints != after {
+            let before = self.doc.constraints.clone();
+            self.edits.push(Edit::SetConstraints { before, after });
+        }
+    }
+
+    pub fn set_keep_out(&mut self, after: Vec<crate::keep_out::KeepOutZone>) {
         if self.doc.keep_out != after {
             let before = self.doc.keep_out.clone();
             self.edits.push(Edit::SetKeepOut { before, after });
@@ -1673,6 +1707,9 @@ pub struct History {
     undo: Vec<Change>,
     redo: Vec<Change>,
     revision: u64,
+    /// What the last change applied would have the person know, with what keeping the
+    /// snapped points added (see [`crate::constraint::keeping`]).
+    last_notes: Vec<String>,
 }
 
 impl History {
@@ -1681,21 +1718,30 @@ impl History {
         if change.is_empty() {
             return Ok(());
         }
-        let change = change.marking_stale(doc);
+        // points snapped to what moved follow it
+        let change = crate::constraint::keeping(doc, change).marking_stale(doc);
         doc.apply(&change)?;
+        self.last_notes.clone_from(&change.notes);
         self.undo.push(change);
         self.redo.clear();
         self.revision += 1;
         Ok(())
     }
 
+    /// The notes of the change last applied (empty after undo and redo).
+    pub fn last_notes(&self) -> &[String] {
+        &self.last_notes
+    }
+
     pub fn undo(&mut self, doc: &mut Document) -> bool {
+        self.last_notes.clear();
         let stepped = Self::step(&mut self.undo, &mut self.redo, doc, true);
         self.revision += u64::from(stepped);
         stepped
     }
 
     pub fn redo(&mut self, doc: &mut Document) -> bool {
+        self.last_notes.clear();
         let stepped = Self::step(&mut self.redo, &mut self.undo, doc, false);
         self.revision += u64::from(stepped);
         stepped

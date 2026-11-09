@@ -5,12 +5,12 @@ use cut_craft_core::testing::sample_document;
 use cut_craft_core::{DynCommand, Registry};
 use cut_craft_scripting::load_gadget;
 use serde_json::json;
-use std::rc::Rc;
+use std::sync::Arc;
 
-fn commands() -> Rc<Registry> {
+fn commands() -> Arc<Registry> {
     let mut r = Registry::default();
     r.add::<DrawCircle>();
-    Rc::new(r)
+    Arc::new(r)
 }
 
 const HOLES: &str = r#"
