@@ -476,9 +476,15 @@ impl MenuSystem {
         let Some(menu) = self.menus.iter_mut().find(|m| m.name == "Gadgets") else {
             return;
         };
+        // Add-ons... stays last, after the gadgets
+        let addons = menu.items.iter().position(|i| i.action == "addons");
+        let tail: Vec<MenuItem> = addons
+            .map(|at| menu.items.drain(at.saturating_sub(1)..).collect())
+            .unwrap_or_default();
         menu.items.push(MenuItem::separator());
         menu.items.extend(loaded.built_in.iter().map(item));
         menu.items.push(MenuItem::submenu("My Gadgets", mine));
+        menu.items.extend(tail);
     }
 
     fn menu(&self, name: &str) -> &Menu {
@@ -1818,6 +1824,8 @@ impl MenuSystem {
                         MenuItem::with_action("Wrapped Spiral Layout", "wrapped_spiral_layout"),
                         MenuItem::with_action("Celtic Weave Creator", "celtic_weave"),
                         MenuItem::with_action("Job Setup Sheet Editor...", "job_sheet_editor"),
+                        sep(),
+                        MenuItem::with_action("Add-ons...", "addons"),
                     ],
                 ),
                 menu(

@@ -1,6 +1,7 @@
-# The Depth add-on's manifest, in the shared add-on layout: a zip of this file, the
-# program (cutcraft-depth, .exe on Windows) and the weights, unpacked per user into
-# <add-ons folder>/depth/.
+# The Depth add-on's manifest. Its releases (on NoobyNull/CutCraft-Depth, made by
+# .github/workflows/depth-addon.yml) carry depth-<os>-<arch>.zip holding this file and the
+# program, and the weights once beside them; Gadgets > Add-ons installs them per user
+# into <add-ons folder>/depth/ (crates/updater/src/addon.rs).
 id = "depth"
 name = "Depth (Relief from Photo)"
 kind = "tool"
@@ -10,4 +11,6 @@ platforms = ["windows-x64", "linux-x64"]
 # the program is Cut Craft's own; the weights are Depth Anything V2 Small (Apache 2.0),
 # converted with `cutcraft-depth convert depth_anything_v2_vits.pth`
 license = "LicenseRef-CutCraft AND Apache-2.0"
-files = ["cutcraft-depth", "depth_anything_v2_vits.safetensors"]
+# the program (.exe added on Windows), and what is downloaded beside the zip
+program = "cutcraft-depth"
+downloads = ["depth_anything_v2_vits.safetensors"]
