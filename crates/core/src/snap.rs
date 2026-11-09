@@ -6,6 +6,7 @@
 //! program's object snaps do, to where the line would meet a span square on (Perpendicular)
 //! or just touch a curve (Tangent). Each snap says what kind it is, so the view can mark it.
 
+use crate::constraint::Anchor;
 use crate::document::Document;
 use crate::geometry::{Point, Segment};
 use schemars::JsonSchema;
@@ -144,6 +145,25 @@ impl SnapKind {
 pub struct Snap {
     pub at: Point,
     pub kind: SnapKind,
+    /// The thing it snapped to, when a point placed there should stay on it: what a
+    /// [`Constraint`](crate::constraint::Constraint) keeps it to.
+    pub on: Option<Anchor>,
+}
+
+impl Snap {
+    /// A snap to nothing in particular (a grid point, a guide, a lined-up point).
+    pub fn free(at: Point, kind: SnapKind) -> Self {
+        Self { at, kind, on: None }
+    }
+
+    /// A snap that a point placed there stays on.
+    pub fn on(at: Point, kind: SnapKind, anchor: Anchor) -> Self {
+        Self {
+            at,
+            kind,
+            on: Some(anchor),
+        }
+    }
 }
 
 impl SnapOptions {
@@ -181,10 +201,7 @@ impl SnapOptions {
         (self.snap_to_grid && self.grid_spacing > 0.0).then(|| {
             let g = self.grid_spacing;
             let origin = doc.job.area().min;
-            Snap {
-                at: origin + ((at - origin) / g).round() * g,
-                kind: SnapKind::Grid,
-            }
+            Snap::free(origin + ((at - origin) / g).round() * g, SnapKind::Grid)
         })
     }
 
@@ -201,10 +218,7 @@ impl SnapOptions {
                 if g.tilted() {
                     let q = g.nearest(at);
                     if q.distance(at) <= reach {
-                        tilted.push(Snap {
-                            at: q,
-                            kind: SnapKind::Guide,
-                        });
+                        tilted.push(Snap::free(q, SnapKind::Guide));
                     }
                 } else {
                     if g.vertical { &mut xs } else { &mut ys }.push((g.at, SnapKind::Guide));
@@ -228,14 +242,14 @@ impl SnapOptions {
         let lined = (x.is_some() || y.is_some()).then(|| {
             // a guide's own name wins over lining up
             let guide = [x, y].iter().flatten().any(|l| l.1 == SnapKind::Guide);
-            Snap {
-                at: Point::new(x.map_or(at.x, |l| l.0), y.map_or(at.y, |l| l.0)),
-                kind: if guide {
+            Snap::free(
+                Point::new(x.map_or(at.x, |l| l.0), y.map_or(at.y, |l| l.0)),
+                if guide {
                     SnapKind::Guide
                 } else {
                     SnapKind::Aligned
                 },
-            }
+            )
         });
         let lined = tilted
             .into_iter()
@@ -246,10 +260,7 @@ impl SnapOptions {
             .smart_snapping
             .then(|| self.tangent_snap(doc, at, reach))
             .flatten()
-            .map(|p| Snap {
-                at: p,
-                kind: SnapKind::Aligned,
-            });
+            .map(|p| Snap::free(p, SnapKind::Aligned));
         match (lined, along) {
             (Some(l), Some(t)) if t.at.distance(at) < l.at.distance(at) => Some(t),
             (Some(l), _) => Some(l),
@@ -260,71 +271,31 @@ impl SnapOptions {
     /// Points on the spans where a line from `from` would meet them at a right angle
     /// (Perpendicular), or just touch a curve (Tangent).
     fn square_and_tangent(&self, doc: &Document, from: Point) -> Vec<Snap> {
-        use crate::geometry::{angle, in_sweep};
         let mut out = Vec::new();
         if !(self.tangent_and_perpendicular && self.geometry_snapping) {
             return out;
         }
-        let square = |at| Snap {
-            at,
-            kind: SnapKind::Perpendicular,
-        };
-        let touch = |at| Snap {
-            at,
-            kind: SnapKind::Tangent,
-        };
         for (id, path) in &doc.vectors {
             if !doc.shown(*id) {
                 continue;
             }
             let mut start = path.start;
-            for span in &path.segments {
-                let end = span.end();
-                match *span {
-                    Segment::Line { .. } => {
-                        let d = end - start;
-                        if d.length_squared() > 1e-18 {
-                            let t = (from - start).dot(d) / d.length_squared();
-                            if (0.0..=1.0).contains(&t) {
-                                out.push(square(start + d * t));
-                            }
+            for (k, span) in path.segments.iter().enumerate() {
+                for (at, kind) in touch_and_square(start, *span, from) {
+                    let anchor = if kind == SnapKind::Tangent {
+                        Anchor::Tangent {
+                            vector: *id,
+                            span: k,
                         }
-                    }
-                    Segment::Arc { center, ccw, .. } => {
-                        let (r, v) = ((start - center).length(), from - center);
-                        let dist = v.length();
-                        if dist > 1e-9 {
-                            let u = v / dist;
-                            // square on: the nearest and farthest points; touching: the two
-                            // tangent points, when `from` is outside the circle
-                            let mut on = vec![square(center + u * r), square(center - u * r)];
-                            if dist > r {
-                                let turn = (r / dist).acos();
-                                for t in [turn, -turn] {
-                                    on.push(touch(
-                                        center + u.rotate(glam::DVec2::from_angle(t)) * r,
-                                    ));
-                                }
-                            }
-                            let (a0, a1) = (angle(start - center), angle(end - center));
-                            out.extend(
-                                on.into_iter()
-                                    .filter(|q| in_sweep(a0, a1, ccw, angle(q.at - center))),
-                            );
+                    } else {
+                        Anchor::Perpendicular {
+                            vector: *id,
+                            span: k,
                         }
-                    }
-                    Segment::Cubic { c1, c2, .. } => {
-                        let b = [start, c1, c2, end];
-                        let (at, dir) = (|t| cubic_at(b, t), |t| cubic_dir(b, t));
-                        // touching: the line from `from` runs along the curve; square on: it
-                        // crosses the curve's direction at a right angle
-                        let along = |t: f64| (at(t) - from).perp_dot(dir(t));
-                        let across = |t: f64| (at(t) - from).dot(dir(t));
-                        out.extend(roots(along).into_iter().map(|t| touch(at(t))));
-                        out.extend(roots(across).into_iter().map(|t| square(at(t))));
-                    }
+                    };
+                    out.push(Snap::on(at, kind, anchor));
                 }
-                start = end;
+                start = span.end();
             }
         }
         out
@@ -370,58 +341,127 @@ impl SnapOptions {
 
     fn points(&self, doc: &Document) -> Vec<Snap> {
         let mut out = Vec::new();
-        let mut put = |at, kind| out.push(Snap { at, kind });
+        let mut put = |at, kind, on| out.push(Snap { at, kind, on });
         if self.job_center_and_corners {
-            let a = doc.job.area();
-            for at in [
-                a.min,
-                a.max,
-                Point::new(a.min.x, a.max.y),
-                Point::new(a.max.x, a.min.y),
-                a.center(),
-            ] {
-                put(at, SnapKind::JobPoint);
+            for (corner, at) in material_points(doc.job.area()).into_iter().enumerate() {
+                let corner = u8::try_from(corner).expect("five points");
+                put(at, SnapKind::JobPoint, Some(Anchor::Material { corner }));
             }
         }
         if !self.geometry_snapping {
             return out;
         }
-        for (id, path) in &doc.vectors {
-            if !doc.shown(*id) {
+        for (&vector, path) in &doc.vectors {
+            if !doc.shown(vector) {
                 continue;
             }
+            let n = path.segments.len();
+            // a closed path's last node is its first
+            let node = |k: usize| if path.closed && k == n { 0 } else { k };
             let mut from = path.start;
             if self.span_end_points {
-                put(from, SnapKind::End);
+                put(from, SnapKind::End, Some(Anchor::End { vector, node: 0 }));
             }
-            for s in &path.segments {
+            for (span, s) in path.segments.iter().enumerate() {
                 let to = s.end();
                 if self.span_end_points {
-                    put(to, SnapKind::End);
+                    let node = node(span + 1);
+                    put(to, SnapKind::End, Some(Anchor::End { vector, node }));
                 }
                 if self.span_mid_points {
-                    let mid = match *s {
-                        Segment::Arc { center, ccw, .. } => {
-                            let half = crate::geometry::arc_sweep(from, to, center, ccw) / 2.0;
-                            center + (from - center).rotate(glam::DVec2::from_angle(half))
-                        }
-                        Segment::Cubic { c1, c2, .. } => (from + 3.0 * c1 + 3.0 * c2 + to) / 8.0,
-                        Segment::Line { .. } => from.lerp(to, 0.5),
-                    };
-                    put(mid, SnapKind::Mid);
+                    let mid = span_mid(from, *s);
+                    put(mid, SnapKind::Mid, Some(Anchor::Mid { vector, span }));
                 }
                 if let (true, Segment::Arc { center, .. }) = (self.arc_centers, s) {
-                    put(*center, SnapKind::ArcCenter);
+                    let on = Some(Anchor::Center { vector, span });
+                    put(*center, SnapKind::ArcCenter, on);
                 }
                 from = to;
             }
             // after the spans, so a circle's own centre names it where the two meet
             if self.object_centers {
-                put(path.bounds().center(), SnapKind::ObjectCenter);
+                let on = Some(Anchor::ShapeCenter { vector });
+                put(path.bounds().center(), SnapKind::ObjectCenter, on);
             }
         }
         out
     }
+}
+
+/// The material's corners and centre, in the order [`Anchor::Material`] numbers them.
+pub(crate) fn material_points(a: crate::geometry::Rect) -> [Point; 5] {
+    [
+        a.min,
+        a.max,
+        Point::new(a.min.x, a.max.y),
+        Point::new(a.max.x, a.min.y),
+        a.center(),
+    ]
+}
+
+/// Halfway along `span`, which starts at `from`.
+pub(crate) fn span_mid(from: Point, span: Segment) -> Point {
+    let to = span.end();
+    match span {
+        Segment::Arc { center, ccw, .. } => {
+            let half = crate::geometry::arc_sweep(from, to, center, ccw) / 2.0;
+            center + (from - center).rotate(glam::DVec2::from_angle(half))
+        }
+        Segment::Cubic { c1, c2, .. } => (from + 3.0 * c1 + 3.0 * c2 + to) / 8.0,
+        Segment::Line { .. } => from.lerp(to, 0.5),
+    }
+}
+
+/// Where a line from `from` meets `span` (starting at `start`) at a right angle
+/// ([`SnapKind::Perpendicular`]) or just touches it ([`SnapKind::Tangent`]).
+pub(crate) fn touch_and_square(start: Point, span: Segment, from: Point) -> Vec<(Point, SnapKind)> {
+    use crate::geometry::{angle, in_sweep};
+    let (square, touch) = (SnapKind::Perpendicular, SnapKind::Tangent);
+    let end = span.end();
+    let mut out = Vec::new();
+    match span {
+        Segment::Line { .. } => {
+            let d = end - start;
+            if d.length_squared() > 1e-18 {
+                let t = (from - start).dot(d) / d.length_squared();
+                if (0.0..=1.0).contains(&t) {
+                    out.push((start + d * t, square));
+                }
+            }
+        }
+        Segment::Arc { center, ccw, .. } => {
+            let (r, v) = ((start - center).length(), from - center);
+            let dist = v.length();
+            if dist > 1e-9 {
+                let u = v / dist;
+                // square on: the nearest and farthest points; touching: the two tangent
+                // points, when `from` is outside the circle
+                let mut on = vec![(center + u * r, square), (center - u * r, square)];
+                if dist > r {
+                    let turn = (r / dist).acos();
+                    for t in [turn, -turn] {
+                        on.push((center + u.rotate(glam::DVec2::from_angle(t)) * r, touch));
+                    }
+                }
+                let (a0, a1) = (angle(start - center), angle(end - center));
+                out.extend(
+                    on.into_iter()
+                        .filter(|q| in_sweep(a0, a1, ccw, angle(q.0 - center))),
+                );
+            }
+        }
+        Segment::Cubic { c1, c2, .. } => {
+            let b = [start, c1, c2, end];
+            let (at, dir) = (|t| cubic_at(b, t), |t| cubic_dir(b, t));
+            // touching: the line from `from` runs along the curve; square on: it crosses
+            // the curve's direction at a right angle
+            let along = |t: f64| (at(t) - from).perp_dot(dir(t));
+            let across = |t: f64| (at(t) - from).dot(dir(t));
+            out.extend(roots(along).into_iter().map(|t| (at(t), touch)));
+            out.extend(roots(across).into_iter().map(|t| (at(t), square)));
+        }
+    }
+    out
 }
 
 /// A cubic Bézier's point at `t`.

@@ -40,7 +40,7 @@ impl CutCraftApp {
         #[expect(clippy::cast_possible_truncation, reason = "a screen scale fits f32")]
         let scale = camera.scale() as f32;
         let hovered = response.hover_pos().and_then(to_job);
-        let (gesture, snap) = self.snapping(ui, gesture, scale, hovered);
+        let (gesture, snap, _) = self.snapping(ui, gesture, scale, hovered);
         // the 2D view's pick radius: half the theme's interactive height, on screen
         let reach = f64::from(ui.spacing().interact_size.y / 2.0) / camera.scale();
         self.track_stroke(gesture);

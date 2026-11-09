@@ -1158,7 +1158,9 @@ impl CutCraftApp {
         // a guide being dragged takes the drag over
         let guided = self.guide_gesture(ui, &canvas, reach);
         let gesture = gesture.filter(|_| !guided);
-        let (gesture, snap) = self.snapping(ui, gesture, canvas.transform.scale, canvas.cursor());
+        let (gesture, snap, placed) =
+            self.snapping(ui, gesture, canvas.transform.scale, canvas.cursor());
+        self.place_on_snaps(gesture, &placed);
         // drawing: a crosshair, to place points by
         if self.drawing_tool().is_some() && canvas.hover().is_some() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
@@ -1222,6 +1224,7 @@ impl CutCraftApp {
         self.paint_2d(ui, &canvas, &overlay);
         self.datum_mark(ui, &canvas, area, job.offset);
         self.handles_and_hints(ui, &canvas, reach, modes);
+        self.paint_kept_snaps(ui, &canvas, reach);
         if let Some(hit) = snap.filter(|_| canvas.hover().is_some() || gesture.is_some()) {
             Self::paint_snap(ui, &canvas, hit);
             // after what the tool does next, so that stays first
@@ -2637,10 +2640,10 @@ impl CutCraftApp {
         gesture: Option<Gesture>,
         scale: f32,
         pointer: Option<Point>,
-    ) -> (Option<Gesture>, Option<Snap>) {
+    ) -> (Option<Gesture>, Option<Snap>, Vec<Snap>) {
         let snapping = self.drawing_tool().is_some() || self.view_tool == Some(ViewTool::NodeEdit);
         if !snapping || ui.input(|i| i.modifiers.shift) {
-            return (gesture, None);
+            return (gesture, None, vec![]);
         }
         let reach = self.snap.snapping_radius / f64::from(scale);
         // a drawn shape's far end also snaps square onto spans and tangent to arcs; a node
@@ -2655,30 +2658,38 @@ impl CutCraftApp {
         let find = |from: Option<Point>, at: Point| self.snap.find(&self.doc, from, at, reach);
         let to = |hit: Option<Snap>, at: Point| hit.map_or(at, |h| h.at);
         let mut marker = None;
+        // where a point was placed on a snap: kept there once drawn
+        let mut placed = vec![];
         let mut snap = |mut drag: Drag| {
-            drag.start = to(find(last, drag.start), drag.start);
+            let first = find(last, drag.start);
+            drag.start = to(first, drag.start);
             let hit = find(drawing.then_some(drag.start), drag.end);
             drag.end = to(hit, drag.end);
             marker = hit;
-            drag
+            (drag, first.into_iter().chain(hit))
         };
         let gesture = gesture.map(|g| match g {
-            Gesture::Dragging(drag) => Gesture::Dragging(snap(drag)),
-            Gesture::Dropped { drag, shift } => Gesture::Dropped {
-                drag: snap(drag),
-                shift,
-            },
+            Gesture::Dragging(drag) => Gesture::Dragging(snap(drag).0),
+            Gesture::Dropped { drag, shift } => {
+                let (drag, hits) = snap(drag);
+                placed.extend(hits);
+                Gesture::Dropped { drag, shift }
+            }
             // a drawing tool's click places a point, so it snaps; node editing's picks
-            Gesture::Click { at, shift } if tool.is_some() => Gesture::Click {
-                at: to(find(last, at), at),
-                shift,
-            },
+            Gesture::Click { at, shift } if tool.is_some() => {
+                let hit = find(last, at);
+                placed.extend(hit);
+                Gesture::Click {
+                    at: to(hit, at),
+                    shift,
+                }
+            }
             click @ Gesture::Click { .. } => click,
         });
         if !matches!(gesture, Some(Gesture::Dragging(_))) {
             marker = pointer.and_then(|at| find(last.filter(|_| drawing), at));
         }
-        (gesture, marker)
+        (gesture, marker, placed)
     }
 
     /// The snap marker where the pointer snapped: a shape for each kind (a square on an end,
@@ -2686,17 +2697,34 @@ impl CutCraftApp {
     /// meets one square on, a plus on a centre, a cross elsewhere) and its name beside it;
     /// the status bar says what it means.
     pub(super) fn paint_snap(ui: &egui::Ui, canvas: &Canvas, hit: Snap) {
-        use cut_craft_core::snap::SnapKind;
         const SIZE: f32 = 6.0;
-        let at = canvas.transform.to_screen(hit.at);
         let colour = egui::Color32::from_rgb(0, 160, 60);
-        let stroke = egui::Stroke::new(2.0, colour);
         let painter = ui.painter_at(canvas.area);
+        let at = canvas.transform.to_screen(hit.at);
+        Self::snap_mark(&painter, at, hit.kind, SIZE, egui::Stroke::new(2.0, colour));
+        painter.text(
+            at + egui::vec2(SIZE + 4.0, SIZE + 4.0),
+            egui::Align2::LEFT_TOP,
+            hit.kind.label(),
+            egui::FontId::proportional(12.0),
+            colour,
+        );
+    }
+
+    /// One snap marker of `kind`, `size` pixels from its middle to its edge.
+    fn snap_mark(
+        painter: &egui::Painter,
+        at: egui::Pos2,
+        kind: cut_craft_core::snap::SnapKind,
+        size: f32,
+        stroke: egui::Stroke,
+    ) {
+        use cut_craft_core::snap::SnapKind;
         let v = egui::vec2;
-        match hit.kind {
+        match kind {
             SnapKind::End | SnapKind::JobPoint => {
                 painter.rect_stroke(
-                    egui::Rect::from_center_size(at, v(2.0 * SIZE, 2.0 * SIZE)),
+                    egui::Rect::from_center_size(at, v(2.0 * size, 2.0 * size)),
                     0.0,
                     stroke,
                     egui::StrokeKind::Middle,
@@ -2704,39 +2732,132 @@ impl CutCraftApp {
             }
             SnapKind::Mid => {
                 let points = vec![
-                    at + v(0.0, -SIZE),
-                    at + v(SIZE, 0.8 * SIZE),
-                    at + v(-SIZE, 0.8 * SIZE),
+                    at + v(0.0, -size),
+                    at + v(size, 0.8 * size),
+                    at + v(-size, 0.8 * size),
                 ];
                 painter.add(egui::Shape::closed_line(points, stroke));
             }
             SnapKind::Tangent => {
-                painter.circle_stroke(at, SIZE, stroke);
-                painter.line_segment([at + v(-SIZE, -SIZE), at + v(SIZE, -SIZE)], stroke);
+                painter.circle_stroke(at, size, stroke);
+                painter.line_segment([at + v(-size, -size), at + v(size, -size)], stroke);
             }
             SnapKind::Perpendicular => {
-                painter.line_segment([at + v(-SIZE, SIZE), at + v(SIZE, SIZE)], stroke);
-                painter.line_segment([at + v(-SIZE, SIZE), at + v(-SIZE, -SIZE)], stroke);
-                painter.line_segment([at + v(-SIZE, 0.0), at + v(0.0, 0.0)], stroke);
-                painter.line_segment([at + v(0.0, 0.0), at + v(0.0, SIZE)], stroke);
+                painter.line_segment([at + v(-size, size), at + v(size, size)], stroke);
+                painter.line_segment([at + v(-size, size), at + v(-size, -size)], stroke);
+                painter.line_segment([at + v(-size, 0.0), at + v(0.0, 0.0)], stroke);
+                painter.line_segment([at + v(0.0, 0.0), at + v(0.0, size)], stroke);
             }
             SnapKind::ArcCenter | SnapKind::ObjectCenter => {
-                painter.line_segment([at + v(-SIZE, 0.0), at + v(SIZE, 0.0)], stroke);
-                painter.line_segment([at + v(0.0, -SIZE), at + v(0.0, SIZE)], stroke);
-                painter.circle_stroke(at, SIZE / 2.0, stroke);
+                painter.line_segment([at + v(-size, 0.0), at + v(size, 0.0)], stroke);
+                painter.line_segment([at + v(0.0, -size), at + v(0.0, size)], stroke);
+                painter.circle_stroke(at, size / 2.0, stroke);
             }
             SnapKind::Guide | SnapKind::Aligned | SnapKind::Grid => {
-                painter.line_segment([at + v(-SIZE, -SIZE), at + v(SIZE, SIZE)], stroke);
-                painter.line_segment([at + v(-SIZE, SIZE), at + v(SIZE, -SIZE)], stroke);
+                painter.line_segment([at + v(-size, -size), at + v(size, size)], stroke);
+                painter.line_segment([at + v(-size, size), at + v(size, -size)], stroke);
             }
         }
-        painter.text(
-            at + v(SIZE + 4.0, SIZE + 4.0),
-            egui::Align2::LEFT_TOP,
-            hit.kind.label(),
-            egui::FontId::proportional(12.0),
-            colour,
+    }
+
+    /// The marks of the points kept on their snaps: small blue snap markers; the picked one
+    /// orange and named, as is one under the pointer, which the status bar explains.
+    fn paint_kept_snaps(&self, ui: &egui::Ui, canvas: &Canvas, reach: f64) {
+        const SIZE: f32 = 4.0;
+        let blue = egui::Color32::from_rgb(30, 110, 220);
+        let orange = egui::Color32::from_rgb(240, 130, 0);
+        let painter = ui.painter_at(canvas.area);
+        let hover = canvas.cursor();
+        for (i, at, kind) in self.doc.constraint_marks() {
+            if !self.doc.shown(self.doc.constraints[i].vector) {
+                continue;
+            }
+            let picked = self.picked_constraint == Some(i);
+            let hovered = hover.is_some_and(|p| p.distance(at) <= reach);
+            let colour = if picked { orange } else { blue };
+            let screen = canvas.transform.to_screen(at);
+            let width = if picked { 2.5 } else { 1.5 };
+            Self::snap_mark(
+                &painter,
+                screen,
+                kind,
+                SIZE,
+                egui::Stroke::new(width, colour),
+            );
+            if picked || hovered {
+                painter.text(
+                    screen + egui::vec2(SIZE + 4.0, -SIZE - 4.0),
+                    egui::Align2::LEFT_BOTTOM,
+                    format!("Kept on {}", kind.label()),
+                    egui::FontId::proportional(12.0),
+                    colour,
+                );
+            }
+            if hovered && !picked {
+                cut_craft_bug_report::hint::hint(
+                    ui.ctx(),
+                    &format!(
+                        "This point stays on the {} it was snapped to, even when that moves. \
+                         Click the mark and press Delete to let it move freely.",
+                        kind.label().to_lowercase()
+                    ),
+                );
+            }
+        }
+    }
+
+    /// The snap mark (a point kept on its snap) within `reach` of `at`, nearest first.
+    pub(super) fn kept_snap_at(&self, at: Point, reach: f64) -> Option<usize> {
+        self.doc
+            .constraint_marks()
+            .into_iter()
+            .filter(|(i, _, _)| self.doc.shown(self.doc.constraints[*i].vector))
+            .map(|(i, p, _)| (i, p.distance(at)))
+            .filter(|(_, d)| *d <= reach)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(i, _)| i)
+    }
+
+    /// Delete with a snap mark picked: that point is let go, so it moves freely. False when
+    /// none is picked.
+    pub(super) fn release_picked_snap(&mut self) -> bool {
+        let Some(i) = self.picked_constraint.take() else {
+            return false;
+        };
+        let mut kept = self.doc.constraints.clone();
+        if i >= kept.len() {
+            return false;
+        }
+        let gone = kept.remove(i);
+        let mut c = Change::builder(&self.doc);
+        c.set_constraints(kept);
+        self.record(
+            Ok(c.finish()),
+            &format!(
+                "Let go of the {} snap: that point now moves freely",
+                gone.to.kind().label().to_lowercase()
+            ),
         );
+        true
+    }
+
+    /// Points just placed on snaps by a drawing tool or a node drag (`placed`), remembered
+    /// so what is made from them keeps them there. A polyline gathers its points' snaps
+    /// from its first click; anything else keeps those of its last click or drag.
+    pub(super) fn place_on_snaps(&mut self, gesture: Option<Gesture>, placed: &[Snap]) {
+        let placing = matches!(
+            gesture,
+            Some(Gesture::Click { .. } | Gesture::Dropped { .. })
+        );
+        if !placing {
+            return;
+        }
+        let kept = placed.iter().filter_map(|s| Some((s.at, s.on?)));
+        if self.drawing_tool() == Some("draw_polyline") && !self.polyline.is_empty() {
+            self.placed.extend(kept);
+        } else {
+            self.placed = kept.collect();
+        }
     }
 
     /// The status bar's words for a snap: what it snapped to, and how to place a point
@@ -3283,6 +3404,16 @@ impl CutCraftApp {
         shift: bool,
         tolerance: f64,
     ) {
+        // a snap mark: picked, for Delete to let its point go
+        self.picked_constraint = self.kept_snap_at(at, tolerance);
+        if let Some(i) = self.picked_constraint {
+            let kind = self.doc.constraints[i].to.kind();
+            self.status.set_message(&format!(
+                "Snap picked: this point is kept on the {}. Press Delete to let it go.",
+                kind.label().to_lowercase()
+            ));
+            return;
+        }
         let hit = self.doc.pick(at, tolerance);
         // a picture is picked where no vector is: click picks it, Shift-click adds or
         // takes it away
