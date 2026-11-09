@@ -51,10 +51,76 @@ pub struct SnapOptions {
     #[serde(default = "nudge")]
     #[schemars(title = "Fixed nudge distance", extend("x-unit" = "mm"), range(min = 0))]
     pub fixed_nudge: f64,
+    /// The angle a rotate drag snaps to while Shift is held: a half of a half of a turn and
+    /// so on down to 22.5°, or every 10° or 5° for finer work
+    #[serde(default)]
+    #[schemars(title = "Rotate snap angle with Shift")]
+    pub rotate_step: RotateSnap,
+    /// The finer angle a rotate drag snaps to while Ctrl is held
+    #[serde(default = "fine_rotate_step")]
+    #[schemars(
+        title = "Rotate snap angle with Ctrl",
+        extend("x-unit" = "°"),
+        range(min = 0.1, max = 45)
+    )]
+    pub fine_rotate_step: f64,
 }
 
 fn nudge() -> f64 {
     1.0
+}
+
+/// The angles a rotate drag can snap to with Shift: halves of a turn down to 22.5°, then
+/// every 10° or 5°.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum RotateSnap {
+    /// Quarter turns
+    #[serde(rename = "90")]
+    #[schemars(title = "90°")]
+    Ninety,
+    /// Eighths of a turn
+    #[serde(rename = "45")]
+    #[schemars(title = "45°")]
+    FortyFive,
+    /// Sixteenths of a turn
+    #[default]
+    #[serde(rename = "22.5")]
+    #[schemars(title = "22.5°")]
+    TwentyTwoAndAHalf,
+    /// Every 10°
+    #[serde(rename = "10")]
+    #[schemars(title = "10°")]
+    Ten,
+    /// Every 5°
+    #[serde(rename = "5")]
+    #[schemars(title = "5°")]
+    Five,
+}
+
+impl RotateSnap {
+    /// Every choice, coarsest first.
+    pub const ALL: [Self; 5] = [
+        Self::Ninety,
+        Self::FortyFive,
+        Self::TwentyTwoAndAHalf,
+        Self::Ten,
+        Self::Five,
+    ];
+
+    /// The angle, degrees.
+    pub fn degrees(self) -> f64 {
+        match self {
+            Self::Ninety => 90.0,
+            Self::FortyFive => 45.0,
+            Self::TwentyTwoAndAHalf => 22.5,
+            Self::Ten => 10.0,
+            Self::Five => 5.0,
+        }
+    }
+}
+
+fn fine_rotate_step() -> f64 {
+    crate::handles::FINE_ROTATE_STEP
 }
 
 fn on() -> bool {
@@ -77,6 +143,8 @@ impl Default for SnapOptions {
             // ponytail: Aspire's slider runs Small to Large; 8 px is our middle [inf]
             snapping_radius: 8.0,
             fixed_nudge: nudge(),
+            rotate_step: RotateSnap::default(),
+            fine_rotate_step: fine_rotate_step(),
         }
     }
 }
@@ -167,6 +235,14 @@ impl Snap {
 }
 
 impl SnapOptions {
+    /// The angles a rotate drag snaps to with Shift and Ctrl.
+    pub fn steps(&self) -> crate::handles::Steps {
+        crate::handles::Steps {
+            shift: self.rotate_step.degrees(),
+            fine: self.fine_rotate_step,
+        }
+    }
+
     /// Where `at` snaps to: the nearest snap point within `reach` (job mm), else the grid
     /// when it is on, else `at` itself.
     pub fn snap(&self, doc: &Document, at: Point, reach: f64) -> Point {
@@ -512,6 +588,45 @@ fn roots(f: impl Fn(f64) -> f64) -> Vec<f64> {
 mod tests {
     use super::*;
     use crate::testing::{document_with, square};
+
+    #[test]
+    fn rotate_snap_angles_default_to_the_standard_steps_and_load_when_missing() {
+        let s = SnapOptions::default();
+        assert_eq!(s.steps(), crate::handles::Steps::STANDARD);
+        // options saved before the angles existed still load, with the standard ones
+        let mut old = serde_json::to_value(&s).expect("serialises");
+        let map = old.as_object_mut().expect("an object");
+        map.remove("rotate_step");
+        map.remove("fine_rotate_step");
+        let loaded: SnapOptions = serde_json::from_value(old).expect("loads");
+        assert_eq!(loaded, s);
+    }
+
+    #[test]
+    fn rotate_snap_angles_halve_a_turn_to_22_5_then_go_every_10_or_5() {
+        let angles: Vec<f64> = RotateSnap::ALL.iter().map(|r| r.degrees()).collect();
+        assert_eq!(angles, [90.0, 45.0, 22.5, 10.0, 5.0]);
+        assert_eq!(
+            SnapOptions::default().rotate_step.degrees(),
+            22.5,
+            "the default"
+        );
+        // the dialog offers just these, labelled in degrees
+        let schema = serde_json::to_value(schemars::schema_for!(SnapOptions)).expect("schema");
+        let text = schema.to_string();
+        for label in ["90°", "45°", "22.5°", "10°", "5°"] {
+            assert!(text.contains(&format!("\"title\":\"{label}\"")), "{label}");
+        }
+        // kept by its angle
+        let s = SnapOptions {
+            rotate_step: RotateSnap::Ten,
+            ..SnapOptions::default()
+        };
+        let json = serde_json::to_value(&s).expect("serialises");
+        assert_eq!(json["rotate_step"], "10");
+        let back: SnapOptions = serde_json::from_value(json).expect("loads");
+        assert_eq!(back.rotate_step, RotateSnap::Ten);
+    }
 
     #[test]
     fn a_line_end_snaps_square_onto_a_span_and_onto_a_tangent() {

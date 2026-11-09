@@ -25,7 +25,7 @@ moves them again.
 | Toolpath save tolerances (2D, 3D, V-carve: 0.00254 mm) | Options ▸ Toolpath Settings |
 | Recent files kept (`files::RECENT_COUNT` = 4) | Options ▸ General |
 | Imported model preview faces (250,000) | Options ▸ Importing Models |
-| Snap radius, nudge distances, grid | Snapping Options |
+| Snap radius, nudge distances, grid, rotate snap angles | Snapping Options (kept between runs) |
 | Job defaults: clearance 5 mm, home, sizes | Job Setup ▸ Set as Default |
 | Tool feeds, speeds, stepovers | Tool Database |
 | Each toolpath's own defaults (stepover, passes, tabs) | the toolpath's form; tool database |
@@ -43,7 +43,7 @@ moves them again.
 | `UI_FONTS` list | `app/src/app.rs:446` | The first installed font of Noto Sans, Open Sans, DejaVu Sans, Segoe UI, Arial is used. **Platform-specific**: Linux usually gets Noto/DejaVu, Windows gets Segoe UI. | Appearance ▸ **Interface font** (Automatic, or any of the list that is installed). Low priority |
 | `flyout::HOLD_SECONDS` = 0.4 | `app/src/flyout.rs:14` | How long you hold a toolbox button before its flyout opens instead of running the tool. Slower hands may open tools by accident. | General ▸ **Hold to open a tool group** 0.4 s (0.2 to 1.5) |
 | `PLAYBACK_SPEED` = 200 mm/s | `app/src/app.rs:448` | Speed a toolpath preview starts playing at (the slider changes it per run). | Toolpath Settings ▸ **Preview playback speed** 200 mm/s; keep the 5..20000 range as a constant |
-| `handles::ROTATE_STEP` = 5.625°, `FINE_ROTATE_STEP` = 1° | `core/src/handles.rs:29-32` | Angles a rotate drag snaps to with Shift and Ctrl. 5.625° (a 64th of a turn) is unusual; most people expect 15° or 45°. | Snapping Options ▸ **Rotate snap angle (Shift)** 15° and **(Ctrl)** 1°. The default change is a question for Matthew |
+| `handles::ROTATE_STEP` = 22.5°, `FINE_ROTATE_STEP` = 1° | `core/src/handles.rs` | Angles a rotate drag snaps to with Shift and Ctrl. | Snapping Options ▸ **Rotate snap angle with Shift**: 90°, 45°, 22.5° (default), 10° or 5°; **with Ctrl** 1° |
 | `view3d::PICK_REACH` = 4 px | `app/src/view3d.rs:20` | How close the pointer must be to a surface to pick it in the 3D view. Marked "fixed until the 3D view has settings". | 3D View ▸ **Click reach** 4 px (1 to 20) |
 | `view3d::FIELD_OF_VIEW` = 45° | `app/src/view3d.rs:23` | Perspective lens width. Wider looks more dramatic, narrower flatter. | 3D View ▸ **Perspective angle** 45° (20 to 90) |
 | `view3d::AMBIENT` 0.35, `DEPTH_SHADE` 0.5, `LIGHT` | `app/src/view3d.rs:13-17` | How dark shadowed sides and deep cuts look. Marked "fixed until the 3D view has light settings". | 3D View ▸ **Shadow strength** and **Darken deep cuts** (0 to 1). Light direction stays a constant |
@@ -129,9 +129,12 @@ Grouped, with the reason.
    (Done: click reach, perspective angle, wait before full detail. Shading strengths go
    through the GPU uniforms and detail while moving shares cached coarse surfaces, so both
    are left for a follow-up.)
-4. Toolpaths and checks: preview speed, material-left warning, job sheet rapid fix. (Done:
-   the job sheet's times use Toolpath Summary's rapid rate.)
-5. Snapping: rotate snap angles.
+4. (Done, #187) Toolpaths and checks: preview speed, material-left warning, job sheet rapid fix.
+   (The job sheet's times use Toolpath Summary's rapid rate.)
+5. Snapping: rotate snap angles. (Done: Snapping Options ▸ *Rotate snap angle with Shift*
+   (a choice of 90°, 45°, 22.5°, 10° or 5°: halves of a turn down to 22.5°, then every 10°
+   or 5°; 22.5° by default, Matthew's call) and *with Ctrl* (1°, 0.1 to 45°). Snapping Options are now kept between runs in
+   `options.json`, where before they reset at every start.)
 6. Import: picture DPI, DXF spline detail.
 7. Performance (Advanced): threads, most 3D detail, clipart and cache limits.
 8. CAM accuracy (Advanced): curve accuracy, 3D accuracy, rest threshold, nesting limits.

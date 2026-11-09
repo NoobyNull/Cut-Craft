@@ -455,7 +455,7 @@ fn a_polylines_next_point_snaps_tangent_to_a_circle() {
     let circle = serde_json::json!({ "center": { "x": 50.0, "y": 70.0 }, "radius": 10.0 });
     h.app.apply("draw_circle", &circle).unwrap();
     h.app.form = None;
-    h.app.snap.job_center_and_corners = false;
+    h.app.options.snapping.job_center_and_corners = false;
     h.app.invoke(&h.ctx, "draw_polyline");
     h.frame(vec![]);
     h.app.polyline.click(Point::new(70.0, 70.0));
@@ -608,7 +608,7 @@ fn node_editing_drags_a_corner_and_offers_its_menu() {
     h.app.invoke(&h.ctx, "node_edit");
     assert_eq!(h.app.view_tool, Some(ViewTool::NodeEdit));
     // smart snapping would line the corner up with the other top corner
-    h.app.snap.smart_snapping = false;
+    h.app.options.snapping.smart_snapping = false;
     let (from, to) = (h.at(30.0, 20.0), h.at(40.0, 25.0));
     h.drag(from, to);
     let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
@@ -1511,7 +1511,7 @@ fn a_selection_always_has_its_handles_to_scale_and_rotate_by() {
     h.frame(vec![Event::PointerMoved(handle)]);
     let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
     assert!(
-        hint.contains("Hold Shift to snap to 5.625°, or Ctrl to 1°"),
+        hint.contains("Hold Shift to snap to 22.5°, or Ctrl to 1°"),
         "{hint}"
     );
     // a quarter turn about the middle
@@ -2710,7 +2710,7 @@ fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
     assert!((scaled.max - grown).length() < 0.5, "{scaled:?}");
     h.app.invoke(&h.ctx, "undo");
     h.frame(vec![]);
-    // the rotation arrow with Shift held turns in 5.625° steps: dragged about 20° round the
+    // the rotation arrow with Shift held turns in 22.5° steps: dragged about 20° round the
     // middle, the box turns 22.5°, so its bounds grow by cos 22.5° + sin 22.5°
     let (middle, from) = (at(&h, Handle::Move), at(&h, Handle::Rotate { x: 0, y: 1 }));
     let to = middle + egui::emath::Rot2::from_angle(20f32.to_radians()) * (from - middle);
@@ -2730,6 +2730,53 @@ fn the_3d_views_transform_handles_move_scale_and_turn_the_selection() {
     assert!(
         (turned.center() - before.center()).length() < 0.5,
         "about the centre"
+    );
+}
+
+#[test]
+fn the_rotate_snap_angle_comes_from_snapping_options() {
+    use cut_craft_core::handles::Handle;
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.app.options.snapping.rotate_step = cut_craft_core::snap::RotateSnap::Ten;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let at = |h: &Harness, which: Handle| {
+        h.app
+            .handles_3d
+            .iter()
+            .find(|(k, _)| *k == Handle3d::Transform(which))
+            .map(|(_, at)| *at)
+            .expect("the transform handles are drawn over the selection")
+    };
+    let before = h.app.doc.components[&EntityId(1)].extent();
+    let (middle, from) = (at(&h, Handle::Move), at(&h, Handle::Rotate { x: 0, y: 1 }));
+    // over the arrow, the status bar names the chosen angle
+    h.frame(vec![Event::PointerMoved(from)]);
+    let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
+    assert!(
+        hint.contains("Hold Shift to snap to 10°, or Ctrl to 1°"),
+        "{hint}"
+    );
+    // dragged about 27° round the middle with Shift held, the box turns 30°, so its bounds
+    // grow by cos 30° + sin 30°
+    let to = middle + egui::emath::Rot2::from_angle(27f32.to_radians()) * (from - middle);
+    let shift = Modifiers::SHIFT;
+    h.frame_holding(shift, vec![Event::PointerMoved(from)]);
+    h.press(from, true, shift);
+    h.frame_holding(shift, vec![Event::PointerMoved(to)]);
+    h.press(to, false, shift);
+    h.frame_holding(shift, vec![]);
+    let turned = h.app.doc.components[&EntityId(1)].extent();
+    let (sin, cos) = 30f64.to_radians().sin_cos();
+    let wide = before.size().x * (cos + sin);
+    assert!(
+        (turned.size().x - wide).abs() < 0.3,
+        "{turned:?}, not {wide} wide"
     );
 }
 
@@ -4042,7 +4089,7 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
 fn the_arrow_keys_nudge_the_selection() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    let square = h.app.snap.grid_spacing;
+    let square = h.app.options.snapping.grid_spacing;
     let at = |h: &Harness| h.app.doc.selection_bounds().unwrap().min;
     let before = at(&h);
     h.frame(vec![key(Key::ArrowRight)]);
@@ -4055,7 +4102,7 @@ fn the_arrow_keys_nudge_the_selection() {
     h.frame(vec![key(Key::ArrowLeft), key(Key::ArrowDown)]);
     assert!((at(&h) - before).length() < 1e-9, "back where it was");
     // Ctrl alone: Snapping Options' Fixed Nudge Distance
-    h.app.snap.fixed_nudge = 0.25;
+    h.app.options.snapping.fixed_nudge = 0.25;
     for (modifiers, share) in [
         (Modifiers::SHIFT, 0.5),
         (Modifiers::SHIFT | Modifiers::COMMAND, 0.1),
@@ -4215,7 +4262,7 @@ fn the_top_bar_splits_the_views_and_toggles_snapping() {
     h.frame(vec![]);
     h.app.invoke(&h.ctx, "split_side_by_side");
     assert_eq!(h.app.split, None, "a second click joins them again");
-    let before = h.app.snap.clone();
+    let before = h.app.options.snapping.clone();
     for id in [
         "toggle_geometry_snapping",
         "toggle_smart_snapping",
@@ -4224,7 +4271,7 @@ fn the_top_bar_splits_the_views_and_toggles_snapping() {
         assert!(h.app.available(id), "{id}");
         h.app.invoke(&h.ctx, id);
     }
-    let s = &h.app.snap;
+    let s = &h.app.options.snapping;
     assert_eq!(
         (s.geometry_snapping, s.smart_snapping, s.snap_to_grid),
         (
@@ -4946,7 +4993,7 @@ fn tabs_are_placed_and_removed_by_clicking_the_vector() {
         "the click placed a tab, not a selection"
     );
     // a drag from the tab moves it along the vector
-    h.app.snap.smart_snapping = false;
+    h.app.options.snapping.smart_snapping = false;
     h.drag(h.at(60.0, 30.0), h.at(60.5, 45.0));
     let moved = tabs(&h);
     assert_eq!(moved.len(), 1, "{}", h.app.status.message);
@@ -5968,8 +6015,8 @@ fn node_editing_picks_nodes_with_a_box_and_a_drag_moves_them_together() {
     h.rectangle(10.0, 10.0, 20.0, 10.0);
     let id = *h.app.doc.selection.iter().next().unwrap();
     h.app.invoke(&h.ctx, "node_edit");
-    h.app.snap.smart_snapping = false;
-    h.app.snap.geometry_snapping = false;
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.geometry_snapping = false;
     // a box round the two right-hand corners picks them
     h.drag(h.at(25.0, 5.0), h.at(35.0, 25.0));
     assert_eq!(h.app.picked_nodes.len(), 2);
@@ -6245,8 +6292,8 @@ fn clipart_dropped_on_a_view_goes_there_and_import_to_level_puts_it_on_a_level()
 fn a_polyline_is_drawn_point_by_point_with_curves_and_its_keys() {
     use cut_craft_core::geometry::Segment;
     let mut h = Harness::new();
-    h.app.snap.smart_snapping = false;
-    h.app.snap.geometry_snapping = false;
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.geometry_snapping = false;
     h.app.invoke(&h.ctx, "draw_polyline");
     h.frame(vec![]);
     // clicks make straight spans, a drag a curved one
@@ -6304,8 +6351,8 @@ fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
     use cut_craft_core::nodes::NodeAt;
     use cut_craft_core::params::Xy;
     let mut h = Harness::new();
-    h.app.snap.smart_snapping = false;
-    h.app.snap.geometry_snapping = false;
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.geometry_snapping = false;
     let line = serde_json::json!({
         "points": [{ "x": 10.0, "y": 10.0 }, { "x": 50.0, "y": 10.0 }], "closed": false
     });
@@ -6523,8 +6570,8 @@ fn the_toolpath_summary_keeps_notes_per_toolpath_and_shows_the_rapid_rate_in_its
 fn a_double_clicked_tile_is_previewed_alone() {
     let mut h = Harness::new();
     h.app.display.animate_preview = false;
-    h.app.snap.smart_snapping = false;
-    h.app.snap.geometry_snapping = false;
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.geometry_snapping = false;
     let area = h.app.doc.job.area();
     // a long thin rectangle right across the job
     let y = area.center().y;
@@ -6608,8 +6655,8 @@ fn a_form_tool_takes_its_shape_from_the_selected_vector() {
 #[test]
 fn e_and_shift_click_edit_a_shape_in_the_tool_that_drew_it() {
     let mut h = Harness::new();
-    h.app.snap.smart_snapping = false;
-    h.app.snap.geometry_snapping = false;
+    h.app.options.snapping.smart_snapping = false;
+    h.app.options.snapping.geometry_snapping = false;
     h.rectangle(10.0, 10.0, 20.0, 20.0);
     let rect = *h.app.doc.selection.iter().next().unwrap();
     assert!(h.app.available("edit_object"));
@@ -7176,7 +7223,7 @@ fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
         [true, false],
         "H: a mirror line, not Mirror"
     );
-    let step = h.app.snap.grid_spacing;
+    let step = h.app.options.snapping.grid_spacing;
     // the arrows move the two sides opposite ways: Left takes the left node left and the
     // right node right
     h.frame(vec![key(Key::ArrowLeft)]);

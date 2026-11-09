@@ -435,7 +435,7 @@ impl CutCraftApp {
         edge: f32,
         clicked: &mut Option<&'static str>,
     ) {
-        let s = &self.snap;
+        let s = &self.options.snapping;
         for (id, on, icon, tip) in [
             (
                 "toggle_grid_snapping",
@@ -476,9 +476,12 @@ impl CutCraftApp {
                 };
                 self.split = (self.split != Some(split)).then_some(split);
             }
-            "toggle_geometry_snapping" => self.snap.geometry_snapping ^= true,
-            "toggle_smart_snapping" => self.snap.smart_snapping ^= true,
-            _ => self.snap.snap_to_grid ^= true,
+            "toggle_geometry_snapping" => self.options.snapping.geometry_snapping ^= true,
+            "toggle_smart_snapping" => self.options.snapping.smart_snapping ^= true,
+            _ => self.options.snapping.snap_to_grid ^= true,
+        }
+        if id.starts_with("toggle_") {
+            self.save_options();
         }
     }
 
@@ -1135,11 +1138,11 @@ impl CutCraftApp {
             &self.display,
             (self.job_epoch, self.history.revision()),
         );
-        if self.snap.snap_to_grid {
+        if self.options.snapping.snap_to_grid {
             let look = &self.options.appearance;
             canvas.paint_grid(
                 ui,
-                self.snap.grid_spacing,
+                self.options.snapping.grid_spacing,
                 look.grid_color,
                 look.grid_point_size,
             );
@@ -1745,7 +1748,10 @@ impl CutCraftApp {
             self.paint_handles(ui, canvas);
             // over a handle, the status bar says what it does and the keys that change it
             if let Some(handle) = canvas.cursor().and_then(|at| self.handle_at(at, reach)) {
-                cut_craft_bug_report::hint::hint(ui.ctx(), handle.hint());
+                cut_craft_bug_report::hint::hint(
+                    ui.ctx(),
+                    &handle.hint(self.options.snapping.steps()),
+                );
             }
         }
         // in the view, the status bar says what the tool in hand does next
@@ -1950,10 +1956,12 @@ impl CutCraftApp {
     pub(super) fn handle_drag(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Option<DAffine2> {
         let bounds = self.doc.selection_bounds()?;
         let handle = self.handle_at(drag.start, reach)?;
+        let steps = self.options.snapping.steps();
         let keys = ui.input(|i| handles::Keys {
             alt: i.modifiers.alt,
             shift: i.modifiers.shift,
             ctrl: i.modifiers.ctrl || i.modifiers.command,
+            steps,
         });
         Some(handles::transform(
             bounds, handle, drag.start, drag.end, keys,
@@ -2645,7 +2653,7 @@ impl CutCraftApp {
         if !snapping || ui.input(|i| i.modifiers.shift) {
             return (gesture, None, vec![]);
         }
-        let reach = self.snap.snapping_radius / f64::from(scale);
+        let reach = self.options.snapping.snapping_radius / f64::from(scale);
         // a drawn shape's far end also snaps square onto spans and tangent to arcs; a node
         // dragged starts from the node itself, and a stroke's samples are not a shape's
         // end, so those snap as points
@@ -2655,7 +2663,8 @@ impl CutCraftApp {
         let last = (tool == Some("draw_polyline"))
             .then(|| self.polyline.points.last().copied())
             .flatten();
-        let find = |from: Option<Point>, at: Point| self.snap.find(&self.doc, from, at, reach);
+        let find =
+            |from: Option<Point>, at: Point| self.options.snapping.find(&self.doc, from, at, reach);
         let to = |hit: Option<Snap>, at: Point| hit.map_or(at, |h| h.at);
         let mut marker = None;
         // where a point was placed on a snap: kept there once drawn
@@ -3293,7 +3302,7 @@ impl CutCraftApp {
         let schema = serde_json::to_value(schemars::schema_for!(cut_craft_core::snap::SnapOptions))
             .expect("a schema serialises");
         let fields = crate::form::fields(&schema);
-        let mut values = serde_json::to_value(&self.snap).expect("options serialise");
+        let mut values = serde_json::to_value(&self.options.snapping).expect("options serialise");
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique("snapping_options"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Snapping Options", size, &mut open, |ui| {
@@ -3308,7 +3317,8 @@ impl CutCraftApp {
             if crate::form::show(ui, &fields, &mut values, &look)
                 && let Ok(options) = serde_json::from_value(values)
             {
-                self.snap = options;
+                self.options.snapping = options;
+                self.save_options();
             }
         });
         self.snap_window = open;

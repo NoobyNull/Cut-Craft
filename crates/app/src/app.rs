@@ -621,13 +621,14 @@ enum Handle3d {
 impl Handle3d {
     const ALL: [Self; 4] = [Self::Total, Self::Height, Self::Base, Self::Settings];
 
-    fn hint(self) -> &'static str {
+    /// What it does, for the status bar; a rotation handle names the angles of `steps`.
+    fn hint(self, steps: handles::Steps) -> String {
         match self {
-            Self::Total => "Total height: drag up or down",
-            Self::Height => "Shape height: drag up or down",
-            Self::Base => "Base height: drag up or down",
-            Self::Settings => "Combine mode, fade, tilt and appearance",
-            Self::Transform(handle) => handle.hint(),
+            Self::Total => "Total height: drag up or down".to_owned(),
+            Self::Height => "Shape height: drag up or down".to_owned(),
+            Self::Base => "Base height: drag up or down".to_owned(),
+            Self::Settings => "Combine mode, fade, tilt and appearance".to_owned(),
+            Self::Transform(handle) => handle.hint(steps),
         }
     }
 
@@ -904,8 +905,7 @@ struct CutCraftApp {
     save_form: Option<SaveForm>,
     /// The checks shown in Save Toolpaths' form.
     save_checks: Option<SaveChecks>,
-    /// Snapping Options (F4) and whether their window is open.
-    snap: cut_craft_core::snap::SnapOptions,
+    /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
     snap_window: bool,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
     job_sheet_window: bool,

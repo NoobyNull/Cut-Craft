@@ -1928,7 +1928,7 @@ impl CutCraftApp {
                     ui.scope_id().with(("handle_3d", i)),
                     egui::Sense::click_and_drag(),
                 )
-                .on_hover_hint(handle.hint());
+                .on_hover_hint(handle.hint(self.options.snapping.steps()));
             let look = ui.style().interact(&response);
             let fill = if response.hovered() || response.dragged() {
                 look.bg_fill
@@ -2040,7 +2040,10 @@ impl CutCraftApp {
             );
             // the status bar says what it does and the keys that change it
             if response.hovered() || response.dragged() {
-                cut_craft_bug_report::hint::hint(ui.ctx(), handle.hint());
+                cut_craft_bug_report::hint::hint(
+                    ui.ctx(),
+                    &handle.hint(self.options.snapping.steps()),
+                );
             }
             self.handles_3d.push((Handle3d::Transform(handle), at));
             if response.drag_started()
@@ -2073,6 +2076,7 @@ impl CutCraftApp {
                     alt: i.modifiers.alt,
                     shift: i.modifiers.shift,
                     ctrl: i.modifiers.ctrl || i.modifiers.command,
+                    steps: self.options.snapping.steps(),
                 },
             )
         });

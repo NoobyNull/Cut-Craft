@@ -124,7 +124,6 @@ impl CutCraftApp {
             sketch_areas: None,
             summary: super::Summary::default(),
             stroke: Vec::new(),
-            snap: cut_craft_core::snap::SnapOptions::default(),
             snap_window: false,
             job_sheet_window: false,
             part_labels_window: false,
@@ -3055,12 +3054,12 @@ impl CutCraftApp {
             return;
         }
         let (shift, ctrl) = ctx.input(|i| (i.modifiers.shift, i.modifiers.command));
-        let g = self.snap.grid_spacing;
+        let g = self.options.snapping.grid_spacing;
         let step = match (shift, ctrl) {
             (true, true) => 0.1 * g,
             (true, false) => 0.5 * g,
             // Snapping Options' Fixed Nudge Distance
-            (false, true) => self.snap.fixed_nudge,
+            (false, true) => self.options.snapping.fixed_nudge,
             (false, false) => g,
         };
         let by = ctx.input(|i| {
