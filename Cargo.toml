@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/app", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/updater", "crates/machines", "crates/calib", "crates/depth-addon", "crates/commands/*", "crates/formats/*"]
+members = ["crates/app", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/updater", "crates/machines", "crates/calib", "crates/depth-addon", "crates/content-pack", "crates/packs/*", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
 version = "0.5.3"

@@ -2349,6 +2349,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cut-craft-content-pack"
+version = "0.5.3"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "cut-craft-core"
 version = "0.5.3"
 dependencies = [
@@ -4865,6 +4874,19 @@ checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "pack-staunton-chess"
+version = "0.5.3"
+dependencies = [
+ "cmd-3d-finishing-toolpath",
+ "cmd-3d-roughing-toolpath",
+ "cmd-drilling-toolpath",
+ "cut-craft-content-pack",
+ "cut-craft-core",
+ "fmt-export-as-stl",
+ "glam",
 ]
 
 [[package]]

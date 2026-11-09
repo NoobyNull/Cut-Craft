@@ -1,0 +1,22 @@
+[package]
+name = "pack-staunton-chess"
+description = "The free Staunton chess set content pack: pieces modelled from scratch, the knight as a two-sided tutorial job"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[[bin]]
+name = "make-staunton-pack"
+path = "src/main.rs"
+
+[dependencies]
+cut-craft-content-pack = { path = "../../content-pack" }
+cmd-3d-finishing-toolpath = { path = "../../commands/3d-finishing-toolpath" }
+cmd-3d-roughing-toolpath = { path = "../../commands/3d-roughing-toolpath" }
+cmd-drilling-toolpath = { path = "../../commands/drilling-toolpath" }
+cut-craft-core.workspace = true
+fmt-export-as-stl = { path = "../../formats/export-as-stl" }
+glam.workspace = true
+
+[lints]
+workspace = true
