@@ -362,7 +362,11 @@ fn a_polyline_click_snaps_to_an_end_marked_and_named_under_a_crosshair() {
     let out = headless(h.ctx.run_ui(input, |ui| h.app.pass(ui)));
     assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Crosshair);
     let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
-    assert!(hint.starts_with("Snapped to End"), "{hint}");
+    assert!(
+        hint.starts_with("Draw Polyline: click the first point"),
+        "{hint}"
+    );
+    assert!(hint.contains("snapped to End"), "{hint}");
     h.click(corner, Modifiers::NONE);
     assert_eq!(h.app.polyline.points, vec![Point::new(30.0, 20.0)]);
     // Shift places it freely

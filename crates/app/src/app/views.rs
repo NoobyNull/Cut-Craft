@@ -1221,7 +1221,12 @@ impl CutCraftApp {
         self.handles_and_hints(ui, &canvas, reach, modes);
         if let Some(hit) = snap.filter(|_| canvas.hover().is_some() || gesture.is_some()) {
             Self::paint_snap(ui, &canvas, hit);
-            cut_craft_bug_report::hint::hint(ui.ctx(), &Self::snap_hint(hit));
+            // after what the tool does next, so that stays first
+            let hint = match self.step_hint(modes) {
+                Some(step) => format!("{step}; {}", Self::snap_hint(hit)),
+                None => Self::snap_hint(hit),
+            };
+            cut_craft_bug_report::hint::hint(ui.ctx(), &hint);
         }
         self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
@@ -2558,6 +2563,7 @@ impl CutCraftApp {
     }
 
     /// Drawing and node drags snap to the snap points (Shift holds snapping off).
+    #[cfg(test)]
     pub(super) fn snapped(
         &self,
         ui: &egui::Ui,
@@ -2678,10 +2684,11 @@ impl CutCraftApp {
         );
     }
 
-    /// The status bar's words for a snap: what it snapped to, and how to draw without it.
+    /// The status bar's words for a snap: what it snapped to, and how to place a point
+    /// without it.
     pub(super) fn snap_hint(hit: Snap) -> String {
         format!(
-            "Snapped to {}: {} (hold Shift to place it freely; F4 for Snapping Options)",
+            "snapped to {}: {} (Shift places it freely)",
             hit.kind.label(),
             hit.kind.explain()
         )
