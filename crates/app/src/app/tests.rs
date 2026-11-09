@@ -790,6 +790,7 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
 
     let mut h = Harness::new();
     h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
+    h.app.addons.ask_to_run = |_| true;
     let mut c = Change::builder(&h.app.doc);
     c.add_bitmap(Bitmap {
         name: "photo".into(),
@@ -1445,22 +1446,75 @@ fn every_command_has_a_line_saying_what_it_does() {
 }
 
 #[test]
-fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
+fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
+    use cut_craft_core::keep_out::KeepOutZone;
+    use cut_craft_core::toolpath::MoveKind;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
+    // a clamp over the rectangle's right-hand side
     let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
-    h.app.doc.keep_out = vec![zone];
+    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
     h.app.invoke(&h.ctx, "profile_toolpath");
     let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
+    let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
     assert!(
-        h.app.status.message.contains("keep-out"),
-        "{}",
-        h.app.status.message
+        refused.starts_with(super::actions::KEEP_OUT_REFUSED),
+        "{refused}"
     );
+    assert!(refused.contains("\"Clamp 1\""), "names the zone: {refused}");
+    assert!(
+        refused.contains("Clip toolpaths at keep-out zones"),
+        "{refused}"
+    );
+    assert_eq!(h.app.doc.toolpaths.len(), 0, "nothing made");
+    // clipping turned on in Options: made, the part under the clamp left uncut
+    h.app.options.toolpaths.clip_at_keep_out_zones = true;
+    assert!(h.app.sync_machine_keep_out());
+    h.app.apply("profile_toolpath", &params).unwrap();
+    let made = h.app.doc.toolpaths.values().next().expect("a toolpath");
+    assert_eq!(
+        h.app.zones_entered(made),
+        [] as [String; 0],
+        "{:?}",
+        made.moves
+    );
+    let cuts = made.moves.iter().filter(|m| m.kind == MoveKind::Cut);
+    assert!(
+        cuts.clone().any(|m| m.to.x > 55.0),
+        "still cut past the clamp"
+    );
+    assert!(cuts.clone().any(|m| m.to.x < 20.0));
+    // no zones: made as it was, with no warning
+    h.app.options.toolpaths.clip_at_keep_out_zones = false;
+    h.app.sync_machine_keep_out();
     h.app.doc.keep_out.clear();
     h.app.apply("profile_toolpath", &params).unwrap();
     assert!(!h.app.status.message.contains("keep-out"));
+}
+
+#[test]
+fn keep_out_zone_labels_turn_on_and_off_and_are_remembered() {
+    let mut h = Harness::new();
+    assert!(h.app.display.keep_out_labels, "shown to start with");
+    assert_eq!(
+        h.app.display.checked("show_keep_out_zone_labels"),
+        Some(true)
+    );
+    h.app.invoke(&h.ctx, "show_keep_out_zone_labels");
+    assert!(!h.app.display.keep_out_labels);
+    assert!(
+        !h.app.options.toolpaths.keep_out_labels,
+        "kept with the options"
+    );
+    // over a zone the 2D view's menu names it and says where it is edited
+    let job = crate::gui::keep_out_menu("Keep-out: Clamp 1", false, false);
+    assert_eq!(job[0].name, "Keep-out: Clamp 1");
+    assert!(!job[0].is_enabled);
+    assert_eq!(job[1].action, "keep_out_zones");
+    assert_eq!(job[2].name, "Show Keep-Out Zone Labels");
+    let machine = crate::gui::keep_out_menu("Keep-out: Machine clamp 1", true, true);
+    assert_eq!(machine[1].action, "machine_configuration");
+    assert_eq!(machine[2].name, "Hide Keep-Out Zone Labels");
 }
 
 #[test]
@@ -1506,6 +1560,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         y: 0.0,
         width: 20.0,
         height: 60.0,
+        name: String::new(),
     }];
     assert!(h.app.sync_machine_keep_out());
     h.app.keep_out_changed();
@@ -3441,6 +3496,50 @@ fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
 }
 
 #[test]
+fn a_design_sub_tab_can_have_a_section_of_its_own() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.pages.open(Page::Design);
+    h.frame(vec![]);
+    assert!(h.text_at("Create Vectors").is_some(), "Create is open");
+    assert!(h.text_at("Shape Creation").is_none(), "Model is a tab");
+    h.app
+        .invoke(&h.ctx, &format!("{}Model:section", gui::SUBTAB_PLACE));
+    h.app
+        .invoke(&h.ctx, &format!("{}Import:section", gui::SUBTAB_PLACE));
+    assert_eq!(h.app.options.design_sections, ["Model", "Import"]);
+    h.frame(vec![]);
+    for group in ["Create Vectors", "Shape Creation", "Import"] {
+        assert!(h.text_at(group).is_some(), "{group} shows");
+    }
+    // a tool on a section leaves the row's tab as it was
+    h.app.invoke(&h.ctx, "sculpt");
+    assert_eq!(h.app.design_subtab, 0);
+    // kept between runs
+    let json = serde_json::to_string(&h.app.options).unwrap();
+    let (back, _) = crate::options::Options::from_bytes(json.as_bytes());
+    assert_eq!(back.design_sections, ["Model", "Import"]);
+    // and all back in one row
+    h.app.invoke(&h.ctx, &format!("{}*:row", gui::SUBTAB_PLACE));
+    assert_eq!(h.app.options.design_sections, Vec::<String>::new());
+    h.frame(vec![]);
+    assert!(h.text_at("Shape Creation").is_none());
+}
+
+#[test]
+fn the_clipart_library_button_opens_the_library_tab() {
+    let mut h = Harness::new();
+    assert!(h.app.available("clipart_library"));
+    // picked from a flown-out Design page, the page stays out on the Library tab
+    h.app.pages.set_pinned(Page::Design, false);
+    h.app.pages.open(Page::Design);
+    h.app.pick(&h.ctx, Page::Design, "clipart_library");
+    assert_eq!(DESIGN_TABS[h.app.design_tab], "Library");
+    assert_ne!(h.app.pages.shown(Page::Design), Shown::Hidden);
+    assert_eq!(h.app.tool_label("import_cut_list"), "Import Cut List");
+}
+
+#[test]
 fn a_tool_that_works_on_a_selection_says_what_to_select_first() {
     let h = Harness::new();
     let tip = h
@@ -3562,6 +3661,8 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
         h.texts_at("Next:")
     );
     // hovering Draw Circle's button: its description, its next step, and the status bar's line
+    h.app.options.general.fold_tool_groups = true;
+    h.frame(vec![]);
     flyout_arrow_naming(&mut h, "Draw Circle");
     let hovered = guide::hovered(&h.ctx).expect("a hovered tool");
     assert_eq!(hovered.label, "Draw Circle");
@@ -5258,7 +5359,7 @@ fn the_design_tab_shows_its_favourites_or_all_its_tools() {
     // right-clicked tools added, then one moved earlier
     let tool = |id: &str, what: &str| format!("{}design:{what}:{id}", gui::FAVOURITE);
     assert_eq!(
-        gui::tool_menu(Page::Design, "draw_circle", false, false)[0].action,
+        gui::tool_menu(Page::Design, "draw_circle", false, false, false)[0].action,
         tool("draw_circle", "add")
     );
     h.app.invoke(&h.ctx, &tool("draw_circle", "add"));
@@ -7377,13 +7478,69 @@ fn flyout_arrow_naming(h: &mut Harness, tool: &str) -> Pos2 {
 }
 
 #[test]
-fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
+fn every_tool_shows_in_a_labelled_box_unless_groups_are_folded() {
     let mut h = Harness::new();
     h.app.pages.set_pinned(Page::Design, true);
     h.frame(vec![]);
     h.frame(vec![]);
+    // spread out by default: no button hides others, each group of ways captioned
+    let spread = flyout_arrows(&h).len();
+    for caption in ["Lines and Curves", "Circles and Ellipses", "Text"] {
+        assert!(h.text_at(caption).is_some(), "{caption} box");
+    }
+    // the box's buttons run their own tool: Draw Circle from Edge is the second
+    let circles = h.text_at("Circles and Ellipses").expect("caption");
+    let mut found = None;
+    for step in 0..12_u8 {
+        let at = circles + vec2(-50.0 + 10.0 * f32::from(step), 30.0);
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.frame(vec![]);
+        if guide::hovered(&h.ctx).is_some_and(|t| t.label == "Draw Circle from Edge") {
+            found = Some(at);
+            break;
+        }
+    }
+    let at = found.expect("Draw Circle from Edge has a button of its own");
+    h.click(at, Modifiers::NONE);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| (f.id, f.way)),
+        Some(("draw_circle", crate::flyout::DragWay::AcrossEdge))
+    );
+    // a tool's right-click menu folds the groups back into flyouts, kept in the options
+    let fold = gui::tool_menu(Page::Design, "draw_circle", false, false, false)
+        .into_iter()
+        .find(|m| m.name == "Fold Tool Groups into One Button")
+        .expect("the menu offers folding");
+    h.app.form = None;
+    h.app.invoke(&h.ctx, &fold.action);
+    assert!(h.app.options.general.fold_tool_groups);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // Create's five flyouts (lines, rectangles, circles, polygons, text) and Zoom
     assert!(
-        flyout_arrows(&h).len() >= 10,
+        flyout_arrows(&h).len() >= spread + 6,
+        "folded into flyouts: {} arrows, {spread} spread out",
+        flyout_arrows(&h).len()
+    );
+    assert!(h.text_at("Circles and Ellipses").is_none());
+    let unfold = gui::tool_menu(Page::Design, "draw_circle", false, false, true)
+        .into_iter()
+        .find(|m| m.name == "Fold Tool Groups into One Button")
+        .expect("still offered");
+    assert!(unfold.is_checked);
+    h.app.invoke(&h.ctx, &unfold.action);
+    assert!(!h.app.options.general.fold_tool_groups);
+}
+
+#[test]
+fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
+    let mut h = Harness::new();
+    h.app.options.general.fold_tool_groups = true;
+    h.app.pages.set_pinned(Page::Design, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        flyout_arrows(&h).len() >= 9,
         "the Drawing tab's flyouts show their arrows"
     );
     let arrow = flyout_arrow_naming(&mut h, "Draw Circle from Edge");

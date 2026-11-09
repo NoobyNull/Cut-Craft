@@ -232,6 +232,10 @@ fn rgb(c: egui::Color32) -> [u8; 3] {
 
 /// Aspire's Toolpath Settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the dialog's own check boxes"
+)]
 pub struct ToolpathSettings {
     /// Swap to the 3D view after calculating a toolpath
     #[schemars(title = "Auto open 3D view")]
@@ -263,6 +267,17 @@ pub struct ToolpathSettings {
     #[serde(default = "preview_speed")]
     #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
     pub preview_speed: f64,
+    /// Write each keep-out zone's name on it in the 2D and 3D views ("Keep-out: Clamp 1").
+    /// The View menu turns them on and off too
+    #[serde(default = "on")]
+    #[schemars(title = "Show keep-out zone labels")]
+    pub keep_out_labels: bool,
+    /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
+    /// made. On: it is made with the part under the zone left uncut, the tool lifting over
+    /// the zone, as if the zone were cut out of whatever is under it
+    #[serde(default)]
+    #[schemars(title = "Clip toolpaths at keep-out zones")]
+    pub clip_at_keep_out_zones: bool,
 }
 
 fn preview_speed() -> f64 {
@@ -421,8 +436,9 @@ pub struct General {
         range(min = 10, max = 600)
     )]
     pub autosave_seconds: u32,
-    /// How long to press and hold a toolbox button with a small arrow before its group of
-    /// tools opens; a quick click runs the tool shown. Longer if groups open by accident
+    /// With tool groups folded: how long to press and hold a toolbox button with a small
+    /// arrow before its group of tools opens; a quick click runs the tool shown. Longer if
+    /// groups open by accident
     #[serde(default = "flyout_hold_seconds")]
     #[schemars(
         title = "Hold to open a tool group",
@@ -430,6 +446,12 @@ pub struct General {
         range(min = 0.2, max = 1.5)
     )]
     pub flyout_hold_seconds: f64,
+    /// Show each group of tools that do one job different ways (the circles, the text
+    /// tools, the joins…) as one button with a small arrow, to open for the rest. Off shows
+    /// every tool in a labelled box, so none is missed
+    #[serde(default)]
+    #[schemars(title = "Fold tool groups into one button")]
+    pub fold_tool_groups: bool,
 }
 
 fn autosave_seconds() -> u32 {
@@ -785,6 +807,11 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub favourites: Favourites,
+    /// The Design sub-tabs shown as sections of their own under the tab row rather than in
+    /// it, by name (right-click a sub-tab). None to start with: every one in the row.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub design_sections: Vec<String>,
     /// The tool each toolbox flyout shows: the one picked from it last.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
@@ -852,6 +879,8 @@ impl Default for Options {
                 tolerance_3d: tolerance(),
                 tolerance_vcarve: tolerance(),
                 preview_speed: preview_speed(),
+                keep_out_labels: d.keep_out_labels,
+                clip_at_keep_out_zones: false,
             },
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
@@ -861,6 +890,7 @@ impl Default for Options {
                 layout: WindowLayout::default(),
                 autosave_seconds: autosave_seconds(),
                 flyout_hold_seconds: flyout_hold_seconds(),
+                fold_tool_groups: false,
             },
             confirmations: Confirmations::default(),
             job_sheet: fmt_create_job_sheet::Style::default(),
@@ -873,6 +903,7 @@ impl Default for Options {
             updates: Updates::default(),
             default_job: None,
             favourites: Favourites::default(),
+            design_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
         }
     }
@@ -951,6 +982,7 @@ impl Options {
         d.previews_2d = t.create_2d_previews;
         d.solid_previews = t.solid_2d_previews;
         d.solid_colour = t.solid_2d_preview_color;
+        d.keep_out_labels = t.keep_out_labels;
     }
 
     /// How many recent files are kept.
@@ -1193,6 +1225,9 @@ mod tests {
         assert_eq!(older.general.autosave_seconds, o.general.autosave_seconds);
         assert!((older.general.flyout_hold_seconds - o.general.flyout_hold_seconds).abs() < 1e-9);
         assert_eq!(older.appearance.text_size, 115);
+        // every tool shows, in its group's box, unless folded on purpose
+        assert!(!o.general.fold_tool_groups);
+        assert!(!older.general.fold_tool_groups);
     }
 
     #[test]
@@ -1239,5 +1274,22 @@ mod tests {
             ..o.toolpaths
         };
         assert!((wild.preview_speed() - 20_000.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn keep_out_labels_show_and_clipping_is_off_until_turned_on() {
+        let o = Options::default();
+        assert!(o.toolpaths.keep_out_labels);
+        assert!(
+            !o.toolpaths.clip_at_keep_out_zones,
+            "clipping is off by default"
+        );
+        // options saved before these settings get the same
+        let mut saved = serde_json::to_value(&o.toolpaths).unwrap();
+        let fields = saved.as_object_mut().unwrap();
+        fields.remove("keep_out_labels");
+        fields.remove("clip_at_keep_out_zones");
+        let older: ToolpathSettings = serde_json::from_value(saved).unwrap();
+        assert_eq!(older, o.toolpaths);
     }
 }

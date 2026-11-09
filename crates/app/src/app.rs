@@ -145,7 +145,7 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 
-const BUILT_INS: [&str; 98] = [
+const BUILT_INS: [&str; 99] = [
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",
@@ -166,6 +166,7 @@ const BUILT_INS: [&str; 98] = [
     "open_folder",
     "open_clipart_folder",
     "component_levels",
+    "clipart_library",
     "edit_toolpath",
     "create_shape_round",
     "create_shape_angled",
@@ -742,6 +743,9 @@ struct CutCraftApp {
     design_tab: usize,
     /// The Design tab's open sub-tab (see [`gui::DESIGN_SUBTABS`]).
     design_subtab: usize,
+    /// The Design sub-tab shown as a section to unfold next frame: a tool on it was picked
+    /// from a menu, a shortcut or Find Tool.
+    design_unfold: Option<&'static str>,
     /// Each tool's first step, once asked for (see [`guide::first_step`]).
     first_steps: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     view: View,

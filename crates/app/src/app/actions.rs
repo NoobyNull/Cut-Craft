@@ -50,6 +50,7 @@ impl CutCraftApp {
             status,
             design_tab: 0,
             design_subtab: 0,
+            design_unfold: None,
             first_steps: std::cell::RefCell::default(),
             view: View::TwoD,
             cursor: None,
@@ -193,6 +194,9 @@ impl CutCraftApp {
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(gui::SELECT_COMPONENT) => true,
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
+            id if id.starts_with(gui::SUBTAB_PLACE) || id.starts_with(gui::FOLD_TOOL_GROUPS) => {
+                true
+            }
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(gui::GUIDE) => true,
@@ -351,6 +355,16 @@ impl CutCraftApp {
             "import_vectors" | "export_vectors" | "open_folder" | "open_clipart_folder" => {
                 self.file_icon_action(id);
             }
+            // the Library tab, where the clipart is
+            "clipart_library" => {
+                self.set_design_tab(
+                    DESIGN_TABS
+                        .iter()
+                        .position(|&t| t == "Library")
+                        .unwrap_or_default(),
+                );
+                self.pages.open(Page::Design);
+            }
             // the Components tab, as Aspire's Component Levels icon shows
             "component_levels" => {
                 self.set_design_tab(
@@ -415,6 +429,13 @@ impl CutCraftApp {
                     manager.draft.number_by_slots(&changer.slots);
                 }
                 self.tool_manager = Some(manager);
+            }
+            // the labels' setting is kept with the options, so they stay as left
+            "show_keep_out_zone_labels" => {
+                self.display.toggle(id);
+                self.options.toolpaths.keep_out_labels = self.display.keep_out_labels;
+                self.save_options();
+                ctx.request_repaint();
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
             id if self.resolution_checked(id).is_some() => self.set_resolution(id),
@@ -569,6 +590,16 @@ impl CutCraftApp {
             id if id.starts_with(gui::SAVE_BRUSH) => self.save_brush(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
+            }
+            id if id.starts_with(gui::FOLD_TOOL_GROUPS) => {
+                self.options.general.fold_tool_groups = id.ends_with("true");
+                self.save_options();
+            }
+            id if id.starts_with(gui::SUBTAB_PLACE) => {
+                if let Some(sections) = gui::placed(&self.options.design_sections, id) {
+                    self.options.design_sections = sections;
+                    self.save_options();
+                }
             }
             id if !self.may_run_gadget(id) => {}
             _ => self.start_command(id),
@@ -1010,7 +1041,8 @@ impl CutCraftApp {
     }
 
     /// The active machine's keep-out zones put on the job, as job millimetres (the G-code's,
-    /// which they are given in); true when they changed.
+    /// which they are given in), and whether Options allow clipping toolpaths at them; true
+    /// when either changed.
     pub(super) fn sync_machine_keep_out(&mut self) -> bool {
         let zones: Vec<_> = self
             .machines
@@ -1018,11 +1050,14 @@ impl CutCraftApp {
             .map(|m| m.keep_out.as_slice())
             .unwrap_or_default()
             .iter()
-            .filter(|z| z.width > 0.0 && z.height > 0.0)
-            .map(|z| z.path())
+            .enumerate()
+            .filter(|(_, z)| z.width > 0.0 && z.height > 0.0)
+            .map(|(i, z)| cut_craft_core::keep_out::KeepOutZone::new(z.name_at(i), z.path()))
             .collect();
-        let changed = zones != self.doc.machine_keep_out;
+        let clip = self.options.toolpaths.clip_at_keep_out_zones;
+        let changed = zones != self.doc.machine_keep_out || clip != self.doc.clip_keep_out;
         self.doc.machine_keep_out = zones;
+        self.doc.clip_keep_out = clip;
         changed
     }
 
@@ -1040,13 +1075,47 @@ impl CutCraftApp {
 
     /// The toolpaths of `plan` that pass over a keep-out zone, by name.
     pub(super) fn not_kept_out(&self, plan: &[Vec<EntityId>]) -> Vec<String> {
-        let zones = self.doc.keep_out_zones();
         plan.iter()
             .flatten()
             .filter_map(|id| self.doc.toolpaths.get(id))
-            .filter(|t| cut_craft_core::keep_out::crossed(&zones, &t.moves))
+            .filter(|t| !self.zones_entered(t).is_empty())
             .map(|t| t.name.clone())
             .collect()
+    }
+
+    /// The names of the keep-out zones `toolpath` cuts into (its cutter's edge reaching
+    /// one) or rapids over.
+    pub(super) fn zones_entered(
+        &self,
+        toolpath: &cut_craft_core::toolpath::Toolpath,
+    ) -> Vec<String> {
+        let radius = toolpath.tool.diameter / 2.0;
+        cut_craft_core::keep_out::entered(self.doc.named_keep_out(), &toolpath.moves, radius)
+            .into_iter()
+            .map(|z| format!("\"{}\"", z.name))
+            .collect()
+    }
+
+    /// Why `change` may not be made: a toolpath it makes would cut into a keep-out zone,
+    /// Options not allowing it to be clipped there (or it being a laser or drill bank
+    /// toolpath, which are not clipped). A clamp is never cut by mistake.
+    pub(super) fn keep_out_refusal(&self, change: &Change) -> Option<String> {
+        let refused: Vec<String> = change
+            .toolpaths_making()
+            .filter_map(|t| {
+                let zones = self.zones_entered(t);
+                (!zones.is_empty())
+                    .then(|| format!("{} would cut into {}", t.name, zones.join(" and ")))
+            })
+            .collect();
+        let way = if self.doc.clip_keep_out {
+            "Move the part or the zone (laser and drill bank toolpaths are not clipped)"
+        } else {
+            &format!(
+                "Move the part or the zone, or let toolpaths be clipped there ({CLIP_SETTING})"
+            )
+        };
+        (!refused.is_empty()).then(|| format!("{KEEP_OUT_REFUSED}: {}. {way}", refused.join("; ")))
     }
 
     pub(super) fn toolpath_action(&mut self, id: &str) {
@@ -1291,8 +1360,9 @@ impl CutCraftApp {
         let crossing = self.not_kept_out(&plan);
         if !crossing.is_empty() {
             return Err(format!(
-                "Not saved: {} could not abide by the keep-out zones. Check the keep-out zones \
-                 and their clearance are right",
+                "Not saved: {} would cut into a keep-out zone. Check the keep-out zones and \
+                 their clearance are right, or turn on clipping ({CLIP_SETTING}) and \
+                 recalculate",
                 crossing.join(", ")
             ));
         }
@@ -1990,10 +2060,13 @@ impl CutCraftApp {
     pub(super) fn warn(&mut self, made: &[EntityId], notes: &[String]) {
         let mut warnings = notes.to_vec();
         for t in made.iter().filter_map(|id| self.doc.toolpaths.get(id)) {
-            if cut_craft_core::keep_out::crossed(&self.doc.keep_out_zones(), &t.moves) {
+            let zones = self.zones_entered(t);
+            if !zones.is_empty() {
                 warnings.push(format!(
-                    "{} could not be made without passing over a keep-out zone",
-                    t.name
+                    "{} cuts into keep-out zone {} and will not be saved: move the part or the \
+                     zone, or turn on clipping ({CLIP_SETTING})",
+                    t.name,
+                    zones.join(" and ")
                 ));
             }
             warnings.extend(cut_craft_core::checks::problems_over(
@@ -2765,6 +2838,9 @@ impl CutCraftApp {
         change: Result<Change, String>,
     ) -> Result<(), String> {
         let change = change?;
+        if let Some(why) = self.keep_out_refusal(&change) {
+            return Err(why);
+        }
         let cmd = self
             .registry
             .get(id)
@@ -3233,8 +3309,6 @@ impl CutCraftApp {
                         self.tools_or_favourites(ui, &groups, Page::Design);
                     } else {
                         self.design_subtabs(ui);
-                        let groups = self.toolbar.subtab_groups(self.design_subtab);
-                        self.tool_groups(ui, &groups, Page::Design);
                     }
                 }
                 "Sheets" => self.sheets_panel(ui),
@@ -3260,35 +3334,91 @@ impl CutCraftApp {
         }
     }
 
-    /// The Design tab's sub-tabs across the page, under the groups always shown: Create,
-    /// Edit, Arrange, Model. Each names what its tools are for on hover, so a beginner
-    /// looks under a word rather than down one long page of icons.
+    /// The Design tab's sub-tabs, under the groups always shown: Create, Edit, Arrange,
+    /// Model, Import. Each names what its tools are for on hover, so a beginner looks under a
+    /// word rather than down one long page of icons. A right-click moves one out of the row
+    /// into a section of its own below it (or back), so tools used together can all show at
+    /// once; the choice is kept in the options.
     pub(super) fn design_subtabs(&mut self, ui: &mut egui::Ui) {
+        /// The share of the usual padding and spacing the sub-tabs keep between them.
+        const SUBTAB_PADDING: f32 = 0.5;
         cut_craft_bug_report::mark(ui, "Design sub-tabs");
         let always = self.toolbar.named(gui::ALWAYS_SHOWN);
         self.tool_groups(ui, &always, Page::Design);
         ui.separator();
-        let mut picked = None;
-        ui.horizontal_wrapped(|ui| {
-            for (i, tab) in gui::DESIGN_SUBTABS.iter().enumerate() {
-                let response = ui
-                    .selectable_label(i == self.design_subtab, tab.name)
-                    .on_hover_hint(tab.hint);
-                if response.clicked() {
-                    picked = Some(i);
+        let sections = self.options.design_sections.clone();
+        let (row, apart) = gui::subtab_layout(&sections);
+        let open = gui::open_subtab(self.design_subtab, &sections);
+        let (mut picked, mut chosen) = (None, None);
+        if !row.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                // a little tighter than a button row, so all five fit across the page
+                ui.spacing_mut().button_padding.x *= SUBTAB_PADDING;
+                ui.spacing_mut().item_spacing.x *= SUBTAB_PADDING;
+                for &i in &row {
+                    let tab = &gui::DESIGN_SUBTABS[i];
+                    let response = ui
+                        .selectable_label(Some(i) == open, tab.name)
+                        .on_hover_hint(format!(
+                            "{}. Right-click to show it as its own section",
+                            tab.hint
+                        ));
+                    if response.clicked() {
+                        picked = Some(i);
+                    }
+                    if let Some(action) =
+                        self.popup(&response, || gui::subtab_menu(tab.name, &sections))
+                    {
+                        chosen = Some(action);
+                    }
                 }
+            });
+            ui.add_space(ui.spacing().item_spacing.y);
+            if let Some(i) = picked.or(open) {
+                self.design_subtab = i;
+                let groups = self.toolbar.subtab_groups(i);
+                self.tool_groups(ui, &groups, Page::Design);
             }
-        });
-        ui.add_space(ui.spacing().item_spacing.y);
-        if let Some(i) = picked {
-            self.design_subtab = i;
+        }
+        for i in apart {
+            let tab = &gui::DESIGN_SUBTABS[i];
+            ui.separator();
+            // a tool picked elsewhere unfolds its section once; it can be folded again
+            let unfold = (self.design_unfold == Some(tab.name)).then_some(true);
+            if unfold.is_some() {
+                self.design_unfold = None;
+            }
+            let header = egui::CollapsingHeader::new(egui::RichText::new(tab.name).strong())
+                .id_salt(("design section", tab.name))
+                .default_open(true)
+                .open(unfold)
+                .show(ui, |ui| {
+                    let groups = self.toolbar.subtab_groups(i);
+                    self.tool_groups(ui, &groups, Page::Design);
+                });
+            let response = header.header_response.on_hover_hint(format!(
+                "{}. Right-click to put it back in the tab row",
+                tab.hint
+            ));
+            if let Some(action) = self.popup(&response, || gui::subtab_menu(tab.name, &sections)) {
+                chosen = Some(action);
+            }
+        }
+        if let Some(action) = chosen {
+            self.invoke(ui.ctx(), &action);
         }
     }
 
     /// Opens the sub-tab `id` is on, so a tool picked from Find Tool, a menu or a shortcut
-    /// shows highlighted where it lives.
+    /// shows highlighted where it lives: its tab in the row, or its section unfolded.
     pub(super) fn show_subtab_of(&mut self, id: &str) {
-        if let Some(tab) = self.toolbar.subtab_of(id, self.design_subtab) {
+        let Some(tab) = self.toolbar.subtab_of(id, self.design_subtab) else {
+            return;
+        };
+        let name = gui::DESIGN_SUBTABS[tab].name;
+        if self.options.design_sections.iter().any(|s| s == name) {
+            self.design_unfold = Some(name);
+        } else {
             self.design_subtab = tab;
         }
     }
@@ -3406,7 +3536,9 @@ impl CutCraftApp {
     /// tool opened a form there.
     pub(super) fn pick(&mut self, ctx: &egui::Context, page: Page, id: &str) {
         self.invoke(ctx, id);
-        if self.form.is_none() {
+        // a button that opens another design tab leaves the page out to show it
+        let navigates = matches!(id, "clipart_library" | "component_levels");
+        if self.form.is_none() && !navigates {
             self.pages.done_with(page);
         }
     }
@@ -3792,7 +3924,11 @@ impl CutCraftApp {
         open.dirty |= listed.get();
         let (id, new_job) = (open.id, open.new_job);
         if let Some(error) = &open.error {
-            ui.colored_label(ui.visuals().error_fg_color, error);
+            let shown = ui.colored_label(ui.visuals().error_fg_color, error);
+            // a toolpath kept out of a zone: how to let it be clipped instead
+            if error.starts_with(KEEP_OUT_REFUSED) {
+                shown.on_hover_text(CLIP_HOW);
+            }
         }
         let (chosen, edit_tool) = asked.into_inner();
         let edit_listed = edit_listed.into_inner();
@@ -3983,7 +4119,10 @@ impl CutCraftApp {
                 .on_disabled_hover_text("Import a photo first")
                 .clicked();
         });
-        if let (true, Some(installed), Some(id)) = (start, installed, chosen) {
+        let name = "The Depth add-on";
+        if let (true, Some(installed), Some(id)) = (start, installed, chosen)
+            && self.addons.may_run(crate::depth::ADDON_ID, name)
+        {
             match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())
             {
                 Ok(running) => self.depth_estimate = Some(running),
@@ -4497,11 +4636,13 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
 /// What the user is told before an unsigned gadget first runs.
 pub(super) fn unsigned_warning(label: &str) -> String {
     format!(
-        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder, \
-         not from a signed Cut Craft build, so nobody has checked what it does.\n\n\
-         Cut Craft and its author are not responsible for what this gadget does. It can only \
-         change the job that is open, and Undo takes back everything it did in one step. \
-         Check its result before you cut.\n\nRun it?"
+        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder \
+         or an unsigned add-on, not from a signed Cut Craft build, so nobody has checked what \
+         it does.\n\n\
+         Cut Craft and its author are not responsible for what this gadget does or can do, \
+         including anything harmful or malicious. It can only change the job that is open, \
+         and Undo takes back everything it did in one step. Check its result before you \
+         cut.\n\nRun it?"
     )
 }
 
@@ -4534,3 +4675,20 @@ pub(super) fn post_database_message(entries: &[cut_craft_machines::Entry]) -> St
         entries.len()
     )
 }
+
+/// How a toolpath refused for cutting into a keep-out zone is said to be (the form's message
+/// then explains how to allow clipping when hovered).
+pub(super) const KEEP_OUT_REFUSED: &str = "Not made, to keep out of a keep-out zone";
+
+/// Where clipping at keep-out zones is turned on.
+pub(super) const CLIP_SETTING: &str =
+    "Edit ▸ Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones";
+
+/// What turning clipping on does, and how: the tooltip on a toolpath refused for a zone.
+pub(super) const CLIP_HOW: &str = "Keep-out zones (red outlines, such as clamps) are kept \
+    safe: a toolpath that would cut into one is not made.\n\nTo make it anyway with the part \
+    under the zone left uncut, open Edit ▸ Options, and under Toolpath Settings tick \
+    \"Clip toolpaths at keep-out zones\". The tool then lifts over each zone and comes back \
+    down past it, as if the zone were cut out of whatever is under it.\n\nTo change a zone \
+    instead: Toolpaths ▸ Keep-Out Zones… for the job's, Machine Configuration for the \
+    machine's.";

@@ -1,5 +1,7 @@
 # Depth add-on
 
+How add-ons plug into Cut Craft (manifest, releases, signing, kinds): [docs/addons.md](../../docs/addons.md).
+
 `cutcraft-depth` estimates a photo's depth for **Model ▸ Relief from Photo**. It is a separate download so the app and its updates stay small. It needs no Python or GPU.
 
 - **Model:** Depth Anything V2 **Small** (Apache 2.0). Base, Large and Giant are CC-BY-NC-4.0 and must not be shipped.

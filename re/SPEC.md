@@ -165,25 +165,39 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   3. A form offers the same values as exact typed input. Rectangle corners can be square, external-radius or internal-radius, with draggable green radius handles.
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
-- **Toolbox flyouts** (Cut Craft's own choice, not Aspire's) [inf]: Aspire shows each of these
-  tools as an icon of its own; Cut Craft groups tools that do one job different ways behind
-  one button so a beginner faces fewer, clearer buttons (Drawing tab 78 buttons to 44). The
-  button shows the tool picked from it last (kept in the options); a press held for 0.4 s, a
-  click on the arrow in its bottom-right corner, or Down with the button focused opens the
-  others, each by icon and name. Find Tool, the Rail layout and Favourites still name every
-  tool on its own. The groups are `FLYOUTS` in `crates/app/src/flyout.rs`. Two variants are
-  Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle from
-  Edge (the drag is the diameter).
+- **Toolbox tool groups** (Cut Craft's own choice, not Aspire's) [inf]: tools that do one job
+  different ways (the circles, the text tools, the joins, the alignments…) are gathered in
+  named groups (`FLYOUTS` in `crates/app/src/flyout.rs`). By default every tool shows: each
+  group is a small box captioned with what its tools are for ("Circles and Ellipses",
+  "Line Up Edges"), so a beginner sees every choice without knowing to open anything; a box
+  moves to the next row whole rather than splitting. Aspire shows the same tools as loose
+  icons with no grouping. Options ▸ General ▸ *Fold tool groups into one button* (also on any
+  toolbox button's right-click menu) folds each group into one flyout button instead, for a
+  compact page (Drawing tab 78 buttons to 44): the button shows the tool picked from it last
+  (kept in the options); a press held for 0.4 s, a click on the arrow in its bottom-right
+  corner, or Down with the button focused opens the others, each by icon and name. Find
+  Tool, the Rail layout and Favourites name every tool on its own either way. Two variants
+  are Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle
+  from Edge (the drag is the diameter). Flyouts were the default until Matthew found tools
+  hidden under them too easy to miss (2026-11-09).
 - **Design sub-tabs** (Cut Craft's own choice, not Aspire's) [inf]: Aspire's Drawing and
   Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
-  Operations and 2D View Control at the top, then four sub-tabs across the page: **Create**
+  Operations and 2D View Control at the top, then five sub-tabs across the page: **Create**
   (Create Vectors), **Edit** (Select and Edit; Join, Combine and Trim; Transform Objects), **Arrange** (Align Objects,
-  Offset and Layout, Array Objects) and **Model** (Shape Creation, Shape Editing), so a page
+  Offset and Layout, Array Objects), **Model** (Shape Creation, Shape Editing) and **Import**
+  (Import Vectors or Picture, Import Vectors, Import 3D Model, Clipart Library, Import
+  Toolpaths (G-code), Import Cut List: every way into the job, which Aspire spreads over the
+  File menu, the Drawing and Modeling tabs and its Clipart tab; each on its own button, with
+  the files it takes in its tooltip), so a page
   shows a couple of dozen buttons instead of sixty-odd and a beginner looks under a word that
   says what the tools are for. Each sub-tab says so on hover. A tool run from a menu, a
   shortcut or Find Tool opens its sub-tab, so it shows highlighted where it lives. Favourites,
   the Rail and Ribbon layouts and Find Tool are as before. The sub-tabs are `DESIGN_SUBTABS`
-  in `crates/app/src/gui.rs`.
+  in `crates/app/src/gui.rs`. A right-click on a sub-tab offers Show as Its Own Section (and
+  on a section's heading, Put Back in the Tab Row), plus All Tabs in One Row and Every Tab as
+  Its Own Section: a section sits under the tab row, folds up by its heading, and is always
+  shown, so tools used together (say Create and Model) need no switching. The choice is kept
+  in the options file (`design_sections`); every sub-tab is in the row to start with.
 - **Next-step guidance** (Cut Craft's own) [inf]: Aspire's status bar shows a tool's tooltip.
   Cut Craft adds a box in the room left under a page's icons: the hovered tool's name, what
   it does and its next step (a flyout's names the tools it holds too), else the tool in
@@ -243,6 +257,10 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
 ### Toolpaths (beyond P4, listed for completeness) [obs]
 - **Strategies:** Profile, Pocket, Drilling, V-Carve, Quick Engrave (Ctrl+Q), Inlay / V-Carve Inlay, Fluting, Prism, Chamfer, Keyhole, Thread Milling, Drag Knife, Moulding/Extruded, Texture, Rough and Finish Machining (3D), Rounding, PhotoVCarve, Sketch Carving, Laser Cut/Fill and Laser Picture, Array Copy, Merged.
 - **Support:** Tool Database (with remote databases), Materials, Templates, Tabs, Keep-Out Zones, Toolpath Tiling, Preview (simulation), Job Sheet, Summary.
+
+### Keep-out zones [inf] (help: Keep-out Zones)
+- **[inf]** Aspire's keep-out zones are areas (clamps) its rapids go round; a toolpath that cannot keep out of one is not saved.
+- **Deliberate differences, for novices:** each zone has a name, written on it in both views as its label ("Keep-out: Clamp 1"; Keep-Out Zones' Name numbers several, Add Selection adds to the zones there are; a machine's clamps are named in Machine Configuration, "Machine clamp 1" when left blank). View ▸ Show Keep-Out Zone Labels (also in Options ▸ Toolpath Settings, remembered) hides them. Resting the pointer on a zone in the 2D view says what it is and where it is edited; right-click there names it with Edit Keep-Out Zones… (or Edit Machine Keep-Out Zones…) and the labels toggle first in the menu. A cutting move enters a zone when the cutter's edge (its radius) reaches it, not only its centre, since the edge is what hits a clamp; rapids only go round the outline. A toolpath that would cut into a zone is not made at all (the form says which zone, and its tooltip says how to allow it), rather than made, warned about, and refused at save. Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones (off by default) makes it instead with whatever is under the zone left uncut: the tool lifts to the safe height where it would enter and comes back down past the zone, as if the zone were cut out of what is under it (a cylinder under a clamp is cut as the cylinder less the zone). The zones are not a layer of vectors: subtracting them from the design itself would change the user's drawing for good, so they stay an overlay over everything that only the toolpaths are clipped by, and turning clipping on or off recalculates every toolpath. Laser and drill bank toolpaths are not clipped (their power and hits run move by move), so one that enters a zone is still not made.
 
 ### Progress of slow jobs [inf] (help: Calculate buttons; trial use)
 - **[inf]** Aspire calculates a toolpath, previews and recalculates on the spot: the window waits, with a progress bar along the bottom for the long ones.

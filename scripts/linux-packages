@@ -21,8 +21,10 @@ rsvg-convert -w 256 -h 256 assets/cut-craft.svg -o "$appdir/family.yax.CutCraft.
 tool=$(command -v appimagetool || true)
 if [[ -z $tool ]]; then
     tool=dist/appimagetool
-    curl -sSL -o "$tool" \
-        https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+    # a fixed release, not "continuous", whose download has timed out (504); --fail stops a
+    # timeout page being saved and run as the tool
+    curl -sSL --fail --retry 5 --retry-all-errors -o "$tool" \
+        https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
     chmod +x "$tool"
 fi
 # runs without FUSE, as on GitHub's runners
