@@ -123,7 +123,9 @@ say "not implemented yet".
   the selected closed shapes. Not yet in the 3D view.
 - Model: Add Zero Plane, Create Component from Bitmap / Visible Model / Toolpath Preview, Relief
   from Photo (Cut Craft's own: Estimate Depth runs the optional Depth add-on on the chosen
-  photo, then backdrop cut-off, lift, fine detail and smoothing shape it into a relief), Bake
+  photo, or a depth map made elsewhere is used as it is; background cut by colour and by
+  depth, invert, fine detail, sharpen, smoothing, lift, soft edge and base shape it into a relief
+  that follows its settings live), Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL (its form: limit by tolerance or triangle count; back
   left open or closed by a flat plane, the inverted front or the other side; Triangulate shows
@@ -298,6 +300,9 @@ say "not implemented yet".
   corner. Active Tile (or a double-click on a tile while the form is open, shaded in the
   2D view) makes the preview cut only that tile's moves, at the machine's corner or, with
   Draw Toolpaths in Original Position, where the tile sits in the finished piece.
+- Gadgets ▸ Add-ons (Cut Craft's own): installs and updates add-ons from a GitHub
+  repository's newest release, official ones (Depth) listed with their repositories built in,
+  signed ones straight away and unsigned ones after a warning.
 - Gadgets ▸ Wrapped Fluting Layout and Wrapped Spiral Layout (rotary jobs): flutes or
   rope-twist strands, with coves, laid out as vectors for Profile / Fluting toolpaths.
 - Gadgets ▸ Celtic Weave Creator: a knot grid's loops as smooth closed vectors (crossings
