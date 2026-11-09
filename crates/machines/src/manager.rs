@@ -469,13 +469,21 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
         );
         let mut gone = None;
         egui::Grid::new("machine_keep_out")
-            .num_columns(5)
+            .num_columns(6)
             .show(ui, |ui| {
-                for heading in ["X", "Y", "Width", "Height"] {
+                for heading in ["Name", "X", "Y", "Width", "Height"] {
                     ui.label(heading);
                 }
                 ui.end_row();
                 for (i, zone) in machine.keep_out.iter_mut().enumerate() {
+                    // what its label in the views says, after "Keep-out: "
+                    let hint = zone.name_at(i);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut zone.name)
+                            .hint_text(hint)
+                            .desired_width(ui.spacing().text_edit_width / 2.0),
+                    )
+                    .on_hover_hint("What its label in the 2D and 3D views calls it");
                     // the corner may be either side of the origin
                     for value in [&mut zone.x, &mut zone.y] {
                         let mut shown = *value / per;

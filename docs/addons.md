@@ -68,8 +68,9 @@ such as `v0.2.0`). A release carries:
 GitHub's SHA-256 checksum of every file must match, or the install is refused.
 
 `.github/workflows/depth-addon.yml` is a worked example. It builds `cutcraft-depth` for
-Linux and Windows, zips each with `addon.toml`, converts the Small model's weights, signs
-everything and publishes the release on `NoobyNull/CutCraft-Depth`.
+Linux and Windows, zips each with `addon.toml`, converts the Small model's weights and
+publishes the release on `NoobyNull/CutCraft-Depth`. It does not sign (see Signing), so
+it needs only the `ADDON_RELEASE_TOKEN` secret.
 
 ## Install, update and remove
 
@@ -97,8 +98,10 @@ Install details:
 
 ## Signing
 
-Matthew's rule: add-ons from Cut Craft's own builds are signed; anything else is allowed
-to install and run after a warning, never blocked.
+Matthew's rule: signing is optional and nothing is blocked for lacking it. Unsigned
+add-ons install and run after a warning. Matthew chose not to sign add-ons, the official
+Depth add-on included, so in practice every add-on today takes the unsigned path below.
+A release can still carry signatures, and Cut Craft checks them when present.
 
 - **Signed** means every file in the release has a `.minisig` that checks out against
   the release key built into Cut Craft (`crates/updater/release-key.pub`, the updater's
