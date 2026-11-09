@@ -936,9 +936,9 @@ struct CutCraftApp {
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
-    /// with the history revision and job it was made for.
+    /// with the history revision, job and detail when still (mesh cells) it was made for.
     drawn_on: Option<(
-        (u64, cut_craft_core::document::Job),
+        (u64, cut_craft_core::document::Job, usize),
         std::sync::Arc<Material>,
     )>,
     /// The imported model's triangles as last drawn, kept while nothing about the view or

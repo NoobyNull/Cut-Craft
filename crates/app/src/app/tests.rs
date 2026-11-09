@@ -8474,3 +8474,15 @@ fn moving_what_a_toolpath_was_made_from_says_it_is_out_of_date() {
         "{message}"
     );
 }
+
+#[test]
+fn the_surface_drawn_on_is_made_again_when_the_detail_when_still_changes() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    let first = h.app.drawing_surface().expect("a model to draw on");
+    let again = h.app.drawing_surface().unwrap();
+    assert!(std::sync::Arc::ptr_eq(&first, &again), "kept");
+    h.app.options.view_3d.still_detail = crate::options::Detail::Low;
+    let changed = h.app.drawing_surface().unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&first, &changed), "made again");
+}
