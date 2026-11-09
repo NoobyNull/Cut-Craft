@@ -593,7 +593,7 @@ mod tests {
             change.notes
         );
         h.apply(&mut doc, change).unwrap();
-        assert!(doc.constraints.is_empty());
+        assert_eq!(doc.constraints, []);
     }
 
     #[test]
@@ -632,7 +632,7 @@ mod tests {
         c.remove(sq);
         let c = c.finish();
         h.apply(&mut doc, c).unwrap();
-        assert!(doc.constraints.is_empty());
+        assert_eq!(doc.constraints, []);
         h.undo(&mut doc);
         assert_eq!(doc.constraints.len(), 1, "undo brings it back");
     }
@@ -754,6 +754,6 @@ mod tests {
         );
         assert_eq!(made.len(), 1, "only the end the line runs to");
         assert_eq!(made[0].pin, Pin::Node { node: 1 });
-        assert!(pins(&line, EntityId(1), &[(p(0.0, 0.0), to)], false).is_empty());
+        assert_eq!(pins(&line, EntityId(1), &[(p(0.0, 0.0), to)], false), []);
     }
 }

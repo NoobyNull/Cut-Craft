@@ -410,7 +410,7 @@ fn a_line_drawn_to_a_snapped_corner_stays_on_it_until_its_mark_is_deleted() {
     h.click(h.at(35.0, 25.0), Modifiers::NONE);
     assert_eq!(h.app.picked_constraint, Some(0));
     h.app.invoke(&h.ctx, "delete");
-    assert!(h.app.doc.constraints.is_empty());
+    assert_eq!(h.app.doc.constraints, []);
     assert_eq!(h.app.doc.vectors.len(), 2, "nothing deleted");
     move_vector(&mut h, square, Point::new(5.0, 5.0));
     let end = h.app.doc.vectors[&line].segments[0].end();
