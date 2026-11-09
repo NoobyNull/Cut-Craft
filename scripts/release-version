@@ -35,8 +35,12 @@ EOF
 fi
 next=$("$here/next-version" bump "$current" "$step")
 
+if [[ -f Cargo.lock ]] && ! command -v cargo >/dev/null; then
+  echo "cargo isn't on PATH, so Cargo.lock can't be updated to $next; nothing was changed." >&2
+  exit 1
+fi
 sed -i "0,/^version = \".*\"/s//version = \"$next\"/" Cargo.toml
-if [[ -f Cargo.lock ]] && command -v cargo >/dev/null; then
+if [[ -f Cargo.lock ]]; then
   cargo update --workspace --offline -q 2>/dev/null || cargo update --workspace -q
 fi
 echo "Cargo.toml: $current -> $next"
