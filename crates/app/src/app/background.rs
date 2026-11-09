@@ -106,6 +106,11 @@ impl CutCraftApp {
             &what,
             move || registry.edit(&doc, toolpath, Some(&settings)),
             move |app, change| {
+                // as when first made: not into a keep-out zone unless clipping is allowed
+                let change = change.and_then(|c| match app.keep_out_refusal(&c) {
+                    Some(why) => Err(CommandError::Failed(why)),
+                    None => Ok(c),
+                });
                 let failed = change.as_ref().err().map(ToString::to_string);
                 app.record(change, "Toolpath edited");
                 app.form_failed(&id, failed.map_or(Ok(()), Err));
