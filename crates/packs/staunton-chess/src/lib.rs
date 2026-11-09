@@ -102,7 +102,8 @@ pub fn files() -> Result<(Pack, Vec<File>), String> {
     Ok((pack, files))
 }
 
-/// Writes the pack into `dir`: its files and `pack.json`.
+/// Writes the pack into `dir`: its files, `pack.json`, and the `addon.toml` the add-on
+/// installer installs it by.
 pub fn write(dir: &std::path::Path) -> Result<Pack, String> {
     let (pack, files) = files()?;
     let io = |e: std::io::Error| e.to_string();
@@ -114,6 +115,11 @@ pub fn write(dir: &std::path::Path) -> Result<Pack, String> {
         std::fs::write(path, &file.bytes).map_err(io)?;
     }
     std::fs::write(dir.join(cut_craft_content_pack::MANIFEST), pack.to_json()).map_err(io)?;
+    std::fs::write(
+        dir.join(cut_craft_content_pack::ADDON_MANIFEST),
+        pack.addon_toml(),
+    )
+    .map_err(io)?;
     Ok(pack)
 }
 
@@ -129,6 +135,11 @@ mod tests {
         let json = std::fs::read(dir.join(cut_craft_content_pack::MANIFEST)).unwrap();
         assert_eq!(Pack::parse(&json).unwrap(), pack);
         assert_eq!(pack.verify(&dir), []);
+        let addon = std::fs::read_to_string(dir.join("addon.toml")).unwrap();
+        assert!(
+            addon.contains("kind = \"content\"") && addon.contains(ID),
+            "{addon}"
+        );
         assert_eq!(pack.licence, Licence::Cc0);
         assert!(pack.credits().is_empty(), "CC0 needs no credits");
         // a tutorial, a half of each piece, and the whole knight

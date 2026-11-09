@@ -5,6 +5,11 @@ a GitHub release of its own repository, installed and updated by the shared
 install-from-repo installer (Add-ons). Once installed, its files sit in a folder of their
 own that is added to the Library, so they show up there like any other files.
 
+A pack's release zip carries `addon.toml` (kind `content`, the pack's id) beside
+`pack.json`, so the add-on installer (Gadgets ▸ Add-ons) installs and updates it like any
+add-on, into `<config>/addons/<id>/`. The Library then adds each installed content add-on
+whose `pack.json` passes `Pack::parse` and `Pack::verify`.
+
 ## Licences
 
 Packs may only hold items under **CC0**, **public domain** or **CC BY** (3.0 or 4.0), so

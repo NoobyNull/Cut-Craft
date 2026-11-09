@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 
 /// The file at a pack's top that lists what is in it.
 pub const MANIFEST: &str = "pack.json";
+/// The add-on installer's own manifest beside it: a pack installs like any add-on, as
+/// kind `content`, into its add-on folder.
+pub const ADDON_MANIFEST: &str = "addon.toml";
 const FORMAT: &str = "cut-craft-pack";
 /// Bump when the manifest's shape changes, and teach [`Pack::parse`] to read the old one.
 const VERSION: u32 = 1;
@@ -272,7 +275,7 @@ impl Pack {
                 && !item.file.contains('\\')
                 && !item.file.contains(':')
                 && (item.file.split('/')).all(|part| !matches!(part, "" | "." | ".."));
-            if !parts_ok || item.file == MANIFEST {
+            if !parts_ok || item.file == MANIFEST || item.file == ADDON_MANIFEST {
                 return Err(PackError::BadPath(item.file.clone()));
             }
             if !seen.insert(item.file.to_lowercase()) {
@@ -285,6 +288,17 @@ impl Pack {
             }
         }
         Ok(())
+    }
+
+    /// The `addon.toml` the add-on installer reads: the same id, as kind `content`.
+    pub fn addon_toml(&self) -> String {
+        let quoted = |s: &str| serde_json::to_string(s).expect("strings always serialize");
+        format!(
+            "id = {}\nname = {}\nkind = \"content\"\nversion = {}\n",
+            quoted(&self.id),
+            quoted(&self.name),
+            quoted(&self.pack_version)
+        )
     }
 
     pub fn to_json(&self) -> Vec<u8> {
@@ -405,6 +419,7 @@ mod tests {
             "a//b.stl",
             "./a.stl",
             "pack.json",
+            "addon.toml",
         ] {
             let mut pack = sample();
             pack.items[0].file = bad.into();
@@ -460,6 +475,16 @@ mod tests {
             ]
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_pack_installs_as_a_content_add_on_of_the_same_id() {
+        let mut pack = sample();
+        pack.name = "Chess \"Staunton\"".into();
+        assert_eq!(
+            pack.addon_toml(),
+            "id = \"staunton-chess\"\nname = \"Chess \\\"Staunton\\\"\"\nkind = \"content\"\nversion = \"1.0.0\"\n"
+        );
     }
 
     #[test]
