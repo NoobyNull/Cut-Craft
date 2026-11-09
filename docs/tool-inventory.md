@@ -281,7 +281,8 @@ say "not implemented yet".
   job's); and Confirmation Choices: crossing vectors for pocket and V-carve toolpaths and for
   radiused and sharp offsets (ask, open the Vector Validator, or don't check), and whether the
   checks before cutting ask before saving.
-- Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
+- Keep-Out Zones (Toolpaths menu; named, with labels in both views; a toolpath that would cut
+  into one is not made unless Options allow clipping it there), Transform mode
   (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
 - View ▸ Save Shaded Image: the 3D view (the model, or the preview) saved as a PNG, cut
   from the window's picture once the 3D view is shown.
@@ -409,10 +410,13 @@ say "not implemented yet".
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Cut Craft's own Rectangle
     from Center and Circle from Edge (the drag is the diameter).
-  - Toolbox flyouts (Cut Craft's own; Aspire shows every tool as its own icon): tools that
-    do one job different ways share a button with an arrow in its corner, showing the one
-    picked last; click the arrow, hold the button, or press Down on it for the rest
-    (`crates/app/src/flyout.rs`). Drawing tab 78 buttons to 44, Modeling 23 to 20.
+  - Toolbox tool groups (Cut Craft's own; Aspire shows every tool as a loose icon): tools
+    that do one job different ways sit together in a box captioned with what they are for,
+    every tool its own button (`crates/app/src/flyout.rs`). Options ▸ General ▸ Fold tool
+    groups into one button (or a toolbox button's right-click menu) folds each box into a
+    flyout button with an arrow in its corner, showing the one picked last; click the arrow,
+    hold the button, or press Down on it for the rest. Folded: Drawing tab 78 buttons to 44,
+    Modeling 23 to 20.
   - Design sub-tabs (Cut Craft's own; Aspire runs every group down one page): File
     Operations and 2D View Control stay at the top; Create, Edit, Arrange and Model across
     the page each show a few groups (`DESIGN_SUBTABS` in `crates/app/src/gui.rs`). A tool
@@ -543,9 +547,23 @@ say "not implemented yet".
 - Edit ▸ Snap Options (F4): drawing and node drags snap to span ends and middles, arc and
   object centres, the job's centre and corners, and a grid, within a snapping radius in
   pixels; Shift holds snapping off. Guides and smart snapping (see the top bar) snap too.
-  Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
+  While drawing, a line's far end (and a polyline's next point) also snaps Tangent to a
+  circle, arc or curve and Perpendicular onto a line or curve, from where it starts
+  (Tangent and Perpendicular check box, on by default). Polyline clicks snap; the view marks
+  each snap with its own shape and name (square End, triangle Middle, circle Tangent, right
+  angle Perpendicular, plus Center) and the status bar says what it means. Drawing tools
+  show a crosshair pointer. Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
   with Shift, or with Ctrl and Shift move by the grid, half or a tenth). Intersections and
   cursor text are not done; the options last for the session.
+- Snaps that stay (Cut Craft's own, not in Aspire): a point placed on an End, Middle,
+  Center, Shape center, material corner, Tangent or Perpendicular snap is kept there, saved
+  with the job. When what it snapped to moves or changes, it follows; a Draw Line/Polyline
+  point (or a node dragged onto a snap) stretches its line, any other drawn shape moves
+  whole. Moving the snapped shape on its own puts the point back, with a status-bar note.
+  Kept points show a small blue snap mark; click one and press Delete to let it go.
+  Deleting either shape, or adding or deleting its nodes, lets go of its snaps. Not done:
+  snaps of Edit Polyline's extensions, an "on the line anywhere" (Nearest) snap,
+  Intersection snaps, and a menu to show or hide the marks.
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
   toolpaths summary and each toolpath's tool, feeds and estimated time (the sections of
   Aspire's job setup sheet), with the home position and, double-sided, the side and flip.

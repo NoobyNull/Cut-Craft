@@ -39,13 +39,19 @@ impl CutCraftApp {
         let gesture = view2d::gesture_of(ui, response, to_job);
         #[expect(clippy::cast_possible_truncation, reason = "a screen scale fits f32")]
         let scale = camera.scale() as f32;
-        let gesture = self.snapped(ui, gesture, scale);
+        let hovered = response.hover_pos().and_then(to_job);
+        let (gesture, snap, _) = self.snapping(ui, gesture, scale, hovered);
         // the 2D view's pick radius: half the theme's interactive height, on screen
         let reach = f64::from(ui.spacing().interact_size.y / 2.0) / camera.scale();
         self.track_stroke(gesture);
-        let hovered = response.hover_pos().and_then(to_job);
         self.cursor = hovered;
-        let preview = self.preview_3d(gesture, hovered, id, reach);
+        // drawing: a crosshair, to place points by
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        }
+        // the preview runs to where a click would land
+        let aim = snap.map(|s| s.at).or(hovered);
+        let preview = self.preview_3d(gesture, aim, id, reach);
         let stroke = ui.visuals().selection.stroke;
         let painter = ui.painter_at(area);
         for path in &preview {
@@ -57,7 +63,13 @@ impl CutCraftApp {
         if response.hovered()
             && let Some(step) = self.step_hint(Modes::default())
         {
-            let hint = format!("{step}; right-drag turns the view");
+            let hint = match snap {
+                Some(hit) => format!(
+                    "{step}; {}; right-drag turns the view",
+                    Self::snap_hint(hit)
+                ),
+                None => format!("{step}; right-drag turns the view"),
+            };
             cut_craft_bug_report::hint::hint(ui.ctx(), &hint);
         }
         let modifiers = ui.input(|i| i.modifiers);
@@ -71,7 +83,8 @@ impl CutCraftApp {
         if self.simulation.is_some() || self.playback.is_some() || self.doc.components.is_empty() {
             return None;
         }
-        let key = (self.history.revision(), self.doc.job);
+        let cells = self.options.view_3d.still_cells();
+        let key = (self.history.revision(), self.doc.job, cells);
         if let Some((kept, model)) = &self.drawn_on
             && *kept == key
         {

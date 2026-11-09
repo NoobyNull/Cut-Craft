@@ -55,6 +55,10 @@ pub struct Addons {
     find: Find,
     install: Install,
     newer: Newer,
+    /// Unsigned add-ons the user has said yes to running this session, by id.
+    allowed: std::collections::HashSet<String>,
+    /// Asks whether to run the unsigned add-on with this name (a dialog; tests answer).
+    pub ask_to_run: fn(&str) -> bool,
 }
 
 impl Addons {
@@ -71,6 +75,8 @@ impl Addons {
             find: addon::find,
             install: |dir, offer, progress| addon::install(dir, offer, &usable, progress),
             newer: addon::update_for,
+            allowed: std::collections::HashSet::new(),
+            ask_to_run,
         }
     }
 
@@ -92,6 +98,38 @@ impl Addons {
     /// Where add-ons are installed.
     pub fn dir(&self) -> Option<&Path> {
         self.dir.as_deref()
+    }
+
+    /// Whether the installed add-on `id` (called `name`) may run now: a signed one always;
+    /// an unsigned one once the user has said yes this session, asked the first time. An
+    /// add-on with no install record (put in place by hand) counts as unsigned.
+    /// Removes an installed add-on, and forgets that the user let it run, so whatever is
+    /// put in its place is asked about afresh. Whether there was a folder to remove from.
+    fn remove(&mut self, id: &str) -> bool {
+        let Some(dir) = &self.dir else { return false };
+        self.phase = match addon::remove(dir, id) {
+            Ok(()) => Phase::Done("The add-on is removed.".into()),
+            Err(e) => Phase::Failed(e),
+        };
+        self.updates.remove(id);
+        self.allowed.remove(id);
+        true
+    }
+
+    pub fn may_run(&mut self, id: &str, name: &str) -> bool {
+        let signed = self
+            .dir
+            .as_deref()
+            .and_then(|d| addon::installed(d, id))
+            .is_some_and(|r| r.signed);
+        if signed || self.allowed.contains(id) {
+            return true;
+        }
+        let yes = (self.ask_to_run)(name);
+        if yes {
+            self.allowed.insert(id.to_owned());
+        }
+        yes
     }
 
     /// Opens the window, and looks for newer releases of what is installed.
@@ -169,6 +207,8 @@ impl Addons {
                 }
                 Msg::Installed(Ok(m)) => {
                     self.updates.remove(&m.id);
+                    // a new version is asked about afresh before it first runs
+                    self.allowed.remove(&m.id);
                     self.phase = Phase::Done(installed_words(&m));
                     installed = true;
                 }
@@ -222,16 +262,7 @@ impl Addons {
                 }
             }
             Press::Cancel => self.phase = Phase::Idle,
-            Press::Remove(id) => {
-                if let Some(dir) = &self.dir {
-                    self.phase = match addon::remove(dir, &id) {
-                        Ok(()) => Phase::Done("The add-on is removed.".into()),
-                        Err(e) => Phase::Failed(e),
-                    };
-                    self.updates.remove(&id);
-                    changed = true;
-                }
-            }
+            Press::Remove(id) => changed = self.remove(&id),
         }
         if !open {
             self.open = false;
@@ -450,10 +481,36 @@ fn installed_ids(dir: &Path) -> Vec<String> {
 pub fn unsigned_warning(offer: &Offer) -> String {
     format!(
         "{} {} is not signed with Cut Craft's release key, so nobody has checked what it \
-         does. Cut Craft and its author are not responsible for what this add-on does. \
-         Install it only if you trust {}.",
+         does. {NOT_RESPONSIBLE} Install it only if you trust {}.",
         offer.repo, offer.release.tag, offer.repo.owner
     )
+}
+
+/// What every unsigned add-on warning says.
+pub const NOT_RESPONSIBLE: &str = "Cut Craft and its author are not responsible for what an \
+    unsigned add-on does or can do, including anything harmful or malicious. A tool add-on \
+    is a program that runs on this computer with your permissions.";
+
+/// What the user is asked before an unsigned add-on's program first runs each session.
+pub fn run_warning(name: &str) -> String {
+    format!(
+        "{name} is not signed with Cut Craft's release key, so nobody has checked what it \
+         does.\n\n{NOT_RESPONSIBLE}\n\nRun it?"
+    )
+}
+
+/// Asks, in a system dialog, whether to run the unsigned add-on `name`.
+fn ask_to_run(name: &str) -> bool {
+    let answer = rfd::MessageDialog::new()
+        .set_title("Unsigned add-on")
+        .set_description(run_warning(name))
+        .set_level(rfd::MessageLevel::Warning)
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            "Run Add-on".into(),
+            "Cancel".into(),
+        ))
+        .show();
+    matches!(answer, rfd::MessageDialogResult::Custom(c) if c == "Run Add-on")
 }
 
 #[cfg(test)]
@@ -573,6 +630,54 @@ mod tests {
         assert!(matches!(a.phase, Phase::Asking(_)));
         a.start(&ctx, *o);
         wait(&mut a, &ctx, |a| matches!(a.phase, Phase::Done(_)));
+    }
+
+    #[test]
+    fn an_unsigned_add_on_asks_once_a_session_before_it_runs() {
+        let dir = std::env::temp_dir().join(format!("cut-craft-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let record = |id: &str, signed: bool| {
+            std::fs::create_dir_all(dir.join(id)).unwrap();
+            let r = Record {
+                repo: Repo::parse("o/r").unwrap(),
+                tag: "v1.0.0".into(),
+                version: "1.0.0".into(),
+                signed,
+            };
+            std::fs::write(
+                dir.join(id).join(addon::RECORD),
+                serde_json::to_string(&r).unwrap(),
+            )
+            .unwrap();
+        };
+        record("signed", true);
+        record("unsigned", false);
+        let mut a = Addons::with(dir.clone(), signed_repo, installs, nothing_newer);
+        a.ask_to_run = |_| panic!("a signed add-on is not asked about");
+        assert!(a.may_run("signed", "Signed"));
+        a.ask_to_run = |_| false;
+        assert!(!a.may_run("unsigned", "Unsigned"), "the user said no");
+        a.ask_to_run = |name| name == "Unsigned";
+        assert!(a.may_run("unsigned", "Unsigned"));
+        a.ask_to_run = |_| panic!("asked twice in a session");
+        assert!(a.may_run("unsigned", "Unsigned"));
+        // removed, then other code put in its place by hand: asked again
+        a.remove("unsigned");
+        std::fs::create_dir_all(dir.join("unsigned")).unwrap();
+        a.ask_to_run = |_| false;
+        assert!(
+            !a.may_run("unsigned", "Unsigned"),
+            "a removed add-on's yes is forgotten"
+        );
+        // put in place by hand: no record, so unsigned
+        a.ask_to_run = |_| false;
+        assert!(!a.may_run("loose", "Loose"));
+        let words = run_warning("Depth");
+        assert!(
+            words.contains("malicious") && words.contains("not responsible"),
+            "{words}"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
