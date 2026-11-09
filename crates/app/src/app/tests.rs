@@ -2048,6 +2048,59 @@ fn an_imported_model_shows_at_once_and_follows_its_form() {
 }
 
 #[test]
+fn a_model_imported_past_the_material_edge_shows_that_part_as_a_red_ghost() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("past-edge");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(
+        form.beyond.as_ref().is_some_and(|b| b.is_empty()),
+        "centred, nothing is past the edge"
+    );
+    // half of the 20 mm pyramid past the material's right edge
+    let area = h.app.doc.job.area();
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["center"] = Value::Bool(false);
+    form.params["placing"]["position"] =
+        serde_json::json!({ "x": area.max.x - 10.0, "y": area.min.y + 10.0 });
+    form.dirty = true;
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    let beyond = form.beyond.as_ref().unwrap();
+    assert!(!beyond.is_empty(), "the part past the edge is kept to show");
+    assert!(
+        beyond
+            .iter()
+            .flat_map(|(t, _)| t)
+            .all(|v| v.x >= area.max.x - 1e-6),
+        "only what is past it"
+    );
+    let model = form.model.as_ref().unwrap();
+    assert!(
+        model
+            .iter()
+            .flat_map(|(t, _)| t)
+            .all(|v| v.x <= area.max.x + 1e-6),
+        "the model drawn as usual stops at the edge"
+    );
+    // past the preview limit the component shows over the material, the ghost still past it
+    h.app.options.import.preview_faces = 4;
+    h.app.form.as_mut().unwrap().dirty = true;
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(!form.model_whole);
+    assert!(
+        form.beyond
+            .as_ref()
+            .is_some_and(|b| !b.is_empty() && b.len() <= 4),
+        "the ghost keeps to the limit too: {:?}",
+        form.beyond.as_ref().map(|b| b.len())
+    );
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn importing_a_model_shows_orientation_and_position_on_one_page() {
     let mut h = Harness::new();
     let file = pyramid_stl("pages");

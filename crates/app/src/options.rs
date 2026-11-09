@@ -496,10 +496,30 @@ pub struct Import {
     #[serde(default = "preview_faces")]
     #[schemars(title = "Model preview faces", range(min = 1000))]
     pub preview_faces: u32,
+    /// How much of a model placed past the material's edges shows while it is imported:
+    /// that part is drawn in see-through red, this many percent solid, so it is not lost
+    /// from sight but does not hide the material either
+    #[serde(default = "out_of_bounds_percent")]
+    #[schemars(title = "Out-of-bounds opacity (%)", range(min = 1, max = 100))]
+    pub out_of_bounds_percent: u8,
 }
 
 fn preview_faces() -> u32 {
     250_000
+}
+
+fn out_of_bounds_percent() -> u8 {
+    5
+}
+
+impl Import {
+    /// The red a model's parts past the material's edges are drawn in: see-through, as
+    /// solid as Out-of-bounds opacity says (kept to 1 to 100 percent).
+    pub fn out_of_bounds_colour(&self) -> egui::Color32 {
+        let percent = u16::from(self.out_of_bounds_percent.clamp(1, 100));
+        let alpha = u8::try_from((percent * 255 + 50) / 100).unwrap_or(u8::MAX);
+        egui::Color32::from_rgba_unmultiplied(255, 0, 0, alpha)
+    }
 }
 
 impl Default for Import {
@@ -507,6 +527,7 @@ impl Default for Import {
         Self {
             model_types: ModelTypes::default(),
             preview_faces: preview_faces(),
+            out_of_bounds_percent: out_of_bounds_percent(),
         }
     }
 }
@@ -1005,6 +1026,21 @@ mod tests {
         assert_eq!(Theme::for_system(OperatingSystem::Mac), Theme::System);
         assert_eq!(Theme::for_system(OperatingSystem::Windows), Theme::Light);
         assert_eq!(Theme::for_system(OperatingSystem::Nix), Theme::Light);
+    }
+
+    #[test]
+    fn out_of_bounds_parts_are_five_percent_red_unless_the_options_say_otherwise() {
+        let mut import = Import::default();
+        assert_eq!(import.out_of_bounds_percent, 5);
+        let c = import.out_of_bounds_colour();
+        assert_eq!(c.to_srgba_unmultiplied(), [255, 0, 0, 13], "5% of 255");
+        import.out_of_bounds_percent = 0;
+        assert_eq!(import.out_of_bounds_colour().a(), 3, "never wholly hidden");
+        import.out_of_bounds_percent = 200;
+        assert_eq!(import.out_of_bounds_colour().a(), 255);
+        // options saved before the setting existed
+        let old: Import = serde_json::from_str(r#"{"preview_faces": 1000}"#).unwrap();
+        assert_eq!(old.out_of_bounds_percent, 5);
     }
 
     #[test]

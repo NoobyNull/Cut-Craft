@@ -235,7 +235,13 @@ impl Draw {
                 uniform.extend_from_slice(&v.to_ne_bytes());
             }
         };
-        let linear = |c: Color32| Rgba::from(c).to_array().map(f64::from);
+        // linear, and not premultiplied: the shader lights the colour, then blends by its
+        // alpha (see-through only for a ghost)
+        let linear = |c: Color32| {
+            let [r, g, b, a] = c.to_srgba_unmultiplied();
+            let [r, g, b, _] = Rgba::from(Color32::from_rgb(r, g, b)).to_array();
+            [r, g, b, f32::from(a) / 255.0].map(f64::from)
+        };
         floats(&mut uniform, &clip.to_cols_array());
         floats(&mut uniform, &light_unit(look.light).to_array());
         floats(&mut uniform, &[AMBIENT]);
@@ -389,15 +395,21 @@ pub fn device(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
 pub struct Gpu {
     state: RenderState,
     pipeline: wgpu::RenderPipeline,
+    /// The see-through faces' pipeline: blended over what is drawn, and leaving the depth
+    /// buffer as it is, so they hide nothing behind them.
+    see_through: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     surface: Option<Piece>,
     model: Option<Piece>,
     /// The model's body under its surface (walls down to the modeling plane).
     body: Option<Piece>,
+    /// A model's parts past the material's edges, drawn see-through after the rest.
+    ghost: Option<Piece>,
 }
 
-/// One draw of the frame: what the shader reads, and how many it draws.
+/// One draw of the frame: how it is drawn, what the shader reads, and how many it draws.
 struct Call {
+    pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     indices: Option<wgpu::Buffer>,
     count: u32,
@@ -406,7 +418,6 @@ struct Call {
 /// What the 3D view draws this frame, for egui's render pass: the surface and, importing,
 /// the model, sharing the depth buffer so the model sits in the material.
 struct Paint {
-    pipeline: wgpu::RenderPipeline,
     calls: Vec<Call>,
 }
 
@@ -448,65 +459,76 @@ impl Gpu {
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("view3d"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &module,
-                entry_point: Some("vs_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[],
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: egui_wgpu::depth_format_from_bits(DEPTH_BITS, 0).expect("a depth format"),
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: u32::from(samples.max(1)),
-                ..wgpu::MultisampleState::default()
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &module,
-                // egui prefers a framebuffer that takes sRGB; a linear one takes linear
-                entry_point: Some(if state.target_format.is_srgb() {
-                    "fs_linear"
-                } else {
-                    "fs_gamma"
+        let pipeline = |see_through: bool| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("view3d"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &module,
+                    entry_point: Some("vs_main"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: &[],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: egui_wgpu::depth_format_from_bits(DEPTH_BITS, 0)
+                        .expect("a depth format"),
+                    depth_write_enabled: Some(!see_through),
+                    depth_compare: Some(wgpu::CompareFunction::Less),
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
                 }),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(state.target_format.into())],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
+                multisample: wgpu::MultisampleState {
+                    count: u32::from(samples.max(1)),
+                    ..wgpu::MultisampleState::default()
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &module,
+                    // egui prefers a framebuffer that takes sRGB; a linear one takes linear
+                    entry_point: Some(if state.target_format.is_srgb() {
+                        "fs_linear"
+                    } else {
+                        "fs_gamma"
+                    }),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        blend: see_through.then_some(wgpu::BlendState::ALPHA_BLENDING),
+                        ..state.target_format.into()
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
         Self {
             state: state.clone(),
-            pipeline,
+            pipeline: pipeline(false),
+            see_through: pipeline(true),
             layout,
             surface: None,
             model: None,
             body: None,
+            ghost: None,
         }
     }
 
     /// This frame's picture over `rect`: uploads what changed, sets the cameras, and gives
-    /// the shape that draws it. A geometry not drawn leaves the card.
+    /// the shape that draws it; the see-through `ghost` goes last, over the rest. A
+    /// geometry not drawn leaves the card.
     pub fn paint(
         &mut self,
         rect: Rect,
         surface: Option<Draw>,
         model: Option<Draw>,
         body: Option<Draw>,
+        ghost: Option<Draw>,
     ) -> Shape {
         let mut calls = vec![];
-        for (slot, draw) in [
-            (&mut self.surface, surface),
-            (&mut self.model, model),
-            (&mut self.body, body),
+        for (slot, draw, pipeline) in [
+            (&mut self.surface, surface, &self.pipeline),
+            (&mut self.model, model, &self.pipeline),
+            (&mut self.body, body, &self.pipeline),
+            (&mut self.ghost, ghost, &self.see_through),
         ] {
             let Some(draw) = draw.filter(|d| d.geometry.count() > 0) else {
                 *slot = None;
@@ -524,15 +546,13 @@ impl Gpu {
                 .queue
                 .write_buffer(&piece.uniform, 0, &draw.uniform);
             calls.push(Call {
+                pipeline: pipeline.clone(),
                 bind_group: piece.bind_group.clone(),
                 indices: piece.indices.clone(),
                 count: piece.geometry.count(),
             });
         }
-        let paint = Paint {
-            pipeline: self.pipeline.clone(),
-            calls,
-        };
+        let paint = Paint { calls };
         Shape::Callback(egui_wgpu::Callback::new_paint_callback(rect, paint))
     }
 }
@@ -544,8 +564,8 @@ impl CallbackTrait for Paint {
         pass: &mut wgpu::RenderPass<'static>,
         _resources: &CallbackResources,
     ) {
-        pass.set_pipeline(&self.pipeline);
         for call in &self.calls {
+            pass.set_pipeline(&call.pipeline);
             pass.set_bind_group(0, &call.bind_group, &[]);
             match &call.indices {
                 Some(indices) => {
@@ -837,6 +857,41 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_see_through_colour_packs_its_alpha_without_darkening_the_red() {
+        let m = slotted();
+        let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+        let camera = Camera::new(&m, Orbit::default(), Framing::default(), area, None);
+        let see_through = Look {
+            colour: Color32::from_rgba_unmultiplied(255, 0, 0, 51),
+            ..look()
+        };
+        let packed = |look: &Look| {
+            let draw = Draw::new(
+                Arc::new(model(&[])),
+                &camera,
+                area,
+                DVec3::ZERO,
+                look,
+                Color32::RED,
+            );
+            f32s(&draw.uniform)
+        };
+        let floats = packed(&see_through);
+        assert_eq!(
+            &floats[24..27],
+            &[1.0, 0.0, 0.0],
+            "full red, not premultiplied"
+        );
+        assert!(
+            (floats[27] - 0.2).abs() < 1e-6,
+            "a fifth solid: {}",
+            floats[27]
+        );
+        // an opaque colour is wholly solid, as it always was
+        assert_eq!(packed(&look())[27], 1.0);
     }
 
     #[test]
