@@ -13,6 +13,7 @@ use crate::flyout::DragWay;
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
+use cut_craft_core::snap::Snap;
 
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.
 const ROTATE_OUT: f64 = 2.5;
@@ -1157,7 +1158,11 @@ impl CutCraftApp {
         // a guide being dragged takes the drag over
         let guided = self.guide_gesture(ui, &canvas, reach);
         let gesture = gesture.filter(|_| !guided);
-        let gesture = self.snapped(ui, gesture, canvas.transform.scale);
+        let (gesture, snap) = self.snapping(ui, gesture, canvas.transform.scale, canvas.cursor());
+        // drawing: a crosshair, to place points by
+        if self.drawing_tool().is_some() && canvas.hover().is_some() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        }
         self.track_stroke(gesture);
         let modes = self.modes();
         let Modes {
@@ -1196,9 +1201,9 @@ impl CutCraftApp {
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Transform), _) => {
                 self.transform_overlay(ui, drag, reach)
             }
-            (gesture, None, Some("draw_polyline")) => {
-                Overlay::Preview(self.polyline_overlay(gesture, canvas.cursor()))
-            }
+            (gesture, None, Some("draw_polyline")) => Overlay::Preview(
+                self.polyline_overlay(gesture, snap.map(|s| s.at).or(canvas.cursor())),
+            ),
             (Some(Gesture::Dragging(drag)), _, Some(id)) => {
                 Overlay::Preview(match self.text_arc_drag(drag, reach) {
                     Some(bent) => self.text_preview(&bent),
@@ -1217,6 +1222,15 @@ impl CutCraftApp {
         self.paint_2d(ui, &canvas, &overlay);
         self.datum_mark(ui, &canvas, area, job.offset);
         self.handles_and_hints(ui, &canvas, reach, modes);
+        if let Some(hit) = snap.filter(|_| canvas.hover().is_some() || gesture.is_some()) {
+            Self::paint_snap(ui, &canvas, hit);
+            // after what the tool does next, so that stays first
+            let hint = match self.step_hint(modes) {
+                Some(step) => format!("{step}; {}", Self::snap_hint(hit)),
+                None => Self::snap_hint(hit),
+            };
+            cut_craft_bug_report::hint::hint(ui.ctx(), &hint);
+        }
         self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
@@ -2604,40 +2618,135 @@ impl CutCraftApp {
     }
 
     /// Drawing and node drags snap to the snap points (Shift holds snapping off).
+    #[cfg(test)]
     pub(super) fn snapped(
         &self,
         ui: &egui::Ui,
         gesture: Option<Gesture>,
         scale: f32,
     ) -> Option<Gesture> {
+        self.snapping(ui, gesture, scale, None).0
+    }
+
+    /// The gesture snapped as [`Self::snapped`] says, and what the pointer (a drag's end, or
+    /// `pointer` while hovering) snaps to, for the view's marker: drawing tools' clicks snap
+    /// too, and a polyline's next point snaps tangent or square on from the last.
+    pub(super) fn snapping(
+        &self,
+        ui: &egui::Ui,
+        gesture: Option<Gesture>,
+        scale: f32,
+        pointer: Option<Point>,
+    ) -> (Option<Gesture>, Option<Snap>) {
         let snapping = self.drawing_tool().is_some() || self.view_tool == Some(ViewTool::NodeEdit);
         if !snapping || ui.input(|i| i.modifiers.shift) {
-            return gesture;
+            return (gesture, None);
         }
         let reach = self.snap.snapping_radius / f64::from(scale);
         // a drawn shape's far end also snaps square onto spans and tangent to arcs; a node
         // dragged starts from the node itself, and a stroke's samples are not a shape's
         // end, so those snap as points
-        let drawing = self
-            .drawing_tool()
-            .is_some_and(|id| !STROKE_TOOLS.contains(&id));
-        let snap = |mut drag: Drag| {
-            drag.start = self.snap.snap(&self.doc, drag.start, reach);
-            drag.end = if drawing {
-                self.snap.snap_from(&self.doc, drag.start, drag.end, reach)
-            } else {
-                self.snap.snap(&self.doc, drag.end, reach)
-            };
+        let tool = self.drawing_tool();
+        let drawing = tool.is_some_and(|id| !STROKE_TOOLS.contains(&id));
+        // a polyline's next point runs on from its last
+        let last = (tool == Some("draw_polyline"))
+            .then(|| self.polyline.points.last().copied())
+            .flatten();
+        let find = |from: Option<Point>, at: Point| self.snap.find(&self.doc, from, at, reach);
+        let to = |hit: Option<Snap>, at: Point| hit.map_or(at, |h| h.at);
+        let mut marker = None;
+        let mut snap = |mut drag: Drag| {
+            drag.start = to(find(last, drag.start), drag.start);
+            let hit = find(drawing.then_some(drag.start), drag.end);
+            drag.end = to(hit, drag.end);
+            marker = hit;
             drag
         };
-        gesture.map(|g| match g {
+        let gesture = gesture.map(|g| match g {
             Gesture::Dragging(drag) => Gesture::Dragging(snap(drag)),
             Gesture::Dropped { drag, shift } => Gesture::Dropped {
                 drag: snap(drag),
                 shift,
             },
+            // a drawing tool's click places a point, so it snaps; node editing's picks
+            Gesture::Click { at, shift } if tool.is_some() => Gesture::Click {
+                at: to(find(last, at), at),
+                shift,
+            },
             click @ Gesture::Click { .. } => click,
-        })
+        });
+        if !matches!(gesture, Some(Gesture::Dragging(_))) {
+            marker = pointer.and_then(|at| find(last.filter(|_| drawing), at));
+        }
+        (gesture, marker)
+    }
+
+    /// The snap marker where the pointer snapped: a shape for each kind (a square on an end,
+    /// a triangle on a middle, a circle where a line touches a curve, a right angle where it
+    /// meets one square on, a plus on a centre, a cross elsewhere) and its name beside it;
+    /// the status bar says what it means.
+    pub(super) fn paint_snap(ui: &egui::Ui, canvas: &Canvas, hit: Snap) {
+        use cut_craft_core::snap::SnapKind;
+        const SIZE: f32 = 6.0;
+        let at = canvas.transform.to_screen(hit.at);
+        let colour = egui::Color32::from_rgb(0, 160, 60);
+        let stroke = egui::Stroke::new(2.0, colour);
+        let painter = ui.painter_at(canvas.area);
+        let v = egui::vec2;
+        match hit.kind {
+            SnapKind::End | SnapKind::JobPoint => {
+                painter.rect_stroke(
+                    egui::Rect::from_center_size(at, v(2.0 * SIZE, 2.0 * SIZE)),
+                    0.0,
+                    stroke,
+                    egui::StrokeKind::Middle,
+                );
+            }
+            SnapKind::Mid => {
+                let points = vec![
+                    at + v(0.0, -SIZE),
+                    at + v(SIZE, 0.8 * SIZE),
+                    at + v(-SIZE, 0.8 * SIZE),
+                ];
+                painter.add(egui::Shape::closed_line(points, stroke));
+            }
+            SnapKind::Tangent => {
+                painter.circle_stroke(at, SIZE, stroke);
+                painter.line_segment([at + v(-SIZE, -SIZE), at + v(SIZE, -SIZE)], stroke);
+            }
+            SnapKind::Perpendicular => {
+                painter.line_segment([at + v(-SIZE, SIZE), at + v(SIZE, SIZE)], stroke);
+                painter.line_segment([at + v(-SIZE, SIZE), at + v(-SIZE, -SIZE)], stroke);
+                painter.line_segment([at + v(-SIZE, 0.0), at + v(0.0, 0.0)], stroke);
+                painter.line_segment([at + v(0.0, 0.0), at + v(0.0, SIZE)], stroke);
+            }
+            SnapKind::ArcCenter | SnapKind::ObjectCenter => {
+                painter.line_segment([at + v(-SIZE, 0.0), at + v(SIZE, 0.0)], stroke);
+                painter.line_segment([at + v(0.0, -SIZE), at + v(0.0, SIZE)], stroke);
+                painter.circle_stroke(at, SIZE / 2.0, stroke);
+            }
+            SnapKind::Guide | SnapKind::Aligned | SnapKind::Grid => {
+                painter.line_segment([at + v(-SIZE, -SIZE), at + v(SIZE, SIZE)], stroke);
+                painter.line_segment([at + v(-SIZE, SIZE), at + v(SIZE, -SIZE)], stroke);
+            }
+        }
+        painter.text(
+            at + v(SIZE + 4.0, SIZE + 4.0),
+            egui::Align2::LEFT_TOP,
+            hit.kind.label(),
+            egui::FontId::proportional(12.0),
+            colour,
+        );
+    }
+
+    /// The status bar's words for a snap: what it snapped to, and how to place a point
+    /// without it.
+    pub(super) fn snap_hint(hit: Snap) -> String {
+        format!(
+            "snapped to {}: {} (Shift places it freely)",
+            hit.kind.label(),
+            hit.kind.explain()
+        )
     }
 
     /// Edit ▸ Options: Aspire's sections; a change is saved and applied at once.

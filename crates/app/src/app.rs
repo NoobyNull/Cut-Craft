@@ -718,11 +718,6 @@ struct OpenForm {
     /// Whether `model` is the whole model (drawn in place of its component) or, past
     /// Options ▸ Model preview faces, only the faces out of reach (drawn over it).
     model_whole: bool,
-    /// The parts of `model` past the material's edges, cut off it along them: the 3D view
-    /// shows them as a faint red ghost (Options ▸ Out-of-bounds opacity) so a model placed
-    /// partly off the material is seen whole, not clipped.
-    /// Its faces are all unmarked: a cutter's reach is not judged past the material.
-    beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
     /// While a value is dragged, the undo depth after its last step and the shape and
@@ -959,8 +954,6 @@ struct CutCraftApp {
     solid_gpu: Option<std::sync::Arc<view3d::gpu::Geometry>>,
     /// The imported model as the GPU draws it.
     model_gpu: Option<ModelGpu>,
-    /// The same for the imported model's parts past the material's edges.
-    ghost_gpu: Option<ModelGpu>,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
     orbit: view3d::Orbit,
