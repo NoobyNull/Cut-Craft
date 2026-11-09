@@ -1,4 +1,4 @@
-- Every tool is back in view: tools that do one job different ways sit together in a labelled box (Options ▸ General folds them into one button again)
-- New Import tab on the Design page gathers every way to bring something in, and any Design tab can be shown as its own section
-- Relief from Photo catches up with depth2stl
-- Add-ons install from a GitHub repository's newest release; unsigned ones run with a warning
+- The 3D view keeps itself smooth: detail drops while it turns on a slow computer and comes back once still (Options ▸ 3D View)
+- CAD snaps while drawing: End, Middle, Tangent and Perpendicular, and snapped points stay put when things move
+- Keep-out zones show labels, and toolpaths are refused or clipped at them
+- Models follow handle drags; a model imported past the material shows as a faint red ghost
