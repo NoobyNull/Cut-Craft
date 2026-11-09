@@ -2930,18 +2930,24 @@ impl CutCraftApp {
         }
         // the keep-out zones in red, closed, over whatever they cover, as Aspire shows them
         let danger = egui::Stroke::new(2.0 * stroke.width, ui.visuals().error_fg_color);
-        let zones = if shown.keep_out_3d {
-            self.doc.keep_out_zones()
+        let zones: Vec<_> = if shown.keep_out_3d {
+            self.doc.named_keep_out().collect()
         } else {
             vec![]
         };
         for zone in zones {
-            let mut points = zone.flatten(cut_craft_core::polygon::TOLERANCE);
+            let mut points = zone.path.flatten(cut_craft_core::polygon::TOLERANCE);
             points.extend(points.first().copied());
             let z = view3d::vector_plane(surface, &points);
             let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
             for run in in_sight(&line) {
                 painter.add(egui::Shape::line(run, danger));
+            }
+            // its name at its top-left corner, as in the 2D view
+            if shown.keep_out_labels {
+                let b = zone.path.bounds();
+                let corner = local(cut_craft_core::geometry::Point::new(b.min.x, b.max.y), z);
+                crate::view2d::zone_label(painter, ui, screen(corner), &zone.label());
             }
         }
         let size = view3d::plan_size(surface);
