@@ -1446,22 +1446,75 @@ fn every_command_has_a_line_saying_what_it_does() {
 }
 
 #[test]
-fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
+fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
+    use cut_craft_core::keep_out::KeepOutZone;
+    use cut_craft_core::toolpath::MoveKind;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
+    // a clamp over the rectangle's right-hand side
     let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
-    h.app.doc.keep_out = vec![zone];
+    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
     h.app.invoke(&h.ctx, "profile_toolpath");
     let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
+    let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
     assert!(
-        h.app.status.message.contains("keep-out"),
-        "{}",
-        h.app.status.message
+        refused.starts_with(super::actions::KEEP_OUT_REFUSED),
+        "{refused}"
     );
+    assert!(refused.contains("\"Clamp 1\""), "names the zone: {refused}");
+    assert!(
+        refused.contains("Clip toolpaths at keep-out zones"),
+        "{refused}"
+    );
+    assert_eq!(h.app.doc.toolpaths.len(), 0, "nothing made");
+    // clipping turned on in Options: made, the part under the clamp left uncut
+    h.app.options.toolpaths.clip_at_keep_out_zones = true;
+    assert!(h.app.sync_machine_keep_out());
+    h.app.apply("profile_toolpath", &params).unwrap();
+    let made = h.app.doc.toolpaths.values().next().expect("a toolpath");
+    assert_eq!(
+        h.app.zones_entered(made),
+        [] as [String; 0],
+        "{:?}",
+        made.moves
+    );
+    let cuts = made.moves.iter().filter(|m| m.kind == MoveKind::Cut);
+    assert!(
+        cuts.clone().any(|m| m.to.x > 55.0),
+        "still cut past the clamp"
+    );
+    assert!(cuts.clone().any(|m| m.to.x < 20.0));
+    // no zones: made as it was, with no warning
+    h.app.options.toolpaths.clip_at_keep_out_zones = false;
+    h.app.sync_machine_keep_out();
     h.app.doc.keep_out.clear();
     h.app.apply("profile_toolpath", &params).unwrap();
     assert!(!h.app.status.message.contains("keep-out"));
+}
+
+#[test]
+fn keep_out_zone_labels_turn_on_and_off_and_are_remembered() {
+    let mut h = Harness::new();
+    assert!(h.app.display.keep_out_labels, "shown to start with");
+    assert_eq!(
+        h.app.display.checked("show_keep_out_zone_labels"),
+        Some(true)
+    );
+    h.app.invoke(&h.ctx, "show_keep_out_zone_labels");
+    assert!(!h.app.display.keep_out_labels);
+    assert!(
+        !h.app.options.toolpaths.keep_out_labels,
+        "kept with the options"
+    );
+    // over a zone the 2D view's menu names it and says where it is edited
+    let job = crate::gui::keep_out_menu("Keep-out: Clamp 1", false, false);
+    assert_eq!(job[0].name, "Keep-out: Clamp 1");
+    assert!(!job[0].is_enabled);
+    assert_eq!(job[1].action, "keep_out_zones");
+    assert_eq!(job[2].name, "Show Keep-Out Zone Labels");
+    let machine = crate::gui::keep_out_menu("Keep-out: Machine clamp 1", true, true);
+    assert_eq!(machine[1].action, "machine_configuration");
+    assert_eq!(machine[2].name, "Hide Keep-Out Zone Labels");
 }
 
 #[test]
@@ -1507,6 +1560,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         y: 0.0,
         width: 20.0,
         height: 60.0,
+        name: String::new(),
     }];
     assert!(h.app.sync_machine_keep_out());
     h.app.keep_out_changed();
@@ -1931,6 +1985,59 @@ fn an_imported_model_shows_at_once_and_follows_its_form() {
     let k = h.app.doc.components.values().next().unwrap();
     let width = k.cell * f64::from(u32::try_from(k.columns).unwrap());
     assert!((width - 40.0).abs() < 2.0 * k.cell, "{} columns", k.columns);
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_model_imported_past_the_material_edge_shows_that_part_as_a_red_ghost() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("past-edge");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(
+        form.beyond.as_ref().is_some_and(|b| b.is_empty()),
+        "centred, nothing is past the edge"
+    );
+    // half of the 20 mm pyramid past the material's right edge
+    let area = h.app.doc.job.area();
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["center"] = Value::Bool(false);
+    form.params["placing"]["position"] =
+        serde_json::json!({ "x": area.max.x - 10.0, "y": area.min.y + 10.0 });
+    form.dirty = true;
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    let beyond = form.beyond.as_ref().unwrap();
+    assert!(!beyond.is_empty(), "the part past the edge is kept to show");
+    assert!(
+        beyond
+            .iter()
+            .flat_map(|(t, _)| t)
+            .all(|v| v.x >= area.max.x - 1e-6),
+        "only what is past it"
+    );
+    let model = form.model.as_ref().unwrap();
+    assert!(
+        model
+            .iter()
+            .flat_map(|(t, _)| t)
+            .all(|v| v.x <= area.max.x + 1e-6),
+        "the model drawn as usual stops at the edge"
+    );
+    // past the preview limit the component shows over the material, the ghost still past it
+    h.app.options.import.preview_faces = 4;
+    h.app.form.as_mut().unwrap().dirty = true;
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(!form.model_whole);
+    assert!(
+        form.beyond
+            .as_ref()
+            .is_some_and(|b| !b.is_empty() && b.len() <= 4),
+        "the ghost keeps to the limit too: {:?}",
+        form.beyond.as_ref().map(|b| b.len())
+    );
     let _ = std::fs::remove_file(file);
 }
 
@@ -8485,4 +8592,62 @@ fn the_surface_drawn_on_is_made_again_when_the_detail_when_still_changes() {
     h.app.options.view_3d.still_detail = crate::options::Detail::Low;
     let changed = h.app.drawing_surface().unwrap();
     assert!(!std::sync::Arc::ptr_eq(&first, &changed), "made again");
+}
+
+/// The status bar's text that contains `part`: its middle and how many rows it was laid in.
+fn status_text(h: &Harness, part: &str) -> Option<(Pos2, usize)> {
+    h.shapes.iter().find_map(|clipped| match &clipped.shape {
+        egui::Shape::Text(t) if t.galley.text().contains(part) && t.pos.y > 700.0 => {
+            Some((t.pos + t.galley.size() / 2.0, t.galley.rows.len()))
+        }
+        _ => None,
+    })
+}
+
+#[test]
+fn the_status_bar_stays_one_line_however_long_its_text() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+    let short = h.text_at(version).expect("the version");
+    // a Library tile's hint: its name, then on a new line what can be done with it
+    let long = format!(
+        "0331. Flowers.STL\nDouble-click to add it to the project, or drag it onto a view. {}",
+        "Click to pick it (Ctrl or Shift for more), right-click for more. ".repeat(6)
+    );
+    h.app.status.set_message(&long);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (_, rows) = status_text(&h, "Flowers.STL").expect("the status text");
+    assert_eq!(rows, 1, "one row");
+    let after = h.text_at(version).expect("the version");
+    assert!(
+        (after.y - short.y).abs() < 0.5,
+        "the bar keeps its height: {short:?} then {after:?}"
+    );
+}
+
+#[test]
+fn the_status_bar_keeps_its_hint_while_the_pointer_is_on_it() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    let hint = "0331. Flowers.STL\nDouble-click to add it to the project";
+    cut_craft_bug_report::hint::hint(&h.ctx, hint);
+    h.frame(vec![]);
+    let (at, _) = status_text(&h, "Flowers.STL").expect("the hint is shown");
+    // moving onto the bar to read it: nothing sets a hint now, yet it stays
+    h.frame(vec![Event::PointerMoved(at)]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        status_text(&h, "Flowers.STL").is_some(),
+        "the hint stays while the pointer is on the bar"
+    );
+    // and goes once the pointer leaves
+    h.frame(vec![Event::PointerMoved(egui::pos2(640.0, 300.0))]);
+    h.frame(vec![]);
+    assert!(status_text(&h, "Flowers.STL").is_none(), "gone after");
 }

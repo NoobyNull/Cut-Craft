@@ -1835,17 +1835,7 @@ impl CutCraftApp {
         &mut self,
         model: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
-        if let Some(kept) = &self.model_gpu
-            && std::sync::Arc::ptr_eq(&kept.model, model)
-        {
-            return std::sync::Arc::clone(&kept.geometry);
-        }
-        let geometry = std::sync::Arc::new(view3d::gpu::model(model));
-        self.model_gpu = Some(super::ModelGpu {
-            model: std::sync::Arc::clone(model),
-            geometry: std::sync::Arc::clone(&geometry),
-        });
-        geometry
+        faces_geometry(&mut self.model_gpu, model)
     }
 
     /// Transform mode's handles in the 3D view, over whatever is selected: Aspire's 3D
@@ -2845,7 +2835,7 @@ impl CutCraftApp {
             .gpu_3d
             .is_some()
             .then(|| painter.add(egui::Shape::Noop));
-        let (mut surface_draw, mut model_draw) = (None, None);
+        let (mut surface_draw, mut model_draw, mut ghost_draw) = (None, None, None);
         if slot.is_some() {
             let geometry = self.surface_geometry(look.wrap, look.sides);
             let at = cut_craft_core::glam::DVec3::ZERO;
@@ -2863,6 +2853,7 @@ impl CutCraftApp {
             }
         } else {
             self.paint_flat(ui, area, &surface, &camera, look, tool_at, gpu);
+            ghost_draw = self.paint_ghost(ui, area, &surface, &camera, look, slot.is_some());
         }
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
@@ -2874,8 +2865,52 @@ impl CutCraftApp {
                 view3d::gpu::Draw::new(geometry, &camera, area, at, &look, mark)
             });
         if let (Some(slot), Some(gpu)) = (slot, &mut self.gpu_3d) {
-            painter.set(slot, gpu.paint(area, surface_draw, model_draw, body_draw));
+            let shape = gpu.paint(area, surface_draw, model_draw, body_draw, ghost_draw);
+            painter.set(slot, shape);
         }
+    }
+
+    /// A model being imported: its parts past the material's edges, in see-through red
+    /// (Options ▸ Out-of-bounds opacity) over the rest, so a model placed partly off the
+    /// material is seen whole. Given to the GPU when the view has one, else painted.
+    fn paint_ghost(
+        &mut self,
+        ui: &egui::Ui,
+        area: egui::Rect,
+        surface: &Material,
+        camera: &view3d::Camera,
+        look: view3d::Look,
+        on_gpu: bool,
+    ) -> Option<view3d::gpu::Draw> {
+        let Some(ghost) = self
+            .form
+            .as_ref()
+            .and_then(|f| f.beyond.clone())
+            .filter(|g| !g.is_empty())
+        else {
+            self.ghost_gpu = None;
+            return None;
+        };
+        let red = self.options.import.out_of_bounds_colour();
+        let look = view3d::Look {
+            colour: red,
+            sides: false,
+            wrap: None,
+            grain: None,
+            shadows: false,
+            ..look
+        };
+        let origin = cut_craft_core::glam::DVec3::new(-surface.origin.x, -surface.origin.y, 0.0);
+        if on_gpu {
+            let geometry = faces_geometry(&mut self.ghost_gpu, &ghost);
+            return Some(view3d::gpu::Draw::new(
+                geometry, camera, area, origin, &look, red,
+            ));
+        }
+        let screen = |p| camera.screen(p + origin);
+        let mesh = view3d::triangles(&ghost, screen, self.orbit, &look, red);
+        ui.painter_at(area).add(mesh);
+        None
     }
 
     /// Over the unwrapped surface: the model being imported in the material's outline, a
@@ -2981,18 +3016,24 @@ impl CutCraftApp {
         }
         // the keep-out zones in red, closed, over whatever they cover, as Aspire shows them
         let danger = egui::Stroke::new(2.0 * stroke.width, ui.visuals().error_fg_color);
-        let zones = if shown.keep_out_3d {
-            self.doc.keep_out_zones()
+        let zones: Vec<_> = if shown.keep_out_3d {
+            self.doc.named_keep_out().collect()
         } else {
             vec![]
         };
         for zone in zones {
-            let mut points = zone.flatten(cut_craft_core::polygon::TOLERANCE);
+            let mut points = zone.path.flatten(cut_craft_core::polygon::TOLERANCE);
             points.extend(points.first().copied());
             let z = view3d::vector_plane(surface, &points);
             let line: Vec<_> = points.iter().map(|&p| local(p, z)).collect();
             for run in in_sight(&line) {
                 painter.add(egui::Shape::line(run, danger));
+            }
+            // its name at its top-left corner, as in the 2D view
+            if shown.keep_out_labels {
+                let b = zone.path.bounds();
+                let corner = local(cut_craft_core::geometry::Point::new(b.min.x, b.max.y), z);
+                crate::view2d::zone_label(painter, ui, screen(corner), &zone.label());
             }
         }
         let size = view3d::plan_size(surface);
@@ -3295,14 +3336,28 @@ impl CutCraftApp {
         }
     }
 
+    /// One fixed-height row: the hint (or last message) on the left, cut short with … when
+    /// it does not fit, its whole text on hover; the tool, units and version on the right.
     pub(super) fn status_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Status bar");
         let mut swap = false;
-        ui.horizontal(|ui| {
-            // what the pointer is over or the next step, else the last message
-            let hint = cut_craft_bug_report::hint::current(ui.ctx());
-            ui.label(hint.as_deref().unwrap_or(&self.status.message));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        // what the pointer is over or the next step, else the last message; while the
+        // pointer is on the bar, to read it, what it said last stays
+        let kept = egui::Id::unique("status_bar_shown");
+        let fresh = cut_craft_bug_report::hint::current(ui.ctx())
+            .unwrap_or_else(|| self.status.message.clone());
+        let on_bar = ui.rect_contains_pointer(ui.max_rect());
+        let full = match ui.data(|d| d.get_temp::<String>(kept)) {
+            Some(last) if on_bar => last,
+            _ => fresh,
+        };
+        ui.data_mut(|d| d.insert_temp(kept, full.clone()));
+        let row = ui.spacing().interact_size.y;
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), row),
+            Layout::right_to_left(Align::Center),
+            |ui| {
+                ui.set_height(row);
                 // the version, at the far right, as Help ▸ About gives it
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
                     .on_hover_hint("Cut Craft's version (Help ▸ About)");
@@ -3323,8 +3378,23 @@ impl CutCraftApp {
                     ui.separator();
                 }
                 ui.label(format!("Tool: {}", self.status.current_tool));
-            });
-        });
+                ui.separator();
+                // the rest of the row, never more than one line
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    let galley = egui::WidgetText::from(gui::one_line(&full)).into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Truncate),
+                        ui.available_width(),
+                        egui::TextStyle::Body,
+                    );
+                    let cut = galley.elided || full.contains('\n');
+                    let label = ui.add(egui::Label::new(galley).selectable(false));
+                    if cut {
+                        label.on_hover_text(full);
+                    }
+                });
+            },
+        );
         if swap {
             let to = match self.doc.job.units {
                 Units::Mm => "units_inch",
@@ -3618,4 +3688,22 @@ fn box_corners(bounds: cut_craft_core::geometry::Rect) -> [Point; 4] {
         bounds.max,
         Point::new(bounds.min.x, bounds.max.y),
     ]
+}
+
+/// `faces` on the GPU, made once and `kept` while the faces stay the same.
+fn faces_geometry(
+    kept: &mut Option<super::ModelGpu>,
+    faces: &std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>,
+) -> std::sync::Arc<view3d::gpu::Geometry> {
+    if let Some(kept) = kept
+        && std::sync::Arc::ptr_eq(&kept.model, faces)
+    {
+        return std::sync::Arc::clone(&kept.geometry);
+    }
+    let geometry = std::sync::Arc::new(view3d::gpu::model(faces));
+    *kept = Some(super::ModelGpu {
+        model: std::sync::Arc::clone(faces),
+        geometry: std::sync::Arc::clone(&geometry),
+    });
+    geometry
 }

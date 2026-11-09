@@ -538,6 +538,14 @@ impl StatusBar {
     }
 }
 
+/// `text` on one line for the status bar: its lines joined with " · ", blank ones dropped.
+pub fn one_line(text: &str) -> String {
+    let lines: Vec<&str> = (text.lines().map(str::trim))
+        .filter(|l| !l.is_empty())
+        .collect();
+    lines.join(" · ")
+}
+
 /// Menu system for application controls
 pub struct MenuSystem {
     pub menus: Vec<Menu>,
@@ -799,6 +807,30 @@ impl MenuSystem {
     pub fn items(&self) -> Vec<&MenuItem> {
         self.menus.iter().flat_map(|m| leaves(&m.items)).collect()
     }
+}
+
+/// The 2D view's menu over a keep-out zone, before the selection's: the zone's `label`,
+/// where it is edited (the job's Keep-Out Zones, or Machine Configuration for a `machine`
+/// clamp), and showing or hiding the labels.
+pub fn keep_out_menu(label: &str, machine: bool, labels_shown: bool) -> Vec<MenuItem> {
+    let edit = if machine {
+        MenuItem::with_action("Edit Machine Keep-Out Zones…", "machine_configuration")
+    } else {
+        MenuItem::with_action("Edit Keep-Out Zones…", "keep_out_zones")
+    };
+    vec![
+        MenuItem::with_action(label, "").enabled(false),
+        edit,
+        MenuItem::with_action(
+            if labels_shown {
+                "Hide Keep-Out Zone Labels"
+            } else {
+                "Show Keep-Out Zone Labels"
+            },
+            "show_keep_out_zone_labels",
+        ),
+        MenuItem::separator(),
+    ]
 }
 
 /// The 2D view's menu on a guide: its properties, locking it, deleting it.
@@ -1953,6 +1985,7 @@ impl MenuSystem {
                         i("Draw Material Block"),
                         i("Draw Vectors in 3D View"),
                         i("Draw Keep-Out Zones in 3D View"),
+                        i("Show Keep-Out Zone Labels"),
                         sep(),
                         i("Auto-Wrapping View"),
                         i("Color Shaded View"),
@@ -2043,6 +2076,15 @@ impl MenuSystem {
 #[cfg(test)]
 mod tests {
     use super::MenuItem;
+
+    #[test]
+    fn status_text_goes_on_one_line() {
+        assert_eq!(super::one_line("Ready"), "Ready");
+        assert_eq!(
+            super::one_line("0331. Flowers.STL\nDouble-click to add it\r\n\n  "),
+            "0331. Flowers.STL · Double-click to add it"
+        );
+    }
 
     #[test]
     fn separators_split_a_menu_into_categories() {
