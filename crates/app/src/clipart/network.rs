@@ -10,11 +10,10 @@
 // finding it then needs `mount`'s list, as /proc/mounts is read on Linux
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 /// How long mounting a share may take before the Library gives up on it for now.
 #[cfg(all(unix, not(target_os = "macos")))]
-const MOUNTING: Duration = Duration::from_secs(20);
+const MOUNTING: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// Whether `path` is a network location (`smb://...`), not a path on this computer.
 pub fn is_location(path: &Path) -> bool {
@@ -237,7 +236,7 @@ fn run(program: &str, args: &[&str]) -> Option<String> {
             let _ = child.wait();
             return None;
         }
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(50));
     };
     let mut out = String::new();
     child.stdout.take()?.read_to_string(&mut out).ok()?;
