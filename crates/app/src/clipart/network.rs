@@ -30,8 +30,28 @@ fn scheme(url: &str) -> Option<&str> {
 }
 
 /// The network location behind `path` when it is in a FUSE mount whose path doesn't last
-/// (kio-fuse or gvfs), else `None`.
+/// (kio-fuse or gvfs, straight inside the user's runtime folder), else `None`.
 pub fn location(path: &Path) -> Option<String> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
+    location_in(path, runtime.as_deref())
+}
+
+/// Whether `folder` is a user's runtime folder (`/run/user/<uid>`, or `runtime`), where
+/// kio-fuse and gvfs mount; a folder of the same name anywhere else is only a folder.
+fn is_runtime(folder: &Path, runtime: Option<&Path>) -> bool {
+    let mut parts = folder.components().map(|c| c.as_os_str().to_str());
+    let standard = parts.next().is_some_and(|r| matches!(r, Some("/" | "\\")))
+        && parts.next() == Some(Some("run"))
+        && parts.next() == Some(Some("user"))
+        && parts
+            .next()
+            .flatten()
+            .is_some_and(|uid| !uid.is_empty() && uid.bytes().all(|b| b.is_ascii_digit()))
+        && parts.next().is_none();
+    standard || runtime.is_some_and(|r| r == folder)
+}
+
+fn location_in(path: &Path, runtime: Option<&Path>) -> Option<String> {
     let parts: Vec<&str> = (path.components())
         .filter_map(|c| match c {
             std::path::Component::Normal(p) => p.to_str(),
@@ -41,6 +61,11 @@ pub fn location(path: &Path) -> Option<String> {
     let at = parts
         .iter()
         .position(|p| p.starts_with("kio-fuse-") || *p == "gvfs")?;
+    let mount =
+        (path.ancestors()).find(|a| a.file_name().and_then(|n| n.to_str()) == Some(parts[at]))?;
+    if !mount.parent().is_some_and(|p| is_runtime(p, runtime)) {
+        return None;
+    }
     let rest = &parts[at + 1..];
     if parts[at] == "gvfs" {
         let (mount, rest) = rest.split_first()?;
@@ -155,7 +180,14 @@ fn unescape(field: &str) -> String {
 #[cfg_attr(not(windows), allow(dead_code))]
 pub fn unc(url: &str) -> Option<PathBuf> {
     let rest = url.strip_prefix("smb://")?;
-    let rest = rest.rsplit_once('@').map_or(rest, |(_, r)| r);
+    // only the host can have a user@ before it; a folder's name can have an @ in it too
+    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let host = host.rsplit_once('@').map_or(host, |(_, h)| h);
+    let rest = if path.is_empty() {
+        host.to_owned()
+    } else {
+        format!("{host}/{path}")
+    };
     Some(PathBuf::from(format!(r"\\{}", rest.replace('/', r"\"))))
 }
 
@@ -298,6 +330,9 @@ mod tests {
             r"\\synology\STL\A-Team",
             "/Volumes/STL/A-Team",
             r"C:\Users\me\STL",
+            // named like a mount, but not in the runtime folder
+            "/home/me/kio-fuse-backup/smb/nas/share",
+            "/home/me/gvfs/smb-share:server=nas,share=stl",
         ] {
             assert_eq!(location(Path::new(path)), None, "{path}");
             assert_eq!(kept(Path::new(path)), PathBuf::from(path));
@@ -369,6 +404,10 @@ mod tests {
             Some(PathBuf::from(r"\\synology.local\STL\A-Team"))
         );
         assert_eq!(unc("smb://matt@nas/stl"), Some(PathBuf::from(r"\\nas\stl")));
+        assert_eq!(
+            unc("smb://matt@nas/stl/me@home"),
+            Some(PathBuf::from(r"\\nas\stl\me@home"))
+        );
         assert_eq!(unc("sftp://box/home"), None);
     }
 
