@@ -145,6 +145,8 @@ impl CutCraftApp {
             simulation_coarse: None,
             import_level: None,
             polyline: crate::polyline::Draft::default(),
+            placed: Vec::new(),
+            picked_constraint: None,
             fine_3d: None,
             drawn_on: None,
             model_3d: None,
@@ -267,6 +269,10 @@ impl CutCraftApp {
     #[expect(clippy::too_many_lines, reason = "the one dispatch of every action")]
     pub(super) fn invoke(&mut self, ctx: &egui::Context, id: &str) {
         self.show_subtab_of(id);
+        // Delete with a snap mark picked lets that point go, rather than deleting vectors
+        if id == "delete" && self.release_picked_snap() {
+            return;
+        }
         // right-click menu items: a command with params chosen by the menu
         if let Some((form, command, params)) = gui::command_action(id) {
             if form {
@@ -1979,6 +1985,10 @@ impl CutCraftApp {
                 .apply(&mut self.doc, c)
                 .map_err(|e| e.to_string())
         });
+        if result.is_ok() {
+            notes.extend_from_slice(self.history.last_notes());
+            notes.dedup();
+        }
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
         self.warn(&made, &notes);
@@ -2755,6 +2765,36 @@ impl CutCraftApp {
         self.applied(id, params, change)
     }
 
+    /// `change` with the points it placed on snaps kept there: a drawn shape's snapped
+    /// points (a line's nodes stretch to stay, other shapes move whole), or a node dragged
+    /// onto a snap. Only for the drawing tool in use, or Node Editing's Move Node.
+    pub(super) fn kept_on_snaps(&mut self, id: &str, mut change: Change) -> Change {
+        use cut_craft_core::Edit;
+        use cut_craft_core::constraint::{merged, pins};
+        let placed = std::mem::take(&mut self.placed);
+        let drawn = self.drawing_tool() == Some(id) && id != "draw_text";
+        if placed.is_empty() || !(drawn || id == "move_node") {
+            return change;
+        }
+        let stretch = matches!(id, "draw_polyline" | "move_node");
+        let mut made = vec![];
+        for edit in &change.edits {
+            match edit {
+                Edit::Add { id, path } if drawn => made.extend(pins(path, *id, &placed, stretch)),
+                Edit::Replace { id, after, .. } if !drawn => {
+                    made.extend(pins(after, *id, &placed, stretch));
+                }
+                _ => {}
+            }
+        }
+        if !made.is_empty() {
+            let before = self.doc.constraints.clone();
+            let after = merged(&before, made);
+            change.edits.push(Edit::SetConstraints { before, after });
+        }
+        change
+    }
+
     /// What command `id` made with `params` (or why it made nothing) put into the job: onto
     /// the import level, into the picked toolpath group, as one undo; then whatever the
     /// command goes on to do.
@@ -2764,7 +2804,7 @@ impl CutCraftApp {
         params: &Value,
         change: Result<Change, String>,
     ) -> Result<(), String> {
-        let change = change?;
+        let change = self.kept_on_snaps(id, change?);
         let cmd = self
             .registry
             .get(id)
@@ -2779,6 +2819,7 @@ impl CutCraftApp {
         self.history
             .apply(&mut self.doc, change)
             .map_err(|e| e.to_string())?;
+        let kept = self.history.last_notes().to_vec();
         // a form that edits what it made (Draw Text) goes on editing it, not adding another
         if let Some(form) = self.form.as_mut().filter(|f| f.id == id)
             && let Some(made) = cmd.initial_params(&self.doc).get("replaces").cloned()
@@ -2799,7 +2840,7 @@ impl CutCraftApp {
             self.status
                 .set_message(&format!("Each strand makes {turns:.2} revolutions"));
         }
-        self.warn(&made, &notes);
+        self.warn(&made, &[notes, kept].concat());
         if id == "swap_sides" {
             self.turn_preview_over();
         }
@@ -2878,6 +2919,9 @@ impl CutCraftApp {
         let change = c.finish();
         match self.history.apply(&mut self.doc, change) {
             Ok(()) => {
+                if let Some(note) = self.history.last_notes().last() {
+                    self.status.set_message(note);
+                }
                 for n in &mut self.picked_nodes {
                     let at = Point::from(n.at) + delta(Point::from(n.at));
                     n.at = cut_craft_core::params::Xy::new(at.x, at.y);

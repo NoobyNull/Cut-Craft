@@ -907,6 +907,15 @@ struct CutCraftApp {
     import_level: Option<u64>,
     /// Draw Line / Polyline's polyline being drawn in the 2D view.
     polyline: crate::polyline::Draft,
+    /// Points the drawing being made was placed on snaps at, and what they snapped to: kept
+    /// there once it is made.
+    placed: Vec<(
+        cut_craft_core::geometry::Point,
+        cut_craft_core::constraint::Anchor,
+    )>,
+    /// The snap mark picked in the 2D view (an index into the job's constraints): Delete
+    /// lets that point go.
+    picked_constraint: Option<usize>,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,

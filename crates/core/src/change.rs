@@ -173,6 +173,11 @@ pub enum Edit {
         before: (bool, SheetObjects),
         after: (bool, SheetObjects),
     },
+    /// Replaces the points kept on their snaps.
+    SetConstraints {
+        before: Vec<crate::constraint::Constraint>,
+        after: Vec<crate::constraint::Constraint>,
+    },
     /// Replaces the sheet list and which sheet is active.
     SetSheets {
         before: (Vec<Sheet>, usize),
@@ -247,6 +252,10 @@ impl Edit {
                 after: before,
             },
             Self::SetGuides { before, after } => Self::SetGuides {
+                before: after,
+                after: before,
+            },
+            Self::SetConstraints { before, after } => Self::SetConstraints {
                 before: after,
                 after: before,
             },
@@ -815,6 +824,7 @@ impl Document {
             Edit::SetVariables { after, .. } => self.variables.clone_from(after),
             Edit::SetKeepOut { after, .. } => self.keep_out.clone_from(after),
             Edit::SetGuides { after, .. } => self.guides.clone_from(after),
+            Edit::SetConstraints { after, .. } => self.constraints.clone_from(after),
             Edit::SetToolpathGroups { after, .. } => self.toolpath_groups.clone_from(after),
             Edit::SetTiling { after, .. } => self.tiling = *after,
             _ => unreachable!("only settings come here"),
@@ -976,6 +986,7 @@ impl Document {
             | Edit::SetVariables { .. }
             | Edit::SetKeepOut { .. }
             | Edit::SetGuides { .. }
+            | Edit::SetConstraints { .. }
             | Edit::SetToolpathGroups { .. }
             | Edit::SetTiling { .. } => self.apply_setting(edit),
             Edit::SetText { group, after, .. } => self.set_text(*group, after.clone()),
@@ -1496,6 +1507,14 @@ impl ChangeBuilder<'_> {
         }
     }
 
+    /// The points kept on their snaps, all of them.
+    pub fn set_constraints(&mut self, after: Vec<crate::constraint::Constraint>) {
+        if self.doc.constraints != after {
+            let before = self.doc.constraints.clone();
+            self.edits.push(Edit::SetConstraints { before, after });
+        }
+    }
+
     pub fn set_keep_out(&mut self, after: Vec<Path>) {
         if self.doc.keep_out != after {
             let before = self.doc.keep_out.clone();
@@ -1673,6 +1692,9 @@ pub struct History {
     undo: Vec<Change>,
     redo: Vec<Change>,
     revision: u64,
+    /// What the last change applied would have the person know, with what keeping the
+    /// snapped points added (see [`crate::constraint::keeping`]).
+    last_notes: Vec<String>,
 }
 
 impl History {
@@ -1681,21 +1703,30 @@ impl History {
         if change.is_empty() {
             return Ok(());
         }
-        let change = change.marking_stale(doc);
+        // points snapped to what moved follow it
+        let change = crate::constraint::keeping(doc, change).marking_stale(doc);
         doc.apply(&change)?;
+        self.last_notes.clone_from(&change.notes);
         self.undo.push(change);
         self.redo.clear();
         self.revision += 1;
         Ok(())
     }
 
+    /// The notes of the change last applied (empty after undo and redo).
+    pub fn last_notes(&self) -> &[String] {
+        &self.last_notes
+    }
+
     pub fn undo(&mut self, doc: &mut Document) -> bool {
+        self.last_notes.clear();
         let stepped = Self::step(&mut self.undo, &mut self.redo, doc, true);
         self.revision += u64::from(stepped);
         stepped
     }
 
     pub fn redo(&mut self, doc: &mut Document) -> bool {
+        self.last_notes.clear();
         let stepped = Self::step(&mut self.redo, &mut self.undo, doc, false);
         self.revision += u64::from(stepped);
         stepped

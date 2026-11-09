@@ -7,6 +7,7 @@ pub mod checks;
 mod command;
 pub mod component;
 pub mod compute;
+pub mod constraint;
 pub mod document;
 pub mod drill_bank;
 pub mod entry;
