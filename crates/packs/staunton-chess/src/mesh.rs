@@ -109,7 +109,7 @@ mod tests {
             let shape = Shape::new(piece);
             for cut in [Cut::Half, Cut::Whole] {
                 let t = mesh(&shape, cut, 0.5);
-                assert!(!t.is_empty());
+                assert_ne!(t.len(), 0);
                 assert_eq!(open_edges(&t), 0, "{piece:?} {cut:?}");
                 assert!(volume(&t) > 0.0, "{piece:?} {cut:?} faces inwards");
             }

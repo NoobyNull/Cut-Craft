@@ -141,7 +141,7 @@ mod tests {
             "{addon}"
         );
         assert_eq!(pack.licence, Licence::Cc0);
-        assert!(pack.credits().is_empty(), "CC0 needs no credits");
+        assert_eq!(pack.credits(), Vec::<String>::new(), "CC0 needs no credits");
         // a tutorial, a half of each piece, and the whole knight
         assert_eq!(pack.items.len(), 1 + Piece::ALL.len() + 1);
         assert!(
