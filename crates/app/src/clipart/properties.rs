@@ -36,18 +36,47 @@ pub struct Properties {
     pub picture: Option<PathBuf>,
     /// The library folder (as added) the file is in.
     pub library_folder: Option<PathBuf>,
+    pub tags: Vec<String>,
+    /// What was read from the file, once it has been.
+    pub read: Option<Read>,
+    /// The reading under way in the background.
+    reading: Option<mpsc::Receiver<Read>>,
+}
+
+/// What is read from the file itself, in the background: a file on a network folder can
+/// keep even its size waiting.
+#[derive(Debug)]
+pub struct Read {
     pub bytes: Option<u64>,
     pub modified: Option<SystemTime>,
-    pub tags: Vec<String>,
-    /// What it measures, once read; or why it couldn't be.
-    pub measured: Option<Result<Measured, String>>,
-    /// The measuring under way in the background.
-    measuring: Option<mpsc::Receiver<Result<Measured, String>>>,
+    /// What it measures, or why it couldn't be.
+    pub measured: Result<Measured, String>,
+}
+
+impl Read {
+    /// Everything about `file`.
+    fn of(file: &Path) -> Self {
+        let metadata = std::fs::metadata(file).ok();
+        Self {
+            bytes: metadata.as_ref().map(std::fs::Metadata::len),
+            modified: metadata.and_then(|m| m.modified().ok()),
+            measured: measure(file),
+        }
+    }
+
+    /// When the reading stopped without saying why.
+    fn stopped() -> Self {
+        Self {
+            bytes: None,
+            modified: None,
+            measured: Err("Reading it stopped unexpectedly.".into()),
+        }
+    }
 }
 
 impl Properties {
-    /// `file`'s properties, the file's size and date read now; what it measures is read in
-    /// the background (`ctx` is woken when it is). `folders` are the library's.
+    /// `file`'s properties, the file itself read in the background (`ctx` is woken when it
+    /// has been). `folders` are the library's.
     pub fn new(
         file: &Path,
         kind: Kind,
@@ -56,12 +85,11 @@ impl Properties {
         folders: &[PathBuf],
         ctx: Option<&egui::Context>,
     ) -> Self {
-        let metadata = std::fs::metadata(file).ok();
-        let (send, measuring) = mpsc::channel();
+        let (send, reading) = mpsc::channel();
         let (owned, ctx) = (file.to_path_buf(), ctx.cloned());
         std::thread::spawn(move || {
             // the window may be closed by now: then nobody is waiting
-            let _ = send.send(measure(&owned));
+            let _ = send.send(Read::of(&owned));
             if let Some(ctx) = ctx {
                 ctx.request_repaint();
             }
@@ -71,36 +99,29 @@ impl Properties {
             kind,
             picture: picture.map(Path::to_path_buf),
             library_folder: library_folder(file, folders),
-            bytes: metadata.as_ref().map(std::fs::Metadata::len),
-            modified: metadata.and_then(|m| m.modified().ok()),
             tags,
-            measured: None,
-            measuring: Some(measuring),
+            read: None,
+            reading: Some(reading),
         }
     }
 
-    /// Takes what the file measures, once it has been measured.
+    /// Takes what was read from the file, once it has been.
     pub fn update(&mut self) {
-        if let Some(rx) = &self.measuring {
-            match rx.try_recv() {
-                Ok(m) => self.measured = Some(m),
+        if let Some(rx) = &self.reading {
+            self.read = match rx.try_recv() {
+                Ok(read) => Some(read),
                 Err(mpsc::TryRecvError::Empty) => return,
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    self.measured = Some(Err("Measuring it stopped unexpectedly.".into()));
-                }
-            }
-            self.measuring = None;
+                Err(mpsc::TryRecvError::Disconnected) => Some(Read::stopped()),
+            };
+            self.reading = None;
         }
     }
 
-    /// Waits for the measuring to finish (for tests).
+    /// Waits for the reading to finish (for tests).
     #[cfg(test)]
     pub fn wait(&mut self) {
-        if let Some(rx) = self.measuring.take() {
-            self.measured = Some(
-                rx.recv()
-                    .unwrap_or_else(|_| Err("Measuring it stopped unexpectedly.".into())),
-            );
+        if let Some(rx) = self.reading.take() {
+            self.read = Some(rx.recv().unwrap_or_else(|_| Read::stopped()));
         }
     }
 }
@@ -278,8 +299,9 @@ fn rows(ui: &mut egui::Ui, props: &Properties) {
         format!("{} ({extension} file)", kind_name(props.kind))
     };
     row(ui, "Kind", kind, None);
-    match &props.measured {
-        None => row(ui, "Size", "Measuring...".into(), None),
+    let read = props.read.as_ref();
+    match read.map(|r| &r.measured) {
+        None => row(ui, "Size", "Reading the file...".into(), None),
         Some(Err(e)) => row(ui, "Size", format!("Couldn't measure it. {e}"), None),
         Some(Ok(Measured::Model { size, triangles })) => {
             row(
@@ -316,16 +338,21 @@ fn rows(ui: &mut egui::Ui, props: &Properties) {
             Some("The picture beside it with the same name, shown as its tile."),
         );
     }
-    let on_disk = props.bytes.map_or_else(|| "Unknown".into(), file_size);
+    let (on_disk, modified) = match read {
+        None => ("Reading...".into(), "Reading...".into()),
+        Some(r) => (
+            r.bytes.map_or_else(|| "Unknown".into(), file_size),
+            r.modified.map_or_else(
+                || "Unknown".into(),
+                |m| {
+                    chrono::DateTime::<chrono::Local>::from(m)
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string()
+                },
+            ),
+        ),
+    };
     row(ui, "File size", on_disk, None);
-    let modified = props.modified.map_or_else(
-        || "Unknown".into(),
-        |m| {
-            chrono::DateTime::<chrono::Local>::from(m)
-                .format("%Y-%m-%d %H:%M")
-                .to_string()
-        },
-    );
     row(ui, "Modified", modified, None);
     let tags = if props.tags.is_empty() {
         "None yet. Right-click it and pick Add Tag... to add one.".into()
@@ -440,8 +467,9 @@ mod tests {
         );
     }
 
-    /// The file's size, date and tags, and the library folder it's in (the outermost added,
-    /// as the tree shows it), are read as the window opens; its measuring follows.
+    /// The file's tags and the library folder it's in (the outermost added, as the tree
+    /// shows it) are known as the window opens; its size, date and measurements are read in
+    /// the background, so a slow network folder can't hold the window up.
     #[test]
     fn properties_of_a_file() {
         let dir = folder("props");
@@ -459,16 +487,18 @@ mod tests {
             None,
         );
         assert_eq!(props.library_folder.as_deref(), Some(dir.as_path()));
-        assert_eq!(props.bytes, Some(std::fs::metadata(&file).unwrap().len()));
-        assert!(props.modified.is_some());
         assert_eq!(props.tags, ["birds"]);
+        assert!(props.read.is_none(), "the file is read in the background");
         props.wait();
+        let read = props.read.expect("read");
+        assert_eq!(read.bytes, Some(std::fs::metadata(&file).unwrap().len()));
+        assert!(read.modified.is_some());
         assert_eq!(
-            props.measured,
-            Some(Ok(Measured::Picture {
+            read.measured,
+            Ok(Measured::Picture {
                 width: 4,
                 height: 2
-            }))
+            })
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
