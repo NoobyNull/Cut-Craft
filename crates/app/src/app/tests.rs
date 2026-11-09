@@ -8830,3 +8830,105 @@ fn the_status_bar_keeps_its_hint_while_the_pointer_is_on_it() {
     h.frame(vec![]);
     assert!(status_text(&h, "Flowers.STL").is_none(), "gone after");
 }
+
+#[test]
+fn the_view_follows_the_frame_rate_by_default_aiming_for_thirty_a_second() {
+    let mut v = crate::options::Options::default().view_3d;
+    assert!(v.adjust_to_frame_rate);
+    assert!((v.fps_wanted() - crate::options::TARGET_FPS).abs() < 1e-9);
+    assert!((crate::options::TARGET_FPS - 30.0).abs() < 1e-9);
+    assert!(!v.show_frame_rate, "the status bar note is opt-in");
+    v.target_fps = 500.0;
+    assert!((v.fps_wanted() - 120.0).abs() < 1e-9);
+    v.target_fps = 0.0;
+    assert!((v.fps_wanted() - 10.0).abs() < 1e-9);
+}
+
+/// A harness with a domed model in the 3D view, turned every frame for `frames` frames
+/// (the harness's frames are a tenth of a second apart: ten a second, slower than wanted).
+fn turned_slowly(adjust: bool, frames: usize) -> Harness {
+    let mut h = Harness::new();
+    h.app.options.view_3d.adjust_to_frame_rate = adjust;
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    for _ in 0..frames {
+        h.app.moved_3d = h.time + 0.1;
+        h.frame(vec![]);
+    }
+    h
+}
+
+#[test]
+fn slow_frames_while_turning_draw_the_model_coarser_then_finely_once_still() {
+    use crate::options::Detail;
+    let mut h = turned_slowly(true, 20);
+    let (level, moving) = h.app.detail_3d;
+    assert!(moving);
+    assert!(
+        level < Detail::VeryHigh,
+        "dropped from Very High: {level:?}"
+    );
+    assert!(h.app.moving_cells() < Detail::VeryHigh.cells());
+    // a second still: back to the detail when still
+    for _ in 0..10 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.detail_3d, (Detail::VeryHigh, false));
+}
+
+#[test]
+fn with_the_frame_rate_setting_off_moving_keeps_options_own_detail() {
+    let h = turned_slowly(false, 20);
+    assert_eq!(h.app.moving_cells(), h.app.options.view_3d.moving_cells());
+    assert_eq!(h.app.turning_cells(), h.app.options.view_3d.still_cells());
+}
+
+#[test]
+fn the_status_bar_shows_the_3d_detail_and_frame_rate_when_asked() {
+    let mut h = turned_slowly(true, 3);
+    assert!(status_text(&h, "3D detail").is_none(), "off unless asked");
+    h.app.options.view_3d.show_frame_rate = true;
+    for _ in 0..10 {
+        h.app.moved_3d = h.time + 0.1;
+        h.frame(vec![]);
+    }
+    let note = h.app.frame_rate_note();
+    assert!(note.contains("frames/s"), "{note}");
+    assert!(status_text(&h, "3D detail").is_some(), "{note}");
+}
+
+#[test]
+fn coarser_surfaces_are_made_from_the_fine_one_on_another_thread_and_kept() {
+    use cut_craft_core::simulation::Material;
+    let job = cut_craft_core::document::Job::default();
+    let fine = Material::new(&job, 120);
+    let key = super::GeometryKey {
+        revision: 1,
+        job,
+        wrap: None,
+        sides: true,
+        importing: false,
+        cells: 120,
+    };
+    let mut kept = super::SurfaceGpu::new(key);
+    assert_eq!(fine.columns.max(fine.rows), 120);
+    kept.levels
+        .push(super::level_of(&fine, 120, None, true, true));
+    kept.fine = Some(std::sync::Arc::new(fine));
+    let ctx = egui::Context::default();
+    kept.make(30, true, &ctx);
+    kept.make(30, true, &ctx);
+    assert!(kept.making.len() <= 1, "made once however often asked");
+    assert_eq!(
+        kept.nearest(30).map(|l| l.cells),
+        Some(120),
+        "the fine one meanwhile"
+    );
+    while !kept.making.is_empty() {
+        std::thread::yield_now();
+        kept.collect();
+    }
+    let coarse = kept.at(30).expect("kept once made");
+    assert!(coarse.solid.is_some(), "with its walls");
+    assert!(coarse.surface.triangles() < kept.at(120).expect("fine").surface.triangles());
+}

@@ -1294,7 +1294,7 @@ impl CutCraftApp {
     pub(super) fn surface_3d(&mut self) -> Option<Cow<'_, Material>> {
         let cells = self.options.view_3d.moving_cells();
         if let Some(playback) = &self.playback {
-            let coarse = view3d::coarse(playback.material(), cells);
+            let coarse = view3d::coarse(playback.material(), self.moving_cells());
             return Some(Cow::Owned(self.painted(coarse)));
         }
         if let Some(material) = &self.simulation {
@@ -1616,6 +1616,7 @@ impl CutCraftApp {
         if response.dragged() || on_cube.dragged() || before != (self.orbit, self.framing) {
             self.moved_3d = ui.input(|i| i.time);
         }
+        self.pace_3d(ui.ctx());
         self.paint_3d(ui, area);
         let painter = ui.painter_at(area);
         cube.paint(&painter, self.orbit, hovered, ui.visuals(), &font);
@@ -1762,41 +1763,58 @@ impl CutCraftApp {
     }
 
     /// The 3D view's surface as the GPU draws it: at its own detail, built once and kept
-    /// while nothing it shows changes; a playing preview's at the moving detail, every frame.
+    /// while nothing it shows changes; while the view moves, at the detail the frame rate
+    /// allows (each kept, a coarser one made from the fine one away from the window's
+    /// thread); a playing preview's at the moving detail, every frame.
     fn surface_geometry(
         &mut self,
+        ctx: &egui::Context,
         wrap: Option<view3d::Wrap>,
         sides: bool,
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
         // while a handle drags the model about, the quick surface, kept by the change it
         // shows, so the fine one is made once the drag ends
         let dragging = self.drag_base.is_some();
-        let view = &self.options.view_3d;
+        let still = self.options.view_3d.still_cells();
         let cells = if dragging {
-            view.moving_cells()
+            self.moving_cells()
         } else {
-            view.still_cells()
+            self.turning_cells()
         };
+        if let Some(playback) = &self.playback {
+            self.solid_gpu = None;
+            let moving = self.moving_cells();
+            let surface = self.painted(view3d::coarse(playback.material(), moving));
+            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+        }
         let key = super::GeometryKey {
             revision: self.history.revision(),
             job: self.doc.job,
             wrap,
             sides,
             importing: self.importing_whole(),
-            cells,
+            cells: still,
         };
-        if let Some(playback) = &self.playback {
-            self.solid_gpu = None;
-            let moving = self.options.view_3d.moving_cells();
-            let surface = self.painted(view3d::coarse(playback.material(), moving));
-            return std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
+        let solid = self.simulation.is_none();
+        let kept = match &mut self.surface_gpu {
+            Some(kept) if kept.key == key => kept,
+            other => other.insert(super::SurfaceGpu::new(key)),
+        };
+        kept.collect();
+        if let Some(level) = kept.at(cells) {
+            self.solid_gpu.clone_from(&level.solid);
+            return std::sync::Arc::clone(&level.surface);
         }
-        if let Some((kept, geometry)) = &self.surface_gpu
-            && *kept == key
-        {
-            return std::sync::Arc::clone(geometry);
+        // turning the view, coarser than the kept fine surface: made from that on another
+        // thread, the nearest kept detail drawn meanwhile
+        if !dragging && cells < still && kept.fine.is_some() {
+            kept.make(cells, solid, ctx);
+            if let Some(level) = kept.nearest(cells) {
+                self.solid_gpu.clone_from(&level.solid);
+                return std::sync::Arc::clone(&level.surface);
+            }
         }
-        let mut surface = match (dragging, self.simulation.is_none()) {
+        let mut surface = match (dragging, solid) {
             // the model alone: the quick surface the view keeps
             (true, true) => match self.surface_3d().map(Cow::into_owned) {
                 Some(quick) => quick,
@@ -1807,7 +1825,7 @@ impl CutCraftApp {
         };
         // the components' own colours (Solid Color), where the model is theirs: painted as a
         // preview paints the toolpaths' colours
-        if self.simulation.is_none() {
+        if solid {
             let doc = &self.doc;
             let paint: Vec<u32> = (0..surface.rows)
                 .flat_map(|r| (0..surface.columns).map(move |c| (c, r)))
@@ -1820,14 +1838,81 @@ impl CutCraftApp {
                 surface.paint = paint;
             }
         }
+        // the fine surface alone stands for every detail coarser than it; a quick one made
+        // while dragging is kept as the detail it was asked for
+        let (made, fine) = if dragging {
+            (cells, false)
+        } else {
+            (still, true)
+        };
         // the model alone (no preview) is drawn solid down to the modeling plane
-        self.solid_gpu = self
-            .simulation
-            .is_none()
-            .then(|| std::sync::Arc::new(view3d::gpu::model(&view3d::solid(&surface, wrap))));
-        let geometry = std::sync::Arc::new(view3d::gpu::surface(&surface, wrap, sides));
-        self.surface_gpu = Some((key, std::sync::Arc::clone(&geometry)));
-        geometry
+        let level = super::level_of(&surface, made, wrap, sides, solid);
+        let kept = self.surface_gpu.as_mut().expect("kept above");
+        if fine {
+            kept.fine = Some(std::sync::Arc::new(surface));
+        }
+        kept.levels.retain(|l| l.cells != made);
+        kept.levels.push(level.clone());
+        self.solid_gpu = level.solid;
+        level.surface
+    }
+
+    /// Mesh cells along the job's longer side while the model or the view moves: as the
+    /// frame rate allows when Options says so, else Options' detail while moving.
+    pub(super) fn moving_cells(&self) -> usize {
+        let view = &self.options.view_3d;
+        if view.adjust_to_frame_rate {
+            self.detail_3d.0.min(view.still_detail).cells()
+        } else {
+            view.moving_cells()
+        }
+    }
+
+    /// Mesh cells the GPU draws the model at while the view turns: as the frame rate allows
+    /// when Options says so, else the detail when still (the card turns it unchanged).
+    pub(super) fn turning_cells(&self) -> usize {
+        let view = &self.options.view_3d;
+        if view.adjust_to_frame_rate {
+            self.detail_3d.0.min(view.still_detail).cells()
+        } else {
+            view.still_cells()
+        }
+    }
+
+    /// Judges this frame's detail from how long the last one took, once a frame: the
+    /// controller sees the view as moving while it turns, a handle drags or a preview
+    /// plays, and for the settle time after. Asks for a frame once still, to draw finely.
+    fn pace_3d(&mut self, ctx: &egui::Context) {
+        let pass = ctx.cumulative_pass_nr();
+        if self.paced_pass == pass {
+            return;
+        }
+        self.paced_pass = pass;
+        let (now, seconds) = ctx.input(|i| (i.time, f64::from(i.unstable_dt)));
+        let view = &self.options.view_3d;
+        let (settle, still, fps) = (view.settle(), view.still_detail, view.fps_wanted());
+        let since = now - self.moved_3d;
+        let moving = since < settle
+            || (self.playing && self.playback.is_some())
+            || self.drag_base.is_some()
+            || self.drag_3d.is_some();
+        let level = self.pacer.frame(seconds, moving, still, fps);
+        self.detail_3d = (level, moving);
+        if moving && level < still {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(
+                (settle - since).max(0.0) + 0.01,
+            ));
+        }
+    }
+
+    /// The status bar's note of the 3D view's detail and frames a second (Options ▸ Show
+    /// detail and frame rate in the status bar).
+    pub(super) fn frame_rate_note(&self) -> String {
+        let (level, moving) = self.detail_3d;
+        match self.pacer.fps().filter(|_| moving) {
+            Some(fps) => format!("3D detail: {} · {fps:.0} frames/s", level.name()),
+            None => format!("3D detail: {}", level.name()),
+        }
     }
 
     /// The imported model as the GPU draws it, kept while the model stays.
@@ -2841,7 +2926,7 @@ impl CutCraftApp {
             .then(|| painter.add(egui::Shape::Noop));
         let (mut surface_draw, mut model_draw, mut ghost_draw) = (None, None, None);
         if slot.is_some() {
-            let geometry = self.surface_geometry(look.wrap, look.sides);
+            let geometry = self.surface_geometry(ui.ctx(), look.wrap, look.sides);
             let at = cut_craft_core::glam::DVec3::ZERO;
             surface_draw = Some(view3d::gpu::Draw::new(
                 geometry, &camera, area, at, &look, mark,
@@ -3383,6 +3468,13 @@ impl CutCraftApp {
                 }
                 ui.label(format!("Tool: {}", self.status.current_tool));
                 ui.separator();
+                if self.screen == Screen::Job && self.options.view_3d.show_frame_rate {
+                    ui.weak(self.frame_rate_note()).on_hover_hint(
+                        "How finely the 3D view draws the model, and how many pictures a \
+                         second it draws while it moves (Options ▸ 3D View)",
+                    );
+                    ui.separator();
+                }
                 // the rest of the row, never more than one line
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let galley = egui::WidgetText::from(gui::one_line(&full)).into_galley(

@@ -47,7 +47,7 @@ moves them again.
 | `view3d::PICK_REACH` = 4 px | `app/src/view3d.rs:20` | How close the pointer must be to a surface to pick it in the 3D view. Marked "fixed until the 3D view has settings". | 3D View ▸ **Click reach** 4 px (1 to 20) |
 | `view3d::FIELD_OF_VIEW` = 45° | `app/src/view3d.rs:23` | Perspective lens width. Wider looks more dramatic, narrower flatter. | 3D View ▸ **Perspective angle** 45° (20 to 90) |
 | `view3d::AMBIENT` 0.35, `DEPTH_SHADE` 0.5, `LIGHT` | `app/src/view3d.rs:13-17` | How dark shadowed sides and deep cuts look. Marked "fixed until the 3D view has light settings". | 3D View ▸ **Shadow strength** and **Darken deep cuts** (0 to 1). Light direction stays a constant |
-| `SETTLE_SECONDS` = 0.25 | `app/src/app.rs:376` | How long the 3D view must be still before it redraws at full detail. | 3D View ▸ **Wait before drawing full detail** 0.25 s; only shown with *Simplify while moving* on |
+| `SETTLE_SECONDS` = 0.25 | `app/src/app.rs:376` | How long the 3D view must be still before it redraws at full detail. | 3D View ▸ **Wait before drawing full detail** 0.25 s; also how long the frame-rate detail waits before drawing at the detail when still |
 | `MESH_CELLS` = 250 | `app/src/app.rs:354` | 3D view detail while turning. Higher = smoother but laggier on slow computers. | 3D View ▸ **Detail while moving** (Low 150 / Normal 250 / High 500) |
 | `BRUSH_STEP` 0.1, `BRUSH_FINE_STEP` 0.02 | `app/src/app.rs:384` | How much one wheel notch grows the sculpting brush. | Sculpting ▸ **Wheel step** 10% (fine 2%). Low priority |
 | `KERN_STEP` 0.05, `LINE_STEP` 0.1 | `app/src/app/views.rs:710` | How much one wheel notch changes text letter and line spacing. | Leave as constants unless asked (very niche) |

@@ -14,6 +14,7 @@ mod display;
 mod files;
 mod flyout;
 mod form;
+mod frame_rate;
 mod gadgets;
 mod gui;
 mod icons;

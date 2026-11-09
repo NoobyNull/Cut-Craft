@@ -69,8 +69,8 @@ fn preview_mark(id: EntityId) -> u32 {
 }
 
 /// What the 3D view's surface on the GPU was built from: the model as at this revision,
-/// wrapped and sided so (light is the shader's, so not these), at this many cells (the
-/// moving detail while a handle drags the model, else the still detail).
+/// wrapped and sided so (light is the shader's, so not these), at most this many cells (the
+/// detail when still).
 #[derive(Clone, Debug, PartialEq)]
 struct GeometryKey {
     revision: u64,
@@ -79,6 +79,97 @@ struct GeometryKey {
     sides: bool,
     importing: bool,
     cells: usize,
+}
+
+/// One detail of the 3D view's surface on the GPU, and the model's walls and bottom made
+/// with it (none over a preview).
+#[derive(Clone)]
+struct SurfaceLevel {
+    cells: usize,
+    surface: std::sync::Arc<view3d::gpu::Geometry>,
+    solid: Option<std::sync::Arc<view3d::gpu::Geometry>>,
+}
+
+/// The 3D view's surface on the GPU at each detail it has been drawn at since the model
+/// last changed, so the detail can follow the frame rate without remaking the surface at
+/// every change: a coarser one is made from the fine one away from the window's thread.
+struct SurfaceGpu {
+    key: GeometryKey,
+    levels: Vec<SurfaceLevel>,
+    /// The surface at the detail when still, painted, that the coarser ones are made from.
+    fine: Option<std::sync::Arc<Material>>,
+    /// Coarser ones being made, by their cells.
+    making: Vec<(usize, std::thread::JoinHandle<SurfaceLevel>)>,
+}
+
+impl SurfaceGpu {
+    fn new(key: GeometryKey) -> Self {
+        Self {
+            key,
+            levels: Vec::new(),
+            fine: None,
+            making: Vec::new(),
+        }
+    }
+
+    /// Keeps the ones finished making.
+    fn collect(&mut self) {
+        let (done, making) = std::mem::take(&mut self.making)
+            .into_iter()
+            .partition::<Vec<_>, _>(|(_, job)| job.is_finished());
+        self.making = making;
+        for (_, job) in done {
+            if let Ok(level) = job.join() {
+                self.levels.push(level);
+            }
+        }
+    }
+
+    fn at(&self, cells: usize) -> Option<&SurfaceLevel> {
+        self.levels.iter().find(|l| l.cells == cells)
+    }
+
+    /// The kept one nearest `cells`, the coarser on a tie: what is drawn while that one is
+    /// made.
+    fn nearest(&self, cells: usize) -> Option<&SurfaceLevel> {
+        self.levels
+            .iter()
+            .min_by_key(|l| (l.cells.abs_diff(cells), l.cells))
+    }
+
+    /// Starts making the surface at `cells` from the fine one, unless it is being made;
+    /// `ctx` is asked to draw again once it is ready.
+    fn make(&mut self, cells: usize, solid: bool, ctx: &egui::Context) {
+        let Some(fine) = self.fine.clone() else {
+            return;
+        };
+        if self.making.iter().any(|(c, _)| *c == cells) {
+            return;
+        }
+        let (wrap, sides, ctx) = (self.key.wrap, self.key.sides, ctx.clone());
+        let job = std::thread::spawn(move || {
+            let level = level_of(&view3d::coarse(&fine, cells), cells, wrap, sides, solid);
+            ctx.request_repaint();
+            level
+        });
+        self.making.push((cells, job));
+    }
+}
+
+/// The GPU's surface (and, with `solid`, walls and bottom) of `surface`.
+fn level_of(
+    surface: &Material,
+    cells: usize,
+    wrap: Option<view3d::Wrap>,
+    sides: bool,
+    solid: bool,
+) -> SurfaceLevel {
+    SurfaceLevel {
+        cells,
+        surface: std::sync::Arc::new(view3d::gpu::surface(surface, wrap, sides)),
+        solid: solid
+            .then(|| std::sync::Arc::new(view3d::gpu::model(&view3d::solid(surface, wrap)))),
+    }
 }
 
 /// What the 3D view's quick surface of the model was made from.
@@ -963,7 +1054,7 @@ struct CutCraftApp {
     /// tests have none and draw the meshes above).
     gpu_3d: Option<view3d::gpu::Gpu>,
     /// The 3D view's surface as the GPU draws it, with what it was built from.
-    surface_gpu: Option<(GeometryKey, std::sync::Arc<view3d::gpu::Geometry>)>,
+    surface_gpu: Option<SurfaceGpu>,
     /// The model's walls and bottom, made with the surface they hang from (no preview).
     solid_gpu: Option<std::sync::Arc<view3d::gpu::Geometry>>,
     /// The imported model as the GPU draws it.
@@ -972,6 +1063,13 @@ struct CutCraftApp {
     ghost_gpu: Option<ModelGpu>,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
+    /// Picks the 3D view's detail while it moves from how quickly frames come (Options ▸
+    /// Adjust detail to keep the view smooth).
+    pacer: crate::frame_rate::Pacer,
+    /// The detail the 3D view draws at this frame, and whether it is moving; the frame
+    /// (`egui::Context::cumulative_pass_nr`) that was judged.
+    detail_3d: (crate::options::Detail, bool),
+    paced_pass: u64,
     orbit: view3d::Orbit,
     framing: view3d::Framing,
     /// Where the 3D view last drew its view cube.
