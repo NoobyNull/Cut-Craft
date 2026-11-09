@@ -147,6 +147,10 @@ impl CutCraftApp {
             import_level: None,
             polyline: crate::polyline::Draft::default(),
             fine_3d: None,
+            rough_3d: None,
+            height_applied_at: None,
+            job_epoch: 0,
+            stale_known: 0,
             drawn_on: None,
             model_3d: None,
             gpu_3d: None,
@@ -1912,6 +1916,7 @@ impl CutCraftApp {
     /// Back to nothing: no job, no form, no preview.
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
+        self.job_epoch += 1;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;
         }
@@ -1922,7 +1927,8 @@ impl CutCraftApp {
             self.simulation_coarse,
             self.fine_3d,
             self.surface_gpu,
-        ) = (None, None, None, None, None);
+            self.rough_3d,
+        ) = (None, None, None, None, None, None);
         self.clear_recovery();
     }
 
@@ -2054,6 +2060,32 @@ impl CutCraftApp {
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
         self.warn(&made, &notes);
+    }
+
+    /// More toolpaths out of date than last frame, after an edit (not as a job opens, nor
+    /// while a drag goes on, as a height handle remakes the model): the status bar says how
+    /// many, and that they and any G-code saved from them want making again. Toolpaths are
+    /// never remade by themselves.
+    pub(super) fn note_stale(&mut self) {
+        if self.drag_3d.is_some() {
+            return;
+        }
+        let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
+        let more = stale.saturating_sub(self.stale_known);
+        self.stale_known = stale;
+        if more == 0 || self.history.undo_depth() == 0 {
+            return;
+        }
+        let (count, it, its) = if more == 1 {
+            ("1 toolpath is".to_owned(), "it", "its")
+        } else {
+            (format!("{more} toolpaths are"), "them", "their")
+        };
+        let message = self.status.message.trim_end_matches('.').to_owned();
+        self.status.set_message(&format!(
+            "{message}. {count} now out of date (⚠ in the Toolpaths list): recalculate \
+             {it}, and save {its} G-code again if you already have"
+        ));
     }
 
     /// A warning in the status bar about what was just made: the command's `notes`, and for

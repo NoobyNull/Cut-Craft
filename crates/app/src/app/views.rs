@@ -38,6 +38,8 @@ impl CutCraftApp {
     /// can drive it headlessly.
     pub(super) fn pass(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
+        // an edit last frame left toolpaths out of date: the status bar says so
+        self.note_stale();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
         // the Depth add-on's answer, when it has one
@@ -1131,6 +1133,7 @@ impl CutCraftApp {
             overlay,
             self.selected_toolpath,
             &self.display,
+            (self.job_epoch, self.history.revision()),
         );
         if self.snap.snap_to_grid {
             let look = &self.options.appearance;
@@ -1563,11 +1566,15 @@ impl CutCraftApp {
     pub(super) fn transform_overlay(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Overlay {
         if let Some(t) = self.handle_drag(ui, drag, reach) {
             let doc = &self.doc;
-            let moved = doc
+            let paths = doc
                 .selection
                 .iter()
-                .map(|id| doc.vectors[id].transformed(&t));
-            return Overlay::Preview(moved.collect());
+                .map(|id| doc.vectors[id].transformed(&t))
+                .collect();
+            return Overlay::Moving {
+                paths,
+                components: self.moving_components(doc.selected_components.iter(), t),
+            };
         }
         Overlay::Window {
             start: drag.start,
@@ -1636,12 +1643,31 @@ impl CutCraftApp {
             };
         };
         let by = cut_craft_core::glam::DAffine2::from_translation(drag.end - drag.start);
-        Overlay::Preview(
-            self.grabbed_outlines(grab)
+        let models: Vec<EntityId> = match grab {
+            Grab::Vector(_) => vec![],
+            Grab::Component(id) => vec![id],
+            Grab::Selection => self.doc.selected_components.iter().copied().collect(),
+        };
+        Overlay::Moving {
+            paths: self
+                .grabbed_outlines(grab)
                 .iter()
                 .map(|p| p.transformed(&by))
                 .collect(),
-        )
+            components: self.moving_components(models.iter(), by),
+        }
+    }
+
+    /// Each of `ids` still in the job with the transform `t` a drag carries it by (the same
+    /// one for each, as the transform let go applies it).
+    fn moving_components<'a>(
+        &self,
+        ids: impl Iterator<Item = &'a EntityId>,
+        t: DAffine2,
+    ) -> Vec<(EntityId, DAffine2)> {
+        ids.filter(|id| self.doc.components.contains_key(id))
+            .map(|&id| (id, t))
+            .collect()
     }
 
     /// A select-mode drag let go: what it took hold of moves (as one undo), as Aspire's
