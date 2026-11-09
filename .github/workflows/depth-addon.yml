@@ -2,10 +2,10 @@
 # Add-ons finds it as that repository's newest release (crates/updater/src/addon.rs):
 #   depth-linux-x86_64.zip, depth-windows-x86_64.zip   addon.toml and cutcraft-depth
 #   depth_anything_v2_vits.safetensors                 the weights, once for both
-#   <each>.minisig                                     signed with Cut Craft's release key
-# Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs the
-# secrets MINISIGN_SECRET_KEY and MINISIGN_PASSWORD (as releases do) and
-# ADDON_RELEASE_TOKEN: a token that may write releases on DEPTH_REPO.
+# Unsigned by Matthew's choice: Cut Craft installs it after its "not responsible" warning.
+# Started by "Run workflow" or a depth-v* tag; the version is addon.toml's. Needs one
+# secret, ADDON_RELEASE_TOKEN: a token that may write releases on DEPTH_REPO (the
+# workflow's own token can only write to this repository).
 name: Depth add-on
 
 on:
@@ -70,12 +70,6 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - name: Sign
-        env:
-          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
-          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
-          REQUIRE_SIGNING: 1
-        run: scripts/sign-release out
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.ADDON_RELEASE_TOKEN }}
