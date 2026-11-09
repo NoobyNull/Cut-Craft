@@ -2,7 +2,7 @@
 //! runs it on the chosen picture in the background and gives the picture its depth (for
 //! Relief from Photo). The add-on is a separate download (a program and about 100 MB of
 //! model weights) so the app and its updates stay small; Gadgets ▸ Add-ons installs it
-//! (crate::addons).
+//! (`crate::addons`).
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::EntityId;
