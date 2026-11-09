@@ -1,0 +1,85 @@
+#!/bin/bash
+# Moves Cut Craft's version one step for a release. The version changes only here, when a release
+# is cut, never with each merge:
+#   scripts/release-version          0.6.0 -> 0.6.1  (patch, the usual release)
+#   scripts/release-version minor    0.6.0 -> 0.7.0  (a milestone)
+# It writes the root Cargo.toml and Cargo.lock, then prints the pull requests merged since the
+# last release, sorted into New and Fixed by their title's kind (scripts/next-version), as a draft
+# for crates/app/whats-new.md, and the steps left. The version goes in through a
+# "chore: version X.Y.Z" pull request; when that merges, Release tag tags it and Builds publishes
+# it (BUILDING.md, "Cut a versioned release").
+# Tests: scripts/test-release-version.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+step=${1:-patch}
+case $step in
+  patch | minor) ;;
+  *)
+    echo "usage: $0 [patch|minor]   (patch: 0.6.0 -> 0.6.1, the usual release; minor: 0.6.0 -> 0.7.0)" >&2
+    exit 2
+    ;;
+esac
+
+current=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+if ! git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
+  cat >&2 <<EOF
+Cargo.toml says $current, but there is no tag v$current, so $current hasn't been released yet.
+A "chore: version $current" pull request is probably waiting: merge that one (Release tag then
+tags and publishes it) instead of moving the version again. Run "git fetch --tags" if the tag
+might exist on GitHub already.
+EOF
+  exit 1
+fi
+next=$("$here/next-version" bump "$current" "$step")
+
+sed -i "0,/^version = \".*\"/s//version = \"$next\"/" Cargo.toml
+if [[ -f Cargo.lock ]] && command -v cargo >/dev/null; then
+  cargo update --workspace --offline -q 2>/dev/null || cargo update --workspace -q
+fi
+echo "Cargo.toml: $current -> $next"
+
+# Each pull request on main's first-parent line: a squash merge's subject is its title, and a
+# merge commit's title is the first line of its body.
+new=() fixed=()
+while IFS= read -r sha; do
+  subject=$(git log -1 --format=%s "$sha")
+  if [[ $subject == "Merge pull request #"* ]]; then
+    subject=$(git log -1 --format=%b "$sha" | sed -n '/./{p;q}')
+  fi
+  kind=$("$here/next-version" kind "$subject" 2>/dev/null) || continue # a direct push
+  title=$(sed -E 's/^[A-Za-z]+(\([^)]*\))?!?: +//; s/ \(#[0-9]+\)$//' <<<"$subject")
+  case $kind in
+    minor) new+=("$title") ;;
+    patch) fixed+=("$title") ;;
+  esac
+done < <(git rev-list --first-parent --reverse "v$current..HEAD")
+
+echo
+if ((${#new[@]} + ${#fixed[@]} == 0)); then
+  echo "Nothing users run has changed since v$current (only docs:, chore:, ci: and the like)."
+  echo
+else
+  echo "Merged since v$current, a draft for crates/app/whats-new.md (keep about four short lines):"
+  echo
+  if ((${#new[@]})); then
+    echo New
+    printf -- '- %s\n' "${new[@]}"
+    echo
+  fi
+  if ((${#fixed[@]})); then
+    echo Fixed
+    printf -- '- %s\n' "${fixed[@]}"
+    echo
+  fi
+fi
+
+cat <<EOF
+Next:
+1. Write crates/app/whats-new.md.
+2. Commit Cargo.toml, Cargo.lock and crates/app/whats-new.md on a branch, and open a pull
+   request titled "chore: version $next".
+3. When CI is green, merge it. Release tag tags v$next and Builds publishes the release.
+EOF
