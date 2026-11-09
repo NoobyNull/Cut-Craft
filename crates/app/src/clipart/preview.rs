@@ -41,29 +41,47 @@ pub fn extension(path: &Path) -> String {
 }
 
 /// `model` seen from its best side.
+#[cfg(test)]
 pub fn render(model: &Path) -> Result<RgbaImage, String> {
+    render_at(model, SIZE)
+}
+
+/// `model` seen from its best side, `size` pixels square.
+pub fn render_at(model: &Path, size: u32) -> Result<RgbaImage, String> {
     let bytes = std::fs::read(model).map_err(|e| format!("Couldn't read {}: {e}", name(model)))?;
     let image = if extension(model) == "ccclip" {
         let k = fmt_export_as_3d_clipart::read_clip(&bytes)
             .map_err(|e| format!("{}: {e}", name(model)))?;
-        shade(&from_component(&k))
+        shade(&from_component(&k, size as usize))
     } else {
         let triangles =
             fmt_import_stl::triangles(&bytes).map_err(|e| format!("{}: {e}", name(model)))?;
-        shade_triangles(&triangles)
+        best_view(&triangles, size as usize).and_then(|h| shade(&h))
     };
     image.ok_or_else(|| format!("{} has nothing in it to show", name(model)))
 }
 
-/// The preview of `model`: `picture` scaled to fit if there is one, else the model rendered.
-/// Kept in `cache` (when there is one) and read from there while the file is unchanged.
+/// The preview of `model` for a tile, [`SIZE`] pixels square at most.
+#[cfg(test)]
 pub fn preview(
     model: &Path,
     picture: Option<&Path>,
     cache: Option<&Path>,
 ) -> Result<RgbaImage, String> {
+    preview_at(model, picture, cache, SIZE)
+}
+
+/// The preview of `model`, `size` pixels square at most: `picture` scaled to fit if there is
+/// one, else the model rendered. Kept in `cache` (when there is one) and read from there
+/// while the file is unchanged.
+pub fn preview_at(
+    model: &Path,
+    picture: Option<&Path>,
+    cache: Option<&Path>,
+    size: u32,
+) -> Result<RgbaImage, String> {
     let source = picture.unwrap_or(model);
-    let kept = cache.and_then(|dir| Some(dir.join(cache_name(source)?)));
+    let kept = cache.and_then(|dir| Some(dir.join(cache_name(source, size)?)));
     if let Some((at, image)) = kept
         .as_deref()
         .and_then(|p| Some((p, image::open(p).ok()?)))
@@ -78,9 +96,9 @@ pub fn preview(
     let image = match picture {
         Some(p) => image::open(p)
             .map_err(|e| format!("Couldn't read {}: {e}", name(p)))?
-            .thumbnail(SIZE, SIZE)
+            .thumbnail(size, size)
             .into_rgba8(),
-        None => render(model)?,
+        None => render_at(model, size)?,
     };
     if let Some(kept) = kept {
         // a preview that can't be kept is made again next time: nothing is lost
@@ -111,9 +129,16 @@ pub fn prune(cache: &Path, unused: std::time::Duration) {
     }
 }
 
-/// The cached preview's file name for `source`: from its [`stamp`].
-fn cache_name(source: &Path) -> Option<String> {
-    stamp(source).map(|hash| format!("{hash:016x}.png"))
+/// The cached preview's file name for `source` at `size`: from its [`stamp`] (and the size,
+/// when it isn't a tile's).
+fn cache_name(source: &Path, size: u32) -> Option<String> {
+    stamp(source).map(|hash| {
+        if size == SIZE {
+            format!("{hash:016x}.png")
+        } else {
+            format!("{hash:016x}-{size}.png")
+        }
+    })
 }
 
 /// What a preview of `source` is made from: its path, size and time changed, so a changed
@@ -141,25 +166,24 @@ pub fn stamp(source: &Path) -> Option<u64> {
     Some(hash)
 }
 
-/// Heights in pixels, row by row from the top; NaN where there is nothing.
-struct Heights(Vec<f64>);
-
-const PIXELS: usize = SIZE as usize;
+/// Heights in pixels, row by row from the top, a square this many pixels across; NaN
+/// where there is nothing.
+struct Heights(Vec<f64>, usize);
 
 /// How a model's `width` x `depth` box is fitted into the picture: the scale, and where its
 /// lower left corner goes (from the picture's lower left).
 #[expect(clippy::cast_precision_loss, reason = "the picture is small")]
-fn fit(width: f64, depth: f64) -> Option<(f64, f64, f64)> {
+fn fit(width: f64, depth: f64, pixels: usize) -> Option<(f64, f64, f64)> {
     let span = width.max(depth);
     if span.is_nan() || span <= 0.0 {
         return None;
     }
-    let room = PIXELS as f64 - 2.0 * MARGIN;
+    let room = pixels as f64 - 2.0 * MARGIN;
     let scale = room / span;
     Some((
         scale,
-        (PIXELS as f64 - width * scale) / 2.0,
-        (PIXELS as f64 - depth * scale) / 2.0,
+        (pixels as f64 - width * scale) / 2.0,
+        (pixels as f64 - depth * scale) / 2.0,
     ))
 }
 
@@ -175,8 +199,9 @@ const VIEWS: [[DVec3; 3]; 6] = [
 ];
 
 /// `triangles` seen from the side that shows them best.
+#[cfg(test)]
 fn shade_triangles(triangles: &[[DVec3; 3]]) -> Option<RgbaImage> {
-    shade(&best_view(triangles)?)
+    shade(&best_view(triangles, SIZE as usize)?)
 }
 
 /// The view of `triangles` that shows the most of them: the side with the largest outline
@@ -184,11 +209,11 @@ fn shade_triangles(triangles: &[[DVec3; 3]]) -> Option<RgbaImage> {
 /// the side opposite, the front (from above, or -Y) unless the other has far more relief
 /// (a relief's flat back is the wrong way round).
 #[expect(clippy::cast_precision_loss, reason = "pixel counts are small")]
-fn best_view(triangles: &[[DVec3; 3]]) -> Option<Heights> {
-    let outline = |(Heights(z), scale): &(Heights, f64)| {
+fn best_view(triangles: &[[DVec3; 3]], pixels: usize) -> Option<Heights> {
+    let outline = |(Heights(z, _), scale): &(Heights, f64)| {
         z.iter().filter(|h| !h.is_nan()).count() as f64 / (scale * scale)
     };
-    let relief = |Heights(z): &Heights| {
+    let relief = |Heights(z, _): &Heights| {
         let shown: Vec<f64> = z.iter().copied().filter(|h| !h.is_nan()).collect();
         let mean = shown.iter().sum::<f64>() / shown.len().max(1) as f64;
         shown.iter().map(|h| (h - mean).powi(2)).sum::<f64>() / shown.len().max(1) as f64
@@ -196,7 +221,7 @@ fn best_view(triangles: &[[DVec3; 3]]) -> Option<Heights> {
     // the first three views and their opposites (the last three) have the same outline
     let mut best: Option<(usize, (Heights, f64))> = None;
     for (i, view) in VIEWS[..3].iter().enumerate() {
-        let seen = from_triangles(triangles, *view)?;
+        let seen = from_triangles(triangles, *view, pixels)?;
         // a little larger to win, so near ties go to the view listed first
         if best
             .as_ref()
@@ -206,7 +231,7 @@ fn best_view(triangles: &[[DVec3; 3]]) -> Option<Heights> {
         }
     }
     let (i, (front, _)) = best?;
-    let (back, _) = from_triangles(triangles, VIEWS[i + 3])?;
+    let (back, _) = from_triangles(triangles, VIEWS[i + 3], pixels)?;
     // well ahead to win: a figure carved all round keeps its front
     Some(if relief(&back) > relief(&front) * 2.0 {
         back
@@ -227,14 +252,18 @@ fn best_view(triangles: &[[DVec3; 3]]) -> Option<Heights> {
     clippy::many_single_char_names,
     reason = "the triangle's corners and barycentric u, v"
 )]
-fn from_triangles(triangles: &[[DVec3; 3]], view: [DVec3; 3]) -> Option<(Heights, f64)> {
+fn from_triangles(
+    triangles: &[[DVec3; 3]],
+    view: [DVec3; 3],
+    pixels: usize,
+) -> Option<(Heights, f64)> {
     let [right, up, out] = view;
     let seen = |p: &DVec3| DVec3::new(p.dot(right), p.dot(up), p.dot(out));
     let points = || triangles.iter().flatten().map(seen);
     let lo = points().fold(DVec3::INFINITY, DVec3::min);
     let hi = points().fold(DVec3::NEG_INFINITY, DVec3::max);
-    let (scale, left, bottom) = fit(hi.x - lo.x, hi.y - lo.y)?;
-    let top = PIXELS as f64;
+    let (scale, left, bottom) = fit(hi.x - lo.x, hi.y - lo.y, pixels)?;
+    let top = pixels as f64;
     // in pixels, y down the picture, z from the model's lowest point
     let to_pixels = |p: DVec3| {
         DVec3::new(
@@ -243,8 +272,8 @@ fn from_triangles(triangles: &[[DVec3; 3]], view: [DVec3; 3]) -> Option<(Heights
             (p.z - lo.z) * scale,
         )
     };
-    let mut heights = vec![f64::NAN; PIXELS * PIXELS];
-    let index = |v: f64| (v.max(0.0) as usize).min(PIXELS - 1);
+    let mut heights = vec![f64::NAN; pixels * pixels];
+    let index = |v: f64| (v.max(0.0) as usize).min(pixels - 1);
     for t in triangles {
         let [a, b, c] = t.map(|p| to_pixels(seen(&p)));
         let (ab, ac) = (b - a, c - a);
@@ -262,14 +291,14 @@ fn from_triangles(triangles: &[[DVec3; 3]], view: [DVec3; 3]) -> Option<(Heights
                     continue;
                 }
                 let z = a.z + u * ab.z + v * ac.z;
-                let h = &mut heights[row * PIXELS + col];
+                let h = &mut heights[row * pixels + col];
                 if h.is_nan() || z > *h {
                     *h = z;
                 }
             }
         }
     }
-    Some((Heights(heights), scale))
+    Some((Heights(heights, pixels), scale))
 }
 
 /// A clipart component's heights, each pixel taking the cell under its centre.
@@ -279,11 +308,11 @@ fn from_triangles(triangles: &[[DVec3; 3]], view: [DVec3; 3]) -> Option<(Heights
     clippy::cast_precision_loss,
     reason = "cell and pixel indices are small and non-negative"
 )]
-fn from_component(k: &Component) -> Heights {
+fn from_component(k: &Component, pixels: usize) -> Heights {
     let (width, depth) = (k.columns as f64 * k.cell, k.rows as f64 * k.cell);
-    let mut heights = vec![f64::NAN; PIXELS * PIXELS];
-    let Some((scale, left, bottom)) = fit(width, depth) else {
-        return Heights(heights);
+    let mut heights = vec![f64::NAN; pixels * pixels];
+    let Some((scale, left, bottom)) = fit(width, depth, pixels) else {
+        return Heights(heights, pixels);
     };
     let lowest = k
         .heights
@@ -291,21 +320,21 @@ fn from_component(k: &Component) -> Heights {
         .copied()
         .filter(|h| !h.is_nan())
         .fold(f64::INFINITY, f64::min);
-    for row in 0..PIXELS {
-        for col in 0..PIXELS {
+    for row in 0..pixels {
+        for col in 0..pixels {
             let x = (col as f64 + 0.5 - left) / scale;
-            let y = (PIXELS as f64 - row as f64 - 0.5 - bottom) / scale;
+            let y = (pixels as f64 - row as f64 - 0.5 - bottom) / scale;
             if x < 0.0 || y < 0.0 || x >= width || y >= depth {
                 continue;
             }
             let at = ((y / k.cell) as usize).min(k.rows - 1) * k.columns
                 + ((x / k.cell) as usize).min(k.columns - 1);
             if let Some(h) = k.heights.get(at).filter(|h| !h.is_nan()) {
-                heights[row * PIXELS + col] = (h - lowest) * scale;
+                heights[row * pixels + col] = (h - lowest) * scale;
             }
         }
     }
-    Heights(heights)
+    Heights(heights, pixels)
 }
 
 /// `heights` lit from the top left; clear where there is nothing. `None` when empty.
@@ -315,7 +344,8 @@ fn from_component(k: &Component) -> Heights {
     reason = "colour channels are clamped to 0..=255"
 )]
 fn shade(heights: &Heights) -> Option<RgbaImage> {
-    let Heights(z) = heights;
+    let &Heights(ref z, pixels) = heights;
+    let side = u32::try_from(pixels).ok()?;
     let highest = z
         .iter()
         .copied()
@@ -325,23 +355,23 @@ fn shade(heights: &Heights) -> Option<RgbaImage> {
         return None;
     }
     // carvings are shallow: steepen a low model's slopes so its detail still shows
-    let deepen = (DEEPEST * f64::from(SIZE) / highest).clamp(1.0, 6.0);
+    let deepen = (DEEPEST * f64::from(side) / highest).clamp(1.0, 6.0);
     // towards the light: left, up the picture, and above
     let light = DVec3::new(-1.0, 1.0, 1.5).normalize();
     let at = |row: usize, col: usize, here: f64| {
-        let h = z[row * PIXELS + col];
+        let h = z[row * pixels + col];
         if h.is_nan() { here } else { h }
     };
-    Some(RgbaImage::from_fn(SIZE, SIZE, |x, y| {
+    Some(RgbaImage::from_fn(side, side, |x, y| {
         let (col, row) = (x as usize, y as usize);
-        let here = z[row * PIXELS + col];
+        let here = z[row * pixels + col];
         if here.is_nan() {
             return Rgba([0, 0, 0, 0]);
         }
         let left = at(row, col.saturating_sub(1), here);
-        let right = at(row, (col + 1).min(PIXELS - 1), here);
+        let right = at(row, (col + 1).min(pixels - 1), here);
         let up = at(row.saturating_sub(1), col, here);
-        let down = at((row + 1).min(PIXELS - 1), col, here);
+        let down = at((row + 1).min(pixels - 1), col, here);
         // slopes per pixel; the picture's y runs down, the model's up
         let normal = DVec3::new(
             -(right - left) * deepen / 2.0,
@@ -371,6 +401,12 @@ pub struct Previews {
     cache: Option<PathBuf>,
     /// Counts the frames drawn, so the least recently shown pictures are let go first.
     frame: u64,
+    /// Each preview's edge, in pixels.
+    size: u32,
+    /// Pictures kept on the graphics card at most.
+    keep: usize,
+    /// Threads making previews at most.
+    threads: usize,
 }
 
 /// A model, the picture beside it if it has one, and the [`stamp`] asked for.
@@ -414,7 +450,15 @@ impl Default for Previews {
 }
 
 impl Previews {
+    /// Tiles' previews, [`SIZE`] pixels across.
     pub fn new(cache: Option<PathBuf>) -> Self {
+        let threads = cut_craft_core::simulation::cores().saturating_sub(1).max(1);
+        Self::sized(cache, SIZE, KEEP, threads)
+    }
+
+    /// Previews `size` pixels across, at most `keep` of them on the graphics card, made by
+    /// at most `threads` threads.
+    pub fn sized(cache: Option<PathBuf>, size: u32, keep: usize, threads: usize) -> Self {
         let (send, done) = channel();
         Self {
             shown: HashMap::new(),
@@ -424,6 +468,9 @@ impl Previews {
             workers: 0,
             cache,
             frame: 0,
+            size,
+            keep,
+            threads,
         }
     }
 
@@ -455,13 +502,13 @@ impl Previews {
             .push((model.to_owned(), picture.map(Path::to_owned), stamp));
         drop(waiting);
         self.jobs.ready.notify_one();
-        let wanted = cut_craft_core::simulation::cores().saturating_sub(1).max(1);
-        if self.workers < wanted {
+        if self.workers < self.threads {
             self.workers += 1;
             let (jobs, send, cache) = (self.jobs.clone(), self.send.clone(), self.cache.clone());
+            let size = self.size;
             let spawned = std::thread::Builder::new()
                 .name("clipart previews".into())
-                .spawn(move || work(&jobs, &send, cache.as_deref()));
+                .spawn(move || work(&jobs, &send, cache.as_deref(), size));
             if spawned.is_err() {
                 self.workers -= 1;
             }
@@ -496,7 +543,7 @@ impl Previews {
             .shown
             .values()
             .filter(|(_, s)| matches!(s, Shown::Ready(..)));
-        if ready.count() > KEEP {
+        if ready.count() > self.keep {
             let mut seen: Vec<(u64, PathBuf)> = (self.shown.iter())
                 .filter_map(|(p, (_, s))| match s {
                     Shown::Ready(_, seen) => Some((*seen, p.clone())),
@@ -504,7 +551,7 @@ impl Previews {
                 })
                 .collect();
             seen.sort();
-            for (_, p) in &seen[..seen.len() - KEEP] {
+            for (_, p) in &seen[..seen.len() - self.keep] {
                 self.shown.remove(p);
             }
         }
@@ -523,6 +570,14 @@ impl Previews {
         self.shown.len()
     }
 
+    /// How many previews are made and on the graphics card.
+    #[cfg(test)]
+    pub fn ready(&self) -> usize {
+        (self.shown.values())
+            .filter(|(_, s)| matches!(s, Shown::Ready(..)))
+            .count()
+    }
+
     /// Drops the previews still waiting (another folder is being looked in).
     pub fn forget_waiting(&mut self) {
         let mut waiting = self
@@ -536,6 +591,59 @@ impl Previews {
     }
 }
 
+/// A larger preview's edge, in pixels: the pop-up over a tile the pointer rests on.
+pub const LARGE: u32 = 512;
+
+/// Larger previews, for the pop-up over the tile the pointer rests on: one made at a time,
+/// the newest hovered first, the few last seen kept.
+pub struct Enlarged {
+    previews: Previews,
+    /// The model asked for last.
+    last: Option<PathBuf>,
+}
+
+impl Enlarged {
+    /// Kept on the graphics card at most: a few, to look back at.
+    const KEEP: usize = 8;
+
+    pub fn new(cache: Option<PathBuf>) -> Self {
+        Self {
+            previews: Previews::sized(cache, LARGE, Self::KEEP, 1),
+            last: None,
+        }
+    }
+
+    /// As [`Previews::get`]; those asked for before and not yet started are dropped, so
+    /// passing the pointer over many tiles doesn't leave a queue of them.
+    pub fn get(&mut self, model: &Path, picture: Option<&Path>, stamp: u64) -> Preview<'_> {
+        if self.last.as_deref() != Some(model) {
+            self.previews.forget_waiting();
+            self.last = Some(model.to_owned());
+        }
+        self.previews.get(model, picture, stamp)
+    }
+
+    pub fn update(&mut self, ctx: &egui::Context) {
+        self.previews.update(ctx);
+    }
+
+    #[cfg(test)]
+    pub fn asked(&self) -> usize {
+        self.previews.asked()
+    }
+
+    #[cfg(test)]
+    pub fn ready(&self) -> usize {
+        self.previews.ready()
+    }
+}
+
+impl Default for Enlarged {
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
 impl Drop for Previews {
     fn drop(&mut self) {
         if let Ok(mut waiting) = self.jobs.waiting.lock() {
@@ -546,7 +654,7 @@ impl Drop for Previews {
 }
 
 /// A worker: makes the newest asked-for preview until told to stop.
-fn work(jobs: &Jobs, send: &Sender<Made>, cache: Option<&Path>) {
+fn work(jobs: &Jobs, send: &Sender<Made>, cache: Option<&Path>, size: u32) {
     loop {
         let Ok(mut waiting) = jobs.waiting.lock() else {
             return;
@@ -564,7 +672,7 @@ fn work(jobs: &Jobs, send: &Sender<Made>, cache: Option<&Path>) {
             };
         };
         drop(waiting);
-        let made = preview(&model, picture.as_deref(), cache);
+        let made = preview_at(&model, picture.as_deref(), cache, size);
         if send.send((model, stamp, made)).is_err() {
             return;
         }
@@ -773,6 +881,60 @@ mod tests {
 
     /// A model changed while the tab is open (its stamp changes) is previewed again, and a
     /// preview made from the old file is not shown for the new one.
+    /// A larger preview is drawn at its own size, not the tile's stretched, and kept apart
+    /// from the tile's in the cache.
+    #[test]
+    fn larger_previews_are_drawn_larger() {
+        let dir = temp("larger");
+        let cache = dir.join("cache");
+        let stl = dir.join("pyramid.stl");
+        std::fs::write(&stl, fmt_export_as_stl::binary_stl(&pyramid())).unwrap();
+        let small = preview(&stl, None, Some(&cache)).unwrap();
+        let large = preview_at(&stl, None, Some(&cache), LARGE).unwrap();
+        assert_eq!(small.dimensions(), (SIZE, SIZE));
+        assert_eq!(large.dimensions(), (LARGE, LARGE));
+        assert_eq!(alpha(&large, LARGE / 2, LARGE / 2), 255);
+        assert_eq!(
+            std::fs::read_dir(&cache).unwrap().count(),
+            2,
+            "one of each kept"
+        );
+        // and read back from the cache at the size asked for
+        let again = preview_at(&stl, None, Some(&cache), LARGE).unwrap();
+        assert_eq!(again.dimensions(), (LARGE, LARGE));
+        let png = dir.join("wide.png");
+        image::RgbImage::new(2000, 1000).save(&png).unwrap();
+        let picture = preview_at(&stl, Some(&png), None, LARGE).unwrap();
+        assert_eq!(picture.dimensions(), (LARGE, LARGE / 2));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Passing the pointer over many tiles doesn't queue a larger preview for each: only
+    /// the one hovered last is wanted.
+    #[test]
+    fn only_the_last_hovered_is_enlarged() {
+        let dir = temp("enlarged");
+        let mut enlarged = Enlarged::new(None);
+        // no worker has started on them yet: all three are still waiting
+        let mut waiting = enlarged.previews.jobs.waiting.lock().unwrap();
+        waiting.stop = true;
+        drop(waiting);
+        for name in ["a.stl", "b.stl", "c.stl"] {
+            let _ = enlarged.get(&dir.join(name), None, 1);
+        }
+        assert_eq!(enlarged.asked(), 1);
+        assert!(matches!(
+            enlarged.get(&dir.join("c.stl"), None, 1),
+            Preview::Waiting
+        ));
+        assert_eq!(
+            enlarged.asked(),
+            1,
+            "asking again for the same one keeps it"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn a_changed_model_is_previewed_again() {
         let dir = temp("changed");

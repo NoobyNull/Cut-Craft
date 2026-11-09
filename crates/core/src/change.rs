@@ -160,8 +160,8 @@ pub enum Edit {
     },
     /// Replaces the keep-out zones.
     SetKeepOut {
-        before: Vec<Path>,
-        after: Vec<Path>,
+        before: Vec<crate::keep_out::KeepOutZone>,
+        after: Vec<crate::keep_out::KeepOutZone>,
     },
     /// Replaces the document variables.
     SetVariables {
@@ -586,6 +586,15 @@ impl Change {
             }
         }
         self
+    }
+
+    /// The toolpaths this change adds, and those it replaces others with, as they will be.
+    pub fn toolpaths_making(&self) -> impl Iterator<Item = &Toolpath> {
+        self.edits.iter().filter_map(|e| match e {
+            Edit::AddToolpath { toolpath, .. } => Some(toolpath.as_ref()),
+            Edit::ReplaceToolpath { after, .. } => Some(after.as_ref()),
+            _ => None,
+        })
     }
 
     /// The toolpaths this change adds or replaces.
@@ -1173,11 +1182,17 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    /// `toolpath` with its rapids routed round the keep-out zones (laser toolpaths, whose
-    /// power runs move for move, as they are).
+    /// `toolpath` with its rapids routed round the keep-out zones, and when clipping is on,
+    /// what would cut into one left out (laser toolpaths, whose power runs move for move, as
+    /// they are; drill banks, whose hits are their moves, not clipped).
     fn kept_out(&self, mut toolpath: Toolpath) -> Toolpath {
         let zones = self.doc.keep_out_zones();
         if !zones.is_empty() && toolpath.power.is_empty() {
+            if self.doc.clip_keep_out && toolpath.drill_bank.is_none() {
+                let radius = toolpath.tool.diameter / 2.0;
+                let safe = self.doc.job.clearance;
+                toolpath.moves = crate::keep_out::clip(&zones, &toolpath.moves, radius, safe);
+            }
             let (moves, origin, _) = crate::keep_out::route_indexed(&zones, &toolpath.moves);
             // a drill bank's plunges keep their moves, and the ways round that lead to them
             if let Some(bank) = &mut toolpath.drill_bank {
@@ -1515,7 +1530,7 @@ impl ChangeBuilder<'_> {
         }
     }
 
-    pub fn set_keep_out(&mut self, after: Vec<Path>) {
+    pub fn set_keep_out(&mut self, after: Vec<crate::keep_out::KeepOutZone>) {
         if self.doc.keep_out != after {
             let before = self.doc.keep_out.clone();
             self.edits.push(Edit::SetKeepOut { before, after });

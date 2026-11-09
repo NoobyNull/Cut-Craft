@@ -38,6 +38,8 @@ impl CutCraftApp {
     /// can drive it headlessly.
     pub(super) fn pass(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
+        // an edit last frame left toolpaths out of date: the status bar says so
+        self.note_stale();
         // a job opened or made, or another machine chosen: the machine's zones on it
         self.sync_machine_keep_out();
         // the Depth add-on's answer, when it has one
@@ -1131,6 +1133,7 @@ impl CutCraftApp {
             overlay,
             self.selected_toolpath,
             &self.display,
+            (self.job_epoch, self.history.revision()),
         );
         if self.snap.snap_to_grid {
             let look = &self.options.appearance;
@@ -1224,7 +1227,12 @@ impl CutCraftApp {
         self.paint_kept_snaps(ui, &canvas, reach);
         if let Some(hit) = snap.filter(|_| canvas.hover().is_some() || gesture.is_some()) {
             Self::paint_snap(ui, &canvas, hit);
-            cut_craft_bug_report::hint::hint(ui.ctx(), &Self::snap_hint(hit));
+            // after what the tool does next, so that stays first
+            let hint = match self.step_hint(modes) {
+                Some(step) => format!("{step}; {}", Self::snap_hint(hit)),
+                None => Self::snap_hint(hit),
+            };
+            cut_craft_bug_report::hint::hint(ui.ctx(), &hint);
         }
         self.paint_form_marks(ui, &canvas);
         canvas.rulers(ui, job.units);
@@ -1561,11 +1569,15 @@ impl CutCraftApp {
     pub(super) fn transform_overlay(&self, ui: &egui::Ui, drag: Drag, reach: f64) -> Overlay {
         if let Some(t) = self.handle_drag(ui, drag, reach) {
             let doc = &self.doc;
-            let moved = doc
+            let paths = doc
                 .selection
                 .iter()
-                .map(|id| doc.vectors[id].transformed(&t));
-            return Overlay::Preview(moved.collect());
+                .map(|id| doc.vectors[id].transformed(&t))
+                .collect();
+            return Overlay::Moving {
+                paths,
+                components: self.moving_components(doc.selected_components.iter(), t),
+            };
         }
         Overlay::Window {
             start: drag.start,
@@ -1634,12 +1646,31 @@ impl CutCraftApp {
             };
         };
         let by = cut_craft_core::glam::DAffine2::from_translation(drag.end - drag.start);
-        Overlay::Preview(
-            self.grabbed_outlines(grab)
+        let models: Vec<EntityId> = match grab {
+            Grab::Vector(_) => vec![],
+            Grab::Component(id) => vec![id],
+            Grab::Selection => self.doc.selected_components.iter().copied().collect(),
+        };
+        Overlay::Moving {
+            paths: self
+                .grabbed_outlines(grab)
                 .iter()
                 .map(|p| p.transformed(&by))
                 .collect(),
-        )
+            components: self.moving_components(models.iter(), by),
+        }
+    }
+
+    /// Each of `ids` still in the job with the transform `t` a drag carries it by (the same
+    /// one for each, as the transform let go applies it).
+    fn moving_components<'a>(
+        &self,
+        ids: impl Iterator<Item = &'a EntityId>,
+        t: DAffine2,
+    ) -> Vec<(EntityId, DAffine2)> {
+        ids.filter(|id| self.doc.components.contains_key(id))
+            .map(|&id| (id, t))
+            .collect()
     }
 
     /// A select-mode drag let go: what it took hold of moves (as one undo), as Aspire's
@@ -2341,13 +2372,42 @@ impl CutCraftApp {
         let node_target = pressed
             .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
             .and_then(|at| self.node_target(at, reach));
+        // over a keep-out zone: its name and where it is edited, first in the menu
+        let zone = pressed.and_then(|at| self.doc.keep_out_at(at));
         let selection_menu = || match (guide, node_target) {
             (Some(i), _) => gui::guide_menu(i, self.doc.guides[i].locked),
             (None, Some(target)) => gui::node_menu(&self.doc, &target),
-            (None, None) => self.menus.selection_menu(&self.doc),
+            (None, None) => {
+                let mut items = zone.map_or_else(Vec::new, |(z, machine)| {
+                    gui::keep_out_menu(&z.label(), machine, self.display.keep_out_labels)
+                });
+                items.extend(self.menus.selection_menu(&self.doc));
+                items
+            }
         };
         if let Some(action) = self.popup(canvas.response(), selection_menu) {
             self.invoke(ui.ctx(), &action);
+        }
+        self.keep_out_hint(canvas);
+    }
+
+    /// Resting the pointer on a keep-out zone in the 2D view: what it is and how to edit it.
+    fn keep_out_hint(&self, canvas: &Canvas) {
+        let response = canvas.response();
+        if response.dragged() || self.drawing_tool().is_some() {
+            return;
+        }
+        if let Some((zone, machine)) = canvas.cursor().and_then(|at| self.doc.keep_out_at(at)) {
+            let edit = if machine {
+                "a clamp of the machine's, edited in Machine Configuration"
+            } else {
+                "edited in Toolpaths ▸ Keep-Out Zones…"
+            };
+            response.clone().on_hover_text(format!(
+                "{}: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. \
+                 It is {edit}; right-click for a shortcut",
+                zone.label()
+            ));
         }
     }
 
@@ -2561,6 +2621,7 @@ impl CutCraftApp {
     }
 
     /// Drawing and node drags snap to the snap points (Shift holds snapping off).
+    #[cfg(test)]
     pub(super) fn snapped(
         &self,
         ui: &egui::Ui,
@@ -2799,10 +2860,11 @@ impl CutCraftApp {
         }
     }
 
-    /// The status bar's words for a snap: what it snapped to, and how to draw without it.
+    /// The status bar's words for a snap: what it snapped to, and how to place a point
+    /// without it.
     pub(super) fn snap_hint(hit: Snap) -> String {
         format!(
-            "Snapped to {}: {} (hold Shift to place it freely; F4 for Snapping Options)",
+            "snapped to {}: {} (Shift places it freely)",
             hit.kind.label(),
             hit.kind.explain()
         )
@@ -2909,6 +2971,10 @@ impl CutCraftApp {
             options.advanced.apply();
             self.options = options;
             self.save_options();
+            // clipping turned on or off: the toolpaths made again with or without it
+            if self.sync_machine_keep_out() {
+                self.keep_out_changed();
+            }
         }
     }
 

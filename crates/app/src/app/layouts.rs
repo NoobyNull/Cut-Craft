@@ -59,6 +59,9 @@ impl CutCraftApp {
         if let Some(variant) = crate::flyout::variant(id) {
             return variant.label.to_owned();
         }
+        if let Some(label) = gui::built_in_label(id) {
+            return label.to_owned();
+        }
         self.registry
             .get(id)
             .map_or_else(|| gui::title_case(id), |c| c.meta().label.to_owned())

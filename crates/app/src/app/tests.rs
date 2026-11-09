@@ -362,7 +362,11 @@ fn a_polyline_click_snaps_to_an_end_marked_and_named_under_a_crosshair() {
     let out = headless(h.ctx.run_ui(input, |ui| h.app.pass(ui)));
     assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Crosshair);
     let hint = cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default();
-    assert!(hint.starts_with("Snapped to End"), "{hint}");
+    assert!(
+        hint.starts_with("Draw Polyline: click the first point"),
+        "{hint}"
+    );
+    assert!(hint.contains("snapped to End"), "{hint}");
     h.click(corner, Modifiers::NONE);
     assert_eq!(h.app.polyline.points, vec![Point::new(30.0, 20.0)]);
     // Shift places it freely
@@ -918,6 +922,7 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
 
     let mut h = Harness::new();
     h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
+    h.app.addons.ask_to_run = |_| true;
     let mut c = Change::builder(&h.app.doc);
     c.add_bitmap(Bitmap {
         name: "photo".into(),
@@ -1573,22 +1578,75 @@ fn every_command_has_a_line_saying_what_it_does() {
 }
 
 #[test]
-fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
+fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
+    use cut_craft_core::keep_out::KeepOutZone;
+    use cut_craft_core::toolpath::MoveKind;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
+    // a clamp over the rectangle's right-hand side
     let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
-    h.app.doc.keep_out = vec![zone];
+    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
     h.app.invoke(&h.ctx, "profile_toolpath");
     let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
+    let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
     assert!(
-        h.app.status.message.contains("keep-out"),
-        "{}",
-        h.app.status.message
+        refused.starts_with(super::actions::KEEP_OUT_REFUSED),
+        "{refused}"
     );
+    assert!(refused.contains("\"Clamp 1\""), "names the zone: {refused}");
+    assert!(
+        refused.contains("Clip toolpaths at keep-out zones"),
+        "{refused}"
+    );
+    assert_eq!(h.app.doc.toolpaths.len(), 0, "nothing made");
+    // clipping turned on in Options: made, the part under the clamp left uncut
+    h.app.options.toolpaths.clip_at_keep_out_zones = true;
+    assert!(h.app.sync_machine_keep_out());
+    h.app.apply("profile_toolpath", &params).unwrap();
+    let made = h.app.doc.toolpaths.values().next().expect("a toolpath");
+    assert_eq!(
+        h.app.zones_entered(made),
+        [] as [String; 0],
+        "{:?}",
+        made.moves
+    );
+    let cuts = made.moves.iter().filter(|m| m.kind == MoveKind::Cut);
+    assert!(
+        cuts.clone().any(|m| m.to.x > 55.0),
+        "still cut past the clamp"
+    );
+    assert!(cuts.clone().any(|m| m.to.x < 20.0));
+    // no zones: made as it was, with no warning
+    h.app.options.toolpaths.clip_at_keep_out_zones = false;
+    h.app.sync_machine_keep_out();
     h.app.doc.keep_out.clear();
     h.app.apply("profile_toolpath", &params).unwrap();
     assert!(!h.app.status.message.contains("keep-out"));
+}
+
+#[test]
+fn keep_out_zone_labels_turn_on_and_off_and_are_remembered() {
+    let mut h = Harness::new();
+    assert!(h.app.display.keep_out_labels, "shown to start with");
+    assert_eq!(
+        h.app.display.checked("show_keep_out_zone_labels"),
+        Some(true)
+    );
+    h.app.invoke(&h.ctx, "show_keep_out_zone_labels");
+    assert!(!h.app.display.keep_out_labels);
+    assert!(
+        !h.app.options.toolpaths.keep_out_labels,
+        "kept with the options"
+    );
+    // over a zone the 2D view's menu names it and says where it is edited
+    let job = crate::gui::keep_out_menu("Keep-out: Clamp 1", false, false);
+    assert_eq!(job[0].name, "Keep-out: Clamp 1");
+    assert!(!job[0].is_enabled);
+    assert_eq!(job[1].action, "keep_out_zones");
+    assert_eq!(job[2].name, "Show Keep-Out Zone Labels");
+    let machine = crate::gui::keep_out_menu("Keep-out: Machine clamp 1", true, true);
+    assert_eq!(machine[1].action, "machine_configuration");
+    assert_eq!(machine[2].name, "Hide Keep-Out Zone Labels");
 }
 
 #[test]
@@ -1634,6 +1692,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         y: 0.0,
         width: 20.0,
         height: 60.0,
+        name: String::new(),
     }];
     assert!(h.app.sync_machine_keep_out());
     h.app.keep_out_changed();
@@ -2058,6 +2117,59 @@ fn an_imported_model_shows_at_once_and_follows_its_form() {
     let k = h.app.doc.components.values().next().unwrap();
     let width = k.cell * f64::from(u32::try_from(k.columns).unwrap());
     assert!((width - 40.0).abs() < 2.0 * k.cell, "{} columns", k.columns);
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_model_imported_past_the_material_edge_shows_that_part_as_a_red_ghost() {
+    let mut h = Harness::new();
+    let file = pyramid_stl("past-edge");
+    h.app.import_file(&file);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(
+        form.beyond.as_ref().is_some_and(|b| b.is_empty()),
+        "centred, nothing is past the edge"
+    );
+    // half of the 20 mm pyramid past the material's right edge
+    let area = h.app.doc.job.area();
+    let form = h.app.form.as_mut().unwrap();
+    form.params["placing"]["center"] = Value::Bool(false);
+    form.params["placing"]["position"] =
+        serde_json::json!({ "x": area.max.x - 10.0, "y": area.min.y + 10.0 });
+    form.dirty = true;
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    let beyond = form.beyond.as_ref().unwrap();
+    assert!(!beyond.is_empty(), "the part past the edge is kept to show");
+    assert!(
+        beyond
+            .iter()
+            .flat_map(|(t, _)| t)
+            .all(|v| v.x >= area.max.x - 1e-6),
+        "only what is past it"
+    );
+    let model = form.model.as_ref().unwrap();
+    assert!(
+        model
+            .iter()
+            .flat_map(|(t, _)| t)
+            .all(|v| v.x <= area.max.x + 1e-6),
+        "the model drawn as usual stops at the edge"
+    );
+    // past the preview limit the component shows over the material, the ghost still past it
+    h.app.options.import.preview_faces = 4;
+    h.app.form.as_mut().unwrap().dirty = true;
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert!(!form.model_whole);
+    assert!(
+        form.beyond
+            .as_ref()
+            .is_some_and(|b| !b.is_empty() && b.len() <= 4),
+        "the ghost keeps to the limit too: {:?}",
+        form.beyond.as_ref().map(|b| b.len())
+    );
     let _ = std::fs::remove_file(file);
 }
 
@@ -3569,6 +3681,50 @@ fn the_design_tab_opens_the_sub_tab_a_tool_run_elsewhere_lives_on() {
 }
 
 #[test]
+fn a_design_sub_tab_can_have_a_section_of_its_own() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.app.pages.open(Page::Design);
+    h.frame(vec![]);
+    assert!(h.text_at("Create Vectors").is_some(), "Create is open");
+    assert!(h.text_at("Shape Creation").is_none(), "Model is a tab");
+    h.app
+        .invoke(&h.ctx, &format!("{}Model:section", gui::SUBTAB_PLACE));
+    h.app
+        .invoke(&h.ctx, &format!("{}Import:section", gui::SUBTAB_PLACE));
+    assert_eq!(h.app.options.design_sections, ["Model", "Import"]);
+    h.frame(vec![]);
+    for group in ["Create Vectors", "Shape Creation", "Import"] {
+        assert!(h.text_at(group).is_some(), "{group} shows");
+    }
+    // a tool on a section leaves the row's tab as it was
+    h.app.invoke(&h.ctx, "sculpt");
+    assert_eq!(h.app.design_subtab, 0);
+    // kept between runs
+    let json = serde_json::to_string(&h.app.options).unwrap();
+    let (back, _) = crate::options::Options::from_bytes(json.as_bytes());
+    assert_eq!(back.design_sections, ["Model", "Import"]);
+    // and all back in one row
+    h.app.invoke(&h.ctx, &format!("{}*:row", gui::SUBTAB_PLACE));
+    assert_eq!(h.app.options.design_sections, Vec::<String>::new());
+    h.frame(vec![]);
+    assert!(h.text_at("Shape Creation").is_none());
+}
+
+#[test]
+fn the_clipart_library_button_opens_the_library_tab() {
+    let mut h = Harness::new();
+    assert!(h.app.available("clipart_library"));
+    // picked from a flown-out Design page, the page stays out on the Library tab
+    h.app.pages.set_pinned(Page::Design, false);
+    h.app.pages.open(Page::Design);
+    h.app.pick(&h.ctx, Page::Design, "clipart_library");
+    assert_eq!(DESIGN_TABS[h.app.design_tab], "Library");
+    assert_ne!(h.app.pages.shown(Page::Design), Shown::Hidden);
+    assert_eq!(h.app.tool_label("import_cut_list"), "Import Cut List");
+}
+
+#[test]
 fn a_tool_that_works_on_a_selection_says_what_to_select_first() {
     let h = Harness::new();
     let tip = h
@@ -3690,6 +3846,8 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
         h.texts_at("Next:")
     );
     // hovering Draw Circle's button: its description, its next step, and the status bar's line
+    h.app.options.general.fold_tool_groups = true;
+    h.frame(vec![]);
     flyout_arrow_naming(&mut h, "Draw Circle");
     let hovered = guide::hovered(&h.ctx).expect("a hovered tool");
     assert_eq!(hovered.label, "Draw Circle");
@@ -5386,7 +5544,7 @@ fn the_design_tab_shows_its_favourites_or_all_its_tools() {
     // right-clicked tools added, then one moved earlier
     let tool = |id: &str, what: &str| format!("{}design:{what}:{id}", gui::FAVOURITE);
     assert_eq!(
-        gui::tool_menu(Page::Design, "draw_circle", false, false)[0].action,
+        gui::tool_menu(Page::Design, "draw_circle", false, false, false)[0].action,
         tool("draw_circle", "add")
     );
     h.app.invoke(&h.ctx, &tool("draw_circle", "add"));
@@ -7505,13 +7663,69 @@ fn flyout_arrow_naming(h: &mut Harness, tool: &str) -> Pos2 {
 }
 
 #[test]
-fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
+fn every_tool_shows_in_a_labelled_box_unless_groups_are_folded() {
     let mut h = Harness::new();
     h.app.pages.set_pinned(Page::Design, true);
     h.frame(vec![]);
     h.frame(vec![]);
+    // spread out by default: no button hides others, each group of ways captioned
+    let spread = flyout_arrows(&h).len();
+    for caption in ["Lines and Curves", "Circles and Ellipses", "Text"] {
+        assert!(h.text_at(caption).is_some(), "{caption} box");
+    }
+    // the box's buttons run their own tool: Draw Circle from Edge is the second
+    let circles = h.text_at("Circles and Ellipses").expect("caption");
+    let mut found = None;
+    for step in 0..12_u8 {
+        let at = circles + vec2(-50.0 + 10.0 * f32::from(step), 30.0);
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.frame(vec![]);
+        if guide::hovered(&h.ctx).is_some_and(|t| t.label == "Draw Circle from Edge") {
+            found = Some(at);
+            break;
+        }
+    }
+    let at = found.expect("Draw Circle from Edge has a button of its own");
+    h.click(at, Modifiers::NONE);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| (f.id, f.way)),
+        Some(("draw_circle", crate::flyout::DragWay::AcrossEdge))
+    );
+    // a tool's right-click menu folds the groups back into flyouts, kept in the options
+    let fold = gui::tool_menu(Page::Design, "draw_circle", false, false, false)
+        .into_iter()
+        .find(|m| m.name == "Fold Tool Groups into One Button")
+        .expect("the menu offers folding");
+    h.app.form = None;
+    h.app.invoke(&h.ctx, &fold.action);
+    assert!(h.app.options.general.fold_tool_groups);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // Create's five flyouts (lines, rectangles, circles, polygons, text) and Zoom
     assert!(
-        flyout_arrows(&h).len() >= 10,
+        flyout_arrows(&h).len() >= spread + 6,
+        "folded into flyouts: {} arrows, {spread} spread out",
+        flyout_arrows(&h).len()
+    );
+    assert!(h.text_at("Circles and Ellipses").is_none());
+    let unfold = gui::tool_menu(Page::Design, "draw_circle", false, false, true)
+        .into_iter()
+        .find(|m| m.name == "Fold Tool Groups into One Button")
+        .expect("still offered");
+    assert!(unfold.is_checked);
+    h.app.invoke(&h.ctx, &unfold.action);
+    assert!(!h.app.options.general.fold_tool_groups);
+}
+
+#[test]
+fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
+    let mut h = Harness::new();
+    h.app.options.general.fold_tool_groups = true;
+    h.app.pages.set_pinned(Page::Design, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        flyout_arrows(&h).len() >= 9,
         "the Drawing tab's flyouts show their arrows"
     );
     let arrow = flyout_arrow_naming(&mut h, "Draw Circle from Edge");
@@ -8257,4 +8471,315 @@ fn gadgets_ends_with_add_ons_which_opens_its_window() {
     assert!(h.app.available("addons"));
     h.app.invoke(&h.ctx, "addons");
     assert!(h.app.addons.open);
+}
+
+/// The screen boxes of the pictures the last frame drew in full (models; one being dragged
+/// is also drawn faint where it was).
+fn textured_meshes(h: &Harness) -> Vec<Rect> {
+    h.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Mesh(m)
+                if m.texture_id != egui::TextureId::default()
+                    && m.vertices.iter().all(|v| v.color == egui::Color32::WHITE) =>
+            {
+                let mut r = Rect::NOTHING;
+                for v in &m.vertices {
+                    r.extend_with(v.pos);
+                }
+                Some(r)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A 60 × 40 mm model at (100, 100) on a new job, picked and drawn.
+fn picked_model(h: &mut Harness) -> cut_craft_core::geometry::Rect {
+    use cut_craft_core::component::{Combine, Component};
+    let o = h.app.doc.job.area().min;
+    let rect = cut_craft_core::geometry::Rect::new(
+        o + Point::new(100.0, 100.0),
+        o + Point::new(160.0, 140.0),
+    );
+    let mut c = Change::builder(&h.app.doc);
+    let id = c.add_component(Component::from_fn("model", Combine::Add, rect, 1.0, |p| {
+        Some(1.0 + (p.x - rect.min.x) / 10.0)
+    }));
+    h.app.record(Ok(c.finish()), "added");
+    h.app.doc.selected_components = [id].into();
+    h.frame(vec![]);
+    rect
+}
+
+#[test]
+fn a_model_follows_a_2d_handle_drag_as_it_goes_and_changes_only_when_let_go() {
+    let mut h = Harness::new();
+    let rect = picked_model(&mut h);
+    let o = h.app.doc.job.area().min;
+    let at = |h: &Harness, p: Point| h.at(p.x - o.x, p.y - o.y);
+    let (corner, far) = (at(&h, rect.max), at(&h, rect.max + Point::new(30.0, 20.0)));
+    let before = h.app.doc.components.values().next().unwrap().extent();
+    h.frame(vec![Event::PointerMoved(corner)]);
+    h.press(corner, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(corner.lerp(far, 0.5))]);
+    h.frame(vec![Event::PointerMoved(far)]);
+    // mid-drag: the model's picture is drawn stretched to the pointer, the model unchanged
+    let drawn = textured_meshes(&h);
+    assert_eq!(drawn.len(), 1, "the model drawn as it will be: {drawn:?}");
+    assert!(
+        (drawn[0].right() - far.x).abs() < 2.0 && (drawn[0].top() - far.y).abs() < 2.0,
+        "{drawn:?} reaches the pointer at {far:?}"
+    );
+    assert_eq!(
+        h.app.doc.components.values().next().unwrap().extent(),
+        before,
+        "nothing changes until let go"
+    );
+    h.press(far, false, Modifiers::NONE);
+    h.frame(vec![]);
+    let drawn = textured_meshes(&h);
+    assert_eq!(drawn.len(), 1, "drawn once, where it now is: {drawn:?}");
+    let after = h.app.doc.components.values().next().unwrap().extent();
+    assert!(
+        (after.max - (rect.max + Point::new(30.0, 20.0))).length() < 1.5,
+        "{after:?}"
+    );
+}
+
+#[test]
+fn a_model_dragged_in_the_2d_view_is_drawn_where_it_is_going() {
+    let mut h = Harness::new();
+    let rect = picked_model(&mut h);
+    let o = h.app.doc.job.area().min;
+    let at = |h: &Harness, p: Point| h.at(p.x - o.x, p.y - o.y);
+    let (from, to) = (
+        at(&h, rect.center()),
+        at(&h, rect.center() + Point::new(40.0, 0.0)),
+    );
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+    h.frame(vec![Event::PointerMoved(to)]);
+    let drawn = textured_meshes(&h);
+    assert_eq!(drawn.len(), 1, "{drawn:?}");
+    assert!(
+        (drawn[0].center().x - to.x).abs() < 2.0,
+        "{drawn:?} at {to:?}"
+    );
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+}
+
+#[test]
+fn editing_a_model_again_and_again_keeps_one_picture_of_it() {
+    let mut h = Harness::new();
+    picked_model(&mut h);
+    let textures = |h: &Harness| h.ctx.tex_manager().read().num_allocated();
+    let before = textures(&h);
+    for _ in 0..4 {
+        let change = Change::transform_selected(&h.app.doc, |_| {
+            cut_craft_core::glam::DAffine2::from_scale(cut_craft_core::glam::DVec2::splat(1.1))
+        });
+        h.app.record(change, "scaled");
+        h.frame(vec![]);
+    }
+    assert_eq!(textures(&h), before, "the old pictures are let go");
+}
+
+#[test]
+fn the_3d_views_quick_surface_is_kept_until_the_model_changes() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.view = View::ThreeD;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let kept = h.app.rough_3d.as_ref().map(|(key, _)| *key);
+    assert!(kept.is_some(), "made once");
+    h.frame(vec![]);
+    assert_eq!(h.app.rough_3d.as_ref().map(|(key, _)| *key), kept, "kept");
+    h.app.doc.selected_components = [EntityId(1)].into();
+    let change = Change::transform_selected(&h.app.doc, |_| {
+        cut_craft_core::glam::DAffine2::from_translation(cut_craft_core::glam::DVec2::X)
+    });
+    h.app.record(change, "moved");
+    h.frame(vec![]);
+    assert_ne!(
+        h.app.rough_3d.as_ref().map(|(key, _)| *key),
+        kept,
+        "made again"
+    );
+}
+
+#[test]
+fn the_detail_while_moving_is_two_steps_below_the_detail_when_still_unless_picked() {
+    use crate::options::{Detail, MovingDetail};
+    let mut v = crate::options::Options::default().view_3d;
+    assert_eq!(v.still_detail, Detail::VeryHigh);
+    assert_eq!(v.moving_detail, MovingDetail::TwoStepsLower);
+    assert_eq!(
+        v.moving_cells(),
+        Detail::Medium.cells(),
+        "Very High drops to Medium"
+    );
+    assert_eq!(v.still_cells(), Detail::VeryHigh.cells());
+    v.still_detail = Detail::Medium;
+    assert_eq!(v.moving_cells(), Detail::Low.cells(), "never below Low");
+    v.moving_detail = MovingDetail::High;
+    assert_eq!(
+        v.moving_cells(),
+        Detail::Medium.cells(),
+        "never finer while moving than when still"
+    );
+    v.still_detail = Detail::VeryHigh;
+    assert_eq!(v.moving_cells(), Detail::High.cells());
+    assert!(Detail::Low.cells() < Detail::Medium.cells());
+    assert!(Detail::High.cells() < Detail::VeryHigh.cells());
+}
+
+#[test]
+fn a_height_handle_drag_applies_its_height_at_most_ten_times_a_second() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    h.app.doc.selected_components = [EntityId(1)].into();
+    h.app.orbit = view3d::Orbit::TOP;
+    h.app.view = View::ThreeD;
+    h.app.invoke(&h.ctx, "transform");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let from = h
+        .app
+        .handles_3d
+        .iter()
+        .find(|(k, _)| *k == Handle3d::Height)
+        .map(|(_, at)| *at)
+        .expect("the height handle");
+    let quarter = h.app.fit_3d.unwrap().height() / VIEW_ZOOM_QUARTERS;
+    h.frame(vec![Event::PointerMoved(from)]);
+    h.press(from, true, Modifiers::NONE);
+    // ten moves a fiftieth of a second apart: a fifth of a second in all
+    let mut revisions = std::collections::BTreeSet::new();
+    for i in 1..=10u8 {
+        h.time -= 0.08;
+        let to = from - vec2(0.0, quarter * f32::from(i) / 10.0);
+        h.frame(vec![Event::PointerMoved(to)]);
+        revisions.insert(h.app.history.revision());
+    }
+    assert!(
+        revisions.len() <= 3,
+        "applied {} times in a fifth of a second",
+        revisions.len()
+    );
+    let to = from - vec2(0.0, quarter);
+    h.press(to, false, Modifiers::NONE);
+    h.frame(vec![]);
+    let height = h.app.doc.components[&EntityId(1)].shaping.shape_height;
+    assert!(
+        (height - 200.0).abs() < 5.0,
+        "the last height is applied: {height}"
+    );
+}
+
+#[test]
+fn moving_what_a_toolpath_was_made_from_says_it_is_out_of_date() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 30.0);
+    let vector = *h.app.doc.vectors.keys().next().unwrap();
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(cut_craft_core::toolpath::Toolpath {
+        name: "Profile 1".into(),
+        strategy: "test".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![vector],
+        moves: vec![],
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+    });
+    h.app.record(Ok(c.finish()), "made");
+    h.frame(vec![]);
+    assert!(!h.app.status.message.contains("out of date"));
+    h.app.doc.selection = [vector].into();
+    h.frame(vec![]);
+    let (from, to) = (h.at(30.0, 25.0), h.at(40.0, 25.0));
+    h.drag(from, to);
+    h.frame(vec![]);
+    let message = &h.app.status.message;
+    assert!(
+        message.contains("1 toolpath is now out of date") && message.contains("G-code"),
+        "{message}"
+    );
+}
+
+#[test]
+fn the_surface_drawn_on_is_made_again_when_the_detail_when_still_changes() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::domed();
+    let first = h.app.drawing_surface().expect("a model to draw on");
+    let again = h.app.drawing_surface().unwrap();
+    assert!(std::sync::Arc::ptr_eq(&first, &again), "kept");
+    h.app.options.view_3d.still_detail = crate::options::Detail::Low;
+    let changed = h.app.drawing_surface().unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&first, &changed), "made again");
+}
+
+/// The status bar's text that contains `part`: its middle and how many rows it was laid in.
+fn status_text(h: &Harness, part: &str) -> Option<(Pos2, usize)> {
+    h.shapes.iter().find_map(|clipped| match &clipped.shape {
+        egui::Shape::Text(t) if t.galley.text().contains(part) && t.pos.y > 700.0 => {
+            Some((t.pos + t.galley.size() / 2.0, t.galley.rows.len()))
+        }
+        _ => None,
+    })
+}
+
+#[test]
+fn the_status_bar_stays_one_line_however_long_its_text() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+    let short = h.text_at(version).expect("the version");
+    // a Library tile's hint: its name, then on a new line what can be done with it
+    let long = format!(
+        "0331. Flowers.STL\nDouble-click to add it to the project, or drag it onto a view. {}",
+        "Click to pick it (Ctrl or Shift for more), right-click for more. ".repeat(6)
+    );
+    h.app.status.set_message(&long);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (_, rows) = status_text(&h, "Flowers.STL").expect("the status text");
+    assert_eq!(rows, 1, "one row");
+    let after = h.text_at(version).expect("the version");
+    assert!(
+        (after.y - short.y).abs() < 0.5,
+        "the bar keeps its height: {short:?} then {after:?}"
+    );
+}
+
+#[test]
+fn the_status_bar_keeps_its_hint_while_the_pointer_is_on_it() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    let hint = "0331. Flowers.STL\nDouble-click to add it to the project";
+    cut_craft_bug_report::hint::hint(&h.ctx, hint);
+    h.frame(vec![]);
+    let (at, _) = status_text(&h, "Flowers.STL").expect("the hint is shown");
+    // moving onto the bar to read it: nothing sets a hint now, yet it stays
+    h.frame(vec![Event::PointerMoved(at)]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        status_text(&h, "Flowers.STL").is_some(),
+        "the hint stays while the pointer is on the bar"
+    );
+    // and goes once the pointer leaves
+    h.frame(vec![Event::PointerMoved(egui::pos2(640.0, 300.0))]);
+    h.frame(vec![]);
+    assert!(status_text(&h, "Flowers.STL").is_none(), "gone after");
 }
