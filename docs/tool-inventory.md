@@ -547,9 +547,23 @@ say "not implemented yet".
 - Edit ▸ Snap Options (F4): drawing and node drags snap to span ends and middles, arc and
   object centres, the job's centre and corners, and a grid, within a snapping radius in
   pixels; Shift holds snapping off. Guides and smart snapping (see the top bar) snap too.
-  Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
+  While drawing, a line's far end (and a polyline's next point) also snaps Tangent to a
+  circle, arc or curve and Perpendicular onto a line or curve, from where it starts
+  (Tangent and Perpendicular check box, on by default). Polyline clicks snap; the view marks
+  each snap with its own shape and name (square End, triangle Middle, circle Tangent, right
+  angle Perpendicular, plus Center) and the status bar says what it means. Drawing tools
+  show a crosshair pointer. Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
   with Shift, or with Ctrl and Shift move by the grid, half or a tenth). Intersections and
   cursor text are not done; the options last for the session.
+- Snaps that stay (Cut Craft's own, not in Aspire): a point placed on an End, Middle,
+  Center, Shape center, material corner, Tangent or Perpendicular snap is kept there, saved
+  with the job. When what it snapped to moves or changes, it follows; a Draw Line/Polyline
+  point (or a node dragged onto a snap) stretches its line, any other drawn shape moves
+  whole. Moving the snapped shape on its own puts the point back, with a status-bar note.
+  Kept points show a small blue snap mark; click one and press Delete to let it go.
+  Deleting either shape, or adding or deleting its nodes, lets go of its snaps. Not done:
+  snaps of Edit Polyline's extensions, an "on the line anywhere" (Nearest) snap,
+  Intersection snaps, and a menu to show or hide the marks.
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
   toolpaths summary and each toolpath's tool, feeds and estimated time (the sections of
   Aspire's job setup sheet), with the home position and, double-sided, the side and flip.

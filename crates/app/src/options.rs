@@ -45,6 +45,17 @@ pub struct View3d {
     #[serde(default)]
     #[schemars(title = "Simplify the model while the view moves")]
     pub simplify_while_moving: bool,
+    /// How finely the model is drawn once the view is still: higher shows more detail and
+    /// takes longer to draw after each change (not one of Aspire's)
+    #[serde(default)]
+    #[schemars(title = "Detail when still")]
+    pub still_detail: Detail,
+    /// How finely the model is drawn while it or the view moves (turning the view, dragging
+    /// a handle, playing a preview): lower keeps it smooth on a slower computer. Never finer
+    /// than the detail when still (not one of Aspire's)
+    #[serde(default)]
+    #[schemars(title = "Detail while moving")]
+    pub moving_detail: MovingDetail,
     /// How dragging turns the view: about the job's vertical with its up kept up, or any
     /// way without stops (not one of Aspire's)
     #[serde(default)]
@@ -98,6 +109,82 @@ impl View3d {
     pub fn settle(&self) -> f64 {
         self.settle_seconds.clamp(0.05, 2.0)
     }
+
+    /// Mesh cells along the job's longer side once the view is still, at most.
+    pub fn still_cells(&self) -> usize {
+        self.still_detail.cells()
+    }
+
+    /// Mesh cells along the job's longer side while the model or the view moves.
+    pub fn moving_cells(&self) -> usize {
+        let still = self.still_detail;
+        let level = match self.moving_detail {
+            MovingDetail::OneStepLower => still.lower(1),
+            MovingDetail::TwoStepsLower => still.lower(2),
+            MovingDetail::Low => Detail::Low,
+            MovingDetail::Medium => Detail::Medium,
+            MovingDetail::High => Detail::High,
+            MovingDetail::VeryHigh => Detail::VeryHigh,
+        };
+        level.min(still).cells()
+    }
+}
+
+/// How finely the 3D view draws the model.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Detail {
+    /// Quickest: about 250 points across the job
+    Low,
+    /// About 500 points across the job
+    Medium,
+    /// About 800 points across the job
+    High,
+    /// Finest: about 1200 points across the job, or the model's own detail when that is less
+    #[default]
+    #[schemars(title = "Very High")]
+    VeryHigh,
+}
+
+impl Detail {
+    const ALL: [Self; 4] = [Self::Low, Self::Medium, Self::High, Self::VeryHigh];
+
+    /// Mesh cells along the job's longer side.
+    // ponytail: four fixed steps; the top one is the old fixed 1200, the bottom the old 250
+    pub fn cells(self) -> usize {
+        match self {
+            Self::Low => 250,
+            Self::Medium => 500,
+            Self::High => 800,
+            Self::VeryHigh => 1200,
+        }
+    }
+
+    /// `steps` levels coarser, Low at the coarsest.
+    fn lower(self, steps: usize) -> Self {
+        let at = Self::ALL.iter().position(|&d| d == self).unwrap_or(0);
+        Self::ALL[at.saturating_sub(steps)]
+    }
+}
+
+/// How finely the 3D view draws the model while it or the view moves.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MovingDetail {
+    /// One level below the detail when still
+    #[schemars(title = "One step lower")]
+    OneStepLower,
+    /// Two levels below the detail when still (Very High moves at Medium)
+    #[default]
+    #[schemars(title = "Two steps lower")]
+    TwoStepsLower,
+    Low,
+    Medium,
+    High,
+    #[schemars(title = "Very High")]
+    VeryHigh,
 }
 
 /// How dragging (and a SpaceMouse) turns the 3D view.
@@ -496,10 +583,30 @@ pub struct Import {
     #[serde(default = "preview_faces")]
     #[schemars(title = "Model preview faces", range(min = 1000))]
     pub preview_faces: u32,
+    /// How much of a model placed past the material's edges shows while it is imported:
+    /// that part is drawn in see-through red, this many percent solid, so it is not lost
+    /// from sight but does not hide the material either
+    #[serde(default = "out_of_bounds_percent")]
+    #[schemars(title = "Out-of-bounds opacity (%)", range(min = 1, max = 100))]
+    pub out_of_bounds_percent: u8,
 }
 
 fn preview_faces() -> u32 {
     250_000
+}
+
+fn out_of_bounds_percent() -> u8 {
+    5
+}
+
+impl Import {
+    /// The red a model's parts past the material's edges are drawn in: see-through, as
+    /// solid as Out-of-bounds opacity says (kept to 1 to 100 percent).
+    pub fn out_of_bounds_colour(&self) -> egui::Color32 {
+        let percent = u16::from(self.out_of_bounds_percent.clamp(1, 100));
+        let alpha = u8::try_from((percent * 255 + 50) / 100).unwrap_or(u8::MAX);
+        egui::Color32::from_rgba_unmultiplied(255, 0, 0, alpha)
+    }
 }
 
 impl Default for Import {
@@ -507,6 +614,7 @@ impl Default for Import {
         Self {
             model_types: ModelTypes::default(),
             preview_faces: preview_faces(),
+            out_of_bounds_percent: out_of_bounds_percent(),
         }
     }
 }
@@ -865,6 +973,8 @@ impl Default for Options {
                 image_file_path: String::new(),
                 anti_aliasing: AntiAliasing::default(),
                 simplify_while_moving: false,
+                still_detail: Detail::default(),
+                moving_detail: MovingDetail::default(),
                 rotation: Rotation::default(),
                 click_reach: click_reach(),
                 perspective_angle: perspective_angle(),
@@ -1005,6 +1115,21 @@ mod tests {
         assert_eq!(Theme::for_system(OperatingSystem::Mac), Theme::System);
         assert_eq!(Theme::for_system(OperatingSystem::Windows), Theme::Light);
         assert_eq!(Theme::for_system(OperatingSystem::Nix), Theme::Light);
+    }
+
+    #[test]
+    fn out_of_bounds_parts_are_five_percent_red_unless_the_options_say_otherwise() {
+        let mut import = Import::default();
+        assert_eq!(import.out_of_bounds_percent, 5);
+        let c = import.out_of_bounds_colour();
+        assert_eq!(c.to_srgba_unmultiplied(), [255, 0, 0, 13], "5% of 255");
+        import.out_of_bounds_percent = 0;
+        assert_eq!(import.out_of_bounds_colour().a(), 3, "never wholly hidden");
+        import.out_of_bounds_percent = 200;
+        assert_eq!(import.out_of_bounds_colour().a(), 255);
+        // options saved before the setting existed
+        let old: Import = serde_json::from_str(r#"{"preview_faces": 1000}"#).unwrap();
+        assert_eq!(old.out_of_bounds_percent, 5);
     }
 
     #[test]

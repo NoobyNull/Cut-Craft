@@ -52,6 +52,8 @@ const RIBBON_TABS: [&str; 3] = ["Design", "Model", "Toolpaths"];
 #[derive(Clone, Debug, PartialEq)]
 struct FineKey {
     revision: u64,
+    /// The still detail's mesh cells.
+    cells: usize,
     job: cut_craft_core::document::Job,
     orbit: view3d::Orbit,
     framing: view3d::Framing,
@@ -67,13 +69,25 @@ fn preview_mark(id: EntityId) -> u32 {
 }
 
 /// What the 3D view's surface on the GPU was built from: the model as at this revision,
-/// wrapped and sided so (light is the shader's, so not these).
+/// wrapped and sided so (light is the shader's, so not these), at this many cells (the
+/// moving detail while a handle drags the model, else the still detail).
 #[derive(Clone, Debug, PartialEq)]
 struct GeometryKey {
     revision: u64,
     job: cut_craft_core::document::Job,
     wrap: Option<view3d::Wrap>,
     sides: bool,
+    importing: bool,
+    cells: usize,
+}
+
+/// What the 3D view's quick surface of the model was made from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RoughKey {
+    revision: u64,
+    job: cut_craft_core::document::Job,
+    cells: usize,
+    /// Whether the imported model is shown whole, in place of its component.
     importing: bool,
 }
 
@@ -373,14 +387,12 @@ const THIRD_PARTY: [(&str, &str); 21] = [
     ),
 ];
 
-/// 3D view mesh cells along the longer side of the job while the view moves.
-// ponytail: fixed until the 3D view has a detail setting
+/// The fewest 3D view mesh cells along the longer side of the job: Options' Low detail.
+/// The detail while moving and when still are Options' (3D View); at Very High, 1200
+/// cells, the CPU mesh takes about 45 ms (measured in release) and the GPU's 40 MB.
 const MESH_CELLS: usize = 250;
-/// The most mesh cells along the job's longer side: the model's own cells up to this. On the
-/// GPU, built once per change and drawn at every frame, moving too; the CPU mesh (tests)
-/// only once the view is still (about 45 ms at 1200, measured in release).
-// ponytail: 1200² vertices are 40 MB on the card; a detail setting could lift it
-const FINE_MESH_CELLS: usize = 1200;
+/// Seconds between remakes of the model while a height handle drags it.
+const HEIGHT_DRAG_EVERY: f64 = 0.1;
 /// How wide the Options, Snapping Options and Help windows open, as a share of the main
 /// window's width.
 const DIALOG_WIDTH_SHARE: f32 = 0.4;
@@ -706,6 +718,11 @@ struct OpenForm {
     /// Whether `model` is the whole model (drawn in place of its component) or, past
     /// Options ▸ Model preview faces, only the faces out of reach (drawn over it).
     model_whole: bool,
+    /// The parts of `model` past the material's edges, cut off it along them: the 3D view
+    /// shows them as a faint red ghost (Options ▸ Out-of-bounds opacity) so a model placed
+    /// partly off the material is seen whole, not clipped.
+    /// Its faces are all unmarked: a cutter's reach is not judged past the material.
+    beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
     /// While a value is dragged, the undo depth after its last step and the shape and
@@ -904,19 +921,38 @@ struct CutCraftApp {
     display: crate::display::Display,
     /// The material as cut by the previewed toolpaths, and its picture once drawn.
     simulation: Option<Material>,
-    /// `simulation` at the 3D view's mesh resolution.
-    simulation_coarse: Option<Material>,
+    /// `simulation` at the 3D view's moving detail, and that detail (mesh cells).
+    simulation_coarse: Option<(usize, Material)>,
+    /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
+    /// made once a change, not every frame.
+    rough_3d: Option<(RoughKey, Material)>,
+    /// How many toolpaths were out of date last frame.
+    stale_known: usize,
+    /// Counts the jobs opened or made: with the history's revision, which job and which
+    /// change of it the 2D view draws (a new job's history starts its revisions again).
+    job_epoch: u64,
+    /// When a height handle's drag last remade the model (the app's clock, seconds).
+    height_applied_at: Option<f64>,
     /// The level clipart imported through Orientate 3D Model goes on (Import to Level),
     /// until another command starts.
     import_level: Option<u64>,
     /// Draw Line / Polyline's polyline being drawn in the 2D view.
     polyline: crate::polyline::Draft,
+    /// Points the drawing being made was placed on snaps at, and what they snapped to: kept
+    /// there once it is made.
+    placed: Vec<(
+        cut_craft_core::geometry::Point,
+        cut_craft_core::constraint::Anchor,
+    )>,
+    /// The snap mark picked in the 2D view (an index into the job's constraints): Delete
+    /// lets that point go.
+    picked_constraint: Option<usize>,
     /// The 3D view's fine mesh once it is still, with what it was made for.
     fine_3d: Option<(FineKey, egui::Mesh)>,
     /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
-    /// with the history revision and job it was made for.
+    /// with the history revision, job and detail when still (mesh cells) it was made for.
     drawn_on: Option<(
-        (u64, cut_craft_core::document::Job),
+        (u64, cut_craft_core::document::Job, usize),
         std::sync::Arc<Material>,
     )>,
     /// The imported model's triangles as last drawn, kept while nothing about the view or
@@ -932,6 +968,8 @@ struct CutCraftApp {
     solid_gpu: Option<std::sync::Arc<view3d::gpu::Geometry>>,
     /// The imported model as the GPU draws it.
     model_gpu: Option<ModelGpu>,
+    /// The same for the imported model's parts past the material's edges.
+    ghost_gpu: Option<ModelGpu>,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
     orbit: view3d::Orbit,
