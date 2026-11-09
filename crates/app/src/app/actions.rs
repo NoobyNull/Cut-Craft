@@ -3983,7 +3983,10 @@ impl CutCraftApp {
                 .on_disabled_hover_text("Import a photo first")
                 .clicked();
         });
-        if let (true, Some(installed), Some(id)) = (start, installed, chosen) {
+        let name = "The Depth add-on";
+        if let (true, Some(installed), Some(id)) = (start, installed, chosen)
+            && self.addons.may_run(crate::depth::ADDON_ID, name)
+        {
             match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())
             {
                 Ok(running) => self.depth_estimate = Some(running),
@@ -4497,11 +4500,13 @@ fn update_undercuts(ui: &mut egui::Ui, open: &OpenForm) -> bool {
 /// What the user is told before an unsigned gadget first runs.
 pub(super) fn unsigned_warning(label: &str) -> String {
     format!(
-        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder, \
-         not from a signed Cut Craft build, so nobody has checked what it does.\n\n\
-         Cut Craft and its author are not responsible for what this gadget does. It can only \
-         change the job that is open, and Undo takes back everything it did in one step. \
-         Check its result before you cut.\n\nRun it?"
+        "\u{201c}{label}\u{201d} is not part of Cut Craft. It came from your My Gadgets folder \
+         or an unsigned add-on, not from a signed Cut Craft build, so nobody has checked what \
+         it does.\n\n\
+         Cut Craft and its author are not responsible for what this gadget does or can do, \
+         including anything harmful or malicious. It can only change the job that is open, \
+         and Undo takes back everything it did in one step. Check its result before you \
+         cut.\n\nRun it?"
     )
 }
 
