@@ -405,6 +405,40 @@ pub struct Gpu {
     body: Option<Piece>,
     /// A model's parts past the material's edges, drawn see-through after the rest.
     ghost: Option<Piece>,
+    /// Pieces drawn lately and put aside, so going back to one (the 3D view's detail
+    /// following the frame rate) uploads nothing; one whose geometry nothing else holds
+    /// leaves the card.
+    spare: Vec<Piece>,
+}
+
+/// The most pieces put aside: a surface and body at each of the four details.
+const SPARE: usize = 8;
+
+/// What a spare piece draws.
+trait Draws {
+    fn geometry(&self) -> &Arc<Geometry>;
+}
+
+impl Draws for Piece {
+    fn geometry(&self) -> &Arc<Geometry> {
+        &self.geometry
+    }
+}
+
+/// The one in `spare` drawing `geometry`, taken out of it.
+fn take_spare<T: Draws>(spare: &mut Vec<T>, geometry: &Arc<Geometry>) -> Option<T> {
+    let at = spare
+        .iter()
+        .position(|p| Arc::ptr_eq(p.geometry(), geometry))?;
+    Some(spare.remove(at))
+}
+
+/// Lets go of the spares whose geometry is held by nothing else, then of the oldest past
+/// [`SPARE`].
+fn tidy_spare<T: Draws>(spare: &mut Vec<T>) {
+    spare.retain(|p| Arc::strong_count(p.geometry()) > 1);
+    let over = spare.len().saturating_sub(SPARE);
+    spare.drain(..over);
 }
 
 /// One draw of the frame: how it is drawn, what the shader reads, and how many it draws.
@@ -509,6 +543,7 @@ impl Gpu {
             model: None,
             body: None,
             ghost: None,
+            spare: Vec::new(),
         }
     }
 
@@ -524,6 +559,7 @@ impl Gpu {
         ghost: Option<Draw>,
     ) -> Shape {
         let mut calls = vec![];
+        let spare = &mut self.spare;
         for (slot, draw, pipeline) in [
             (&mut self.surface, surface, &self.pipeline),
             (&mut self.model, model, &self.pipeline),
@@ -531,17 +567,19 @@ impl Gpu {
             (&mut self.ghost, ghost, &self.see_through),
         ] {
             let Some(draw) = draw.filter(|d| d.geometry.count() > 0) else {
-                *slot = None;
+                spare.extend(slot.take());
                 continue;
             };
-            let piece = match slot {
-                Some(p) if Arc::ptr_eq(&p.geometry, &draw.geometry) => p,
-                _ => slot.insert(Piece::new(
-                    &self.state.device,
-                    &self.layout,
-                    Arc::clone(&draw.geometry),
-                )),
-            };
+            if slot
+                .as_ref()
+                .is_none_or(|p| !Arc::ptr_eq(&p.geometry, &draw.geometry))
+            {
+                let piece = take_spare(spare, &draw.geometry).unwrap_or_else(|| {
+                    Piece::new(&self.state.device, &self.layout, Arc::clone(&draw.geometry))
+                });
+                spare.extend(slot.replace(piece));
+            }
+            let piece = slot.as_mut().expect("put above");
             self.state
                 .queue
                 .write_buffer(&piece.uniform, 0, &draw.uniform);
@@ -552,6 +590,7 @@ impl Gpu {
                 count: piece.geometry.count(),
             });
         }
+        tidy_spare(spare);
         let paint = Paint { calls };
         Shape::Callback(egui_wgpu::Callback::new_paint_callback(rect, paint))
     }
@@ -582,6 +621,33 @@ impl CallbackTrait for Paint {
 mod tests {
     use super::super::{Framing, LIGHT, Orbit, Wrap};
     use super::*;
+
+    impl Draws for Arc<Geometry> {
+        fn geometry(&self) -> &Arc<Geometry> {
+            self
+        }
+    }
+
+    #[test]
+    fn spare_pieces_are_found_again_and_let_go_once_nothing_holds_them() {
+        let (fine, coarse) = (Arc::new(Geometry::default()), Arc::new(Geometry::default()));
+        let mut spare = vec![Arc::clone(&fine), Arc::clone(&coarse)];
+        tidy_spare(&mut spare);
+        assert_eq!(spare.len(), 2, "both still held");
+        let found = take_spare(&mut spare, &coarse).expect("kept");
+        assert!(Arc::ptr_eq(&found, &coarse));
+        assert!(take_spare(&mut spare, &coarse).is_none(), "taken out");
+        drop(fine);
+        tidy_spare(&mut spare);
+        assert!(spare.is_empty(), "nothing else held it");
+        let held: Vec<_> = (0..SPARE + 3)
+            .map(|_| Arc::new(Geometry::default()))
+            .collect();
+        let mut spare: Vec<_> = held.iter().map(Arc::clone).collect();
+        tidy_spare(&mut spare);
+        assert_eq!(spare.len(), SPARE);
+        assert!(Arc::ptr_eq(&spare[0], &held[3]), "the oldest let go first");
+    }
     use cut_craft_core::document::Job;
     use cut_craft_core::glam::DVec4;
     use eframe::egui::pos2;
