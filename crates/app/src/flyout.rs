@@ -1,10 +1,12 @@
-//! Flyouts: tools that do one job different ways share one button in the icon toolboxes. The
-//! button shows the one picked last; press and hold it, click the little arrow in its corner, or
-//! press Down while it has the keyboard focus, and the rest open beside it, each with its name.
+//! Tool groups: tools that do one job different ways show together in a box captioned with
+//! what they are for, every one its own button. Folded (Options ▸ General), each group shares
+//! one flyout button instead: it shows the one picked last; press and hold it, click the little
+//! arrow in its corner, or press Down while it has the keyboard focus, and the rest open beside
+//! it, each with its name.
 //!
-//! Aspire lists every one of these as an icon of its own; Cut Craft groups them so a beginner
-//! faces fewer, clearer buttons (`re/SPEC.md`, Toolbox flyouts). Find Tool, the Rail layout's
-//! lists and Favourites still name every tool on its own.
+//! Aspire lists every one of these as a loose icon; Cut Craft names each group so a beginner
+//! sees what the choices are (`re/SPEC.md`, Toolbox tool groups). Find Tool, the Rail layout's
+//! lists and Favourites name every tool on its own either way.
 
 use cut_craft_core::Drag;
 use eframe::egui;
@@ -17,61 +19,119 @@ pub const HOLD_SECONDS: f64 = 0.4;
 /// The share of a button's side its corner arrow takes, measured from the bottom-right corner.
 pub const ARROW_SHARE: f32 = 0.35;
 
-/// Each flyout's tools, the one shown until another is picked first. A tool is in one flyout
-/// at most; a flyout only holds tools that do one job different ways.
-pub const FLYOUTS: &[&[&str]] = &[
+/// Tools that do one job different ways: one button when tool groups are folded, else a
+/// small labelled box with every one of them showing.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Flyout {
+    /// What the tools are for, in a beginner's words: the box's caption.
+    pub name: &'static str,
+    /// The tools, the one shown until another is picked first.
+    pub tools: &'static [&'static str],
+}
+
+const fn flyout(name: &'static str, tools: &'static [&'static str]) -> Flyout {
+    Flyout { name, tools }
+}
+
+/// Each flyout. A tool is in one flyout at most; a flyout only holds tools that do one job
+/// different ways.
+pub const FLYOUTS: &[Flyout] = &[
     // Drawing tab (the imports have a sub-tab of their own, each named on its own button)
-    &["zoom_to_job", "zoom_box", "zoom_selected"],
-    &["draw_polyline", "draw_curve", "draw_arc", "draw_freehand"],
-    &["draw_rectangle", "draw_rectangle_from_center"],
-    &["draw_circle", "draw_circle_from_edge", "draw_ellipse"],
-    &["draw_polygon", "draw_star"],
-    &[
-        "draw_text",
-        "edit_text",
-        "text_on_a_curve",
-        "auto_layout_text",
-        "convert_text_to_curves",
-    ],
-    &[
-        "join_vectors",
-        "join_straight_line",
-        "join_smooth_curve",
-        "join_move_end_points",
-        "close_extend_vector",
-    ],
-    &["weld_vectors", "subtract_vectors", "overlap_intersect"],
-    &["interactive_vector_trim", "trim_objects"],
+    flyout("Zoom", &["zoom_to_job", "zoom_box", "zoom_selected"]),
+    flyout(
+        "Lines and Curves",
+        &["draw_polyline", "draw_curve", "draw_arc", "draw_freehand"],
+    ),
+    flyout(
+        "Rectangles",
+        &["draw_rectangle", "draw_rectangle_from_center"],
+    ),
+    flyout(
+        "Circles and Ellipses",
+        &["draw_circle", "draw_circle_from_edge", "draw_ellipse"],
+    ),
+    flyout("Polygons and Stars", &["draw_polygon", "draw_star"]),
+    flyout(
+        "Text",
+        &[
+            "draw_text",
+            "edit_text",
+            "text_on_a_curve",
+            "auto_layout_text",
+            "convert_text_to_curves",
+        ],
+    ),
+    flyout(
+        "Join and Close",
+        &[
+            "join_vectors",
+            "join_straight_line",
+            "join_smooth_curve",
+            "join_move_end_points",
+            "close_extend_vector",
+        ],
+    ),
+    flyout(
+        "Combine Shapes",
+        &["weld_vectors", "subtract_vectors", "overlap_intersect"],
+    ),
+    flyout("Trim", &["interactive_vector_trim", "trim_objects"]),
     // naming parts, then marking them with their names (cut lists and part labels)
-    &["name_part", "engrave_part_names"],
-    &["edit_picture", "crop_bitmap"],
-    &[
-        "center_in_material",
-        "center_horizontally_in_material",
-        "center_vertically_in_material",
-    ],
-    &["center", "center_horizontally", "center_vertically"],
-    &["align_left", "align_right", "align_top", "align_bottom"],
-    &[
-        "left_to_right",
-        "right_to_left",
-        "top_to_bottom",
-        "bottom_to_top",
-    ],
-    &["nest_parts", "plate_production"],
-    &["array_copy", "circular_copy", "copy_along_vectors"],
+    flyout("Part Names", &["name_part", "engrave_part_names"]),
+    flyout("Pictures", &["edit_picture", "crop_bitmap"]),
+    flyout(
+        "Center on the Material",
+        &[
+            "center_in_material",
+            "center_horizontally_in_material",
+            "center_vertically_in_material",
+        ],
+    ),
+    flyout(
+        "Center on Each Other",
+        &["center", "center_horizontally", "center_vertically"],
+    ),
+    flyout(
+        "Line Up Edges",
+        &["align_left", "align_right", "align_top", "align_bottom"],
+    ),
+    flyout(
+        "Space Out Evenly",
+        &[
+            "left_to_right",
+            "right_to_left",
+            "top_to_bottom",
+            "bottom_to_top",
+        ],
+    ),
+    flyout("Nesting", &["nest_parts", "plate_production"]),
+    flyout(
+        "Copies",
+        &["array_copy", "circular_copy", "copy_along_vectors"],
+    ),
     // Modeling tab
-    &[
-        "create_shape_round",
-        "create_shape_angled",
-        "create_shape_smooth",
-        "create_shape_flat",
-    ],
+    flyout(
+        "Create Shape",
+        &[
+            "create_shape_round",
+            "create_shape_angled",
+            "create_shape_smooth",
+            "create_shape_flat",
+        ],
+    ),
 ];
 
 /// The flyout `id` is in, if any.
 pub fn flyout_of(id: &str) -> Option<&'static [&'static str]> {
-    FLYOUTS.iter().copied().find(|f| f.contains(&id))
+    FLYOUTS.iter().map(|f| f.tools).find(|f| f.contains(&id))
+}
+
+/// The caption of the flyout `id` is in, if any.
+pub fn flyout_name(id: &str) -> Option<&'static str> {
+    FLYOUTS
+        .iter()
+        .find(|f| f.tools.contains(&id))
+        .map(|f| f.name)
 }
 
 /// The tool each flyout shows, by the flyout's first tool: the one picked from it last.
@@ -121,6 +181,37 @@ pub fn buttons(tools: &[&'static str], faces: &Faces) -> Vec<Button> {
             .and_then(|f| members.iter().copied().find(|m| m == f))
             .unwrap_or(members[0]);
         out.push(Button { face, members });
+    }
+    out
+}
+
+/// A box of a toolbox section's tools when tool groups are spread out (the default): a
+/// flyout's tools under its name, or a run of tools in no flyout, unnamed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cluster {
+    pub name: Option<&'static str>,
+    pub tools: Vec<&'static str>,
+}
+
+/// A section's `tools` spread out: every one shows, each flyout's together in a box of its
+/// own where its first tool comes, so nothing hides under another button.
+pub fn clusters(tools: &[&'static str]) -> Vec<Cluster> {
+    let mut out: Vec<Cluster> = Vec::new();
+    for button in buttons(tools, &Faces::new()) {
+        if button.members.is_empty() {
+            match out.last_mut() {
+                Some(last) if last.name.is_none() => last.tools.push(button.face),
+                _ => out.push(Cluster {
+                    name: None,
+                    tools: vec![button.face],
+                }),
+            }
+        } else {
+            out.push(Cluster {
+                name: flyout_name(button.face),
+                tools: button.members,
+            });
+        }
     }
     out
 }
@@ -228,10 +319,84 @@ mod tests {
     fn no_tool_is_in_two_flyouts_and_each_has_two_or_more() {
         let mut seen = std::collections::HashSet::new();
         for flyout in FLYOUTS {
-            assert!(flyout.len() >= 2, "{flyout:?}");
-            for id in *flyout {
+            assert!(flyout.tools.len() >= 2, "{flyout:?}");
+            for id in flyout.tools {
                 assert!(seen.insert(*id), "{id} is in two flyouts");
             }
+        }
+    }
+
+    #[test]
+    fn every_flyout_has_a_name_of_its_own() {
+        let mut seen = std::collections::HashSet::new();
+        for flyout in FLYOUTS {
+            assert!(!flyout.name.trim().is_empty(), "{flyout:?}");
+            assert!(seen.insert(flyout.name), "{} named twice", flyout.name);
+        }
+        assert_eq!(flyout_name("draw_ellipse"), Some("Circles and Ellipses"));
+        assert_eq!(flyout_name("select"), None);
+    }
+
+    #[test]
+    fn spread_out_each_flyout_is_a_named_box_and_loose_tools_share_one() {
+        let tools = [
+            "select",
+            "node_edit",
+            "draw_circle",
+            "draw_rectangle",
+            "draw_ellipse",
+            "draw_rectangle_from_center",
+            "dimensions",
+        ];
+        assert_eq!(
+            clusters(&tools),
+            vec![
+                Cluster {
+                    name: None,
+                    tools: vec!["select", "node_edit"]
+                },
+                Cluster {
+                    name: Some("Circles and Ellipses"),
+                    tools: vec!["draw_circle", "draw_ellipse"]
+                },
+                Cluster {
+                    name: Some("Rectangles"),
+                    tools: vec!["draw_rectangle", "draw_rectangle_from_center"]
+                },
+                Cluster {
+                    name: None,
+                    tools: vec!["dimensions"]
+                },
+            ]
+        );
+        // one tool of a flyout on its own in a section is a loose tool
+        assert_eq!(
+            clusters(&["select", "draw_star"]),
+            vec![Cluster {
+                name: None,
+                tools: vec!["select", "draw_star"]
+            }]
+        );
+    }
+
+    #[test]
+    fn spread_out_every_tool_on_every_page_shows_once() {
+        let toolbar = crate::gui::Toolbar::new();
+        for group in toolbar
+            .groups
+            .iter()
+            .chain(&toolbar.modeling_groups)
+            .chain(&toolbar.toolpath_groups)
+        {
+            let shown: Vec<&str> = clusters(group.tools)
+                .into_iter()
+                .flat_map(|c| c.tools)
+                .collect();
+            let mut want = group.tools.to_vec();
+            let mut got = shown.clone();
+            want.sort_unstable();
+            got.sort_unstable();
+            assert_eq!(got, want, "{}", group.name);
         }
     }
 
@@ -316,7 +481,7 @@ mod tests {
     #[test]
     fn every_flyout_tool_is_on_a_tab() {
         let toolbar = crate::gui::Toolbar::new();
-        for id in FLYOUTS.iter().flat_map(|f| f.iter()) {
+        for id in FLYOUTS.iter().flat_map(|f| f.tools.iter()) {
             assert!(
                 toolbar
                     .groups

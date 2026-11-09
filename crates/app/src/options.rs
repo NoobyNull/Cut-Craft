@@ -421,8 +421,9 @@ pub struct General {
         range(min = 10, max = 600)
     )]
     pub autosave_seconds: u32,
-    /// How long to press and hold a toolbox button with a small arrow before its group of
-    /// tools opens; a quick click runs the tool shown. Longer if groups open by accident
+    /// With tool groups folded: how long to press and hold a toolbox button with a small
+    /// arrow before its group of tools opens; a quick click runs the tool shown. Longer if
+    /// groups open by accident
     #[serde(default = "flyout_hold_seconds")]
     #[schemars(
         title = "Hold to open a tool group",
@@ -430,6 +431,12 @@ pub struct General {
         range(min = 0.2, max = 1.5)
     )]
     pub flyout_hold_seconds: f64,
+    /// Show each group of tools that do one job different ways (the circles, the text
+    /// tools, the joins…) as one button with a small arrow, to open for the rest. Off shows
+    /// every tool in a labelled box, so none is missed
+    #[serde(default)]
+    #[schemars(title = "Fold tool groups into one button")]
+    pub fold_tool_groups: bool,
 }
 
 fn autosave_seconds() -> u32 {
@@ -866,6 +873,7 @@ impl Default for Options {
                 layout: WindowLayout::default(),
                 autosave_seconds: autosave_seconds(),
                 flyout_hold_seconds: flyout_hold_seconds(),
+                fold_tool_groups: false,
             },
             confirmations: Confirmations::default(),
             job_sheet: fmt_create_job_sheet::Style::default(),
@@ -1199,6 +1207,9 @@ mod tests {
         assert_eq!(older.general.autosave_seconds, o.general.autosave_seconds);
         assert!((older.general.flyout_hold_seconds - o.general.flyout_hold_seconds).abs() < 1e-9);
         assert_eq!(older.appearance.text_size, 115);
+        // every tool shows, in its group's box, unless folded on purpose
+        assert!(!o.general.fold_tool_groups);
+        assert!(!older.general.fold_tool_groups);
     }
 
     #[test]

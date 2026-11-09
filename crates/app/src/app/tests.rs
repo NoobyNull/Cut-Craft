@@ -3567,6 +3567,8 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
         h.texts_at("Next:")
     );
     // hovering Draw Circle's button: its description, its next step, and the status bar's line
+    h.app.options.general.fold_tool_groups = true;
+    h.frame(vec![]);
     flyout_arrow_naming(&mut h, "Draw Circle");
     let hovered = guide::hovered(&h.ctx).expect("a hovered tool");
     assert_eq!(hovered.label, "Draw Circle");
@@ -5263,7 +5265,7 @@ fn the_design_tab_shows_its_favourites_or_all_its_tools() {
     // right-clicked tools added, then one moved earlier
     let tool = |id: &str, what: &str| format!("{}design:{what}:{id}", gui::FAVOURITE);
     assert_eq!(
-        gui::tool_menu(Page::Design, "draw_circle", false, false)[0].action,
+        gui::tool_menu(Page::Design, "draw_circle", false, false, false)[0].action,
         tool("draw_circle", "add")
     );
     h.app.invoke(&h.ctx, &tool("draw_circle", "add"));
@@ -7382,8 +7384,64 @@ fn flyout_arrow_naming(h: &mut Harness, tool: &str) -> Pos2 {
 }
 
 #[test]
+fn every_tool_shows_in_a_labelled_box_unless_groups_are_folded() {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Design, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // spread out by default: no button hides others, each group of ways captioned
+    let spread = flyout_arrows(&h).len();
+    for caption in ["Lines and Curves", "Circles and Ellipses", "Text"] {
+        assert!(h.text_at(caption).is_some(), "{caption} box");
+    }
+    // the box's buttons run their own tool: Draw Circle from Edge is the second
+    let circles = h.text_at("Circles and Ellipses").expect("caption");
+    let mut found = None;
+    for step in 0..12_u8 {
+        let at = circles + vec2(-50.0 + 10.0 * f32::from(step), 30.0);
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.frame(vec![]);
+        if guide::hovered(&h.ctx).is_some_and(|t| t.label == "Draw Circle from Edge") {
+            found = Some(at);
+            break;
+        }
+    }
+    let at = found.expect("Draw Circle from Edge has a button of its own");
+    h.click(at, Modifiers::NONE);
+    assert_eq!(
+        h.app.form.as_ref().map(|f| (f.id, f.way)),
+        Some(("draw_circle", crate::flyout::DragWay::AcrossEdge))
+    );
+    // a tool's right-click menu folds the groups back into flyouts, kept in the options
+    let fold = gui::tool_menu(Page::Design, "draw_circle", false, false, false)
+        .into_iter()
+        .find(|m| m.name == "Fold Tool Groups into One Button")
+        .expect("the menu offers folding");
+    h.app.form = None;
+    h.app.invoke(&h.ctx, &fold.action);
+    assert!(h.app.options.general.fold_tool_groups);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // Create's five flyouts (lines, rectangles, circles, polygons, text) and Zoom
+    assert!(
+        flyout_arrows(&h).len() >= spread + 6,
+        "folded into flyouts: {} arrows, {spread} spread out",
+        flyout_arrows(&h).len()
+    );
+    assert!(h.text_at("Circles and Ellipses").is_none());
+    let unfold = gui::tool_menu(Page::Design, "draw_circle", false, false, true)
+        .into_iter()
+        .find(|m| m.name == "Fold Tool Groups into One Button")
+        .expect("still offered");
+    assert!(unfold.is_checked);
+    h.app.invoke(&h.ctx, &unfold.action);
+    assert!(!h.app.options.general.fold_tool_groups);
+}
+
+#[test]
 fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
     let mut h = Harness::new();
+    h.app.options.general.fold_tool_groups = true;
     h.app.pages.set_pinned(Page::Design, true);
     h.frame(vec![]);
     h.frame(vec![]);

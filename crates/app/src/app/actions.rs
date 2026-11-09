@@ -191,7 +191,9 @@ impl CutCraftApp {
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(gui::SELECT_COMPONENT) => true,
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
-            id if id.starts_with(gui::SUBTAB_PLACE) => true,
+            id if id.starts_with(gui::SUBTAB_PLACE) || id.starts_with(gui::FOLD_TOOL_GROUPS) => {
+                true
+            }
             "add_clipart_folder" => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(gui::GUIDE) => true,
@@ -577,6 +579,10 @@ impl CutCraftApp {
             id if id.starts_with(gui::SAVE_BRUSH) => self.save_brush(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
+            }
+            id if id.starts_with(gui::FOLD_TOOL_GROUPS) => {
+                self.options.general.fold_tool_groups = id.ends_with("true");
+                self.save_options();
             }
             id if id.starts_with(gui::SUBTAB_PLACE) => {
                 if let Some(sections) = gui::placed(&self.options.design_sections, id) {
