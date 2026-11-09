@@ -1446,22 +1446,75 @@ fn every_command_has_a_line_saying_what_it_does() {
 }
 
 #[test]
-fn a_toolpath_over_a_keep_out_zone_is_warned_about() {
+fn a_toolpath_into_a_keep_out_zone_is_not_made_unless_clipping_is_turned_on() {
+    use cut_craft_core::keep_out::KeepOutZone;
+    use cut_craft_core::toolpath::MoveKind;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
+    // a clamp over the rectangle's right-hand side
     let zone = cut_craft_core::testing::square(55.0, 20.0, 10.0);
-    h.app.doc.keep_out = vec![zone];
+    h.app.doc.keep_out = vec![KeepOutZone::new("Clamp 1", zone)];
     h.app.invoke(&h.ctx, "profile_toolpath");
     let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("profile_toolpath", &params).unwrap();
+    let refused = h.app.apply("profile_toolpath", &params).unwrap_err();
     assert!(
-        h.app.status.message.contains("keep-out"),
-        "{}",
-        h.app.status.message
+        refused.starts_with(super::actions::KEEP_OUT_REFUSED),
+        "{refused}"
     );
+    assert!(refused.contains("\"Clamp 1\""), "names the zone: {refused}");
+    assert!(
+        refused.contains("Clip toolpaths at keep-out zones"),
+        "{refused}"
+    );
+    assert_eq!(h.app.doc.toolpaths.len(), 0, "nothing made");
+    // clipping turned on in Options: made, the part under the clamp left uncut
+    h.app.options.toolpaths.clip_at_keep_out_zones = true;
+    assert!(h.app.sync_machine_keep_out());
+    h.app.apply("profile_toolpath", &params).unwrap();
+    let made = h.app.doc.toolpaths.values().next().expect("a toolpath");
+    assert_eq!(
+        h.app.zones_entered(made),
+        [] as [String; 0],
+        "{:?}",
+        made.moves
+    );
+    let cuts = made.moves.iter().filter(|m| m.kind == MoveKind::Cut);
+    assert!(
+        cuts.clone().any(|m| m.to.x > 55.0),
+        "still cut past the clamp"
+    );
+    assert!(cuts.clone().any(|m| m.to.x < 20.0));
+    // no zones: made as it was, with no warning
+    h.app.options.toolpaths.clip_at_keep_out_zones = false;
+    h.app.sync_machine_keep_out();
     h.app.doc.keep_out.clear();
     h.app.apply("profile_toolpath", &params).unwrap();
     assert!(!h.app.status.message.contains("keep-out"));
+}
+
+#[test]
+fn keep_out_zone_labels_turn_on_and_off_and_are_remembered() {
+    let mut h = Harness::new();
+    assert!(h.app.display.keep_out_labels, "shown to start with");
+    assert_eq!(
+        h.app.display.checked("show_keep_out_zone_labels"),
+        Some(true)
+    );
+    h.app.invoke(&h.ctx, "show_keep_out_zone_labels");
+    assert!(!h.app.display.keep_out_labels);
+    assert!(
+        !h.app.options.toolpaths.keep_out_labels,
+        "kept with the options"
+    );
+    // over a zone the 2D view's menu names it and says where it is edited
+    let job = crate::gui::keep_out_menu("Keep-out: Clamp 1", false, false);
+    assert_eq!(job[0].name, "Keep-out: Clamp 1");
+    assert!(!job[0].is_enabled);
+    assert_eq!(job[1].action, "keep_out_zones");
+    assert_eq!(job[2].name, "Show Keep-Out Zone Labels");
+    let machine = crate::gui::keep_out_menu("Keep-out: Machine clamp 1", true, true);
+    assert_eq!(machine[1].action, "machine_configuration");
+    assert_eq!(machine[2].name, "Hide Keep-Out Zone Labels");
 }
 
 #[test]
@@ -1507,6 +1560,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         y: 0.0,
         width: 20.0,
         height: 60.0,
+        name: String::new(),
     }];
     assert!(h.app.sync_machine_keep_out());
     h.app.keep_out_changed();

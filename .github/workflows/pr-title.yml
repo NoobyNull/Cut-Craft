@@ -1,5 +1,6 @@
-# Each pull request's title says what kind of change it is (feat:, fix:, docs:, ...), because
-# that decides the version number main gets when it merges; see scripts/next-version.
+# Each pull request's title says what kind of change it is (feat:, fix:, docs:, ...), so
+# scripts/release-version can sort the next release's notes; see scripts/next-version.
+# Merging doesn't change the version: that moves one step only when a release is cut.
 name: PR title
 
 on:
@@ -18,13 +19,15 @@ jobs:
         run: scripts/test-next-version
       - name: Release tagging's own tests
         run: scripts/test-release-commit
+      - name: Release version's own tests
+        run: scripts/test-release-version
       - name: The title names a kind of change
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
           kind=$(scripts/next-version kind "$TITLE")
           case $kind in
-            minor) echo "::notice::Merging this makes a new feature version (0.x+1.0)." ;;
-            patch) echo "::notice::Merging this makes a fix version (0.x.y+1)." ;;
-            none) echo "::notice::Merging this doesn't change the version." ;;
+            minor) echo "::notice::The next release lists this under New." ;;
+            patch) echo "::notice::The next release lists this under Fixed." ;;
+            none) echo "::notice::The next release's notes leave this out." ;;
           esac

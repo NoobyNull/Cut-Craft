@@ -1,0 +1,68 @@
+#!/bin/bash
+# Tests for scripts/release-version: scripts/test-release-version (CI runs it on each pull request).
+# Builds a throwaway repository shaped like main and checks the version it moves to and the
+# list of changes it prints.
+set -uo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(mktemp -d)
+trap 'rm -rf "$repo"' EXIT
+failed=0
+
+g() { git -C "$repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"; }
+fail() {
+  echo "FAIL: $*"
+  failed=1
+}
+version_now() { sed -n 's/^version = "\(.*\)"/\1/p' "$repo/Cargo.toml" | head -1; }
+run() { (cd "$repo" && "$here/release-version" "$@" 2>&1); }
+
+g init -q -b main
+printf '[workspace.package]\nversion = "0.6.0"\n\n[dependencies]\nfoo = { version = "1.0" }\n' >"$repo/Cargo.toml"
+g add Cargo.toml && g commit -qm "chore: version 0.6.0 (#206)"
+g tag -a v0.6.0 -m "Cut Craft 0.6.0"
+work() { echo "$1" >>"$repo/work.txt" && g add work.txt && g commit -qm "$1"; }
+work "feat: Properties in the Library's right-click menu (#211)"
+work "fix(library): keep folders on network shares (#208)"
+work "docs: how add-ons plug in (#201)"
+work "ci: pin appimagetool (#207)"
+# a pull request merged with a merge commit: its title is the commit body's first line
+g switch -qc snaps
+work "work in progress"
+g switch -q main
+g merge -q --no-ff -m "Merge pull request #203 from NoobyNull/snaps" -m "feat: CAD-style snaps while drawing" snaps
+work "plain commit with no kind"
+
+# no step given: one patch step
+out=$(run)
+[[ $(version_now) == 0.6.1 ]] || fail "no step: version is $(version_now), want 0.6.1"
+[[ $out == *"0.6.0 -> 0.6.1"* ]] || fail "no step: doesn't say 0.6.0 -> 0.6.1: $out"
+[[ $out == *"chore: version 0.6.1"* ]] || fail "no step: doesn't name the pull request title: $out"
+new=$(printf '%s\n' "$out" | sed -n '/^New$/,/^$/p')
+fixed=$(printf '%s\n' "$out" | sed -n '/^Fixed$/,/^$/p')
+[[ $new == *"- Properties in the Library's right-click menu"* ]] || fail "feat: isn't listed under New: $out"
+[[ $new == *"- CAD-style snaps while drawing"* ]] || fail "a merge commit's title isn't listed under New: $out"
+[[ $fixed == *"- keep folders on network shares"* ]] || fail "fix(scope): isn't listed under Fixed: $out"
+[[ $out != *"how add-ons plug in"* && $out != *"appimagetool"* ]] || fail "docs:/ci: are listed: $out"
+[[ $out != *"(#211)"* ]] || fail "pull request numbers aren't trimmed: $out"
+[[ $out != *"work in progress"* ]] || fail "a merged branch's own commits are listed: $out"
+grep -q 'foo = { version = "1.0" }' "$repo/Cargo.toml" || fail "a dependency's version was changed"
+
+# the new version has no tag yet: a version pull request is already waiting, so refuse
+out=$(run patch) && fail "bumped 0.6.1 again before it was released: $out"
+[[ $(version_now) == 0.6.1 ]] || fail "an untagged version was moved to $(version_now)"
+[[ $out == *"v0.6.1"* ]] || fail "the refusal doesn't name the missing tag: $out"
+
+# once 0.6.1 is released, minor moves the middle number
+g commit -qam "chore: version 0.6.1 (#300)" && g tag -a v0.6.1 -m "Cut Craft 0.6.1"
+out=$(run minor)
+[[ $(version_now) == 0.7.0 ]] || fail "minor: version is $(version_now), want 0.7.0"
+[[ $out == *"Nothing"* ]] || fail "minor with no changes since v0.6.1 doesn't say so: $out"
+g checkout -q Cargo.toml
+
+for bad in major 2 --minor; do
+  out=$(run "$bad") && fail "\"$bad\" was accepted as a step: $out"
+  [[ $(version_now) == 0.6.1 ]] || fail "\"$bad\" changed the version to $(version_now)"
+done
+
+[[ $failed == 0 ]] && echo "release-version: all tests pass"
+exit $failed
