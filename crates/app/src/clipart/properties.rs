@@ -369,8 +369,16 @@ fn rows(ui: &mut egui::Ui, props: &Properties) {
         row(
             ui,
             "Library folder",
-            folder.display().to_string(),
+            super::network::location(folder).unwrap_or_else(|| folder.display().to_string()),
             Some("The folder you added to the Library that this file is in."),
+        );
+    }
+    if let Some(url) = super::network::location(&props.file) {
+        row(
+            ui,
+            "Network location",
+            url,
+            Some("Where it is on your network share; the path below is where it's mounted now."),
         );
     }
     row(ui, "Location", props.file.display().to_string(), None);
