@@ -319,6 +319,10 @@ fn rgb(c: egui::Color32) -> [u8; 3] {
 
 /// Aspire's Toolpath Settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the dialog's own check boxes"
+)]
 pub struct ToolpathSettings {
     /// Swap to the 3D view after calculating a toolpath
     #[schemars(title = "Auto open 3D view")]
@@ -350,6 +354,17 @@ pub struct ToolpathSettings {
     #[serde(default = "preview_speed")]
     #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
     pub preview_speed: f64,
+    /// Write each keep-out zone's name on it in the 2D and 3D views ("Keep-out: Clamp 1").
+    /// The View menu turns them on and off too
+    #[serde(default = "on")]
+    #[schemars(title = "Show keep-out zone labels")]
+    pub keep_out_labels: bool,
+    /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
+    /// made. On: it is made with the part under the zone left uncut, the tool lifting over
+    /// the zone, as if the zone were cut out of whatever is under it
+    #[serde(default)]
+    #[schemars(title = "Clip toolpaths at keep-out zones")]
+    pub clip_at_keep_out_zones: bool,
 }
 
 fn preview_speed() -> f64 {
@@ -953,6 +968,8 @@ impl Default for Options {
                 tolerance_3d: tolerance(),
                 tolerance_vcarve: tolerance(),
                 preview_speed: preview_speed(),
+                keep_out_labels: d.keep_out_labels,
+                clip_at_keep_out_zones: false,
             },
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
@@ -1054,6 +1071,7 @@ impl Options {
         d.previews_2d = t.create_2d_previews;
         d.solid_previews = t.solid_2d_previews;
         d.solid_colour = t.solid_2d_preview_color;
+        d.keep_out_labels = t.keep_out_labels;
     }
 
     /// How many recent files are kept.
@@ -1345,5 +1363,22 @@ mod tests {
             ..o.toolpaths
         };
         assert!((wild.preview_speed() - 20_000.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn keep_out_labels_show_and_clipping_is_off_until_turned_on() {
+        let o = Options::default();
+        assert!(o.toolpaths.keep_out_labels);
+        assert!(
+            !o.toolpaths.clip_at_keep_out_zones,
+            "clipping is off by default"
+        );
+        // options saved before these settings get the same
+        let mut saved = serde_json::to_value(&o.toolpaths).unwrap();
+        let fields = saved.as_object_mut().unwrap();
+        fields.remove("keep_out_labels");
+        fields.remove("clip_at_keep_out_zones");
+        let older: ToolpathSettings = serde_json::from_value(saved).unwrap();
+        assert_eq!(older, o.toolpaths);
     }
 }

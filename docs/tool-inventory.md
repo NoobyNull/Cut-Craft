@@ -281,7 +281,8 @@ say "not implemented yet".
   job's); and Confirmation Choices: crossing vectors for pocket and V-carve toolpaths and for
   radiused and sharp offsets (ask, open the Vector Validator, or don't check), and whether the
   checks before cutting ask before saving.
-- Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
+- Keep-Out Zones (Toolpaths menu; named, with labels in both views; a toolpath that would cut
+  into one is not made unless Options allow clipping it there), Transform mode
   (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
 - View ▸ Save Shaded Image: the 3D view (the model, or the preview) saved as a PNG, cut
   from the window's picture once the 3D view is shown.
@@ -546,7 +547,12 @@ say "not implemented yet".
 - Edit ▸ Snap Options (F4): drawing and node drags snap to span ends and middles, arc and
   object centres, the job's centre and corners, and a grid, within a snapping radius in
   pixels; Shift holds snapping off. Guides and smart snapping (see the top bar) snap too.
-  Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
+  While drawing, a line's far end (and a polyline's next point) also snaps Tangent to a
+  circle, arc or curve and Perpendicular onto a line or curve, from where it starts
+  (Tangent and Perpendicular check box, on by default). Polyline clicks snap; the view marks
+  each snap with its own shape and name (square End, triangle Middle, circle Tangent, right
+  angle Perpendicular, plus Center) and the status bar says what it means. Drawing tools
+  show a crosshair pointer. Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
   with Shift, or with Ctrl and Shift move by the grid, half or a tenth). Intersections and
   cursor text are not done; the options last for the session.
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,

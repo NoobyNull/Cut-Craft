@@ -612,10 +612,16 @@ impl Canvas {
                 painter.add(Shape::line(screen(&v.path.transformed(&turn)), faint));
             }
         }
-        // keep-out zones in the warning colour, heavier than vectors
+        // keep-out zones in the warning colour, heavier than vectors, each named at its
+        // top-left corner while labels are shown
         let zone = Stroke::new(2.0 * datum.width, visuals.error_fg_color);
-        for path in &doc.keep_out_zones() {
-            painter.add(Shape::line(screen(path), zone));
+        for z in doc.named_keep_out() {
+            painter.add(Shape::line(screen(&z.path), zone));
+            if display.keep_out_labels {
+                let b = z.path.bounds();
+                let corner = t.to_screen(Point::new(b.min.x, b.max.y));
+                zone_label(painter, ui, corner, &z.label());
+            }
         }
     }
 
@@ -861,6 +867,20 @@ fn to_f32(v: f64) -> f32 {
 
 /// How strongly the active toolpath tile is shaded in the 2D view.
 const ACTIVE_TILE_SHADE: f32 = 0.15;
+
+/// A keep-out zone's label ("Keep-out: Clamp 1"), small, in the warning colour on the
+/// panel's background so it reads over whatever is under it, its top-left corner just in
+/// from `corner`.
+pub fn zone_label(painter: &egui::Painter, ui: &egui::Ui, corner: Pos2, text: &str) {
+    let visuals = ui.visuals();
+    let font = egui::TextStyle::Small.resolve(ui.style());
+    let galley = painter.layout_no_wrap(text.to_owned(), font, visuals.error_fg_color);
+    let pad = ui.spacing().item_spacing.x / 2.0;
+    let at = corner + egui::vec2(2.0 * pad, 2.0 * pad);
+    let back = egui::Rect::from_min_size(at, galley.size()).expand(pad);
+    painter.rect_filled(back, pad, visuals.panel_fill.gamma_multiply(0.85));
+    painter.galley(at, galley, visuals.error_fg_color);
+}
 
 #[cfg(test)]
 mod tests {
