@@ -2329,13 +2329,42 @@ impl CutCraftApp {
         let node_target = pressed
             .filter(|_| self.view_tool == Some(ViewTool::NodeEdit))
             .and_then(|at| self.node_target(at, reach));
+        // over a keep-out zone: its name and where it is edited, first in the menu
+        let zone = pressed.and_then(|at| self.doc.keep_out_at(at));
         let selection_menu = || match (guide, node_target) {
             (Some(i), _) => gui::guide_menu(i, self.doc.guides[i].locked),
             (None, Some(target)) => gui::node_menu(&self.doc, &target),
-            (None, None) => self.menus.selection_menu(&self.doc),
+            (None, None) => {
+                let mut items = zone.map_or_else(Vec::new, |(z, machine)| {
+                    gui::keep_out_menu(&z.label(), machine, self.display.keep_out_labels)
+                });
+                items.extend(self.menus.selection_menu(&self.doc));
+                items
+            }
         };
         if let Some(action) = self.popup(canvas.response(), selection_menu) {
             self.invoke(ui.ctx(), &action);
+        }
+        self.keep_out_hint(canvas);
+    }
+
+    /// Resting the pointer on a keep-out zone in the 2D view: what it is and how to edit it.
+    fn keep_out_hint(&self, canvas: &Canvas) {
+        let response = canvas.response();
+        if response.dragged() || self.drawing_tool().is_some() {
+            return;
+        }
+        if let Some((zone, machine)) = canvas.cursor().and_then(|at| self.doc.keep_out_at(at)) {
+            let edit = if machine {
+                "a clamp of the machine's, edited in Machine Configuration"
+            } else {
+                "edited in Toolpaths ▸ Keep-Out Zones…"
+            };
+            response.clone().on_hover_text(format!(
+                "{}: no toolpath cuts here unless clipping is turned on in Edit ▸ Options. \
+                 It is {edit}; right-click for a shortcut",
+                zone.label()
+            ));
         }
     }
 
@@ -2686,6 +2715,10 @@ impl CutCraftApp {
             options.advanced.apply();
             self.options = options;
             self.save_options();
+            // clipping turned on or off: the toolpaths made again with or without it
+            if self.sync_machine_keep_out() {
+                self.keep_out_changed();
+            }
         }
     }
 

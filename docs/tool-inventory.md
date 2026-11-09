@@ -281,7 +281,8 @@ say "not implemented yet".
   job's); and Confirmation Choices: crossing vectors for pocket and V-carve toolpaths and for
   radiused and sharp offsets (ask, open the Vector Validator, or don't check), and whether the
   checks before cutting ask before saving.
-- Keep-Out Zones (Toolpaths menu; toolpaths over one are warned about), Transform mode
+- Keep-Out Zones (Toolpaths menu; named, with labels in both views; a toolpath that would cut
+  into one is not made unless Options allow clipping it there), Transform mode
   (handles to move, scale, rotate), guide lines from the rulers (View ▸ Guide Lines).
 - View ▸ Save Shaded Image: the 3D view (the model, or the preview) saved as a PNG, cut
   from the window's picture once the 3D view is shown.
