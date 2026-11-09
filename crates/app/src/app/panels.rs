@@ -152,7 +152,8 @@ impl CutCraftApp {
 
     /// Headed sections of tool buttons; a right-click on one adds it to `page`'s favourites
     /// or takes it off (`among` them, it moves along them too). Tools that do one job
-    /// different ways share a flyout button (see [`crate::flyout`]).
+    /// different ways show together in a labelled box, or share a flyout button when
+    /// Options ▸ General folds tool groups (see [`crate::flyout`]).
     fn tool_sections(
         &mut self,
         ui: &mut egui::Ui,
@@ -161,11 +162,17 @@ impl CutCraftApp {
         among: bool,
     ) {
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
+        let folded = self.options.general.fold_tool_groups;
         let mut clicked = None;
         let mut chosen = None;
         // plain sections, as Aspire's tool pages have: a heading over its tools
         for (name, tools) in sections {
             ui.strong(*name);
+            if !among && !folded {
+                self.spread_tools(ui, tools, page, edge, &mut clicked, &mut chosen);
+                ui.add_space(ui.spacing().item_spacing.y);
+                continue;
+            }
             ui.horizontal_wrapped(|ui| {
                 // favourites name each tool on its own, flyout or not
                 let buttons = if among {
@@ -194,10 +201,7 @@ impl CutCraftApp {
                         }
                         response
                     };
-                    let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
-                    if let Some(action) =
-                        self.popup(&response, || gui::tool_menu(page, id, favourite, among))
-                    {
+                    if let Some(action) = self.tool_menu_on(&response, page, id, among, folded) {
                         chosen = Some(action);
                     }
                 }
@@ -215,6 +219,119 @@ impl CutCraftApp {
         }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
+        }
+    }
+
+    /// A tool button's right-click menu, and the action picked from it.
+    fn tool_menu_on(
+        &self,
+        response: &egui::Response,
+        page: Page,
+        id: &str,
+        among: bool,
+        folded: bool,
+    ) -> Option<String> {
+        let favourite = self.options.favourites.of(page).0.iter().any(|f| f == id);
+        self.popup(response, || {
+            gui::tool_menu(page, id, favourite, among, folded)
+        })
+    }
+
+    /// A section's tools spread out: every tool its own button, those that do one job
+    /// different ways in a box captioned with what they are for, so a beginner sees them
+    /// all without knowing to open anything. A box goes to the next row whole when the row
+    /// has no room for it.
+    fn spread_tools(
+        &self,
+        ui: &mut egui::Ui,
+        tools: &[&'static str],
+        page: Page,
+        edge: f32,
+        clicked: &mut Option<&'static str>,
+        chosen: &mut Option<String>,
+    ) {
+        let full = ui.available_width();
+        let spacing = ui.spacing().item_spacing;
+        let button = edge + 2.0 * ui.spacing().button_padding.x;
+        let margin = 4.0;
+        let caption_font = egui::TextStyle::Small.resolve(ui.style());
+        let caption_color = ui.visuals().weak_text_color();
+        let caption_height = ui.fonts_mut(|f| f.row_height(&caption_font));
+        let clusters = crate::flyout::clusters(tools);
+        let captions: Vec<&str> = clusters
+            .iter()
+            .map(|c| c.name.unwrap_or_default())
+            .collect();
+        let widths: Vec<f32> = clusters
+            .iter()
+            .zip(&captions)
+            .map(|(cluster, caption)| {
+                let n = f32::from(u16::try_from(cluster.tools.len()).unwrap_or(u16::MAX));
+                let caption_width = ui
+                    .painter()
+                    .layout_no_wrap((*caption).to_owned(), caption_font.clone(), caption_color)
+                    .size()
+                    .x;
+                let icons = n * button + (n - 1.0).max(0.0) * spacing.x;
+                (icons.max(caption_width) + 2.0 * margin + 2.0).min(full)
+            })
+            .collect();
+        // the rows the boxes go in, a box going to the next row whole when this one has
+        // no room for it
+        let mut rows: Vec<Vec<usize>> = Vec::new();
+        let mut left = 0.0;
+        for (i, &width) in widths.iter().enumerate() {
+            if rows.is_empty() || left < width {
+                rows.push(Vec::new());
+                left = full;
+            }
+            left -= width + spacing.x;
+            rows.last_mut().expect("a row").push(i);
+        }
+        for row in rows {
+            // loose tools line up with the tools of a box beside them
+            let boxed_row = row.iter().any(|&i| clusters[i].name.is_some());
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                for i in row {
+                    let (cluster, width) = (&clusters[i], widths[i]);
+                    let frame = egui::Frame::group(ui.style()).inner_margin(margin);
+                    let frame = if cluster.name.is_some() {
+                        frame
+                    } else {
+                        frame.stroke(egui::Stroke::NONE)
+                    };
+                    frame.show(ui, |ui| {
+                        ui.set_max_width(width - 2.0 * margin - 2.0);
+                        ui.vertical(|ui| {
+                            if cluster.name.is_some() {
+                                let text = egui::RichText::new(captions[i])
+                                    .small()
+                                    .color(caption_color);
+                                ui.add(
+                                    egui::Label::new(text)
+                                        .selectable(false)
+                                        .wrap_mode(egui::TextWrapMode::Extend),
+                                );
+                            } else if boxed_row {
+                                ui.add_space(caption_height + spacing.y);
+                            }
+                            ui.horizontal_wrapped(|ui| {
+                                for &id in &cluster.tools {
+                                    let response = self.tool_button(ui, id, edge);
+                                    if response.clicked() {
+                                        *clicked = Some(id);
+                                    }
+                                    if let Some(action) =
+                                        self.tool_menu_on(&response, page, id, false, false)
+                                    {
+                                        *chosen = Some(action);
+                                    }
+                                }
+                            });
+                        });
+                    });
+                }
+            });
         }
     }
 

@@ -1169,6 +1169,7 @@ pub fn tool_menu(
     id: &str,
     favourite: bool,
     among: bool,
+    folded: bool,
 ) -> Vec<MenuItem> {
     let action = |what: &str| format!("{FAVOURITE}{}:{what}:{id}", page_key(page));
     let mut menu = vec![if favourite {
@@ -1179,9 +1180,22 @@ pub fn tool_menu(
     if among {
         menu.push(MenuItem::with_action("Move Earlier", &action("earlier")));
         menu.push(MenuItem::with_action("Move Later", &action("later")));
+    } else {
+        menu.push(MenuItem::separator());
+        menu.push(MenuItem {
+            is_checked: folded,
+            ..MenuItem::with_action(
+                "Fold Tool Groups into One Button",
+                &format!("{FOLD_TOOL_GROUPS}{}", !folded),
+            )
+        });
     }
     menu
 }
+
+/// Folding each group of tools that do one job different ways into one button, or spreading
+/// them out: then `true` or `false` (Options ▸ General ▸ Fold tool groups into one button).
+pub const FOLD_TOOL_GROUPS: &str = "fold_tool_groups:";
 
 /// A tool page's tab menu: its favourites or all its tools, the one shown ticked.
 pub fn favourites_menu(page: crate::pages::Page, only: bool) -> Vec<MenuItem> {

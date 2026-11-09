@@ -165,15 +165,21 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   3. A form offers the same values as exact typed input. Rectangle corners can be square, external-radius or internal-radius, with draggable green radius handles.
   4. To edit an existing shape, select it with the form open, change values and Apply. Shift+click moves on to the next shape.
   5. Every tool works in both the 2D and 3D views.
-- **Toolbox flyouts** (Cut Craft's own choice, not Aspire's) [inf]: Aspire shows each of these
-  tools as an icon of its own; Cut Craft groups tools that do one job different ways behind
-  one button so a beginner faces fewer, clearer buttons (Drawing tab 78 buttons to 44). The
-  button shows the tool picked from it last (kept in the options); a press held for 0.4 s, a
-  click on the arrow in its bottom-right corner, or Down with the button focused opens the
-  others, each by icon and name. Find Tool, the Rail layout and Favourites still name every
-  tool on its own. The groups are `FLYOUTS` in `crates/app/src/flyout.rs`. Two variants are
-  Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle from
-  Edge (the drag is the diameter).
+- **Toolbox tool groups** (Cut Craft's own choice, not Aspire's) [inf]: tools that do one job
+  different ways (the circles, the text tools, the joins, the alignments…) are gathered in
+  named groups (`FLYOUTS` in `crates/app/src/flyout.rs`). By default every tool shows: each
+  group is a small box captioned with what its tools are for ("Circles and Ellipses",
+  "Line Up Edges"), so a beginner sees every choice without knowing to open anything; a box
+  moves to the next row whole rather than splitting. Aspire shows the same tools as loose
+  icons with no grouping. Options ▸ General ▸ *Fold tool groups into one button* (also on any
+  toolbox button's right-click menu) folds each group into one flyout button instead, for a
+  compact page (Drawing tab 78 buttons to 44): the button shows the tool picked from it last
+  (kept in the options); a press held for 0.4 s, a click on the arrow in its bottom-right
+  corner, or Down with the button focused opens the others, each by icon and name. Find
+  Tool, the Rail layout and Favourites name every tool on its own either way. Two variants
+  are Cut Craft's own: Draw Rectangle from Center (the drag read as Alt-drag) and Draw Circle
+  from Edge (the drag is the diameter). Flyouts were the default until Matthew found tools
+  hidden under them too easy to miss (2026-11-09).
 - **Design sub-tabs** (Cut Craft's own choice, not Aspire's) [inf]: Aspire's Drawing and
   Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
   Operations and 2D View Control at the top, then five sub-tabs across the page: **Create**

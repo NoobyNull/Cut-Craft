@@ -409,10 +409,13 @@ say "not implemented yet".
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.
   - Polyline, Rectangle, Circle, Ellipse, Polygon, Star, Arc; Cut Craft's own Rectangle
     from Center and Circle from Edge (the drag is the diameter).
-  - Toolbox flyouts (Cut Craft's own; Aspire shows every tool as its own icon): tools that
-    do one job different ways share a button with an arrow in its corner, showing the one
-    picked last; click the arrow, hold the button, or press Down on it for the rest
-    (`crates/app/src/flyout.rs`). Drawing tab 78 buttons to 44, Modeling 23 to 20.
+  - Toolbox tool groups (Cut Craft's own; Aspire shows every tool as a loose icon): tools
+    that do one job different ways sit together in a box captioned with what they are for,
+    every tool its own button (`crates/app/src/flyout.rs`). Options ▸ General ▸ Fold tool
+    groups into one button (or a toolbox button's right-click menu) folds each box into a
+    flyout button with an arrow in its corner, showing the one picked last; click the arrow,
+    hold the button, or press Down on it for the rest. Folded: Drawing tab 78 buttons to 44,
+    Modeling 23 to 20.
   - Design sub-tabs (Cut Craft's own; Aspire runs every group down one page): File
     Operations and 2D View Control stay at the top; Create, Edit, Arrange and Model across
     the page each show a few groups (`DESIGN_SUBTABS` in `crates/app/src/gui.rs`). A tool
