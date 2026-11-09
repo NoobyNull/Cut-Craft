@@ -11,9 +11,12 @@ log = "0.4"
 # release signatures (minisign, Ed25519)
 minisign-verify = "0.3"
 semver = "1"
+serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
 tar = "0.4"
+# add-on manifests (addon.toml)
+toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
 # GitHub over HTTPS (rustls, no OpenSSL to install), trusting the computer's certificates
 ureq = { version = "3", features = ["platform-verifier"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

@@ -300,6 +300,9 @@ say "not implemented yet".
   corner. Active Tile (or a double-click on a tile while the form is open, shaded in the
   2D view) makes the preview cut only that tile's moves, at the machine's corner or, with
   Draw Toolpaths in Original Position, where the tile sits in the finished piece.
+- Gadgets ▸ Add-ons (Cut Craft's own): installs and updates add-ons from a GitHub
+  repository's newest release, official ones (Depth) listed with their repositories built in,
+  signed ones straight away and unsigned ones after a warning.
 - Gadgets ▸ Wrapped Fluting Layout and Wrapped Spiral Layout (rotary jobs): flutes or
   rope-twist strands, with coves, laid out as vectors for Profile / Fluting toolpaths.
 - Gadgets ▸ Celtic Weave Creator: a knot grid's loops as smooth closed vectors (crossings
