@@ -8233,3 +8233,61 @@ fn gadgets_ends_with_add_ons_which_opens_its_window() {
     h.app.invoke(&h.ctx, "addons");
     assert!(h.app.addons.open);
 }
+
+/// The status bar's text that contains `part`: its middle and how many rows it was laid in.
+fn status_text(h: &Harness, part: &str) -> Option<(Pos2, usize)> {
+    h.shapes.iter().find_map(|clipped| match &clipped.shape {
+        egui::Shape::Text(t) if t.galley.text().contains(part) && t.pos.y > 700.0 => {
+            Some((t.pos + t.galley.size() / 2.0, t.galley.rows.len()))
+        }
+        _ => None,
+    })
+}
+
+#[test]
+fn the_status_bar_stays_one_line_however_long_its_text() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+    let short = h.text_at(version).expect("the version");
+    // a Library tile's hint: its name, then on a new line what can be done with it
+    let long = format!(
+        "0331. Flowers.STL\nDouble-click to add it to the project, or drag it onto a view. {}",
+        "Click to pick it (Ctrl or Shift for more), right-click for more. ".repeat(6)
+    );
+    h.app.status.set_message(&long);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let (_, rows) = status_text(&h, "Flowers.STL").expect("the status text");
+    assert_eq!(rows, 1, "one row");
+    let after = h.text_at(version).expect("the version");
+    assert!(
+        (after.y - short.y).abs() < 0.5,
+        "the bar keeps its height: {short:?} then {after:?}"
+    );
+}
+
+#[test]
+fn the_status_bar_keeps_its_hint_while_the_pointer_is_on_it() {
+    let mut h = Harness::new();
+    h.app.status.set_message("Ready");
+    h.frame(vec![]);
+    let hint = "0331. Flowers.STL\nDouble-click to add it to the project";
+    cut_craft_bug_report::hint::hint(&h.ctx, hint);
+    h.frame(vec![]);
+    let (at, _) = status_text(&h, "Flowers.STL").expect("the hint is shown");
+    // moving onto the bar to read it: nothing sets a hint now, yet it stays
+    h.frame(vec![Event::PointerMoved(at)]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        status_text(&h, "Flowers.STL").is_some(),
+        "the hint stays while the pointer is on the bar"
+    );
+    // and goes once the pointer leaves
+    h.frame(vec![Event::PointerMoved(egui::pos2(640.0, 300.0))]);
+    h.frame(vec![]);
+    assert!(status_text(&h, "Flowers.STL").is_none(), "gone after");
+}
