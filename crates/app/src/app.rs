@@ -166,6 +166,7 @@ const BUILT_INS: [&str; 98] = [
     "open_folder",
     "open_clipart_folder",
     "component_levels",
+    "clipart_library",
     "edit_toolpath",
     "create_shape_round",
     "create_shape_angled",
@@ -742,6 +743,9 @@ struct CutCraftApp {
     design_tab: usize,
     /// The Design tab's open sub-tab (see [`gui::DESIGN_SUBTABS`]).
     design_subtab: usize,
+    /// The Design sub-tab shown as a section to unfold next frame: a tool on it was picked
+    /// from a menu, a shortcut or Find Tool.
+    design_unfold: Option<&'static str>,
     /// Each tool's first step, once asked for (see [`guide::first_step`]).
     first_steps: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     view: View,

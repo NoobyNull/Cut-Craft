@@ -81,7 +81,136 @@ pub const DESIGN_SUBTABS: &[SubTab] = &[
         hint: "Build and shape the 3D parts to carve",
         groups: &["Shape Creation", "Shape Editing"],
     },
+    SubTab {
+        name: "Import",
+        hint: "Bring in drawings, pictures, 3D models, clipart, toolpaths and cut lists",
+        groups: &["Import"],
+    },
 ];
+
+/// The Design sub-tabs in the tab row and those shown as sections of their own under it, by
+/// index in [`DESIGN_SUBTABS`], each in that order. `sections` names the sub-tabs moved out
+/// of the row (Options' `design_sections`); names that are no sub-tab are ignored.
+pub fn subtab_layout(sections: &[String]) -> (Vec<usize>, Vec<usize>) {
+    (0..DESIGN_SUBTABS.len()).partition(|&i| !sections.iter().any(|s| s == DESIGN_SUBTABS[i].name))
+}
+
+/// The sub-tab the row shows open: `open` while it is in the row, else the row's first; none
+/// when every sub-tab is a section.
+pub fn open_subtab(open: usize, sections: &[String]) -> Option<usize> {
+    let (row, _) = subtab_layout(sections);
+    row.contains(&open).then_some(open).or(row.first().copied())
+}
+
+/// Moving a Design sub-tab between the tab row and a section of its own: then the sub-tab's
+/// name and `section` or `row`, or `*` and either for every sub-tab.
+pub const SUBTAB_PLACE: &str = "subtab_place:";
+
+/// A Design sub-tab's right-click menu, on its tab in the row or its section's heading.
+pub fn subtab_menu(name: &str, sections: &[String]) -> Vec<MenuItem> {
+    let in_section = sections.iter().any(|s| s == name);
+    let (row, apart) = subtab_layout(sections);
+    let mut menu = vec![if in_section {
+        MenuItem::with_action(
+            "Put Back in the Tab Row",
+            &format!("{SUBTAB_PLACE}{name}:row"),
+        )
+    } else {
+        MenuItem::with_action(
+            "Show as Its Own Section",
+            &format!("{SUBTAB_PLACE}{name}:section"),
+        )
+    }];
+    menu.push(MenuItem::separator());
+    menu.push(MenuItem {
+        is_checked: apart.is_empty(),
+        ..MenuItem::with_action("All Tabs in One Row", &format!("{SUBTAB_PLACE}*:row"))
+    });
+    menu.push(MenuItem {
+        is_checked: row.is_empty(),
+        ..MenuItem::with_action(
+            "Every Tab as Its Own Section",
+            &format!("{SUBTAB_PLACE}*:section"),
+        )
+    });
+    menu
+}
+
+/// `sections` after a [`SUBTAB_PLACE`] action, kept in [`DESIGN_SUBTABS`] order; `None` for
+/// an action that is not one.
+pub fn placed(sections: &[String], action: &str) -> Option<Vec<String>> {
+    let (name, place) = action.strip_prefix(SUBTAB_PLACE)?.rsplit_once(':')?;
+    let apart = match place {
+        "section" => true,
+        "row" => false,
+        _ => return None,
+    };
+    if name != "*" && !DESIGN_SUBTABS.iter().any(|t| t.name == name) {
+        return None;
+    }
+    Some(
+        DESIGN_SUBTABS
+            .iter()
+            .map(|t| t.name)
+            .filter(|&t| {
+                if name == "*" || t == name {
+                    apart
+                } else {
+                    sections.iter().any(|s| s == t)
+                }
+            })
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
+/// Names and descriptions of the built-in tools on the Import sub-tab, which have no
+/// command crate to give them: Aspire's names run words together ("Import Vectors Bitmap")
+/// and say nothing about the files they take.
+const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
+    (
+        "import_vectors_bitmap",
+        "Import Vectors or Picture",
+        "Bring in a drawing (DXF, SVG or a Vectric job's vectors) or a picture (PNG, JPG, \
+         BMP, GIF or TIFF) to trace, carve round or draw over",
+    ),
+    (
+        "import_vectors",
+        "Import Vectors",
+        "Bring in a drawing made in another program: DXF, SVG or a Vectric job's vectors",
+    ),
+    (
+        "import_component_3d_model",
+        "Import 3D Model",
+        "Bring in a 3D model (STL or OBJ) or saved 3D clipart, to size, place and carve",
+    ),
+    (
+        "clipart_library",
+        "Clipart Library",
+        "Open the Library tab: your folders of ready-made drawings, pictures and 3D clipart, \
+         to drag onto the job",
+    ),
+    (
+        "import_toolpaths_file",
+        "Import Toolpaths (G-code)",
+        "Read a G-code file (.nc, .tap, .gcode and the like) back in as toolpaths, to preview \
+         and check it before it runs",
+    ),
+    (
+        "import_cut_list",
+        "Import Cut List",
+        "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
+         width and how many, ready for Nest Parts",
+    ),
+];
+
+/// A built-in tool's own name, where [`title_case`] of its id would not do.
+pub fn built_in_label(id: &str) -> Option<&'static str> {
+    BUILT_IN_ABOUTS
+        .iter()
+        .find(|(i, _, _)| *i == id)
+        .map(|(_, label, _)| *label)
+}
 
 impl Toolbar {
     /// Every group the Design page can show: the drawing then the modeling tools.
@@ -136,13 +265,23 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "new",
                 "open",
                 "save",
-                "import_vectors_bitmap",
-                "import_vectors",
                 "export_vectors",
                 "paste_in_place",
-                "import_component_3d_model",
                 "open_folder",
                 "job_setup",
+            ],
+        ),
+        // every way to bring something into the job, on the Import sub-tab: Aspire spreads
+        // them over the File menu, the Drawing and Modeling tabs and the Clipart tab
+        group(
+            "Import",
+            &[
+                "import_vectors_bitmap",
+                "import_vectors",
+                "import_component_3d_model",
+                "clipart_library",
+                "import_toolpaths_file",
+                "import_cut_list",
             ],
         ),
         group(
@@ -373,6 +512,12 @@ pub fn about(id: &str) -> Option<&'static str> {
         .iter()
         .find(|(command, _)| *command == id)
         .map(|(_, about)| *about)
+        .or_else(|| {
+            BUILT_IN_ABOUTS
+                .iter()
+                .find(|(i, _, _)| *i == id)
+                .map(|(_, _, about)| *about)
+        })
 }
 
 pub struct StatusBar {
@@ -1962,6 +2107,83 @@ mod tests {
                 super::DESIGN_SUBTABS[tab].name
             );
         }
+    }
+
+    #[test]
+    fn the_import_sub_tab_gathers_every_import() {
+        let toolbar = super::Toolbar::new();
+        let tab = super::DESIGN_SUBTABS
+            .iter()
+            .position(|t| t.name == "Import")
+            .expect("an Import sub-tab");
+        let tools: Vec<&str> = toolbar
+            .subtab_groups(tab)
+            .iter()
+            .flat_map(|g| g.tools.iter().copied())
+            .collect();
+        for id in [
+            "import_vectors_bitmap",
+            "import_vectors",
+            "import_component_3d_model",
+            "clipart_library",
+            "import_toolpaths_file",
+            "import_cut_list",
+        ] {
+            assert!(tools.contains(&id), "{id} is on Import");
+            assert_eq!(toolbar.subtab_of(id, 0), Some(tab), "{id}");
+            // each its own button, named on its own, so none hides behind another
+            assert!(crate::flyout::flyout_of(id).is_none(), "{id} in a flyout");
+            assert!(super::about(id).is_some(), "{id} says what it does");
+        }
+        assert_eq!(
+            super::built_in_label("import_vectors_bitmap"),
+            Some("Import Vectors or Picture")
+        );
+        let file = toolbar.named(&["File Operations"]);
+        assert!(
+            !file[0].tools.iter().any(|t| t.starts_with("import")),
+            "imports live on the Import sub-tab only"
+        );
+    }
+
+    #[test]
+    fn sub_tabs_go_in_the_row_or_a_section_of_their_own() {
+        let none: Vec<String> = vec![];
+        let all = super::DESIGN_SUBTABS.len();
+        assert_eq!(super::subtab_layout(&none), ((0..all).collect(), vec![]));
+        let model = vec!["Model".to_owned(), "No such tab".to_owned()];
+        let (row, apart) = super::subtab_layout(&model);
+        assert_eq!(apart, [3]);
+        assert_eq!(row.len(), all - 1);
+        // the row shows its open tab, else its first; nothing when it is empty
+        assert_eq!(super::open_subtab(1, &model), Some(1));
+        assert_eq!(super::open_subtab(3, &model), Some(0));
+        let every = super::placed(&none, "subtab_place:*:section").unwrap();
+        assert_eq!(super::open_subtab(0, &every), None);
+        assert_eq!(every.len(), all);
+        // moved one at a time, kept in tab order
+        let one = super::placed(&none, "subtab_place:Import:section").unwrap();
+        let two = super::placed(&one, "subtab_place:Edit:section").unwrap();
+        assert_eq!(two, ["Edit", "Import"]);
+        assert_eq!(
+            super::placed(&two, "subtab_place:Import:row").unwrap(),
+            ["Edit"]
+        );
+        assert_eq!(super::placed(&two, "subtab_place:*:row"), Some(vec![]));
+        assert_eq!(super::placed(&two, "subtab_place:Nothing:row"), None);
+        assert_eq!(super::placed(&two, "favourite:design:add:x"), None);
+        // the menu offers the move that applies, and ticks the layout in use
+        let menu = super::subtab_menu("Edit", &two);
+        assert_eq!(menu[0].name, "Put Back in the Tab Row");
+        assert_eq!(menu[0].action, "subtab_place:Edit:row");
+        let menu = super::subtab_menu("Create", &none);
+        assert_eq!(menu[0].name, "Show as Its Own Section");
+        let ticked: Vec<&str> = menu
+            .iter()
+            .filter(|i| i.is_checked)
+            .map(|i| i.name.as_str())
+            .collect();
+        assert_eq!(ticked, ["All Tabs in One Row"]);
     }
 
     #[test]

@@ -176,14 +176,22 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   Edge (the drag is the diameter).
 - **Design sub-tabs** (Cut Craft's own choice, not Aspire's) [inf]: Aspire's Drawing and
   Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
-  Operations and 2D View Control at the top, then four sub-tabs across the page: **Create**
+  Operations and 2D View Control at the top, then five sub-tabs across the page: **Create**
   (Create Vectors), **Edit** (Select and Edit; Join, Combine and Trim; Transform Objects), **Arrange** (Align Objects,
-  Offset and Layout, Array Objects) and **Model** (Shape Creation, Shape Editing), so a page
+  Offset and Layout, Array Objects), **Model** (Shape Creation, Shape Editing) and **Import**
+  (Import Vectors or Picture, Import Vectors, Import 3D Model, Clipart Library, Import
+  Toolpaths (G-code), Import Cut List: every way into the job, which Aspire spreads over the
+  File menu, the Drawing and Modeling tabs and its Clipart tab; each on its own button, with
+  the files it takes in its tooltip), so a page
   shows a couple of dozen buttons instead of sixty-odd and a beginner looks under a word that
   says what the tools are for. Each sub-tab says so on hover. A tool run from a menu, a
   shortcut or Find Tool opens its sub-tab, so it shows highlighted where it lives. Favourites,
   the Rail and Ribbon layouts and Find Tool are as before. The sub-tabs are `DESIGN_SUBTABS`
-  in `crates/app/src/gui.rs`.
+  in `crates/app/src/gui.rs`. A right-click on a sub-tab offers Show as Its Own Section (and
+  on a section's heading, Put Back in the Tab Row), plus All Tabs in One Row and Every Tab as
+  Its Own Section: a section sits under the tab row, folds up by its heading, and is always
+  shown, so tools used together (say Create and Model) need no switching. The choice is kept
+  in the options file (`design_sections`); every sub-tab is in the row to start with.
 - **Next-step guidance** (Cut Craft's own) [inf]: Aspire's status bar shows a tool's tooltip.
   Cut Craft adds a box in the room left under a page's icons: the hovered tool's name, what
   it does and its next step (a flyout's names the tools it holds too), else the tool in
