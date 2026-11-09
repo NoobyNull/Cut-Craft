@@ -69,7 +69,7 @@ impl Addons {
             tx,
             rx,
             find: addon::find,
-            install: addon::install,
+            install: |dir, offer, progress| addon::install(dir, offer, &usable, progress),
             newer: addon::update_for,
         }
     }
@@ -169,7 +169,7 @@ impl Addons {
                 }
                 Msg::Installed(Ok(m)) => {
                     self.updates.remove(&m.id);
-                    self.phase = Phase::Done(format!("{} {} is installed.", m.name, m.version));
+                    self.phase = Phase::Done(installed_words(&m));
                     installed = true;
                 }
                 Msg::Installed(Err(e)) => {
@@ -290,7 +290,7 @@ impl Addons {
         ui.add_space(8.0);
         ui.strong("Install from GitHub");
         ui.label(
-            "Any add-on published on GitHub: type its repository, such as \
+            "A gadget or other add-on published on GitHub: type its repository, such as \
                   owner/name, or paste its link. Cut Craft installs its newest release.",
         );
         ui.horizontal(|ui| {
@@ -394,6 +394,44 @@ enum Press {
     Remove(String),
 }
 
+/// The tool add-ons this Cut Craft has tools for: a tool add-on only works through a Cut
+/// Craft tool made for it (Relief from Photo for Depth), never with its own interface.
+pub const TOOLS: &[&str] = &[crate::depth::ADDON_ID];
+
+/// Whether this Cut Craft can use the add-on `m` describes, or why not, said before it is
+/// installed.
+pub fn usable(m: &Manifest) -> Result<(), String> {
+    match m.kind.as_str() {
+        "gadget" => Ok(()),
+        "tool" if TOOLS.contains(&m.id.as_str()) => Ok(()),
+        "tool" => Err(format!(
+            "{} is a tool this version of Cut Craft has no place for. Tool add-ons work \
+             through Cut Craft's own tools, so only those on the official list install.",
+            m.name
+        )),
+        "content" => Err(format!(
+            "{} is a content pack, which this version of Cut Craft cannot use yet. Update \
+             Cut Craft (Help ▸ Check for Updates) and try again.",
+            m.name
+        )),
+        kind => Err(format!(
+            "{} is a kind of add-on (\"{kind}\") this version of Cut Craft does not know. \
+             Update Cut Craft and try again.",
+            m.name
+        )),
+    }
+}
+
+/// What to say once `m` is installed.
+fn installed_words(m: &Manifest) -> String {
+    let more = if m.kind == "gadget" {
+        " It is in the Gadgets menu the next time Cut Craft starts."
+    } else {
+        ""
+    };
+    format!("{} {} is installed.{more}", m.name, m.version)
+}
+
 /// The ids of the add-ons installed in `dir` (folders with an install record).
 fn installed_ids(dir: &Path) -> Vec<String> {
     let mut ids: Vec<String> = std::fs::read_dir(dir)
@@ -476,6 +514,34 @@ mod tests {
     #[expect(clippy::unnecessary_wraps, reason = "stands in for asking GitHub")]
     fn nothing_newer(_: &Path, _: &str) -> Result<Option<Offer>, String> {
         Ok(None)
+    }
+
+    #[test]
+    fn only_add_ons_cut_craft_can_use_install() {
+        let m = |id: &str, kind: &str| {
+            Manifest::parse(&format!(
+                "id = \"{id}\"\nname = \"Thing\"\nkind = \"{kind}\"\nversion = \"1.0.0\""
+            ))
+            .unwrap()
+        };
+        assert_eq!(usable(&m("depth", "tool")), Ok(()));
+        assert_eq!(usable(&m("anything", "gadget")), Ok(()));
+        assert!(
+            usable(&m("other", "tool"))
+                .unwrap_err()
+                .contains("official list")
+        );
+        assert!(
+            usable(&m("pack", "content"))
+                .unwrap_err()
+                .contains("cannot use yet")
+        );
+        assert!(
+            usable(&m("x", "theme"))
+                .unwrap_err()
+                .contains("does not know")
+        );
+        assert!(installed_words(&m("g", "gadget")).contains("Gadgets menu"));
     }
 
     #[test]

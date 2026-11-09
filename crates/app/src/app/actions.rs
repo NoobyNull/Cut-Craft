@@ -25,7 +25,10 @@ impl CutCraftApp {
     pub(super) fn new() -> Self {
         let mut registry = commands::registry();
         let my_gadgets = crate::gadgets::my_gadgets_dir();
-        let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref());
+        let addon_gadgets = crate::depth::addons_dir()
+            .map(|dir| crate::gadgets::from_addons(&dir))
+            .unwrap_or_default();
+        let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
         let mut menus = gui::MenuSystem::new();
         menus.add_gadgets(&gadgets, my_gadgets.as_deref());
         let mut status = gui::StatusBar::new();

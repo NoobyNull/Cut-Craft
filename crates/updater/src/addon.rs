@@ -137,7 +137,12 @@ impl Manifest {
         if !id_fine {
             return Err(format!("the add-on's id \"{}\" is not a folder name", m.id));
         }
-        if let Some(name) = m.downloads.iter().find(|d| !plain_name(d)) {
+        if let Some(name) = m
+            .downloads
+            .iter()
+            .chain(&m.program)
+            .find(|d| !plain_name(d))
+        {
             return Err(format!("the add-on asks for an odd file \"{name}\""));
         }
         Ok(m)
@@ -258,10 +263,13 @@ pub fn update_for(addons: &Path, id: &str) -> Result<Option<Offer>, String> {
 }
 
 /// Installs (or updates) `offer` into `addons`, telling `progress` the bytes downloaded of
-/// the whole. The caller asks the user first when it is not signed.
+/// the whole. The caller asks the user first when it is not signed. `usable` says whether
+/// this Cut Craft can use the add-on its manifest describes (its kind, say), or why not;
+/// nothing is installed unless it can.
 pub fn install(
     addons: &Path,
     offer: &Offer,
+    usable: &dyn Fn(&Manifest) -> Result<(), String>,
     progress: &dyn Fn(u64, u64),
 ) -> Result<Manifest, String> {
     install_with(
@@ -269,6 +277,7 @@ pub fn install(
         offer,
         &crate::current_version(),
         crate::RELEASE_KEY,
+        usable,
         &|asset, done| crate::download(asset, done),
         progress,
     )
@@ -282,6 +291,7 @@ fn install_with(
     offer: &Offer,
     current: &Version,
     key: &str,
+    usable: &dyn Fn(&Manifest) -> Result<(), String>,
     fetch: &Fetch<'_>,
     progress: &dyn Fn(u64, u64),
 ) -> Result<Manifest, String> {
@@ -321,6 +331,7 @@ fn install_with(
         Manifest::parse(&text)?
     };
     manifest.suits(current)?;
+    usable(&manifest)?;
     let downloads = manifest
         .downloads
         .iter()
@@ -569,6 +580,13 @@ mod tests {
                 &offer,
                 &Version::new(0, 6, 0),
                 &self.key,
+                &|m| {
+                    if m.kind == "theme" {
+                        Err("Cut Craft cannot use a theme".into())
+                    } else {
+                        Ok(())
+                    }
+                },
                 &|asset, done| {
                     let bytes = self.files[&asset.url].clone();
                     done(bytes.len() as u64);
@@ -774,6 +792,30 @@ mod tests {
         let sneaky = format!("{escaping}\ndownloads = [\"../../.bashrc\"]").replace("../x", "x");
         assert!(Manifest::parse(&sneaky).unwrap_err().contains("odd file"));
         assert!(!addons.exists() || fs::read_dir(&addons).unwrap().next().is_none());
+        let _ = fs::remove_dir_all(addons);
+    }
+
+    #[test]
+    fn a_program_outside_the_add_on_is_refused() {
+        let base = "id = \"x\"\nname = \"x\"\nkind = \"tool\"\nversion = \"1.0.0\"";
+        for program in ["../../../../.ssh/id_rsa", "/etc/passwd", "a/b", "..", ""] {
+            let m = format!("{base}\nprogram = \"{program}\"");
+            let e = Manifest::parse(&m).unwrap_err();
+            assert!(e.contains("odd file"), "{program}: {e}");
+        }
+    }
+
+    #[test]
+    fn an_add_on_this_cut_craft_cannot_use_is_not_installed() {
+        let addons = scratch("unusable");
+        let manifest = "id = \"dark\"\nname = \"Dark\"\nkind = \"theme\"\nversion = \"1.0.0\"";
+        let fake = fake(
+            &[("dark.zip", zip(&[("addon.toml", manifest.as_bytes())]))],
+            true,
+        );
+        let e = fake.install(&addons, &platform()).unwrap_err();
+        assert!(e.contains("cannot use a theme"), "{e}");
+        assert!(!addons.join("dark").exists());
         let _ = fs::remove_dir_all(addons);
     }
 
