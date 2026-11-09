@@ -81,7 +81,7 @@ impl CutCraftApp {
             depth_estimate: None,
             busy: None,
             wait_before_showing: crate::busy::SHOW_AFTER,
-            addons_path: None,
+            addons: crate::addons::Addons::new(None),
             machines: cut_craft_machines::Machines::default(),
             machines_path: None,
             posts: cut_craft_machines::Library::new(None),
@@ -437,6 +437,7 @@ impl CutCraftApp {
             | "help_contents"
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
+            "addons" => self.addons.show(ctx),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
                 self.updates.check(ctx, true, skipped);
@@ -3924,7 +3925,7 @@ impl CutCraftApp {
     /// Relief from Photo's Depth: Estimate Depth when the add-on is installed, else how to
     /// get it.
     fn depth_section(&mut self, ui: &mut egui::Ui) {
-        let installed = self.addons_path.as_deref().and_then(crate::depth::find);
+        let installed = self.addons.dir().and_then(crate::depth::find);
         let chosen = self
             .doc
             .selected_bitmaps
@@ -3958,30 +3959,7 @@ impl CutCraftApp {
                      (about 100 MB, downloaded once). If the picture is already a depth \
                      map, set Depth from to Picture instead.",
                 );
-                let folder = self
-                    .addons_path
-                    .as_ref()
-                    .map(|d| d.join(crate::depth::ADDON_ID));
-                if let Some(folder) = folder {
-                    ui.label(format!(
-                        "Put {} and {} in {}",
-                        crate::depth::program_name(),
-                        crate::depth::WEIGHTS,
-                        folder.display()
-                    ));
-                    if ui
-                        .button("Open Add-ons Folder")
-                        .on_hover_hint("Where the Depth add-on's two files go")
-                        .clicked()
-                    {
-                        let shown = std::fs::create_dir_all(&folder)
-                            .and_then(|()| files::show_folder(&folder));
-                        if let Err(e) = shown {
-                            self.status
-                                .set_message(&format!("cannot open {}: {e}", folder.display()));
-                        }
-                    }
-                }
+                self.depth_install(ui);
                 return;
             };
             if self.depth_estimate.is_some() {
@@ -4009,6 +3987,55 @@ impl CutCraftApp {
                 Err(e) => self.status.set_message(&e),
             }
         }
+    }
+
+    /// Install Depth Add-on, or how its install is going (the Add-ons window's install).
+    fn depth_install(&mut self, ui: &mut egui::Ui) {
+        use crate::addons::Phase;
+        match &self.addons.phase {
+            Phase::Finding(_) => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("Looking for the newest Depth add-on...");
+                });
+            }
+            Phase::Installing { done, total, .. } => {
+                ui.label("Downloading the Depth add-on...");
+                #[expect(clippy::cast_precision_loss, reason = "a fraction for the bar")]
+                let fraction = if *total > 0 {
+                    *done as f32 / *total as f32
+                } else {
+                    0.0
+                };
+                ui.add(egui::ProgressBar::new(fraction.min(1.0)).show_percentage());
+            }
+            Phase::Asking(_) => {
+                ui.label("The Add-ons window is asking whether to install it.");
+            }
+            phase => {
+                if let Phase::Failed(e) = phase {
+                    ui.colored_label(ui.visuals().error_fg_color, e);
+                }
+                let can = self.addons.dir().is_some();
+                if ui
+                    .add_enabled(can, egui::Button::new("Install Depth Add-on"))
+                    .on_hover_hint("Downloads it from GitHub once; Gadgets ▸ Add-ons updates it")
+                    .on_disabled_hover_text("Cut Craft has no settings folder to put it in")
+                    .clicked()
+                {
+                    self.install_depth(ui.ctx());
+                }
+            }
+        }
+    }
+
+    /// Starts installing the official Depth add-on.
+    pub(super) fn install_depth(&mut self, ctx: &egui::Context) {
+        let depth = cut_craft_updater::addon::OFFICIAL
+            .iter()
+            .find(|a| a.id == crate::depth::ADDON_ID)
+            .expect("Depth is an official add-on");
+        self.addons.install_from(ctx, depth.repo);
     }
 
     /// Gives the picture its depth once the Depth add-on answers (undoable), and shows the

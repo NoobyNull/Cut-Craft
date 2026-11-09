@@ -789,7 +789,7 @@ fn estimate_depth_gives_the_photo_its_depth_from_the_add_on() {
     std::fs::write(dir.join(crate::depth::WEIGHTS), b"").unwrap();
 
     let mut h = Harness::new();
-    h.app.addons_path = Some(addons.clone());
+    h.app.addons = crate::addons::Addons::new(Some(addons.clone()));
     let mut c = Change::builder(&h.app.doc);
     c.add_bitmap(Bitmap {
         name: "photo".into(),
@@ -8108,4 +8108,25 @@ fn a_machine_with_a_tool_changer_uses_it_by_default_and_one_without_saves_files_
         h.app.save_form.as_ref().unwrap().changes,
         crate::files::ToolChanges::ToolChanger
     );
+}
+
+#[test]
+fn gadgets_ends_with_add_ons_which_opens_its_window() {
+    let mut h = Harness::new();
+    let gadgets = &h
+        .app
+        .menus
+        .menus
+        .iter()
+        .find(|m| m.name == "Gadgets")
+        .unwrap()
+        .items;
+    let last = gadgets.last().unwrap();
+    assert_eq!(
+        (last.name.as_str(), last.action.as_str()),
+        ("Add-ons...", "addons")
+    );
+    assert!(h.app.available("addons"));
+    h.app.invoke(&h.ctx, "addons");
+    assert!(h.app.addons.open);
 }

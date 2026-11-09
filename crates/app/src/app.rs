@@ -145,7 +145,7 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 
-const BUILT_INS: [&str; 97] = [
+const BUILT_INS: [&str; 98] = [
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",
@@ -206,6 +206,7 @@ const BUILT_INS: [&str; 97] = [
     "third_party_licenses",
     "about_cut_craft",
     "check_for_updates",
+    "addons",
     "undo",
     "redo",
     "exit",
@@ -793,8 +794,9 @@ struct CutCraftApp {
     /// How long a job may take before its progress is shown; quicker ones finish as if
     /// run in place.
     wait_before_showing: std::time::Duration,
-    /// Where add-ons are installed; `None` in tests.
-    addons_path: Option<std::path::PathBuf>,
+    /// Gadgets ▸ Add-ons, and the installs it (or Relief from Photo) starts; where add-ons
+    /// are installed (none in tests).
+    addons: crate::addons::Addons,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,
@@ -2097,7 +2099,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             }
             app.options_path = crate::options::Options::path();
             app.words_path = files::config_dir().map(|d| d.join("words.txt"));
-            app.addons_path = crate::depth::addons_dir();
+            app.addons = crate::addons::Addons::new(crate::depth::addons_dir());
             app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
