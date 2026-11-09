@@ -326,6 +326,8 @@ fn install_with(
                     offer.zip.name
                 )
             })?
+            // a manifest is a few lines; never read more than this of one
+            .take(64 * 1024)
             .read_to_string(&mut text)
             .map_err(|e| format!("could not read the add-on's {MANIFEST} ({e})"))?;
         Manifest::parse(&text)?
