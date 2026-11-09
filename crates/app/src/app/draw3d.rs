@@ -83,8 +83,7 @@ impl CutCraftApp {
         if self.simulation.is_some() || self.playback.is_some() || self.doc.components.is_empty() {
             return None;
         }
-        let cells = self.options.view_3d.still_cells();
-        let key = (self.history.revision(), self.doc.job, cells);
+        let key = (self.history.revision(), self.doc.job);
         if let Some((kept, model)) = &self.drawn_on
             && *kept == key
         {

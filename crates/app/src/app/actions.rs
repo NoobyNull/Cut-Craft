@@ -149,17 +149,12 @@ impl CutCraftApp {
             placed: Vec::new(),
             picked_constraint: None,
             fine_3d: None,
-            rough_3d: None,
-            height_applied_at: None,
-            job_epoch: 0,
-            stale_known: 0,
             drawn_on: None,
             model_3d: None,
             gpu_3d: None,
             surface_gpu: None,
             solid_gpu: None,
             model_gpu: None,
-            ghost_gpu: None,
             moved_3d: 0.0,
             orbit: view3d::Orbit::default(),
             framing: view3d::Framing::default(),
@@ -1716,7 +1711,6 @@ impl CutCraftApp {
                 dragged: None,
                 model: None,
                 model_whole: true,
-                beyond: None,
                 applied: None,
                 undo_from: self.history.undo_depth(),
                 way: crate::flyout::DragWay::AsIs,
@@ -1922,7 +1916,6 @@ impl CutCraftApp {
     /// Back to nothing: no job, no form, no preview.
     pub(super) fn reset_job(&mut self) {
         (self.doc, self.history, self.session, self.form) = Default::default();
-        self.job_epoch += 1;
         if let Some(job) = self.options.default_job {
             self.doc.job = job;
         }
@@ -1933,8 +1926,7 @@ impl CutCraftApp {
             self.simulation_coarse,
             self.fine_3d,
             self.surface_gpu,
-            self.rough_3d,
-        ) = (None, None, None, None, None, None);
+        ) = (None, None, None, None, None);
         self.clear_recovery();
     }
 
@@ -2070,32 +2062,6 @@ impl CutCraftApp {
         self.status
             .set_message(&result.map_or_else(|e| e, |()| done.to_owned()));
         self.warn(&made, &notes);
-    }
-
-    /// More toolpaths out of date than last frame, after an edit (not as a job opens, nor
-    /// while a drag goes on, as a height handle remakes the model): the status bar says how
-    /// many, and that they and any G-code saved from them want making again. Toolpaths are
-    /// never remade by themselves.
-    pub(super) fn note_stale(&mut self) {
-        if self.drag_3d.is_some() {
-            return;
-        }
-        let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
-        let more = stale.saturating_sub(self.stale_known);
-        self.stale_known = stale;
-        if more == 0 || self.history.undo_depth() == 0 {
-            return;
-        }
-        let (count, it, its) = if more == 1 {
-            ("1 toolpath is".to_owned(), "it", "its")
-        } else {
-            (format!("{more} toolpaths are"), "them", "their")
-        };
-        let message = self.status.message.trim_end_matches('.').to_owned();
-        self.status.set_message(&format!(
-            "{message}. {count} now out of date (⚠ in the Toolpaths list): recalculate \
-             {it}, and save {its} G-code again if you already have"
-        ));
     }
 
     /// A warning in the status bar about what was just made: the command's `notes`, and for
@@ -2511,25 +2477,8 @@ impl CutCraftApp {
                     .ok()
                     .flatten()
             });
-        // the model's size: its triangles' box, or (wrapped) its component's
-        let made = model.as_deref().and_then(model_size);
-        let cap = usize::try_from(self.options.import.preview_faces).unwrap_or(usize::MAX);
-        // on a flat job, what is past the material's edges is cut off to show as a ghost;
-        // past the preview limit, every so many of its faces only (faint, it still reads)
-        let (model, beyond) = match model {
-            Some(all) if self.doc.job.rotary.is_none() => {
-                let (over, past) = crate::view3d::split_at_edges(&all, self.doc.job.area());
-                let every = past.len().div_ceil(cap.max(1)).max(1);
-                let past = past
-                    .into_iter()
-                    .step_by(every)
-                    .map(|t| (t, false))
-                    .collect();
-                (Some(over), Some(std::sync::Arc::new(past)))
-            }
-            all => (all, None),
-        };
         // a huge model is shown as the surface it makes, only its unreachable faces drawn
+        let cap = usize::try_from(self.options.import.preview_faces).unwrap_or(usize::MAX);
         let (model, whole) = match model {
             Some(all) if all.len() > cap => (
                 Some(all.into_iter().filter(|(_, red)| *red).collect()),
@@ -2538,17 +2487,28 @@ impl CutCraftApp {
             all => (all, true),
         };
         let model = model.map(std::sync::Arc::new);
-        let made = made.or_else(|| {
-            let k = self.doc.components.get(&self.form.as_ref()?.drawn?)?;
-            let (lo, hi) = k.height_range().unwrap_or_default();
-            Some([k.cell * k.columns as f64, k.cell * k.rows as f64, hi - lo])
-        });
+        // the model's size: its triangles' box, or (wrapped) its component's
+        let made = model
+            .as_ref()
+            .and_then(|tris| {
+                let corners = tris.iter().flat_map(|(t, _)| t);
+                let lo = corners
+                    .clone()
+                    .copied()
+                    .reduce(cut_craft_core::glam::DVec3::min)?;
+                let hi = corners.copied().reduce(cut_craft_core::glam::DVec3::max)?;
+                Some((hi - lo).to_array())
+            })
+            .or_else(|| {
+                let k = self.doc.components.get(&self.form.as_ref()?.drawn?)?;
+                let (lo, hi) = k.height_range().unwrap_or_default();
+                Some([k.cell * k.columns as f64, k.cell * k.rows as f64, hi - lo])
+            });
         let (area, thickness) = (self.doc.job.area(), self.doc.job.thickness);
         if let Some(form) = &mut self.form {
             form.error = result.err();
             form.model = model;
             form.model_whole = whole;
-            form.beyond = beyond;
             if let (true, Some(made)) = (sized, made) {
                 // to the hundredth of a millimetre shown, not the cell's float noise
                 let round = |v: f64| (v * 100.0).round() / 100.0;
@@ -4758,17 +4718,6 @@ pub(super) fn post_database_message(entries: &[cut_craft_machines::Entry]) -> St
          Craft, which brings its newest post-processors",
         entries.len()
     )
-}
-
-/// The size of the box round a model's `faces`.
-fn model_size(faces: &[cmd_orientate_3d_model::Seen]) -> Option<[f64; 3]> {
-    let corners = faces.iter().flat_map(|(t, _)| t);
-    let lo = corners
-        .clone()
-        .copied()
-        .reduce(cut_craft_core::glam::DVec3::min)?;
-    let hi = corners.copied().reduce(cut_craft_core::glam::DVec3::max)?;
-    Some((hi - lo).to_array())
 }
 
 /// How a toolpath refused for cutting into a keep-out zone is said to be (the form's message

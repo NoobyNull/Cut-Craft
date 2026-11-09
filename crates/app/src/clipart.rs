@@ -2,11 +2,10 @@
 //! picked (and the folders in it; in all of them when none is) as tiles: pictures and 3D
 //! models as previews, drawings by their kind. Tiles are picked with a click (Ctrl or
 //! Shift for more), added to the project with a double-click or by dragging, and a
-//! right-click menu adds, locates, tags or deletes the ones picked, or shows one's Properties.
+//! right-click menu adds, locates, tags or deletes the ones picked.
 
 mod network;
 mod preview;
-mod properties;
 mod tags;
 
 use cut_craft_bug_report::hint::HoverHint;
@@ -89,8 +88,6 @@ pub struct Clipart {
     greys: Greys,
     /// The last thing that went wrong, until the next action.
     trouble: Option<String>,
-    /// Properties: the file shown in the window, while it is open.
-    properties: Option<properties::Properties>,
     /// How many tiles were drawn last.
     #[cfg(test)]
     drawn: usize,
@@ -651,10 +648,7 @@ pub fn panel(
     if clipart.listing.is_none() {
         clipart.listing = taken;
     }
-    match properties::window(ui.ctx(), &mut clipart.properties) {
-        Some(properties::Asked::Locate(file)) => Some(Picked::Locate(file)),
-        None => picked,
-    }
+    picked
 }
 
 /// What the folder tree asks for.
@@ -1280,22 +1274,6 @@ fn menu(ui: &mut egui::Ui, clipart: &mut Clipart, tile: &Tile) -> Option<Picked>
         }
         picked = Some(Picked::Delete(doomed));
     }
-    ui.separator();
-    if ui
-        .button("Properties")
-        .on_hover_hint("Its size, date, tags and where it is.")
-        .clicked()
-    {
-        let file = &tile.entry.file;
-        clipart.properties = Some(properties::Properties::new(
-            file,
-            clipart.kind(tile.entry),
-            tile.entry.picture.as_deref(),
-            clipart.tags.of(file).map(str::to_owned).collect(),
-            &clipart.folders,
-            Some(ui.ctx()),
-        ));
-    }
     picked
 }
 
@@ -1874,99 +1852,6 @@ mod tests {
             Clipart::kept(Some(store)).folders,
             std::slice::from_ref(&dir)
         );
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    /// Where `text` is drawn in `shapes`, if it is.
-    fn text_at(shapes: &[egui::epaint::ClippedShape], text: &str) -> Option<egui::Pos2> {
-        shapes.iter().find_map(|c| match &c.shape {
-            egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos + t.galley.size() / 2.0),
-            _ => None,
-        })
-    }
-
-    /// Right-click ▸ Properties, at the bottom of a tile's menu, opens a window about the
-    /// file: its kind, size, tags and where it is. Escape closes it.
-    #[test]
-    fn properties_from_the_menu() {
-        let dir = folder("properties");
-        let file = dir.join("eagle.stl");
-        std::fs::write(&file, "").unwrap();
-        let stl = importable(&["stl"]);
-        let mut clipart = Clipart {
-            folders: vec![dir.clone()],
-            ..Clipart::default()
-        };
-        clipart
-            .tags
-            .add(std::slice::from_ref(&file), "birds")
-            .unwrap();
-        clipart.read_now(&stl);
-        let ctx = egui::Context::default();
-        let frame = |clipart: &mut Clipart, events: Vec<egui::Event>| {
-            let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(800.0, 800.0),
-                )),
-                events,
-                ..Default::default()
-            };
-            let mut out = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show(ui, |ui| {
-                    panel(ui, clipart, &stl, &[]);
-                });
-            });
-            out.textures_delta.clear();
-            out.shapes
-        };
-        let click = |at: egui::Pos2, button: egui::PointerButton| {
-            [true, false].map(|pressed| egui::Event::PointerButton {
-                pos: at,
-                button,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            })
-        };
-        let shapes = frame(&mut clipart, vec![]);
-        let tile = text_at(&shapes, "eagle.stl").expect("the tile's name");
-        frame(&mut clipart, vec![egui::Event::PointerMoved(tile)]);
-        for e in click(tile, egui::PointerButton::Secondary) {
-            frame(&mut clipart, vec![e]);
-        }
-        // a new menu is drawn unseen for a frame while egui sizes it
-        frame(&mut clipart, vec![]);
-        let shapes = frame(&mut clipart, vec![]);
-        let item = text_at(&shapes, "Properties").expect("Properties in the menu");
-        let report = text_at(&shapes, "Report a Bug Here…").expect("the bug report item");
-        assert!(item.y < report.y, "Properties comes before Report a Bug");
-        frame(&mut clipart, vec![egui::Event::PointerMoved(item)]);
-        for e in click(item, egui::PointerButton::Primary) {
-            frame(&mut clipart, vec![e]);
-        }
-        clipart
-            .properties
-            .as_mut()
-            .expect("the window is open")
-            .wait();
-        frame(&mut clipart, vec![]);
-        let shapes = frame(&mut clipart, vec![]);
-        for text in ["3D model (STL file)", "birds", "0 bytes"] {
-            assert!(text_at(&shapes, text).is_some(), "{text} is shown");
-        }
-        assert!(
-            text_at(&shapes, &file.display().to_string()).is_some(),
-            "its path"
-        );
-        let escape = egui::Event::Key {
-            key: egui::Key::Escape,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::NONE,
-        };
-        frame(&mut clipart, vec![escape]);
-        assert!(clipart.properties.is_none(), "Escape closes it");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
