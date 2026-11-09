@@ -98,20 +98,28 @@ Install details:
 ## Signing
 
 Matthew's rule: add-ons from Cut Craft's own builds are signed; anything else is allowed
-after a warning, never blocked.
+to install and run after a warning, never blocked.
 
 - **Signed** means every file in the release has a `.minisig` that checks out against
   the release key built into Cut Craft (`crates/updater/release-key.pub`, the updater's
   key). The signature's trusted comment must name the file (`file:<name>`), so an old
-  signed file can't be passed off as a new one. Signed add-ons install straight away.
-- **Unsigned** add-ons install only after the user agrees to a warning: nobody has
-  checked what the add-on does, Cut Craft and its author are not responsible for it, and
-  install it only if you trust the repository's owner.
+  signed file can't be passed off as a new one. Signed add-ons install and run straight
+  away.
+- **Unsigned** add-ons are allowed. Every warning about one says the same thing
+  (`addons::NOT_RESPONSIBLE`): nobody has checked what it does, and Cut Craft and its
+  author are not responsible for what it does or can do, including anything harmful or
+  malicious. A tool add-on is a program that runs on the computer with the user's
+  permissions. The warning appears:
+  - before it installs, and again before each update (an update is new, unchecked code);
+  - the first time its program runs in a session, for a tool add-on (`Addons::may_run`).
+    Saying yes covers the rest of the session; reinstalling or updating asks again;
+  - before its gadgets first run each session, for a gadget add-on: they sit under My
+    Gadgets and use the unsigned-gadget warning.
 - **A signature that is present but does not match** refuses the install outright.
   That isn't "unsigned", it means something was changed.
-- Gadgets follow the same rule once installed. A signed add-on's gadgets sit beside the
-  built-in ones. An unsigned add-on's gadgets go under My Gadgets and show the
-  unsigned-gadget warning before they first run each session.
+- A tool add-on placed in the folder by hand, with no `installed.json`, counts as unsigned.
+  Gadget add-ons are loaded only with that record; loose gadgets belong in My Gadgets.
+- A signed add-on's gadgets sit beside the built-in ones.
 
 ## Tool add-ons
 
