@@ -2422,17 +2422,23 @@ impl CutCraftApp {
             });
         // the model's size: its triangles' box, or (wrapped) its component's
         let made = model.as_deref().and_then(model_size);
-        // on a flat job, what is past the material's edges is cut off to show as a ghost
+        let cap = usize::try_from(self.options.import.preview_faces).unwrap_or(usize::MAX);
+        // on a flat job, what is past the material's edges is cut off to show as a ghost;
+        // past the preview limit, every so many of its faces only (faint, it still reads)
         let (model, beyond) = match model {
             Some(all) if self.doc.job.rotary.is_none() => {
                 let (over, past) = crate::view3d::split_at_edges(&all, self.doc.job.area());
-                let past = past.into_iter().map(|t| (t, false)).collect();
+                let every = past.len().div_ceil(cap.max(1)).max(1);
+                let past = past
+                    .into_iter()
+                    .step_by(every)
+                    .map(|t| (t, false))
+                    .collect();
                 (Some(over), Some(std::sync::Arc::new(past)))
             }
             all => (all, None),
         };
         // a huge model is shown as the surface it makes, only its unreachable faces drawn
-        let cap = usize::try_from(self.options.import.preview_faces).unwrap_or(usize::MAX);
         let (model, whole) = match model {
             Some(all) if all.len() > cap => (
                 Some(all.into_iter().filter(|(_, red)| *red).collect()),

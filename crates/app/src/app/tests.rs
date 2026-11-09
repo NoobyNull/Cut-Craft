@@ -1977,7 +1977,13 @@ fn a_model_imported_past_the_material_edge_shows_that_part_as_a_red_ghost() {
     h.frame(vec![]);
     let form = h.app.form.as_ref().unwrap();
     assert!(!form.model_whole);
-    assert!(form.beyond.as_ref().is_some_and(|b| !b.is_empty()));
+    assert!(
+        form.beyond
+            .as_ref()
+            .is_some_and(|b| !b.is_empty() && b.len() <= 4),
+        "the ghost keeps to the limit too: {:?}",
+        form.beyond.as_ref().map(|b| b.len())
+    );
     let _ = std::fs::remove_file(file);
 }
 
