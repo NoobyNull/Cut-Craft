@@ -171,12 +171,16 @@ fn ellipse(e: &Ellipse) -> Path {
     unit.transformed(&place)
 }
 
-/// Samples per knot span when a spline is turned into a polyline.
+/// A (possibly rational) B-spline, evaluated with de Boor's algorithm and sampled at the
+/// points per knot span Options ▸ Advanced sets (32 unless changed).
 // ponytail: sampled; convert to exact Beziers by knot insertion if precision matters
-const SPLINE_SAMPLES: u32 = 32;
-
-/// A (possibly rational) B-spline, evaluated with de Boor's algorithm and sampled.
 fn spline(s: &Spline) -> Option<Path> {
+    spline_sampled(s, cut_craft_core::import_settings::spline_samples())
+}
+
+/// [`spline`] with `samples` points per knot span.
+fn spline_sampled(s: &Spline, samples: u32) -> Option<Path> {
+    let samples = cut_craft_core::import_settings::samples_in_range(samples);
     let p = usize::try_from(s.degree_of_curve)
         .ok()
         .filter(|&p| p >= 1)?;
@@ -197,13 +201,13 @@ fn spline(s: &Spline) -> Option<Path> {
     for k in p..=last {
         let (a, b) = (knots[k], knots[k + 1]);
         if b > a {
-            points.extend((0..SPLINE_SAMPLES).map(|i| {
+            points.extend((0..samples).map(|i| {
                 de_boor(
                     p,
                     k,
                     knots,
                     &ctrl,
-                    a + (b - a) * f64::from(i) / f64::from(SPLINE_SAMPLES),
+                    a + (b - a) * f64::from(i) / f64::from(samples),
                 )
             }));
         }
@@ -386,6 +390,24 @@ mod tests {
             "a cubic with those controls peaks at 7.5: {:?}",
             p.bounds()
         );
+    }
+
+    #[test]
+    fn a_spline_span_becomes_as_many_lines_as_samples_asked_for() {
+        let s = Spline {
+            degree_of_curve: 3,
+            control_points: [(0.0, 0.0), (0.0, 10.0), (10.0, 10.0), (10.0, 0.0)]
+                .iter()
+                .map(|&(x, y)| DxfPoint::new(x, y, 0.0))
+                .collect(),
+            knot_values: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            ..Spline::default()
+        };
+        // one knot span: the samples along it, then the last point
+        assert_eq!(spline_sampled(&s, 8).unwrap().segments.len(), 8);
+        assert_eq!(spline_sampled(&s, 64).unwrap().segments.len(), 64);
+        // kept to Options' range
+        assert_eq!(spline_sampled(&s, 1).unwrap().segments.len(), 4);
     }
 
     #[test]

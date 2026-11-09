@@ -2977,7 +2977,7 @@ impl CutCraftApp {
             if options.toolpaths.preview_speed != self.options.toolpaths.preview_speed {
                 self.playback_speed = options.toolpaths.preview_speed();
             }
-            options.advanced.apply();
+            options.apply();
             self.options = options;
             self.save_options();
             // clipping turned on or off: the toolpaths made again with or without it

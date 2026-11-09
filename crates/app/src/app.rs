@@ -2134,7 +2134,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             app.load_machines();
             let (options, tampered) = crate::options::Options::load_checked();
             app.options = options;
-            app.options.advanced.apply();
+            app.options.apply();
             app.playback_speed = app.options.toolpaths.preview_speed();
             if tampered {
                 app.status.set_message(crate::options::TAMPERED);

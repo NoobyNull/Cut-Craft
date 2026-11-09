@@ -234,7 +234,7 @@ pub struct Params {
     /// A full 3D model is kept whole: in a double-sided job its underside goes to the other
     /// side, and in a rotary job it is wrapped round the axis, its distance out at each
     /// angle becoming the height. A flat model is its top seen from above, placed like
-    /// clipart. Shown when Options ▸ Importing Models offers both
+    /// clipart. Shown when Options ▸ Importing offers both
     #[schemars(title = "Imported model type", extend("x-hide-when" = {"offered": ["full", "flat"]}))]
     #[serde(default)]
     pub model_type: ModelType,
@@ -244,7 +244,7 @@ pub struct Params {
     #[schemars(title = "Scale model to fit material")]
     #[serde(default)]
     pub fit_material: bool,
-    /// What Options ▸ Importing Models offers; never shown. Set by the app when the form
+    /// What Options ▸ Importing offers; never shown. Set by the app when the form
     /// opens; one kind alone also sets `model_type`
     #[schemars(extend("x-hide-when" = {"offered": ["full", "flat", "both"]}))]
     #[serde(default)]
@@ -266,7 +266,7 @@ pub struct Params {
     pub rotary: bool,
 }
 
-/// What Options ▸ Importing Models lets the form offer.
+/// What Options ▸ Importing lets the form offer.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Offered {

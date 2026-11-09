@@ -1,5 +1,6 @@
-//! Import a bitmap picture: kept in grey levels, placed at the job's lower left at 96 pixels
-//! per inch, shrunk to fit the job if it is bigger. A 16-bit or floating point picture (a
+//! Import a bitmap picture: kept in grey levels, placed at the job's lower left at the
+//! pixels per inch Options ▸ Importing sets (96 unless changed), shrunk to fit the job if it
+//! is bigger. A 16-bit or floating point picture (a
 //! depth map) keeps its tones at full precision too, for reliefs made from it, and a colour
 //! picture its colours, for tracing by colour.
 
@@ -7,8 +8,6 @@ use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::{Change, CommandError, FileFormat, Importer};
-
-const MM_PER_PX: f64 = 25.4 / 96.0;
 
 pub struct ImportBitmap;
 
@@ -20,30 +19,40 @@ impl Importer for ImportBitmap {
     };
 
     fn import(doc: &Document, bytes: &[u8]) -> Result<Change, CommandError> {
-        let (columns, rows, grey, depth) = match float_tiff(bytes) {
-            Some((columns, rows, heights)) => {
-                let tones = stretched(heights);
-                (columns, rows, grey_of(&tones), tones)
-            }
-            None => decoded(bytes)?,
-        };
-        #[expect(clippy::cast_precision_loss, reason = "pixel counts")]
-        let natural = Point::new(columns as f64, rows as f64) * MM_PER_PX;
-        let area = doc.job.area();
-        let room = area.max - area.min;
-        let scale = (room.x / natural.x).min(room.y / natural.y).min(1.0);
-        let mut c = Change::builder(doc);
-        c.add_bitmap(Bitmap {
-            name: "Bitmap".into(),
-            columns,
-            rows,
-            grey,
-            rect: Rect::new(area.min, area.min + natural * scale),
-            depth,
-            rgb: colours(bytes, columns * rows),
-        });
-        Ok(c.finish())
+        import_at(
+            doc,
+            bytes,
+            cut_craft_core::import_settings::pixels_per_inch(),
+        )
     }
+}
+
+/// The picture in `bytes` imported at `ppi` pixels per inch (kept to Options' range).
+pub fn import_at(doc: &Document, bytes: &[u8], ppi: f64) -> Result<Change, CommandError> {
+    let mm_per_px = 25.4 / cut_craft_core::import_settings::ppi_in_range(ppi);
+    let (columns, rows, grey, depth) = match float_tiff(bytes) {
+        Some((columns, rows, heights)) => {
+            let tones = stretched(heights);
+            (columns, rows, grey_of(&tones), tones)
+        }
+        None => decoded(bytes)?,
+    };
+    #[expect(clippy::cast_precision_loss, reason = "pixel counts")]
+    let natural = Point::new(columns as f64, rows as f64) * mm_per_px;
+    let area = doc.job.area();
+    let room = area.max - area.min;
+    let scale = (room.x / natural.x).min(room.y / natural.y).min(1.0);
+    let mut c = Change::builder(doc);
+    c.add_bitmap(Bitmap {
+        name: "Bitmap".into(),
+        columns,
+        rows,
+        grey,
+        rect: Rect::new(area.min, area.min + natural * scale),
+        depth,
+        rgb: colours(bytes, columns * rows),
+    });
+    Ok(c.finish())
 }
 
 /// A colour picture's pixels, three bytes each, if it has `pixels` of them and any is not
@@ -195,6 +204,20 @@ mod tests {
             b.darkness(b.rect.min + Point::new(0.1, 1.0)),
             Some(1.0),
             "the black first column"
+        );
+    }
+
+    #[test]
+    fn a_picture_comes_in_at_the_pixels_per_inch_given() {
+        let mut doc = Document::default();
+        // 300 pixels at 300 per inch is an inch wide
+        doc.apply(&import_at(&doc, &png(300, 150), 300.0).unwrap())
+            .unwrap();
+        let b = doc.bitmaps.values().next().unwrap();
+        let size = b.rect.max - b.rect.min;
+        assert!(
+            (size.x - 25.4).abs() < 1e-9 && (size.y - 12.7).abs() < 1e-9,
+            "{size:?}"
         );
     }
 
