@@ -450,6 +450,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   - Geometry snaps: object centres, span end/mid points, arc centres, intersections, horizontal/vertical/angle alignment.
 - **Smart snapping:** hovering "wakes" nodes and vectors, and the most recent few take priority (with a cap on how many). It draws dashed snap lines for bounding boxes and centres, horizontal and vertical lines through nodes, tangents, perpendiculars to tangents, lines connecting two woken nodes (and their midpoint), the span geometry itself, angle constraints, and job edge and centre lines.
 - **Hold Shift** to turn snapping off temporarily.
+- **[inf]** Cut Craft differs on purpose: Tangent and Perpendicular (from the start of the line being drawn) are object snaps with their own check box in Snapping Options, on by default, not part of smart snapping, so a novice gets them without knowing the smart-snapping toggle. Each snap shows a CAD-style marker and its name at the pointer (square End, triangle Middle, circle Tangent, right angle Perpendicular, plus Center, cross for lined up, guide or grid), and the status bar says in plain words what it snapped to and that Shift places the point freely. Drawing tools show a crosshair pointer.
 
 ### Keyboard shortcuts [check] (help: keyboard shortcuts; to re-confirm in the trial)
 | Key | Command | Key | Command |

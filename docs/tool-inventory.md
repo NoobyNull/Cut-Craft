@@ -547,7 +547,12 @@ say "not implemented yet".
 - Edit ▸ Snap Options (F4): drawing and node drags snap to span ends and middles, arc and
   object centres, the job's centre and corners, and a grid, within a snapping radius in
   pixels; Shift holds snapping off. Guides and smart snapping (see the top bar) snap too.
-  Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
+  While drawing, a line's far end (and a polyline's next point) also snaps Tangent to a
+  circle, arc or curve and Perpendicular onto a line or curve, from where it starts
+  (Tangent and Perpendicular check box, on by default). Polyline clicks snap; the view marks
+  each snap with its own shape and name (square End, triangle Middle, circle Tangent, right
+  angle Perpendicular, plus Center) and the status bar says what it means. Drawing tools
+  show a crosshair pointer. Fixed Nudge Distance moves the selection with Ctrl and an arrow key (the arrows alone,
   with Shift, or with Ctrl and Shift move by the grid, half or a tenth). Intersections and
   cursor text are not done; the options last for the session.
 - Toolpaths ▸ Create Job Sheet: an HTML page with the job layout, notes, material setup,
