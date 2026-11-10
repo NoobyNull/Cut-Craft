@@ -49,6 +49,8 @@ please report them (see [Reporting bugs](#reporting-bugs)).
   (which face is up, rotation, size, position, depth) move and resize it as you change them.
 - Reliefs from pictures. 16-bit PNG and TIFF, and 32-bit floating point TIFF depth maps, are
   read at full precision, so smooth reliefs don't come out stepped.
+  Relief from Photo can show a relief as your bit will carve it: give it the ball nose's
+  tip and taper, and grooves too narrow for the bit fill in.
 - Sculpting, smoothing, slicing, offset models, draft, baking components together.
 - Segment a 3D model into pieces for a 3-axis machine: cut any piece again, and choose
   which face of each piece is up.
