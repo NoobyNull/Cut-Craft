@@ -1177,7 +1177,8 @@ mod tests {
                 "Fractal",
                 "Stones",
                 "Ripples",
-                "Hammered"
+                "Hammered",
+                "Bandanna"
             ]
         );
         assert_eq!(field(&texture, "seed").kind, Kind::Seed);

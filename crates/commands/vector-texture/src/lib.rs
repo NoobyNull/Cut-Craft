@@ -4,6 +4,7 @@
 //! stones, ripples, hammered dimples) grown inside them, every line kept a carvable gap from
 //! the others and from the edge. On the current layer, or on a layer of their own.
 
+mod bandanna;
 mod fill;
 mod motif;
 mod patterns;
@@ -55,6 +56,9 @@ pub enum Style {
     /// Round dimples of a few sizes, as hammered metal
     #[schemars(title = "Hammered")]
     Hammered,
+    /// Paisley teardrops with flowers and dots between, as on a bandanna
+    #[schemars(title = "Bandanna")]
+    Bandanna,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -273,6 +277,7 @@ fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandErro
         Style::Stones => patterns::stones(&mut g, p.size).ok_or_else(too_fine)?,
         Style::Ripples => patterns::ripples(&area, p.size, p.gap),
         Style::Hammered => patterns::hammered(&mut g, p.size),
+        Style::Bandanna => merged(&bandanna::bandanna(&mut g, p.size), p.gap),
     };
     if g.full() || paths.len() > MOST_PIECES {
         return Err(too_fine());
@@ -415,7 +420,8 @@ fn merged(made: &scroll::Made, gap: f64) -> Vec<Path> {
     paths
 }
 
-/// The parts of the details at least the gap from every outline, each long enough to carve.
+/// The parts of the details at least the gap from every outline, each long enough to carve
+/// (three gaps; shorter scraps read as scratches).
 #[expect(clippy::cast_possible_truncation, reason = "grid cells")]
 fn clear_of(details: &[fill::Stroke], outlines: &[Path], gap: f64) -> Vec<fill::Stroke> {
     let key = |q: Point| ((q.x / gap).floor() as i64, (q.y / gap).floor() as i64);
@@ -454,7 +460,7 @@ fn clear_of(details: &[fill::Stroke], outlines: &[Path], gap: f64) -> Vec<fill::
                 run.push(q);
             } else if !run.is_empty() {
                 let length: f64 = run.windows(2).map(|w| w[0].distance(w[1])).sum();
-                if length >= gap {
+                if length >= gap * 3.0 {
                     out.push(fill::Stroke::open(std::mem::take(&mut run)));
                 }
                 run.clear();
@@ -541,7 +547,7 @@ mod tests {
         assert_ne!(noisy(3), noisy(4));
     }
 
-    const FILLS: [Style; 9] = [
+    const FILLS: [Style; 10] = [
         Style::Floral,
         Style::Baroque,
         Style::Western,
@@ -551,6 +557,7 @@ mod tests {
         Style::Stones,
         Style::Ripples,
         Style::Hammered,
+        Style::Bandanna,
     ];
 
     fn fill(style: Style, seed: u32, boundary: Vec<Path>) -> Vec<Path> {

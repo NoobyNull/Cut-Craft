@@ -12,15 +12,15 @@ use std::f64::consts::{PI, TAU};
 /// One scroll in its own frame (its foot at the origin heading along +x, curling
 /// anticlockwise): the closed shapes that merge into one another, and the details apart.
 #[derive(Clone, Default)]
-struct Motif {
-    shapes: Vec<Vec<Point>>,
-    details: Vec<Stroke>,
+pub(crate) struct Motif {
+    pub shapes: Vec<Vec<Point>>,
+    pub details: Vec<Stroke>,
     /// The same shapes as raised pieces, for the relief.
-    pieces: Vec<Piece>,
+    pub pieces: Vec<Piece>,
 }
 
 impl Motif {
-    fn map(&self, f: impl Fn(Point) -> Point) -> Self {
+    pub(crate) fn map(&self, f: impl Fn(Point) -> Point) -> Self {
         Self {
             shapes: self
                 .shapes
@@ -40,19 +40,19 @@ impl Motif {
     }
 
     /// Turned by `angle`, mirrored across its own x axis if `flip`, then moved by `by`.
-    fn placed(&self, by: Point, angle: f64, flip: bool) -> Self {
+    pub(crate) fn placed(&self, by: Point, angle: f64, flip: bool) -> Self {
         let turn = Point::from_angle(angle);
         let y = if flip { -1.0 } else { 1.0 };
         self.map(|p| by + turn.rotate(Point::new(p.x, p.y * y)))
     }
 
-    fn add(&mut self, other: Self) {
+    pub(crate) fn add(&mut self, other: Self) {
         self.shapes.extend(other.shapes);
         self.details.extend(other.details);
         self.pieces.extend(other.pieces);
     }
 
-    fn centre(&self) -> Point {
+    pub(crate) fn centre(&self) -> Point {
         let (mut lo, mut hi) = (Point::splat(f64::INFINITY), Point::splat(f64::NEG_INFINITY));
         for p in self.shapes.iter().flatten() {
             lo = lo.min(*p);
@@ -62,7 +62,7 @@ impl Motif {
     }
 
     /// Points round every outline and along every detail, no further apart than `step`.
-    fn samples(&self, step: f64) -> Vec<Point> {
+    pub(crate) fn samples(&self, step: f64) -> Vec<Point> {
         let mut out = Vec::new();
         for ring in &self.shapes {
             for i in 0..ring.len() {
@@ -79,13 +79,13 @@ impl Motif {
 /// How one scroll's curve differs from the next: how gently it starts, how much it first
 /// bends the other way (an S), a slow wave along it, and how far its volute turns.
 #[derive(Clone, Copy)]
-struct Curve {
-    start: f64,
-    counter: f64,
-    wave: f64,
-    period: f64,
-    phase: f64,
-    turns: f64,
+pub(crate) struct Curve {
+    pub start: f64,
+    pub counter: f64,
+    pub wave: f64,
+    pub period: f64,
+    pub phase: f64,
+    pub turns: f64,
 }
 
 impl Curve {
@@ -110,7 +110,7 @@ impl Curve {
 /// tightening until its radius is `volute`, then holding, stopping before it comes within
 /// `clear` of itself. Points, headings and curvatures.
 #[expect(clippy::cast_precision_loss, reason = "points along a spine")]
-fn spine(
+pub(crate) fn spine(
     length: f64,
     volute: f64,
     clear: f64,
@@ -165,7 +165,7 @@ fn spine(
 /// A band along `points` tapering from `width` at its foot to a point, never wider than
 /// its curve allows.
 #[expect(clippy::cast_precision_loss, reason = "points along a spine")]
-fn band(points: &[Point], headings: &[f64], bends: &[f64], width: f64) -> Vec<Point> {
+pub(crate) fn band(points: &[Point], headings: &[f64], bends: &[f64], width: f64) -> Vec<Point> {
     let n = points.len();
     let (mut left, mut right) = (Vec::with_capacity(n), Vec::with_capacity(n));
     for i in 0..n {
@@ -378,7 +378,7 @@ fn flower(centre: Point, radius: f64, gap: f64, turn: f64) -> Motif {
 
 /// Whether the points can go down: inside, and the gap clear of everything laid so far
 /// (but `junction`'s stroke near it).
-fn fits(g: &Grower, points: &[Point], junction: Option<(u32, Point, f64)>) -> bool {
+pub(crate) fn fits(g: &Grower, points: &[Point], junction: Option<(u32, Point, f64)>) -> bool {
     let probe = Probe {
         stroke: u32::MAX,
         index: 0,
@@ -391,7 +391,7 @@ fn fits(g: &Grower, points: &[Point], junction: Option<(u32, Point, f64)>) -> bo
 }
 
 /// Lays a placed motif down: its points in the space, its shapes and details in `made`.
-fn lay(g: &mut Grower, motif: Motif, points: &[Point], made: &mut Made) {
+pub(crate) fn lay(g: &mut Grower, motif: Motif, points: &[Point], made: &mut Made) {
     let stroke = g.space.stroke();
     for &p in points {
         g.space.add(p, 0.0, stroke, 0);
