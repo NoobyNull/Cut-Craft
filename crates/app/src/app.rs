@@ -254,7 +254,7 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 
 /// Forms that make many vectors at once and go on remaking them as their settings change
 /// (a fill and its variations), rather than adding another each time.
-const REMAKE_FORMS: &[&str] = &["vector_texture"];
+const REMAKE_FORMS: &[&str] = &["vector_texture", "decorative_relief"];
 
 const BUILT_INS: [&str; 101] = [
     "try_sample_project",

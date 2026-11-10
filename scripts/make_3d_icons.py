@@ -348,6 +348,50 @@ def _():
     return ic
 
 
+def scroll_fn():
+    """A carved scroll: a rounded band sweeping round into a volute with a raised eye, two
+    leaves lying along the outside of its curve."""
+    t = np.linspace(0, 1, 160)
+    a = 0.4 + 2.7 * math.pi * t
+    r = 0.8 * np.exp(-1.25 * t * 2.7 * math.pi / (2 * math.pi))
+    spine = np.stack([0.08 + r * np.cos(a) * 1.05, -0.05 + r * np.sin(a)], -1)
+    half = 0.15 * (1 - t) ** 0.6 + 0.035
+
+    def near(X, Y, pts, widths):
+        best = np.full(X.shape, 9.0)
+        u = np.zeros(X.shape)
+        for (x, y), w in zip(pts, widths):
+            d = np.hypot(X - x, Y - y) / w
+            u = np.where(d < best, d, u)
+            best = np.minimum(best, d)
+        return best
+
+    def fn(X, Y):
+        d = near(X, Y, spine, half)
+        band = 0.22 * np.sqrt(np.clip(1 - d ** 2, 0, 1)) * (d < 1)
+        ex, ey = spine[-1]
+        eye = 0.3 * np.sqrt(np.clip(1 - ((X - ex) ** 2 + (Y - ey) ** 2) / 0.13 ** 2, 0, 1))
+        leaves = np.zeros_like(X)
+        for k, s in ((10, 0.26), (60, 0.2)):
+            (x, y) = spine[k]
+            out = np.array([x - 0.08, y - 0.02])
+            d = out / np.linalg.norm(out)
+            cx, cy = x + d[0] * 0.18, y + d[1] * 0.18
+            along = (X - cx) * -d[1] + (Y - cy) * d[0]
+            across = (X - cx) * d[0] + (Y - cy) * d[1]
+            # an oval leaf, its edge scalloped into lobes
+            lobed = 1 + 0.18 * np.cos(np.arctan2(across, along) * 6)
+            q = ((along / s) ** 2 + (across / (s * 0.6)) ** 2) / lobed ** 2
+            leaves = np.maximum(leaves, 0.2 * np.sqrt(np.clip(1 - q, 0, 1)))
+        return np.maximum.reduce([band, eye, leaves])
+    return fn
+
+
+@icon("modeling/decorative_relief")
+def _():
+    return Icon().add([(on_slab(scroll_fn(), n=120, depth=0.2), WOOD)])
+
+
 @icon("modeling/create_vector_boundary_around_selected_components")
 def _():
     ic = Icon().add([(shape(TWO), BODY)])

@@ -1,0 +1,20 @@
+[package]
+name = "cmd-decorative-relief"
+description = "Create Decorative Relief"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cmd-vector-texture = { path = "../vector-texture" }
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+image.workspace = true
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

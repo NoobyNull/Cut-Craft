@@ -9506,3 +9506,38 @@ fn a_fill_follows_its_settings_in_place_and_one_undo_takes_it_away() {
     h.app.apply_form("vector_texture", &params).unwrap();
     assert!(fill(&h).is_superset(&kept), "the first fill stays");
 }
+
+#[test]
+fn a_decorative_relief_follows_its_settings_as_one_component() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 150.0, 150.0);
+    let square: Vec<EntityId> = h.app.doc.vectors.keys().copied().collect();
+    h.app.doc.selection = square.iter().copied().collect();
+    h.app.invoke(&h.ctx, "decorative_relief");
+    h.frame(vec![]);
+    let mut params = h.app.form.as_ref().expect("the form").params.clone();
+    h.app.apply_form("decorative_relief", &params).unwrap();
+    assert_eq!(h.app.doc.components.len(), 1, "one relief made");
+    let first = h
+        .app
+        .doc
+        .components
+        .values()
+        .next()
+        .unwrap()
+        .heights
+        .clone();
+    let undo_depth = h.app.history.undo_depth();
+    // a new variation carves another in its place, live
+    params["seed"] = 7.into();
+    let form = h.app.form.as_mut().unwrap();
+    form.params = params.clone();
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "in place of the first");
+    let second = &h.app.doc.components.values().next().unwrap().heights;
+    assert!(!cut_craft_core::component::same_heights(&first, second));
+    assert_eq!(h.app.history.undo_depth(), undo_depth);
+    h.app.invoke(&h.ctx, "undo");
+    assert!(h.app.doc.components.is_empty());
+}

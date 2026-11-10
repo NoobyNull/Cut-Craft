@@ -25,6 +25,53 @@ pub enum Look {
 pub struct Made {
     pub shapes: Vec<Stroke>,
     pub details: Vec<Stroke>,
+    /// The composed styles' shapes as raised pieces, for the relief, lowest first.
+    pub pieces: Vec<Piece>,
+}
+
+/// What a raised piece of a relief is, which says how it is rounded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Part {
+    /// A scroll's band, rolling along its length into the volute.
+    Band,
+    /// A leaf lying along its band, curling up towards its tip.
+    Leaf,
+    /// A volute's eye or a flower's heart: a round button.
+    Eye,
+    /// A ring of petals, each domed.
+    Petals,
+}
+
+/// A raised piece of a relief: its outline, the line down its middle from its foot to its
+/// tip (the centre, for a round one), what it is, and how high its top stands as a share of
+/// the relief's height.
+#[derive(Clone, Debug)]
+pub struct Piece {
+    pub part: Part,
+    pub outline: Vec<Point>,
+    pub spine: Vec<Point>,
+    pub rise: f64,
+}
+
+impl Piece {
+    pub fn new(part: Part, outline: Vec<Point>, spine: Vec<Point>, rise: f64) -> Self {
+        Self {
+            part,
+            outline,
+            spine,
+            rise,
+        }
+    }
+
+    #[must_use]
+    pub fn map(&self, f: impl Fn(Point) -> Point) -> Self {
+        Self {
+            part: self.part,
+            outline: self.outline.iter().map(|&p| f(p)).collect(),
+            spine: self.spine.iter().map(|&p| f(p)).collect(),
+            rise: self.rise,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

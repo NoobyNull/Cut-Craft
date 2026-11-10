@@ -268,6 +268,9 @@ pub struct Grower<'a> {
     pub space: Space,
     pub step: f64,
     pub random: Random,
+    /// Fuller, overlapping leaves on the composed scrolls, for a relief, where they are
+    /// carved over one another rather than outlined side by side.
+    pub lush: bool,
 }
 
 /// How a walk turns: each step it is given the step's number and the distance grown, and
@@ -291,6 +294,7 @@ impl<'a> Grower<'a> {
             space,
             step: (gap / 3.0).max(0.02),
             random: Random(u64::from(seed).wrapping_mul(0x9e37_79b9) ^ 0x5eed),
+            lush: false,
         }
     }
 
