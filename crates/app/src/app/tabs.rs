@@ -15,18 +15,79 @@ fn window_id() -> egui::Id {
     egui::Id::unique("edit_tabs")
 }
 
-/// The Edit Tabs… button, at the foot of a form's Tabs (Profile Toolpath's); then what else
-/// a group's foot holds (Edit Loops…). Whether the form's settings changed.
-pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut serde_json::Value) -> bool {
-    if group == "Tabs"
-        && ui
+/// What a form's group feet need to know of the job: the material and what is selected.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Stock {
+    /// The material's thickness, mm.
+    pub thickness: f64,
+    /// Whether a closed shape is among the vectors the toolpath cuts.
+    pub closed: bool,
+}
+
+/// How close to the material's bottom a cut must reach to count as right through, mm.
+const THROUGH: f64 = 1e-3;
+
+/// Whether a Profile Toolpath form's `params` cut the piece right out of `stock` with nothing
+/// to hold it: right through, round a closed shape, with no tabs.
+pub(super) fn cuts_loose(params: &serde_json::Value, stock: Stock) -> bool {
+    let Some(side) = params.get("side").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    let depth = if params["through"] == true {
+        stock.thickness
+    } else {
+        params["depth"].as_f64().unwrap_or_default()
+    };
+    let through = stock.thickness > 0.0 && depth + THROUGH >= stock.thickness;
+    let closed = side != "on" || stock.closed;
+    through && closed && params["tabs"] == "none"
+}
+
+/// The words over Add Tabs when a profile would cut its piece loose.
+pub(super) const LOOSE: &str = "This cuts the piece right out with nothing holding it, so it \
+     can move into the cutter or be thrown. Add tabs, or hold it down another way (tape, \
+     screws, a vacuum table).";
+
+/// The Edit Tabs… button, at the foot of a form's Tabs (Profile Toolpath's), with a warning
+/// and Add Tabs when the cut would set the piece loose; a cut right through kept at the
+/// material's thickness under Cutting Depths; then what else a group's foot holds (Edit
+/// Loops…). Whether the form's settings changed.
+pub(super) fn group_end(
+    ui: &mut egui::Ui,
+    group: &str,
+    params: &mut serde_json::Value,
+    stock: Stock,
+) -> bool {
+    let mut changed = false;
+    // the depth field, greyed, shows the depth the cut goes to
+    if group == form::CUTTING_DEPTHS
+        && params["through"] == true
+        && params["depth"].as_f64() != Some(stock.thickness)
+    {
+        params["depth"] = stock.thickness.into();
+        changed = true;
+    }
+    if group == "Tabs" {
+        if cuts_loose(params, stock) {
+            ui.colored_label(ui.visuals().warn_fg_color, LOOSE);
+            if ui
+                .button("Add Tabs")
+                .on_hover_hint("Leave small bridges of material that hold the piece in place")
+                .clicked()
+            {
+                params["tabs"] = "flat".into();
+                changed = true;
+            }
+        }
+        if ui
             .button("Edit Tabs…")
             .on_hover_hint("Place the tabs: how many, where, their size, 2D or 3D")
             .clicked()
-    {
-        ui.data_mut(|d| d.insert_temp(window_id(), true));
+        {
+            ui.data_mut(|d| d.insert_temp(window_id(), true));
+        }
     }
-    super::cutting::group_end(ui, group, params)
+    changed | super::cutting::group_end(ui, group, params)
 }
 
 impl CutCraftApp {

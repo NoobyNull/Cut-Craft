@@ -751,6 +751,21 @@ for way, cw_outside in (("climb", True), ("conventional", False)):
     for side in ("outside", "on", "inside"):
         cw = cw_outside if side != "inside" else not cw_outside
         I[tp + f"cut_{way}_{side}.svg"] = (lambda cw=cw, inside=(side == "inside"): cut_way(cw, inside))
+# which side of the line a profile cuts: the shape, the tool's path (dashed) and the tool on it;
+# outside keeps the part (wood), inside cuts a hole in the sheet, on the line follows the vector
+def side_pic(side):
+    if side == "outside":
+        return [rect(15, 15, 18, 18, 2, INK, SW, WOOD), rect(8, 8, 32, 32, 8, TP, 2, dash="3 3"),
+                circ(8, 24, 6, ACC, SW, WHITE)]
+    if side == "inside":
+        return [rect(3, 3, 42, 42, 3, WOODD, 2, WOOD), rect(9, 9, 30, 30, 3, INK, SW, WHITE),
+                rect(16, 16, 16, 16, 2, TP, 2, dash="3 3"), circ(16, 24, 6, ACC, SW, WHITE)]
+    return [rect(10, 10, 28, 28, 3, INK, SW), rect(10, 10, 28, 28, 3, TP, 2, dash="3 3"),
+            circ(10, 24, 6, ACC, SW, WHITE)]
+
+
+for side in ("outside", "inside", "on"):
+    I[tp + f"side_{side}.svg"] = (lambda side=side: side_pic(side))
 # passes: each pass the same way, or every other one back
 I[tp + "passes_one.svg"] = lambda: [material(4, 30, 40, 14), arrow(6, 12, 42, 12, TP), arrow(6, 23, 42, 23, TP)]
 I[tp + "passes_both.svg"] = lambda: [material(4, 30, 40, 14), arrow(6, 12, 42, 12, TP), arrow(42, 23, 6, 23, TP), path("M42,12 Q47,17.5 42,23", TP, 2, dash="2 2")]

@@ -3380,13 +3380,12 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Design page");
         self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
         let tab = DESIGN_TABS[self.design_tab];
-        let form_open = self.form.as_ref().is_some_and(|f| f.page == Page::Design);
+        // a tool's form takes the page's place, as Aspire's does
+        if self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
+            self.form_panel(ui);
+            return;
+        }
         egui::ScrollArea::vertical().show(ui, |ui| {
-            // a tool's form takes the page's place, as Aspire's does
-            if form_open {
-                self.command_form(ui);
-                return;
-            }
             match tab {
                 "Design" => {
                     if self.options.favourites.of(Page::Design).1 {
@@ -3407,7 +3406,7 @@ impl CutCraftApp {
             }
         });
         // the hovered tool's guidance, or the tool in hand's, in the room left under the icons
-        if tab == "Design" && !form_open {
+        if tab == "Design" {
             self.tip_box(ui);
         }
     }
@@ -3941,6 +3940,31 @@ impl CutCraftApp {
         }
     }
 
+    /// The open form filling `ui`: its settings scroll, while what went wrong and the
+    /// buttons stay pinned at the foot, so Apply (or Calculate) and the reason it failed are
+    /// never scrolled out of sight.
+    pub(super) fn form_panel(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::bottom("form_foot").show(ui, |ui| {
+            ui.add_space(ui.spacing().item_spacing.y);
+            self.form_error(ui);
+            self.form_buttons(ui);
+        });
+        egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+    }
+
+    /// Why the open form's last Apply failed, in red, over its buttons.
+    fn form_error(&self, ui: &mut egui::Ui) {
+        let Some(error) = self.form.as_ref().and_then(|f| f.error.as_ref()) else {
+            return;
+        };
+        let shown = ui.colored_label(ui.visuals().error_fg_color, error);
+        // a toolpath kept out of a zone: how to let it be clipped instead
+        if error.starts_with(KEEP_OUT_REFUSED) {
+            shown.on_hover_text(CLIP_HOW);
+        }
+    }
+
+    /// The open form's heading and settings; [`Self::form_panel`] pins its buttons under it.
     pub(super) fn command_form(&mut self, ui: &mut egui::Ui) {
         let form = self.form.as_ref().map_or("none", |f| f.label);
         cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
@@ -3998,32 +4022,31 @@ impl CutCraftApp {
             }
             selector_section(ui, params, &layers, units);
         };
+        let stock = super::tabs::Stock {
+            thickness: self.doc.job.thickness,
+            closed: self
+                .doc
+                .selection
+                .iter()
+                .any(|id| self.doc.vectors.get(id).is_some_and(|v| v.closed)),
+        };
+        let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
+            super::tabs::group_end(ui, group, params, stock)
+        };
         let look = form::Look {
             units,
             picture: &picture,
             material: form::material(&self.doc, units),
             tool: Some(&tool),
-            group_end: Some(&super::tabs::group_end),
+            group_end: Some(&group_end),
         };
         let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
         open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
         open.dirty |= listed.get();
-        let (id, new_job) = (open.id, open.new_job);
-        if let Some(error) = &open.error {
-            let shown = ui.colored_label(ui.visuals().error_fg_color, error);
-            // a toolpath kept out of a zone: how to let it be clipped instead
-            if error.starts_with(KEEP_OUT_REFUSED) {
-                shown.on_hover_text(CLIP_HOW);
-            }
-        }
+        let id = open.id;
         let (chosen, edit_tool) = asked.into_inner();
         let edit_listed = edit_listed.into_inner();
         self.form_extras(ui, id);
-        // Job Setup for a new job keeps its buttons pinned under the panel instead
-        if !new_job {
-            self.form_buttons(ui);
-            ui.separator();
-        }
         if let Some(name) = chosen {
             self.choose_tool(&name);
         }
