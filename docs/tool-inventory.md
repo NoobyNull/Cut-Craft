@@ -461,7 +461,7 @@ say "not implemented yet".
     job, max spacing with variation, wavelength, amplitude, noise and a seed; on the
     current layer, or (Place Vectors on Layer) on the layer named, made if needed. Cut Craft
     adds decorative fills as other styles (Floral, Baroque, Western leaf, Frost, Snowflakes, Fractal,
-    Stones, Ripples, Hammered) with a pattern size, a smallest gap kept between every line
+    Stones, Ripples, Hammered, Bandanna) with a pattern size, a smallest gap kept between every line
     and the edge, and New variation; the fill follows the form live once applied (see SPEC,
     Create Vector Texture: decorative fills).
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed

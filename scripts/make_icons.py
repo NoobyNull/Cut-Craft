@@ -538,6 +538,10 @@ I[df + "fill_western.svg"] = lambda: [fill_frame(),
     path("M15,26 q-6,-3 -5,-9 q5,3 5,9 z", INK, 2),
     path("M20,17 q-1,-6 3,-9 q1,6 -3,9 z", INK, 2),
     circ(31, 33, 4.5, ACC, 2), dot(31, 33, 1.5)]
+I[df + "fill_bandanna.svg"] = lambda: [fill_frame(),
+    path("M22,38 C12,38 9,30 11,24 C14,14 26,10 32,14 C35,16 34,20 31,19", INK, 2),
+    path("M22,38 C30,38 34,32 33,26 C32,21 28,20 26,22", INK, 2),
+    circ(19, 28, 3.5, ACC, 2), circ(36, 9, 1.8, INK, 2), circ(38, 34, 1.8, INK, 2)]
 I[df + "fill_frost.svg"] = lambda: [fill_frame(), line(10, 38, 34, 12, INK, 2)] + [
     line(10 + 24 * t, 38 - 26 * t, 10 + 24 * t + dx * (1 - t) * 12, 38 - 26 * t + dy * (1 - t) * 12, ACC if i == 0 else INK, 2)
     for i, t in enumerate((0.2, 0.4, 0.6, 0.8)) for dx, dy in ((0.95, 0.3), (-0.3, -0.95))]
