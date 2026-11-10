@@ -5,14 +5,14 @@ use super::{
     APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_PANEL_WIDTHS,
     DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
     KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers,
-    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, SECTION_PICTURE_ROWS,
-    SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
-    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
-    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
-    file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
-    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
-    toolpath_template_dialog, view3d,
+    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS,
+    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks,
+    SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES,
+    ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog,
+    commands, dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog, gui,
+    job_dialog, menu_items, message_dialog, on_the_desktop, rest_section, selector_section,
+    shortcut, side_panel, side_tabs, summary_table, template_dialog, texture_dialog, tool_list,
+    tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -1730,6 +1730,7 @@ impl CutCraftApp {
                 model_whole: true,
                 beyond: None,
                 applied: None,
+                remade: None,
                 undo_from: self.history.undo_depth(),
                 way: crate::flyout::DragWay::AsIs,
             });
@@ -2397,6 +2398,9 @@ impl CutCraftApp {
             self.edit_in_background(id, toolpath, params);
             return Ok(());
         }
+        if REMAKE_FORMS.contains(&id) {
+            return self.remake(id, params);
+        }
         let before = self.entity_ids();
         let same = self.form.as_ref().and_then(|f| f.applied.as_ref()) == Some(params);
         match self.drawn_shape() {
@@ -2413,6 +2417,34 @@ impl CutCraftApp {
             form.applied = form.drawn.map(|_| params.clone());
         }
         Ok(())
+    }
+
+    /// A fill form's Apply: its fill made again with `params` in place of the one it last
+    /// made, while that is still the last thing done (one undo); else a new one.
+    pub(super) fn remake(&mut self, id: &str, params: &Value) -> Result<(), String> {
+        if let Some(applied) = self.remade_last() {
+            if applied == *params {
+                return Ok(());
+            }
+            self.history.undo(&mut self.doc);
+        }
+        if let Some(form) = &mut self.form {
+            form.remade = None;
+        }
+        self.apply(id, params)?;
+        let after = (self.history.revision(), self.doc.selection.clone());
+        if let Some(form) = &mut self.form {
+            form.remade = Some((after.0, after.1, params.clone()));
+        }
+        Ok(())
+    }
+
+    /// The settings of the open fill form's last fill, while nothing has been done or picked
+    /// since.
+    pub(super) fn remade_last(&self) -> Option<Value> {
+        let (revision, selection, applied) = self.form.as_ref()?.remade.as_ref()?;
+        (self.history.revision() == *revision && self.doc.selection == *selection)
+            .then(|| applied.clone())
     }
 
     /// Every vector and component, to tell what a command made.
@@ -2446,6 +2478,11 @@ impl CutCraftApp {
         }
         form.dirty = false;
         let dragged = form.dragged.take();
+        // a fill follows its settings once made, a drag only remaking it (one undo)
+        if self.remade_last().is_some() {
+            self.apply_live();
+            return;
+        }
         if self.drawn_shape().is_none() {
             return;
         }
@@ -2481,7 +2518,7 @@ impl CutCraftApp {
         const SIZES: [&str; 3] = ["x", "y", "z"];
         let Some(form) = &mut self.form else { return };
         let (id, mut params) = (form.id, form.params.clone());
-        let sized = params.get("size").is_some();
+        let sized = params["size"].is_object();
         if sized {
             let lock = params["size"]["lock_ratio"].as_bool().unwrap_or(false);
             for (i, key) in SIZES.iter().enumerate() {

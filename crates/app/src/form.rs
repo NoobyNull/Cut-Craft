@@ -153,6 +153,9 @@ pub enum Kind {
         steps: Vec<f64>,
     },
     Bool,
+    /// A pattern's seed (`x-widget: seed`): its number, and a New variation button that picks
+    /// another.
+    Seed,
     /// A string; `multiline` (`x-widget: multiline`) is a box of several lines.
     Text {
         multiline: bool,
@@ -492,6 +495,24 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
                 } else {
                     Value::from(n * factor)
                 };
+            }
+            changed
+        }
+        Kind::Seed => {
+            let mut n = value.as_u64().unwrap_or_default();
+            let mut changed = ui
+                .add(egui::DragValue::new(&mut n).range(0..=u32::MAX))
+                .changed();
+            if ui
+                .button("New variation")
+                .on_hover_hint("Another pattern with the same settings")
+                .clicked()
+            {
+                n = u64::from(next_seed(u32::try_from(n).unwrap_or_default()));
+                changed = true;
+            }
+            if changed {
+                *value = Value::from(n);
             }
             changed
         }
@@ -881,11 +902,29 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     changed
 }
 
+/// The seed after `seed`: well away from it, the same every time, so a variation can be
+/// found again by stepping from the first.
+pub fn next_seed(seed: u32) -> u32 {
+    let mut random = cut_craft_core::random::Random(u64::from(seed));
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a unit times u32::MAX fits u32"
+    )]
+    let next = (random.unit() * f64::from(u32::MAX)) as u32;
+    if next == seed {
+        next.wrapping_add(1)
+    } else {
+        next
+    }
+}
+
 /// A new item of `kind` with nothing set: numbers at their least, the first choice, every
 /// field of an object so.
 fn blank(kind: &Kind) -> Value {
     match kind {
         Kind::Number { min, .. } => Value::from(min.unwrap_or(0.0).max(0.0)),
+        Kind::Seed => Value::from(1),
         Kind::Bool => Value::Bool(false),
         Kind::Text { .. } => Value::from(""),
         Kind::Choice(options, _) => options
@@ -1022,6 +1061,11 @@ fn kind(root: &Value, property: &Value) -> Kind {
         return Kind::Choice(options, widget);
     }
     match s["type"].as_str() {
+        Some("number" | "integer")
+            if marked("x-widget").and_then(Value::as_str) == Some("seed") =>
+        {
+            Kind::Seed
+        }
         Some(t @ ("number" | "integer")) => Kind::Number {
             unit: s["x-unit"].as_str().map(String::from),
             min: s["minimum"].as_f64(),
@@ -1095,6 +1139,51 @@ mod tests {
 
     fn field<'a>(fields: &'a [Field], key: &str) -> &'a Field {
         fields.iter().find(|f| f.key == key).unwrap()
+    }
+
+    #[test]
+    fn vector_textures_style_is_a_row_of_named_pictures_and_its_seed_has_new_variation() {
+        let texture = fields(&schema("vector_texture"));
+        assert_eq!(texture[0].key, "style", "the style comes first");
+        let Kind::Choice(styles, Widget::Icons { picture, named }) = &texture[0].kind else {
+            panic!("{:?}", texture[0].kind);
+        };
+        assert!(*named);
+        assert_eq!(picture.as_deref(), Some("drawing_forms/fill_{}.png"));
+        let labels: Vec<&str> = styles.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "Wavy lines",
+                "Floral",
+                "Baroque",
+                "Frost",
+                "Snowflakes",
+                "Fractal",
+                "Stones",
+                "Ripples",
+                "Hammered"
+            ]
+        );
+        assert_eq!(field(&texture, "seed").kind, Kind::Seed);
+        // the wavy lines' own settings only show for them, the pattern's for the rest
+        let wavy = serde_json::json!({ "style": "wavy_lines" });
+        let floral = serde_json::json!({ "style": "floral" });
+        let shown = |key, params| {
+            field(&texture, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(params))
+        };
+        assert!(shown("wavelength", &wavy) && !shown("wavelength", &floral));
+        assert!(!shown("gap", &wavy) && shown("gap", &floral));
+    }
+
+    #[test]
+    fn a_new_variation_is_another_seed_and_the_same_one_each_time() {
+        assert_ne!(next_seed(1), 1);
+        assert_eq!(next_seed(1), next_seed(1));
+        assert_ne!(next_seed(next_seed(1)), next_seed(1));
     }
 
     #[test]
