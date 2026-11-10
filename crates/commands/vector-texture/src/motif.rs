@@ -72,15 +72,58 @@ impl Motif {
     }
 }
 
-/// A scroll's centre line: from the origin along +x, its curve tightening until its radius
-/// is `volute`, then holding, stopping before it comes within `clear` of itself. Points,
-/// headings and curvatures.
+/// How one scroll's curve differs from the next: how gently it starts, how much it first
+/// bends the other way (an S), a slow wave along it, and how far its volute turns.
+#[derive(Clone, Copy)]
+struct Curve {
+    start: f64,
+    counter: f64,
+    wave: f64,
+    period: f64,
+    phase: f64,
+    turns: f64,
+}
+
+impl Curve {
+    /// A fresh random curve, so no two scrolls are the same.
+    fn random(g: &mut Grower) -> Self {
+        Self {
+            start: g.range(0.2, 0.9),
+            counter: if g.chance(0.5) {
+                g.range(0.8, 2.2)
+            } else {
+                0.0
+            },
+            wave: g.range(0.0, 0.8),
+            period: g.range(0.5, 1.0),
+            phase: g.range(0.0, TAU),
+            turns: g.range(0.9, 1.5),
+        }
+    }
+}
+
+/// A scroll's centre line: from the origin along +x, its curve (shaped by `curve`)
+/// tightening until its radius is `volute`, then holding, stopping before it comes within
+/// `clear` of itself. Points, headings and curvatures.
 #[expect(clippy::cast_precision_loss, reason = "points along a spine")]
-fn spine(length: f64, volute: f64, clear: f64, step: f64) -> (Vec<Point>, Vec<f64>, Vec<f64>) {
-    let start = 0.5 / length;
+fn spine(
+    length: f64,
+    volute: f64,
+    clear: f64,
+    step: f64,
+    curve: Curve,
+) -> (Vec<Point>, Vec<f64>, Vec<f64>) {
+    let start = curve.start / length;
     let most = 1.0 / volute;
     let rate = (most / start).max(1.01).ln() / length;
-    let total = length + TAU * volute * 1.25;
+    let total = length + TAU * volute * curve.turns;
+    // the S bend and the wave die away before the volute
+    let extra = |s: f64| {
+        let fade = (1.0 - s / length).max(0.0);
+        (-curve.counter * (-s / (0.25 * length)).exp()
+            + curve.wave * (TAU * s / (curve.period * length) + curve.phase).sin() * fade)
+            / length
+    };
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -93,11 +136,12 @@ fn spine(length: f64, volute: f64, clear: f64, step: f64) -> (Vec<Point>, Vec<f6
         reason = "a few steps"
     )]
     let skip = (clear * 1.6 / step).ceil() as usize + 1;
-    let (mut points, mut headings, mut bends) = (vec![Point::ZERO], vec![0.0], vec![start]);
+    let (mut points, mut headings, mut bends) =
+        (vec![Point::ZERO], vec![0.0], vec![start + extra(0.0)]);
     let (mut p, mut h) = (Point::ZERO, 0.0);
     for i in 1..=steps {
         let s = i as f64 * step;
-        let k = (start * (rate * s).exp()).min(most);
+        let k = (start * (rate * s).exp()).min(most) + extra(s);
         h += k * step;
         p += Point::from_angle(h) * step;
         let crowded = points
@@ -123,7 +167,7 @@ fn band(points: &[Point], headings: &[f64], bends: &[f64], width: f64) -> Vec<Po
     for i in 0..n {
         let u = i as f64 / (n - 1).max(1) as f64;
         let half = (width / 2.0 * (1.0 - u).powf(0.8))
-            .min(0.6 / bends[i].max(1e-9))
+            .min(0.6 / bends[i].abs().max(1e-9))
             .max(width * 0.03);
         let normal = Point::from_angle(headings[i]).perp() * half;
         left.push(points[i] + normal);
@@ -145,9 +189,10 @@ fn band(points: &[Point], headings: &[f64], bends: &[f64], width: f64) -> Vec<Po
 fn scroll(g: &mut Grower, length: f64, look: Look, depth: u32) -> Motif {
     let gap = g.gap();
     let baroque = look == Look::Baroque;
-    let width = (length * if baroque { 0.09 } else { 0.05 }).max(gap * 0.8);
-    let volute = (length * 0.09).max(gap * 1.5 + width);
-    let (points, headings, bends) = spine(length, volute, gap + width, g.step);
+    let width = (length * if baroque { 0.09 } else { 0.05 } * g.range(0.85, 1.15)).max(gap * 0.8);
+    let volute = (length * g.range(0.07, 0.12)).max(gap * 1.5 + width);
+    let curve = Curve::random(g);
+    let (points, headings, bends) = spine(length, volute, gap + width, g.step, curve);
     let count = points.len();
     let at = |u: f64| ((u * (count - 1) as f64).round() as usize).min(count - 1);
     let mut motif = Motif::default();
@@ -176,9 +221,17 @@ fn scroll(g: &mut Grower, length: f64, look: Look, depth: u32) -> Motif {
             (0.56, 0.18, -1.0),
         ]
     };
-    let skip_for_scroll = depth == 0 && length * 0.4 >= gap * 12.0;
+    // like a fractal, smaller scrolls branch off it, and off them in turn, each with its
+    // own curve: where one branches, it has no leaf
+    let mut branches = Vec::new();
+    if depth < 3 && length * 0.35 >= gap * 10.0 {
+        branches.push(0.4);
+        if depth == 0 && g.chance(0.6) {
+            branches.push(0.22);
+        }
+    }
     for &(u, size, side) in leaves {
-        if skip_for_scroll && (u - 0.4).abs() < 1e-9 {
+        if branches.iter().any(|&b: &f64| (u - b).abs() < 1e-9) {
             continue;
         }
         let i = at(u);
@@ -212,14 +265,15 @@ fn scroll(g: &mut Grower, length: f64, look: Look, depth: u32) -> Motif {
             }
         }
     }
+    // each branch a smaller copy off the outside, curling the other way
+    for u in branches {
+        let i = at(u);
+        let ratio = g.range(0.35, 0.5);
+        let small = scroll(g, length * ratio, look, depth + 1);
+        motif.add(small.placed(points[i], headings[i] - g.range(0.5, 0.9), true));
+    }
     if depth > 0 {
         return motif;
-    }
-    // a smaller scroll off the outside, curling the other way
-    if skip_for_scroll {
-        let i = at(0.4);
-        let small = scroll(g, length * 0.4, look, depth + 1);
-        motif.add(small.placed(points[i], headings[i] - g.range(0.6, 0.9), true));
     }
     // at the foot, a leaf turning back (acanthus) or a flower (western)
     if baroque {
