@@ -90,6 +90,7 @@ impl CutCraftApp {
             machines_path: None,
             posts: cut_craft_machines::Library::new(None),
             machine_window: None,
+            first_run: None,
             post_window: None,
             tools: ToolDatabase::starter(),
             tools_path: None,
@@ -207,6 +208,7 @@ impl CutCraftApp {
                 true
             }
             "add_clipart_folder" => true,
+            id if id.starts_with(gui::COMMUNITY) => true,
             id if TOP_BAR_TOGGLES.contains(&id) => true,
             id if id.starts_with(gui::GUIDE) => true,
             id if id.starts_with(gui::SAVE_BRUSH) => self.brush_component(id).is_some(),
@@ -474,6 +476,14 @@ impl CutCraftApp {
             | "help_contents"
             | "snap_options" => self.open_window(id),
             "options" => self.options_window = true,
+            "first_run_setup" => self.open_first_run(),
+            "try_sample_project" => self.open_sample(),
+            id if id.starts_with(gui::COMMUNITY) => {
+                let link = id[gui::COMMUNITY.len()..].parse::<usize>().ok();
+                if let Some((_, url, _)) = link.and_then(|n| super::LINKS.get(n)) {
+                    ctx.open_url(egui::OpenUrl::new_tab(*url));
+                }
+            }
             "addons" => self.addons.show(ctx),
             "check_for_updates" => {
                 let skipped = self.options.updates.skipped_version.clone();
@@ -3343,19 +3353,12 @@ impl CutCraftApp {
             });
         }
         ui.separator();
-        ui.strong("Links");
-        for (label, url, icon) in LINKS {
-            ui.horizontal(|ui| {
-                if let Some(path) = self.icons.find(icon, "") {
-                    ui.add(
-                        self.icons
-                            .image(path)
-                            .fit_to_exact_size(egui::vec2(edge, edge)),
-                    );
-                }
-                ui.hyperlink_to(label, url);
-            });
-        }
+        // the rest of the community links are in Help ▸ Community, out of the way
+        let (label, url, _) = LINKS[0];
+        ui.horizontal_wrapped(|ui| {
+            ui.weak("Questions or ideas?");
+            ui.hyperlink_to(format!("Cut Craft on {label}"), url);
+        });
         if let Some(id) = clicked {
             self.invoke(ui.ctx(), &id);
         }

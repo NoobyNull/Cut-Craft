@@ -5,12 +5,14 @@ mod actions;
 mod background;
 mod cutting;
 mod draw3d;
+mod first_run;
 mod guide;
 mod help;
 mod layouts;
 mod mac;
 mod panels;
 mod passes;
+mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod tabs;
@@ -250,7 +252,9 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 
-const BUILT_INS: [&str; 99] = [
+const BUILT_INS: [&str; 101] = [
+    "try_sample_project",
+    "first_run_setup",
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
     "tool_changer",
@@ -546,8 +550,13 @@ const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
 // ponytail: fixed rate until a preferences dialog exists
 const VIEW_ZOOM_QUARTERS: f32 = 4.0;
 /// Aspire's startup tasks: action, label and icon.
-const STARTUP_TASKS: [(&str, &str, &str); 3] = [
+const STARTUP_TASKS: [(&str, &str, &str); 4] = [
     ("new", "Create a new file", "file/new.png"),
+    (
+        "try_sample_project",
+        "Try a sample project",
+        "drawing/create_vectors/draw_text.png",
+    ),
     (
         "new_from_template",
         "New file from template",
@@ -584,11 +593,11 @@ const WHATS_NEW: &str = include_str!("../whats-new.md");
 /// The repository's contributors on GitHub (login, commits, profile), as
 /// `scripts/contributors` last wrote them; Help ▸ About lists them.
 const CONTRIBUTORS: &str = include_str!("../contributors.tsv");
-/// Where Cut Craft is found online, shown on the start page: label, address and icon (the
-/// social ones are placeholders: each site's home page).
 /// Machine ▸ Search for Machine Online: the machine packages in Cut Craft's repository.
 const MACHINES_ONLINE: &str = "https://github.com/NoobyNull/Cut-Craft/tree/main/machines";
-const LINKS: [(&str, &str, &str); 7] = [
+/// Where Cut Craft is found online, in Help ▸ Community (GitHub on the start page too): label,
+/// address and icon (the social ones are placeholders: each site's home page).
+pub(crate) const LINKS: [(&str, &str, &str); 7] = [
     (
         "GitHub",
         "https://github.com/NoobyNull/cut-craft",
@@ -920,6 +929,8 @@ struct CutCraftApp {
     posts: cut_craft_machines::Library,
     /// The open Machine Configuration Management and Post-Processor Management windows.
     machine_window: Option<cut_craft_machines::MachineManager>,
+    /// First-time setup's questions, while they are shown.
+    first_run: Option<first_run::Setup>,
     post_window: Option<cut_craft_machines::PostManager>,
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
@@ -2228,17 +2239,9 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             }
             app.load_tools();
             app.load_machines();
-            let (options, tampered) = crate::options::Options::load_checked();
-            app.options = options;
-            app.options.advanced.apply();
-            app.playback_speed = app.options.toolpaths.preview_speed();
-            if tampered {
-                app.status.set_message(crate::options::TAMPERED);
-            }
-            app.options_path = crate::options::Options::path();
+            app.load_options();
             app.words_path = files::config_dir().map(|d| d.join("words.txt"));
             app.addons = crate::addons::Addons::new(crate::depth::addons_dir());
-            app.options.apply_to(&mut app.display);
             app.load_recent();
             app.clipart = crate::clipart::Clipart::load();
             app.recovery_path = files::config_dir().map(|d| d.join("recovery.ccjob"));

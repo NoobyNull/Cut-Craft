@@ -33,6 +33,13 @@ pub(super) struct Modes {
     placing_tabs: bool,
 }
 
+/// What an empty sheet says in its middle, and the status bar's step for it.
+pub(super) const EMPTY_SHEET_TITLE: &str = "Nothing drawn yet";
+pub(super) const EMPTY_SHEET_HINT: &str =
+    "Draw a shape with the tools on the Design page, or drop a picture, SVG or DXF here.";
+const EMPTY_SHEET_STEP: &str = "Nothing drawn yet: pick a drawing tool on the Design page, or drop a picture, SVG or DXF \
+     on the sheet";
+
 impl CutCraftApp {
     /// One pass of the whole window on the root `ui`; apart from the eframe entry so tests
     /// can drive it headlessly.
@@ -298,6 +305,7 @@ impl CutCraftApp {
         self.tool_changer_window(ctx);
         self.updates_window(ctx);
         self.addons.window(ctx);
+        self.first_run_window(ctx);
         match self.screen {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
@@ -1224,6 +1232,7 @@ impl CutCraftApp {
             _ => Overlay::None,
         };
         self.paint_2d(ui, &canvas, &overlay);
+        self.empty_sheet_hint(ui, &canvas);
         self.datum_mark(ui, &canvas, area, job.offset);
         self.handles_and_hints(ui, &canvas, reach, modes);
         self.paint_kept_snaps(ui, &canvas, reach);
@@ -1244,6 +1253,52 @@ impl CutCraftApp {
         self.view_area = Some(area);
         self.cursor = canvas.cursor();
         self.act_2d(ui, gesture, &canvas, reach, area, modes);
+    }
+
+    /// Whether the sheet has nothing on it yet: no vectors, pictures or 3D components.
+    pub(super) fn nothing_drawn(&self) -> bool {
+        self.doc.vectors.is_empty() && self.doc.bitmaps.is_empty() && self.doc.components.is_empty()
+    }
+
+    /// The hint in the middle of an empty sheet, until the first thing is drawn or dropped,
+    /// with no tool in hand.
+    fn empty_sheet_hint(&self, ui: &egui::Ui, canvas: &Canvas) {
+        if !self.nothing_drawn()
+            || self.form.is_some()
+            || self.view_tool.is_some()
+            || self.drawing_tool().is_some()
+        {
+            return;
+        }
+        let job = self.shown_job().area();
+        let (a, b) = (
+            canvas.transform.to_screen(job.min),
+            canvas.transform.to_screen(job.max),
+        );
+        let sheet = egui::Rect::from_two_pos(a, b).intersect(canvas.area);
+        if sheet.width() < ui.spacing().interact_size.x * 2.0 {
+            return;
+        }
+        let colour = ui.visuals().weak_text_color();
+        let size = ui.text_style_height(&egui::TextStyle::Body);
+        let mut text = egui::text::LayoutJob::default();
+        text.append(
+            EMPTY_SHEET_TITLE,
+            0.0,
+            egui::TextFormat::simple(egui::FontId::proportional(size * 1.4), colour),
+        );
+        text.append(
+            &format!("\n{EMPTY_SHEET_HINT}"),
+            0.0,
+            egui::TextFormat::simple(egui::FontId::proportional(size), colour),
+        );
+        text.wrap.max_width = sheet.width() * 0.8;
+        text.halign = Align::Center;
+        let galley = ui.fonts_mut(|f| f.layout_job(text));
+        let at = sheet.center() - egui::vec2(0.0, galley.size().y / 2.0);
+        ui.painter()
+            .with_clip_rect(sheet)
+            .galley(at, galley, colour);
     }
 
     /// What a gesture in the 2D view does, once the view is drawn.
@@ -1844,6 +1899,8 @@ impl CutCraftApp {
         }
         if !modes.handled {
             None
+        } else if self.nothing_drawn() {
+            Some(EMPTY_SHEET_STEP.into())
         } else if self.doc.selection.is_empty() {
             Some(
                 "Click a vector to select it, Shift-click to add more, or drag a box round \
