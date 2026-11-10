@@ -1533,6 +1533,11 @@ fn the_status_bar_says_what_the_tool_in_hand_does_next() {
         cut_craft_bug_report::hint::current(&h.ctx).unwrap_or_default()
     };
     let somewhere = h.at(100.0, 100.0);
+    // an empty sheet: where to start
+    let empty = hint(&mut h, somewhere);
+    assert!(empty.starts_with("Nothing drawn yet"), "{empty}");
+    h.rectangle(400.0, 300.0, 10.0, 10.0);
+    h.app.doc.selection = cut_craft_core::selection::Selection::new();
     // selecting, with nothing selected
     let select = hint(&mut h, somewhere);
     assert!(
@@ -3470,8 +3475,9 @@ fn the_start_page_says_whats_new_and_links_out() {
         "{first}"
     );
     assert!(h.text_at("•").is_some(), "each change is bulleted");
-    for (label, url, _) in LINKS {
-        assert!(h.text_at(label).is_some(), "{label}");
+    // the links themselves are in Help ▸ Community (see
+    // the_community_links_are_in_help_not_on_the_start_page)
+    for (_, url, _) in LINKS {
         assert!(url.starts_with("https://"), "{url}");
     }
 }
@@ -8931,4 +8937,168 @@ fn coarser_surfaces_are_made_from_the_fine_one_on_another_thread_and_kept() {
     let coarse = kept.at(30).expect("kept once made");
     assert!(coarse.solid.is_some(), "with its walls");
     assert!(coarse.surface.triangles() < kept.at(120).expect("fine").surface.triangles());
+}
+
+#[test]
+fn an_empty_sheet_says_where_to_start_until_something_is_drawn() {
+    let mut h = Harness::new();
+    let hint = format!(
+        "{}\n{}",
+        super::views::EMPTY_SHEET_TITLE,
+        super::views::EMPTY_SHEET_HINT
+    );
+    let title = hint.as_str();
+    assert!(h.text_at(title).is_some(), "shown on a new job");
+    h.app.invoke(&h.ctx, "draw_rectangle");
+    h.frame(vec![]);
+    assert!(h.text_at(title).is_none(), "not over a tool in hand");
+    h.app.form = None;
+    h.frame(vec![]);
+    assert!(h.text_at(title).is_some());
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    assert!(h.text_at(title).is_none(), "gone with the first shape");
+}
+
+#[test]
+fn first_time_setup_picks_the_machine_units_and_material_for_new_jobs() {
+    use super::first_run::Maker;
+    let mut h = Harness::at_start();
+    assert!(h.app.first_run.is_none(), "tests start without it");
+    h.choose(
+        |app| {
+            app.current_menus()
+                .menus
+                .iter()
+                .find(|m| m.name == "Help")
+                .unwrap()
+                .items
+                .clone()
+        },
+        &["Run First-Time Setup Again..."],
+    );
+    // a window sizes itself unseen on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Welcome to Cut Craft").is_some());
+    let setup = h.app.first_run.as_mut().unwrap();
+    setup.pick_maker(Maker::Named("Sienci".into()));
+    let longmill = setup
+        .catalogue
+        .iter()
+        .position(|m| m.name == "Sienci LongMill MK2 30x30")
+        .unwrap();
+    setup.pick_model(longmill);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let start = h.text_at("Start using Cut Craft").unwrap();
+    h.click(start, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.first_run.is_none(), "closed");
+    assert!(h.app.options.first_run_done);
+    let machine = h.app.machines.active().expect("the machine set up");
+    assert_eq!(machine.name, "Sienci LongMill MK2 30x30");
+    assert_eq!(machine.post(), Some("Cut Craft GRBL Arcs (inch) (*.nc)"));
+    assert_eq!(h.app.tools.groups[0].path, "Imperial Tools");
+    // a new job starts as answered
+    h.app.invoke(&h.ctx, "new");
+    h.app.job_setup_ok();
+    h.frame(vec![]);
+    let job = h.app.doc.job;
+    assert_eq!(job.units, Units::Inch);
+    assert!(job.width <= 762.0 && job.height <= 762.0, "{job:?}");
+    // asked again: the machine is not added twice
+    h.app.open_first_run();
+    let setup = h.app.first_run.as_mut().unwrap();
+    setup.pick_maker(Maker::Named("Sienci".into()));
+    setup.pick_model(longmill);
+    let setup = h.app.first_run.take().unwrap();
+    h.app.finish_first_run(&setup);
+    assert_eq!(h.app.machines.machines.len(), 1);
+}
+
+#[test]
+fn skipping_first_time_setup_keeps_todays_start() {
+    let mut h = Harness::at_start();
+    h.app.open_first_run();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.app.first_run.as_ref().is_some_and(|s| !s.ready()),
+        "nothing picked yet"
+    );
+    let skip = h.text_at("Skip for now").unwrap();
+    h.click(skip, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.first_run.is_none() && h.app.options.first_run_done);
+    assert_eq!(
+        h.app.machines.machines,
+        [] as [cut_craft_machines::Machine; 0]
+    );
+    assert!(h.app.options.default_job.is_none());
+    h.app.invoke(&h.ctx, "new");
+    h.app.job_setup_ok();
+    let (job, usual) = (h.app.doc.job, cut_craft_core::document::Job::default());
+    assert_eq!(
+        (job.width, job.height, job.thickness, job.units),
+        (usual.width, usual.height, usual.thickness, usual.units)
+    );
+}
+
+#[test]
+fn the_sample_project_opens_with_toolpaths_that_pass_the_checks() {
+    let mut h = Harness::at_start();
+    assert!(
+        h.text_at("Try a sample project").is_some(),
+        "on the start page"
+    );
+    let at = h.text_at("Try a sample project").unwrap();
+    h.click(at, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.screen, Screen::Job);
+    let names: Vec<&str> = h
+        .app
+        .doc
+        .toolpaths
+        .values()
+        .map(|t| t.name.as_str())
+        .collect();
+    assert_eq!(names, [super::sample::CARVE, super::sample::CUT_OUT]);
+    let toolpaths: Vec<_> = h.app.doc.toolpaths.values().collect();
+    let found = cut_craft_core::preflight::check(&h.app.doc, &toolpaths, &h.app.limits());
+    // the starter tools give no flute length, so how deep they reach goes unchecked: a
+    // note on every job, not a fault of the sample's
+    let faults: Vec<_> = found
+        .iter()
+        .filter(|f| !f.message.contains("has no flute length set"))
+        .collect();
+    assert_eq!(faults, [] as [&cut_craft_core::preflight::Finding; 0]);
+    assert!(
+        !h.app.session.is_dirty(&h.app.history),
+        "closing an untouched sample asks nothing"
+    );
+    assert!(h.app.session.path.is_none(), "saving asks where");
+}
+
+#[test]
+fn the_community_links_are_in_help_not_on_the_start_page() {
+    let h = Harness::at_start();
+    assert!(h.text_at("Facebook").is_none());
+    assert!(h.text_at("Cut Craft on GitHub").is_some());
+    let help = h
+        .app
+        .current_menus()
+        .menus
+        .iter()
+        .find(|m| m.name == "Help")
+        .unwrap()
+        .items
+        .clone();
+    let community = leaf(&help, &["Community"]);
+    assert_eq!(community.children.len(), super::LINKS.len());
+    assert!(
+        community
+            .children
+            .iter()
+            .all(|i| h.app.available(&i.action))
+    );
 }
