@@ -2195,15 +2195,12 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
     };
     let samples = options.multisampling;
     // the pictures' run keeps its egui state apart from the user's
-    let name = if shots.is_some() {
-        "Cut Craft screenshots"
-    } else {
-        title
-    };
+    let name = shots.as_ref().map_or(title, |_| "Cut Craft screenshots");
     eframe::run_native(
         name,
         options,
         Box::new(|cc| {
+            crate::startup::window_opened();
             cc.egui_ctx.set_theme(theme.preference());
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx, text_scale);
