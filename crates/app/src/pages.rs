@@ -100,10 +100,67 @@ impl Pages {
     }
 }
 
+/// The shape the view between the pages is kept to, width over height: 4:3.
+pub const VIEW_ASPECT: f32 = 4.0 / 3.0;
+/// The most of the room beside the side tabs one page may take, so a small window still
+/// shows its view.
+pub const PAGE_SHARE: f32 = 1.0 / 3.0;
+
+/// How wide each tool page is, outer edge to outer edge, in a `room` (width × height)
+/// between the side tabs whose top `view_top` goes to the bar above the views.
+///
+/// The width comes from the window alone, never from what the page shows, so a page
+/// never bounces as forms change. Both pages share what the view leaves over at
+/// [`VIEW_ASPECT`], whether one is pinned or both, so pinning or unpinning one page
+/// never moves the other; with one pinned, the view gets the unused side too. A page is
+/// never narrower than `least` (room for its tool buttons), unless that would take more
+/// than [`PAGE_SHARE`] of the room.
+pub fn page_width(room: (f32, f32), view_top: f32, least: f32) -> f32 {
+    let (width, height) = room;
+    let view = VIEW_ASPECT * (height - view_top).max(0.0);
+    let even = (width - view) / 2.0;
+    even.max(least).min(PAGE_SHARE * width).max(0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use Page::{Design, Toolpaths};
+
+    #[test]
+    fn a_wide_window_widens_both_pages_until_the_view_is_four_by_three() {
+        let (room, top, least) = ((2400.0, 1000.0), 40.0, 260.0);
+        let page = page_width(room, top, least);
+        let view = (room.0 - 2.0 * page) / (room.1 - top);
+        assert!((view - VIEW_ASPECT).abs() < 1e-4, "view {view}");
+        assert!(page > least, "{page}");
+    }
+
+    #[test]
+    fn pages_grow_and_shrink_with_the_window() {
+        let at = |w: f32| page_width((w, 1000.0), 40.0, 260.0);
+        assert!(at(2600.0) > at(2400.0));
+        assert!(at(2400.0) > at(2200.0));
+    }
+
+    #[test]
+    fn a_page_keeps_room_for_its_buttons_when_the_window_is_tall() {
+        // 4:3 would leave the pages nothing: the view takes what the pages leave
+        assert_eq!(page_width((1280.0, 760.0), 40.0, 260.0), 260.0);
+    }
+
+    #[test]
+    fn a_small_window_still_shows_its_view() {
+        let page = page_width((600.0, 500.0), 40.0, 260.0);
+        assert_eq!(page, 200.0, "a third of the room each");
+    }
+
+    #[test]
+    fn nothing_odd_comes_of_a_window_with_no_room() {
+        assert_eq!(page_width((0.0, 0.0), 40.0, 260.0), 0.0);
+        let tall = page_width((800.0, 10.0), 40.0, 260.0);
+        assert!((tall - 800.0 * PAGE_SHARE).abs() < 1e-3, "{tall}");
+    }
 
     fn unpinned() -> Pages {
         let mut p = Pages::design_layout();

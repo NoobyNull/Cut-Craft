@@ -638,6 +638,82 @@ const DESIGN_PANEL_WIDTHS: f32 = 7.0;
 // ponytail: fixed share until panel widths are saved with the window layout
 const SIDE_PANEL_SHARE: f32 = 1.0 / 3.0;
 
+/// Tool buttons a pinned page always has room for side by side, in a captioned box.
+// ponytail: fixed count until a preferences dialog exists
+const PAGE_BUTTONS: f32 = 5.0;
+/// Inner margin of a captioned box of tools on a page.
+const TOOL_BOX_MARGIN: f32 = 4.0;
+
+/// The narrowest a tool page is, outer edge to outer edge: [`PAGE_BUTTONS`] tool buttons in a
+/// captioned box, inside the page's frame.
+fn least_page_width(style: &egui::Style) -> f32 {
+    let s = &style.spacing;
+    let button = TOOL_ICON_ROWS * s.interact_size.y + 2.0 * s.button_padding.x;
+    let row = PAGE_BUTTONS * button + (PAGE_BUTTONS - 1.0) * s.item_spacing.x;
+    // the box's margins and its 1-point border, as `spread_tools` draws it
+    let boxed = row + 2.0 * TOOL_BOX_MARGIN + 2.0;
+    // room for the frame's border and rounding, so the fifth button never just misses
+    let slack = s.item_spacing.x;
+    boxed + egui::Frame::side_top_panel(style).total_margin().sum().x + slack
+}
+
+/// How wide a side tab strip is, outer edge to outer edge.
+fn side_tabs_width(style: &egui::Style) -> f32 {
+    style.spacing.interact_size.y + 2.0 * style.spacing.item_spacing.y
+}
+
+/// How far the views start below the top of the room the pages share: the central panel's
+/// margin, the top bar and the line under it, as `views` lays them out.
+fn views_top(style: &egui::Style) -> f32 {
+    let s = &style.spacing;
+    let bar = s.interact_size.y + 2.0 * s.button_padding.y;
+    // `ui.separator()`'s own room, and the gap after the bar and after the line
+    let line = 6.0;
+    egui::Frame::central_panel(style).total_margin().top + bar + line + 2.0 * s.item_spacing.y
+}
+
+/// How wide the Design and Toolpaths pages are in `ui`'s room, docked or flown out (see
+/// [`crate::pages::page_width`]). Called with the room between the menu and status bars, before
+/// the side tabs take theirs; the result never depends on what the pages show.
+fn page_width(ui: &egui::Ui) -> f32 {
+    let style = ui.style();
+    let room = ui.available_rect_before_wrap();
+    let between_tabs = room.width() - 2.0 * side_tabs_width(style);
+    crate::pages::page_width(
+        (between_tabs, room.height()),
+        views_top(style),
+        least_page_width(style),
+    )
+}
+
+/// A tool page docked beside the views, drawn by `add`: exactly `width` wide whatever it
+/// shows, so forms and fields sizing themselves to the room can never widen, narrow or
+/// shift it, and it never keeps a width from an earlier run. Returns where it is.
+///
+/// What the page shows is laid out in a child that does not report its size to the panel:
+/// egui moves a right-hand panel's inner edge over by however much its contents overflow,
+/// so a field a few points too wide would otherwise nudge the view every frame it shows.
+fn show_page<R>(
+    panel: egui::Panel,
+    width: f32,
+    ui: &mut egui::Ui,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::Rect {
+    panel
+        .resizable(false)
+        .exact_size(width)
+        .show(ui, |ui| {
+            let room = ui.max_rect();
+            let mut page = ui.new_child(egui::UiBuilder::new().max_rect(room).layout(*ui.layout()));
+            page.shrink_clip_rect(room);
+            add(&mut page);
+            // the page's whole height, as the panel would have taken
+            ui.allocate_rect(room, egui::Sense::hover());
+        })
+        .response
+        .rect
+}
+
 /// A resizable page beside the views: it starts [`DESIGN_PANEL_WIDTHS`] wide and never takes
 /// more than [`SIDE_PANEL_SHARE`] of the window. Forms and frames inside size themselves to the
 /// room they are given, so an unbounded panel could widen a little every frame while the window
@@ -885,6 +961,12 @@ struct CutCraftApp {
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,
+    /// Where the docked Design and Toolpaths pages were drawn last frame, if docked.
+    page_rects: [Option<egui::Rect>; 2],
+    /// Where a flown-out page was drawn last frame, if one was.
+    flyout_rect: Option<egui::Rect>,
+    /// How many tool buttons fit side by side in a captioned box on the last page drawn.
+    buttons_across: std::cell::Cell<f32>,
     /// Find Tool (Ctrl+K): the text typed, while its window is open.
     search: Option<String>,
     /// The browser's tab (`INSPECTOR_TABS`) in the Rail and Ribbon layouts.
