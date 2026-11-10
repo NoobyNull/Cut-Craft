@@ -34,7 +34,8 @@ concurrency:
 
 jobs:
   macos:
-    runs-on: macos-14
+    # macos-14 is retired: GitHub cancels its jobs at once ("configuration not supported")
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
