@@ -81,7 +81,7 @@ jobs:
           dir="cut-craft-${{ needs.plan.outputs.tag }}-${{ matrix.name }}"
           mkdir -p "$dir"
           cp target/release/cut-craft "$dir/"
-          cp -r assets README.md "$dir/"
+          cp -r assets README.md LICENSE "$dir/"
           tar -czf "$dir.tar.gz" "$dir"
           echo "ASSET=$dir.tar.gz" >> "$GITHUB_ENV"
 
@@ -92,7 +92,7 @@ jobs:
           $dir = "cut-craft-${{ needs.plan.outputs.tag }}-${{ matrix.name }}"
           New-Item -ItemType Directory $dir | Out-Null
           Copy-Item target/release/cut-craft.exe $dir
-          Copy-Item -Recurse assets, README.md $dir
+          Copy-Item -Recurse assets, README.md, LICENSE $dir
           Compress-Archive -Path $dir -DestinationPath "$dir.zip"
           "ASSET=$dir.zip" | Out-File -Append $env:GITHUB_ENV
 

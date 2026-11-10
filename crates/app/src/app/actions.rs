@@ -4536,22 +4536,7 @@ impl CutCraftApp {
         cut_craft_bug_report::dialog(ctx, id, &title, size, &mut open, |ui| match info {
             Info::Help(_) => unreachable!("returned above"),
             Info::Summary => noted = summary_table(ui, &rows, summary, units, machine.clone()),
-            Info::About => {
-                ui.heading("Cut Craft");
-                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-                ui.label("2D and 3D design and CNC toolpaths.");
-                ui.separator();
-                ui.strong("Acknowledgements");
-                ui.label(ACKNOWLEDGEMENT);
-                ui.separator();
-                ui.strong("Contributors on GitHub");
-                for (login, commits, url) in contributors() {
-                    ui.horizontal(|ui| {
-                        ui.hyperlink_to(login, url);
-                        ui.weak(format!("{commits} commits"));
-                    });
-                }
-            }
+            Info::About => about(ui),
             Info::Shortcuts => {
                 egui::ScrollArea::vertical()
                     .max_height(400.0)
@@ -4593,6 +4578,37 @@ impl CutCraftApp {
         }
     }
 }
+
+/// The About window: what Cut Craft is, its license, thanks and contributors.
+fn about(ui: &mut egui::Ui) {
+    ui.heading("Cut Craft");
+    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+    ui.label("2D and 3D design and CNC toolpaths.");
+    ui.separator();
+    ui.strong("License");
+    ui.label(LICENCE_SUMMARY);
+    ui.hyperlink_to(
+        "Read the full license",
+        "https://github.com/NoobyNull/Cut-Craft/blob/main/LICENSE",
+    );
+    ui.separator();
+    ui.strong("Acknowledgements");
+    ui.label(ACKNOWLEDGEMENT);
+    ui.separator();
+    ui.strong("Contributors on GitHub");
+    for (login, commits, url) in contributors() {
+        ui.horizontal(|ui| {
+            ui.hyperlink_to(login, url);
+            ui.weak(format!("{commits} commits"));
+        });
+    }
+}
+
+/// The About window's plain summary of Cut Craft's own license (the top of LICENSE).
+pub(super) const LICENCE_SUMMARY: &str = "Cut Craft is source-available, not open source. \
+You may use, change and share it free of charge for noncommercial purposes. Small makers \
+(under US$1,000 total gross revenue in the last twelve months) may also use it to make things \
+they sell. No one may sell Cut Craft or charge for it in any form. The LICENSE file is what applies.";
 
 /// The About window's thanks to the program that inspired Cut Craft (ACKNOWLEDGEMENTS.md in full).
 pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. Cut Craft was inspired by Vectric Aspire, \
