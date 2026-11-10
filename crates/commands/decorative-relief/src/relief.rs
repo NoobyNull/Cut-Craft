@@ -59,6 +59,8 @@ pub struct Shaping {
     pub bit_radius: f64,
     /// Bands with a groove down their middle, and leaves with a deep midrib (baroque).
     pub fluted: bool,
+    /// Lines echoing each piece's edge, at even steps from its edge to its middle.
+    pub lines: u32,
 }
 
 /// Which pieces go down first: bands, then the leaves over them, then flowers, then eyes
@@ -184,7 +186,8 @@ fn shape(grid: &Grid, piece: &Piece, shaping: Shaping) -> Option<Shaped> {
             let (t, off) = spine.nearest(at);
             // 0 at the edge, 1 on the middle line: smooth however the width changes
             let u = edge / (edge + off).max(1e-9);
-            top * profile(piece.part, t, u, shaping.fluted)
+            let half = edge + off;
+            top * (profile(piece.part, t, u, shaping.fluted) - echoes(u, half, shaping))
         })
         .collect();
     Some(Shaped {
@@ -250,6 +253,26 @@ fn profile(part: Part, t: f64, u: f64, fluted: bool) -> f64 {
         Part::Eye => 0.55 + 0.45 * round,
         Part::Petals => 0.3 + 0.7 * u.powf(0.5),
     }
+}
+
+/// How deep the echo lines cut at `u` of the way in from the edge, as a share of the
+/// piece's top, `half` mm from the edge to the middle there: a rounded crease a bit wide at
+/// each step, fading out where the piece is too narrow for the bit to carve them apart.
+fn echoes(u: f64, half: f64, shaping: Shaping) -> f64 {
+    if shaping.lines == 0 {
+        return 0.0;
+    }
+    let steps = f64::from(shaping.lines + 1);
+    let r = shaping.bit_radius;
+    // each line needs about a bit and a half of room
+    let room = smooth(steps * r * 1.2, steps * r * 2.0, half);
+    (1..=shaping.lines)
+        .map(|k| {
+            let at = f64::from(k) / steps;
+            0.3 * (-(((u - at) * half) / (r * 0.7)).powi(2)).exp()
+        })
+        .sum::<f64>()
+        * room
 }
 
 /// 0 below `a`, 1 above `b`, smoothly between.

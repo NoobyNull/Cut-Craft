@@ -34,6 +34,11 @@ pub struct Params {
     #[serde(default = "finishing_bit")]
     #[schemars(title = "Finishing bit", extend("x-unit" = "mm"), range(min = 0))]
     pub bit: f64,
+    /// Carved lines inside each leaf and scroll that follow its edge, evenly spaced to its
+    /// middle, as carvers echo a leaf's outline; left out where a piece is too narrow
+    #[serde(default)]
+    #[schemars(title = "Echo lines", range(min = 0, max = 3))]
+    pub lines: u32,
     /// Another seed gives another carving with the same settings
     #[schemars(title = "Variation", extend("x-widget" = "seed"))]
     pub seed: u32,
@@ -60,6 +65,7 @@ impl Default for Params {
             height: height(),
             size: pattern_size(),
             bit: finishing_bit(),
+            lines: 0,
             seed: 1,
             name: "Decorative Relief".into(),
             combine: Combine::Add,
@@ -146,6 +152,7 @@ pub fn carve(
         height: p.height,
         bit_radius: p.bit / 2.0,
         fluted: p.style == Ornament::Baroque,
+        lines: p.lines,
     };
     let grid = relief::raise(&pieces, area, cell, shaping);
     let mut part = Component::from_fn(&p.name, p.combine, area, cell, |_| None);
@@ -233,6 +240,36 @@ mod tests {
     }
 
     #[test]
+    fn echo_lines_carve_creases_the_bit_can_still_follow() {
+        let fine = Params {
+            bit: 1.5875,
+            ..Params::default()
+        };
+        let plain = relief(&fine);
+        let p = Params { lines: 2, ..fine };
+        let lined = relief(&p);
+        assert!(!cut_craft_core::component::same_heights(
+            &plain.heights,
+            &lined.heights
+        ));
+        let mut grid = relief::Grid {
+            origin: lined.origin,
+            cell: lined.cell,
+            columns: lined.columns,
+            rows: lined.rows,
+            heights: lined.heights.clone(),
+        };
+        relief::close(&mut grid, p.bit / 2.0);
+        let worst = lined
+            .heights
+            .iter()
+            .zip(&grid.heights)
+            .map(|(a, b)| (if a.is_nan() { 0.0 } else { *a } - b).abs())
+            .fold(0.0, f64::max);
+        assert!(worst < 0.01, "{worst}");
+    }
+
+    #[test]
     fn a_pattern_smaller_than_three_bits_says_how_to_fix_it() {
         let doc = framed();
         let p = Params {
@@ -289,6 +326,8 @@ mod tests {
                     let p = Params {
                         style,
                         seed,
+                        lines: std::env::var("RELIEF_LINES").map_or(0, |v| v.parse().unwrap()),
+                        bit: std::env::var("RELIEF_BIT").map_or(3.175, |v| v.parse().unwrap()),
                         ..Params::default()
                     };
                     let part = carve(&p, vec![ring.clone()], area, 0.25).unwrap();
