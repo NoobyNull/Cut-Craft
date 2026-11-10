@@ -3518,7 +3518,7 @@ impl CutCraftApp {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let pinned = self.pages.pinned(page);
                 pin = ui
-                    .selectable_label(pinned, "📌")
+                    .add(self.pin_button(pinned, row))
                     .on_hover_hint(if pinned {
                         "Unpin: hide this page to its side tab"
                     } else {

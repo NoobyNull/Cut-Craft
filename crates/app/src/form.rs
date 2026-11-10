@@ -864,7 +864,7 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     for (i, it) in items.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= edit(ui, item, it, &Value::Null, look);
-            if ui.small_button("✕").on_hover_hint("Remove").clicked() {
+            if ui.small_button("×").on_hover_hint("Remove").clicked() {
                 remove = Some(i);
             }
         });

@@ -12,6 +12,10 @@ use super::{
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{MachinedArea, Units};
 
+/// The push-pin's two drawings (`scripts/make_icons.py`).
+pub(super) const PIN_ICON: &str = "view/pin.png";
+pub(super) const PINNED_ICON: &str = "view/pinned.png";
+
 impl CutCraftApp {
     /// The Tool Database manager; its edits are kept on Apply or OK.
     pub(super) fn tool_database_window(&mut self, ctx: &egui::Context) {
@@ -494,6 +498,17 @@ impl CutCraftApp {
             ),
             None => egui::Button::new(label.to_owned()),
         }
+    }
+
+    /// The push-pin toggle: leaning while loose, upright and pushed in once pinned. Drawn
+    /// rather than the 📌 emoji, which many system fonts lack and egui drew as an empty box.
+    pub(super) fn pin_button(&self, pinned: bool, edge: f32) -> egui::Button<'static> {
+        let (icon, label) = if pinned {
+            (PINNED_ICON, "Pinned")
+        } else {
+            (PIN_ICON, "Pin")
+        };
+        self.icon_button(icon, "", label, edge).selected(pinned)
     }
 
     /// Layers, top first: visibility and lock toggles, the current layer highlighted, and

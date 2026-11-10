@@ -813,6 +813,17 @@ I[vw + "solid_2d_toolpath_drawing.svg"] = lambda: [path("M5,13 A8,8 0 0 1 13,5 H
                                                    rect(12, 12, 24, 24, 1, INK, 2.5, LIGHT)]
 
 
+# the push-pin at the top of a page and the Rail's list (once the 📌 emoji, which many fonts
+# lack and drew as an empty box): leaning over when the page can slide away, upright and
+# pushed in, its head in the accent, once pinned
+def push_pin(head, needle=42):
+    return [path("M18,6 H30 M20,6 V16 L14,24 H34 L28,16 V6", INK, SW, head), line(24, 24, 24, needle, INK, SW)]
+
+
+I[vw + "pin.svg"] = lambda: [f'<g transform="rotate(40 24 26)">{"".join(push_pin("none"))}</g>']
+I[vw + "pinned.svg"] = lambda: [f'<g transform="translate(0 6)">{"".join(push_pin(ACC, 32))}</g>', line(8, 38, 40, 38, INK, SW)]
+
+
 def render(name):
     els = I[name]()
     body = "".join(e for e in els if e)
