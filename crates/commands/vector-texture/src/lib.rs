@@ -136,7 +136,7 @@ impl Command for VectorTexture {
         }
         if lines.is_empty() {
             return Err(CommandError::Failed(
-                "the area is too small for the texture".into(),
+                "the area is too small for the texture. Make the texture smaller, or draw a bigger area".into(),
             ));
         }
         if !p.place_on_layer {

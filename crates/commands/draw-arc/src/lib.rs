@@ -100,7 +100,7 @@ mod tests {
                 end_angle: 360.0,
                 ..Params::default()
             }),
-            "invalid parameters: start and end angle must differ (use Draw Circle for a full circle)"
+            "Start and end angle must differ (use Draw Circle for a full circle)."
         );
     }
 }

@@ -91,7 +91,7 @@ impl Command for ArrayCopyToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.rows == 0 || p.columns == 0 {
             return Err(CommandError::InvalidParams(
-                "it needs at least 1 row and 1 column".into(),
+                "set rows and columns to 1 or more".into(),
             ));
         }
         let named = if p.sources.is_empty() {
@@ -114,7 +114,7 @@ impl Command for ArrayCopyToolpath {
             .reduce(Rect::union)
         else {
             return Err(CommandError::Failed(
-                "the toolpaths to copy have no cuts".into(),
+                "the toolpaths to copy have no cuts. Edit them and press Calculate first".into(),
             ));
         };
         let size = bounds.max - bounds.min;

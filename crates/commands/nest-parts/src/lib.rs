@@ -225,7 +225,7 @@ impl Command for NestParts {
             row = row.max(size.y);
         }
         if placed.is_empty() {
-            return Err(CommandError::Failed("no part fits in the job".into()));
+            return Err(nothing_fits());
         }
         let (right, top) = (
             p.nest_from == Corner::BottomRight || p.nest_from == Corner::TopRight,
@@ -322,7 +322,7 @@ fn true_shape(
     };
     let placed = place(doc, p, &parts, fresh);
     if placed.iter().all(|placed| parts[placed.part].filler) {
-        return Err(CommandError::Failed("no part fits in the job".into()));
+        return Err(nothing_fits());
     }
     Ok(write(doc, p, &parts, &placed))
 }
@@ -790,6 +790,15 @@ fn parts(doc: &Document) -> Vec<(Vec<EntityId>, Rect)> {
         }
     }
     parts
+}
+
+/// What Nest Parts says when no part fits: how to make room.
+fn nothing_fits() -> CommandError {
+    CommandError::Failed(
+        "No part fits on the material. Make the material bigger in Job Setup, or make the parts \
+         or the border gap smaller."
+            .into(),
+    )
 }
 
 #[cfg(test)]

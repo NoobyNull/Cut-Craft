@@ -43,7 +43,7 @@ impl Command for MergeVisibleLayers {
             .collect();
         if merged.is_empty() {
             return Err(CommandError::Failed(
-                "no other visible layer to merge".into(),
+                "there is no other visible layer to merge. Show the layers to merge".into(),
             ));
         }
         let mut c = Change::builder(doc);

@@ -31,7 +31,9 @@ impl Command for Split {
         // ponytail: closed cutters only; Aspire extends an open vector to the modeling area's
         // edges, add that when it is asked for
         if !cutter.closed {
-            return Err(CommandError::Failed("split with a closed vector".into()));
+            return Err(CommandError::Failed(
+                "select a closed vector to split with".into(),
+            ));
         }
         let Some((ids, part)) = chosen_or_baked(doc) else {
             return Err(CommandError::Failed("select a component to split".into()));
@@ -50,7 +52,7 @@ impl Command for Split {
         }
         if a.height_range().is_none() || b.height_range().is_none() {
             return Err(CommandError::Failed(
-                "the vector does not cross the component".into(),
+                "the vector does not cross the component. Move it so it crosses".into(),
             ));
         }
         a.name = format!("{} - A", part.name);

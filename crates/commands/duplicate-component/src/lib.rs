@@ -73,6 +73,9 @@ mod tests {
 
     #[test]
     fn needs_the_component() {
-        assert!(rejection::<DuplicateComponent>(&Params::default()).contains("does not exist"));
+        assert!(
+            rejection::<DuplicateComponent>(&Params::default())
+                .contains("is not in the job any more")
+        );
     }
 }

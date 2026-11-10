@@ -23,7 +23,7 @@ impl Command for CopyToOtherSide {
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
         let Some(sides) = doc.job.double_sided else {
             return Err(CommandError::Failed(
-                "only a double-sided job has another side (Job Setup)".into(),
+                "only a double-sided job has another side. Set the job to double-sided in Job Setup first".into(),
             ));
         };
         if doc.selection.is_empty() {

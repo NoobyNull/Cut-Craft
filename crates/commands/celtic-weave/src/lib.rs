@@ -155,7 +155,7 @@ impl Command for CelticWeave {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.columns < 1 || p.rows < 1 || p.cell <= 0.0 {
             return Err(CommandError::InvalidParams(
-                "the knot grid needs a cell or more and a cell size".into(),
+                "give the knot grid at least one cell, and a cell size above 0".into(),
             ));
         }
         let half = p.cell / 2.0;

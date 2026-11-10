@@ -99,7 +99,9 @@ impl Command for TwoRailSweep {
         };
         let (r1, r2) = (Rail::new(one, reverse_1), Rail::new(two, reverse_2));
         if r1.walk.total <= 0.0 || r2.walk.total <= 0.0 {
-            return Err(CommandError::Failed("the rails need length".into()));
+            return Err(CommandError::Failed(
+                "A rail is a single point. Draw each rail as a line or curve.".into(),
+            ));
         }
         let pairs = if p.add_to_all_rail_nodes {
             let (a, b) = (r1.node_shares(), r2.node_shares());

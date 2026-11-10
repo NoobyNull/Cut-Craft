@@ -75,7 +75,7 @@ impl Command for ReplaceBelow {
         }
         if part.heights.iter().all(|h| h.is_nan()) {
             return Err(CommandError::Failed(
-                "that would remove the whole component".into(),
+                "that would remove the whole component. Set a lower height to replace below".into(),
             ));
         }
         let mut c = Change::builder(doc);
@@ -159,7 +159,7 @@ mod tests {
         assert!(err.contains("whole component"), "{err}");
         assert!(
             cut_craft_core::testing::rejection::<ReplaceBelow>(&Params::default())
-                .contains("select")
+                .contains("Select")
         );
     }
 }

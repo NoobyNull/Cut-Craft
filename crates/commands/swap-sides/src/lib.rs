@@ -22,7 +22,7 @@ impl Command for SwapSides {
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
         if doc.job.double_sided.is_none() {
             return Err(CommandError::Failed(
-                "only a double-sided job has another side (Job Setup)".into(),
+                "only a double-sided job has another side. Set the job to double-sided in Job Setup first".into(),
             ));
         }
         let mut c = Change::builder(doc);

@@ -110,7 +110,7 @@ impl Command for MaterialSetup {
         };
         if p.position.gap < 0.0 || p.position.gap > thickness {
             return Err(CommandError::InvalidParams(format!(
-                "the gap must be between 0 and the material's {thickness:.1} mm"
+                "set the gap between 0 and the material's {thickness:.1} mm"
             )));
         }
         let material = |d: &Document| JobSetup::run(d, &job);

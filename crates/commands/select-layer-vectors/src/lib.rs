@@ -36,7 +36,7 @@ impl Command for SelectLayerVectors {
         let layer = existing_layer(doc, p.layer)?;
         if !layer.visible || layer.locked {
             return Err(CommandError::Failed(format!(
-                "layer \"{}\" is hidden or locked",
+                "layer \"{}\" is hidden or locked. Show and unlock it first",
                 layer.name
             )));
         }
@@ -79,6 +79,6 @@ mod tests {
             assert!(why.contains("hidden or locked"), "{why}");
         }
         let why = after_err::<SelectLayerVectors>(&Params { layer: LayerId(9) });
-        assert!(why.contains("does not exist"), "{why}");
+        assert!(why.contains("is not in the job any more"), "{why}");
     }
 }

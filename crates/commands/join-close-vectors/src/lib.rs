@@ -288,6 +288,6 @@ mod tests {
             line((4.0, 0.0), (5.0, 0.0)),
         ]);
         assert!(JoinCloseVectors::run(&three, &Params::default()).is_err());
-        assert!(rejection::<JoinCloseVectors>(&Params::default()).contains("select one open"));
+        assert!(rejection::<JoinCloseVectors>(&Params::default()).contains("Select one open"));
     }
 }

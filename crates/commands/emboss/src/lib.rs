@@ -56,7 +56,7 @@ impl Command for Emboss {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !(1.0..=50.0).contains(&p.scale_height) {
             return Err(CommandError::InvalidParams(
-                "scale height is 1 to 50 %".into(),
+                "set scale height between 1 and 50 %".into(),
             ));
         }
         let Some((ids, mut part)) = chosen_or_baked(doc) else {

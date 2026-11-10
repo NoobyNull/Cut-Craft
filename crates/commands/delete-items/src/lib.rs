@@ -59,11 +59,7 @@ impl Command for DeleteItems {
         let targets = match p.which {
             Which::This if items.iter().any(|&(id, _)| id == p.item) => vec![p.item],
             Which::This => {
-                return Err(CommandError::InvalidParams(format!(
-                    "{} {} does not exist",
-                    p.items.one(),
-                    p.item
-                )));
+                return Err(cut_craft_core::gone(p.items.one()));
             }
             Which::Visible => pick(true),
             Which::Invisible => pick(false),
@@ -76,7 +72,7 @@ impl Command for DeleteItems {
                 .collect(),
             Which::Empty => {
                 return Err(CommandError::InvalidParams(
-                    "only layers can be empty".into(),
+                    "only layers can be empty. Pick Layers to delete empty ones".into(),
                 ));
             }
         };
@@ -150,7 +146,7 @@ mod tests {
             item: 0,
             which: Which::All,
         });
-        assert!(why.contains("last layer"), "{why}");
+        assert!(why.contains("at least one layer"), "{why}");
     }
 
     #[test]
@@ -167,6 +163,6 @@ mod tests {
             item: 0,
             which: Which::Empty,
         });
-        assert!(why.contains("only layers"), "{why}");
+        assert!(why.contains("Only layers"), "{why}");
     }
 }

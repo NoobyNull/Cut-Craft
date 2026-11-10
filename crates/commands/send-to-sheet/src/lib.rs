@@ -40,14 +40,11 @@ impl Command for SendToSheet {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.sheet >= doc.sheets.len() {
-            return Err(CommandError::InvalidParams(format!(
-                "there is no sheet {}",
-                p.sheet + 1
-            )));
+            return Err(cut_craft_core::gone("sheet"));
         }
         if p.sheet == doc.active_sheet {
             return Err(CommandError::Failed(
-                "the vectors are on that sheet already".into(),
+                "the vectors are on that sheet already. Pick another sheet".into(),
             ));
         }
         if doc.selection.is_empty() {

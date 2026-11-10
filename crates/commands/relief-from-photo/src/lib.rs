@@ -104,14 +104,16 @@ impl Command for ReliefFromPhoto {
         ensure_positive("max height", p.max_height)?;
         if p.lift < 0.0 || p.lift >= p.max_height {
             return Err(CommandError::InvalidParams(
-                "the lift must be at least 0 and below the max height".into(),
+                "set the lift to 0 or more and below the max height".into(),
             ));
         }
         let Some(photo) = doc.chosen_bitmap() else {
             return Err(CommandError::Failed("import the photo first".into()));
         };
         if photo.grey.is_empty() {
-            return Err(CommandError::Failed("the picture is empty".into()));
+            return Err(CommandError::Failed(
+                "the picture is empty. Pick another picture".into(),
+            ));
         }
         let estimated = photo.depth.len() == photo.grey.len();
         if p.depth_from == DepthFrom::Estimated && !estimated {
@@ -123,7 +125,7 @@ impl Command for ReliefFromPhoto {
         }
         if p.soft_edge < 0.0 || p.base_height < 0.0 {
             return Err(CommandError::InvalidParams(
-                "the soft edge and base cannot be below 0".into(),
+                "set the soft edge and base to 0 or more".into(),
             ));
         }
         let shaped = shaped(photo, p, doc.job.model_cell());

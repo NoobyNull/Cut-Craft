@@ -260,12 +260,12 @@ impl Command for CreateShape {
         let name = ensure_named(&p.name)?;
         if !(1.0..=89.0).contains(&p.angle) {
             return Err(CommandError::InvalidParams(
-                "the angle must be between 1 and 89 degrees".into(),
+                "set the angle between 1° and 89°".into(),
             ));
         }
         if p.profile == Profile::Flat && p.height + p.base + p.total_height <= 0.0 {
             return Err(CommandError::InvalidParams(
-                "a flat shape needs a height".into(),
+                "a flat shape needs a height. Set the height to more than 0".into(),
             ));
         }
         let (editing, all) = outlines(doc, p);

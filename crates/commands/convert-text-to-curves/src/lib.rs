@@ -70,6 +70,6 @@ mod tests {
 
     #[test]
     fn needs_selected_text() {
-        assert!(rejection::<ConvertTextToCurves>(&NoParams {}).contains("select the text"));
+        assert!(rejection::<ConvertTextToCurves>(&NoParams {}).contains("Select the text"));
     }
 }

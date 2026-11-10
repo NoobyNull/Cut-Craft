@@ -21,7 +21,7 @@ fn ensure_group(doc: &Document, group: &str) -> Result<(), CommandError> {
         Ok(())
     } else {
         Err(CommandError::Failed(format!(
-            "no toolpath group is called {group}"
+            "no toolpath group is called {group}. Pick a group from the list"
         )))
     }
 }
@@ -122,7 +122,7 @@ impl Command for RenameToolpathGroup {
         let groups = doc.toolpath_groups_in_use();
         if name != p.group && groups.contains(&name) {
             return Err(CommandError::Failed(format!(
-                "a toolpath group is already called {name}"
+                "a toolpath group is already called {name}. Type another name"
             )));
         }
         let mut c = Change::builder(doc);
@@ -291,7 +291,7 @@ mod tests {
         let err = RenameToolpathGroup::run(&doc, &unknown)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("no toolpath group is called Group 9"), "{err}");
+        assert!(err.contains("No toolpath group is called Group 9"), "{err}");
     }
 
     #[test]

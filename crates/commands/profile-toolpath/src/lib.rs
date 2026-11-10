@@ -11,7 +11,7 @@ use cut_craft_core::geometry::{
 use cut_craft_core::params::Anchor;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Tool, cut_points, made_by, project_onto_model};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -296,9 +296,7 @@ impl Command for ProfileToolpath {
             Side::On => paths.clone(),
         };
         if centre_line.is_empty() {
-            return Err(CommandError::Failed(
-                "the tool is too big for the inside of the selected shapes".into(),
-            ));
+            return Err(tool_does_not_fit(&p.tool, Some("cut Outside instead")));
         }
         let depths = p.tool.pass_depths(depth);
         let tab = p.tab.sized(p.tool.pass_depth, depth);
@@ -782,7 +780,8 @@ mod tests {
     fn a_shape_smaller_than_the_tool_cannot_be_cut_inside() {
         assert_eq!(
             profile(Side::Inside, 4.0).unwrap_err(),
-            "the tool is too big for the inside of the selected shapes"
+            "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, \
+             or cut Outside instead."
         );
     }
 
@@ -996,7 +995,7 @@ mod tests {
                 ..Params::default()
             },
         );
-        assert!(none.unwrap_err().contains("click"));
+        assert!(none.unwrap_err().contains("Click"));
     }
 
     /// The tabs a profile round a `w` x `h` rectangle leaves, cut `depth` deep with a 1/4"

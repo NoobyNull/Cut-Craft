@@ -44,13 +44,13 @@ impl Command for ReorderLevel {
         let moving = doc
             .levels
             .get(&p.level)
-            .ok_or_else(|| CommandError::Failed(format!("level {} does not exist", p.level)))?;
+            .ok_or_else(|| cut_craft_core::gone("level"))?;
         let other = match p.direction {
             Direction::Up => doc.levels.range(p.level + 1..).next(),
             Direction::Down => doc.levels.range(..p.level).next_back(),
         }
         .map(|(&id, _)| id)
-        .ok_or_else(|| CommandError::Failed("there is no level that way".into()))?;
+        .ok_or_else(|| CommandError::Failed("it is already at the end of the list".into()))?;
         let mut c = Change::builder(doc);
         c.set_level(other, Some(moving.clone()));
         c.set_level(p.level, Some(doc.levels[&other].clone()));

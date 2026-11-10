@@ -29,33 +29,82 @@ pub enum CommandError {
     Failed(String),
 }
 
+/// What a tool that works on a selection asks for when nothing is selected.
+pub const SELECT_FIRST: &str =
+    "Select what to work on: click a vector in the 2D view, Shift-click to add more";
+
+/// What a tool that reads a 3D model file says when the file holds nothing to read.
+pub const EMPTY_MODEL: &str =
+    "This file has no triangles in it. Export it again from the program that made it.";
+
+/// Every message reads as a sentence, whatever case it was written in: a capital first and a
+/// full stop last. A message should also say what to do about it ("Pick a smaller tool"),
+/// not only what is wrong; the app's tests run every command to keep that so.
 impl fmt::Display for CommandError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidParams(why) => write!(f, "invalid parameters: {why}"),
-            Self::NothingSelected => f.write_str("nothing is selected"),
-            Self::Failed(why) => f.write_str(why),
+            Self::InvalidParams(why) | Self::Failed(why) => f.write_str(&sentence(why)),
+            Self::NothingSelected => f.write_str(&sentence(SELECT_FIRST)),
         }
     }
 }
 
 impl std::error::Error for CommandError {}
 
+/// `text` as a sentence: trimmed, its first letter upper case, and a full stop unless it
+/// already ends with one (or `!`, `?`).
+pub fn sentence(text: &str) -> String {
+    let text = text.trim();
+    let mut chars = text.chars();
+    let mut out: String = match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => return String::new(),
+    };
+    if !out.ends_with(['.', '!', '?']) {
+        out.push('.');
+    }
+    out
+}
+
 /// Uniform validation for lengths, radii and counts: fails unless `value > 0` (NaN fails).
+/// `name` is the setting as its form names it ("pass depth").
 pub fn ensure_positive(name: &str, value: f64) -> Result<(), CommandError> {
     if value > 0.0 {
         Ok(())
     } else {
         Err(CommandError::InvalidParams(format!(
-            "{name} must be greater than 0"
+            "set {name} to more than 0"
         )))
     }
 }
 
+/// The one message for a tool too big to cut inside the selected shapes, used by every
+/// toolpath that cuts inside: it names the tool and says what to do. `instead` is the other
+/// way out where there is one ("cut Outside instead"); without it, making the shapes bigger.
+pub fn tool_does_not_fit(tool: &crate::toolpath::Tool, instead: Option<&str>) -> CommandError {
+    let name = tool.name.trim();
+    let tool = if name.is_empty() {
+        format!("{} mm tool", tool.diameter)
+    } else {
+        name.to_owned()
+    };
+    let instead = instead.unwrap_or("make the shapes bigger");
+    CommandError::Failed(format!(
+        "The {tool} does not fit inside the selected shapes. Pick a smaller tool, or {instead}."
+    ))
+}
+
+/// The message for an item a command names that is no longer in the job (deleted, or undone):
+/// `what` is its kind ("toolpath").
+pub fn gone(what: &str) -> CommandError {
+    CommandError::InvalidParams(format!(
+        "That {what} is not in the job any more. Pick another {what}."
+    ))
+}
+
 /// The layer a command names, or the error the user sees when it is gone.
 pub fn existing_layer(doc: &Document, id: LayerId) -> Result<&Layer, CommandError> {
-    doc.layer(id)
-        .ok_or_else(|| CommandError::InvalidParams(format!("layer {} does not exist", id.0)))
+    doc.layer(id).ok_or_else(|| gone("layer"))
 }
 
 /// The item a command names by id (a toolpath, a component...), or the error the user sees
@@ -65,16 +114,14 @@ pub fn existing<'a, T>(
     id: EntityId,
     what: &str,
 ) -> Result<&'a T, CommandError> {
-    items
-        .get(&id)
-        .ok_or_else(|| CommandError::InvalidParams(format!("{what} {} does not exist", id.0)))
+    items.get(&id).ok_or_else(|| gone(what))
 }
 
 /// Names (of layers, toolpaths...) must have something in them; returns the trimmed name.
 pub fn ensure_named(name: &str) -> Result<String, CommandError> {
     let name = name.trim();
     if name.is_empty() {
-        Err(CommandError::InvalidParams("the name is empty".into()))
+        Err(CommandError::InvalidParams("Type a name.".into()))
     } else {
         Ok(name.to_owned())
     }
@@ -202,7 +249,7 @@ impl<C: Command> DynCommand for Erased<C> {
 
     fn run_json(&self, doc: &Document, params: &Value) -> Result<Change, CommandError> {
         let params = C::Params::deserialize(params)
-            .map_err(|e| CommandError::InvalidParams(e.to_string()))?;
+            .map_err(|e| CommandError::InvalidParams(format!("Check the tool's settings: {e}")))?;
         C::run(doc, &params)
     }
 
@@ -340,13 +387,11 @@ impl Registry {
         id: EntityId,
         params: Option<&serde_json::Value>,
     ) -> Result<Change, CommandError> {
-        let toolpath = doc
-            .toolpaths
-            .get(&id)
-            .ok_or_else(|| CommandError::Failed(format!("toolpath {} does not exist", id.0)))?;
+        let toolpath = doc.toolpaths.get(&id).ok_or_else(|| gone("toolpath"))?;
         let strategy = self.get(&toolpath.strategy).ok_or_else(|| {
             CommandError::Failed(format!(
-                "{} was made by `{}`, which is not available",
+                "{} was made by `{}`, which is not available. Install the add-on that made it, \
+                 or delete this toolpath.",
                 toolpath.name, toolpath.strategy
             ))
         })?;
@@ -357,7 +402,7 @@ impl Registry {
             sources.selection = selector.picked(doc).into_iter().collect();
             if sources.selection.is_empty() {
                 return Err(CommandError::Failed(format!(
-                    "no vectors pass {}'s Vector Selector",
+                    "no vectors pass {}'s Vector Selector. Edit its filters",
                     toolpath.name
                 )));
             }
@@ -371,7 +416,8 @@ impl Registry {
             // a toolpath made from no vectors (3D, rotary, picture) needs none to recalculate
             if sources.selection.is_empty() && !toolpath.vectors.is_empty() {
                 return Err(CommandError::Failed(format!(
-                    "the vectors {} was made from have been deleted",
+                    "The vectors {0} was made from have been deleted. Select new vectors, then \
+                     edit {0} and press Calculate.",
                     toolpath.name
                 )));
             }

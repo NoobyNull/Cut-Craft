@@ -143,7 +143,7 @@ impl Command for CopyAlongVectors {
             let walk = Walk::new(points);
             if walk.length <= 0.0 {
                 return Err(CommandError::Failed(
-                    "a vector to copy along has no length".into(),
+                    "a vector to copy along has no length. Draw it as a line or curve".into(),
                 ));
             }
             for d in distances(p, walk.length, guide.closed)? {
@@ -208,7 +208,7 @@ fn distances(p: &Params, length: f64, closed: bool) -> Result<Vec<f64>, CommandE
         Spacing::Count => {
             if p.copies == 0 {
                 return Err(CommandError::InvalidParams(
-                    "copies must be at least 1".into(),
+                    "set copies to 1 or more".into(),
                 ));
             }
             Ok(match (p.copies, closed) {

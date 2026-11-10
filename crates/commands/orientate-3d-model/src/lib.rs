@@ -7,7 +7,7 @@ use cut_craft_core::document::{Along, Document, Rotary};
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DMat3, DVec3};
 use cut_craft_core::params::Xy;
-use cut_craft_core::{Change, Command, CommandError, Meta};
+use cut_craft_core::{Change, Command, CommandError, EMPTY_MODEL, Meta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -390,7 +390,7 @@ impl Command for Orientate3dModel {
         }
         if k.height_range().is_none() {
             return Err(CommandError::Failed(
-                "nothing of the model is above the zero plane".into(),
+                "nothing of the model is above the zero plane. Move the model up, or the zero plane down".into(),
             ));
         }
         k.source = source;
@@ -478,12 +478,11 @@ fn placed(
     p: &Params,
     mut tris: Vec<[DVec3; 3]>,
 ) -> Result<(Vec<[DVec3; 3]>, Rect), CommandError> {
-    let (lo, hi) =
-        bounds(&tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
+    let (lo, hi) = bounds(&tris).ok_or_else(|| CommandError::Failed(EMPTY_MODEL.into()))?;
     let size = hi - lo;
     if size.x <= 0.0 || size.y <= 0.0 {
         return Err(CommandError::Failed(
-            "the model has no area seen from above".into(),
+            "the model has no area seen from above. Turn it so a wide side faces up".into(),
         ));
     }
     let area = doc.job.area();
@@ -668,8 +667,7 @@ impl Turning {
         tris: &[[DVec3; 3]],
         params: &Params,
     ) -> Result<Self, CommandError> {
-        let (lo, hi) =
-            bounds(tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
+        let (lo, hi) = bounds(tris).ok_or_else(|| CommandError::Failed(EMPTY_MODEL.into()))?;
         let x_axis = rotary.along == Along::X;
         let probe = Self {
             x_axis,
@@ -694,7 +692,7 @@ impl Turning {
             .fold(0.0, f64::max);
         if length <= 0.0 || reach <= 0.0 {
             return Err(CommandError::Failed(
-                "the model has no length or width".into(),
+                "the model has no length or width. Turn it so a wide side faces up".into(),
             ));
         }
         let job = doc.job.area();

@@ -84,7 +84,7 @@ impl Command for Mirror {
                 .last()
                 .map_or(path.start, cut_craft_core::geometry::Segment::end);
             let t = reflection(path.start, end).ok_or_else(|| {
-                CommandError::Failed("the vector picked last has its two ends together".into())
+                CommandError::Failed("the vector picked last has its two ends together. Pick a straight line to mirror about".into())
             })?;
             let rest: Vec<EntityId> = doc
                 .selection

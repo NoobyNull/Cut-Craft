@@ -76,10 +76,7 @@ impl Command for GroupProperties {
             }
         }
         if !found {
-            return Err(CommandError::Failed(format!(
-                "group {} does not exist",
-                p.group
-            )));
+            return Err(cut_craft_core::gone("group"));
         }
         Ok(c.finish())
     }

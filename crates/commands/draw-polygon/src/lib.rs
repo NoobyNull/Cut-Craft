@@ -49,9 +49,7 @@ impl Command for DrawPolygon {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.sides < 3 {
-            return Err(CommandError::InvalidParams(
-                "a polygon needs at least 3 sides".into(),
-            ));
+            return Err(CommandError::InvalidParams("set sides to 3 or more".into()));
         }
         ensure_positive("radius", p.radius)?;
         let step = 360.0 / f64::from(p.sides);
@@ -119,7 +117,7 @@ mod tests {
                 sides: 2,
                 ..Params::default()
             }),
-            "invalid parameters: a polygon needs at least 3 sides"
+            "Set sides to 3 or more."
         );
     }
 

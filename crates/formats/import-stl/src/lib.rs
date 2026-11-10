@@ -26,7 +26,7 @@ impl Importer for ImportStl {
         let size = hi - lo;
         if triangles.is_empty() || size.x <= 0.0 || size.y <= 0.0 {
             return Err(CommandError::Failed(
-                "the model has no area seen from above".into(),
+                "the model has no area seen from above. Export it again from the program that made it".into(),
             ));
         }
         // ponytail: native size, centred, shrunk to fit; Aspire asks in its Orientate 3D

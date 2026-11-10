@@ -29,10 +29,7 @@ impl Command for MoveToLevel {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !doc.levels.contains_key(&p.level) {
-            return Err(CommandError::Failed(format!(
-                "level {} does not exist",
-                p.level
-            )));
+            return Err(cut_craft_core::gone("level"));
         }
         let picked: Vec<_> = doc
             .selected_components

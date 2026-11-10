@@ -53,6 +53,8 @@ mod tests {
         let mut doc = with_toolpath();
         run_on::<DeleteToolpath>(&mut doc, &Params::default());
         assert!(doc.toolpaths.is_empty());
-        assert!(rejection::<DeleteToolpath>(&Params::default()).contains("does not exist"));
+        assert!(
+            rejection::<DeleteToolpath>(&Params::default()).contains("is not in the job any more")
+        );
     }
 }

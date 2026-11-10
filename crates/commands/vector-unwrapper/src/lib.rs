@@ -97,7 +97,7 @@ impl Command for VectorUnwrapper {
     #[expect(clippy::cast_precision_loss, reason = "a small sample count")]
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let rotary = doc.job.rotary.ok_or_else(|| {
-            CommandError::Failed("the Vector Unwrapper is for rotary jobs only".into())
+            CommandError::Failed("the Vector Unwrapper is for rotary jobs only. Set the job to rotary in Job Setup first".into())
         })?;
         let section = match doc.selection.iter().collect::<Vec<_>>().as_slice() {
             [one] if doc.vectors[one].closed => &doc.vectors[one],

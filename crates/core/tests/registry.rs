@@ -87,7 +87,8 @@ fn command_validation_errors_come_back_through_run_json() {
         .run_json(&Document::default(), &serde_json::json!({ "size": -1.0 }));
     assert_eq!(
         err.unwrap_err().to_string(),
-        "invalid parameters: size must be positive"
+        "Size must be positive.",
+        "no raw prefix, and one style: a capital first and a full stop last"
     );
 }
 
@@ -114,7 +115,88 @@ fn ensure_positive_names_the_parameter() {
         cut_craft_core::ensure_positive("width", 0.0)
             .unwrap_err()
             .to_string(),
-        "invalid parameters: width must be greater than 0"
+        "Set width to more than 0."
+    );
+}
+
+#[test]
+fn every_error_reads_as_a_sentence() {
+    use cut_craft_core::CommandError;
+    for (error, shown) in [
+        (
+            CommandError::Failed("select a closed vector".into()),
+            "Select a closed vector.",
+        ),
+        (
+            CommandError::Failed("Pick another tool.".into()),
+            "Pick another tool.",
+        ),
+        (
+            CommandError::InvalidParams("choose a file".into()),
+            "Choose a file.",
+        ),
+        (CommandError::Failed("Stop!".into()), "Stop!"),
+        (CommandError::Failed("  trailing  ".into()), "Trailing."),
+    ] {
+        assert_eq!(error.to_string(), shown);
+    }
+}
+
+#[test]
+fn nothing_selected_says_how_to_select() {
+    let shown = cut_craft_core::CommandError::NothingSelected.to_string();
+    assert_eq!(shown, format!("{}.", cut_craft_core::SELECT_FIRST));
+    assert!(shown.starts_with("Select what to work on"), "{shown}");
+}
+
+#[test]
+fn a_tool_that_does_not_fit_is_named_with_a_way_out() {
+    use cut_craft_core::toolpath::Tool;
+    let tool = Tool::default();
+    assert_eq!(
+        cut_craft_core::tool_does_not_fit(&tool, Some("cut Outside instead")).to_string(),
+        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, or \
+         cut Outside instead."
+    );
+    assert_eq!(
+        cut_craft_core::tool_does_not_fit(&tool, None).to_string(),
+        "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, or \
+         make the shapes bigger."
+    );
+    let unnamed = Tool {
+        name: " ".into(),
+        diameter: 3.175,
+        ..Tool::default()
+    };
+    assert!(
+        cut_craft_core::tool_does_not_fit(&unnamed, None)
+            .to_string()
+            .starts_with("The 3.175 mm tool does not fit"),
+        "a tool with no name is named by its size"
+    );
+}
+
+#[test]
+fn an_item_that_is_gone_says_to_pick_another() {
+    use cut_craft_core::document::{Document, EntityId, LayerId};
+    let doc = Document::default();
+    let gone = cut_craft_core::existing(&doc.toolpaths, EntityId(7), "toolpath").unwrap_err();
+    assert_eq!(
+        gone.to_string(),
+        "That toolpath is not in the job any more. Pick another toolpath."
+    );
+    let layer = cut_craft_core::existing_layer(&doc, LayerId(9)).unwrap_err();
+    assert_eq!(
+        layer.to_string(),
+        "That layer is not in the job any more. Pick another layer."
+    );
+}
+
+#[test]
+fn an_empty_name_says_to_type_one() {
+    assert_eq!(
+        cut_craft_core::ensure_named("  ").unwrap_err().to_string(),
+        "Type a name."
     );
 }
 

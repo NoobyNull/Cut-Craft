@@ -38,9 +38,7 @@ impl Command for CopyToolpathToSheet {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let toolpath = doc.toolpaths.get(&p.toolpath).ok_or_else(|| {
-            CommandError::InvalidParams(format!("toolpath {} does not exist", p.toolpath.0))
-        })?;
+        let toolpath = cut_craft_core::existing(&doc.toolpaths, p.toolpath, "toolpath")?;
         if p.sheet >= doc.sheets.len() || p.sheet == doc.active_sheet {
             return Err(CommandError::InvalidParams(
                 "pick another sheet to copy the toolpath to".into(),

@@ -202,12 +202,12 @@ impl Command for LaserPictureToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !(p.power > 0.0 && p.power <= 100.0) {
             return Err(CommandError::InvalidParams(
-                "power must be more than 0 and at most 100 %".into(),
+                "set power to more than 0 and at most 100 %".into(),
             ));
         }
         if p.passes == 0 {
             return Err(CommandError::InvalidParams(
-                "it needs at least 1 pass".into(),
+                "set passes to 1 or more".into(),
             ));
         }
         ensure_positive("kerf", p.tool.diameter)?;
@@ -229,7 +229,7 @@ impl Command for LaserPictureToolpath {
         let (moves, power) = p.burn(&lines, bitmap, step, safe);
         if moves.is_empty() {
             return Err(CommandError::Failed(
-                "nothing to burn on the picture".into(),
+                "nothing to burn on the picture. Pick a picture with darker areas, or raise the power".into(),
             ));
         }
         let count = moves.len();

@@ -88,7 +88,7 @@ mod tests {
                 name: " ".into(),
                 like: None
             })
-            .contains("name is empty")
+            .contains("Type a name")
         );
     }
 

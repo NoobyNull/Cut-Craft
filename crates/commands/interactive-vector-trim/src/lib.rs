@@ -191,7 +191,9 @@ fn trim_at(doc: &Document, at: Point, reach: f64) -> Result<Change, CommandError
         cuts.sort_by(f64::total_cmp);
         cuts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
         if cuts.is_empty() {
-            return Err(CommandError::Failed("nothing crosses that vector".into()));
+            return Err(CommandError::Failed(
+                "nothing crosses that vector. Click a piece between two crossings".into(),
+            ));
         }
         let click = along(&pts, &lengths, at);
         let closed = doc.vectors[&id].closed;

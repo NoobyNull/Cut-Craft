@@ -58,7 +58,7 @@ impl Command for ScaleModelZHeight {
         let now = model_height(doc);
         if now <= 0.0 {
             return Err(CommandError::Failed(
-                "the model is flat: there is no height to scale".into(),
+                "the model is flat, so there is no height to scale. Give it height with a modelling tool first".into(),
             ));
         }
         let factor = p.height / now;

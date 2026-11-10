@@ -22,7 +22,10 @@ impl Command for CreateComponentFromVisibleModel {
 
     fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
         if !doc.components.values().any(|k| k.visible) {
-            return Err(CommandError::Failed("there is no visible model".into()));
+            return Err(CommandError::Failed(
+                "there is no visible model. Show a component, or create one with a modelling tool"
+                    .into(),
+            ));
         }
         let made =
             Component::from_material("Visible Model", Combine::Add, &model_at_resolution(doc));

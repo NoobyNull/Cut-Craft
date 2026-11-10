@@ -54,7 +54,8 @@ impl Unrolled {
     pub fn of(doc: &Document) -> Result<Self, CommandError> {
         let Some(rotary) = doc.job.rotary else {
             return Err(CommandError::Failed(
-                "this gadget lays out a rotary job (Job Setup)".into(),
+                "this gadget lays out a rotary job. Set the job to rotary in Job Setup first"
+                    .into(),
             ));
         };
         let a = doc.job.area();
@@ -92,7 +93,7 @@ impl Unrolled {
         let (from, to) = (self.lo + start, self.hi - end);
         if from >= to {
             return Err(CommandError::InvalidParams(
-                "the offsets leave nothing of the work piece".into(),
+                "the offsets leave nothing of the work piece. Make the offsets smaller".into(),
             ));
         }
         Ok((from, to))
@@ -123,7 +124,9 @@ impl Command for WrappedFlutingLayout {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let job = Unrolled::of(doc)?;
         if p.flutes == 0 {
-            return Err(CommandError::InvalidParams("at least one flute".into()));
+            return Err(CommandError::InvalidParams(
+                "set flutes to 1 or more".into(),
+            ));
         }
         let (from, to) = job.between(p.start, p.end)?;
         let gap = job.round() / f64::from(p.flutes);

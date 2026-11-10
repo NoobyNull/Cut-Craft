@@ -29,14 +29,11 @@ impl Command for DeleteLevel {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !doc.levels.contains_key(&p.level) {
-            return Err(CommandError::Failed(format!(
-                "level {} does not exist",
-                p.level
-            )));
+            return Err(cut_craft_core::gone("level"));
         }
         if doc.levels.len() == 1 {
             return Err(CommandError::Failed(
-                "a job keeps at least one level".into(),
+                "a job keeps at least one level. Add another level before deleting this one".into(),
             ));
         }
         let mut c = Change::builder(doc);
