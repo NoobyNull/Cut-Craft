@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn needs_a_selection_and_a_tolerance() {
-        assert!(rejection::<FitCurvesToVectors>(&Params::default()).contains("select"));
+        assert!(rejection::<FitCurvesToVectors>(&Params::default()).contains("Select"));
         let p = Params {
             tolerance: 0.0,
             ..Params::default()

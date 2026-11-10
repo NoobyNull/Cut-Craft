@@ -176,7 +176,9 @@ impl Command for ExtrudeAndWeave {
         let (rails, sections) = picked.split_at(count);
         let rails: Vec<Rail> = rails.iter().map(|path| Rail::new(path)).collect();
         if rails.iter().any(|r| r.total <= 0.0) {
-            return Err(CommandError::Failed("the drive rails need length".into()));
+            return Err(CommandError::Failed(
+                "A drive rail is a single point. Draw each drive rail as a line or curve.".into(),
+            ));
         }
         let shape = match p.sweep {
             Sweep::CrossSections => Shape::Sections(placed(&rails, sections)?),
@@ -224,7 +226,9 @@ impl Command for ExtrudeAndWeave {
         }
         if made.height_range().is_none() {
             return Err(CommandError::Failed(
-                "the cross-section makes no shape".into(),
+                "The cross-section makes no shape. Draw it as an open curve that rises away from \
+                 the line between its ends."
+                    .into(),
             ));
         }
         let mut c = Change::builder(doc);
@@ -362,7 +366,7 @@ fn placed(rails: &[Rail], sections: &[&Path]) -> Result<Vec<Vec<(f64, Section)>>
         .iter()
         .map(|s| Section::new(s))
         .collect::<Option<_>>()
-        .ok_or_else(|| CommandError::Failed("the cross-section's ends must be apart".into()))?;
+        .ok_or_else(|| CommandError::Failed("the cross-section starts and ends at the same point. Draw it so its ends are apart".into()))?;
     let mut by_rail: Vec<Vec<(f64, Section)>> = vec![vec![]; rails.len()];
     if let [only] = sections.as_slice() {
         for list in &mut by_rail {

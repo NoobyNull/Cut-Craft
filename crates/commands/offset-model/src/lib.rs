@@ -50,7 +50,9 @@ impl Command for OffsetModel {
     )]
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.distance == 0.0 {
-            return Err(CommandError::InvalidParams("distance must not be 0".into()));
+            return Err(CommandError::InvalidParams(
+                "set distance to something other than 0".into(),
+            ));
         }
         let visible: Vec<_> = doc
             .components
@@ -60,7 +62,7 @@ impl Command for OffsetModel {
             .collect();
         if visible.is_empty() {
             return Err(CommandError::Failed(
-                "there is no visible model to offset".into(),
+                "there is no visible model to offset. Show a component, or create one with a modelling tool".into(),
             ));
         }
         let model = model_at_resolution(doc);

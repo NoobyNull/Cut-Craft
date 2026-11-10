@@ -53,10 +53,7 @@ impl Command for SheetProperties {
         let name = ensure_named(&p.name)?;
         let mut sheets = doc.sheets.clone();
         let Some(sheet) = sheets.get_mut(p.sheet) else {
-            return Err(CommandError::InvalidParams(format!(
-                "there is no sheet {}",
-                p.sheet + 1
-            )));
+            return Err(cut_craft_core::gone("sheet"));
         };
         (sheet.name, sheet.visible) = (name, p.visible);
         let mut c = Change::builder(doc);
@@ -95,14 +92,14 @@ mod tests {
                 name: String::new(),
                 ..Params::default()
             })
-            .contains("name is empty")
+            .contains("Type a name")
         );
         assert!(
             rejection::<SheetProperties>(&Params {
                 sheet: 3,
                 ..Params::default()
             })
-            .contains("no sheet 4")
+            .contains("That sheet is not in the job any more")
         );
     }
 }

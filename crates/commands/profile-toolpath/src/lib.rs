@@ -11,7 +11,7 @@ use cut_craft_core::geometry::{
 use cut_craft_core::params::Anchor;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Tool, cut_points, made_by, project_onto_model};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -20,14 +20,24 @@ pub struct ProfileToolpath;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Side {
-    /// Around the outside of closed shapes
+    /// Cut a part out: the tool goes round the outside of each shape, so the part is the size
+    /// drawn
     #[default]
+    #[schemars(title = "Outside")]
     Outside,
-    /// Around the inside of closed shapes
+    /// Cut a hole: the tool goes round the inside of each shape, so the hole is the size
+    /// drawn
+    #[schemars(title = "Inside")]
     Inside,
-    /// Along the line itself, open vectors included
+    /// The tool's middle follows the line itself, open lines too, so the cut is as wide as the
+    /// tool
+    #[schemars(title = "On the Line")]
     On,
 }
+
+/// The heading of the form's block that picks [`Side`], drawn just under the cut depth: the
+/// choice that decides whether a part comes out the size drawn.
+pub const SIDE_GROUP: &str = "Which Side of the Line";
 
 /// The ways of ordering the cuts to try: the one with the shortest moves between cuts is used.
 /// Shapes inside others are always cut first, so a part stays held as long as it can.
@@ -88,12 +98,29 @@ pub struct Params {
     /// Below the material surface
     #[schemars(
         title = "Cut Depth",
-        extend("x-unit" = "mm", "x-group" = "Cutting Depths"),
+        extend(
+            "x-unit" = "mm",
+            "x-group" = "Cutting Depths",
+            "x-enable-when" = {"through": "false"}
+        ),
         range(min = 0)
     )]
     pub depth: f64,
+    /// Down to the bottom of the material: the cut depth is the material's thickness in Job
+    /// Setup, and follows it if the thickness changes
+    #[serde(default)]
+    #[schemars(title = "Cut right through", extend("x-group" = "Cutting Depths"))]
+    pub through: bool,
     pub tool: Tool,
-    #[schemars(skip)]
+    /// Outside to cut a part out, Inside to cut a hole, On the Line to follow the line itself
+    #[schemars(
+        title = "Cut",
+        extend(
+            "x-group" = "Which Side of the Line",
+            "x-widget" = "named-icons",
+            "x-icon" = "toolpaths/side_{}.png"
+        )
+    )]
     pub side: Side,
     /// Which way round closed shapes are cut: climb is clockwise round a part, anticlockwise
     /// round a hole
@@ -195,6 +222,7 @@ impl Default for Params {
         Self {
             name: "Profile".into(),
             depth: 6.0,
+            through: false,
             side: Side::Outside,
             tool: Tool::default(),
             direction: Direction::Climb,
@@ -218,6 +246,15 @@ impl Default for Params {
     }
 }
 
+impl Params {
+    /// How deep the cut goes in material `thickness` thick: right through it when asked, else
+    /// the cut depth.
+    #[must_use]
+    pub fn cut_depth(&self, thickness: f64) -> f64 {
+        if self.through { thickness } else { self.depth }
+    }
+}
+
 impl Command for ProfileToolpath {
     const ID: &'static str = "profile_toolpath";
     type Params = Params;
@@ -232,7 +269,8 @@ impl Command for ProfileToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        ensure_positive("depth", p.depth)?;
+        let depth = p.cut_depth(doc.job.thickness);
+        ensure_positive("depth", depth)?;
         ensure_positive("tool diameter", p.tool.diameter)?;
         ensure_positive("pass depth", p.tool.pass_depth)?;
         let (ids, paths) = doc.selected_paths(|path| path.closed || p.side == Side::On);
@@ -258,12 +296,10 @@ impl Command for ProfileToolpath {
             Side::On => paths.clone(),
         };
         if centre_line.is_empty() {
-            return Err(CommandError::Failed(
-                "the tool is too big for the inside of the selected shapes".into(),
-            ));
+            return Err(tool_does_not_fit(&p.tool, Some("cut Outside instead")));
         }
-        let depths = p.tool.pass_depths(p.depth);
-        let tab = p.tab.sized(p.tool.pass_depth, p.depth);
+        let depths = p.tool.pass_depths(depth);
+        let tab = p.tab.sized(p.tool.pass_depth, depth);
         let entry = Entry {
             ramp: p.ramp,
             ramping: p.ramping,
@@ -272,7 +308,7 @@ impl Command for ProfileToolpath {
             side: 1.0,
             tabs: p.tabs,
             tab,
-            tab_top: -p.depth + tab.thickness,
+            tab_top: -depth + tab.thickness,
             tool_diameter: p.tool.diameter,
             placed: vec![],
         };
@@ -694,6 +730,45 @@ mod tests {
     }
 
     #[test]
+    fn cut_right_through_goes_to_the_bottom_of_the_material_whatever_its_thickness() {
+        let through = Params {
+            through: true,
+            ..Params::default()
+        };
+        let deepest = |thickness: f64| {
+            let mut doc = Document::default();
+            doc.job.thickness = thickness;
+            let mut c = Change::builder(&doc);
+            let id = c.add(square(0.0, 0.0, 10.0));
+            c.select([id]);
+            doc.apply(&c.finish()).unwrap();
+            let change = ProfileToolpath::run(&doc, &through).unwrap();
+            doc.apply(&change).unwrap();
+            let tp = doc.toolpaths.values().next().unwrap();
+            tp.moves.iter().map(|m| -m.to.z).fold(0.0, f64::max)
+        };
+        assert!((deepest(20.0) - 20.0).abs() < 1e-9, "{}", deepest(20.0));
+        assert!((deepest(12.5) - 12.5).abs() < 1e-9, "follows the thickness");
+        assert!((through.cut_depth(18.0) - 18.0).abs() < 1e-9);
+        assert!((Params::default().cut_depth(18.0) - 6.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_side_is_on_the_form_under_the_depth_with_a_picture_for_each_choice() {
+        let schema = schemars::schema_for!(Params);
+        let schema = schema.as_value();
+        let side = &schema["properties"]["side"];
+        assert_eq!(side["x-group"], SIDE_GROUP);
+        assert_eq!(side["x-widget"], "named-icons");
+        let through = &schema["properties"]["through"];
+        assert_eq!(through["title"], "Cut right through");
+        assert_eq!(
+            schema["properties"]["depth"]["x-enable-when"]["through"], "false",
+            "the depth is greyed while it follows the thickness"
+        );
+    }
+
+    #[test]
     fn remembers_how_it_was_made_so_it_can_be_recalculated() {
         let tp = profile(Side::Inside, 10.0).unwrap();
         assert_eq!(tp.strategy, "profile_toolpath");
@@ -705,7 +780,8 @@ mod tests {
     fn a_shape_smaller_than_the_tool_cannot_be_cut_inside() {
         assert_eq!(
             profile(Side::Inside, 4.0).unwrap_err(),
-            "the tool is too big for the inside of the selected shapes"
+            "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, \
+             or cut Outside instead."
         );
     }
 
@@ -919,7 +995,7 @@ mod tests {
                 ..Params::default()
             },
         );
-        assert!(none.unwrap_err().contains("click"));
+        assert!(none.unwrap_err().contains("Click"));
     }
 
     /// The tabs a profile round a `w` x `h` rectangle leaves, cut `depth` deep with a 1/4"

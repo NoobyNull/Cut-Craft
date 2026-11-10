@@ -10,7 +10,7 @@ use cut_craft_core::entry::{
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, cut_points, hatch_lines, made_by, project_onto_model};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -221,7 +221,7 @@ fn check(p: &Params) -> Result<(), CommandError> {
     ensure_positive("pass depth", p.tool.pass_depth)?;
     if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
         return Err(CommandError::InvalidParams(
-            "stepover must be more than 0 and at most 1".into(),
+            "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
         ));
     }
     Ok(())
@@ -245,9 +245,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             Corners::Round,
         );
         if ring.is_empty() {
-            return Err(CommandError::Failed(
-                "the tool is too big to fit inside the selected shapes".into(),
-            ));
+            return Err(tool_does_not_fit(&p.tool, None));
         }
         let step = p.tool.stepover * p.tool.diameter;
         let edge = ring.clone();
@@ -663,7 +661,8 @@ mod tests {
     fn a_shape_smaller_than_the_tool_cannot_be_pocketed() {
         assert_eq!(
             pocket(4.0, &Params::default()).unwrap_err(),
-            "the tool is too big to fit inside the selected shapes"
+            "The 6 mm End Mill does not fit inside the selected shapes. Pick a smaller tool, \
+             or make the shapes bigger."
         );
     }
 
@@ -678,7 +677,7 @@ mod tests {
         };
         assert_eq!(
             pocket(20.0, &p).unwrap_err(),
-            "invalid parameters: stepover must be more than 0 and at most 1"
+            "Set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database."
         );
     }
 

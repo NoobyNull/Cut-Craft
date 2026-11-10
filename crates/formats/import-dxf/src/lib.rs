@@ -32,7 +32,7 @@ impl Importer for ImportDxf {
             .collect();
         if paths.is_empty() {
             return Err(CommandError::Failed(
-                "the DXF has no lines, arcs, circles, polylines, ellipses or splines".into(),
+                "the DXF has no lines, arcs, circles, polylines, ellipses or splines. Export it again from the program that made it".into(),
             ));
         }
         Ok(Change::swap(doc, [], paths))
@@ -394,7 +394,7 @@ mod tests {
             ImportDxf::import(&Document::default(), &dxf(Units::Millimeters, vec![])).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "the DXF has no lines, arcs, circles, polylines, ellipses or splines"
+            "The DXF has no lines, arcs, circles, polylines, ellipses or splines. Export it again from the program that made it."
         );
         assert!(ImportDxf::import(&Document::default(), b"not a dxf").is_err());
     }

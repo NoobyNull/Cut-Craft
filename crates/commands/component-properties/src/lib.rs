@@ -217,7 +217,7 @@ impl Command for ComponentProperties {
         let component = existing(&doc.components, p.component, "component")?;
         if p.shape_height < 0.0 {
             return Err(CommandError::InvalidParams(
-                "shape height cannot be negative".into(),
+                "set shape height to 0 or more".into(),
             ));
         }
         let mut after = Component {
@@ -349,6 +349,9 @@ mod tests {
 
     #[test]
     fn needs_the_component() {
-        assert!(rejection::<ComponentProperties>(&Params::default()).contains("does not exist"));
+        assert!(
+            rejection::<ComponentProperties>(&Params::default())
+                .contains("is not in the job any more")
+        );
     }
 }

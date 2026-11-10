@@ -116,7 +116,7 @@ impl Command for DrawRectangle {
             let max = p.width.min(p.height) / 2.0;
             if p.radius > max {
                 return Err(CommandError::InvalidParams(format!(
-                    "radius must be at most half the shorter side ({max})"
+                    "set radius to at most half the shorter side ({max})"
                 )));
             }
         }
@@ -290,7 +290,7 @@ mod tests {
                 width: 0.0,
                 ..Params::default()
             }),
-            "invalid parameters: width must be greater than 0"
+            "Set width to more than 0."
         );
     }
 
@@ -303,7 +303,7 @@ mod tests {
         };
         assert_eq!(
             rejection::<DrawRectangle>(&p),
-            "invalid parameters: radius must be at most half the shorter side (25)"
+            "Set radius to at most half the shorter side (25)."
         );
     }
 

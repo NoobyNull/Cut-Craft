@@ -53,6 +53,8 @@ mod tests {
         let mut doc = domed();
         run_on::<DeleteComponent>(&mut doc, &Params::default());
         assert!(doc.components.is_empty());
-        assert!(rejection::<DeleteComponent>(&Params::default()).contains("does not exist"));
+        assert!(
+            rejection::<DeleteComponent>(&Params::default()).contains("is not in the job any more")
+        );
     }
 }

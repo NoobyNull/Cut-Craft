@@ -176,22 +176,34 @@ To cut a release:
    list. The start page shows them under "What's new". Keep it to about four short lines, or
    the start page's links no longer fit and a test fails.
 
-4. `main` is protected, so the version goes in through a pull request like any other change.
-   Commit the three files on a branch and open a pull request titled `chore: version 0.6.1`:
+4. Take the README's pictures again, so they show this version in the status bar and the
+   screens as they are now:
+
+   ```bash
+   cargo run --release -p cut-craft -- --screenshots docs/screenshots
+   ```
+
+   The app opens, sets up each scene, saves it as `docs/screenshots/NN-name.png` and quits
+   (about half a minute). It needs a display: on a Linux machine without one, run it under
+   `xvfb-run -a` (packages `xvfb`, `libxkbcommon-x11-0` and `mesa-vulkan-drivers`). Look over
+   the pictures before committing them; a picture the README doesn't use can be left out.
+
+5. `main` is protected, so the version goes in through a pull request like any other change.
+   Commit the files on a branch and open a pull request titled `chore: version 0.6.1`:
 
    ```bash
    git switch -c version-0.6.1
-   git add Cargo.toml Cargo.lock crates/app/whats-new.md
+   git add Cargo.toml Cargo.lock crates/app/whats-new.md docs/screenshots
    git commit -m "Version 0.6.1"
    git push -u origin version-0.6.1
    gh pr create --title "chore: version 0.6.1" --body "Version 0.6.1"
    ```
 
-5. When CI is green, merge it. **Release tag** tags v0.6.1 on the merge and **Builds** makes
+6. When CI is green, merge it. **Release tag** tags v0.6.1 on the merge and **Builds** makes
    the macOS DMG, Linux `.tar.gz`, AppImage and Flatpak, and Windows `.zip`, signs each and
    attaches them to the release on GitHub's Releases page. Watch with `gh run list --limit 6`.
 
-6. Build the same version locally (see "Build and run locally").
+7. Build the same version locally (see "Build and run locally").
 
 ## Repository protection
 

@@ -118,7 +118,7 @@ impl Command for DrillBankToolpath {
         }
         if p.dwell < 0.0 || p.retract_gap < 0.0 {
             return Err(CommandError::InvalidParams(
-                "the dwell and retract gap cannot be negative".into(),
+                "set the dwell and retract gap to 0 or more".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|path| path.closed);
@@ -284,6 +284,6 @@ mod tests {
             &with_bank(),
         )
         .unwrap_err();
-        assert!(err.starts_with("select the circles"), "{err}");
+        assert!(err.starts_with("Select the circles"), "{err}");
     }
 }

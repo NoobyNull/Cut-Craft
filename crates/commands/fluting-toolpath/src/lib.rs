@@ -158,7 +158,7 @@ impl Command for FlutingToolpath {
         ensure_positive("tool diameter", p.tool.diameter)?;
         if p.start_depth < 0.0 {
             return Err(CommandError::InvalidParams(
-                "start depth cannot be negative".into(),
+                "set start depth to 0 or more".into(),
             ));
         }
         if p.flute_type != FluteType::RampOverCompleteLength {
@@ -166,7 +166,7 @@ impl Command for FlutingToolpath {
                 ensure_positive("ramp length", p.ramp_length)?;
             } else if !(p.ramp_percent > 0.0 && p.ramp_percent < 100.0) {
                 return Err(CommandError::InvalidParams(
-                    "ramp % must be greater than 0 and less than 100".into(),
+                    "set ramp % above 0 and below 100".into(),
                 ));
             }
         }
@@ -371,7 +371,7 @@ mod tests {
             };
             assert_eq!(
                 rejection::<FlutingToolpath>(&p),
-                "invalid parameters: ramp % must be greater than 0 and less than 100"
+                "Set ramp % above 0 and below 100."
             );
         }
     }
@@ -410,7 +410,7 @@ mod tests {
     fn needs_vectors_selected() {
         assert_eq!(
             made_toolpath::<FlutingToolpath>(vec![], &Params::default()).unwrap_err(),
-            "select the vectors to flute"
+            "Select the vectors to flute."
         );
     }
 }

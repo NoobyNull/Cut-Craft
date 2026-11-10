@@ -973,6 +973,12 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub default_job: Option<cut_craft_core::document::Job>,
+    /// First-time setup was answered or skipped, so it is not shown at start again (Help ▸
+    /// Run First-Time Setup Again still opens it). Kept here, in the options file, wherever
+    /// the platform keeps that.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[schemars(skip)]
+    pub first_run_done: bool,
     /// The favourite tools of the Design and Toolpaths tabs, and whether each shows only
     /// them (right-click the tab).
     #[serde(default)]
@@ -1079,6 +1085,7 @@ impl Default for Options {
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
             default_job: None,
+            first_run_done: false,
             favourites: Favourites::default(),
             design_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),

@@ -8,6 +8,7 @@ mod command;
 pub mod component;
 pub mod compute;
 pub mod constraint;
+pub mod csv;
 pub mod document;
 pub mod drill_bank;
 pub mod entry;
@@ -45,7 +46,8 @@ pub use glam;
 
 pub use change::{ApplyError, Change, ChangeBuilder, Edit, History, Sequence, Step};
 pub use command::{
-    Command, CommandError, Drag, DynCommand, Interactive, Meta, NoParams, Registry, ensure_named,
-    ensure_positive, existing, existing_layer,
+    Command, CommandError, Drag, DynCommand, EMPTY_MODEL, Interactive, Meta, NoParams, Registry,
+    SELECT_FIRST, ensure_named, ensure_positive, existing, existing_layer, gone, sentence,
+    tool_does_not_fit,
 };
 pub use formats::{ExportEntry, Exporter, FileFormat, ImportEntry, Importer};

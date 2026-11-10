@@ -46,7 +46,7 @@ impl Command for LevelClipping {
         let mut level = doc
             .levels
             .get(&p.level)
-            .ok_or_else(|| CommandError::Failed(format!("level {} does not exist", p.level)))?
+            .ok_or_else(|| cut_craft_core::gone("level"))?
             .clone();
         let closed = |ids: &[EntityId]| -> Vec<EntityId> {
             ids.iter()

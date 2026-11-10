@@ -1,4 +1,16 @@
 #!/bin/bash
 # The AppImage's entry: Cut Craft, its icons built in.
 here="$(dirname "$(readlink -f "$0")")"
+# usr/lib holds the keyboard libraries the window loads (libxkbcommon, libxkbcommon-x11 and
+# libxcb-xkb), which minimal installs can lack. They are used only when the system is missing
+# one: otherwise the system's own copies serve Cut Craft and the programs it starts (file
+# dialogs, the web browser), which may need newer ones.
+cache=$(PATH="$PATH:/sbin:/usr/sbin" ldconfig -p 2>/dev/null)
+for lib in "$here"/usr/lib/*.so.*; do
+    if ! awk -v name="${lib##*/}" '$1 == name && /x86-64/ { found = 1 } END { exit !found }' \
+        <<<"$cache"; then
+        export LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        break
+    fi
+done
 exec "$here/usr/bin/cut-craft" "$@"

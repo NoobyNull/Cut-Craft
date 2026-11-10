@@ -864,7 +864,7 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     for (i, it) in items.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= edit(ui, item, it, &Value::Null, look);
-            if ui.small_button("✕").on_hover_hint("Remove").clicked() {
+            if ui.small_button("×").on_hover_hint("Remove").clicked() {
                 remove = Some(i);
             }
         });
@@ -913,16 +913,22 @@ fn round(n: f64) -> i64 {
 /// The heading of the group a toolpath's depths go in; [`arrange`] puts it first.
 pub const CUTTING_DEPTHS: &str = "Cutting Depths";
 
+/// The group that picks which side of the vectors a profile cuts, shown just after the cutting
+/// depths: Aspire keeps it lower, under Machine Vectors.
+pub const WHICH_SIDE: &str = cmd_profile_toolpath::SIDE_GROUP;
+
 /// A toolpath form's fields in Aspire's order: the cutting depths, the tool, then the rest
 /// as declared with each group's (and the tab strip's) fields gathered where the first of
 /// them is, and Project onto 3D Model and the name last.
 pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
     let rank = |f: &Field| match f.key.as_str() {
         _ if f.group.as_deref() == Some(CUTTING_DEPTHS) => 0,
-        "tool" => 1,
-        "project_onto_model" => 3,
-        "name" => 4,
-        _ => 2,
+        // Profile's Outside / Inside / On, right under the depth where a beginner looks first
+        _ if f.group.as_deref() == Some(WHICH_SIDE) => 1,
+        "tool" => 2,
+        "project_onto_model" => 4,
+        "name" => 5,
+        _ => 3,
     };
     // where each field's company first appears: its group's or the tab strip's first field,
     // else its own place
@@ -1100,6 +1106,7 @@ mod tests {
                 "side": { "type": "string", "x-group": "Chamfer" },
                 "seed": { "type": "number" },
                 "start_depth": { "type": "number", "x-group": "Cutting Depths" },
+                "cut": { "type": "string", "x-group": WHICH_SIDE },
                 "width": { "type": "number", "x-group": "Chamfer" },
                 "ramp": { "type": "boolean", "x-tab": "Ramp" },
                 "project_onto_model": { "type": "boolean" },
@@ -1111,6 +1118,7 @@ mod tests {
             keys(&arrange(fields(&schema))),
             [
                 "start_depth",
+                "cut",
                 "tool",
                 "side",
                 "width",
@@ -1141,7 +1149,9 @@ mod tests {
             let k = keys(&f);
             let depths = f
                 .iter()
-                .take_while(|f| f.group.as_deref() == Some(CUTTING_DEPTHS))
+                .take_while(|f| {
+                    [Some(CUTTING_DEPTHS), Some(WHICH_SIDE)].contains(&f.group.as_deref())
+                })
                 .count();
             assert_eq!(k.get(depths), Some(&"tool"), "{}: {k:?}", command.id());
             if k.contains(&"name") {

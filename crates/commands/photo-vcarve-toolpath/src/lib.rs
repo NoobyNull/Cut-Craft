@@ -170,7 +170,7 @@ impl Command for PhotoVcarveToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.tool.shape != ToolShape::VBit {
             return Err(CommandError::InvalidParams(
-                "photo V-carving needs a V-bit".into(),
+                "pick a V-bit: photo V-carving needs one".into(),
             ));
         }
         ensure_positive("max carving depth", p.max_carving_depth)?;

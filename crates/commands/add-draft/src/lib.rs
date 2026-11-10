@@ -40,12 +40,12 @@ impl Command for AddDraft {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !(p.draft_angle > 0.0 && p.draft_angle <= 45.0) {
             return Err(CommandError::InvalidParams(
-                "the draft angle is above 0 and at most 45°".into(),
+                "set the draft angle above 0° and at most 45°".into(),
             ));
         }
         if !doc.components.values().any(|c| c.visible) {
             return Err(CommandError::Failed(
-                "there is no visible model to add draft to".into(),
+                "there is no visible model to add draft to. Show a component, or create one with a modelling tool".into(),
             ));
         }
         let mut model = model_at_resolution(doc);

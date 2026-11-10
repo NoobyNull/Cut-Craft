@@ -162,7 +162,10 @@ mod tests {
 
     #[test]
     fn needs_the_toolpath_and_a_name() {
-        assert!(rejection::<ToolpathProperties>(&Params::default()).contains("does not exist"));
+        assert!(
+            rejection::<ToolpathProperties>(&Params::default())
+                .contains("is not in the job any more")
+        );
         let blank = Params {
             name: " ".into(),
             ..Params::default()
@@ -170,6 +173,6 @@ mod tests {
         let why = ToolpathProperties::run(&with_toolpath(), &blank)
             .unwrap_err()
             .to_string();
-        assert!(why.contains("name is empty"), "{why}");
+        assert!(why.contains("Type a name"), "{why}");
     }
 }

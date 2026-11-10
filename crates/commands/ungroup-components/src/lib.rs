@@ -51,10 +51,7 @@ impl Command for UngroupComponents {
             .filter(|(_, k)| k.group.as_ref().is_some_and(|g| g.id == p.group))
             .collect();
         if members.is_empty() {
-            return Err(CommandError::Failed(format!(
-                "group {} does not exist",
-                p.group
-            )));
+            return Err(cut_craft_core::gone("group"));
         }
         let mut c = Change::builder(doc);
         for (&id, k) in members {

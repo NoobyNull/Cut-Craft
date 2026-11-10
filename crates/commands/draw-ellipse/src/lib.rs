@@ -104,7 +104,7 @@ mod tests {
                 height: 0.0,
                 ..Params::default()
             }),
-            "invalid parameters: height must be greater than 0"
+            "Set height to more than 0."
         );
     }
 

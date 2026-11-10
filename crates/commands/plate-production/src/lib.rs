@@ -16,17 +16,32 @@ use serde::{Deserialize, Serialize};
 pub struct PlateProduction;
 
 /// One step of laying out the plates, run on the document as the steps before left it:
-/// which plate it lays, and the template vectors its copies stand for, in order.
+/// which plate it lays, and the template vectors its copies stand for: one for one, in
+/// order, or (`text`) a whole template text made again with the plate's values.
 struct PlateStep {
     plate: usize,
     template: Vec<EntityId>,
+    text: bool,
     run: StepFn,
 }
 
-type StepFn = Box<dyn Fn(&Document) -> Result<Change, CommandError>>;
+/// What a step made: its plate, the template vectors it stands for, whether it is a text
+/// made again, and the vectors it added.
+struct Made {
+    plate: usize,
+    template: Vec<EntityId>,
+    text: bool,
+    vectors: Vec<EntityId>,
+}
 
-/// Each plate's copy of each template vector: (plate, template vector) to the copy.
-type Copies = std::collections::HashMap<(usize, EntityId), EntityId>;
+/// A row of the data file: its row number in the spreadsheet and its fields.
+#[derive(Clone, Debug, Default)]
+struct Row {
+    number: usize,
+    fields: Vec<String>,
+}
+
+type StepFn = Box<dyn Fn(&Document) -> Result<Change, CommandError>>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -39,14 +54,22 @@ pub enum Separator {
 }
 
 impl Separator {
-    fn split(self, line: &str) -> Vec<String> {
-        let parts: Vec<&str> = match self {
-            Self::Comma => line.split(',').collect(),
-            Self::Tab => line.split('\t').collect(),
-            Self::Semicolon => line.split(';').collect(),
-            Self::Space => line.split_whitespace().collect(),
+    /// The file's records, quoted fields keeping their separators (spaces: split at runs of
+    /// them, a line a record), each field trimmed.
+    fn records(self, text: &str) -> Vec<Vec<String>> {
+        let records = match self {
+            Self::Comma => cut_craft_core::csv::records(text, ','),
+            Self::Tab => cut_craft_core::csv::records(text, '\t'),
+            Self::Semicolon => cut_craft_core::csv::records(text, ';'),
+            Self::Space => text
+                .lines()
+                .map(|l| l.split_whitespace().map(str::to_owned).collect())
+                .collect(),
         };
-        parts.into_iter().map(|p| p.trim().to_owned()).collect()
+        records
+            .into_iter()
+            .map(|r| r.into_iter().map(|f| f.trim().to_owned()).collect())
+            .collect()
     }
 }
 
@@ -241,6 +264,7 @@ impl Command for PlateProduction {
             steps.push(PlateStep {
                 plate: k,
                 template: plain.clone(),
+                text: false,
                 run: Box::new(move |d: &Document| {
                     let mut c = Change::builder(d);
                     if new_layer {
@@ -256,62 +280,82 @@ impl Command for PlateProduction {
             for (group, spec) in &texts {
                 let mut params: cmd_draw_text::Params = serde_json::from_value((*spec).clone())
                     .map_err(|e| CommandError::Failed(format!("a template text: {e}")))?;
-                params.text = fill(&params.text, &p.data.variables, &rows[k], &p.counter, k);
+                params.text = fill(
+                    &params.text,
+                    &p.data.variables,
+                    &rows[k].fields,
+                    &p.counter,
+                    k,
+                );
                 params.anchor.x += at.x - bounds.min.x;
                 params.anchor.y += at.y - bounds.min.y;
                 params.replaces = None;
                 steps.push(PlateStep {
                     plate: k,
                     template: doc.group_members_of(*group),
+                    text: true,
                     run: Box::new(move |d: &Document| {
                         <cmd_draw_text::DrawText as Command>::run(d, &params)
                     }),
                 });
             }
         }
-        // each plate's copy of each template vector, as the steps make them
-        let copies: std::cell::RefCell<Copies> = std::cell::RefCell::new(Copies::new());
-        let laid = Change::chain_over(doc, &steps, |d, step| {
+        // what each step made, as the steps make them
+        let made: std::cell::RefCell<Vec<Made>> = std::cell::RefCell::new(vec![]);
+        let mut laid = Change::chain_over(doc, &steps, |d, step| {
             let change = (step.run)(d)?;
-            let made = change.edits.iter().filter_map(|e| match e {
-                Edit::Add { id, .. } => Some(*id),
-                _ => None,
+            made.borrow_mut().push(Made {
+                plate: step.plate,
+                template: step.template.clone(),
+                text: step.text,
+                vectors: change
+                    .edits
+                    .iter()
+                    .filter_map(|e| match e {
+                        Edit::Add { id, .. } => Some(*id),
+                        _ => None,
+                    })
+                    .collect(),
             });
-            let mut copies = copies.borrow_mut();
-            for (template, copy) in step.template.iter().zip(made) {
-                copies.insert((step.plate, *template), copy);
-            }
             Ok(change)
         })?;
-        if !p.create_toolpaths {
-            return Ok(laid);
-        }
+        let made = made.into_inner();
         let mut after = doc.clone();
         after
             .apply(&laid)
             .map_err(|e| CommandError::Failed(e.to_string()))?;
-        let toolpaths =
-            sheet_toolpaths(doc, &after, &template, &spots, bounds, &copies.into_inner());
+        if let Some(note) = overflowing(&after, &made, &spots, bounds, &rows, &p.data) {
+            laid.notes.push(note);
+        }
+        if !p.create_toolpaths {
+            return Ok(laid);
+        }
+        let toolpaths = sheet_toolpaths(doc, &after, &template, &spots, bounds, &made);
         Ok(laid.then(toolpaths))
     }
 }
 
 /// The template's toolpaths once per sheet of plates: each toolpath whose vectors are in
 /// `template`, its moves shifted onto every plate of the sheet (`spots`: each plate's sheet
-/// and place, `bounds` the template's box), its vectors the plates' `copies`, named after
-/// the sheet and the toolpath.
+/// and place, `bounds` the template's box), its vectors the plates' copies (`made`), named
+/// after the sheet and the toolpath. One cutting a template text is left stale: each plate's
+/// text differs from the template's, so the shifted moves would cut the placeholders; the app
+/// recalculates it straight away.
 fn sheet_toolpaths(
     doc: &Document,
     after: &Document,
     template: &[EntityId],
     spots: &[(usize, Point)],
     bounds: Rect,
-    copies: &Copies,
+    made: &[Made],
 ) -> Change {
     let sheets = spots.iter().map(|s| s.0).max().map_or(1, |s| s + 1);
     let mut c = Change::builder(after);
     let of_template = |t: &&Toolpath| t.vectors.iter().any(|v| template.contains(v));
     for t in doc.toolpaths.values().filter(of_template) {
+        let cuts_text = made
+            .iter()
+            .any(|m| m.text && m.template.iter().any(|v| t.vectors.contains(v)));
         for sheet in 0..sheets {
             let (mut moves, mut power, mut vectors) = (vec![], vec![], vec![]);
             // where each copy is, for a drill bank's plunges
@@ -324,18 +368,21 @@ fn sheet_toolpaths(
                     to: m.to + DVec3::new(shift.x, shift.y, 0.0),
                 }));
                 power.extend(t.power.iter().copied());
-                vectors.extend(
-                    t.vectors
-                        .iter()
-                        .filter_map(|v| copies.get(&(k, *v)).copied()),
-                );
+                vectors.extend(plate_vectors(made, k, &t.vectors));
+            }
+            let name = format!("S{} - {}", sheet + 1, t.name);
+            // its settings carry the name too, so a recalculation keeps it
+            let mut params = t.params.clone();
+            if params.get("name").is_some_and(serde_json::Value::is_string) {
+                params["name"] = name.clone().into();
             }
             c.add_toolpath(Toolpath {
-                name: format!("S{} - {}", sheet + 1, t.name),
+                name,
+                params,
                 vectors,
                 moves,
                 power,
-                stale: false,
+                stale: cuts_text,
                 drill_bank: t.drill_bank.as_ref().map(|b| b.copied(&placed)),
                 ..t.clone()
             });
@@ -344,28 +391,116 @@ fn sheet_toolpaths(
     c.finish()
 }
 
-/// The data's rows; with no file, one empty row per plate asked for.
-fn rows(data: &Data) -> Result<Vec<Vec<String>>, CommandError> {
+/// Plate `plate`'s copies of the template vectors `of`: a plain vector's own copy, and the
+/// whole of each text made again from a template text holding one of them.
+fn plate_vectors(made: &[Made], plate: usize, of: &[EntityId]) -> Vec<EntityId> {
+    let mut out = vec![];
+    for m in made.iter().filter(|m| m.plate == plate) {
+        if m.text {
+            if m.template.iter().any(|v| of.contains(v)) {
+                out.extend(m.vectors.iter().copied());
+            }
+        } else {
+            out.extend(
+                m.template
+                    .iter()
+                    .zip(&m.vectors)
+                    .filter(|(t, _)| of.contains(t))
+                    .map(|(_, v)| *v),
+            );
+        }
+    }
+    out
+}
+
+/// A note naming the rows whose text runs past their plate (the template's box, `bounds`,
+/// where `spots` put it), with how to fix it; `None` when every plate's text fits.
+fn overflowing(
+    after: &Document,
+    made: &[Made],
+    spots: &[(usize, Point)],
+    bounds: Rect,
+    rows: &[Row],
+    data: &Data,
+) -> Option<String> {
+    // a little give for curve flattening
+    const GIVE: f64 = 0.01;
+    let mut over = vec![];
+    for (k, &(_, at)) in spots.iter().enumerate() {
+        let plate = Rect::new(at, at + bounds.size());
+        let text = made
+            .iter()
+            .filter(|m| m.plate == k && m.text)
+            .flat_map(|m| &m.vectors)
+            .filter_map(|v| after.vectors.get(v))
+            .map(cut_craft_core::geometry::Path::bounds)
+            .reduce(Rect::union);
+        let Some(text) = text else { continue };
+        let outside = text.min.x < plate.min.x - GIVE
+            || text.min.y < plate.min.y - GIVE
+            || text.max.x > plate.max.x + GIVE
+            || text.max.y > plate.max.y + GIVE;
+        if outside {
+            let row = &rows[k];
+            // the first column a variable takes names the row
+            let name = data
+                .variables
+                .iter()
+                .filter(|a| a.column > 0)
+                .find_map(|a| row.fields.get(a.column - 1))
+                .filter(|f| !f.is_empty());
+            over.push(match name {
+                Some(name) => format!("row {} ({name})", row.number),
+                None => format!("plate {}", k + 1),
+            });
+        }
+    }
+    if over.is_empty() {
+        return None;
+    }
+    let which = over.join(", ");
+    Some(format!(
+        "The text runs past the plate's edge on {which}. Make the template's text a Text in a \
+         Box (Draw Text) so long names shrink to fit the box, or make the text smaller, then \
+         undo and run Plate Production again."
+    ))
+}
+
+/// The data's rows, numbered as the spreadsheet numbers them; with no file, one empty row
+/// per plate asked for.
+fn rows(data: &Data) -> Result<Vec<Row>, CommandError> {
     if data.file.trim().is_empty() {
         if data.plates == 0 {
             return Err(CommandError::InvalidParams(
-                "ask for at least one plate".into(),
+                "set plates to 1 or more".into(),
             ));
         }
-        return Ok(vec![vec![]; data.plates]);
+        return Ok((1..=data.plates)
+            .map(|number| Row {
+                number,
+                fields: vec![],
+            })
+            .collect());
     }
-    let text = std::fs::read_to_string(&data.file)
+    let bytes = std::fs::read(&data.file)
         .map_err(|e| CommandError::Failed(format!("{}: {e}", data.file)))?;
+    let text = cut_craft_core::csv::decode(&bytes);
     let skip = usize::from(data.first_row_names);
-    let rows: Vec<Vec<String>> = text
-        .lines()
+    let rows: Vec<Row> = data
+        .separator
+        .records(&text)
+        .into_iter()
+        .enumerate()
         .skip(skip)
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| data.separator.split(l))
+        .filter(|(_, fields)| fields.iter().any(|f| !f.is_empty()))
+        .map(|(i, fields)| Row {
+            number: i + 1,
+            fields,
+        })
         .collect();
     if rows.is_empty() {
         return Err(CommandError::Failed(format!(
-            "{} has no rows of data",
+            "{} has no rows of data. Pick a file with a row for each plate, or fewer rows to skip",
             data.file
         )));
     }
@@ -428,7 +563,7 @@ fn layout(
     );
     if across < 1.0 || down < 1.0 {
         return Err(CommandError::Failed(
-            "a plate does not fit on the material inside the margins".into(),
+            "a plate does not fit on the material inside the margins. Make the plate or the margins smaller".into(),
         ));
     }
     let (across, down) = (across as usize, down as usize);
@@ -513,6 +648,112 @@ mod tests {
         }
         // 3 borders + 1 + 2 + 1 letter boxes
         assert_eq!(doc.vectors.len(), before + 3 + 4);
+    }
+
+    #[test]
+    fn quoted_fields_keep_their_commas() {
+        let mut doc = template();
+        let mut p = PlateProduction::initial_params(&doc);
+        p.data.file = data_file("quoted", "name\n\"I, H\"\n");
+        run_on::<PlateProduction>(&mut doc, &p);
+        assert!(doc.texts.values().any(|t| t["text"] == "I, H"));
+    }
+
+    #[test]
+    fn excel_windows_text_is_read() {
+        let path = std::env::temp_dir().join(format!(
+            "cut-craft-plates-{}-latin1.csv",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"name\nRen\xe9e\n").unwrap();
+        let data = Data {
+            file: path.display().to_string(),
+            ..Params::default().data
+        };
+        assert_eq!(rows(&data).unwrap()[0].fields, ["Renée"]);
+    }
+
+    #[test]
+    fn rows_keep_their_spreadsheet_row_numbers() {
+        let data = Data {
+            file: data_file("numbers", "name\nI\n\nH\n"),
+            ..Params::default().data
+        };
+        let got: Vec<usize> = rows(&data).unwrap().iter().map(|r| r.number).collect();
+        assert_eq!(got, [2, 4]);
+    }
+
+    #[test]
+    fn text_running_past_the_plate_is_named_in_a_note() {
+        let doc = template();
+        let mut p = PlateProduction::initial_params(&doc);
+        // the border is 40 wide; ten letter boxes are far wider
+        p.data.file = data_file("long", "name\nI\nIHIHIHIHIHIHIHIHIHIH\n");
+        let change = PlateProduction::run(&doc, &p).unwrap();
+        let note = change.notes.join(" ");
+        assert!(note.contains("row 3"), "{note}");
+        assert!(note.contains("IHIHIHIHIHIHIHIHIHIH"), "{note}");
+        assert!(!note.contains("row 2"), "{note}");
+        assert!(note.contains("Text in a Box"), "{note}");
+    }
+
+    #[test]
+    fn toolpaths_on_placeholder_text_are_left_to_recalculate_with_each_plates_text() {
+        use cut_craft_core::toolpath::Tool;
+        let mut doc = template();
+        let border = *doc.selection.iter().last().unwrap();
+        let letters: Vec<EntityId> = doc
+            .selection
+            .iter()
+            .copied()
+            .filter(|v| *v != border)
+            .collect();
+        let toolpath = |name: &str, vectors: Vec<EntityId>| Toolpath {
+            name: name.into(),
+            strategy: "vcarve_toolpath".into(),
+            params: serde_json::json!({ "name": name }),
+            tool: Tool::default(),
+            vectors,
+            moves: vec![],
+            visible: true,
+            power: vec![],
+            stale: false,
+            group: None,
+            drill_bank: None,
+        };
+        let mut c = Change::builder(&doc);
+        c.add_toolpath(toolpath("Carve name", letters));
+        c.add_toolpath(toolpath("Cut out", vec![border]));
+        doc.apply(&c.finish()).unwrap();
+        let mut p = PlateProduction::initial_params(&doc);
+        p.data.file = data_file("stale", "name\nI\nIH\n");
+        run_on::<PlateProduction>(&mut doc, &p);
+        let made = |name: &str| {
+            doc.toolpaths
+                .values()
+                .find(|t| t.name == name)
+                .unwrap()
+                .clone()
+        };
+        let carve = made("S1 - Carve name");
+        assert!(
+            carve.stale,
+            "the template's letters are not the plates' letters"
+        );
+        assert_eq!(
+            carve.params["name"], "S1 - Carve name",
+            "recalculating keeps the sheet's name"
+        );
+        // its vectors are every plate's own letters: I, then I and H
+        assert_eq!(carve.vectors.len(), 3);
+        let filled: Vec<EntityId> = doc
+            .texts
+            .iter()
+            .filter(|(_, t)| t["text"] == "I" || t["text"] == "IH")
+            .flat_map(|(g, _)| doc.group_members_of(*g))
+            .collect();
+        assert!(carve.vectors.iter().all(|v| filled.contains(v)));
+        assert!(!made("S1 - Cut out").stale, "plain vectors only move");
     }
 
     #[test]

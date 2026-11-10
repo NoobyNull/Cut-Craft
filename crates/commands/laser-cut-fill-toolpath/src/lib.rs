@@ -120,12 +120,12 @@ impl Command for LaserCutFillToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !(p.power > 0.0 && p.power <= 100.0) {
             return Err(CommandError::InvalidParams(
-                "power must be more than 0 and at most 100 %".into(),
+                "set power to more than 0 and at most 100 %".into(),
             ));
         }
         if p.passes == 0 {
             return Err(CommandError::InvalidParams(
-                "it needs at least 1 pass".into(),
+                "set passes to 1 or more".into(),
             ));
         }
         ensure_positive("kerf", p.tool.diameter)?;
@@ -184,7 +184,7 @@ impl Command for LaserCutFillToolpath {
         };
         if once.is_empty() {
             return Err(CommandError::Failed(
-                "the kerf leaves nothing to cut inside the shapes".into(),
+                "the kerf leaves nothing to cut inside the shapes. Make the kerf smaller".into(),
             ));
         }
         // ponytail: every pass at the surface; lowering the focus each pass is a later option

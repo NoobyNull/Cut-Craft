@@ -603,12 +603,14 @@ impl Command for BreakTextIntoLines {
             .map_err(|e| CommandError::Failed(e.to_string()))?;
         if matches!(text.mode, Mode::TextInABox) {
             return Err(CommandError::Failed(
-                "Text in a Box is one block: it has no lines of its own".into(),
+                "Text in a Box is one block: it has no lines of its own. Select text drawn as lines".into(),
             ));
         }
         let lines: Vec<&str> = text.text.lines().collect();
         if lines.len() < 2 {
-            return Err(CommandError::Failed("the text is one line already".into()));
+            return Err(CommandError::Failed(
+                "the text is one line already. Select text with more than one line".into(),
+            ));
         }
         let face = font::load(&text.font, text.bold, text.italic, &text.text)
             .map_err(CommandError::Failed)?;

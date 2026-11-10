@@ -57,14 +57,16 @@ impl Command for SmoothSelectedComponents {
         let id = if doc.components.contains_key(&p.component) {
             p.component
         } else {
-            *doc.components
-                .keys()
-                .next_back()
-                .ok_or_else(|| CommandError::Failed("there are no components to smooth".into()))?
+            *doc.components.keys().next_back().ok_or_else(|| {
+                CommandError::Failed(
+                    "there are no components to smooth. Create one with a modelling tool first"
+                        .into(),
+                )
+            })?
         };
         if p.passes == 0 {
             return Err(CommandError::InvalidParams(
-                "it needs at least 1 pass".into(),
+                "set passes to 1 or more".into(),
             ));
         }
         let mut smooth = doc.components[&id].clone();

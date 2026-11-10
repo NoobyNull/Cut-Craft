@@ -34,10 +34,7 @@ impl Command for ActivateSheet {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.sheet >= doc.sheets.len() {
-            return Err(CommandError::InvalidParams(format!(
-                "there is no sheet {}",
-                p.sheet + 1
-            )));
+            return Err(cut_craft_core::gone("sheet"));
         }
         let mut c = Change::builder(doc);
         c.activate_sheet(p.sheet);
@@ -62,6 +59,9 @@ mod tests {
 
     #[test]
     fn needs_a_sheet_that_exists() {
-        assert!(rejection::<ActivateSheet>(&Params { sheet: 5 }).contains("no sheet 6"));
+        assert!(
+            rejection::<ActivateSheet>(&Params { sheet: 5 })
+                .contains("That sheet is not in the job any more")
+        );
     }
 }

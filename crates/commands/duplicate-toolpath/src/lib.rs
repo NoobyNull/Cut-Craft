@@ -76,7 +76,7 @@ mod tests {
     fn needs_a_toolpath() {
         assert!(
             rejection::<DuplicateToolpath>(&Params::default())
-                .contains("toolpath 1 does not exist")
+                .contains("That toolpath is not in the job any more")
         );
     }
 }

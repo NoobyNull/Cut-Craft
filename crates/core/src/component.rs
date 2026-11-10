@@ -967,7 +967,8 @@ pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandErro
         .fold(f64::INFINITY, f64::min);
     if top - lowest > doc.job.thickness {
         return Err(CommandError::Failed(format!(
-            "the model is {:.1} mm tall but the material is only {:.1} mm thick",
+            "the model is {:.1} mm tall but the material is only {:.1} mm thick. Set a thicker \
+             material in Job Setup, or make the model lower",
             top - lowest,
             doc.job.thickness
         )));
@@ -976,7 +977,7 @@ pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandErro
     // ponytail: 1 µm slack for rounding
     if top + shift > 1e-6 || lowest + shift < -doc.job.thickness - 1e-6 {
         return Err(CommandError::Failed(
-            "the model does not fit in the material where Material Setup puts it".into(),
+            "the model does not fit in the material where Material Setup puts it. Change the position in Material Setup, or make the model lower".into(),
         ));
     }
     for height in &mut surface.heights {

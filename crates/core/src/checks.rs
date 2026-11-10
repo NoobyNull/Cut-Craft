@@ -8,6 +8,12 @@ use crate::toolpath::{MoveKind, Tool, Toolpath};
 /// The 3D Finishing strategy, whose toolpaths follow the model.
 const FINISHING: &str = "3d_finishing_toolpath";
 
+/// The Profile strategy, whose cut right through the material lets a part come free.
+const PROFILE: &str = "profile_toolpath";
+
+/// How close to the material's bottom a cut must reach to count as right through, mm.
+const THROUGH: f64 = 1e-3;
+
 /// Material left that is worth a mention, mm, until Options says otherwise.
 pub const LEFT: f64 = 0.1;
 
@@ -40,6 +46,9 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
             tool.name
         ));
     }
+    if let Some(loose) = comes_loose(doc, toolpath, deepest) {
+        found.push(loose);
+    }
     if toolpath.strategy == FINISHING
         && tool.reach() > tool.diameter / 2.0
         && let Ok(model) = placed_model(doc, tool)
@@ -68,6 +77,40 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
         }
     }
     found
+}
+
+/// A profile that cuts right through the material round a closed shape, with no tabs: what
+/// it cuts out comes free and can be thrown by the cutter, or move into it. `deepest` is
+/// the deepest the toolpath cuts below the surface.
+fn comes_loose(doc: &Document, toolpath: &Toolpath, deepest: f64) -> Option<String> {
+    let params = &toolpath.params;
+    let through = doc.job.thickness > 0.0 && deepest + THROUGH >= doc.job.thickness;
+    if toolpath.strategy != PROFILE || held_by_tabs(params) || !through {
+        return None;
+    }
+    // along the line itself, only a closed shape is cut out
+    let closed = toolpath
+        .vectors
+        .iter()
+        .any(|id| doc.vectors.get(id).is_some_and(|v| v.closed));
+    if params["side"] == "on" && !closed {
+        return None;
+    }
+    Some(format!(
+        "{} cuts right through the material with no tabs, so the piece it cuts out comes \
+         loose and can move into the cutter. Add tabs (Tabs in the toolpath's form), or hold \
+         the piece down another way: tape, screws or a vacuum table",
+        toolpath.name
+    ))
+}
+
+/// Whether a profile's settings leave tabs that hold the piece: tabs on, and either sized
+/// from the tool (never nothing) or given a thickness.
+pub fn held_by_tabs(params: &serde_json::Value) -> bool {
+    let tab = &params["tab"];
+    let sized_by_tool = tab["size_from_tool"].as_bool().unwrap_or(true);
+    let thickness = tab["thickness"].as_f64().unwrap_or(1.0);
+    params["tabs"] != "none" && (sized_by_tool || thickness > 0.0)
 }
 
 #[cfg(test)]
@@ -164,5 +207,61 @@ mod tests {
             shank_diameter: 8.0,
             ..Tool::default()
         }
+    }
+
+    /// A profile round `vectors` of the sample document, `depth` deep, cut `side` with
+    /// `tabs`.
+    fn profile(vectors: &[u64], side: &str, tabs: &str, depth: f64) -> Toolpath {
+        Toolpath {
+            name: "Profile 1".into(),
+            params: serde_json::json!({ "side": side, "tabs": tabs }),
+            vectors: vectors
+                .iter()
+                .map(|&n| crate::document::EntityId(n))
+                .collect(),
+            ..toolpath(Tool::default(), PROFILE, depth)
+        }
+    }
+
+    fn loose(found: &[String]) -> bool {
+        found.iter().any(|f| f.contains("comes loose"))
+    }
+
+    #[test]
+    fn a_profile_right_through_with_no_tabs_lets_the_part_come_loose() {
+        let mut doc = crate::testing::sample_document();
+        doc.job.thickness = 20.0;
+        // the first square is closed, the third vector an open polyline
+        let found = problems(&doc, &profile(&[1], "outside", "none", 20.0));
+        assert!(loose(&found), "{found:?}");
+        assert!(
+            found.iter().any(|f| f.contains("Add tabs")),
+            "says how to fix it"
+        );
+        assert!(loose(&problems(
+            &doc,
+            &profile(&[1], "inside", "none", 20.5)
+        )));
+        assert!(loose(&problems(&doc, &profile(&[1], "on", "none", 20.0))));
+        // tabs hold it; a cut short of the bottom leaves it joined; an open line frees nothing
+        assert!(!loose(&problems(
+            &doc,
+            &profile(&[1], "outside", "flat", 20.0)
+        )));
+        assert!(!loose(&problems(
+            &doc,
+            &profile(&[1], "outside", "none", 19.0)
+        )));
+        assert!(!loose(&problems(&doc, &profile(&[3], "on", "none", 20.0))));
+        // tabs given no thickness hold nothing
+        let mut thin = profile(&[1], "outside", "flat", 20.0);
+        thin.params["tab"] = serde_json::json!({ "size_from_tool": false, "thickness": 0.0 });
+        assert!(loose(&problems(&doc, &thin)));
+        // only a profile's cut is judged so
+        let pocket = Toolpath {
+            strategy: "pocket_toolpath".into(),
+            ..profile(&[1], "outside", "none", 20.0)
+        };
+        assert!(!loose(&problems(&doc, &pocket)));
     }
 }

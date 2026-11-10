@@ -31,8 +31,7 @@ impl Tip {
 }
 
 /// The first step for a tool that wants a selection but says only that nothing is selected.
-pub(super) const SELECT_FIRST: &str =
-    "Select what to work on: click a vector in the 2D view, Shift-click to add more";
+pub(super) use cut_craft_core::SELECT_FIRST;
 
 /// The least room under the icons worth showing the tip box in, in rows: below it the status
 /// bar alone carries the line.

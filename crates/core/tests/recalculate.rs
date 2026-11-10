@@ -117,7 +117,8 @@ fn deleted_source_vectors_and_unknown_strategies_are_explained() {
     doc.apply(&c.finish()).unwrap();
     assert_eq!(
         registry().recalculate(&doc, tp).unwrap_err().to_string(),
-        "the vectors Centres was made from have been deleted"
+        "The vectors Centres was made from have been deleted. Select new vectors, then edit \
+         Centres and press Calculate."
     );
     let (doc, tp) = job();
     assert_eq!(
@@ -125,7 +126,8 @@ fn deleted_source_vectors_and_unknown_strategies_are_explained() {
             .recalculate(&doc, tp)
             .unwrap_err()
             .to_string(),
-        "Centres was made by `centres`, which is not available"
+        "Centres was made by `centres`, which is not available. Install the add-on that made \
+         it, or delete this toolpath."
     );
 }
 

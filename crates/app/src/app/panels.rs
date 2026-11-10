@@ -12,6 +12,10 @@ use super::{
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{MachinedArea, Units};
 
+/// The push-pin's two drawings (`scripts/make_icons.py`).
+pub(super) const PIN_ICON: &str = "view/pin.png";
+pub(super) const PINNED_ICON: &str = "view/pinned.png";
+
 impl CutCraftApp {
     /// The Tool Database manager; its edits are kept on Apply or OK.
     pub(super) fn tool_database_window(&mut self, ctx: &egui::Context) {
@@ -494,6 +498,17 @@ impl CutCraftApp {
             ),
             None => egui::Button::new(label.to_owned()),
         }
+    }
+
+    /// The push-pin toggle: leaning while loose, upright and pushed in once pinned. Drawn
+    /// rather than the 📌 emoji, which many system fonts lack and egui drew as an empty box.
+    pub(super) fn pin_button(&self, pinned: bool, edge: f32) -> egui::Button<'static> {
+        let (icon, label) = if pinned {
+            (PINNED_ICON, "Pinned")
+        } else {
+            (PIN_ICON, "Pin")
+        };
+        self.icon_button(icon, "", label, edge).selected(pinned)
     }
 
     /// Layers, top first: visibility and lock toggles, the current layer highlighted, and
@@ -3171,7 +3186,7 @@ impl CutCraftApp {
             .as_ref()
             .is_some_and(|f| f.page == Page::Toolpaths)
         {
-            egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+            self.form_panel(ui);
             return;
         }
         // the toolpath list in its own bottom half, as Aspire's, so it never scrolls away;
@@ -3188,6 +3203,7 @@ impl CutCraftApp {
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
                 .show(ui, |ui| {
+                    step_heading(ui, 1, "Make a toolpath: pick how to cut");
                     self.tools_or_favourites(ui, &groups, Page::Toolpaths);
                     // the hovered tool's guidance under the icons, scrolling with them
                     self.tip_contents(ui);
@@ -3206,7 +3222,7 @@ impl CutCraftApp {
             ui.visuals().widgets.noninteractive.bg_stroke
         };
         ui.painter().hline(rect.x_range(), rect.center().y, line);
-        self.toolpath_list(ui);
+        self.toolpath_list(ui, true);
     }
 
     /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
@@ -3330,26 +3346,18 @@ impl CutCraftApp {
         (pick, self.popup(&label, || gui::toolpath_group_menu(group)))
     }
 
-    pub(super) fn toolpath_list(&mut self, ui: &mut egui::Ui) {
+    /// The toolpath list, with what comes after making toolpaths pinned under it, so it never
+    /// scrolls away: preview them, then save them for the machine. `steps` numbers those as
+    /// the Toolpaths page numbers making one.
+    pub(super) fn toolpath_list(&mut self, ui: &mut egui::Ui, steps: bool) {
         cut_craft_bug_report::mark(ui, "Toolpath list");
+        egui::Panel::bottom("toolpath_next_steps").show(ui, |ui| {
+            self.preview_and_save(ui, steps);
+        });
         ui.strong("Toolpath List");
         self.toolpath_list_buttons(ui);
-        let actions = [gui::ToolGroup {
-            name: "Toolpath List Actions",
-            tools: &[
-                "recalculate_toolpath",
-                "recalculate_all_toolpaths",
-                "delete_toolpath",
-                "preview_toolpath",
-                "preview_all_toolpaths",
-                "preview_visible_toolpaths",
-                "undo_last_preview",
-                "reset_preview",
-            ],
-        }];
-        self.tool_groups(ui, &actions, Page::Toolpaths);
         if self.doc.toolpaths.is_empty() {
-            ui.weak("No toolpaths yet");
+            ui.weak("No toolpaths yet: each one you make is listed here");
         }
         self.toolpath_order_arrows(ui);
         let mut chosen = None;
@@ -3422,6 +3430,77 @@ impl CutCraftApp {
         }
         if let Some(action) = chosen {
             self.invoke(ui.ctx(), &action);
+        }
+    }
+
+    /// Under the toolpath list: Preview All and Reset Preview, the other previews and the
+    /// recalculating in More…, then one wide Save Toolpaths button, the step that ends every
+    /// job. `steps` numbers them 2 and 3.
+    fn preview_and_save(&mut self, ui: &mut egui::Ui, steps: bool) {
+        let mut chosen = None;
+        let heading = |ui: &mut egui::Ui, n: u8, text: &str| {
+            if steps {
+                step_heading(ui, n, text);
+            } else {
+                ui.strong(text);
+            }
+        };
+        ui.add_space(ui.spacing().item_spacing.y);
+        heading(ui, 2, "Preview: watch it cut");
+        let stale = self.doc.toolpaths.values().any(|t| t.stale);
+        ui.horizontal_wrapped(|ui| {
+            let mut shown = vec!["preview_all_toolpaths", "reset_preview"];
+            // out of date ones are called out in the list; their fix is at hand
+            if stale {
+                shown.insert(0, "recalculate_all_toolpaths");
+            }
+            for id in shown {
+                if ui
+                    .add_enabled(self.available(id), egui::Button::new(self.tool_label(id)))
+                    .on_hover_hint(gui::about(id).unwrap_or_default())
+                    .clicked()
+                {
+                    chosen = Some(id);
+                }
+            }
+            ui.menu_button("More…", |ui| {
+                for id in MORE_LIST_ACTIONS {
+                    if (!stale || id != "recalculate_all_toolpaths")
+                        && ui
+                            .add_enabled(self.available(id), egui::Button::new(self.tool_label(id)))
+                            .clicked()
+                    {
+                        chosen = Some(id);
+                        ui.close();
+                    }
+                }
+            });
+        });
+        ui.add_space(ui.spacing().item_spacing.y);
+        heading(ui, 3, "Save: the file your machine runs");
+        let ready = self.available("save_toolpaths");
+        let row = ui.spacing().interact_size.y;
+        let label = egui::RichText::new(SAVE_FOR_MACHINE).strong();
+        let save = ui
+            .add_enabled(
+                ready,
+                egui::Button::new(label)
+                    .fill(ui.visuals().selection.bg_fill)
+                    .min_size(egui::vec2(ui.available_width(), row * 1.5)),
+            )
+            .on_hover_hint(
+                "Check the toolpaths and write the G-code file your machine runs, using its \
+                 post processor",
+            );
+        if !ready {
+            ui.weak(SAVE_NEEDS);
+        }
+        if save.clicked() {
+            chosen = Some("save_toolpaths");
+        }
+        ui.add_space(ui.spacing().item_spacing.y);
+        if let Some(id) = chosen {
+            self.invoke(ui.ctx(), id);
         }
     }
 
@@ -3802,4 +3881,41 @@ fn faces_geometry(
         geometry: std::sync::Arc::clone(&geometry),
     });
     geometry
+}
+
+/// The Save Toolpaths button under the toolpath list.
+pub(super) const SAVE_FOR_MACHINE: &str = "Save Toolpaths for the Machine…";
+
+/// Under it while there is nothing to save.
+pub(super) const SAVE_NEEDS: &str = "Make a toolpath first, then save it here";
+
+/// The toolpath list's actions in its More… menu (Recalculate All only while none is out of
+/// date, when it is a button of its own).
+const MORE_LIST_ACTIONS: [&str; 6] = [
+    "preview_toolpath",
+    "preview_visible_toolpaths",
+    "undo_last_preview",
+    "recalculate_toolpath",
+    "recalculate_all_toolpaths",
+    "delete_toolpath",
+];
+
+/// A numbered step of making a job on the Toolpaths page: the number in a filled circle,
+/// then what to do.
+fn step_heading(ui: &mut egui::Ui, n: u8, text: &str) {
+    ui.horizontal(|ui| {
+        let row = ui.spacing().interact_size.y;
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(row, row), egui::Sense::hover());
+        let visuals = ui.visuals();
+        ui.painter()
+            .circle_filled(rect.center(), row * 0.45, visuals.selection.bg_fill);
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            n.to_string(),
+            egui::FontId::proportional(row * 0.6),
+            visuals.strong_text_color(),
+        );
+        ui.strong(text);
+    });
 }

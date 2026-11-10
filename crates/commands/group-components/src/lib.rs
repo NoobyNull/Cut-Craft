@@ -51,7 +51,8 @@ impl Command for GroupComponents {
         let level = doc.components[&picked[0]].level;
         if picked.iter().any(|id| doc.components[id].level != level) {
             return Err(CommandError::Failed(
-                "components on different levels cannot be grouped".into(),
+                "components on different levels cannot be grouped. Move them to one level first"
+                    .into(),
             ));
         }
         let id = doc

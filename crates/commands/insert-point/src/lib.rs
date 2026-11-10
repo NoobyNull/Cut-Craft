@@ -21,8 +21,9 @@ impl Command for InsertPoint {
 
     fn run(doc: &Document, p: &NodeAt) -> Result<Change, CommandError> {
         let path = p.path(doc)?;
-        let split = nodes::insert_node(path, p.at.into(), p.reach)
-            .ok_or_else(|| CommandError::Failed("there is no span there".into()))?;
+        let split = nodes::insert_node(path, p.at.into(), p.reach).ok_or_else(|| {
+            CommandError::Failed("there is no span there. Click on the vector's line".into())
+        })?;
         let mut c = Change::builder(doc);
         c.replace(p.vector, split);
         Ok(c.finish())

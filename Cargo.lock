@@ -2294,6 +2294,7 @@ dependencies = [
  "cut-craft-updater",
  "cut-craft-vtdb",
  "eframe",
+ "egui",
  "egui_commonmark",
  "egui_extras",
  "fmt-create-job-sheet",

@@ -77,7 +77,8 @@ impl Command for CropBitmap {
         );
         if columns.is_empty() || rows.is_empty() {
             return Err(CommandError::Failed(
-                "the vectors do not cover the picture".into(),
+                "the vectors do not cover the picture. Move a closed vector over the part to keep"
+                    .into(),
             ));
         }
         let mut grey = Vec::with_capacity(columns.len() * rows.len());

@@ -79,7 +79,11 @@ impl Command for TurnAndSpin {
             }
         }
         if made.height_range().is_none() {
-            return Err(CommandError::Failed("the profile makes no shape".into()));
+            return Err(CommandError::Failed(
+                "The profile makes no shape. Draw it as an open curve that bends away from a \
+                 straight line, like half the outline of a vase."
+                    .into(),
+            ));
         }
         let mut c = Change::builder(doc);
         c.add_component(made);
@@ -125,7 +129,9 @@ fn turned(
     let length = start.distance(end);
     if length <= 0.0 {
         return Err(CommandError::Failed(
-            "the profile's ends must be apart to turn round".into(),
+            "The profile starts and ends at the same point. Draw it so its ends are apart: it \
+             turns round the line between them."
+                .into(),
         ));
     }
     let dir = (end - start) / length;

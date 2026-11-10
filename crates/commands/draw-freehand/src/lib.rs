@@ -152,7 +152,7 @@ mod tests {
             points: vec![Xy::new(1.0, 1.0)],
             ..Params::default()
         };
-        assert!(rejection::<DrawFreehand>(&one).contains("drag"));
+        assert!(rejection::<DrawFreehand>(&one).contains("Drag"));
     }
 
     #[test]

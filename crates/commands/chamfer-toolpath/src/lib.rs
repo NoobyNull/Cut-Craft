@@ -182,7 +182,7 @@ impl Command for ChamferToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !matches!(p.tool.shape, ToolShape::VBit | ToolShape::BallNose) {
             return Err(CommandError::InvalidParams(
-                "a chamfer needs a V-bit or a ball nose".into(),
+                "pick a V-bit or a ball nose: a chamfer needs a sloped tip".into(),
             ));
         }
         ensure_positive("width", p.width)?;
@@ -190,12 +190,12 @@ impl Command for ChamferToolpath {
         ensure_positive("pass depth", p.tool.pass_depth)?;
         if !(p.slope_angle() > 0.0 && p.slope_angle() < std::f64::consts::FRAC_PI_2) {
             return Err(CommandError::InvalidParams(
-                "the angle must be between 0 and 90 degrees".into(),
+                "set the angle between 0° and 90°".into(),
             ));
         }
         if p.start_depth < 0.0 || p.overcut < 0.0 {
             return Err(CommandError::InvalidParams(
-                "start depth and overcut cannot be negative".into(),
+                "set start depth and overcut to 0 or more".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|path| path.closed);
@@ -230,7 +230,9 @@ impl Command for ChamferToolpath {
         }
         if moves.is_empty() {
             return Err(CommandError::Failed(
-                "the chamfer does not fit inside the selected shapes".into(),
+                "The chamfer does not fit inside the selected shapes. Make the width smaller, or \
+                 chamfer Outside instead."
+                    .into(),
             ));
         }
         let mut c = Change::builder(doc);

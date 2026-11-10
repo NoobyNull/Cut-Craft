@@ -163,7 +163,8 @@ impl Params {
             Source::Model => {
                 if doc.components.is_empty() {
                     return Err(CommandError::Failed(
-                        "there is no 3D model to sketch".into(),
+                        "there is no 3D model to sketch. Create one with a modelling tool first"
+                            .into(),
                     ));
                 }
                 let area = doc.job.area();
@@ -247,7 +248,7 @@ impl Command for SketchCarvingToolpath {
         let moves = cut_rows(&sketch.grid, &sketch.line, inside, z, doc.job.clearance);
         if moves.is_empty() {
             return Err(CommandError::Failed(
-                "the sketch has no lines: try a thicker line".into(),
+                "the sketch has no lines. Use a thicker line".into(),
             ));
         }
         let mut c = Change::builder(doc);
@@ -277,7 +278,7 @@ impl Sketch {
         ensure_positive("tool diameter", p.tool.diameter)?;
         if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
+                "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
             ));
         }
         let cell = p.tool.stepover * p.tool.diameter;

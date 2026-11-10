@@ -260,7 +260,7 @@ impl Command for MergedToolpath {
         }
         if let Some(other) = sources.iter().find(|t| t.tool.name != first.tool.name) {
             return Err(CommandError::Failed(format!(
-                "only toolpaths with the same tool merge: {} uses {} and {} uses {}",
+                "only toolpaths with the same tool merge: {} uses {} and {} uses {}. Show only toolpaths that use one tool",
                 first.name, first.tool.name, other.name, other.tool.name
             )));
         }
@@ -358,7 +358,7 @@ impl Command for UngroupMergedToolpath {
         let merged = existing(&doc.toolpaths, p.toolpath, "toolpath")?;
         if merged.strategy != MergedToolpath::ID {
             return Err(CommandError::Failed(format!(
-                "{} is not a merged toolpath",
+                "{} is not a merged toolpath. Pick a merged toolpath to ungroup",
                 merged.name
             )));
         }

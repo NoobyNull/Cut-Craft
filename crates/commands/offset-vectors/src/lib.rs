@@ -43,7 +43,9 @@ impl Command for OffsetVectors {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.distance == 0.0 {
-            return Err(CommandError::InvalidParams("distance must not be 0".into()));
+            return Err(CommandError::InvalidParams(
+                "set distance to something other than 0".into(),
+            ));
         }
         let (ids, paths) = doc.selected_paths(|p| p.closed);
         if ids.is_empty() {
@@ -54,7 +56,7 @@ impl Command for OffsetVectors {
         let result = polygon::offset(&paths, p.distance, p.corners);
         if result.is_empty() {
             return Err(CommandError::Failed(
-                "the inward offset left nothing: try a smaller distance".into(),
+                "the inward offset left nothing. Use a smaller distance".into(),
             ));
         }
         Ok(Change::swap(
@@ -110,7 +112,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             err,
-            "the inward offset left nothing: try a smaller distance"
+            "The inward offset left nothing. Use a smaller distance."
         );
     }
 
@@ -122,7 +124,7 @@ mod tests {
                 ..Params::default()
             })
             .unwrap_err(),
-            "invalid parameters: distance must not be 0"
+            "Set distance to something other than 0."
         );
     }
 

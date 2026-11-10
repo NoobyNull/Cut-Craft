@@ -294,7 +294,13 @@ say "not implemented yet".
   the two sides meet; Swap Sides turns the preview over with the job.
 - Plate Production (Offset and Layout): a template's !!variables!! filled from a data file's
   columns or a counter, plates laid out inside margins, a layer per sheet of material when
-  they need more. Not done: copying the template's toolpaths onto each plate.
+  they need more. The data file is read as spreadsheets save CSV: quoted fields (a comma in
+  "Smith, John"), UTF-8 or Excel's Windows encoding. Create Toolpaths makes the template's
+  toolpaths per sheet; one cutting the !!variable!! text is recalculated straight away for
+  each plate's own text. Rows whose text runs past the plate are named in a warning that
+  points to Text in a Box (which shrinks long names to fit). Not done: one job / toolpath
+  file and proof picture per row with names from a column, a review of every plate before
+  saving, XLSX.
 - Toolpath Tiling (Toolpaths menu): individual tiles or feed-through in X or Y, tile size,
   overlap, smallest tile first; tiles drawn in the 2D view; Save Toolpaths writes one file
   per tile (`name_tileN`), cuts clipped to the tile and its overlap and moved to the job's

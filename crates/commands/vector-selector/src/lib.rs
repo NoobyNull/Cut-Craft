@@ -24,7 +24,9 @@ impl Command for VectorSelector {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let picked = p.picked(doc);
         if picked.is_empty() {
-            return Err(CommandError::Failed("no vectors pass those filters".into()));
+            return Err(CommandError::Failed(
+                "no vectors pass those filters. Turn some filters off, or loosen them".into(),
+            ));
         }
         let mut c = Change::builder(doc);
         c.select(picked);

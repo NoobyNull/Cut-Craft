@@ -108,7 +108,7 @@ impl Command for EditPicture {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let before = existing(&doc.bitmaps, p.bitmap, "picture")?;
         if p.tones.gamma <= 0.0 {
-            return Err(CommandError::InvalidParams("gamma must be above 0".into()));
+            return Err(CommandError::InvalidParams("set gamma above 0".into()));
         }
         let mut c = Change::builder(doc);
         c.replace_bitmap(p.bitmap, edited(before, p));
@@ -276,7 +276,7 @@ mod tests {
     fn needs_the_picture() {
         assert!(
             cut_craft_core::testing::rejection::<EditPicture>(&Params::default())
-                .contains("picture 1 does not exist")
+                .contains("That picture is not in the job any more")
         );
     }
 }

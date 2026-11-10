@@ -57,6 +57,9 @@ mod tests {
     #[test]
     fn a_missing_layer_is_reported() {
         let why = after_err::<SetCurrentLayer>(&Params { layer: LayerId(9) });
-        assert!(why.contains("layer 9 does not exist"), "{why}");
+        assert!(
+            why.contains("That layer is not in the job any more"),
+            "{why}"
+        );
     }
 }

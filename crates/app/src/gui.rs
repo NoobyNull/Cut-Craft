@@ -897,6 +897,9 @@ pub struct Menu {
     pub items: Vec<MenuItem>,
 }
 
+/// Help ▸ Community's links: this, then the link's place in `LINKS`.
+pub const COMMUNITY: &str = "community:";
+
 #[derive(Debug, Clone)]
 pub struct MenuItem {
     pub name: String,
@@ -2026,8 +2029,20 @@ impl MenuSystem {
                         i("Help Contents"),
                         i("Keyboard Shortcuts"),
                         i("Third Party Licenses"),
+                        sub(
+                            "Community",
+                            crate::app::LINKS
+                                .iter()
+                                .enumerate()
+                                .map(|(n, (label, _, icon))| {
+                                    MenuItem::with_action(label, &format!("{COMMUNITY}{n}"))
+                                        .icon(icon)
+                                })
+                                .collect(),
+                        ),
                         sep(),
                         MenuItem::with_action("Check for Updates...", "check_for_updates"),
+                        MenuItem::with_action("Run First-Time Setup Again...", "first_run_setup"),
                         i("About Cut Craft"),
                     ],
                 ),

@@ -751,6 +751,21 @@ for way, cw_outside in (("climb", True), ("conventional", False)):
     for side in ("outside", "on", "inside"):
         cw = cw_outside if side != "inside" else not cw_outside
         I[tp + f"cut_{way}_{side}.svg"] = (lambda cw=cw, inside=(side == "inside"): cut_way(cw, inside))
+# which side of the line a profile cuts: the shape, the tool's path (dashed) and the tool on it;
+# outside keeps the part (wood), inside cuts a hole in the sheet, on the line follows the vector
+def side_pic(side):
+    if side == "outside":
+        return [rect(15, 15, 18, 18, 2, INK, SW, WOOD), rect(8, 8, 32, 32, 8, TP, 2, dash="3 3"),
+                circ(8, 24, 6, ACC, SW, WHITE)]
+    if side == "inside":
+        return [rect(3, 3, 42, 42, 3, WOODD, 2, WOOD), rect(9, 9, 30, 30, 3, INK, SW, WHITE),
+                rect(16, 16, 16, 16, 2, TP, 2, dash="3 3"), circ(16, 24, 6, ACC, SW, WHITE)]
+    return [rect(10, 10, 28, 28, 3, INK, SW), rect(10, 10, 28, 28, 3, TP, 2, dash="3 3"),
+            circ(10, 24, 6, ACC, SW, WHITE)]
+
+
+for side in ("outside", "inside", "on"):
+    I[tp + f"side_{side}.svg"] = (lambda side=side: side_pic(side))
 # passes: each pass the same way, or every other one back
 I[tp + "passes_one.svg"] = lambda: [material(4, 30, 40, 14), arrow(6, 12, 42, 12, TP), arrow(6, 23, 42, 23, TP)]
 I[tp + "passes_both.svg"] = lambda: [material(4, 30, 40, 14), arrow(6, 12, 42, 12, TP), arrow(42, 23, 6, 23, TP), path("M42,12 Q47,17.5 42,23", TP, 2, dash="2 2")]
@@ -811,6 +826,17 @@ I[vw + "2d_toolpath_drawing_on.svg"] = lambda: [rect(10, 10, 28, 28, 2, INK, 2.5
 I[vw + "2d_toolpath_drawing_off.svg"] = lambda: [greyed(rect(10, 10, 28, 28, 2, INK, 2.5, LIGHT) + rect(5, 5, 38, 38, 8, TP, SW))]
 I[vw + "solid_2d_toolpath_drawing.svg"] = lambda: [path("M5,13 A8,8 0 0 1 13,5 H35 A8,8 0 0 1 43,13 V35 A8,8 0 0 1 35,43 H13 A8,8 0 0 1 5,35 Z M12,12 V36 H36 V12 Z", None, 0, "#7fd1a6"),
                                                    rect(12, 12, 24, 24, 1, INK, 2.5, LIGHT)]
+
+
+# the push-pin at the top of a page and the Rail's list (once the 📌 emoji, which many fonts
+# lack and drew as an empty box): leaning over when the page can slide away, upright and
+# pushed in, its head in the accent, once pinned
+def push_pin(head, needle=42):
+    return [path("M18,6 H30 M20,6 V16 L14,24 H34 L28,16 V6", INK, SW, head), line(24, 24, 24, needle, INK, SW)]
+
+
+I[vw + "pin.svg"] = lambda: [f'<g transform="rotate(40 24 26)">{"".join(push_pin("none"))}</g>']
+I[vw + "pinned.svg"] = lambda: [f'<g transform="translate(0 6)">{"".join(push_pin(ACC, 32))}</g>', line(8, 38, 40, 38, INK, SW)]
 
 
 def render(name):

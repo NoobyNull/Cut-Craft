@@ -127,15 +127,18 @@ impl Command for TextureArea {
                 .unwrap_or_else(|| doc.job.area());
             (id, area, rings)
         };
-        let seed = doc
-            .components
-            .get(&seed_id)
-            .ok_or_else(|| CommandError::Failed("the texture's tile is gone".into()))?;
+        let seed = doc.components.get(&seed_id).ok_or_else(|| {
+            CommandError::Failed(
+                "The component used as the tile has been deleted. Select another component \
+                     to tile."
+                    .into(),
+            )
+        })?;
         let tiling = p.tiling();
         let mut made = tiled(seed, &p.name, p.combine, area, &rings, &tiling).ok_or_else(|| {
             CommandError::InvalidParams(
-                "the tile needs a shape, spacing must leave each tile some room, and there \
-                 are four reflections"
+                "check the tile settings: the tile needs a shape, the spacing must leave each \
+                 tile some room, and there must be four reflections"
                     .into(),
             )
         })?;

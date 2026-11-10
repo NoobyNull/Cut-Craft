@@ -98,7 +98,7 @@ impl Command for DrillingToolpath {
         }
         if p.dwell < 0.0 || p.retract_gap < 0.0 {
             return Err(CommandError::InvalidParams(
-                "the dwell and retract gap cannot be negative".into(),
+                "set the dwell and retract gap to 0 or more".into(),
             ));
         }
         let safe = doc.job.clearance;
@@ -257,6 +257,6 @@ mod tests {
             &Params::default(),
         )
         .unwrap_err();
-        assert_eq!(err, "select closed vectors to drill at their centres");
+        assert_eq!(err, "Select closed vectors to drill at their centres.");
     }
 }

@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn rejects_a_blank_name() {
         let why = rejection::<AddLayer>(&Params { name: "  ".into() });
-        assert!(why.contains("name is empty"), "{why}");
+        assert!(why.contains("Type a name"), "{why}");
     }
 
     #[test]

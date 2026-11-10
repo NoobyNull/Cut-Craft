@@ -67,7 +67,7 @@ mod tests {
             WeldVectors::run(&doc, &NoParams {})
                 .unwrap_err()
                 .to_string(),
-            "select at least two closed vectors to weld"
+            "Select at least two closed vectors to weld."
         );
     }
 

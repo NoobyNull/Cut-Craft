@@ -1,20 +1,41 @@
 #!/bin/bash
 # Packs the Linux program as an AppImage and a Flatpak bundle, in dist/.
-#   scripts/linux-packages [PROGRAM]        (default: target/release/cut-craft)
+#   scripts/linux-packages [PROGRAM [LIBS]]  (default: target/release/cut-craft)
+# LIBS is a folder holding the libraries the AppImage carries (see AppRun) and, in
+# LIBS/licenses, their licence files; without it they are taken from this system.
 # .github/workflows/builds.yml runs it on GitHub. Needs rsvg-convert, and for the Flatpak
 # flatpak and flatpak-builder with the freedesktop 25.08 runtime and SDK from Flathub;
 # appimagetool is fetched when it is not installed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 program=${1:-target/release/cut-craft}
+libs=${2:-}
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 mkdir -p dist
 
 # AppImage: one file holding the program (its icons are built in), a launcher, the desktop
-# entry and icon
+# entry and icon, and the keyboard libraries the window loads, for systems without them
 appdir=dist/CutCraft.AppDir
 rm -rf "$appdir"
 install -Dm755 "$program" "$appdir/usr/bin/cut-craft"
+mkdir -p "$appdir/usr/lib"
+for lib in libxkbcommon.so.0 libxkbcommon-x11.so.0 libxcb-xkb.so.1; do
+    if [[ -n $libs ]]; then
+        from=$libs/$lib
+    else
+        from=$(PATH="$PATH:/sbin:/usr/sbin" ldconfig -p \
+            | awk -v name="$lib" '$1 == name && /x86-64/ { print $NF; exit }')
+    fi
+    if [[ ! -f $from ]]; then
+        echo "error: $lib is not ${libs:+in $libs}${libs:-installed}; it goes in the AppImage" >&2
+        exit 1
+    fi
+    install -m644 "$(readlink -f "$from")" "$appdir/usr/lib/$lib"
+done
+if [[ -n $libs && -d $libs/licenses ]]; then
+    mkdir -p "$appdir/usr/share/doc"
+    cp -r "$libs/licenses/." "$appdir/usr/share/doc/"
+fi
 install -m755 packaging/linux/AppRun "$appdir/AppRun"
 cp packaging/linux/family.yax.CutCraft.desktop "$appdir/"
 rsvg-convert -w 256 -h 256 assets/cut-craft.svg -o "$appdir/family.yax.CutCraft.png"

@@ -28,7 +28,9 @@ impl Exporter for ExportGrayscaleBitmap {
                 (lo.min(h), hi.max(h))
             });
         let range = (hi - lo).max(f64::EPSILON);
-        let too_big = |_| CommandError::Failed("the model is too big for a bitmap".into());
+        let too_big = |_| {
+            CommandError::Failed("the model is too big for a bitmap. Use a lower resolution".into())
+        };
         let (width, height) = (
             u32::try_from(m.columns).map_err(too_big)?,
             u32::try_from(m.rows).map_err(too_big)?,

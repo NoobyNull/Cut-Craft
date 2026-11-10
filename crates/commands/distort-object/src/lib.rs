@@ -384,7 +384,7 @@ impl Command for DistortObject {
         let objects = match (vectors.is_empty(), components.is_empty()) {
             (false, false) => {
                 return Err(CommandError::Failed(
-                    "vectors and components cannot be distorted together".into(),
+                    "vectors and components cannot be distorted together. Select only vectors, or only components".into(),
                 ));
             }
             (false, true) => Objects::Vectors(vectors),
@@ -404,7 +404,8 @@ impl Command for DistortObject {
         .ok_or(CommandError::NothingSelected)?;
         if area.size().x <= f64::EPSILON || area.size().y <= f64::EPSILON {
             return Err(CommandError::Failed(
-                "the objects have no width or height".into(),
+                "the objects have no width or height. Select objects that are not flat lines"
+                    .into(),
             ));
         }
         if p.mode == Mode::CreateEnvelope {
@@ -666,7 +667,7 @@ mod tests {
 
     #[test]
     fn nothing_selected_is_an_error() {
-        assert!(rejection::<DistortObject>(&Params::default()).contains("nothing"));
+        assert!(rejection::<DistortObject>(&Params::default()).contains("Select what to work on"));
     }
 }
 

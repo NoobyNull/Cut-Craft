@@ -109,7 +109,7 @@ mod tests {
                 radius: 0.0,
                 ..Params::default()
             }),
-            "invalid parameters: radius must be greater than 0"
+            "Set radius to more than 0."
         );
     }
 

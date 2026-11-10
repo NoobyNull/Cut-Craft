@@ -151,7 +151,7 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         }
         if tool.shape != ToolShape::VBit {
             return Err(CommandError::InvalidParams(
-                "V-carving needs a V-bit".into(),
+                "pick a V-bit: V-carving needs one".into(),
             ));
         }
         ensure_positive("tool diameter", tool.diameter)?;
@@ -170,7 +170,7 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         }
         if p.start_depth < 0.0 {
             return Err(CommandError::InvalidParams(
-                "start depth cannot be negative".into(),
+                "set start depth to 0 or more".into(),
             ));
         }
         let mut moves = carve(&paths, p, doc.job.clearance);
@@ -211,7 +211,7 @@ fn clearing(
     );
     if flat.is_empty() {
         return Err(CommandError::Failed(format!(
-            "{} is too big to clear any of the flat bottom",
+            "{} is too big to clear any of the flat bottom. Pick a smaller flat-bottom tool",
             tool.name
         )));
     }

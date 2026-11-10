@@ -21,8 +21,11 @@ impl Command for DeletePoint {
 
     fn run(doc: &Document, p: &NodeAt) -> Result<Change, CommandError> {
         let path = p.path(doc)?;
-        let fewer = nodes::delete_node(path, p.node(path)?)
-            .ok_or_else(|| CommandError::Failed("the vector needs the nodes it has left".into()))?;
+        let fewer = nodes::delete_node(path, p.node(path)?).ok_or_else(|| {
+            CommandError::Failed(
+                "the vector needs the nodes it has left. Delete the whole vector instead".into(),
+            )
+        })?;
         let mut c = Change::builder(doc);
         c.replace(p.vector, fewer);
         Ok(c.finish())

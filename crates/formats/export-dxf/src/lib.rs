@@ -21,7 +21,7 @@ impl Exporter for ExportDxf {
     fn export(doc: &Document) -> Result<Vec<u8>, CommandError> {
         if doc.vectors.is_empty() {
             return Err(CommandError::Failed(
-                "there are no vectors to export".into(),
+                "there are no vectors to export. Draw or import vectors first".into(),
             ));
         }
         let mut drawing = Drawing::new();
@@ -208,7 +208,7 @@ mod tests {
             ExportDxf::export(&Document::default())
                 .unwrap_err()
                 .to_string(),
-            "there are no vectors to export"
+            "There are no vectors to export. Draw or import vectors first."
         );
     }
 }
