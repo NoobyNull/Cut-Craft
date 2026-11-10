@@ -54,6 +54,16 @@ impl CutCraftApp {
             .collect()
     }
 
+    /// The icon a tool names: its command's, or a built-in tool's own (empty when its icon
+    /// file is just named for its id).
+    pub(super) fn explicit_icon(&self, id: &str) -> &'static str {
+        self.registry
+            .get(id)
+            .map(|c| c.meta().icon)
+            .or_else(|| gui::built_in_icon(id))
+            .unwrap_or("")
+    }
+
     /// A tool's name: the command's label, or its id in words.
     pub(super) fn tool_label(&self, id: &str) -> String {
         if let Some(variant) = crate::flyout::variant(id) {
@@ -168,7 +178,7 @@ impl CutCraftApp {
         let mut clicked = None;
         for &id in group.tools {
             let label = self.tool_label(id);
-            let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+            let explicit = self.explicit_icon(id);
             let button = match self.icons.find(explicit, id) {
                 Some(path) => egui::Button::image_and_text(
                     self.icons
@@ -214,7 +224,7 @@ impl CutCraftApp {
                             // the first of the group's tools with an icon stands for it;
                             // a group with none shows as much of its name as fits
                             let icon = group.tools.iter().find_map(|&id| {
-                                let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+                                let explicit = self.explicit_icon(id);
                                 self.icons.find(explicit, id)
                             });
                             let button = match icon {

@@ -79,7 +79,7 @@ pub const DESIGN_SUBTABS: &[SubTab] = &[
     SubTab {
         name: "Model",
         hint: "Build and shape the 3D parts to carve",
-        groups: &["Shape Creation", "Shape Editing"],
+        groups: &["Shape Creation", "Shape Editing", "Export Model"],
     },
     SubTab {
         name: "Import",
@@ -202,7 +202,85 @@ const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
          width and how many, ready for Nest Parts",
     ),
+    // the Model sub-tab's exports, which are file formats rather than commands
+    (
+        "export_as_stl",
+        "Export Model as STL",
+        "Save the 3D model as an STL file, for a 3D printer or another program",
+    ),
+    (
+        "export_as_grayscale_bitmap",
+        "Export Model as Grayscale Picture",
+        "Save the 3D model as a PNG picture where lighter is higher, for another carving \
+         program",
+    ),
+    (
+        "export_as_3d_clipart",
+        "Export Model as 3D Clipart",
+        "Save the selected 3D parts as clipart, to drop into other jobs from the Library",
+    ),
+    // the Toolpaths page's templates and printouts, which were only in the Toolpaths menu
+    (
+        "load_template",
+        "Load Toolpath Template",
+        "Add the toolpaths saved in a template to this job, ready to pick the vectors each \
+         one cuts and calculate",
+    ),
+    (
+        "save_selected_toolpath_as_template",
+        "Save Toolpath as Template",
+        "Save the selected toolpath's settings and tools, to make the same cut on another job",
+    ),
+    (
+        "save_all_visible_toolpaths_as_template",
+        "Save All Shown Toolpaths as Template",
+        "Save the settings and tools of every toolpath shown in the list, to make the same \
+         cuts on another job",
+    ),
+    (
+        "create_job_sheet",
+        "Save Job Sheet",
+        "Save a page for the machine: the job, the material, each toolpath's tool and how long \
+         it takes",
+    ),
+    (
+        "print_job_sheet",
+        "Print Job Sheet",
+        "Open the job sheet in the web browser to print it: the job, the material, each \
+         toolpath's tool and how long it takes",
+    ),
+    (
+        "part_labels",
+        "Print Part Labels",
+        "Print a label for each named part, to stick on it once it is cut out",
+    ),
+    (
+        "cut_list",
+        "Save Cut List",
+        "Save a list of the job's parts and their sizes, as a spreadsheet (CSV)",
+    ),
 ];
+
+/// The icons of built-in tools whose file is not named for their id.
+const BUILT_IN_ICONS: &[(&str, &str)] = &[
+    ("load_template", "toolpaths/load_toolpath_template.png"),
+    (
+        "save_selected_toolpath_as_template",
+        "toolpaths/save_toolpath_template.png",
+    ),
+    (
+        "save_all_visible_toolpaths_as_template",
+        "toolpaths/save_all_as_template.png",
+    ),
+];
+
+/// A built-in tool's own icon, where no file is named for its id.
+pub fn built_in_icon(id: &str) -> Option<&'static str> {
+    BUILT_IN_ICONS
+        .iter()
+        .find(|(i, _)| *i == id)
+        .map(|(_, icon)| *icon)
+}
 
 /// A built-in tool's own name, where [`title_case`] of its id would not do.
 pub fn built_in_label(id: &str) -> Option<&'static str> {
@@ -269,6 +347,8 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "paste_in_place",
                 "open_folder",
                 "job_setup",
+                // Aspire keeps the job's notes with its files
+                "notes",
             ],
         ),
         // every way to bring something into the job, on the Import sub-tab: Aspire spreads
@@ -318,6 +398,8 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "vector_boundary",
                 "vector_texture",
                 "trace_bitmap",
+                // shown in the Text box (its flyout): text that fills itself in
+                "document_variables",
             ],
         ),
         // Aspire's Edit Objects section, in two: picking and reshaping, then the tools that
@@ -427,6 +509,24 @@ fn modeling_groups() -> Vec<ToolGroup> {
                 "split",
                 "bake_components",
                 "component_levels",
+                // Aspire's Model Editing row (help: Clearing or Splitting Components,
+                // Create Vector Boundary From Selected Components, Create Cross Section
+                // Vector): the model cleared inside or outside vectors, vectors drawn from
+                // it, and the visible model as one component
+                "reset_inside_selected_vectors",
+                "reset_outside_selected_vectors",
+                "component_boundary",
+                "cross_section",
+                "create_component_from_visible_model",
+            ],
+        ),
+        // Aspire's second row of modeling icons: the model saved for other programs
+        group(
+            "Export Model",
+            &[
+                "export_as_stl",
+                "export_as_grayscale_bitmap",
+                "export_as_3d_clipart",
             ],
         ),
     ]
@@ -473,7 +573,14 @@ fn toolpath_groups() -> Vec<ToolGroup> {
         ),
         group(
             "Toolpath Templates",
-            &["array_copy_toolpath", "merged_toolpath"],
+            &[
+                "array_copy_toolpath",
+                "merged_toolpath",
+                // Aspire's Toolpath Templates icons, which were only in the Toolpaths menu
+                "load_template",
+                "save_selected_toolpath_as_template",
+                "save_all_visible_toolpaths_as_template",
+            ],
         ),
         group(
             "Output",
@@ -483,6 +590,11 @@ fn toolpath_groups() -> Vec<ToolGroup> {
                 "tool_database",
                 "keep_out_zones",
                 "toolpath_tiling",
+                // what goes to the machine with the G-code: the sheet, labels and list
+                "create_job_sheet",
+                "print_job_sheet",
+                "part_labels",
+                "cut_list",
             ],
         ),
     ]
@@ -2172,8 +2284,10 @@ mod tests {
             let mut shown = toolbar.named(super::ALWAYS_SHOWN);
             shown.extend(toolbar.subtab_groups(tab));
             let n = count(shown);
+            // every tool has a button somewhere (Matthew, 2026-11-10), which took the Model
+            // sub-tab past the 36 the others keep under
             assert!(
-                n <= 36 && n * 2 < whole,
+                n <= 40 && n * 2 < whole,
                 "{}: {n} of {whole}",
                 super::DESIGN_SUBTABS[tab].name
             );
@@ -2289,7 +2403,12 @@ mod menu_tests {
             if group.name == "Output" {
                 continue; // app actions, not commands
             }
-            for id in group.tools {
+            // the templates' load and save are app actions beside the template commands
+            for id in group
+                .tools
+                .iter()
+                .filter(|id| super::built_in_label(id).is_none())
+            {
                 assert!(
                     registry.get(id).is_some(),
                     "{} lists `{id}`, which is not a command",

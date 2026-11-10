@@ -190,7 +190,7 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   Modeling tabs each run every group down one long page. Cut Craft's Design tab keeps File
   Operations and 2D View Control at the top, then five sub-tabs across the page: **Create**
   (Create Vectors), **Edit** (Select and Edit; Join, Combine and Trim; Transform Objects), **Arrange** (Align Objects,
-  Offset and Layout, Array Objects), **Model** (Shape Creation, Shape Editing) and **Import**
+  Offset and Layout, Array Objects), **Model** (Shape Creation, Shape Editing, Export Model) and **Import**
   (Import Vectors or Picture, Import Vectors, Import 3D Model, Clipart Library, Import
   Toolpaths (G-code), Import Cut List: every way into the job, which Aspire spreads over the
   File menu, the Drawing and Modeling tabs and its Clipart tab; each on its own button, with
@@ -204,6 +204,17 @@ Our equivalents so far: wgpu for the 3D view, winit for windows.
   Its Own Section: a section sits under the tab row, folds up by its heading, and is always
   shown, so tools used together (say Create and Model) need no switching. The choice is kept
   in the options file (`design_sections`); every sub-tab is in the row to start with.
+- **Every tool has a button** (Cut Craft's own rule, Matthew 2026-11-10) [inf]: tools that
+  were only in a menu got a button where Aspire's help puts its icon, the left (Design) page
+  for what changes the shape to cut and the right (Toolpaths) page for how it is cut and
+  sent to the machine; buttons already there kept their places. Model sub-tab: Reset Inside
+  / Outside Selected Vectors (a "Clear the Model" box), Create Vector Boundary Around
+  Selected Components, Create Cross Section Vector, Create Component from Visible Model,
+  and an Export Model group (STL, grayscale picture, 3D clipart); Document Variables in
+  the Text box; Notes in File Operations. Toolpaths page: Load / Save Toolpath Template in
+  Toolpath Templates; Save and Print Job Sheet, Print Part Labels and Save Cut List in
+  Output. Settings, view toggles, the lists' right-click items, node editing, the Gadgets
+  and the Machine menu stay in their menus, as in Aspire.
 - **Next-step guidance** (Cut Craft's own) [inf]: Aspire's status bar shows a tool's tooltip.
   Cut Craft adds a box in the room left under a page's icons: the hovered tool's name, what
   it does and its next step (a flyout's names the tools it holds too), else the tool in
