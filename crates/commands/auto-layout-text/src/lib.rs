@@ -68,7 +68,7 @@ impl Command for AutoLayoutText {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !(0.0..50.0).contains(&p.border) {
             return Err(CommandError::InvalidParams(
-                "the border must be from 0 to under 50 %".into(),
+                "set the border from 0 to under 50 %".into(),
             ));
         }
         ensure_positive("line spacing", p.line_spacing)?;

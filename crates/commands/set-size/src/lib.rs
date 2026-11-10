@@ -117,7 +117,8 @@ impl Command for SetSize {
         }
         let Some(by) = scale(bounds.size()) else {
             return Err(CommandError::Failed(
-                "the selection has no area to resize".into(),
+                "the selection has no area to resize. Select objects that are not flat lines"
+                    .into(),
             ));
         };
         let t = about(bounds, by);
@@ -214,7 +215,7 @@ mod tests {
                 width: 0.0,
                 ..Params::default()
             }),
-            "invalid parameters: width must be greater than 0"
+            "Set width to more than 0."
         );
     }
 

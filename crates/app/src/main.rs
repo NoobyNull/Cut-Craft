@@ -11,6 +11,8 @@ mod commands;
 mod compute;
 mod depth;
 mod display;
+#[cfg(test)]
+mod error_messages;
 mod files;
 mod flyout;
 mod form;

@@ -53,11 +53,7 @@ impl Command for ShowHide {
         let items = doc.items(p.items);
         let names_one = !matches!(p.action, Action::ShowAll | Action::HideAll);
         if names_one && !items.iter().any(|&(id, _)| id == p.item) {
-            return Err(CommandError::InvalidParams(format!(
-                "{} {} does not exist",
-                p.items.one(),
-                p.item
-            )));
+            return Err(cut_craft_core::gone(p.items.one()));
         }
         let wanted = |id: u64, shown: bool| match p.action {
             Action::ShowThis => shown || id == p.item,
@@ -130,7 +126,7 @@ fn set_visible(
             let l = doc
                 .levels
                 .get(&id)
-                .ok_or_else(|| CommandError::InvalidParams(format!("level {id} does not exist")))?;
+                .ok_or_else(|| cut_craft_core::gone("level"))?;
             cmd_level_properties::LevelProperties::run(
                 doc,
                 &cmd_level_properties::Params {
@@ -207,6 +203,9 @@ mod tests {
             item: 9,
             action: Action::ShowThis,
         });
-        assert!(why.contains("layer 9 does not exist"), "{why}");
+        assert!(
+            why.contains("That layer is not in the job any more"),
+            "{why}"
+        );
     }
 }

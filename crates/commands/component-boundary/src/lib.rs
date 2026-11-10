@@ -44,7 +44,9 @@ impl Command for ComponentBoundary {
         }
         let paths = silhouette(&parts);
         if paths.is_empty() {
-            return Err(CommandError::Failed("the components have no shape".into()));
+            return Err(CommandError::Failed(
+                "the components have no shape. Select components with some height".into(),
+            ));
         }
         let group = (paths.len() > 1).then(|| doc.next_group());
         let mut c = Change::builder(doc);
@@ -102,7 +104,7 @@ mod tests {
     fn needs_a_component() {
         assert!(
             cut_craft_core::testing::rejection::<ComponentBoundary>(&NoParams {})
-                .contains("select")
+                .contains("Select")
         );
     }
 }

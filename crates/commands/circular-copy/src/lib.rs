@@ -86,15 +86,17 @@ impl Command for CircularCopy {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.items < 2 {
             return Err(CommandError::InvalidParams(
-                "items must be at least 2: the original and a copy".into(),
+                "set items to 2 or more: the original and at least one copy".into(),
             ));
         }
         if p.angle == 0.0 || !p.angle.is_finite() {
-            return Err(CommandError::InvalidParams("angle must not be 0".into()));
+            return Err(CommandError::InvalidParams(
+                "set the angle to something other than 0".into(),
+            ));
         }
         if p.angle_mode == AngleMode::Total && p.angle.abs() > 360.0 {
             return Err(CommandError::InvalidParams(
-                "a total angle must be at most 360°".into(),
+                "set the total angle to 360° or less".into(),
             ));
         }
         let Some(bounds) = doc.selection_bounds() else {

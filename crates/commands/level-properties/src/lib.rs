@@ -76,10 +76,10 @@ impl Command for LevelProperties {
         let before = doc
             .levels
             .get(&p.level)
-            .ok_or_else(|| CommandError::Failed(format!("level {} does not exist", p.level)))?;
+            .ok_or_else(|| cut_craft_core::gone("level"))?;
         if p.wrapping && doc.job.rotary.is_none() {
             return Err(CommandError::InvalidParams(
-                "wrapping is for rotary jobs only".into(),
+                "wrapping is for rotary jobs only. Set the job to rotary in Job Setup first".into(),
             ));
         }
         let after = Level {

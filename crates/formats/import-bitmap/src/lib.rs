@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn rubbish_is_refused() {
         let why = ImportBitmap::import(&Document::default(), b"not a picture").unwrap_err();
-        assert!(why.to_string().contains("not a readable picture"));
+        assert!(why.to_string().contains("Not a readable picture"));
     }
 
     #[test]

@@ -149,7 +149,7 @@ impl Command for EngravePartNames {
         }
         if made.is_empty() {
             return Err(CommandError::Failed(
-                "The parts are too small for text. Try a smaller text height.".into(),
+                "The parts are too small for text. Set a smaller text height.".into(),
             ));
         }
         c.note(format!(

@@ -123,7 +123,7 @@ impl Command for CreateFillets {
         }
         if corners == 0 {
             return Err(CommandError::Failed(
-                "the selected vectors have no sharp corners of that kind to fillet".into(),
+                "the selected vectors have no sharp corners of that kind to fillet. Pick another corner type, or select other vectors".into(),
             ));
         }
         if done == 0 {
@@ -359,8 +359,9 @@ pub fn at_click(
         (Some((dist, id, seg, mut sharp)), arc) if arc.is_none_or(|nearest| dist <= nearest.0) => {
             let off = at - sharp.at;
             sharp.click_side = Some(off.dot(sharp.back) >= off.dot(sharp.on));
-            let planned = plan(sharp, p, (sharp.len_in, sharp.len_out))
-                .ok_or_else(|| CommandError::Failed("no fillet fits that corner".into()))?;
+            let planned = plan(sharp, p, (sharp.len_in, sharp.len_out)).ok_or_else(|| {
+                CommandError::Failed("no fillet fits that corner. Try a smaller radius".into())
+            })?;
             let radius = (planned.center - planned.through).length();
             let note = (radius < p.radius - STRAIGHT)
                 .then(|| format!("the radius was cut to {radius:.2} mm, the largest that fits"));
@@ -369,7 +370,7 @@ pub fn at_click(
         (_, Some((_, id, seg))) => {
             let path = unfilleted(&doc.vectors[&id], seg).ok_or_else(|| {
                 CommandError::Failed(
-                    "only a fillet between two straight sides can be taken out".into(),
+                    "only a fillet between two straight sides can be taken out. Click a fillet between two straight sides".into(),
                 )
             })?;
             Ok((id, path, None))
@@ -727,7 +728,7 @@ mod tests {
             "the corner is back"
         );
         let far = CreateFillets::run(&doc, &click(Point::new(5.0, 5.0))).unwrap_err();
-        assert!(far.to_string().contains("click on a sharp corner"), "{far}");
+        assert!(far.to_string().contains("Click on a sharp corner"), "{far}");
     }
 
     #[test]

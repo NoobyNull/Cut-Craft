@@ -85,14 +85,14 @@ impl Command for Slice {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if !doc.components.values().any(|c| c.visible) {
             return Err(CommandError::Failed(
-                "there is no visible model to slice".into(),
+                "there is no visible model to slice. Show a component, or create one with a modelling tool".into(),
             ));
         }
         let model = model_at_resolution(doc);
         let top = model.heights.iter().copied().fold(0.0, f64::max);
         if top <= 0.0 {
             return Err(CommandError::Failed(
-                "the model has no thickness above the zero plane".into(),
+                "the model has no thickness above the zero plane. Show a component with some height".into(),
             ));
         }
         let cuts = match p.slicing {

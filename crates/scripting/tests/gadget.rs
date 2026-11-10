@@ -96,7 +96,7 @@ fn a_failed_command_stops_the_gadget_and_changes_nothing() {
         panic!("expected a failure, got {err:?}")
     };
     assert!(why.contains("draw_circle"), "{why}");
-    assert!(why.contains("radius must be greater than 0"), "{why}");
+    assert!(why.contains("Set radius to more than 0"), "{why}");
     assert!(why.contains("test.lua:4"), "names the gadget's line: {why}");
 }
 

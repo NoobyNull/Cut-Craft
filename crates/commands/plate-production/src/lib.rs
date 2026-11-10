@@ -349,7 +349,7 @@ fn rows(data: &Data) -> Result<Vec<Vec<String>>, CommandError> {
     if data.file.trim().is_empty() {
         if data.plates == 0 {
             return Err(CommandError::InvalidParams(
-                "ask for at least one plate".into(),
+                "set plates to 1 or more".into(),
             ));
         }
         return Ok(vec![vec![]; data.plates]);
@@ -365,7 +365,7 @@ fn rows(data: &Data) -> Result<Vec<Vec<String>>, CommandError> {
         .collect();
     if rows.is_empty() {
         return Err(CommandError::Failed(format!(
-            "{} has no rows of data",
+            "{} has no rows of data. Pick a file with a row for each plate, or fewer rows to skip",
             data.file
         )));
     }
@@ -428,7 +428,7 @@ fn layout(
     );
     if across < 1.0 || down < 1.0 {
         return Err(CommandError::Failed(
-            "a plate does not fit on the material inside the margins".into(),
+            "a plate does not fit on the material inside the margins. Make the plate or the margins smaller".into(),
         ));
     }
     let (across, down) = (across as usize, down as usize);

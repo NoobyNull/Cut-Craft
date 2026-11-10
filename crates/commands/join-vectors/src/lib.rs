@@ -68,7 +68,9 @@ impl Command for JoinVectors {
         }
         if !changed {
             return Err(CommandError::Failed(
-                "no open vector ends are within the tolerance".into(),
+                "no open vector ends are within the tolerance. Raise the tolerance, or move the ends \
+                 closer together"
+                    .into(),
             ));
         }
         Ok(Change::swap(doc, ids, chains))
@@ -169,7 +171,11 @@ mod tests {
             line((50.0, 0.0), (60.0, 0.0)),
         ])
         .unwrap_err();
-        assert_eq!(err, "no open vector ends are within the tolerance");
+        assert_eq!(
+            err,
+            "No open vector ends are within the tolerance. Raise the tolerance, or move the ends \
+             closer together."
+        );
     }
 
     cut_craft_core::contract_tests!(JoinVectors, touching_lines);

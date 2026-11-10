@@ -51,7 +51,7 @@ impl Command for CloseExtendVector {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.max_gap < 0.0 {
             return Err(CommandError::InvalidParams(
-                "max gap must not be negative".into(),
+                "set max gap to 0 or more".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|path| !path.closed && !path.segments.is_empty());
@@ -76,7 +76,7 @@ impl Command for CloseExtendVector {
         }
         if closed == 0 {
             return Err(CommandError::Failed(
-                "no selected vector's ends are within the max gap".into(),
+                "no selected vector's ends are within the max gap. Raise the max gap, or move the ends closer".into(),
             ));
         }
         Ok(c.finish())

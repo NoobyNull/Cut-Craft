@@ -8,7 +8,7 @@ use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Point, Rect};
 use cut_craft_core::glam::{DMat3, DVec3};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, EMPTY_MODEL, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -296,7 +296,7 @@ impl Command for Segment3dModel {
         }
         if !(0.0..=100.0).contains(&p.position) {
             return Err(CommandError::InvalidParams(
-                "the plane must cut between 0 and 100 %".into(),
+                "set the plane between 0 and 100 %".into(),
             ));
         }
         let bytes =
@@ -310,8 +310,7 @@ impl Command for Segment3dModel {
             .iter()
             .map(|t| t.map(|v| v * unit))
             .collect();
-        let (lo, hi) =
-            bounds(&tris).ok_or_else(|| CommandError::Failed("the model is empty".into()))?;
+        let (lo, hi) = bounds(&tris).ok_or_else(|| CommandError::Failed(EMPTY_MODEL.into()))?;
         let first: Vec<(usize, Vec<[DVec3; 3]>)> = slices(&tris, p, axis_normal(p.axis), (lo, hi))
             .into_iter()
             .enumerate()

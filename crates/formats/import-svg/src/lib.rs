@@ -49,7 +49,9 @@ impl Importer for ImportSvg {
             ids.extend(subpaths(&path.data, to_mm).into_iter().map(|p| c.add(p)));
         }
         if ids.is_empty() {
-            return Err(CommandError::Failed("the SVG has no vector paths".into()));
+            return Err(CommandError::Failed(
+                "the SVG has no vector paths. Export it again with its shapes as paths".into(),
+            ));
         }
         c.select(ids);
         Ok(c.finish())
@@ -187,7 +189,7 @@ mod tests {
             ImportSvg::import(&Document::default(), empty.as_bytes())
                 .unwrap_err()
                 .to_string(),
-            "the SVG has no vector paths"
+            "The SVG has no vector paths. Export it again with its shapes as paths."
         );
     }
 }

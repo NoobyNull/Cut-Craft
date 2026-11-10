@@ -93,7 +93,8 @@ impl Command for TrimObjects {
         let boundary: Vec<EntityId> = doc.group_members(last);
         if boundary.iter().any(|id| !doc.vectors[id].closed) {
             return Err(CommandError::Failed(
-                "the object picked last, the boundary, must be closed".into(),
+                "the object picked last, the boundary, must be closed. Pick a closed vector last"
+                    .into(),
             ));
         }
         let tolerance = cut_craft_core::polygon::TOLERANCE;
@@ -155,7 +156,7 @@ impl Command for TrimObjects {
         }
         if removed.is_empty() {
             return Err(CommandError::Failed(
-                "nothing lies on the side to clear".into(),
+                "nothing lies on the side to clear. Click on the other side".into(),
             ));
         }
         Ok(Change::swap(doc, removed, added))

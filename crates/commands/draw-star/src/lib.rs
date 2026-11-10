@@ -54,14 +54,14 @@ impl Command for DrawStar {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.points < 3 {
             return Err(CommandError::InvalidParams(
-                "a star needs at least 3 points".into(),
+                "set points to 3 or more".into(),
             ));
         }
         ensure_positive("outer radius", p.outer_radius)?;
         ensure_positive("inner radius", p.inner_radius)?;
         if p.inner_radius >= p.outer_radius {
             return Err(CommandError::InvalidParams(
-                "inner radius must be smaller than outer radius".into(),
+                "set inner radius smaller than outer radius".into(),
             ));
         }
         let step = 180.0 / f64::from(p.points);
@@ -126,7 +126,7 @@ mod tests {
                 inner_radius: 30.0,
                 ..Params::default()
             }),
-            "invalid parameters: inner radius must be smaller than outer radius"
+            "Set inner radius smaller than outer radius."
         );
     }
 
@@ -137,7 +137,7 @@ mod tests {
                 points: 2,
                 ..Params::default()
             }),
-            "invalid parameters: a star needs at least 3 points"
+            "Set points to 3 or more."
         );
     }
 

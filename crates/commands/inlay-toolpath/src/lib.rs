@@ -6,7 +6,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, contour_moves, cut_points, made_by};
-use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
+use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -144,14 +144,14 @@ impl Command for InlayToolpath {
         ensure_positive("pass depth", p.tool.pass_depth)?;
         if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
+                "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
             ));
         }
         if p.inlay_type == InlayType::MaleStepped
             && !(p.step_depth > 0.0 && p.step_depth < p.cut_depth)
         {
             return Err(CommandError::InvalidParams(
-                "the step depth must be within the cut depth".into(),
+                "set the step depth less than the cut depth".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|path| path.closed);
@@ -163,9 +163,7 @@ impl Command for InlayToolpath {
         let r = p.tool.diameter / 2.0;
         let shape = inlay_shape(&polygon::regions(&paths), r);
         if shape.is_empty() {
-            return Err(CommandError::Failed(
-                "the shapes are too narrow for the tool".into(),
-            ));
+            return Err(tool_does_not_fit(&p.tool, None));
         }
         let safe = doc.job.clearance;
         let (start, depth) = (p.start_depth, p.cut_depth);
@@ -191,9 +189,7 @@ impl Command for InlayToolpath {
             InlayType::FemaleHole => p.around(&grow(&shape, p.allowance - r), start, depth, safe),
         };
         if moves.is_empty() {
-            return Err(CommandError::Failed(
-                "the tool is too big for the shapes".into(),
-            ));
+            return Err(tool_does_not_fit(&p.tool, None));
         }
         let mut c = Change::builder(doc);
         c.add_toolpath(made_by::<Self>(

@@ -98,7 +98,7 @@ impl Command for ImportToolpaths {
         }
         if made == 0 {
             return Err(CommandError::Failed(format!(
-                "{} has no part {} (it has fewer tools)",
+                "{} has no part {} (it has fewer tools). Pick a lower part number",
                 p.file, p.part
             )));
         }
@@ -598,7 +598,7 @@ mod tests {
             ImportToolpaths::run(&doc, &Params::default())
                 .unwrap_err()
                 .to_string()
-                .contains("pick the G-code file")
+                .contains("Pick the G-code file")
         );
         std::fs::remove_dir_all(&dir).ok();
     }

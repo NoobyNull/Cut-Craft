@@ -87,7 +87,7 @@ impl Command for WrappedSpiralLayout {
         let job = Unrolled::of(doc)?;
         if p.strands == 0 || p.distance <= 0.0 {
             return Err(CommandError::InvalidParams(
-                "at least one strand, and a pitch or spacing above 0".into(),
+                "set strands to 1 or more, and the pitch or spacing above 0".into(),
             ));
         }
         let (from, to) = job.between(p.start, p.end)?;

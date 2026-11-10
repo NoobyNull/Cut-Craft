@@ -35,14 +35,11 @@ impl Command for DeleteSheet {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.sheet >= doc.sheets.len() {
-            return Err(CommandError::InvalidParams(format!(
-                "there is no sheet {}",
-                p.sheet + 1
-            )));
+            return Err(cut_craft_core::gone("sheet"));
         }
         if doc.sheets.len() == 1 {
             return Err(CommandError::Failed(
-                "a job needs at least one sheet".into(),
+                "a job keeps at least one sheet. Add another sheet before deleting this one".into(),
             ));
         }
         let mut c = Change::builder(doc);

@@ -18,7 +18,7 @@ fn ungroup(doc: &Document, onto_current: bool) -> Result<Change, CommandError> {
         .any(|id| doc.vector_groups.contains_key(id))
     {
         return Err(CommandError::Failed(
-            "nothing selected is in a group".into(),
+            "nothing selected is in a group. Select a group to ungroup".into(),
         ));
     }
     let mut c = Change::builder(doc);

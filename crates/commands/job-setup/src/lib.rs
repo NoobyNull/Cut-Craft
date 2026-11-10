@@ -225,7 +225,7 @@ impl Command for JobSetup {
         ensure_positive("clearance", p.gaps.clearance)?;
         if !(0.0..=p.gaps.clearance).contains(&p.gaps.plunge) {
             return Err(CommandError::InvalidParams(
-                "Plunge (Z2) must be between 0 and the clearance (Z1)".into(),
+                "set Plunge (Z2) between 0 and the clearance (Z1)".into(),
             ));
         }
         let shape = match p.job_type {
@@ -517,7 +517,7 @@ mod tests {
     fn rejects_a_zero_thickness() {
         assert_eq!(
             after_err::<JobSetup>(&with(|p| p.size.thickness = 0.0)),
-            "invalid parameters: thickness must be greater than 0"
+            "Set thickness to more than 0."
         );
     }
 }

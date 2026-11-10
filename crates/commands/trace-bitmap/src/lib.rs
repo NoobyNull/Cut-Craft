@@ -120,7 +120,7 @@ impl Command for TraceBitmap {
         let paths = traced_paths(b, p, |i| traced(b.grey[i]));
         if paths.is_empty() {
             return Err(CommandError::Failed(
-                "nothing to trace: try another threshold or trace color".into(),
+                "nothing to trace. Set another threshold or trace colour".into(),
             ));
         }
         let group = (p.group_vectors && paths.len() > 1).then(|| doc.next_group());
@@ -174,7 +174,7 @@ fn traced_paths(b: &Bitmap, p: &Params, on: impl Fn(usize) -> bool) -> Vec<Path>
 fn by_colour(doc: &Document, b: &Bitmap, p: &Params) -> Result<Change, CommandError> {
     if b.rgb.len() != b.columns * b.rows * 3 {
         return Err(CommandError::Failed(
-            "this picture has no colours: trace it in black and white".into(),
+            "this picture has no colours. Set the trace to black and white".into(),
         ));
     }
     let (palette, labels) = palette(&b.rgb, usize::from(p.colors.clamp(2, 16)));
@@ -215,7 +215,7 @@ fn by_colour(doc: &Document, b: &Bitmap, p: &Params) -> Result<Change, CommandEr
     }
     if made.is_empty() {
         return Err(CommandError::Failed(
-            "nothing to trace: try other colours or more of them".into(),
+            "nothing to trace. Pick other colours, or more of them".into(),
         ));
     }
     c.select(made);
@@ -521,7 +521,7 @@ mod tests {
         let err = TraceBitmap::run(&blank, &Params::default())
             .unwrap_err()
             .to_string();
-        assert!(err.contains("nothing to trace"), "{err}");
+        assert!(err.contains("Nothing to trace"), "{err}");
     }
 
     #[test]

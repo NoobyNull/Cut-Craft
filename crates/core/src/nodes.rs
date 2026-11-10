@@ -35,19 +35,20 @@ impl NodeAt {
         doc.vectors
             .get(&self.vector)
             .filter(|_| doc.editable(self.vector))
-            .ok_or_else(|| CommandError::Failed("that vector cannot be edited".into()))
+            .ok_or_else(|| CommandError::Failed("that vector cannot be edited: its layer is hidden or locked, or it was deleted. Show or unlock its layer, or pick another vector".into()))
     }
 
     /// The node nearest the point.
     pub fn node(&self, path: &Path) -> Result<usize, CommandError> {
         node_near(path, self.at.into(), self.reach)
-            .ok_or_else(|| CommandError::Failed("there is no node there".into()))
+            .ok_or_else(|| CommandError::Failed("there is no node there. Click on a node".into()))
     }
 
     /// The span nearest the point.
     pub fn span(&self, path: &Path) -> Result<usize, CommandError> {
-        span_near(path, self.at.into(), self.reach)
-            .ok_or_else(|| CommandError::Failed("there is no span there".into()))
+        span_near(path, self.at.into(), self.reach).ok_or_else(|| {
+            CommandError::Failed("there is no span there. Click on the vector's line".into())
+        })
     }
 }
 

@@ -132,6 +132,6 @@ mod tests {
             name: String::new(),
             ..Params::default()
         });
-        assert!(why.contains("name is empty"), "{why}");
+        assert!(why.contains("Type a name"), "{why}");
     }
 }

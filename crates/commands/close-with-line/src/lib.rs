@@ -24,7 +24,9 @@ impl Command for CloseWithLine {
     fn run(doc: &Document, p: &NodeAt) -> Result<Change, CommandError> {
         let path = p.path(doc)?;
         if path.closed {
-            return Err(CommandError::Failed("that vector is already closed".into()));
+            return Err(CommandError::Failed(
+                "that vector is already closed. Select an open vector to close".into(),
+            ));
         }
         let mut closed = path.clone();
         let end = closed.segments.last().map_or(closed.start, Segment::end);

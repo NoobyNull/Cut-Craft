@@ -48,12 +48,12 @@ impl Command for DrawPolyline {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.points.len() < 2 {
             return Err(CommandError::InvalidParams(
-                "a line needs at least 2 points".into(),
+                "click at least 2 points to draw a line".into(),
             ));
         }
         if p.closed && p.points.len() < 3 {
             return Err(CommandError::InvalidParams(
-                "a closed shape needs at least 3 points".into(),
+                "click at least 3 points to draw a closed shape".into(),
             ));
         }
         let points: Vec<Point> = p.points.iter().map(|&q| q.into()).collect();
@@ -160,7 +160,7 @@ mod tests {
         };
         assert_eq!(
             rejection::<DrawPolyline>(&p),
-            "invalid parameters: a line needs at least 2 points"
+            "Click at least 2 points to draw a line."
         );
     }
 
@@ -173,7 +173,7 @@ mod tests {
         };
         assert_eq!(
             rejection::<DrawPolyline>(&p),
-            "invalid parameters: a closed shape needs at least 3 points"
+            "Click at least 3 points to draw a closed shape."
         );
     }
 }

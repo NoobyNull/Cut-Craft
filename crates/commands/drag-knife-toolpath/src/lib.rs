@@ -200,12 +200,12 @@ impl Command for DragKnifeToolpath {
         ensure_positive("cut depth", p.cut_depth)?;
         if !(p.swivel_depth >= 0.0 && p.swivel_depth < p.cut_depth) {
             return Err(CommandError::InvalidParams(
-                "the swivel depth must be less than the cut depth".into(),
+                "set the swivel depth less than the cut depth".into(),
             ));
         }
         if p.passes == 0 {
             return Err(CommandError::InvalidParams(
-                "it needs at least 1 pass".into(),
+                "set passes to 1 or more".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|_| true);

@@ -108,7 +108,7 @@ pub fn triangulate(doc: &Document, settings: &Settings) -> Result<Mesh, CommandE
         && (doc.job.double_sided.is_none() || doc.other_side.components.is_empty())
     {
         return Err(CommandError::Failed(
-            "closing with the other side needs a double-sided job with a model on its other side"
+            "closing with the other side needs a double-sided job with a model on its other side. Turn this off, or set the job to double-sided in Job Setup"
                 .into(),
         ));
     }

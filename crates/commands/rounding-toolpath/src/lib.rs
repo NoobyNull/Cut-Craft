@@ -125,14 +125,14 @@ impl Command for RoundingToolpath {
         }
         if p.method == Method::OptimizedRaster && p.blank == Blank::Round {
             return Err(CommandError::InvalidParams(
-                "the optimized raster is for square blanks".into(),
+                "the optimized raster is for square blanks. Pick another strategy".into(),
             ));
         }
         let finished = rotary.diameter / 2.0 + p.allowance.max(0.0);
         let top = p.outer_radius() - rotary.diameter / 2.0;
         if p.outer_radius() <= finished {
             return Err(CommandError::Failed(
-                "the blank is no bigger than the finished cylinder".into(),
+                "the blank is no bigger than the finished cylinder. Make the blank bigger, or the allowance smaller".into(),
             ));
         }
         // job coordinates: `along` the axis and `round` it (unrolled at the job's diameter)

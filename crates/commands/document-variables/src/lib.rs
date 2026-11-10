@@ -61,12 +61,12 @@ impl Command for DocumentVariables {
                 && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
             if !named {
                 return Err(CommandError::InvalidParams(format!(
-                    "\"{name}\": a name starts with a letter, then letters, digits or _"
+                    "rename \"{name}\": a name starts with a letter, then letters, digits or _"
                 )));
             }
             if variables.insert(name.to_owned(), v.value).is_some() {
                 return Err(CommandError::InvalidParams(format!(
-                    "{name} is named twice"
+                    "{name} is named twice. Rename one of them"
                 )));
             }
         }

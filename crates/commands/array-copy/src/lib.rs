@@ -113,12 +113,12 @@ impl Command for ArrayCopy {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.rows == 0 || p.columns == 0 {
             return Err(CommandError::InvalidParams(
-                "rows and columns must be at least 1".into(),
+                "set rows and columns to 1 or more".into(),
             ));
         }
         if p.rows * p.columns < 2 {
             return Err(CommandError::InvalidParams(
-                "one row of one column makes no copies".into(),
+                "one row of one column makes no copies. Set rows or columns to 2 or more".into(),
             ));
         }
         let Some(bounds) = doc.selection_bounds() else {

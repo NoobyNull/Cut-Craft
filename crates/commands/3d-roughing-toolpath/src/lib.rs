@@ -165,12 +165,12 @@ impl Command for RoughingToolpath3d {
         ensure_positive("pass depth", tool.pass_depth)?;
         if !(tool.stepover > 0.0 && tool.stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "stepover must be more than 0 and at most 1".into(),
+                "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
             ));
         }
         if p.allowance.is_nan() || p.allowance < 0.0 {
             return Err(CommandError::InvalidParams(
-                "the allowance cannot be negative".into(),
+                "set the allowance to 0 or more".into(),
             ));
         }
         // what must be left: the model and the allowance on top of it

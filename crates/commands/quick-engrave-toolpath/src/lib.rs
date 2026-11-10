@@ -101,7 +101,7 @@ impl Command for QuickEngraveToolpath {
         ensure_positive("tool diameter", p.tool.diameter)?;
         if p.passes == 0 {
             return Err(CommandError::InvalidParams(
-                "it needs at least 1 pass".into(),
+                "set passes to 1 or more".into(),
             ));
         }
         let fill = p.strategy == Strategy::Fill;
@@ -222,6 +222,6 @@ mod tests {
         let line = Path::polyline(&[Point::new(0.0, 0.0), Point::new(9.0, 0.0)], false);
         let why = made_toolpath::<QuickEngraveToolpath>(vec![line], &fill(FillPattern::Hatch))
             .unwrap_err();
-        assert_eq!(why, "select the closed vectors to fill");
+        assert_eq!(why, "Select the closed vectors to fill.");
     }
 }

@@ -297,7 +297,8 @@ impl Command for TextureToolpath {
         };
         if moves.is_empty() {
             return Err(CommandError::Failed(
-                "the boundary offset leaves nothing to texture".into(),
+                "the boundary offset leaves nothing to texture. Make the boundary offset smaller"
+                    .into(),
             ));
         }
         if p.project_onto_model {

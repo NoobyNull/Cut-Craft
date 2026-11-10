@@ -80,10 +80,11 @@ impl Command for BitmapProperties {
         let id = if doc.bitmaps.contains_key(&p.bitmap) {
             p.bitmap
         } else {
-            *doc.bitmaps
-                .keys()
-                .next_back()
-                .ok_or_else(|| CommandError::Failed("there are no bitmaps".into()))?
+            *doc.bitmaps.keys().next_back().ok_or_else(|| {
+                CommandError::Failed(
+                    "there are no pictures in the job. Import a picture first".into(),
+                )
+            })?
         };
         let min = Point::new(p.x, p.y);
         let after = Bitmap {

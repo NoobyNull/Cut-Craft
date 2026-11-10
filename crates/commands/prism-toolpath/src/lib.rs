@@ -116,14 +116,14 @@ impl Command for PrismToolpath {
         let tool = &p.tool;
         if tool.shape != ToolShape::VBit {
             return Err(CommandError::InvalidParams(
-                "prism carving needs a V-bit".into(),
+                "pick a V-bit: prism carving needs one".into(),
             ));
         }
         ensure_positive("tool diameter", tool.diameter)?;
         ensure_positive("pass depth", tool.pass_depth)?;
         if p.start_depth < 0.0 {
             return Err(CommandError::InvalidParams(
-                "start depth cannot be negative".into(),
+                "set start depth to 0 or more".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|path| path.closed);
@@ -137,7 +137,7 @@ impl Command for PrismToolpath {
             let half = widest_half(&paths);
             if half > tool.diameter / 2.0 {
                 return Err(CommandError::Failed(format!(
-                    "the V-bit is too narrow for a full prism: the widest shape needs {:.2} mm across",
+                    "the V-bit is too narrow for a full prism: the widest shape needs {:.2} mm across. Pick a wider V-bit",
                     2.0 * half
                 )));
             }

@@ -31,7 +31,8 @@ impl Command for OverlapIntersect {
         });
         if common.is_empty() {
             return Err(CommandError::Failed(
-                "the selected vectors do not overlap".into(),
+                "the selected vectors do not overlap. Move them so they overlap, then try again"
+                    .into(),
             ));
         }
         Ok(Change::swap(doc, ids, common))
@@ -68,7 +69,7 @@ mod tests {
             OverlapIntersect::run(&doc, &NoParams {})
                 .unwrap_err()
                 .to_string(),
-            "the selected vectors do not overlap"
+            "The selected vectors do not overlap. Move them so they overlap, then try again."
         );
     }
 

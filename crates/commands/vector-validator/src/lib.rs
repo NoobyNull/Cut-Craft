@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn a_clean_job_is_reported_not_selected() {
         let err = found(vec![square(0.0, 0.0, 10.0)], &Params::default()).unwrap_err();
-        assert!(err.contains("no problems found in 1 vector"), "{err}");
+        assert!(err.contains("No problems found in 1 vector"), "{err}");
     }
 
     #[test]

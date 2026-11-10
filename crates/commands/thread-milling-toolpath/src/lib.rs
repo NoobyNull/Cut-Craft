@@ -360,17 +360,17 @@ impl Command for ThreadMillingToolpath {
         // Aspire's rule for a single-point tool's offset
         if p.tool.shape == ToolShape::ThreadMill && p.tool.tooth_offset < p.tool.tooth_size / 2.0 {
             return Err(CommandError::InvalidParams(
-                "the thread mill's tooth offset must be at least half the tooth size".into(),
+                "set the thread mill's tooth offset to at least half the tooth size".into(),
             ));
         }
         if p.thread_length() < p.pitch() {
             return Err(CommandError::InvalidParams(
-                "the max depth must reach at least a pitch below the tooth offset".into(),
+                "set the max depth at least a pitch below the tooth offset".into(),
             ));
         }
         if p.centre_radius() <= 0.0 {
             return Err(CommandError::InvalidParams(
-                "the thread mill is too big for this thread".into(),
+                "the thread mill is too big for this thread. Pick a smaller thread mill".into(),
             ));
         }
         let (ids, paths) = doc.selected_paths(|_| true);

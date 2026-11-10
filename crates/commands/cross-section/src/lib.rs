@@ -56,7 +56,7 @@ impl Command for CrossSection {
         }
         if !doc.components.values().any(|c| c.visible) {
             return Err(CommandError::Failed(
-                "there is no visible model to cut a section through".into(),
+                "there is no visible model to cut a section through. Show a component, or create one with a modelling tool".into(),
             ));
         }
         let model = model_at_resolution(doc);

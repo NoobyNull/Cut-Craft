@@ -36,7 +36,7 @@ impl Command for DeleteLayer {
         existing_layer(doc, p.layer)?;
         if doc.layers.len() == 1 {
             return Err(CommandError::Failed(
-                "the last layer cannot be deleted".into(),
+                "a job keeps at least one layer. Add another layer before deleting this one".into(),
             ));
         }
         let mut c = Change::builder(doc);
@@ -79,12 +79,15 @@ mod tests {
     #[test]
     fn the_last_layer_cannot_be_deleted() {
         let why = after_err::<DeleteLayer>(&Params::default());
-        assert!(why.contains("last layer"), "{why}");
+        assert!(why.contains("at least one layer"), "{why}");
     }
 
     #[test]
     fn a_missing_layer_is_reported() {
         let why = after_err::<DeleteLayer>(&Params { layer: LayerId(9) });
-        assert!(why.contains("layer 9 does not exist"), "{why}");
+        assert!(
+            why.contains("That layer is not in the job any more"),
+            "{why}"
+        );
     }
 }
