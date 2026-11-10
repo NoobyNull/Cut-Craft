@@ -85,7 +85,7 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
 fn comes_loose(doc: &Document, toolpath: &Toolpath, deepest: f64) -> Option<String> {
     let params = &toolpath.params;
     let through = doc.job.thickness > 0.0 && deepest + THROUGH >= doc.job.thickness;
-    if toolpath.strategy != PROFILE || params["tabs"] != "none" || !through {
+    if toolpath.strategy != PROFILE || held_by_tabs(params) || !through {
         return None;
     }
     // along the line itself, only a closed shape is cut out
@@ -102,6 +102,15 @@ fn comes_loose(doc: &Document, toolpath: &Toolpath, deepest: f64) -> Option<Stri
          the piece down another way: tape, screws or a vacuum table",
         toolpath.name
     ))
+}
+
+/// Whether a profile's settings leave tabs that hold the piece: tabs on, and either sized
+/// from the tool (never nothing) or given a thickness.
+pub fn held_by_tabs(params: &serde_json::Value) -> bool {
+    let tab = &params["tab"];
+    let sized_by_tool = tab["size_from_tool"].as_bool().unwrap_or(true);
+    let thickness = tab["thickness"].as_f64().unwrap_or(1.0);
+    params["tabs"] != "none" && (sized_by_tool || thickness > 0.0)
 }
 
 #[cfg(test)]
@@ -244,6 +253,10 @@ mod tests {
             &profile(&[1], "outside", "none", 19.0)
         )));
         assert!(!loose(&problems(&doc, &profile(&[3], "on", "none", 20.0))));
+        // tabs given no thickness hold nothing
+        let mut thin = profile(&[1], "outside", "flat", 20.0);
+        thin.params["tab"] = serde_json::json!({ "size_from_tool": false, "thickness": 0.0 });
+        assert!(loose(&problems(&doc, &thin)));
         // only a profile's cut is judged so
         let pocket = Toolpath {
             strategy: "pocket_toolpath".into(),

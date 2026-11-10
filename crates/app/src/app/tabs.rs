@@ -40,7 +40,7 @@ pub(super) fn cuts_loose(params: &serde_json::Value, stock: Stock) -> bool {
     };
     let through = stock.thickness > 0.0 && depth + THROUGH >= stock.thickness;
     let closed = side != "on" || stock.closed;
-    through && closed && params["tabs"] == "none"
+    through && closed && !cut_craft_core::checks::held_by_tabs(params)
 }
 
 /// The words over Add Tabs when a profile would cut its piece loose.
