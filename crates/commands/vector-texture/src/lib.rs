@@ -274,7 +274,10 @@ fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandErro
         Style::Frost => fill::paths(&patterns::frost(&mut g, p.size), p.gap),
         Style::Snowflakes => fill::paths(&patterns::snowflakes(&mut g, p.size), p.gap),
         Style::Fractal => fill::paths(&patterns::fractal(&mut g, p.size), p.gap),
-        Style::Stones => patterns::stones(&mut g, p.size).ok_or_else(too_fine)?,
+        Style::Stones => lighter(
+            &patterns::stones(&mut g, p.size).ok_or_else(too_fine)?,
+            p.gap,
+        ),
         Style::Ripples => patterns::ripples(&area, p.size, p.gap),
         Style::Hammered => patterns::hammered(&mut g, p.size),
         Style::Bandanna => merged(&bandanna::bandanna(&mut g, p.size), p.gap),
@@ -408,7 +411,7 @@ fn merged(made: &scroll::Made, gap: f64) -> Vec<Path> {
     // back), then slivers too small to carve are dropped
     let joined = union(&fill::paths(&made.shapes, gap));
     let grown = offset_regions(&joined, gap / 2.0, Corners::Round);
-    let mut paths: Vec<Path> = offset_regions(&grown, -gap / 2.0, Corners::Round)
+    let mut paths: Vec<Path> = lighter(&offset_regions(&grown, -gap / 2.0, Corners::Round), gap)
         .into_iter()
         .filter(|p| {
             let size = p.bounds().size();
@@ -418,6 +421,22 @@ fn merged(made: &scroll::Made, gap: f64) -> Vec<Path> {
     let details = clear_of(&made.details, &paths, gap);
     paths.extend(fill::paths(&details, gap));
     paths
+}
+
+/// Outlines from the polygon booleans with the points the curve doesn't need dropped (the
+/// round offsets put one every hundredth of a millimetre).
+fn lighter(paths: &[Path], gap: f64) -> Vec<Path> {
+    let rings: Vec<fill::Stroke> = paths
+        .iter()
+        .map(|p| {
+            let mut ring = p.flatten(0.01);
+            if ring.len() > 1 && ring[0] == ring[ring.len() - 1] {
+                ring.pop();
+            }
+            fill::Stroke::shape(ring)
+        })
+        .collect();
+    fill::paths(&rings, gap)
 }
 
 /// The parts of the details at least the gap from every outline, each long enough to carve

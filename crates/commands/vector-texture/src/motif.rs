@@ -438,7 +438,9 @@ pub fn ornament(g: &mut Grower, size: f64, look: Look, axis: Option<(u32, f64)>)
                 misses += 1;
                 continue;
             };
-            if axis.is_some_and(|(_, x)| at.x >= x) {
+            // no use making a scroll where there isn't room for its middle
+            let middle = length * 0.1;
+            if axis.is_some_and(|(_, x)| at.x >= x) || g.space.room(at, middle) < middle {
                 misses += 1;
                 continue;
             }
