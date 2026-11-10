@@ -334,6 +334,17 @@ mod tests {
                     shade(&part, ring)
                         .save(format!("{dir}/{style:?}-{name}-{seed}.png"))
                         .unwrap();
+                    // the heights too, for a 3D render: columns, rows, cell, then rows of f32
+                    let mut raw = Vec::new();
+                    for v in [part.columns, part.rows] {
+                        raw.extend(u32::try_from(v).unwrap().to_le_bytes());
+                    }
+                    raw.extend(part.cell.to_le_bytes());
+                    for h in &part.heights {
+                        #[expect(clippy::cast_possible_truncation, reason = "a picture")]
+                        raw.extend((if h.is_nan() { 0.0 } else { *h } as f32).to_le_bytes());
+                    }
+                    std::fs::write(format!("{dir}/{style:?}-{name}-{seed}.heights"), raw).unwrap();
                 }
             }
         }
