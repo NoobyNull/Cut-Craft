@@ -13,6 +13,10 @@ const MM_PER_INCH: f64 = 25.4;
 /// The thickness offered to start with: 18 mm, or 3/4 inch (common plywood and MDF).
 const THICKNESS_MM: f64 = 18.0;
 const THICKNESS_INCH: f64 = 0.75 * MM_PER_INCH;
+/// The working area offered for a machine not listed, until one is typed: Cut Craft's usual
+/// job, or 24 × 16 inches.
+const BED_MM: [f64; 2] = [600.0, 400.0];
+const BED_INCH: [f64; 2] = [24.0 * MM_PER_INCH, 16.0 * MM_PER_INCH];
 /// The starter tool groups, by units.
 const METRIC_TOOLS: &str = "Metric Tools";
 const IMPERIAL_TOOLS: &str = "Imperial Tools";
@@ -52,15 +56,14 @@ pub(super) struct Setup {
 
 impl Setup {
     pub fn new() -> Self {
-        let job = Job::default();
         Self {
             catalogue: cut_craft_machines::catalogue(),
             maker: Maker::Unpicked,
             model: None,
-            bed: [job.width, job.height],
+            bed: BED_MM,
             controller: Controller::default(),
             inches: false,
-            sheet: [job.width, job.height, THICKNESS_MM],
+            sheet: [BED_MM[0], BED_MM[1], THICKNESS_MM],
         }
     }
 
@@ -80,7 +83,10 @@ impl Setup {
         self.model = None;
         match self.models().as_slice() {
             [only] => self.pick_model(*only),
-            _ if self.maker == Maker::NotListed => self.fit_sheet(self.bed),
+            _ if self.maker == Maker::NotListed => {
+                self.round_bed();
+                self.fit_sheet(self.bed);
+            }
             _ => {}
         }
     }
@@ -103,6 +109,21 @@ impl Setup {
         let thickness = &mut self.sheet[2];
         if [THICKNESS_MM, THICKNESS_INCH].contains(thickness) {
             *thickness = if inches { THICKNESS_INCH } else { THICKNESS_MM };
+        }
+        if self.maker == Maker::NotListed {
+            let was = self.bed;
+            self.round_bed();
+            if [was[0], was[1]] == [self.sheet[0], self.sheet[1]] {
+                self.fit_sheet(self.bed);
+            }
+        }
+    }
+
+    /// A working area still the one offered becomes the one offered in the units picked, so
+    /// it reads as a round number.
+    fn round_bed(&mut self) {
+        if self.bed == BED_MM || self.bed == BED_INCH {
+            self.bed = if self.inches { BED_INCH } else { BED_MM };
         }
     }
 
@@ -281,7 +302,11 @@ impl CutCraftApp {
         let mut finish = None;
         ui.horizontal(|ui| {
             let start = ui
-                .add_enabled(setup.ready(), egui::Button::new("Start using Cut Craft"))
+                .add_enabled(
+                    setup.ready(),
+                    egui::Button::new(egui::RichText::new("Start using Cut Craft").strong())
+                        .fill(ui.visuals().selection.bg_fill),
+                )
                 .on_disabled_hover_text("Pick your machine first, or Mine is not listed");
             if start.clicked() {
                 finish = Some(Finish::Done);
@@ -509,6 +534,24 @@ mod tests {
         assert_eq!(machine.name, MY_MACHINE);
         setup.bed[0] = 0.0;
         assert!(!setup.ready(), "a working area is needed");
+    }
+
+    #[test]
+    fn a_machine_not_listed_starts_at_a_round_size_in_the_units_picked() {
+        let mut setup = Setup::new();
+        setup.pick_maker(Maker::Named("Sienci".into()));
+        let i = named(&setup, "Sienci LongMill MK2 30x30");
+        setup.pick_model(i);
+        setup.pick_maker(Maker::NotListed);
+        assert!(setup.inches, "kept from the machine looked at");
+        assert_eq!(setup.bed, BED_INCH);
+        assert_eq!([setup.sheet[0], setup.sheet[1]], BED_INCH);
+        setup.set_inches(false);
+        assert_eq!(setup.bed, BED_MM);
+        assert_eq!([setup.sheet[0], setup.sheet[1]], BED_MM);
+        setup.bed = [500.0, 300.0];
+        setup.set_inches(true);
+        assert_eq!(setup.bed, [500.0, 300.0], "a typed size is kept");
     }
 
     #[test]

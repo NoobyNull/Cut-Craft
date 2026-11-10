@@ -21,7 +21,7 @@ const BORDER_RADIUS: f64 = 10.0;
 #[cfg(test)]
 const WORD: &str = "HELLO";
 #[cfg(test)]
-const WORD_HEIGHT: f64 = 40.0;
+const WORD_HEIGHT: f64 = 28.0;
 #[cfg(test)]
 const WORD_FONT: &str = "DejaVu Sans";
 /// The toolpaths' names, in the order they cut: carve first, then cut the sign free.
@@ -50,9 +50,8 @@ impl CutCraftApp {
         self.view = View::TwoD;
         match self.sample_toolpaths() {
             Ok(()) => self.status.set_message(
-                "Sample sign: its two toolpaths are made. Press Preview All Toolpaths on the \
-                 Toolpaths page to watch it cut. Select the word and use Edit Text to change it, \
-                 or Create a new file to start your own",
+                "Sample sign opened with its toolpaths made. Press Preview All Toolpaths on the \
+                 Toolpaths page to watch it cut",
             ),
             Err(e) => self
                 .status
@@ -158,4 +157,30 @@ fn make_sample_sign() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/sample-sign.ccjob");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, cut_craft_core::file::save_job(&app.doc)).unwrap();
+}
+
+#[test]
+fn the_word_sits_inside_the_border_clear_of_its_cut() {
+    let doc = sign();
+    let bounds: Vec<_> = doc
+        .vectors
+        .values()
+        .map(cut_craft_core::geometry::Path::bounds)
+        .collect();
+    let area = |b: &cut_craft_core::geometry::Rect| b.size().x * b.size().y;
+    let border = *bounds
+        .iter()
+        .max_by(|a, b| area(a).total_cmp(&area(b)))
+        .unwrap();
+    // the border's rounded corners and the profile's tool both need room
+    let room = BORDER_RADIUS / 2.0;
+    for b in bounds.iter().filter(|b| **b != border) {
+        assert!(
+            b.min.x >= border.min.x + room
+                && b.min.y >= border.min.y + room
+                && b.max.x <= border.max.x - room
+                && b.max.y <= border.max.y - room,
+            "{b:?} in {border:?}"
+        );
+    }
 }
