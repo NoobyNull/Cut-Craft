@@ -328,7 +328,7 @@ pub fn read(text: &str, units: Units) -> Result<Vec<Entry>, String> {
         .max_by_key(|d| first.matches(*d).count())
         .filter(|d| first.contains(*d))
         .unwrap_or(',');
-    let records = split(text, delimiter);
+    let records = cut_craft_core::csv::records(text, delimiter);
     // blank lines before the headings are skipped; rows keep their line numbers
     let start = records
         .iter()
@@ -421,42 +421,6 @@ fn decimal(raw: &str, delimiter: char) -> Option<f64> {
         .or_else(|| (delimiter != ',').then(|| raw.replace(',', ".").parse().ok())?)
 }
 
-/// CSV records: fields split at `delimiter`, quotes keeping delimiters and line breaks, a
-/// doubled quote a quote.
-fn split(text: &str, delimiter: char) -> Vec<Vec<String>> {
-    let mut records = Vec::new();
-    let (mut record, mut field, mut quoted) = (Vec::new(), String::new(), false);
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' if quoted && chars.peek() == Some(&'"') => {
-                field.push('"');
-                chars.next();
-            }
-            '"' => quoted = !quoted,
-            c if c == delimiter && !quoted => record.push(std::mem::take(&mut field)),
-            '\r' if !quoted => {}
-            '\n' if !quoted => {
-                record.push(std::mem::take(&mut field));
-                records.push(std::mem::take(&mut record));
-            }
-            c => field.push(c),
-        }
-    }
-    if !field.is_empty() || !record.is_empty() {
-        record.push(field);
-        records.push(record);
-    }
-    records
-}
-
-/// Text from a file a spreadsheet saved: UTF-8, or else read as Latin-1, close enough to the
-/// Windows-1252 that Excel on Windows writes for "CSV" without "UTF-8" for accented letters.
-fn decode(bytes: &[u8]) -> String {
-    String::from_utf8(bytes.to_vec())
-        .unwrap_or_else(|_| bytes.iter().map(|&b| char::from(b)).collect())
-}
-
 /// File ▸ Import ▸ Import Cut List: each part of the list, as many times as its quantity, as
 /// a named rectangle (length along X), laid out in rows from the job's bottom-left corner a
 /// little apart and selected, so Nest Parts can arrange them next. A material puts its parts
@@ -471,7 +435,8 @@ impl Importer for ImportCutList {
     };
 
     fn import(doc: &Document, bytes: &[u8]) -> Result<Change, CommandError> {
-        let entries = read(&decode(bytes), doc.job.units).map_err(CommandError::Failed)?;
+        let entries = read(&cut_craft_core::csv::decode(bytes), doc.job.units)
+            .map_err(CommandError::Failed)?;
         let total: u64 = entries.iter().map(|e| u64::from(e.quantity)).sum();
         if total > MOST_PARTS {
             return Err(CommandError::Failed(format!(

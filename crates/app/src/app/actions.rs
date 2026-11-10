@@ -2968,7 +2968,21 @@ impl CutCraftApp {
             self.status
                 .set_message(&format!("Each strand makes {turns:.2} revolutions"));
         }
-        self.warn(&made, &[notes, kept].concat());
+        // a toolpath made already out of date (Plate Production's, cutting each plate's own
+        // text) is recalculated straight away, then warned about
+        let stale: Vec<EntityId> = made
+            .iter()
+            .copied()
+            .filter(|t| self.doc.toolpaths.get(t).is_some_and(|t| t.stale))
+            .collect();
+        let notes = [notes, kept].concat();
+        if stale.is_empty() {
+            self.warn(&made, &notes);
+        } else {
+            self.recalculate_in_background(stale, "Toolpaths recalculated", move |app| {
+                app.warn(&made, &notes);
+            });
+        }
         if id == "swap_sides" {
             self.turn_preview_over();
         }

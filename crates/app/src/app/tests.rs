@@ -9278,3 +9278,46 @@ fn the_community_links_are_in_help_not_on_the_start_page() {
             .all(|i| h.app.available(&i.action))
     );
 }
+
+#[test]
+fn plate_production_recalculates_toolpaths_on_placeholder_text_for_each_plates_text() {
+    let mut h = Harness::new();
+    let mut text = h.app.registry.get("draw_text").unwrap().default_params();
+    text["text"] = "!!name!!".into();
+    text["font"] = "Test Boxes".into();
+    text["height"] = 5.0.into();
+    text["anchor"] = serde_json::json!({ "x": 10.0, "y": 10.0 });
+    h.app.apply("draw_text", &text).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let profile = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &profile).unwrap();
+    h.app.form = None;
+    let template = h.app.doc.toolpaths.values().next().unwrap().clone();
+    let file =
+        std::env::temp_dir().join(format!("cut-craft-app-plates-{}.csv", std::process::id()));
+    std::fs::write(&file, "name\nI\n").unwrap();
+    let mut p = h
+        .app
+        .registry
+        .get("plate_production")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    p["data"]["file"] = file.display().to_string().into();
+    h.app.apply("plate_production", &p).unwrap();
+    let plate = h
+        .app
+        .doc
+        .toolpaths
+        .values()
+        .find(|t| t.name.starts_with("S1 - "))
+        .expect("the plates' toolpath, named after its sheet");
+    assert!(!plate.stale, "recalculated straight away");
+    // one letter box, not the eight of !!name!!: far fewer moves than the template's
+    assert!(
+        plate.moves.len() < template.moves.len(),
+        "{} moves vs the template's {}",
+        plate.moves.len(),
+        template.moves.len()
+    );
+}
