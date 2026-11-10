@@ -1,4 +1,4 @@
-- The 3D view keeps itself smooth: detail drops while it turns on a slow computer and comes back once still (Options ▸ 3D View)
-- CAD snaps while drawing: End, Middle, Tangent and Perpendicular, and snapped points stay put when things move
-- Keep-out zones show labels, and toolpaths are refused or clipped at them
-- Models follow handle drags; a model imported past the material shows as a faint red ghost
+- First-time setup asks for your machine, units and material, and there's a sample project to open
+- Profile cuts show Outside / Inside / On the Line up front, can cut right through, and warn when a part would come loose without tabs
+- Error messages say what to do next; Linux explains a missing library instead of crashing
+- New app icon and logo; Plate Production cuts each plate's own text
