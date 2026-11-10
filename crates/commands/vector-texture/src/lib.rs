@@ -5,6 +5,7 @@
 //! the others and from the edge. On the current layer, or on a layer of their own.
 
 mod fill;
+mod motif;
 mod patterns;
 mod scroll;
 
@@ -28,9 +29,14 @@ pub enum Style {
     /// Curling vines with leaves and flowers
     #[schemars(title = "Floral")]
     Floral,
-    /// Broad C and S scrolls with lobed acanthus leaves, mirrored left to right
+    /// Broad C and S scrolls wrapped in lobed acanthus leaves, as Dutch and French carving,
+    /// mirrored left to right
     #[schemars(title = "Baroque")]
     Baroque,
+    /// Western (Sheridan-style) leaf: curling bands, broad wavy leaves with veins and layered
+    /// flowers, as tooled leather
+    #[schemars(title = "Western leaf")]
+    Western,
     /// Ice ferns growing in from the edge, as frost on a window
     #[schemars(title = "Frost")]
     Frost,
@@ -268,9 +274,13 @@ fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandErro
     let paths = match p.style {
         Style::WavyLines => unreachable!("wavy lines are drawn on their own"),
         Style::Floral => fill::paths(
-            &scroll::scrolls(&mut g, p.size, scroll::Look::Floral, None),
+            &scroll::scrolls(&mut g, p.size, scroll::Look::Floral).details,
             p.gap,
         ),
+        Style::Western => {
+            let made = motif::ornament(&mut g, p.size, scroll::Look::Western, None);
+            merged(&made, p.gap)
+        }
         Style::Baroque => baroque(&mut g, p.size),
         Style::Frost => fill::paths(&patterns::frost(&mut g, p.size), p.gap),
         Style::Snowflakes => fill::paths(&patterns::snowflakes(&mut g, p.size), p.gap),
@@ -311,12 +321,86 @@ fn baroque(g: &mut fill::Grower, size: f64) -> Vec<Path> {
     ) {
         g.space.add(q, 0.0, line, 0);
     }
-    let strokes = scroll::scrolls(g, size, scroll::Look::Baroque, Some((line, axis)));
-    let both: Vec<fill::Stroke> = strokes
-        .iter()
-        .flat_map(|s| [s.clone(), s.mirrored(axis)])
+    let made = motif::ornament(g, size, scroll::Look::Baroque, Some((line, axis)));
+    let both = |strokes: &[fill::Stroke]| -> Vec<fill::Stroke> {
+        strokes
+            .iter()
+            .flat_map(|s| [s.clone(), s.mirrored(axis)])
+            .collect()
+    };
+    let mirrored = scroll::Made {
+        shapes: both(&made.shapes),
+        details: both(&made.details),
+    };
+    merged(&mirrored, g.gap())
+}
+
+/// Scrolls' stems and leaves merged into whole shapes, and their details kept apart.
+fn merged(made: &scroll::Made, gap: f64) -> Vec<Path> {
+    use cut_craft_core::polygon::{Corners, offset_regions, union};
+    // pieces nearer each other than the gap are joined (grown by half the gap and shrunk
+    // back), then slivers too small to carve are dropped
+    let joined = union(&fill::paths(&made.shapes, gap));
+    let grown = offset_regions(&joined, gap / 2.0, Corners::Round);
+    let mut paths: Vec<Path> = offset_regions(&grown, -gap / 2.0, Corners::Round)
+        .into_iter()
+        .filter(|p| {
+            let size = p.bounds().size();
+            size.x.max(size.y) >= gap && cut_craft_core::polygon::area(p) >= gap * gap * 0.5
+        })
         .collect();
-    cut_craft_core::polygon::union(&fill::paths(&both, g.gap()))
+    let details = clear_of(&made.details, &paths, gap);
+    paths.extend(fill::paths(&details, gap));
+    paths
+}
+
+/// The parts of the details at least the gap from every outline, each long enough to carve.
+#[expect(clippy::cast_possible_truncation, reason = "grid cells")]
+fn clear_of(details: &[fill::Stroke], outlines: &[Path], gap: f64) -> Vec<fill::Stroke> {
+    let key = |q: Point| ((q.x / gap).floor() as i64, (q.y / gap).floor() as i64);
+    let mut grid: std::collections::HashMap<(i64, i64), Vec<Point>> =
+        std::collections::HashMap::default();
+    for path in outlines {
+        let points = path.flatten(0.01);
+        for w in points.windows(2) {
+            for q in fill::along(w[0], w[1], gap / 4.0) {
+                grid.entry(key(q)).or_default().push(q);
+            }
+        }
+    }
+    let clear = |q: Point| {
+        let (cx, cy) = key(q);
+        (cx - 1..=cx + 1).all(|x| {
+            (cy - 1..=cy + 1).all(|y| {
+                grid.get(&(x, y))
+                    .is_none_or(|near| near.iter().all(|r| r.distance(q) >= gap))
+            })
+        })
+    };
+    let mut out = Vec::new();
+    for d in details {
+        let mut points = d.points.clone();
+        if d.closed {
+            points.push(points[0]);
+        }
+        if points.iter().all(|&q| clear(q)) {
+            out.push(d.clone());
+            continue;
+        }
+        let mut run: Vec<Point> = Vec::new();
+        for q in points.into_iter().chain([Point::splat(f64::NAN)]) {
+            if !q.x.is_nan() && clear(q) {
+                run.push(q);
+            } else if !run.is_empty() {
+                let length: f64 = run.windows(2).map(|w| w[0].distance(w[1])).sum();
+                if length >= gap {
+                    out.push(fill::Stroke::open(std::mem::take(&mut run)));
+                }
+                run.clear();
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -396,9 +480,10 @@ mod tests {
         assert_ne!(noisy(3), noisy(4));
     }
 
-    const FILLS: [Style; 8] = [
+    const FILLS: [Style; 9] = [
         Style::Floral,
         Style::Baroque,
+        Style::Western,
         Style::Frost,
         Style::Snowflakes,
         Style::Fractal,
@@ -518,7 +603,11 @@ mod tests {
         for style in FILLS {
             for path in fill(style, 3, vec![square(0.0, 0.0, 100.0)]) {
                 let b = path.bounds().size();
-                assert!(b.x.max(b.y) >= 3.0, "{style:?}: a piece only {b} across");
+                assert!(
+                    b.x.max(b.y) >= 3.0,
+                    "{style:?}: a piece only {b} across, closed {}",
+                    path.closed
+                );
             }
         }
     }
@@ -615,8 +704,18 @@ mod tests {
     fn draw_previews() {
         use std::fmt::Write;
         let dir = std::env::var("FILL_PREVIEWS").unwrap();
+        let triangle = std::env::var("FILL_TRIANGLE").is_ok();
         let shape = |style| {
-            if style == Style::Baroque {
+            if triangle {
+                Path::polyline(
+                    &[
+                        Point::new(2.0, 2.0),
+                        Point::new(198.0, 2.0),
+                        Point::new(100.0, 148.0),
+                    ],
+                    true,
+                )
+            } else if style == Style::Baroque {
                 // an oval cartouche
                 Path::polyline(
                     &(0..96)

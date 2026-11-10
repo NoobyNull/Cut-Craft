@@ -1157,6 +1157,7 @@ mod tests {
                 "Wavy lines",
                 "Floral",
                 "Baroque",
+                "Western leaf",
                 "Frost",
                 "Snowflakes",
                 "Fractal",
