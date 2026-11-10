@@ -9321,3 +9321,109 @@ fn plate_production_recalculates_toolpaths_on_placeholder_text_for_each_plates_t
         template.moves.len()
     );
 }
+
+/// Every non-ASCII character in the app's strings, with where it first appears: the text in
+/// `"…"` literals of `src`, comments left out. `app/mac.rs` is left out too: its key symbols
+/// (⌘ ⌥ ⌫ …) are only shown on a Mac, in the Mac's own font, which has them.
+fn label_characters() -> std::collections::BTreeMap<char, String> {
+    fn walk(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(&path, files);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    walk(&src, &mut files);
+    files.sort();
+    let mut found = std::collections::BTreeMap::new();
+    for file in files {
+        let rel = file
+            .strip_prefix(&src)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        if rel == "app/mac.rs" || rel.ends_with("tests.rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&file).unwrap();
+        // inside a string literal, which may run over several lines
+        let mut in_string = false;
+        for (n, line) in text.lines().enumerate() {
+            let mut chars = line.chars().peekable();
+            while let Some(c) = chars.next() {
+                if in_string {
+                    match c {
+                        '\\' => {
+                            chars.next();
+                        }
+                        '"' => in_string = false,
+                        c if !c.is_ascii() => {
+                            found.entry(c).or_insert_with(|| format!("{rel}:{}", n + 1));
+                        }
+                        _ => {}
+                    }
+                } else if c == '"' {
+                    in_string = true;
+                } else if c == '\'' {
+                    // a char literal such as '"', or a lifetime: step over a quoted quote
+                    if chars.peek() == Some(&'"') {
+                        chars.next();
+                    }
+                } else if c == '/' && chars.peek() == Some(&'/') {
+                    break;
+                }
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn label_characters_are_found_in_strings_only() {
+    let found = label_characters();
+    assert!(found.contains_key(&'…'), "{found:?}");
+    assert!(found.contains_key(&'▸'), "{found:?}");
+    assert!(
+        !found.contains_key(&'⌘'),
+        "the Mac's key symbols are its own font's"
+    );
+}
+
+/// Every non-ASCII character the app writes has a glyph in egui's own fonts, which go with the
+/// program everywhere: a system font that lacks one then still draws it, not an empty box
+/// (the 📌 pin button once did, on Linux and Windows).
+#[test]
+fn every_label_character_has_a_glyph() {
+    let ctx = egui::Context::default();
+    ctx.set_fonts(super::ui_fonts(None));
+    let _ = headless(ctx.run_ui(RawInput::default(), |_| {}));
+    let font = egui::FontId::proportional(14.0);
+    let missing: Vec<String> = label_characters()
+        .into_iter()
+        .filter(|&(c, _)| !ctx.fonts_mut(|f| f.has_glyph(&font, c)))
+        .map(|(c, at)| format!("{c} (U+{:04X}) at {at}", u32::from(c)))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "no glyph in egui's fonts, so these draw as empty boxes; draw an icon \
+         (scripts/make_icons.py) or pick a character they have:\n{}",
+        missing.join("\n")
+    );
+}
+
+/// The push-pin is drawn, loose and pinned, not left to a font's 📌.
+#[test]
+fn the_pin_buttons_are_drawn_icons() {
+    let h = Harness::new();
+    for icon in [super::panels::PIN_ICON, super::panels::PINNED_ICON] {
+        assert!(
+            h.app.icons.find(icon, "").is_some(),
+            "{icon} is in assets/icons"
+        );
+    }
+}

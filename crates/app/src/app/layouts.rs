@@ -239,8 +239,14 @@ impl CutCraftApp {
                 ui.horizontal(|ui| {
                     ui.strong(group.name);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.toggle_value(&mut self.rail_pinned, "📌")
-                            .on_hover_hint("Keep this list open after picking a tool");
+                        let row = ui.spacing().interact_size.y;
+                        if ui
+                            .add(self.pin_button(self.rail_pinned, row))
+                            .on_hover_hint("Keep this list open after picking a tool")
+                            .clicked()
+                        {
+                            self.rail_pinned = !self.rail_pinned;
+                        }
                     });
                 });
                 ui.separator();

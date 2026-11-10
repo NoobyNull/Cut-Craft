@@ -1557,29 +1557,37 @@ fn shortcut_label<'a>(ctx: &egui::Context, text: &'a str) -> Cow<'a, str> {
     }
 }
 
+/// The app's fonts: the system's face (`system`, from [`UI_FONTS`]) first, then egui's own,
+/// which every system has. Those end with Hack, for the arrows and ▸ of menu paths, and the
+/// monochrome emoji fonts, for ⚠ and ★: a character none of them has draws as an empty box,
+/// which `every_label_character_has_a_glyph` guards against.
+fn ui_fonts(system: Option<(String, Vec<u8>, u32)>) -> egui::FontDefinitions {
+    let mut fonts = egui::FontDefinitions::default();
+    let proportional = fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default();
+    proportional.push("Hack".to_owned());
+    if let Some((name, data, index)) = system {
+        proportional.insert(0, name.clone());
+        let mut data = egui::FontData::from_owned(data);
+        data.index = index;
+        fonts.font_data.insert(name, std::sync::Arc::new(data));
+    }
+    fonts
+}
+
 /// An easier-to-read look: a heavier system font, text and controls `text_scale` times egui's
 /// (Options ▸ Appearance ▸ Text size), and lines thicker to match; on a Mac, the Mac's own
 /// font and look ([`mac`]).
 fn readable(ctx: &egui::Context, text_scale: f32) {
     let line_scale = LINE_SCALE * text_scale / 1.15;
-    let mut fonts = egui::FontDefinitions::default();
     let families: &[&str] = if mac::is_mac(ctx) {
         &mac::UI_FONTS
     } else {
         &UI_FONTS
     };
-    if let Some((name, data, index)) = cut_craft_core::font::system_face(families) {
-        let mut data = egui::FontData::from_owned(data);
-        data.index = index;
-        fonts
-            .font_data
-            .insert(name.clone(), std::sync::Arc::new(data));
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(0, name);
-    }
+    let fonts = ui_fonts(cut_craft_core::font::system_face(families));
     ctx.set_fonts(fonts);
     ctx.all_styles_mut(|style| {
         for font in style.text_styles.values_mut() {
@@ -1791,7 +1799,7 @@ fn tool_list(
             {
                 edit = Some(current.clone());
             }
-            if ui.small_button("✕").on_hover_hint("Remove").clicked() {
+            if ui.small_button("×").on_hover_hint("Remove").clicked() {
                 remove = Some(i);
             }
         });
