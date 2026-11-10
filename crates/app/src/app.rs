@@ -497,8 +497,9 @@ fn dialog_size(ctx: &egui::Context) -> egui::Vec2 {
         )
 }
 
-/// Cut Craft's own mark, built in.
-const LOGO: &[u8] = include_bytes!("../../../assets/cut-craft.svg");
+/// The logo on the opening splash: the CC monogram with the name under it, on its own dark
+/// ground, so it reads the same on the light and the dark theme.
+const SPLASH_LOGO: &[u8] = include_bytes!("../../../assets/splash-logo.jpg");
 /// How long the 3D view stays still before it is drawn finely, seconds, until Options says
 /// otherwise.
 pub(crate) const SETTLE_SECONDS: f64 = 0.25;
