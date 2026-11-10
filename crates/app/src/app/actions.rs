@@ -4,14 +4,14 @@
 use super::{
     APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_PANEL_WIDTHS,
     DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
-    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, LOGO, Layout, MODEL_IMPORTERS, Menus,
-    Modifiers, OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON,
-    SECTION_PICTURE_ROWS, SELECT_LEVEL, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen,
-    Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase,
-    VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands,
-    dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog,
-    menu_items, message_dialog, on_the_desktop, rest_section, selector_section, shortcut,
-    side_panel, side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
+    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers,
+    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, SECTION_PICTURE_ROWS,
+    SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
+    Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
+    VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
+    file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
+    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
+    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
     toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
@@ -3361,17 +3361,18 @@ impl CutCraftApp {
         }
     }
 
-    /// The middle of the window with no job open: the Cut Craft mark.
+    /// The middle of the window with no job open: the Cut Craft logo, which carries the
+    /// name itself, so no heading under it.
     pub(super) fn splash(ui: &mut egui::Ui) {
         let space = ui.available_size();
         let edge = space.min_elem() * SPLASH_SHARE;
         ui.vertical_centered(|ui| {
             ui.add_space((space.y - edge) / 2.0);
             ui.add(
-                egui::Image::from_bytes("bytes://cut-craft.svg", LOGO)
-                    .fit_to_exact_size(egui::vec2(edge, edge)),
+                egui::Image::from_bytes("bytes://splash-logo.jpg", SPLASH_LOGO)
+                    .fit_to_exact_size(egui::vec2(edge, edge))
+                    .corner_radius(edge * 0.06),
             );
-            ui.heading(APP_NAME);
         });
     }
 

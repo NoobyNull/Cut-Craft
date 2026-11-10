@@ -8932,3 +8932,16 @@ fn coarser_surfaces_are_made_from_the_fine_one_on_another_thread_and_kept() {
     assert!(coarse.solid.is_some(), "with its walls");
     assert!(coarse.surface.triangles() < kept.at(120).expect("fine").surface.triangles());
 }
+
+/// The opening splash shows Matthew's CC logo, which carries the name itself: it is a real,
+/// square picture big enough to stay sharp at the splash's size on a large screen.
+#[test]
+fn splash_logo_is_a_square_picture() {
+    let logo = image::load_from_memory(SPLASH_LOGO).expect("the splash logo decodes");
+    assert_eq!(
+        logo.width(),
+        logo.height(),
+        "square, so the splash can size it by one edge"
+    );
+    assert!(logo.width() >= 512, "sharp at a third of a large screen");
+}
