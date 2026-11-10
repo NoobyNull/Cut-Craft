@@ -133,8 +133,8 @@ impl CutCraftApp {
     pub(super) fn inspector(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Inspector");
         if self.form.is_some() {
-            // the form draws its own Apply and Close
-            egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+            // the form draws its own Apply and Close, pinned at the foot
+            self.form_panel(ui);
             return;
         }
         self.browser(ui);
@@ -150,7 +150,7 @@ impl CutCraftApp {
         });
         ui.separator();
         match INSPECTOR_TABS[self.inspector_tab] {
-            "Toolpaths" => self.toolpath_list(ui),
+            "Toolpaths" => self.toolpath_list(ui, false),
             tab => {
                 egui::ScrollArea::vertical().show(ui, |ui| match tab {
                     "Sheets" => self.sheets_panel(ui),

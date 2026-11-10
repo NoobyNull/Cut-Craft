@@ -1170,6 +1170,15 @@ impl Harness {
         None
     }
 
+    /// The open form's heading `text`: the rightmost place it is drawn, as the Design
+    /// page's tip box may name the tool too.
+    fn form_heading(&self, text: &str) -> Pos2 {
+        self.texts_at(text)
+            .into_iter()
+            .max_by(|a, b| a.x.total_cmp(&b.x))
+            .unwrap_or_else(|| panic!("{text}"))
+    }
+
     /// The middle of `text` where the last frame drew it.
     fn text_at(&self, text: &str) -> Option<Pos2> {
         self.shapes.iter().find_map(|clipped| match &clipped.shape {
@@ -7634,8 +7643,9 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     h.app.invoke(&h.ctx, "pocket_toolpath");
     h.frame(vec![]);
     h.frame(vec![]);
-    // down the form to its Clear Pocket, the picture and Cutting… at its foot
-    let over = h.text_at("Pocket Toolpath").expect("the form");
+    // down the form to its Clear Pocket, the picture and Cutting… at its foot; the form's
+    // heading, not the Design page's tip naming the tool
+    let over = h.form_heading("Pocket Toolpath");
     for _ in 0..30 {
         if h.text_at("Cutting…").is_some_and(|b| b.y < 700.0) {
             break;
@@ -8944,4 +8954,157 @@ fn splash_logo_is_a_square_picture() {
         "square, so the splash can size it by one edge"
     );
     assert!(logo.width() >= 512, "sharp at a third of a large screen");
+}
+
+/// A rectangle selected and the Profile Toolpath form open on it.
+fn profile_form() -> Harness {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    h
+}
+
+#[test]
+fn the_profile_form_shows_which_side_it_cuts_just_under_the_depth() {
+    let mut h = profile_form();
+    let y = |h: &Harness, text: &str| h.text_at(text).unwrap_or_else(|| panic!("{text}")).y;
+    let side = y(&h, crate::form::WHICH_SIDE);
+    assert!(y(&h, "Cut Depth") < side, "under the depth");
+    assert!(
+        side < y(&h, "Machine Vectors…"),
+        "before the cutting details"
+    );
+    for choice in ["Outside", "Inside", "On the Line"] {
+        assert!(
+            y(&h, choice) > side,
+            "{choice} is a picture under the heading"
+        );
+    }
+    assert!(h.text_at(super::cutting::side_said("outside")).is_some());
+    // the picture over Inside picks it, and the sentence says what that makes
+    let inside = h.text_at("Inside").unwrap();
+    h.click(inside - egui::vec2(0.0, 25.0), Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().unwrap().params["side"], "inside");
+    assert!(h.text_at(super::cutting::side_said("inside")).is_some());
+}
+
+#[test]
+fn cut_right_through_follows_the_material_and_a_loose_part_is_warned_of_with_add_tabs() {
+    let mut h = profile_form();
+    let thickness = h.app.doc.job.thickness;
+    assert!(h.text_at("Cut right through").is_some());
+    assert!(
+        h.text_at(super::tabs::LOOSE).is_none(),
+        "6 mm deep holds the part"
+    );
+    h.app.form.as_mut().unwrap().params["through"] = true.into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let params = |h: &Harness| h.app.form.as_ref().unwrap().params.clone();
+    assert_eq!(
+        params(&h)["depth"].as_f64(),
+        Some(thickness),
+        "the greyed depth shows the thickness"
+    );
+    let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
+    let add = scroll_above_foot(&mut h, over, "Add Tabs");
+    assert!(
+        h.text_at(super::tabs::LOOSE).is_some(),
+        "right through, no tabs"
+    );
+    // made like that, the status bar warns too
+    h.app.apply("profile_toolpath", &params(&h)).unwrap();
+    assert!(
+        h.app.status.message.contains("comes loose"),
+        "{}",
+        h.app.status.message
+    );
+    // Add Tabs puts tabs on, and the warning goes
+    h.click(add, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().unwrap().params["tabs"], "flat");
+    assert!(h.text_at(super::tabs::LOOSE).is_none());
+    // a thicker sheet: the cut follows it when made again
+    h.app.doc.job.thickness = thickness + 5.0;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let depth = h.app.form.as_ref().unwrap().params["depth"].as_f64();
+    assert_eq!(depth, Some(thickness + 5.0));
+}
+
+#[test]
+fn a_long_forms_apply_button_and_error_stay_in_sight() {
+    let mut h = profile_form();
+    let apply = h.text_at("Apply").expect("Apply");
+    assert!(apply.y < 800.0, "Apply is in the window: {apply:?}");
+    assert!(
+        h.text_at("Add tabs to toolpath").is_none(),
+        "the form runs on out of sight, under the pinned buttons"
+    );
+    h.app.form.as_mut().unwrap().error = Some("select the vectors to profile".into());
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let error = h
+        .text_at("select the vectors to profile")
+        .expect("the error");
+    let apply = h.text_at("Apply").unwrap();
+    assert!(
+        error.y < apply.y && error.y > 600.0,
+        "{error:?} over {apply:?}"
+    );
+}
+
+/// Wheels the form under `over` down until `text` sits clear of the buttons pinned at its
+/// foot, and gives where it is.
+fn scroll_above_foot(h: &mut Harness, over: Pos2, text: &str) -> Pos2 {
+    let apply = h.text_at("Apply").expect("the form's buttons");
+    for _ in 0..40 {
+        if let Some(at) = h.text_at(text).filter(|at| at.y < apply.y - 80.0) {
+            return at;
+        }
+        h.frame(vec![
+            Event::PointerMoved(over),
+            Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0.0, -60.0),
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Wheel,
+                modifiers: Modifiers::NONE,
+            },
+        ]);
+        h.frame(vec![]);
+    }
+    panic!("{text} never scrolled into sight");
+}
+
+#[test]
+fn the_toolpath_list_ends_in_preview_then_a_labelled_save_button() {
+    use super::panels::{SAVE_FOR_MACHINE, SAVE_NEEDS};
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Make a toolpath: pick how to cut").is_some());
+    assert!(h.text_at(SAVE_FOR_MACHINE).is_some());
+    assert!(h.text_at(SAVE_NEEDS).is_some(), "says what to do first");
+    h.click(h.text_at(SAVE_FOR_MACHINE).unwrap(), Modifiers::NONE);
+    assert!(h.app.save_form.is_none(), "nothing to save yet");
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at(SAVE_NEEDS).is_none());
+    let y = |h: &Harness, text: &str| h.text_at(text).unwrap_or_else(|| panic!("{text}")).y;
+    assert!(y(&h, "Toolpath List") < y(&h, "Preview: watch it cut"));
+    assert!(y(&h, "Preview: watch it cut") < y(&h, SAVE_FOR_MACHINE));
+    h.click(h.text_at(SAVE_FOR_MACHINE).unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.save_form.is_some(), "the same Save Toolpaths form");
 }

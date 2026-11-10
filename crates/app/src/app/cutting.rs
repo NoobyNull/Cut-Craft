@@ -72,6 +72,22 @@ impl Cutting {
         self.climb == matches!(self.at, At::Outside | At::On)
     }
 
+    /// What the choices make in plain words, before the detail [`Self::told`] gives.
+    fn headline(&self) -> String {
+        let way = if self.clockwise() {
+            "clockwise"
+        } else {
+            "anticlockwise"
+        };
+        match self.at {
+            At::Outside => format!("Cuts round the outside of each shape, going {way}"),
+            At::Inside => format!("Cuts round the inside of each shape, going {way}"),
+            At::On => format!("Cuts along the line itself, going {way}"),
+            At::Pocket if self.raster => "Clears the pocket in rows".to_owned(),
+            At::Pocket => format!("Clears the pocket in rings, going {way}"),
+        }
+    }
+
     /// What the choices make, a line each.
     fn told(&self) -> Vec<String> {
         let way = |cw: bool| if cw { "clockwise" } else { "anticlockwise" };
@@ -123,6 +139,10 @@ impl Cutting {
 /// chosen, what it does, and Cutting… to change it, with its window while open. Whether the
 /// settings changed.
 pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value) -> bool {
+    if group == crate::form::WHICH_SIDE {
+        ui.label(side_said(params["side"].as_str().unwrap_or_default()));
+        return false;
+    }
     let ours = match group {
         "Machine Vectors…" => params.get("side").is_some(),
         "Clear Pocket" => params.get("rings").is_some(),
@@ -137,7 +157,9 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value) -> b
     ui.horizontal(|ui| {
         combination(ui, &Cutting::read(params), row * SMALL_ROWS);
         ui.vertical(|ui| {
-            for line in Cutting::read(params).told() {
+            let cutting = Cutting::read(params);
+            ui.label(cutting.headline());
+            for line in cutting.told() {
                 ui.small(line);
             }
             if ui
@@ -160,6 +182,25 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value) -> b
     }
     ui.data_mut(|d| d.insert_temp(id, open));
     before != *params
+}
+
+/// What a profile cut on `side` of the vectors makes, in plain words for someone who has not
+/// cut one before.
+pub(super) fn side_said(side: &str) -> &'static str {
+    match side {
+        "inside" => {
+            "Cuts a hole: the tool goes round the inside of each shape, so the hole is \
+                     the size drawn."
+        }
+        "on" => {
+            "Follows the line: the middle of the tool runs along it, so the cut is as wide \
+                 as the tool. Use it for open lines and grooves."
+        }
+        _ => {
+            "Cuts a part out: the tool goes round the outside of each shape, so the part is \
+              the size drawn."
+        }
+    }
 }
 
 /// The window's inside: the choices, the picture, then the loops when trochoidal.
@@ -185,24 +226,10 @@ fn window(ui: &mut egui::Ui, params: &mut Value, diameter: f64) {
     }
 }
 
-/// The choices, a row of radio buttons each: Machine for a profile, Rings for an offset
-/// pocket.
+/// The choices, a row of radio buttons each, Rings for an offset pocket. A profile's side is
+/// on its form, under the cut depth, where it is seen first.
 fn choices(ui: &mut egui::Ui, params: &mut Value) {
-    let profile = params.get("side").is_some();
     egui::Grid::new("cutting").num_columns(2).show(ui, |ui| {
-        if profile {
-            choose(
-                ui,
-                params,
-                "side",
-                "Machine",
-                &[
-                    ("outside", "Outside", "Round the outside of closed shapes"),
-                    ("inside", "Inside", "Round the inside of closed shapes"),
-                    ("on", "On", "Along the line itself, open vectors too"),
-                ],
-            );
-        }
         choose(
             ui,
             params,
@@ -561,6 +588,23 @@ mod tests {
 
     fn told(params: &Value) -> Vec<String> {
         Cutting::read(params).told()
+    }
+
+    #[test]
+    fn the_cutting_is_said_in_plain_words_first() {
+        let said = |params: Value| Cutting::read(&params).headline();
+        assert_eq!(
+            said(serde_json::json!({ "side": "outside", "direction": "climb" })),
+            "Cuts round the outside of each shape, going clockwise"
+        );
+        assert_eq!(
+            said(serde_json::json!({ "side": "inside", "direction": "climb" })),
+            "Cuts round the inside of each shape, going anticlockwise"
+        );
+        assert!(said(serde_json::json!({ "side": "on" })).starts_with("Cuts along the line"));
+        assert!(side_said("outside").starts_with("Cuts a part out"));
+        assert!(side_said("inside").starts_with("Cuts a hole"));
+        assert!(side_said("on").starts_with("Follows the line"));
     }
 
     #[test]

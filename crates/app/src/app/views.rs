@@ -307,8 +307,7 @@ impl CutCraftApp {
             }
             Screen::NewJob => {
                 side_panel(egui::Panel::left("design_panel"), ctx).show(ui, |ui| {
-                    egui::Panel::bottom("form_buttons").show(ui, |ui| self.form_buttons(ui));
-                    egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
+                    self.form_panel(ui);
                 });
             }
             Screen::Job => match self.options.general.layout {
