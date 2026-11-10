@@ -23,22 +23,24 @@ mod pages;
 mod polyline;
 mod shortcut;
 mod spacemouse;
+mod startup;
 mod update;
 mod view2d;
 mod view3d;
 
 fn main() {
+    // the command line first: --version and --help print and stop, touching nothing (a closed
+    // pipe or, on Windows, no console to print to is no reason to panic)
+    let shots = match startup::parse(std::env::args().skip(1)) {
+        startup::Start::Version => return startup::print(&format!("{}\n", startup::version())),
+        startup::Start::Help => return startup::print(&startup::help()),
+        startup::Start::Screenshots(dir) => Some(dir),
+        startup::Start::App => None,
+    };
     // the log and, on a panic, the crash log the next start offers to report
     cut_craft_bug_report::logs::install(files::config_dir().as_deref());
-    // cut-craft --screenshots DIR: the README's pictures (see app/screenshots.rs)
-    let mut args = std::env::args().skip(1);
-    let shots = match args.next().as_deref() {
-        Some("--screenshots") => Some(
-            args.next()
-                .map_or_else(|| "docs/screenshots".into(), Into::into),
-        ),
-        _ => None,
-    };
+    // a window that can't open says why, rather than nothing happening
+    startup::explain_failures();
     // what the last update set aside, now that the new version is the one running
     if let Some(program) = cut_craft_updater::this_install().program() {
         cut_craft_updater::clean_up(program);
