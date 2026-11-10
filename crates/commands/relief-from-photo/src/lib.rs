@@ -64,6 +64,30 @@ pub struct Params {
     /// A flat slab under the whole picture, for a plaque or a printed base. 0 for none
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub base_height: f64,
+    /// Shows the relief as your bit will really carve it: pits and grooves too narrow for
+    /// the bit fill in, and the foot of a steep wall slopes at the bit's taper
+    #[schemars(extend("x-group" = "Carving bit"))]
+    pub only_what_the_bit_can_carve: bool,
+    /// The ball nose bit's tip diameter (1/64 inch is 0.397 mm)
+    #[schemars(
+        extend(
+            "x-unit" = "mm",
+            "x-group" = "Carving bit",
+            "x-enable-when" = {"only_what_the_bit_can_carve": "true"}
+        ),
+        range(min = 0)
+    )]
+    pub bit_tip_diameter: f64,
+    /// A tapered bit's angle on each side, from its listing; 0 for a straight ball nose
+    #[schemars(
+        extend(
+            "x-unit" = "deg",
+            "x-group" = "Carving bit",
+            "x-enable-when" = {"only_what_the_bit_can_carve": "true"}
+        ),
+        range(min = 0, max = 45)
+    )]
+    pub bit_taper: f64,
     pub combine: Combine,
 }
 
@@ -82,6 +106,10 @@ impl Default for Params {
             lift: 0.8,
             soft_edge: 0.0,
             base_height: 0.0,
+            only_what_the_bit_can_carve: false,
+            // a 1/64 inch tapered ball nose
+            bit_tip_diameter: 0.397,
+            bit_taper: 10.0,
             combine: Combine::Add,
         }
     }
@@ -97,6 +125,22 @@ impl Command for ReliefFromPhoto {
             group: "Modeling",
             icon: "",
             shortcut: "",
+        }
+    }
+
+    /// A grey picture with no depth estimated for it is taken to be a depth map already,
+    /// so the form opens ready to carve it; a colour photo still asks for an estimate.
+    fn initial_params(doc: &Document) -> Params {
+        let depth_map = doc.chosen_bitmap().is_some_and(|photo| {
+            !photo.grey.is_empty() && photo.rgb.is_empty() && photo.depth.is_empty()
+        });
+        Params {
+            depth_from: if depth_map {
+                DepthFrom::Picture
+            } else {
+                DepthFrom::Estimated
+            },
+            ..Params::default()
         }
     }
 
@@ -128,6 +172,13 @@ impl Command for ReliefFromPhoto {
                 "set the soft edge and base to 0 or more".into(),
             ));
         }
+        if p.only_what_the_bit_can_carve
+            && !(p.bit_tip_diameter > 0.0 && (0.0..=45.0).contains(&p.bit_taper))
+        {
+            return Err(CommandError::InvalidParams(
+                "set the bit's tip diameter above 0 and its taper from 0 to 45 degrees".into(),
+            ));
+        }
         let shaped = shaped(photo, p, doc.job.model_cell());
         let relief = Component::from_fn(
             &p.name,
@@ -144,6 +195,41 @@ impl Command for ReliefFromPhoto {
         c.add_component(relief);
         Ok(c.finish())
     }
+}
+
+/// Whether the job's 3D model is fine enough to hold what a bit with a `tip`-wide ball can
+/// cut. The model's points are `cell` apart, and `finest` apart at the highest Model
+/// Resolution; a length is written by `length`, in the job's units. A bit cuts detail down
+/// to about its tip's radius, so points farther apart than that lose it.
+pub fn resolution_note(
+    cell: f64,
+    finest: f64,
+    tip: f64,
+    length: impl Fn(f64) -> String,
+) -> Option<String> {
+    let radius = tip / 2.0;
+    if tip <= 0.0 || cell <= radius {
+        return None;
+    }
+    let lost = format!(
+        "This job's model points are {} apart, but this bit can cut detail down to about {}, \
+         so the relief is coarser than the bit.",
+        length(cell),
+        length(radius)
+    );
+    Some(if finest < cell * 0.99 {
+        let enough = if finest <= radius {
+            ""
+        } else {
+            " A smaller job is finer still."
+        };
+        format!(
+            "{lost} Model \u{25b8} Model Resolution \u{25b8} Highest puts them {} apart.{enough}",
+            length(finest)
+        )
+    } else {
+        format!("{lost} A smaller job puts them closer together.")
+    })
 }
 
 /// The photo with its depth shaped into heights 0 to 1, as a depth map.
@@ -183,7 +269,14 @@ fn shaped(photo: &Bitmap, p: &Params, cell: f64) -> Bitmap {
         smoothing: p.smoothness as usize,
         soft_edge: (p.soft_edge * pixels_per_mm).round().max(0.0) as usize,
     };
-    let heights = shape::heights(&light, &depth, &shaping);
+    let mut heights = shape::heights(&light, &depth, &shaping);
+    if p.only_what_the_bit_can_carve {
+        let bit = shape::Bit {
+            tip: p.bit_tip_diameter,
+            taper: p.bit_taper,
+        };
+        heights = shape::carvable(&heights, 1.0 / pixels_per_mm, p.max_height, &bit);
+    }
     Bitmap {
         columns,
         rows,
@@ -364,6 +457,106 @@ mod tests {
             ..Params::default()
         };
         assert_eq!(source(&photo, &p), photo.depth);
+    }
+
+    /// A 60 x 60 depth map over 30 x 30 mm in a job whose model cells are 0.5 mm: white
+    /// (high) all over but a black groove one pixel wide down the middle.
+    fn with_groove() -> Document {
+        let mut doc = Document::default();
+        doc.job.width = 500.0;
+        doc.job.height = 500.0;
+        let grey = (0..3600)
+            .map(|i| if i % 60 == 30 { 0 } else { 255 })
+            .collect();
+        let mut c = Change::builder(&doc);
+        c.add_bitmap(Bitmap {
+            name: "groove".into(),
+            columns: 60,
+            rows: 60,
+            grey,
+            rect: Rect::new(Point::ZERO, Point::new(30.0, 30.0)),
+            depth: Vec::new(),
+            rgb: Vec::new(),
+        });
+        doc.apply(&c.finish()).unwrap();
+        doc
+    }
+
+    #[test]
+    fn a_grey_picture_with_no_estimate_opens_as_a_depth_map() {
+        // estimated: the form asks for the estimate
+        let mut doc = with_photo();
+        let opens = |doc: &Document| ReliefFromPhoto::initial_params(doc).depth_from;
+        assert_eq!(opens(&doc), DepthFrom::Estimated);
+        // a plain grey picture is the depth map itself
+        let id = *doc.bitmaps.keys().next().unwrap();
+        doc.bitmaps.get_mut(&id).unwrap().depth.clear();
+        assert_eq!(opens(&doc), DepthFrom::Picture);
+        // a colour photo is not
+        doc.bitmaps.get_mut(&id).unwrap().rgb = vec![0; 144 * 3];
+        assert_eq!(opens(&doc), DepthFrom::Estimated);
+        assert_eq!(opens(&Document::default()), DepthFrom::Estimated);
+    }
+
+    #[test]
+    fn a_groove_too_narrow_for_the_bit_fills_in() {
+        let asked = Params {
+            depth_from: DepthFrom::Picture,
+            background_cut_off: 0.0,
+            depth_cut_off: 0.0,
+            fine_detail: 0.0,
+            smoothness: 0,
+            lift: 0.0,
+            max_height: 10.0,
+            ..Params::default()
+        };
+        let groove = Point::new(15.25, 15.0);
+        let as_drawn = relief(&mut with_groove(), &asked)
+            .height_at(groove)
+            .unwrap();
+        assert!(as_drawn < 0.5, "the groove as drawn: {as_drawn}");
+        let carved = Params {
+            only_what_the_bit_can_carve: true,
+            ..asked.clone()
+        };
+        let r = relief(&mut with_groove(), &carved);
+        // a 0.5 mm groove 10 mm deep: the 10-degree bit gets about 1.8 mm into it
+        let left = r.height_at(groove).unwrap();
+        assert!(left > 7.0 && left < 9.5, "the groove as carved: {left}");
+        assert!((r.height_at(Point::new(5.0, 15.0)).unwrap() - 10.0).abs() < 1e-4);
+        let no_bit = Params {
+            bit_tip_diameter: 0.0,
+            ..carved
+        };
+        assert!(matches!(
+            ReliefFromPhoto::run(&with_groove(), &no_bit),
+            Err(CommandError::InvalidParams(_))
+        ));
+    }
+
+    #[test]
+    fn the_note_says_when_the_model_is_coarser_than_the_bit() {
+        let mm = |v: f64| format!("{v:.2} mm");
+        // points 0.49 mm apart, a 1/64 inch bit (0.2 mm radius), 0.19 mm at Highest
+        let note = resolution_note(0.49, 0.185, 0.397, mm).unwrap();
+        assert!(note.contains("0.49 mm apart"), "{note}");
+        assert!(note.contains("about 0.20 mm"), "{note}");
+        assert!(note.contains("Highest puts them 0.18 mm apart."), "{note}");
+        assert!(
+            !note.contains("smaller job"),
+            "fine enough at Highest: {note}"
+        );
+        // already at Highest and still too coarse
+        let note = resolution_note(0.49, 0.49, 0.397, mm).unwrap();
+        assert!(
+            note.ends_with("A smaller job puts them closer together."),
+            "{note}"
+        );
+        // Highest helps but not enough
+        let note = resolution_note(0.9, 0.34, 0.397, mm).unwrap();
+        assert!(note.ends_with("A smaller job is finer still."), "{note}");
+        assert_eq!(resolution_note(0.15, 0.1, 0.397, mm), None, "fine enough");
+        assert_eq!(resolution_note(0.49, 0.185, 0.0, mm), None, "no bit");
     }
 
     #[test]

@@ -473,6 +473,173 @@ fn soften(grid: &mut Grid, fig: &[bool], floor: f32, width: usize) {
     }
 }
 
+/// A tapered ball nose bit: a ball at the tip, then a cone widening above it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Bit {
+    /// The ball's diameter, in the same unit as the relief's heights and cells.
+    pub tip: f64,
+    /// The cone's angle from the bit's axis, degrees a side; 0 for a straight ball nose.
+    pub taper: f64,
+}
+
+impl Bit {
+    /// How high the bit's cutting surface is above its tip, `r` from its axis: the ball
+    /// out to where the cone leaves it (at a tangent), then the cone. `None` beyond a
+    /// straight ball nose's radius, which nothing can stand beside.
+    pub fn profile(&self, r: f64) -> Option<f64> {
+        let radius = self.tip / 2.0;
+        let a = self.taper.to_radians();
+        let on_ball = |r: f64| radius - (radius * radius - r * r).max(0.0).sqrt();
+        if a <= 0.0 {
+            return (r <= radius).then(|| on_ball(r));
+        }
+        let hand_over = radius * a.cos();
+        Some(if r <= hand_over {
+            on_ball(r)
+        } else {
+            radius - radius * a.sin() + (r - hand_over) / a.tan()
+        })
+    }
+}
+
+/// What `bit` can carve of `heights` (cells `cell` apart, a height of 1 standing `relief`
+/// high): the bit is lowered everywhere as far as it goes without cutting into the
+/// relief, and what its shape leaves behind is the answer. Pits and grooves too narrow for
+/// it fill in and the foot of a wall slopes at its taper; nothing is ever cut lower than
+/// asked. (depth2stl's carve simulation.)
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "cell offsets of a kernel a few dozen cells wide"
+)]
+pub fn carvable(heights: &Grid, cell: f64, relief: f64, bit: &Bit) -> Grid {
+    if cell <= 0.0 || relief <= 0.0 || bit.tip <= 0.0 || heights.values.is_empty() {
+        return heights.clone();
+    }
+    // no part of the bit higher than the relief's whole range can touch it
+    let (lo, hi) = heights
+        .values
+        .iter()
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &v| {
+            (lo.min(v), hi.max(v))
+        });
+    let range = f64::from(hi - lo);
+    let reach = if bit.taper > 0.0 {
+        bit.tip / 2.0 + range * relief * bit.taper.to_radians().tan()
+    } else {
+        bit.tip / 2.0
+    };
+    let most = (reach / cell).ceil().max(1.0) as isize;
+    // each cell offset under the bit, with the bit's height there in relief heights
+    let mut under: Vec<(isize, isize, f32)> = Vec::new();
+    for dy in -most..=most {
+        for dx in -most..=most {
+            let r = ((dx * dx + dy * dy) as f64).sqrt() * cell;
+            if let Some(t) = bit.profile(r).map(|t| t / relief)
+                && t <= range
+            {
+                under.push((dx, dy, t as f32));
+            }
+        }
+    }
+    // lowest part of the bit first, so a cell can stop looking once the rest of the bit
+    // is too high to matter there
+    under.sort_by(|a, b| a.2.total_cmp(&b.2));
+    let (columns, rows) = (heights.columns, heights.rows);
+    let at = |values: &[f32], column: isize, row: isize| {
+        let column = column.clamp(0, columns as isize - 1) as usize;
+        let row = row.clamp(0, rows as isize - 1) as usize;
+        values[row * columns + column]
+    };
+    let most = most as usize;
+    // how low the tip can go over each cell: resting on the highest thing under the bit.
+    // Nothing under the bit is higher than the highest cell within its reach, so on
+    // smooth ground only the bit's tip is ever looked at.
+    let highest = within(&heights.values, columns, most, |a, b| a >= b);
+    let mut tip = vec![0.0_f32; heights.values.len()];
+    cut_craft_core::simulation::by_rows(&mut tip, columns, |first, band| {
+        for (i, out) in band.iter_mut().enumerate() {
+            let at_cell = first * columns + i;
+            let (column, row) = ((i % columns) as isize, (first + i / columns) as isize);
+            let mut best = heights.values[at_cell];
+            for &(dx, dy, t) in &under {
+                if highest[at_cell] - t <= best {
+                    break;
+                }
+                best = best.max(at(&heights.values, column + dx, row + dy) - t);
+            }
+            *out = best;
+        }
+    });
+    // what is left: the lowest the bit's surface came over each cell
+    let lowest = within(&tip, columns, most, |a, b| a <= b);
+    let mut left = vec![0.0_f32; tip.len()];
+    cut_craft_core::simulation::by_rows(&mut left, columns, |first, band| {
+        for (i, out) in band.iter_mut().enumerate() {
+            let at_cell = first * columns + i;
+            let (column, row) = ((i % columns) as isize, (first + i / columns) as isize);
+            let mut best = tip[at_cell];
+            for &(dx, dy, t) in &under {
+                if lowest[at_cell] + t >= best {
+                    break;
+                }
+                best = best.min(at(&tip, column - dx, row - dy) + t);
+            }
+            *out = best.clamp(0.0, 1.0);
+        }
+    });
+    Grid::new(columns, rows, left)
+}
+
+/// For each cell, the value `wins` picks (the highest, or the lowest) of the square of
+/// cells within `radius` of it, in time that does not grow with `radius`.
+fn within(
+    values: &[f32],
+    columns: usize,
+    radius: usize,
+    wins: impl Fn(f32, f32) -> bool + Copy,
+) -> Vec<f32> {
+    let rows = values.len() / columns;
+    let mut along = vec![0.0_f32; values.len()];
+    for (line, out) in values.chunks(columns).zip(along.chunks_mut(columns)) {
+        window(line, radius, wins, out);
+    }
+    let mut out = vec![0.0_f32; values.len()];
+    let (mut line, mut swept) = (vec![0.0_f32; rows], vec![0.0_f32; rows]);
+    for column in 0..columns {
+        for (row, v) in line.iter_mut().enumerate() {
+            *v = along[row * columns + column];
+        }
+        window(&line, radius, wins, &mut swept);
+        for (row, v) in swept.iter().enumerate() {
+            out[row * columns + column] = *v;
+        }
+    }
+    out
+}
+
+/// [`within`] along one line: a sliding window that keeps only the cells that could
+/// still win.
+fn window(line: &[f32], radius: usize, wins: impl Fn(f32, f32) -> bool, out: &mut [f32]) {
+    let mut held: std::collections::VecDeque<usize> = std::collections::VecDeque::new();
+    let mut next = 0;
+    for (i, out) in out.iter_mut().enumerate() {
+        while next < line.len() && next <= i + radius {
+            while held.back().is_some_and(|&b| wins(line[next], line[b])) {
+                held.pop_back();
+            }
+            held.push_back(next);
+            next += 1;
+        }
+        while held.front().is_some_and(|&f| f + radius < i) {
+            held.pop_front();
+        }
+        *out = held.front().map_or(line[i], |&f| line[f]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -742,5 +909,97 @@ mod tests {
         assert!(close(h.at(3, 6), 0.2), "nearest-but-least lifted clear");
         assert!(close(h.at(8, 6), 1.0), "the nearest is the top");
         assert!(h.at(5, 6) > h.at(4, 6), "order kept");
+    }
+
+    #[test]
+    fn a_bit_is_a_ball_then_a_cone() {
+        let bit = Bit {
+            tip: 0.4,
+            taper: 10.0,
+        };
+        assert!(bit.profile(0.0).unwrap().abs() < 1e-12);
+        // on the ball: 0.1 out, a 0.2 radius
+        let on_ball = 0.2 - (0.04_f64 - 0.01).sqrt();
+        assert!((bit.profile(0.1).unwrap() - on_ball).abs() < 1e-12);
+        // far out, the cone rises 1 / tan(10 degrees) for each 1 out
+        let rise = bit.profile(2.0).unwrap() - bit.profile(1.0).unwrap();
+        assert!(
+            (rise - 1.0 / 10.0_f64.to_radians().tan()).abs() < 1e-9,
+            "{rise}"
+        );
+        let straight = Bit {
+            tip: 0.4,
+            taper: 0.0,
+        };
+        assert_eq!(straight.profile(0.21), None);
+        assert!((straight.profile(0.2).unwrap() - 0.2).abs() < 1e-12);
+    }
+
+    /// 40 x 40 cells 0.05 mm apart, 8 mm of relief: a flat at half height with a one-cell
+    /// pit, a wide plateau and a lone peak.
+    fn carved_test() -> Grid {
+        let mut values = vec![0.5; 1600];
+        values[20 * 40 + 20] = 0.0;
+        for row in 5..15 {
+            for column in 5..15 {
+                values[row * 40 + column] = 0.9;
+            }
+        }
+        values[30 * 40 + 30] = 1.0;
+        Grid::new(40, 40, values)
+    }
+
+    #[test]
+    fn a_pit_narrower_than_the_bit_fills_in_and_tops_survive() {
+        let flat = carved_test();
+        let bit = Bit {
+            tip: 0.397,
+            taper: 10.0,
+        };
+        let cut = carvable(&flat, 0.05, 8.0, &bit);
+        assert!(
+            cut.values
+                .iter()
+                .zip(&flat.values)
+                .all(|(c, f)| *c >= f - 1e-6),
+            "the bit only leaves material, never cuts lower than asked"
+        );
+        assert!(cut.at(20, 20) > 0.49, "the pit: {}", cut.at(20, 20));
+        assert!((cut.at(10, 10) - 0.9).abs() < 1e-6, "the plateau's top");
+        assert!((cut.at(30, 30) - 1.0).abs() < 1e-6, "the peak's top");
+        // beside the plateau's wall the bit's side holds it off the floor
+        assert!(cut.at(16, 10) > 0.6, "{}", cut.at(16, 10));
+        assert!((cut.at(39, 0) - 0.5).abs() < 1e-6, "open floor is reached");
+        // the same heights depth2stl's simulation gives for this map
+        for ((column, row), want) in [
+            ((20, 20), 0.665_735),
+            ((16, 10), 0.829_109),
+            ((0, 0), 0.767_439),
+        ] {
+            let got = cut.at(column, row);
+            assert!((got - want).abs() < 1e-4, "({column}, {row}): {got}");
+        }
+    }
+
+    #[test]
+    fn a_pit_wider_than_the_bit_is_cut_to_its_floor() {
+        let mut values = vec![0.5; 1600];
+        for row in 10..30 {
+            for column in 10..30 {
+                values[row * 40 + column] = 0.0;
+            }
+        }
+        let wide = Grid::new(40, 40, values);
+        let straight = Bit {
+            tip: 0.397,
+            taper: 0.0,
+        };
+        assert!(carvable(&wide, 0.05, 8.0, &straight).at(20, 20) < 1e-6);
+        // no bit, no relief: nothing to do
+        let none = Bit {
+            tip: 0.0,
+            taper: 10.0,
+        };
+        assert_eq!(carvable(&wide, 0.05, 8.0, &none), wide);
     }
 }

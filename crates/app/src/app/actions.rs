@@ -4371,7 +4371,10 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
-            "relief_from_photo" => self.depth_section(ui),
+            "relief_from_photo" => {
+                self.depth_section(ui);
+                self.bit_note(ui);
+            }
             "profile_toolpath" => {
                 self.edit_tabs(ui);
                 self.deep_cut_warning(ui.ctx());
@@ -4413,6 +4416,27 @@ impl CutCraftApp {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Relief from Photo, with Only What the Bit Can Carve ticked: says when the job's 3D
+    /// model is too coarse to hold what the bit can cut, and what makes it finer.
+    fn bit_note(&self, ui: &mut egui::Ui) {
+        use cut_craft_core::document::Resolution;
+        let Some(form) = &self.form else { return };
+        if form.params["only_what_the_bit_can_carve"] != true {
+            return;
+        }
+        let tip = form.params["bit_tip_diameter"].as_f64().unwrap_or(0.0);
+        let job = &self.doc.job;
+        let finest = (job.width * job.height / Resolution::Highest.points()).sqrt();
+        let (per, unit) = form::shown_in("mm", job.units).unwrap_or((1.0, "mm"));
+        let places = if unit == "in" { 3 } else { 2 };
+        let length = |mm: f64| format!("{:.places$} {unit}", mm / per);
+        if let Some(note) =
+            cmd_relief_from_photo::resolution_note(job.model_cell(), finest, tip, length)
+        {
+            ui.label(note);
         }
     }
 

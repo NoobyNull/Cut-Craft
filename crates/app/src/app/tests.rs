@@ -971,6 +971,61 @@ fn relief_from_photo_follows_its_settings_as_one_relief() {
     assert!(top(&h) > before + 5.0, "{before} -> {}", top(&h));
 }
 
+/// Relief from Photo with Only What the Bit Can Carve ticked: the form draws its note on
+/// the job's resolution, and the relief is still one relief made again in place.
+#[test]
+fn relief_from_photo_carves_only_what_the_bit_can() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    // white all over, with one black column: a groove 1 mm wide
+    c.add_bitmap(Bitmap {
+        name: "map".into(),
+        columns: 40,
+        rows: 4,
+        grey: (0..160)
+            .map(|i| if i % 40 == 20 { 0 } else { 255 })
+            .collect(),
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(40.0, 4.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().unwrap();
+    for (key, value) in [
+        ("depth_from", "picture".into()),
+        ("max_height", 10.0.into()),
+        ("lift", 0.0.into()),
+        ("background_cut_off", 0.0.into()),
+        ("depth_cut_off", 0.0.into()),
+        ("fine_detail", 0.0.into()),
+        ("smoothness", 0.into()),
+    ] {
+        let value: serde_json::Value = value;
+        form.params[key] = value;
+    }
+    let params = form.params.clone();
+    h.app.apply_form("relief_from_photo", &params).unwrap();
+    let lowest = |h: &Harness| {
+        let k = h.app.doc.components.values().next().unwrap();
+        k.height_range().unwrap().0
+    };
+    let as_drawn = lowest(&h);
+    let form = h.app.form.as_mut().unwrap();
+    form.params["only_what_the_bit_can_carve"] = true.into();
+    form.dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "made again in place");
+    assert!(
+        lowest(&h) > as_drawn + 2.0,
+        "the groove fills in: {as_drawn} -> {}",
+        lowest(&h)
+    );
+}
+
 /// Estimate Depth with a stand-in add-on (a shell script that answers with a fixed depth
 /// map): the photo gets its depth, undoably, and Relief from Photo can then use it.
 #[cfg(unix)]
