@@ -446,6 +446,7 @@ I[cv + "rounded_shape_span.svg"] = lambda: [path("M15,14 H33 A10,10 0 0 1 33,34 
 I[cv + "shapes.svg"] = lambda: [circ(15, 15, 9, INK, 2.5, LIGHT), rect(26, 6, 17, 17, 1.5, INK, 2.5, LIGHT), pl([(6, 42), (15, 27), (24, 42)], INK, 2.5, LIGHT, True), pl(star_pts(34, 35, 9, 4), ACC, 2.5, ACCL, True)]
 I[cv + "trace_bitmap.svg"] = lambda: [rect(6 + 6 * c, 6 + 6 * r, 6, 6, 0, None, 0, "#9aa6b8" if (r - 2.5) ** 2 + (c - 2.5) ** 2 < 7 else "#e3e7ee") for r in range(6) for c in range(6)] + [circ(24, 24, 13, ACC, 3)]
 I[cv + "vector_boundary.svg"] = lambda: [rect(10, 12, 12, 12, 1.5, INK, 2.5, LIGHT), circ(31, 30, 8, INK, 2.5, LIGHT), path("M7,9 H25 L42,24 V38 Q42,41 39,41 H10 Q7,41 7,38 Z", ACC, 2.5, dash="4 3")]
+I[cv + "embellish.svg"] = lambda: [pl(poly_pts(24, 24, 20), INK, SW, LIGHT, True), path("M13,31 C12,18 33,14 34,26 C34,33 25,34 24,28 C24,24 29,24 29,27", ACC, 2.5), dot(15, 15, 2, INK), dot(34, 36, 2, INK), dot(24, 39, 2, INK)]
 I[cv + "vector_texture.svg"] = lambda: [rect(5, 5, 38, 38, 2, INK, 2.5, LIGHT)] + [path(f"M8,{y} q5,-4 10,0 t10,0 t10,0", INK, 2) for y in (13, 21, 29, 37)]
 I[cv + "vector_validator.svg"] = lambda: [pl(poly_pts(20, 22, 15), INK, SW, LIGHT, True), badge(35, 35, 10, TP, tick(35, 35, 0.75, WHITE))]
 

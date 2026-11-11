@@ -105,6 +105,7 @@ cmd-vector-selector = { path = "../commands/vector-selector" }
 cmd-draw-curve = { path = "../commands/draw-curve" }
 cmd-draw-freehand = { path = "../commands/draw-freehand" }
 cmd-vector-texture = { path = "../commands/vector-texture" }
+cmd-embellish = { path = "../commands/embellish" }
 cmd-interactive-vector-trim = { path = "../commands/interactive-vector-trim" }
 cmd-close-with-line = { path = "../commands/close-with-line" }
 cmd-reverse-direction = { path = "../commands/reverse-direction" }

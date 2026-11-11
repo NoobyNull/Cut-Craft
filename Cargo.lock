@@ -1006,6 +1006,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-embellish"
+version = "0.6.2"
+dependencies = [
+ "cut-craft-core",
+ "image",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-emboss"
 version = "0.6.2"
 dependencies = [
@@ -2184,6 +2195,7 @@ dependencies = [
  "cmd-duplicate-component",
  "cmd-duplicate-toolpath",
  "cmd-edit-picture",
+ "cmd-embellish",
  "cmd-emboss",
  "cmd-engrave-part-names",
  "cmd-extrude-and-weave",

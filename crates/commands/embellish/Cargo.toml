@@ -1,0 +1,19 @@
+[package]
+name = "cmd-embellish"
+description = "Embellish: folk-swirl ornament designed to fit the selected shape"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+image.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

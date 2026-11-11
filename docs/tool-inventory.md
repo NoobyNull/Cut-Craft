@@ -460,6 +460,16 @@ say "not implemented yet".
   - Create Vector Texture: wavy lines at an angle over the selected closed vectors or the
     job, max spacing with variation, wavelength, amplitude, noise and a seed; on the
     current layer, or (Place Vectors on Layer) on the layer named, made if needed.
+  - Embellish: folk-swirl ornament designed for the selected closed vectors rather than cut
+    out of a pattern, read from each shape's distance to its edge: a border band and bead
+    row follow the outline; a shape with n-fold mirror symmetry (a regular polygon, a star,
+    hanging-chain sides) is designed one wedge at a time and mirrored into the rest (corner
+    stems and leaf fans, side sunbursts, a centre rosette, the biggest scrolls that fit);
+    any other shape gets a vine down its middle with curls at its ends and scrolls
+    branching off it, leaf fans in its points and flowers where it is roomiest. Where (Fill
+    / Border / Both), Refinement, Number of objects, Scroll size and Tightness (smallest gap
+    3 to 0.75 mm) are sliders; it makes grouped vectors, a 3D component of Height, or both,
+    with stippled ground if asked, and follows its settings live (one undo).
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.

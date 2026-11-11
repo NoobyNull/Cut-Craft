@@ -9427,3 +9427,62 @@ fn the_pin_buttons_are_drawn_icons() {
         );
     }
 }
+
+#[test]
+fn an_embellishment_follows_its_settings_in_place_and_one_undo_takes_it_away() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 160.0, 120.0);
+    let shape: Vec<EntityId> = h.app.doc.vectors.keys().copied().collect();
+    h.app.doc.selection = shape.iter().copied().collect();
+    h.app.invoke(&h.ctx, "embellish");
+    h.frame(vec![]);
+    let mut params = h.app.form.as_ref().expect("the form").params.clone();
+    h.app.form.as_mut().unwrap().params = params.clone();
+    h.app.apply_form("embellish", &params).unwrap();
+    let pieces = |h: &Harness| -> std::collections::BTreeSet<EntityId> {
+        h.app
+            .doc
+            .vectors
+            .keys()
+            .filter(|id| !shape.contains(id))
+            .copied()
+            .collect()
+    };
+    let first = pieces(&h);
+    assert!(first.len() > 20, "ornament made");
+    assert_eq!(h.app.doc.components.len(), 1, "and its carving");
+    let outlines = |h: &Harness| -> Vec<String> {
+        let mut all: Vec<String> = pieces(h)
+            .iter()
+            .map(|id| format!("{:?}", h.app.doc.vectors[id]))
+            .collect();
+        all.sort();
+        all
+    };
+    let first_outlines = outlines(&h);
+    let undo_depth = h.app.history.undo_depth();
+    // a new design takes the place of the first, live, rather than adding another
+    params["seed"] = 99.into();
+    let form = h.app.form.as_mut().unwrap();
+    form.params = params.clone();
+    form.dirty = true;
+    h.frame(vec![]);
+    assert!(
+        !pieces(&h).is_empty() && outlines(&h) != first_outlines,
+        "made again"
+    );
+    assert_eq!(h.app.doc.components.len(), 1, "one carving still");
+    assert_eq!(
+        h.app.history.undo_depth(),
+        undo_depth,
+        "in place of the first"
+    );
+    // Apply with the same settings has nothing more to do
+    let second = pieces(&h);
+    h.app.apply_form("embellish", &params).unwrap();
+    assert_eq!(pieces(&h), second);
+    // one undo leaves the shape as it was
+    h.app.invoke(&h.ctx, "undo");
+    assert!(pieces(&h).is_empty());
+    assert!(h.app.doc.components.is_empty());
+}
