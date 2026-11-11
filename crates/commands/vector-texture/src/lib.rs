@@ -23,7 +23,7 @@ pub struct VectorTexture;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Style {
-    /// Rows of wavy lines at an angle, as Aspire's Vector Texture
+    /// Rows of wavy lines at an angle
     #[default]
     #[schemars(title = "Wavy lines")]
     WavyLines,

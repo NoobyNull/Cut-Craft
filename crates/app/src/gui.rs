@@ -169,6 +169,12 @@ pub fn placed(sections: &[String], action: &str) -> Option<Vec<String>> {
 /// and say nothing about the files they take.
 pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
+        "machine_files",
+        "Machine Files",
+        "See the files on the machine's card or shared folder, and upload, rename, delete or \
+         make folders there, without walking over to the machine",
+    ),
+    (
         "import_vectors_bitmap",
         "Import Vectors or Picture",
         "Bring in a drawing (DXF, SVG or a Vectric job's vectors) or a picture (PNG, JPG, \

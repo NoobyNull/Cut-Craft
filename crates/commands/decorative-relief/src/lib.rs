@@ -42,6 +42,7 @@ pub struct Params {
     /// Another seed gives another carving with the same settings
     #[schemars(title = "Variation", extend("x-widget" = "seed"))]
     pub seed: u32,
+    /// The name the carving goes by in the list of 3D components
     pub name: String,
     pub combine: Combine,
 }

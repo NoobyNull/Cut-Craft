@@ -623,7 +623,7 @@ impl General {
 }
 
 /// Importing pictures and 3D models: the size pictures come in at, and what Orientate 3D
-/// Model offers (not one of Aspire's).
+/// Model offers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Import {
     /// How big an imported picture comes in: this many of its pixels make an inch. 96 suits

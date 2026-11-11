@@ -104,7 +104,6 @@ create_component_from_bitmap | setting without help: Name
 create_component_from_toolpath_preview | no tooltip
 create_component_from_visible_model | short help page intro
 create_fillets | setting without help: Kind
-create_job_sheet | no tooltip
 create_shape | setting without help: Name
 create_shape | setting without help: Profile
 create_shape_angled | no tooltip
@@ -121,7 +120,6 @@ cross_section | setting without help: From ▸ Y
 cross_section | setting without help: To ▸ X
 cross_section | setting without help: To ▸ Y
 cut | no tooltip
-cut_list | no tooltip
 cut_vector | setting without help: At ▸ X
 cut_vector | setting without help: At ▸ Y
 cut_vector | setting without help: Reach
@@ -246,9 +244,6 @@ engrave_part_names | option without help: Engrave = Name only
 engrave_part_names | option without help: Engrave = Number only
 exit | no tooltip
 export_ai | no tooltip
-export_as_3d_clipart | no tooltip
-export_as_grayscale_bitmap | no tooltip
-export_as_stl | no tooltip
 export_dxf | no tooltip
 export_eps | no tooltip
 export_pdf | no tooltip
@@ -369,7 +364,6 @@ level_properties | option without help: Mirror Mode = Top Left Quadrant
 level_properties | option without help: Mirror Mode = Top Right Quadrant
 level_properties | option without help: Mirror Mode = Top to Bottom
 light_follows_viewer | no tooltip
-load_template | no tooltip
 lock_all_existing_guides | no tooltip
 machine_configuration | no tooltip
 make_2d_previews_solid | no tooltip
@@ -480,7 +474,6 @@ overlap_intersect | short tooltip
 overlap_intersect | short help page intro
 pan | no tooltip
 pan | no help page intro
-part_labels | no tooltip
 paste | no tooltip
 paste_in_place | no tooltip
 paste_in_place | no help page intro
@@ -513,7 +506,6 @@ preview_quality_25 | no tooltip
 preview_quality_4 | no tooltip
 preview_quality_8 | no tooltip
 print | no tooltip
-print_job_sheet | no tooltip
 print_preview | no tooltip
 prism_toolpath | setting without help: Cut direction
 prism_toolpath | setting without help: Name
@@ -524,10 +516,6 @@ profile_toolpath | setting without help: Name
 profile_toolpath | setting without help: Specify Ramp
 profile_toolpath | setting without help: Specify Ramp ▸ By
 profile_toolpath | setting without help: Specify Ramp ▸ Distance
-profile_toolpath | setting without help: Tab Size
-profile_toolpath | setting without help: Tab Size ▸ Distance
-profile_toolpath | setting without help: Tab Size ▸ Number
-profile_toolpath | setting without help: Tab Size ▸ Spacing
 profile_toolpath | setting without help: Tool
 profile_toolpath | option without help: Add ramps to toolpath = None
 profile_toolpath | option without help: Add tabs to toolpath = None
@@ -588,10 +576,8 @@ run:space_vertically:{"order":"bottom_to_top","inside_last_vector":false} | no t
 run:space_vertically:{"order":"top_to_bottom","inside_last_vector":false} | no tooltip
 save | no tooltip
 save | no help page intro
-save_all_visible_toolpaths_as_template | no tooltip
 save_as | no tooltip
 save_as_template | no tooltip
-save_selected_toolpath_as_template | no tooltip
 save_shaded_image | no tooltip
 save_toolpaths | no tooltip
 save_toolpaths | no help page intro

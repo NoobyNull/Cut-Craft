@@ -9516,7 +9516,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
     let apply = h.text_at("Apply").expect("Apply");
     assert!(apply.y < 800.0, "Apply is in the window: {apply:?}");
     assert!(
-        h.text_at("Edit Tabs…").is_none(),
+        h.text_at("Add ramps to toolpath").is_none(),
         "the form runs on out of sight, under the pinned buttons"
     );
     h.app.form.as_mut().unwrap().error = Some("select the vectors to profile".into());

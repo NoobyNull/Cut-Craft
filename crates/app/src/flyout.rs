@@ -479,7 +479,8 @@ mod tests {
             .iter()
             .copied()
             .partition(|g| g.name == "Import");
-        assert!(count(&rest) <= 45, "{}", count(&rest));
+        // 46 since the menu-only tools got buttons (#230) alongside Embellish (#236)
+        assert!(count(&rest) <= 46, "{}", count(&rest));
         assert_eq!(count(&import), import[0].tools.len());
         // the four Create Shape buttons become one, and the two Reset buttons one
         let modeling: usize = toolbar.modeling_groups.iter().map(|g| g.tools.len()).sum();

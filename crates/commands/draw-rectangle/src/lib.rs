@@ -13,9 +13,9 @@ pub struct DrawRectangle;
 pub enum Corners {
     #[default]
     Square,
-    /// Rounded outwards
+    /// Each corner rounded off outwards, by the radius
     Rounded,
-    /// Cut inwards
+    /// Each corner cut inwards in a quarter circle, by the radius
     Notched,
 }
 
