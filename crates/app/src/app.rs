@@ -19,6 +19,7 @@ mod tabs;
 #[cfg(test)]
 mod tests;
 mod title_bar;
+mod trace_window;
 mod updates;
 mod views;
 
@@ -879,6 +880,8 @@ struct CutCraftApp {
     view: View,
     cursor: Option<Point>,
     form: Option<OpenForm>,
+    /// Trace Bitmap's trace window, while its form is open.
+    trace_view: Option<trace_window::TraceView>,
     /// How the 2D view mapped the job last frame.
     view_transform: Option<ViewTransform>,
     /// Where the 2D view was on screen last frame.

@@ -531,11 +531,14 @@ say "not implemented yet".
   - Not built from these tools' Aspire forms: see each one's section in `re/SPEC.md`.
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
     corner fit, noise filter and grouping (dialog 347); or in Colors mode, a colour picture
-    (imported pictures keep their colours) cut down to 2 to 16 colours, numbered from the
-    darkest, the ones listed (or all but the lightest) traced each onto a layer named after
-    it, the palette given in the status. With the form open, a box dragged over the picture
-    is the part traced (drawn dashed) and a click on the picture lets it go; in Colors mode
-    a click picks the colour under it (again to let go). No colour swatches in the form.
+    (imported pictures keep their colours) shown as up to 48 swatches, grouped by colour
+    similarity and by hand (Merge / Separate), each group ticked to trace (to start: all but
+    the background and edge blends) onto a layer named after it. The settings sit in a trace
+    window beside a live preview (Before and after, Result only, Outlines over picture; zoom
+    and pan; Live updates or Update preview; Picture type presets; Reset). With the form
+    open, a box dragged over the picture is the part traced (drawn dashed) and a click on the
+    picture lets it go; in Colors mode a click ticks the colour under it (again to let go).
+    Not built: Centerline trace, Quick Trace.
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset. Mirror flips about

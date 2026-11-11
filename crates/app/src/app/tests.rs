@@ -845,15 +845,81 @@ fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
     h.click(h.at(70.0, 25.0), Modifiers::NONE);
     assert!(h.app.form.as_ref().unwrap().params["area"].is_null());
     h.app.form.as_mut().unwrap().params["mode"] = "colors".into();
-    h.app.form.as_mut().unwrap().params["colors"] = 2.into();
-    h.click(h.at(70.0, 25.0), Modifiers::NONE);
-    let picked = h.app.form.as_ref().unwrap().params["trace_colors"].clone();
-    assert_eq!(picked.as_array().map(Vec::len), Some(1), "{picked}");
+    // the blue starts traced (the red counts as the background): a click lets it go
     h.click(h.at(70.0, 25.0), Modifiers::NONE);
     assert_eq!(
-        h.app.form.as_ref().unwrap().params["trace_colors"],
+        h.app.form.as_ref().unwrap().params["trace"],
         serde_json::json!([])
     );
+    h.click(h.at(70.0, 25.0), Modifiers::NONE);
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["trace"],
+        serde_json::json!(["#1414c8"])
+    );
+}
+
+/// Trace Bitmap opens its trace window, whose preview traces off the window's thread and
+/// follows the settings as they change; Apply in it traces into the job.
+#[test]
+fn trace_bitmap_previews_in_its_window_and_follows_the_settings() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    // white round a red square and a blue one
+    let (w, rows) = (40, 20);
+    let mut rgb = vec![];
+    for r in 0..rows {
+        for col in 0..w {
+            let inside = (5..15).contains(&r);
+            rgb.extend(match col {
+                5..15 if inside => [200, 20, 20],
+                25..35 if inside => [20, 20, 200],
+                _ => [250, 250, 250],
+            });
+        }
+    }
+    c.add_bitmap(Bitmap {
+        name: "b".into(),
+        columns: w,
+        rows,
+        grey: rgb.chunks(3).map(|p| p[1]).collect(),
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(80.0, 40.0)),
+        depth: Vec::new(),
+        rgb,
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "trace_bitmap");
+    let settle = |h: &mut Harness, want: usize| {
+        for _ in 0..400 {
+            h.frame(vec![]);
+            let view = h.app.trace_view.as_ref().unwrap();
+            let current = view.shown_params() == h.app.form.as_ref().map(|f| &f.params);
+            if current && view.traced_colours() == Some(want) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        panic!(
+            "the preview never showed {want} colours: {:?}",
+            h.app.trace_view.as_ref().unwrap().traced_colours()
+        );
+    };
+    // black and white: the two squares are dark enough at the threshold
+    settle(&mut h, 1);
+    h.app.form.as_mut().unwrap().params["mode"] = "colors".into();
+    settle(&mut h, 2);
+    // untick live: a change waits for Update preview
+    h.app.trace_view.as_mut().unwrap().live = false;
+    h.app.form.as_mut().unwrap().params["trace"] = serde_json::json!(["#c81414"]);
+    for _ in 0..30 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.trace_view.as_ref().unwrap().traced_colours(), Some(2));
+    // closing the form lets the window go
+    h.app.form = None;
+    h.frame(vec![]);
+    assert!(h.app.trace_view.is_none());
 }
 
 /// Relief from Photo follows its settings once applied, as depth2stl's preview did: one
