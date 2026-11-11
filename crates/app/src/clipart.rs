@@ -4,7 +4,7 @@
 //! Shift for more), added to the project with a double-click or by dragging, and a
 //! right-click menu adds, locates, tags or deletes the ones picked, or shows one's Properties.
 
-mod network;
+pub(crate) mod network;
 mod preview;
 mod properties;
 mod tags;
@@ -941,8 +941,8 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) 
     if locked > 0 {
         ui.label(
             egui::RichText::new(format!(
-                "{locked} Vectric clipart file{} here can't be shown. Vectric locks .3dclip \
-                 and .v3m files to its own software. If you have Aspire, export them as STL \
+                "{locked} Vectric clipart file{} here can't be shown: .3dclip and .v3m \
+                 files only open in the program that made them. Export them from it as STL \
                  to use them here.",
                 if locked == 1 { "" } else { "s" },
             ))

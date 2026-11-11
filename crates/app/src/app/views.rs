@@ -7,7 +7,8 @@ use super::{
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
     Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
     ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
-    inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel, view2d,
+    inspected, inspected_rows, measured, measured_rows, page_width, paint_focus_ring, show_page,
+    view2d,
 };
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
@@ -56,6 +57,9 @@ impl CutCraftApp {
         self.busy_window(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
+        if !self.tracing() {
+            self.trace_view = None;
+        }
         self.next_import();
         self.autosave(ctx);
         self.report_bugs(ctx);
@@ -293,6 +297,7 @@ impl CutCraftApp {
         self.machine_windows(ctx);
         self.info_window(ctx);
         self.save_toolpaths_window(ctx);
+        self.machine_files_window(ctx);
         self.measure_window(ctx);
         self.snap_options_window(ctx);
         self.job_sheet_window(ctx);
@@ -314,9 +319,12 @@ impl CutCraftApp {
                 return;
             }
             Screen::NewJob => {
-                side_panel(egui::Panel::left("design_panel"), ctx).show(ui, |ui| {
+                // as wide as the Design page the job opens with
+                let width = page_width(ui);
+                let rect = show_page(egui::Panel::left("design_panel"), width, ui, |ui| {
                     self.form_panel(ui);
                 });
+                self.page_rects = [Some(rect), None];
             }
             Screen::Job => match self.options.general.layout {
                 WindowLayout::Classic => self.job_pages(ui),
@@ -2181,17 +2189,16 @@ impl CutCraftApp {
         let Ok(p) = serde_json::from_value::<cmd_trace_bitmap::Params>(form.params.clone()) else {
             return;
         };
-        if p.mode != cmd_trace_bitmap::Mode::Colors {
-            return;
-        }
-        let Some(n) = cmd_trace_bitmap::colour_at(&self.doc, &p, at) else {
+        let Some(colours) = cmd_trace_bitmap::toggled_at(&self.doc, &p, at) else {
             return;
         };
-        let colours = cmd_trace_bitmap::toggled(&p.trace_colors, n);
-        self.status
-            .set_message(&format!("Colors to trace: {colours:?}"));
+        self.status.set_message(&if colours.is_empty() {
+            "No colours traced: click one on the picture, or tick it in the trace window".into()
+        } else {
+            format!("Colors to trace: {}", colours.join(", "))
+        });
         if let Some(form) = self.form.as_mut() {
-            form.params["trace_colors"] = serde_json::json!(colours);
+            form.params["trace"] = serde_json::json!(colours);
         }
     }
 
@@ -3033,7 +3040,7 @@ impl CutCraftApp {
             if options.toolpaths.preview_speed != self.options.toolpaths.preview_speed {
                 self.playback_speed = options.toolpaths.preview_speed();
             }
-            options.advanced.apply();
+            options.apply();
             self.options = options;
             self.save_options();
             // clipping turned on or off: the toolpaths made again with or without it
@@ -3051,6 +3058,8 @@ impl CutCraftApp {
         };
         let mut open = true;
         let mut save = false;
+        let mut send = false;
+        let mut manage = None;
         let mut machine_changed = None;
         let choices = self.post_choices();
         let default = self.output_post().map(|p| p.name);
@@ -3113,27 +3122,23 @@ impl CutCraftApp {
             )
             .on_hover_hint(
                 "Toolpaths next to each other in the list that use the same tool go in one \
-                 file. The cutting order never changes (Aspire's Group Where Possible)",
+                 file. The cutting order never changes",
             );
             tool_changes_section(ui, &mut form.changes, changer);
             if self.doc.job.double_sided.is_some() {
                 ui.checkbox(&mut form.add_side, "Add side to toolpath name");
             }
+            ui.checkbox(&mut form.job_sheet, "Save a job sheet with the files")
+                .on_hover_hint(
+                    "The project's sheet to print or keep by the machine: material, origin, \
+                     tools, toolpaths in order and the files to run, saved beside them",
+                );
             ui.separator();
             files_section(ui, &self.doc, &plan, split);
             checks_section(ui, &found);
             ui.add_space(ui.spacing().item_spacing.y);
-            let response = ui.add_enabled(
-                plan.is_ok() && !errors,
-                egui::Button::new("Save Toolpaths..."),
-            );
-            save = if errors {
-                response
-                    .on_disabled_hover_text("Fix the problems marked Must fix to save")
-                    .clicked()
-            } else {
-                response.clicked()
-            };
+            let ready = plan.is_ok() && !errors;
+            (save, send, manage) = self.save_buttons(ui, ready, errors);
         });
         if let Some(n) = machine_changed {
             self.machines.active = n;
@@ -3141,10 +3146,76 @@ impl CutCraftApp {
             form.changes = self.default_changes();
             self.machines_changed("Machine changed");
         }
-        if save {
-            self.save_toolpaths(&form);
-        }
+        self.pressed(&form, (save, send, manage));
         self.save_form = open.then_some(form);
+    }
+
+    /// Does what Save Toolpaths' buttons asked (as [`Self::save_buttons`] says).
+    fn pressed(
+        &mut self,
+        form: &super::SaveForm,
+        (save, send, manage): (
+            bool,
+            bool,
+            Option<(String, cut_craft_machines::send::SendTo)>,
+        ),
+    ) {
+        if save {
+            self.save_toolpaths(form);
+        }
+        if send {
+            self.send_toolpaths(form);
+        }
+        if let Some((name, send_to)) = manage {
+            self.open_machine_files(&name, &send_to);
+        }
+    }
+
+    /// Save Toolpaths' buttons: Save Toolpaths, then Send to Machine (greyed until the
+    /// machine has a files folder) and Machine Files; which was pressed, Machine Files with
+    /// the machine's name and folders.
+    fn save_buttons(
+        &self,
+        ui: &mut egui::Ui,
+        ready: bool,
+        errors: bool,
+    ) -> (
+        bool,
+        bool,
+        Option<(String, cut_craft_machines::send::SendTo)>,
+    ) {
+        let (mut save, mut send, mut manage) = (false, false, None);
+        ui.horizontal(|ui| {
+            let response = ui.add_enabled(ready, egui::Button::new("Save Toolpaths..."));
+            save = if errors {
+                response
+                    .on_disabled_hover_text("Fix the problems marked Must fix to save")
+                    .clicked()
+            } else {
+                response.clicked()
+            };
+            let machine = self.machines.active();
+            let reachable = machine.is_some_and(|m| m.send_to.is_set());
+            let response = ui
+                .add_enabled(ready && reachable, egui::Button::new("Send to Machine"))
+                .on_hover_hint(
+                    "Save the files straight onto the machine, in this project's own folder \
+                     there",
+                );
+            send = if reachable {
+                response
+                    .on_disabled_hover_text("Fix the problems marked Must fix to send")
+                    .clicked()
+            } else {
+                response
+                    .on_disabled_hover_text(super::send::NO_MACHINE_FOLDER)
+                    .clicked()
+            };
+            if reachable && ui.button("Machine Files…").clicked() {
+                manage = machine.map(|m| (m.name.clone(), m.send_to.clone()));
+            }
+        });
+        (save, send, manage)
     }
 
     /// Gadgets ▸ Job Setup Sheet Editor: the job sheets' title, colours, logo and sections,

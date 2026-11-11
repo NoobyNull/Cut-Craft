@@ -4,8 +4,9 @@
 //!
 //! Learned from one vendor file: `unit` is `inches` or `millimeters`, for lengths and
 //! per-minute rates; `geometry` `DC` cutting diameter, `NOF` flutes, `RE` corner radius, `TA`
-//! half the included angle (a tapered mill's taper), `LCF` flute length, `SFDM` shank
-//! diameter; `type` is Fusion's tool kind. All [inf].
+//! half the included angle (a tapered mill's taper), `LCF` flute length, `LB` body and
+//! `OAL` overall length from the tip, `SFDM` shank diameter; `type` is Fusion's tool kind.
+//! All [inf].
 //!
 //! Some `.tools` files are plain JSON instead: groups (`Bits`) of tools keyed by id, lengths
 //! in mm and rates in mm/s whatever `MetricTool` says. Also [inf], from one file (Amana's).
@@ -93,6 +94,7 @@ fn plain_tool(group: &str, e: &Value) -> Option<Tool> {
         .join(" ");
     Some(Tool {
         name,
+        manufacturer: text("Vendor"),
         shape,
         diameter,
         angle: num("IncludedAngle")
@@ -210,8 +212,14 @@ fn tool(entry: &Value) -> Option<Tool> {
     .filter(|s| !s.is_empty())
     .collect::<Vec<_>>()
     .join(" ");
+    // `LB` body length and `OAL` overall length run from the tip; the neck is the body past
+    // the flutes and the shank the rest (0 for what the file leaves out)
+    let flutes = num(&g["LCF"]).filter(|l| *l > 0.0).unwrap_or(0.0);
+    let body = num(&g["LB"]).filter(|l| *l >= flutes).unwrap_or(flutes);
+    let overall = num(&g["OAL"]).filter(|l| *l > body);
     let mut tool = Tool {
         name,
+        manufacturer: named("vendor"),
         shape,
         rate_units: if scale == INCH {
             RateUnits::InchPerMin
@@ -236,7 +244,9 @@ fn tool(entry: &Value) -> Option<Tool> {
             _ => 0.0,
         },
         shank_diameter: num(&g["SFDM"]).unwrap_or(0.0) * scale,
-        flute_length: num(&g["LCF"]).unwrap_or(0.0) * scale,
+        flute_length: flutes * scale,
+        neck_length: (body - flutes).max(0.0) * scale,
+        shank_length: overall.map_or(0.0, |all| (all - body).max(0.0)) * scale,
         flutes: g["NOF"]
             .as_u64()
             .and_then(|f| u32::try_from(f).ok())
@@ -343,6 +353,28 @@ mod tests {
     }
 
     #[test]
+    fn body_and_overall_lengths_give_the_neck_and_shank() {
+        let library = serde_json::json!({ "data": [
+            { "type": "flat end mill", "unit": "millimeters",
+              "geometry": { "DC": 3, "LCF": 12, "LB": 15, "OAL": 50 } },
+            { "type": "flat end mill", "unit": "millimeters",
+              "geometry": { "DC": 3, "LCF": 12, "OAL": 50 } },
+            { "type": "flat end mill", "unit": "millimeters", "geometry": { "DC": 3 } }
+        ]});
+        let db = read(&zip("tools.json", library.to_string().as_bytes())).unwrap();
+        let lengths: Vec<_> = db
+            .tools
+            .iter()
+            .map(|t| (t.flute_length, t.neck_length, t.shank_length))
+            .collect();
+        // no body length: the shank starts at the flutes; nothing given, nothing made up
+        assert_eq!(
+            lengths,
+            [(12.0, 3.0, 35.0), (12.0, 0.0, 38.0), (0.0, 0.0, 0.0)]
+        );
+    }
+
+    #[test]
     fn presets_become_cutting_data_per_material_in_millimetres() {
         let library = serde_json::json!({ "data": [
             { "type": "flat end mill", "unit": "inches", "vendor": "Acme", "product-id": "E1",
@@ -360,6 +392,8 @@ mod tests {
         assert_eq!(db.tools.len(), 2, "an end mill and a V-bit; no round-over");
         let t = &db.tools[0];
         assert_eq!(t.name, "Acme E1 Flat End Mill 0.25in");
+        assert_eq!(t.manufacturer, "Acme");
+        assert_eq!(db.tools[1].manufacturer, "", "none given");
         assert_eq!(t.rate_units, RateUnits::InchPerMin);
         assert_eq!(t.units, Units::Inch, "an inch tool reads in inches");
         assert_eq!(db.tools[1].units, Units::Mm);
@@ -398,6 +432,7 @@ mod tests {
             (t.name.as_str(), t.group.as_str()),
             ("Acme A1 End Mill", "Bits")
         );
+        assert_eq!(t.manufacturer, "Acme");
         assert!((t.feed_rate - 2790.0).abs() < 1e-9 && (t.stepover - 0.4).abs() < 1e-9);
         assert_eq!(db.tools[1].shape, ToolShape::BallNose);
     }

@@ -109,6 +109,11 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[schemars(skip)]
     pub name_format: String,
+    /// Who makes it (`Amana`), for the name format's `{Manufacturer}`; empty if not given
+    /// (added with manufacturers)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[schemars(skip)]
+    pub manufacturer: String,
     #[serde(default)]
     pub shape: ToolShape,
     /// Radius of a radiused end mill's rounded corners
@@ -156,6 +161,16 @@ pub struct Tool {
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub flute_length: f64,
+    /// The plain part between the flutes and the shank, which does not cut (a neck or
+    /// shoulder); 0 for none or not given (added with drawn tool profiles)
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    #[schemars(skip)]
+    pub neck_length: f64,
+    /// How long the shank is, the part held in the collet, from the neck (or flutes) to the
+    /// top; 0 if not given (added with drawn tool profiles)
+    #[serde(default, skip_serializing_if = "is_nothing")]
+    #[schemars(skip)]
+    pub shank_length: f64,
     /// Cutting edges, for the chip load (added after the first tool format)
     #[serde(default = "default_flutes")]
     #[schemars(title = "Number of Flutes", range(min = 1, max = 12))]
@@ -269,6 +284,12 @@ impl Tool {
         } else {
             self.stepover
         }
+    }
+
+    /// The flute length when one was given: `None` for 0 (not set, as in tools saved or
+    /// imported without one), so nothing trusts a made-up number.
+    pub fn known_flute_length(&self) -> Option<f64> {
+        (self.flute_length.is_finite() && self.flute_length > 0.0).then_some(self.flute_length)
     }
 
     /// How much each flute cuts per turn (mm): the feed rate over the spindle speed and
@@ -502,6 +523,7 @@ impl Default for Tool {
         Self {
             name: "6 mm End Mill".into(),
             name_format: String::new(),
+            manufacturer: String::new(),
             shape: ToolShape::EndMill,
             tip_radius: default_tip_radius(),
             angle: default_angle(),
@@ -515,6 +537,8 @@ impl Default for Tool {
             taper: 0.0,
             shank_diameter: 0.0,
             flute_length: 0.0,
+            neck_length: 0.0,
+            shank_length: 0.0,
             flutes: default_flutes(),
             number: 0,
             passes: vec![],

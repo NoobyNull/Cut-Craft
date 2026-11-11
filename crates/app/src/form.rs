@@ -1180,6 +1180,60 @@ mod tests {
     }
 
     #[test]
+    fn decorative_reliefs_style_uses_the_fills_pictures_and_has_new_variation() {
+        let relief = fields(&schema("decorative_relief"));
+        assert_eq!(relief[0].key, "style");
+        let Kind::Choice(styles, Widget::Icons { picture, named }) = &relief[0].kind else {
+            panic!("{:?}", relief[0].kind);
+        };
+        assert!(*named);
+        assert_eq!(picture.as_deref(), Some("drawing_forms/fill_{}.png"));
+        let labels: Vec<&str> = styles.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["Baroque", "Western leaf"]);
+        assert_eq!(field(&relief, "seed").kind, Kind::Seed);
+    }
+
+    #[test]
+    fn vector_textures_style_is_a_row_of_named_pictures_and_its_seed_has_new_variation() {
+        let texture = fields(&schema("vector_texture"));
+        assert_eq!(texture[0].key, "style", "the style comes first");
+        let Kind::Choice(styles, Widget::Icons { picture, named }) = &texture[0].kind else {
+            panic!("{:?}", texture[0].kind);
+        };
+        assert!(*named);
+        assert_eq!(picture.as_deref(), Some("drawing_forms/fill_{}.png"));
+        let labels: Vec<&str> = styles.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "Wavy lines",
+                "Floral",
+                "Baroque",
+                "Western leaf",
+                "Frost",
+                "Snowflakes",
+                "Fractal",
+                "Stones",
+                "Ripples",
+                "Hammered",
+                "Bandanna"
+            ]
+        );
+        assert_eq!(field(&texture, "seed").kind, Kind::Seed);
+        // the wavy lines' own settings only show for them, the pattern's for the rest
+        let wavy = serde_json::json!({ "style": "wavy_lines" });
+        let floral = serde_json::json!({ "style": "floral" });
+        let shown = |key, params| {
+            field(&texture, key)
+                .when
+                .as_ref()
+                .is_none_or(|w| w.shown(params))
+        };
+        assert!(shown("wavelength", &wavy) && !shown("wavelength", &floral));
+        assert!(!shown("gap", &wavy) && shown("gap", &floral));
+    }
+
+    #[test]
     fn embellishs_settings_are_sliders_with_where_in_a_row_and_a_new_design_button() {
         let f = fields(&schema("embellish"));
         assert_eq!(keys(&f)[..2], ["place", "border"]);

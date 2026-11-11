@@ -1,4 +1,4 @@
-//! Celtic Weave Creator (an Aspire gadget): a Celtic knot's loops as smooth closed vectors,
+//! Celtic Weave Creator: a Celtic knot's loops as smooth closed vectors,
 //! the drive rails Extrude and Weave turns into a weave. Strands run diagonally between the
 //! crossing points of a knot grid and bounce off its edges; at each crossing a strand carries
 //! straight on, unless the crossing is cut: a vertical cut turns it back on the same side

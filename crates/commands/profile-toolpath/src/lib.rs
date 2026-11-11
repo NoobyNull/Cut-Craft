@@ -98,18 +98,15 @@ pub struct Params {
     /// Below the material surface
     #[schemars(
         title = "Cut Depth",
-        extend(
-            "x-unit" = "mm",
-            "x-group" = "Cutting Depths",
-            "x-enable-when" = {"through": "false"}
-        ),
+        extend("x-unit" = "mm", "x-group" = "Cutting Depths"),
         range(min = 0)
     )]
     pub depth: f64,
     /// Down to the bottom of the material: the cut depth is the material's thickness in Job
-    /// Setup, and follows it if the thickness changes
+    /// Setup, and follows it if the thickness changes. Kept for toolpaths made with it; the
+    /// form no longer offers it (a cut deeper than the material is warned of instead)
     #[serde(default)]
-    #[schemars(title = "Cut right through", extend("x-group" = "Cutting Depths"))]
+    #[schemars(skip)]
     pub through: bool,
     pub tool: Tool,
     /// Outside to cut a part out, Inside to cut a hole, On the Line to follow the line itself
@@ -150,15 +147,9 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Add tabs to toolpath", extend("x-group" = "Tabs"))]
     pub tabs: Tabs,
+    /// Their size, how many and where: set in the Edit Tabs window, so the form stays short
     #[serde(default)]
-    #[schemars(
-        title = "Tab Size",
-        extend(
-            "x-section" = true,
-            "x-group" = "Tabs",
-            "x-enable-when" = {"tabs": ["flat", "triangular"]}
-        )
-    )]
+    #[schemars(skip)]
     pub tab: TabSettings,
     /// Tabs placed by clicking in the 2D view, on the vectors
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -760,12 +751,24 @@ mod tests {
         let side = &schema["properties"]["side"];
         assert_eq!(side["x-group"], SIDE_GROUP);
         assert_eq!(side["x-widget"], "named-icons");
-        let through = &schema["properties"]["through"];
-        assert_eq!(through["title"], "Cut right through");
-        assert_eq!(
-            schema["properties"]["depth"]["x-enable-when"]["through"], "false",
-            "the depth is greyed while it follows the thickness"
+        assert!(
+            schema["properties"].get("through").is_none(),
+            "a cut past the material is warned of on Calculate instead"
         );
+    }
+
+    #[test]
+    fn the_tab_settings_are_in_edit_tabs_not_on_the_form() {
+        let schema = schemars::schema_for!(Params);
+        let schema = schema.as_value();
+        assert_eq!(schema["properties"]["tabs"]["x-group"], "Tabs");
+        assert!(
+            schema["properties"].get("tab").is_none(),
+            "the size and spacing are set in the Edit Tabs window"
+        );
+        // still kept with the toolpath
+        let tp = profile(Side::Outside, 10.0).unwrap();
+        assert_eq!(tp.params["tab"]["spacing"], "automatic");
     }
 
     #[test]

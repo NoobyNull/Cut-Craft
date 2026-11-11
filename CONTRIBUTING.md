@@ -4,6 +4,19 @@ Work on a branch named for the area, keep `cargo fmt`, `cargo clippy` and `cargo
 clean (`.githooks/pre-commit` runs all three), and open a pull request into `main`.
 [BUILDING.md](BUILDING.md) has the setup.
 
+## Help for every tool
+
+Every tool needs help a beginner can use: a tooltip (the crate's first `//!` sentence) that
+says what it does, a help page intro (the `///` doc comment on its `Params`), and a `///`
+doc comment on every setting and every option of a choice. The help coverage suite checks
+this apart from the other tests:
+
+    cargo nextest run -p cut-craft --profile help
+
+It fails only on gaps not listed in `crates/app/help/coverage-baseline.txt`. When you fix a
+gap, delete its line there. The Help coverage workflow keeps one GitHub issue (label
+`help-coverage`) listing every gap still open.
+
 ## Pull request titles and versions
 
 Cut Craft's version is **0.MINOR.PATCH**, and it only changes when a release is cut, one step at

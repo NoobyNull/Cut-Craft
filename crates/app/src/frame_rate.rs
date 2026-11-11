@@ -1,7 +1,7 @@
 //! Detail that follows the frame rate: while the 3D view moves, it watches how long each
 //! frame takes and draws the model coarser when frames come too slowly, finer again when
 //! they come quickly, so turning the view stays smooth on a slow computer and sharp on a
-//! fast one (not one of Aspire's).
+//! fast one.
 //!
 //! It is a pure function of the frame times it is given ([`Pacer::frame`]), so its tests
 //! feed it made-up timings.

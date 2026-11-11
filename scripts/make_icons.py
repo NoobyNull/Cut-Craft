@@ -505,6 +505,64 @@ I[df + "star_outer_radius.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5
 I[df + "star_inner_radius.svg"] = lambda: [pl(star_pts(24, 25, 19, 8), GREY, 2.5, "#eef1f5", True), dot(24, 25, 2.5, GREY),
                                            arrow(24, 25, 24 + 8 * math.cos(math.radians(-54)), 25 + 8 * math.sin(math.radians(-54)), ACC, 2.5, 5)]
 
+# Create Vector Texture's styles: the shape's outline in grey, the fill in the ink, one part in
+# the accent
+def fill_frame():
+    return rect(5, 5, 38, 38, 6, GREY, 2, "none")
+
+
+def flake_pts(cx, cy, r, branch):
+    out = []
+    for k in range(6):
+        a = math.radians(90 + 60 * k)
+        ax, ay = math.cos(a), math.sin(a)
+        out.append(line(cx, cy, cx + ax * r, cy - ay * r, branch[1], 2))
+        t, b = r * 0.55, r * 0.35
+        for turn in (60, -60):
+            bx, by = math.cos(a + math.radians(turn)), math.sin(a + math.radians(turn))
+            out.append(line(cx + ax * t, cy - ay * t, cx + ax * t + bx * b, cy - ay * t - by * b, branch[1], 2))
+    return out
+
+
+I[df + "fill_wavy_lines.svg"] = lambda: [fill_frame()] + [path(f"M9,{y} q5,-4 10,0 t10,0 t10,0", INK, 2) for y in (15, 24, 33)]
+I[df + "fill_floral.svg"] = lambda: [fill_frame(),
+    path("M10,36 C14,24 26,30 28,20 C30,12 22,10 20,15 C18,19 23,21 24,18", INK, 2),
+    path("M16,29 q-6,-2 -7,-8 q6,1 7,8 z", INK, 2),
+    path("M24,30 q5,-1 8,3", INK, 2),
+    circ(35, 34, 4, ACC, 2), dot(35, 34, 1.5)]
+I[df + "fill_baroque.svg"] = lambda: [fill_frame(),
+    path("M24,36 C16,32 10,26 12,18 C14,11 22,12 21,18 C20,22 15,21 16,18", INK, 2.5),
+    path("M24,36 C32,32 38,26 36,18 C34,11 26,12 27,18 C28,22 33,21 32,18", INK, 2.5),
+    path("M24,33 q-4,-6 0,-12 q4,6 0,12 z", ACC, 2)]
+I[df + "fill_western.svg"] = lambda: [fill_frame(),
+    path("M12,36 C12,22 20,12 30,13 C37,14 38,22 33,24 C29,26 27,21 30,20", INK, 2),
+    path("M15,26 q-6,-3 -5,-9 q5,3 5,9 z", INK, 2),
+    path("M20,17 q-1,-6 3,-9 q1,6 -3,9 z", INK, 2),
+    circ(31, 33, 4.5, ACC, 2), dot(31, 33, 1.5)]
+I[df + "fill_bandanna.svg"] = lambda: [fill_frame(),
+    path("M22,38 C12,38 9,30 11,24 C14,14 26,10 32,14 C35,16 34,20 31,19", INK, 2),
+    path("M22,38 C30,38 34,32 33,26 C32,21 28,20 26,22", INK, 2),
+    circ(19, 28, 3.5, ACC, 2), circ(36, 9, 1.8, INK, 2), circ(38, 34, 1.8, INK, 2)]
+I[df + "fill_frost.svg"] = lambda: [fill_frame(), line(10, 38, 34, 12, INK, 2)] + [
+    line(10 + 24 * t, 38 - 26 * t, 10 + 24 * t + dx * (1 - t) * 12, 38 - 26 * t + dy * (1 - t) * 12, ACC if i == 0 else INK, 2)
+    for i, t in enumerate((0.2, 0.4, 0.6, 0.8)) for dx, dy in ((0.95, 0.3), (-0.3, -0.95))]
+I[df + "fill_snowflakes.svg"] = lambda: [fill_frame()] + flake_pts(20, 21, 11, (INK, INK)) + [
+    line(34 + 4 * math.cos(math.radians(a)), 33 - 4 * math.sin(math.radians(a)),
+         34 - 4 * math.cos(math.radians(a)), 33 + 4 * math.sin(math.radians(a)), ACC, 2) for a in (90, 30, -30)]
+I[df + "fill_fractal.svg"] = lambda: [fill_frame(),
+    pl([(9, 39), (15, 31), (14, 25), (20, 18), (21, 10)], INK, 2),
+    pl([(15, 31), (22, 29), (27, 23), (33, 21), (38, 14)], INK, 2),
+    pl([(14, 25), (9, 19)], INK, 2), pl([(20, 18), (27, 13)], INK, 2),
+    pl([(27, 23), (31, 30), (37, 33)], ACC, 2)]
+I[df + "fill_stones.svg"] = lambda: [fill_frame(),
+    pl([(10, 13), (14, 9), (21, 10), (22, 18), (16, 21), (10, 19)], INK, 2, "none", True),
+    pl([(26, 10), (36, 9), (38, 16), (34, 22), (26, 20)], INK, 2, "none", True),
+    pl([(10, 25), (17, 25), (20, 32), (16, 38), (10, 37)], INK, 2, "none", True),
+    pl([(24, 26), (33, 26), (38, 31), (35, 38), (25, 38), (22, 32)], ACC, 2, "none", True)]
+I[df + "fill_ripples.svg"] = lambda: [fill_frame(), rect(10, 10, 28, 28, 5, INK, 2), rect(15, 15, 18, 18, 3, INK, 2), rect(20, 20, 8, 8, 1.5, ACC, 2)]
+I[df + "fill_hammered.svg"] = lambda: [fill_frame(), circ(15, 15, 5, INK, 2), circ(30, 13, 4, INK, 2), circ(22, 26, 5.5, ACC, 2),
+    circ(13, 33, 4, INK, 2), circ(33, 31, 5, INK, 2), circ(37, 21, 2.5, INK, 2)]
+
 # file
 fl = "file/"
 I[fl + "new.svg"] = lambda: [page(10, 5, 26, 36), badge(35, 35, 9, TP, plus(35, 35, 4.5, WHITE, 3))]
@@ -623,6 +681,10 @@ I[md + "create_texture_area.svg"] = lambda: [rect(5, 5, 38, 38, 2, INK, 2.5, Non
 I[md + "create_vector_boundary_around_selected_components.svg"] = lambda: [dome(24, 34, 30, 18), rect(4, 8, 40, 32, 5, ACC, 2.5, None, "4 3")]
 I[md + "emboss_component.svg"] = lambda: [plane(40), path("M6,38 C12,26 18,34 24,26 S36,30 42,38 Z", INK, SW, MODEL), arrow(24, 6, 24, 20, ACC, 2.5, 6)]
 I[md + "export_as_stl.svg"] = lambda: [pl([(6, 40), (18, 14), (30, 40)], INK, 2.5, MODEL, True), line(18, 14, 18, 40, INK, 1.5), line(12, 27, 24, 27, INK, 1.5), arrow(28, 20, 43, 5)]
+# the model as a height picture: dark low, light high, saved out
+I[md + "export_as_grayscale_bitmap.svg"] = lambda: [rect(5, 16, 9, 26, 0, None, 0, "#5a5f68"), rect(14, 16, 9, 26, 0, None, 0, "#9aa3b2"),
+                                                    rect(23, 16, 9, 26, 0, None, 0, "#e3e6eb"), rect(5, 16, 27, 26, 2, INK, 2.5),
+                                                    arrow(28, 18, 43, 4)]
 I[md + "extrude_and_weave.svg"] = lambda: [path("M4,30 C12,14 20,14 24,24 S36,34 44,18", INK, 7), path("M4,30 C12,14 20,14 24,24 S36,34 44,18", MODEL, 3)]
 I[md + "import_component_3d_model.svg"] = lambda: [dome(30, 42, 28, 20), arrow(4, 6, 18, 20)]
 I[md + "offset_model.svg"] = lambda: [plane(42), path("M4,40 A20,28 0 0 1 44,40", ACC, 2.5, dash="4 3"), profile("round", 10, 38, 40, 20)]
@@ -729,6 +791,16 @@ I[tp + "keep_out_zones.svg"] = lambda: [material(4, 6, 40, 36), rect(14, 14, 20,
 I[tp + "toolpath_tiling.svg"] = lambda: [rect(4 + 14 * c, 6 + 13 * r, 12, 11, 1, TP, 2, TPL) for r in range(3) for c in range(3)] + [line(16, 4, 16, 44, ACC, 1.5, "2 2"), line(30, 4, 30, 44, ACC, 1.5, "2 2")]
 I[tp + "toolpath_summary.svg"] = lambda: [page(6, 4, 28, 38, 7)] + [line(11, y, 27, y, GREY, 2) for y in (16, 23, 30)] + [circ(36, 35, 9, DARK, 2.5, "none"), line(36, 35, 36, 29, DARK, 2), line(36, 35, 40, 37, DARK, 2)]
 I[tp + "create_job_sheet.svg"] = lambda: [page(8, 4, 30, 40, 7), rect(13, 12, 18, 12, 1, WOODD, 1.5, WOOD), path("M15,22 Q21,14 29,19", TP, 2)] + [line(13, y, 31, y, GREY, 2) for y in (30, 36)]
+# the job sheet coming out of a printer
+I[tp + "print_job_sheet.svg"] = lambda: [page(13, 4, 22, 20, 6), line(17, 12, 29, 12, GREY, 2), line(17, 18, 29, 18, GREY, 2),
+                                         rect(5, 22, 38, 14, 3, INK, 2.5), rect(13, 32, 22, 12, 1, INK, 2.5, WHITE),
+                                         line(17, 38, 31, 38, TP, 2), dot(37, 28, 2.5)]
+# a tag to stick on a cut part: its name and size
+I[tp + "part_labels.svg"] = lambda: [path("M6,14 H32 L43,24 L32,34 H6 Z", INK, 2.5), circ(34, 24, 2.5, ACC, 2),
+                                     line(11, 21, 25, 21, GREY, 2), line(11, 27, 21, 27, GREY, 2)]
+# the parts' list, saved out as a spreadsheet
+I[tp + "cut_list.svg"] = lambda: [rect(4, 14, 30, 28, 2, INK, 2.5), line(4, 23, 34, 23), line(4, 32, 34, 32),
+                                  line(17, 14, 17, 42), arrow(28, 18, 43, 4)]
 I[tp + "load_toolpath_template.svg"] = lambda: [page(14, 6, 28, 36, 7, TPL, TP), arrow(3, 6, 16, 19, ACC)]
 I[tp + "save_toolpath_template.svg"] = lambda: [page(4, 4, 26, 34, 7, TPL, TP), floppy(26, 26, 18)]
 I[tp + "save_all_as_template.svg"] = lambda: [page(4, 2, 22, 30, 6, TPL, TP), page(10, 8, 22, 30, 6, TPL, TP), floppy(26, 26, 18)]

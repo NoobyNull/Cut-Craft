@@ -758,6 +758,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-decorative-relief"
+version = "0.6.3"
+dependencies = [
+ "cmd-vector-texture",
+ "cut-craft-core",
+ "image",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-delete"
 version = "0.6.3"
 dependencies = [
@@ -1896,6 +1908,7 @@ dependencies = [
  "cut-craft-core",
  "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2168,6 +2181,7 @@ dependencies = [
  "cmd-crop-bitmap",
  "cmd-cross-section",
  "cmd-cut-vector",
+ "cmd-decorative-relief",
  "cmd-delete",
  "cmd-delete-component",
  "cmd-delete-items",

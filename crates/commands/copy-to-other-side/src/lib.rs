@@ -1,6 +1,6 @@
 //! Copy to Other Side: in a double-sided job, the selected vectors copied onto the other side,
-//! mirrored as the material is turned over so they line up through it (Aspire's right-click
-//! Copy to ▸ Other Side).
+//! mirrored as the material is turned over so they line up through it (right-click ▸ Copy to ▸
+//! Other Side).
 
 use cut_craft_core::document::{Document, StoredVector};
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};

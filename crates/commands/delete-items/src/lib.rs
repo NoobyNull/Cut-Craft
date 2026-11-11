@@ -1,4 +1,4 @@
-//! Delete Items: Aspire's right-click delete family (This, Visible, Invisible, Empty, All) for
+//! Delete Items: the right-click delete family (This, Visible, Invisible, Empty, All) for
 //! layers, toolpaths or components, built from each kind's delete command.
 
 use cut_craft_core::document::{Document, EntityId, LayerId};

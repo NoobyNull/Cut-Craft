@@ -5,9 +5,10 @@ use super::RING_SHARE;
 use super::{
     Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FineKey, HEIGHT_DRAG_EVERY,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
-    Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
-    TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
-    gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
+    Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_BOX_MARGIN,
+    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui,
+    file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
+    wrap_for,
 };
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{MachinedArea, Units};
@@ -38,17 +39,26 @@ impl CutCraftApp {
             return;
         };
         match outcome {
-            Outcome::Apply | Outcome::Ok => {
+            Outcome::Apply | Outcome::Ok | Outcome::Select(_) => {
                 self.tools = manager.draft.clone();
                 let changer = manager.changer.clone();
                 if let Some(changer) = &changer {
                     self.tools.number_by_slots(&changer.slots);
                 }
-                if outcome == Outcome::Ok {
+                if matches!(outcome, Outcome::Ok | Outcome::Select(_)) {
                     self.tool_manager = None;
                 }
                 self.tools_changed("Tool database saved");
                 self.refresh_form_tool();
+                if let Outcome::Select(name) = &outcome {
+                    let clearing = self.selecting_clearing.is_some();
+                    self.selected_tool(name);
+                    if let Some(form) = &mut self.form {
+                        form.dirty = true;
+                    }
+                    let doing = if clearing { "Clearing" } else { "Cutting" };
+                    self.status.set_message(&format!("{doing} with {name}"));
+                }
                 if let Some(changer) = changer
                     && let Some(machine) = self
                         .machines
@@ -64,7 +74,10 @@ impl CutCraftApp {
                     ));
                 }
             }
-            Outcome::Cancel => self.tool_manager = None,
+            Outcome::Cancel => {
+                self.tool_manager = None;
+                self.selecting_clearing = None;
+            }
             Outcome::Import => {
                 if let Some(path) = file_dialog()
                     .add_filter("Tool databases", &files::TOOL_FILE_EXTENSIONS)
@@ -257,11 +270,14 @@ impl CutCraftApp {
         let full = ui.available_width();
         let spacing = ui.spacing().item_spacing;
         let button = edge + 2.0 * ui.spacing().button_padding.x;
-        let margin = 4.0;
+        let margin = TOOL_BOX_MARGIN;
         let caption_font = egui::TextStyle::Small.resolve(ui.style());
         let caption_color = ui.visuals().weak_text_color();
         let caption_height = ui.fonts_mut(|f| f.row_height(&caption_font));
         let clusters = crate::flyout::clusters(tools);
+        let room = full - 2.0 * margin - 2.0 + spacing.x;
+        let across = (room / (button + spacing.x)).floor();
+        self.buttons_across.set(across);
         let captions: Vec<&str> = clusters
             .iter()
             .map(|c| c.name.unwrap_or_default())
@@ -342,7 +358,7 @@ impl CutCraftApp {
     /// One tool's icon button: enabled when it is built, highlighted while in hand.
     fn tool_button(&self, ui: &mut egui::Ui, id: &str, edge: f32) -> egui::Response {
         let label = self.tool_label(id);
-        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let explicit = self.explicit_icon(id);
         let button = self
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
@@ -366,7 +382,7 @@ impl CutCraftApp {
         let hold_for = self.options.general.flyout_hold();
         let id = button.face;
         let label = self.tool_label(id);
-        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let explicit = self.explicit_icon(id);
         let in_hand = button
             .members
             .iter()
@@ -457,7 +473,7 @@ impl CutCraftApp {
         let mut picked = None;
         for &member in &button.members {
             let name = self.tool_label(member);
-            let explicit = self.registry.get(member).map_or("", |c| c.meta().icon);
+            let explicit = self.explicit_icon(member);
             let row = match self.icons.find(explicit, member) {
                 Some(path) => egui::Button::image_and_text(
                     self.icons

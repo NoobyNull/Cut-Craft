@@ -172,7 +172,7 @@ pub enum ZZero {
 }
 
 /// A rotary job: a cylinder turned by a rotary axis, worked on as its surface unrolled flat.
-/// A double-sided job's setup (Aspire's help: Job Setup - Double Sided).
+/// A double-sided job's setup.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
 )]
@@ -379,8 +379,7 @@ fn default_clearance() -> f64 {
     Job::default().clearance
 }
 
-/// How the toolpath preview colours the areas it cuts (Aspire's Material Appearance ▸
-/// Machined Area Color).
+/// How the toolpath preview colours the areas it cuts.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
 )]

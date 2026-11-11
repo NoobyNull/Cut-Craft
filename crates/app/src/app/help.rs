@@ -35,7 +35,7 @@ impl CutCraftApp {
     }
 
     /// Every help page: Contents, the two tool pages, and each of their tools.
-    fn help_topics(&self) -> Vec<&'static str> {
+    pub(super) fn help_topics(&self) -> Vec<&'static str> {
         let mut topics = vec!["contents", "design", "toolpaths"];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
@@ -86,13 +86,18 @@ impl CutCraftApp {
         }
     }
 
-    /// A command's help, from its params' doc comments: what it does, then each setting.
+    /// A command's help, from its params' doc comments (else its crate's), what it does, then
+    /// each setting.
     pub(super) fn tool_help(&self, id: &str) -> (Option<String>, Vec<(String, String)>) {
+        let own = || gui::intro(id, &self.tool_label(id));
         let Some(cmd) = self.registry.get(id) else {
-            return (None, vec![]);
+            return (own(), vec![]);
         };
         let schema = cmd.schema();
-        let about = schema["description"].as_str().map(String::from);
+        let about = schema["description"]
+            .as_str()
+            .map(String::from)
+            .or_else(own);
         let fields = form::fields(&schema)
             .into_iter()
             .filter_map(|f| Some((f.label, f.help?)))

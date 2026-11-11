@@ -1,5 +1,5 @@
-//! Calculation edit boxes: a number field may hold a sum, worked out when it is entered
-//! (Aspire's help: Calculation Edit Boxes). `+ - * / ^`, brackets, and letters for stored
+//! Calculation edit boxes: a number field may hold a sum, worked out when it is entered.
+//! `+ - * / ^`, brackets, and letters for stored
 //! values: W or X the material width, H or Y its height, T or Z its thickness, P π, I to
 //! inches (÷ 25.4), M to millimetres (× 25.4), `'` after a number for feet (× 12), and
 //! `{name}` for a document variable.

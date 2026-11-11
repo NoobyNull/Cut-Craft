@@ -1,5 +1,4 @@
-//! Move Nodes: the nodes picked with a box while node editing move together by one offset
-//! (Aspire's drag of several selected nodes).
+//! Move Nodes: the nodes picked with a box while node editing move together by one offset.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;

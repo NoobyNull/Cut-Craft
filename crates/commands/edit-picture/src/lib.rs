@@ -1,5 +1,5 @@
 //! Edit Picture: a picture's contrast, brightness and gamma, inverted if asked, and a border
-//! that fades its edges to white (Aspire's help: Edit Picture). Pictures are kept in grey,
+//! that fades its edges to white. Pictures are kept in grey,
 //! so Aspire's Grayscale has nothing to do here.
 
 use cut_craft_core::bitmap::Bitmap;
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct EditPicture;
 
-/// Aspire's first section: the picture's tones.
+/// The picture's tones.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Tones {
     /// Above 0 the light and dark parts move apart; below, toward middle grey
@@ -36,7 +36,7 @@ pub enum Shape {
     Oval,
 }
 
-/// Aspire's second section: a border fading the edges to white.
+/// A border fading the edges to white.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Border {
     #[schemars(title = "Add Border")]

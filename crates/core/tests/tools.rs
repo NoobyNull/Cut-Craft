@@ -478,3 +478,32 @@ fn tools_loaded_in_a_tool_changer_take_their_slot_as_their_number() {
     let numbers: Vec<u32> = db.tools.iter().map(|t| t.number).collect();
     assert_eq!(numbers, [0, 2, 3]);
 }
+
+#[test]
+fn tools_saved_before_drawn_profiles_have_no_neck_or_shank_length() {
+    let mut json = serde_json::to_value(Tool::default()).unwrap();
+    let fields = json.as_object_mut().unwrap();
+    assert!(!fields.contains_key("neck_length"), "0 is not written");
+    assert!(!fields.contains_key("shank_length"));
+    let tool: Tool = serde_json::from_value(json).unwrap();
+    assert_eq!((tool.neck_length, tool.shank_length), (0.0, 0.0));
+    let set = Tool {
+        neck_length: 4.0,
+        shank_length: 25.4,
+        ..Tool::default()
+    };
+    let back: Tool = serde_json::from_str(&serde_json::to_string(&set).unwrap()).unwrap();
+    assert_eq!((back.neck_length, back.shank_length), (4.0, 25.4));
+}
+
+#[test]
+fn a_flute_length_is_known_only_when_one_was_given() {
+    let mut t = Tool::default();
+    assert_eq!(t.known_flute_length(), None, "0 is not set");
+    t.flute_length = 22.225;
+    assert_eq!(t.known_flute_length(), Some(22.225));
+    for unset in [-1.0, f64::NAN, f64::INFINITY] {
+        t.flute_length = unset;
+        assert_eq!(t.known_flute_length(), None, "{unset}");
+    }
+}

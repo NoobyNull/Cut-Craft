@@ -1,5 +1,5 @@
-//! Toolpath Tiling: save the toolpaths in tiles for a machine smaller than the job (Aspire's
-//! help: Toolpath Tiling Manager). The tiles are drawn in the 2D view; Save Toolpaths writes
+//! Toolpath Tiling: save the toolpaths in tiles for a machine smaller than the job. The tiles are
+//! drawn in the 2D view; Save Toolpaths writes
 //! one file per tile, each moved to the job's lower-left corner.
 
 use cut_craft_core::document::Document;

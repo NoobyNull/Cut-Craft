@@ -1,5 +1,5 @@
-//! Vector Boundary: closed boundaries round the selected vectors (Aspire's help: Vector
-//! Boundary). Without a rubber band the boundary follows the selected closed vectors' outsides
+//! Vector Boundary: closed boundaries round the selected vectors. Without a rubber band the
+//! boundary follows the selected closed vectors' outsides
 //! (overlapping ones as one, holes left out); a rubber band stretches round everything
 //! selected, open vectors too. Either can be offset outwards.
 

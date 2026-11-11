@@ -1,4 +1,4 @@
-//! Material Setup (Aspire's form, opened before the first toolpath): the material's
+//! Material Setup (opened before the first toolpath): the material's
 //! thickness, Z zero, XY datum, rapid Z gaps and home, as in Job Setup, and where the 3D model
 //! sits in the material, by the gap above its top (Gap Outside Model on rotary jobs) or below
 //! its bottom (Gap Inside Model, from the axis), with the model's thickness, which Set scales.
@@ -37,7 +37,7 @@ pub struct Params {
     #[schemars(title = "Model Position in Material", extend("x-section" = true))]
     pub position: ModelPosition,
     /// The 3D model's height from its lowest to its highest point; a new value scales the
-    /// model to it (Aspire's Set). 0 when there is no model, or to leave it alone
+    /// model to it (Set). 0 when there is no model, or to leave it alone
     #[schemars(title = "Model Thickness", extend("x-unit" = "mm"), range(min = 0))]
     pub model_thickness: f64,
     #[schemars(
