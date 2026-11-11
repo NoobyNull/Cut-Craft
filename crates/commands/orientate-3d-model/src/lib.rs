@@ -1,4 +1,5 @@
-//! Orientate 3D Model: Aspire's step between picking an STL and having a component. Which
+//! Orientate 3D Model: stand a 3D model the right way up, size it and place it in the material
+//! before it becomes a component. Which
 //! face is up, a turn about Z, the model's size and units, centring, how high above the bed
 //! it sits, and whether anything below the zero plane is kept.
 
@@ -92,7 +93,7 @@ pub enum FileUnits {
     Inches,
 }
 
-/// Aspire's Initial Orientation: which face is up, then a turn about Z.
+/// Which face is up, then a turn about Z.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Orientation {
     /// The face of the model as drawn that becomes its top
@@ -110,7 +111,7 @@ pub struct Orientation {
     pub rotation: f64,
 }
 
-/// Aspire's Model Size: the model's size, the ratio lock and the file's units.
+/// The model's size, the ratio lock and the file's units.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ModelSize {
     /// Keep the model's proportions: the size changed sets the others
@@ -131,7 +132,7 @@ pub struct ModelSize {
     pub units: FileUnits,
 }
 
-/// Aspire's second page, Position relative to Modeling Plane.
+/// Where the model sits relative to the modelling plane.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Placing {
     /// Centred on the material; the form shows it as the position it gives and clears it,
@@ -154,7 +155,7 @@ pub struct Placing {
     pub discard_below_zero: bool,
 }
 
-/// Aspire's Interactive Rotation: fine turns about the job's axes after the initial
+/// Fine turns about the job's axes after the initial
 /// orientation, which a drag in the 3D view adds to while the drag turns the model.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Turn {
@@ -193,7 +194,7 @@ pub enum TurnMode {
     Z,
 }
 
-/// Aspire's Rotation Axis Movement: a full 3D model off a rotary job's axis, which sits
+/// A full 3D model off a rotary job's axis, which sits
 /// through the middle of the model by default.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct AxisMove {

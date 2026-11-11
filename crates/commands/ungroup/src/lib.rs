@@ -1,5 +1,5 @@
 //! Ungroup: the selected vectors leave their groups, onto the layers they are on (grouping
-//! never moves them), or all onto the current layer (Aspire's Ungroup onto Group's Layer).
+//! never moves them), or all onto the current layer.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};

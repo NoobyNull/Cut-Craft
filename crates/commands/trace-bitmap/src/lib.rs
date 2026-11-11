@@ -1,4 +1,4 @@
-//! Trace Bitmap (Aspire's Fit Vectors to Bitmap): closed vectors round the dark (or light)
+//! Trace Bitmap: closed vectors round the dark (or light)
 //! regions of the chosen bitmap, fitted with arcs, for machining a picture's shapes. In
 //! colour mode a colour picture is cut down to a few colours and the colours asked for are
 //! traced, each on a layer of its own named after it.
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct TraceBitmap;
 
-/// Which pixels are traced (Aspire's Trace Color, in black and white mode).
+/// Which pixels are traced (in black and white mode).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TraceColor {
@@ -22,7 +22,7 @@ pub enum TraceColor {
     White,
 }
 
-/// How the picture is read (Aspire's Black and White or Colors).
+/// How the picture is read (black and white, or by colour).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {

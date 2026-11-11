@@ -41,7 +41,7 @@ pub enum CutDirection {
     Up,
 }
 
-/// Aspire's Pitch Preset: a standard thread's pitch, ISO metric coarse or Unified (UNC),
+/// A standard thread's pitch, ISO metric coarse or Unified (UNC),
 /// else the pitch typed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

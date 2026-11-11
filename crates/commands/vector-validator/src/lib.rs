@@ -19,7 +19,7 @@ pub struct Params {
     pub intersections: bool,
     /// Spans, or whole vectors, shorter than the tolerance
     pub zero_length_spans: bool,
-    /// Open vectors: they cannot be pocketed or modelled (not one of Aspire's checks)
+    /// Open vectors: they cannot be pocketed or modelled
     pub open: bool,
     /// Instead of selecting problems, remove the zero-length spans from the vectors checked
     pub fix_zero_length_spans: bool,

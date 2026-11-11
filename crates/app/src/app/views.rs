@@ -3113,7 +3113,7 @@ impl CutCraftApp {
             )
             .on_hover_hint(
                 "Toolpaths next to each other in the list that use the same tool go in one \
-                 file. The cutting order never changes (Aspire's Group Where Possible)",
+                 file. The cutting order never changes",
             );
             tool_changes_section(ui, &mut form.changes, changer);
             if self.doc.job.double_sided.is_some() {

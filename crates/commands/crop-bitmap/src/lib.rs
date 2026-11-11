@@ -1,5 +1,5 @@
 //! Crop Bitmap: the selected picture cleared to white outside the selected closed vectors
-//! and trimmed to them (Aspire's help: Crop Bitmap). Several vectors keep what is inside any
+//! and trimmed to them. Several vectors keep what is inside any
 //! of them, a vector inside another making a hole.
 
 use cut_craft_core::document::Document;

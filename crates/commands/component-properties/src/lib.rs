@@ -45,7 +45,7 @@ pub struct Params {
     pub colour: [u8; 3],
 }
 
-/// Aspire's Appearance: the parent's colour, or the component's own.
+/// The parent's colour, or the component's own.
 // ponytail: Use Material and Color from Children are not offered
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

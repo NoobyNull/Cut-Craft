@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Aspire's 3D View Settings: what the 3D view draws when Cut Craft starts.
+/// What the 3D view draws when Cut Craft starts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -41,18 +41,18 @@ pub struct View3d {
     #[schemars(title = "Anti-aliasing mode")]
     pub anti_aliasing: AntiAliasing,
     /// Draw the model coarser while the view turns or zooms, and at full detail once it is
-    /// still: smoother on a slow computer, blockier while moving (not one of Aspire's)
+    /// still: smoother on a slow computer, blockier while moving
     #[serde(default)]
     #[schemars(title = "Simplify the model while the view moves")]
     pub simplify_while_moving: bool,
     /// How finely the model is drawn once the view is still: higher shows more detail and
-    /// takes longer to draw after each change (not one of Aspire's)
+    /// takes longer to draw after each change
     #[serde(default)]
     #[schemars(title = "Detail when still")]
     pub still_detail: Detail,
     /// How finely the model is drawn while it or the view moves (turning the view, dragging
     /// a handle, playing a preview): lower keeps it smooth on a slower computer. Never finer
-    /// than the detail when still (not one of Aspire's)
+    /// than the detail when still
     #[serde(default)]
     #[schemars(
         title = "Detail while moving",
@@ -61,13 +61,12 @@ pub struct View3d {
     pub moving_detail: MovingDetail,
     /// While the view moves, draw the model as finely as this computer can keep smooth:
     /// coarser when frames come slowly, finer again when they come quickly, never finer
-    /// than the detail when still (not one of Aspire's)
+    /// than the detail when still
     #[serde(default = "yes")]
     #[schemars(title = "Adjust detail to keep the view smooth")]
     pub adjust_to_frame_rate: bool,
     /// How many pictures a second the 3D view aims for while it moves: higher is smoother
-    /// and coarser, lower sharper and choppier. 30 suits most; films run at 24 (not one of
-    /// Aspire's)
+    /// and coarser, lower sharper and choppier. 30 suits most; films run at 24
     #[serde(default = "target_fps")]
     #[schemars(
         title = "Smoothness to aim for",
@@ -76,27 +75,26 @@ pub struct View3d {
     )]
     pub target_fps: f64,
     /// Show the 3D view's detail and frames a second at the foot of the window, to see what
-    /// the setting above does (not one of Aspire's)
+    /// the setting above does
     #[serde(default)]
     #[schemars(title = "Show detail and frame rate in the status bar")]
     pub show_frame_rate: bool,
     /// How dragging turns the view: about the job's vertical with its up kept up, or any
-    /// way without stops (not one of Aspire's)
+    /// way without stops
     #[serde(default)]
     pub rotation: Rotation,
     /// How near the pointer must be to the model, in screen pixels, for a click to pick a
     /// point on it (drawing on the model, placing a fade's anchor). Larger is easier to hit,
-    /// smaller is more exact (not one of Aspire's)
+    /// smaller is more exact
     #[serde(default = "click_reach")]
     #[schemars(extend("x-unit" = "px"), range(min = 1, max = 20))]
     pub click_reach: f32,
     /// How wide the Perspective view sees, as a camera lens does: wider makes near things
-    /// look larger and far ones smaller, narrower looks flatter (not one of Aspire's)
+    /// look larger and far ones smaller, narrower looks flatter
     #[serde(default = "perspective_angle")]
     #[schemars(extend("x-unit" = "°"), range(min = 20, max = 90))]
     pub perspective_angle: f64,
     /// How long the view must be still before it is drawn at the detail when still again
-    /// (not one of Aspire's)
     #[serde(default = "settle_seconds")]
     #[schemars(
         title = "Wait before drawing full detail",
@@ -266,8 +264,7 @@ impl Rotation {
     }
 }
 
-/// A 3Dconnexion SpaceMouse turning the 3D view (Linux, through spacenavd; not one of
-/// Aspire's).
+/// A 3Dconnexion SpaceMouse turning the 3D view (Linux, through spacenavd).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -341,7 +338,7 @@ pub enum BackgroundStyle {
     Image,
 }
 
-/// Multisampling: Aspire offers 2x, 4x and 6x too.
+/// Multisampling: smooths the jagged edges of lines and the model in the 3D view.
 // ponytail: 4x is the only count every graphics card takes; others can stop the window opening
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -375,7 +372,7 @@ fn rgb(c: egui::Color32) -> [u8; 3] {
     [c.r(), c.g(), c.b()]
 }
 
-/// Aspire's Toolpath Settings.
+/// Toolpath settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -405,10 +402,10 @@ pub struct ToolpathSettings {
     pub tolerance_3d: f64,
     /// The same for V-carving, prism, inlay and chamfer toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "VCarve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "V-Carve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance_vcarve: f64,
     /// How fast a toolpath preview plays when it starts, in mm of tool travel a second; the
-    /// slider under the preview changes it while it plays (not one of Aspire's)
+    /// slider under the preview changes it while it plays
     #[serde(default = "preview_speed")]
     #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
     pub preview_speed: f64,
@@ -474,7 +471,7 @@ impl ToolpathSettings {
     }
 }
 
-/// Aspire's Confirmation Choices: what happens when something looks wrong.
+/// What happens when something looks wrong.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Confirmations {
     /// Crossing vectors chosen for a V-carve or pocket toolpath
@@ -489,13 +486,12 @@ pub struct Confirmations {
     #[serde(default)]
     #[schemars(title = "Sharp offset intersections check")]
     pub sharp_offset_intersections: IntersectionCheck,
-    /// Problems the checks before cutting find when saving toolpaths (not one of Aspire's)
+    /// Problems the checks before cutting find when saving toolpaths
     #[serde(default)]
     #[schemars(title = "Checks before cutting")]
     pub cutting_checks: CuttingChecks,
     /// The checks before cutting warn when a tool's taper or shape will leave more material
     /// than this on the model. Raise it if the warnings are about bits too small to matter
-    /// (not one of Aspire's)
     #[serde(default = "material_left")]
     #[schemars(
         title = "Warn when material left is over",
@@ -552,7 +548,7 @@ pub enum CuttingChecks {
     SaveAndTell,
 }
 
-/// Aspire's General Settings.
+/// General settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct General {
     /// How many files File ▸ Recent Files and the start page list
@@ -567,8 +563,8 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "File dialog default")]
     pub file_dialog_default: FileDialogDefault,
-    /// How the window is arranged: Aspire's pages and side tabs, a rail of tool groups with
-    /// an inspector, or a ribbon of tabs over the view
+    /// How the window is arranged: the Design and Toolpaths pages with side tabs, a rail of
+    /// tool groups with an inspector, or a ribbon of tabs over the view
     #[serde(default)]
     #[schemars(title = "Window layout")]
     pub layout: WindowLayout,
@@ -626,7 +622,7 @@ impl General {
     }
 }
 
-/// Importing 3D models: what Orientate 3D Model offers (not one of Aspire's).
+/// Importing 3D models: what Orientate 3D Model offers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Import {
     /// What an imported model is kept as: whole (its underside on the other side of a
@@ -691,7 +687,7 @@ pub enum ModelTypes {
 
 /// Settings that change how hard Cut Craft works the computer, or how exactly it cuts: listed
 /// only once Show advanced settings is ticked, and put back to their defaults when the file
-/// was changed outside Cut Craft (not one of Aspire's).
+/// was changed outside Cut Craft.
 // ponytail: wayland_native moved here from General; one saved there before starts off again
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Advanced {
@@ -794,7 +790,7 @@ impl Default for Updates {
     }
 }
 
-/// How Cut Craft looks (not one of Aspire's).
+/// How Cut Craft looks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Appearance {
     /// Light, dark, or the desktop's own
@@ -863,7 +859,7 @@ fn grid_point_size() -> f32 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Theme {
-    /// Light, as Aspire is, whatever the desktop's theme
+    /// Light, whatever the desktop's theme
     Light,
     Dark,
     /// The desktop's own light or dark theme
@@ -900,7 +896,7 @@ impl Theme {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowLayout {
-    /// Aspire's: Design page left, Toolpaths page right, side tabs
+    /// Design page left, Toolpaths page right, side tabs
     #[default]
     Classic,
     /// A rail of tool groups on the left opening a list of tools; an inspector on the right

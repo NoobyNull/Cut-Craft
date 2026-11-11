@@ -1,5 +1,5 @@
 //! Keep-Out Zones: areas a tool must not pass over, made from the selected closed vectors
-//! grown by a clearance, or cleared (Aspire's help: Keep-out Zones). Once made they do not
+//! grown by a clearance, or cleared. Once made they do not
 //! follow the vectors. Each is named ("Clamp 1"), its label in the views saying so. A
 //! toolpath that would cut into one is not made, unless Options allow clipping it.
 

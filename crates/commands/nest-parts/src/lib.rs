@@ -4,8 +4,7 @@
 //! (True Shape) each where its own shape first fits, turned in steps, holes filled by
 //! smaller parts, with as many copies of each as asked; mirrored where that fits better,
 //! inside a boundary layer's vectors, onto new sheets when the job is full, with a double-
-//! sided part's other side following it, and filler parts in what is left (Aspire's help:
-//! Nest Parts).
+//! sided part's other side following it, and filler parts in what is left.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Point, Rect};

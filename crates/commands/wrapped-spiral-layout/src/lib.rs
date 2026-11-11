@@ -1,4 +1,4 @@
-//! Wrapped Spiral Layout (an Aspire gadget): rope or barley-twist strands on a rotary job's
+//! Wrapped Spiral Layout: rope or barley-twist strands on a rotary job's
 //! unrolled surface. Each strand starts evenly spaced round the cylinder and runs along the
 //! axis turning by the pitch; it runs past the job's edge, and wrapping makes it a spiral.
 //! Coves round the ends if asked. It lays out vectors for Profile toolpaths only.

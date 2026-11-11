@@ -1,4 +1,4 @@
-//! Wrapped Fluting Layout (an Aspire gadget): on a rotary job's unrolled surface, flutes along
+//! Wrapped Fluting Layout: on a rotary job's unrolled surface, flutes along
 //! the axis evenly spaced round the cylinder, and coves round it at either end if asked. It
 //! lays out vectors for Profile or Fluting toolpaths; it makes no toolpaths itself.
 

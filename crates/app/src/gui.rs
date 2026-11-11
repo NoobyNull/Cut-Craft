@@ -167,7 +167,7 @@ pub fn placed(sections: &[String], action: &str) -> Option<Vec<String>> {
 /// Names and descriptions of the built-in tools on the Import sub-tab, which have no
 /// command crate to give them: Aspire's names run words together ("Import Vectors Bitmap")
 /// and say nothing about the files they take.
-const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
+pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "import_vectors_bitmap",
         "Import Vectors or Picture",
@@ -2006,7 +2006,10 @@ impl MenuSystem {
                         sub(
                             "Window Layout",
                             vec![
-                                MenuItem::with_action("Classic (Aspire's pages)", "layout_classic"),
+                                MenuItem::with_action(
+                                    "Classic (Design and Toolpaths pages)",
+                                    "layout_classic",
+                                ),
                                 MenuItem::with_action("Rail and Inspector", "layout_rail"),
                                 MenuItem::with_action("Ribbon", "layout_ribbon"),
                             ],

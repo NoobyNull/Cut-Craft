@@ -317,6 +317,11 @@ impl Registry {
         })
     }
 
+    /// Every command, in the order they were added.
+    pub fn commands(&self) -> impl Iterator<Item = &dyn DynCommand> {
+        self.commands.iter().map(AsRef::as_ref)
+    }
+
     pub fn get(&self, id: &str) -> Option<&dyn DynCommand> {
         self.commands
             .iter()
