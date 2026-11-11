@@ -330,7 +330,9 @@ say "not implemented yet".
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools; taper angle, shank
   diameter and flute length (tapered ball noses and flat bottoms are cut with their whole
-  taper, read from .vtdb and Fusion .tools files).
+  taper, read from .vtdb and Fusion .tools files). The editor draws the tool to scale from
+  its sizes, each typed on its dimension line, with neck and shank lengths and a
+  Manufacturer (`{Manufacturer}` in name formats).
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
   (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.

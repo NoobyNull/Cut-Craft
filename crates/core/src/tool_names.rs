@@ -9,8 +9,9 @@ use crate::document::Units;
 use crate::toolpath::{Tool, ToolShape};
 
 /// Every variable a format can use, for the form's list.
-pub const VARIABLES: [&str; 19] = [
+pub const VARIABLES: [&str; 20] = [
     "Tool Type",
+    "Manufacturer",
     "Units",
     "Units Short",
     "Diameter",
@@ -94,6 +95,7 @@ fn value(name: &str, tool: &Tool, material: &str, machine: &str) -> Option<Value
         "Move Speed" => Some(rate(tool.feed_rate)),
         "Plunge Rate" => Some(rate(tool.plunge_rate)),
         "Spindle Speed" => Some(Value::Number(tool.spindle_speed)),
+        "Manufacturer" if !tool.manufacturer.is_empty() => text(&tool.manufacturer),
         "Material Name" if !material.is_empty() => text(material),
         "Machine Name" if !machine.is_empty() => text(machine),
         _ => None,
@@ -187,6 +189,21 @@ mod tests {
             expand("{Diameter}{Units Short} {Diameter|F}", &metric, "", ""),
             "6mm 15/64"
         );
+    }
+
+    #[test]
+    fn the_manufacturer_names_the_tool_when_it_is_set() {
+        let mut t = eighth_inch_end_mill();
+        t.manufacturer = "Amana".into();
+        assert_eq!(
+            expand("{Manufacturer} {Tool Type} {Diameter|F}", &t, "", ""),
+            "Amana End Mill 1/8"
+        );
+        assert_eq!(expand("{Manufacturer|U}", &t, "", ""), "AMANA");
+        assert!(VARIABLES.contains(&"Manufacturer"));
+        // none set: it stays as written, as Machine Name does, so the gap shows
+        t.manufacturer.clear();
+        assert_eq!(expand("{Manufacturer}", &t, "", ""), "{Manufacturer}");
     }
 
     #[test]
