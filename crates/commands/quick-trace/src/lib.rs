@@ -4,13 +4,21 @@
 //! apart. Trace Bitmap's window shows and changes the same settings, with a preview.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};
+use cut_craft_core::{Change, Command, CommandError, Meta};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+/// Quick Trace has no settings: it looks at the chosen picture and picks them itself, so a
+/// colour picture comes out in its colours and a black and white or grey one as dark shapes.
+/// Open Trace Bitmap to see a preview and change any of them.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct Params {}
 
 pub struct QuickTrace;
 
 impl Command for QuickTrace {
     const ID: &'static str = "quick_trace";
-    type Params = NoParams;
+    type Params = Params;
 
     fn meta() -> Meta {
         Meta {
@@ -21,7 +29,7 @@ impl Command for QuickTrace {
         }
     }
 
-    fn run(doc: &Document, _: &NoParams) -> Result<Change, CommandError> {
+    fn run(doc: &Document, _: &Params) -> Result<Change, CommandError> {
         let Some(b) = doc.chosen_bitmap() else {
             return Err(CommandError::Failed("import a bitmap to trace".into()));
         };
@@ -71,7 +79,7 @@ mod tests {
     #[test]
     fn a_grey_picture_is_split_where_its_greys_part() {
         let mut doc = picture();
-        run_on::<QuickTrace>(&mut doc, &NoParams {});
+        run_on::<QuickTrace>(&mut doc, &Params {});
         // the disc, the dark side of the picture's own split; the light grey round it is not
         assert_eq!(doc.vectors.len(), 1);
         let disc = doc.vectors.values().next().unwrap().bounds();
@@ -80,6 +88,6 @@ mod tests {
 
     #[test]
     fn needs_a_picture() {
-        assert!(rejection::<QuickTrace>(&NoParams {}).contains("bitmap"));
+        assert!(rejection::<QuickTrace>(&Params {}).contains("bitmap"));
     }
 }

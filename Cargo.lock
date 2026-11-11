@@ -1482,6 +1482,8 @@ version = "0.6.3"
 dependencies = [
  "cmd-trace-bitmap",
  "cut-craft-core",
+ "schemars",
+ "serde",
 ]
 
 [[package]]
