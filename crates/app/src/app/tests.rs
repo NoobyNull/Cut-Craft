@@ -5390,6 +5390,22 @@ fn help_contents_links_to_the_pages_and_their_tools() {
 }
 
 #[test]
+fn a_tools_help_page_falls_back_to_its_own_description() {
+    let h = Harness::new();
+    // Profile's params carry no doc comment of their own; its crate says what it does
+    let profile = h.app.help_markdown("profile_toolpath");
+    assert!(!profile.contains("No help written"), "{profile}");
+    assert!(
+        profile.contains("Cuts along the selected vectors, outside, inside or on the line"),
+        "{profile}"
+    );
+    assert!(
+        !profile.contains("Profile Toolpath: cuts"),
+        "the heading names it already: {profile}"
+    );
+}
+
+#[test]
 fn a_pages_question_mark_opens_its_help() {
     let mut h = Harness::new();
     h.app.pages.set_pinned(Page::Design, true);
