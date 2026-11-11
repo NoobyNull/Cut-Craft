@@ -324,7 +324,8 @@ say "not implemented yet".
 - Rest machining for every toolpath (a Rest Machining section in each toolpath form; 3D
   Finishing keeps its own): what the toolpath would leave is simulated, each earlier tool's
   best try at it shows what that tool left, and only the cuts over areas every earlier tool
-  left are kept (minimum detail, overlap). Kept with the toolpath, so recalculating does it
+  left are kept (minimum detail, overlap; a cut counts where the tool's edge is over what was
+  left), each leftover spot finished before the nearest next. Kept with the toolpath, so recalculating does it
   again. The rest grid is a quarter of the tool across [inf].
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
@@ -385,8 +386,11 @@ say "not implemented yet".
 - Snap grid: while Snap to Grid is on, the 2D view draws its points over the job (thinned
   when zoomed out so they never crowd); Options ▸ Appearance sets the grid colour and point size.
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
-- Clearance Tools on Pocket and V-Carve (the form's "Add a clearance tool from the
-  database", kept largest first): each makes a toolpath of its own, named `[1]`, `[2]`... in
+- Clearing bits on Pocket and V-Carve ("Clear with bigger bits first" / "Clear the flat
+  bottom with end mills first", each bit picked with Select… in the Tool Database, kept
+  largest first; Pocket checks each is bigger than the finishing bit and none the same size;
+  the separate Rest Machining list shows on these forms only for an older job that has one):
+  each makes a toolpath of its own, named `[1]`, `[2]`... in
   cutting order. Pocket's later tools (its own last) cut only what the ones before left
   (rest machining, kept on each so it recalculates alone; a raster only for the first).
   V-Carve's end mills pocket the flat bottom (needs a flat depth); the V-bit then carves the

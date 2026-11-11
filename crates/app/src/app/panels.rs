@@ -50,11 +50,13 @@ impl CutCraftApp {
                 self.tools_changed("Tool database saved");
                 self.refresh_form_tool();
                 if let Outcome::Select(name) = &outcome {
-                    self.choose_tool(name);
+                    let clearing = self.selecting_clearing.is_some();
+                    self.selected_tool(name);
                     if let Some(form) = &mut self.form {
                         form.dirty = true;
                     }
-                    self.status.set_message(&format!("Cutting with {name}"));
+                    let doing = if clearing { "Clearing" } else { "Cutting" };
+                    self.status.set_message(&format!("{doing} with {name}"));
                 }
                 if let Some(changer) = changer
                     && let Some(machine) = self
@@ -71,7 +73,10 @@ impl CutCraftApp {
                     ));
                 }
             }
-            Outcome::Cancel => self.tool_manager = None,
+            Outcome::Cancel => {
+                self.tool_manager = None;
+                self.selecting_clearing = None;
+            }
             Outcome::Import => {
                 if let Some(path) = file_dialog()
                     .add_filter("Tool databases", &files::TOOL_FILE_EXTENSIONS)

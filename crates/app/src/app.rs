@@ -949,6 +949,8 @@ struct CutCraftApp {
     tools_path: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
+    /// Which clearing bit the open Select Tool picks; `None` picks the form's own tool.
+    selecting_clearing: Option<ClearingSlot>,
     /// A Calculate waiting on the deeper-than-the-material warning.
     deep_cut: Option<depth::DeepCut>,
     /// Right-click ▸ Report a Bug Here…
@@ -1718,6 +1720,151 @@ fn tool_picker(
         }
     })
     .inner
+}
+
+/// Which of a form's clearing bits a pick is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ClearingSlot {
+    /// One more.
+    New,
+    /// In place of this one.
+    At(usize),
+}
+
+/// Whether a toolpath form shows Rest Machining: every toolpath that cuts with a tool can
+/// rest machine after the tools that cut before it, except 3D Finishing (its own, as `after`)
+/// and a form with clearing bits, which does that with them (an older job's list still
+/// shows, so it can be changed).
+fn shows_rest(params: &Value) -> bool {
+    params.get("after").is_none()
+        && (params.get("clearance_tools").is_none()
+            || cut_craft_core::rest::Rest::of(params).is_some())
+}
+
+/// What a toolpath form's Clearing section asks for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ClearingAsk {
+    /// Select Tool for a clearing bit.
+    Select(ClearingSlot),
+    /// The Tool Database to change this bit in.
+    Edit(String),
+}
+
+/// A form's clearing bits (`clearance_tools`): off, the form's tool cuts it all; on, bigger
+/// bits cut first, largest first, each picked with Select… in the Tool Database, and the
+/// form's tool cuts only what they left. `finishing_smallest` (Pocket) wants each bigger than
+/// the form's tool; V-Carve's V-bit follows end mills of any size. Whether the list changed,
+/// and what was asked for.
+fn clearing_section(
+    ui: &mut egui::Ui,
+    params: &mut Value,
+    slots: &[Option<String>],
+    finishing_smallest: bool,
+) -> (bool, Option<ClearingAsk>) {
+    if !params["clearance_tools"].is_array() {
+        params["clearance_tools"] = Value::Array(vec![]);
+    }
+    let finishing: Option<Tool> = serde_json::from_value(params["tool"].clone()).ok();
+    let mut list: Vec<Tool> =
+        serde_json::from_value(params["clearance_tools"].clone()).unwrap_or_default();
+    let (mut changed, mut ask) = (false, None);
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        let mut on = !list.is_empty();
+        let (label, hint, about) = if finishing_smallest {
+            (
+                "Clear with bigger bits first",
+                "Bigger bits take out most of the material first, so the Tool above only \
+                 cuts what they could not reach: quicker, and easier on a small bit",
+                "Biggest first. The Tool above finishes: it cuts only what these left.",
+            )
+        } else {
+            (
+                "Clear the flat bottom with end mills first",
+                "End mills clear the flat bottom first, so the V-bit only carves the slopes \
+                 and what they could not reach",
+                "Biggest first. The V-bit finishes: it carves only what these left.",
+            )
+        };
+        if ui.checkbox(&mut on, label).on_hover_hint(hint).changed() {
+            if on {
+                ask = Some(ClearingAsk::Select(ClearingSlot::New));
+            } else {
+                list.clear();
+                changed = true;
+            }
+        }
+        if list.is_empty() {
+            return;
+        }
+        ui.weak(about);
+        let mut remove = None;
+        for (i, tool) in list.iter().enumerate() {
+            ui.push_id(("clearing", i), |ui| {
+                ui.strong(held_name(&tool.name, slots));
+                ui.label(tool_line(tool, None));
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("Select…")
+                        .on_hover_hint("Pick another bit for this in the Tool Database")
+                        .clicked()
+                    {
+                        ask = Some(ClearingAsk::Select(ClearingSlot::At(i)));
+                    }
+                    if ui
+                        .button("Edit…")
+                        .on_hover_hint("Change this bit in the Tool Database")
+                        .clicked()
+                    {
+                        ask = Some(ClearingAsk::Edit(tool.name.clone()));
+                    }
+                    if ui
+                        .small_button("×")
+                        .on_hover_hint("Remove this bit")
+                        .clicked()
+                    {
+                        remove = Some(i);
+                    }
+                });
+            });
+        }
+        if let Some(i) = remove {
+            list.remove(i);
+            changed = true;
+        }
+        if ui
+            .button("Add a smaller clearing bit…")
+            .on_hover_hint(
+                "Another bit, between the ones above and the finishing bit, for corners too \
+                 tight for them",
+            )
+            .clicked()
+        {
+            ask = Some(ClearingAsk::Select(ClearingSlot::New));
+        }
+        if let Some(finishing) = &finishing
+            && let Err(e) =
+                cut_craft_core::rest::check_clearing(finishing, &list, finishing_smallest)
+        {
+            ui.colored_label(ui.visuals().error_fg_color, e.to_string());
+        }
+    });
+    if changed {
+        params["clearance_tools"] = serde_json::to_value(&list).expect("tools serialize");
+    }
+    (changed, ask)
+}
+
+/// `params`' clearing bits with `tool` put `at` its slot, largest first.
+fn put_clearing(params: &mut Value, at: ClearingSlot, tool: &Tool) {
+    let mut list: Vec<Tool> =
+        serde_json::from_value(params["clearance_tools"].clone()).unwrap_or_default();
+    match at {
+        ClearingSlot::At(i) if i < list.len() => list[i] = tool.clone(),
+        _ => list.push(tool.clone()),
+    }
+    list.sort_by(|a, b| b.diameter.total_cmp(&a.diameter));
+    params["clearance_tools"] = serde_json::to_value(&list).expect("tools serialize");
 }
 
 /// The form tool's name as the tool changer has it: `T3  name` when loaded in holder 3.

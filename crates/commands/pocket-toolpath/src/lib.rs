@@ -187,8 +187,11 @@ impl Command for PocketToolpath {
             c.add_toolpath(pocket(doc, p)?);
             return Ok(c.finish());
         }
+        cut_craft_core::rest::check_clearing(&p.tool, &p.clearance_tools, true)?;
         // each tool, largest first, then the pocket's own; a raster only for the first
-        let tools: Vec<&Tool> = p.clearance_tools.iter().chain([&p.tool]).collect();
+        let mut clearing: Vec<&Tool> = p.clearance_tools.iter().collect();
+        clearing.sort_by(|a, b| b.diameter.total_cmp(&a.diameter));
+        let tools: Vec<&Tool> = clearing.into_iter().chain([&p.tool]).collect();
         for (i, &tool) in tools.iter().enumerate() {
             let own = Params {
                 name: format!("{} [{}]", p.name, i + 1),
@@ -655,6 +658,48 @@ mod tests {
         );
         // and it keeps its rest settings, so recalculating it does the same
         assert!(cut_craft_core::rest::Rest::of(&made[1].params).is_some());
+    }
+
+    #[test]
+    fn a_clearing_bit_not_bigger_than_the_finishing_bit_is_refused() {
+        use cut_craft_core::testing::document_with;
+        let mill = |d: f64| Tool {
+            name: format!("{d} mm End Mill"),
+            diameter: d,
+            ..Tool::default()
+        };
+        let p = Params {
+            tool: mill(6.0),
+            clearance_tools: vec![mill(3.0)],
+            ..Params::default()
+        };
+        let doc = document_with(vec![square(0.0, 0.0, 40.0)]);
+        let Err(CommandError::InvalidParams(why)) = PocketToolpath::run(&doc, &p) else {
+            panic!("a 3 mm clearing bit before a 6 mm finishing bit");
+        };
+        assert!(
+            why.contains("must be bigger than the finishing bit"),
+            "{why}"
+        );
+    }
+
+    #[test]
+    fn clearing_bits_cut_largest_first_whatever_order_they_were_picked_in() {
+        use cut_craft_core::testing::document_with;
+        let mill = |d: f64| Tool {
+            name: format!("{d} mm End Mill"),
+            diameter: d,
+            ..Tool::default()
+        };
+        let p = Params {
+            tool: mill(2.0),
+            clearance_tools: vec![mill(8.0), mill(20.0)],
+            ..Params::default()
+        };
+        let mut doc = document_with(vec![square(0.0, 0.0, 60.0)]);
+        doc.apply(&PocketToolpath::run(&doc, &p).unwrap()).unwrap();
+        let sizes: Vec<f64> = doc.toolpaths.values().map(|t| t.tool.diameter).collect();
+        assert_eq!(sizes, vec![20.0, 8.0, 2.0]);
     }
 
     #[test]
