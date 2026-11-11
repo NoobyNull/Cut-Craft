@@ -548,7 +548,9 @@ say "not implemented yet".
     and pan; Live updates or Update preview; Picture type presets; Reset). With the form
     open, a box dragged over the picture is the part traced (drawn dashed) and a click on the
     picture lets it go; in Colors mode a click ticks the colour under it (again to let go).
-    Not built: Centerline trace, Quick Trace.
+    Trace type Outline or Centerline (one line down the middle of each stroke).
+  - Quick Trace: the chosen picture traced in one click with settings picked to suit it
+    (its colours, or black and white split at Otsu's threshold).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset. Mirror flips about

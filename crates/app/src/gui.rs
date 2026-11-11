@@ -405,6 +405,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "vector_texture",
                 "embellish",
                 "trace_bitmap",
+                "quick_trace",
                 // shown in the Text box (its flyout): text that fills itself in
                 "document_variables",
             ],
