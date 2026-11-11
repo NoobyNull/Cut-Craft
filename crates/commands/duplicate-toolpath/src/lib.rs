@@ -1,5 +1,5 @@
 //! Duplicate Toolpath: a copy added to the toolpath list, named with the next free number
-//! after it ("Cut out (1)"), as Aspire's.
+//! after it ("Cut out (1)").
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::{Change, Command, CommandError, Meta, existing};

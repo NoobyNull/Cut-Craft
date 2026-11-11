@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct Sculpt;
 
-/// What the brush does (Aspire's keys 1 to 5).
+/// What the brush does (keys 1 to 5).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Tool {
@@ -60,7 +60,7 @@ pub struct Params {
     #[schemars(title = "Preserve Transparency")]
     pub preserve_transparency: bool,
     pub mode: Mode,
-    /// With the Undo Brush: remove the shape under the brush altogether (Aspire's Shift)
+    /// With the Undo Brush: remove the shape under the brush altogether (hold Shift)
     pub erase: bool,
     /// Deposit and Remove: a component saved as a sculpting brush (a `.ccclip` file, Load
     /// Brush… below) pressed into the surface, its larger side the diameter; empty for the

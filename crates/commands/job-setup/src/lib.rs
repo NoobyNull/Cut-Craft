@@ -1,5 +1,5 @@
 //! Job Setup: the material block, where the machine's zero is on it, how finely the model is
-//! worked out and how the material looks, laid out in sections as Aspire's form is.
+//! worked out and how the material looks.
 
 use cut_craft_core::document::{
     Along, Datum, Document, DoubleSided, Home, Job, Resolution, Rotary, Units, ZZero,

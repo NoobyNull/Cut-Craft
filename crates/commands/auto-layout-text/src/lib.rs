@@ -16,7 +16,7 @@ pub struct Params {
     /// The words; they are wrapped onto as many lines as make them largest
     #[schemars(extend("x-widget" = "multiline"))]
     pub text: String,
-    /// Single-line fonts (Vectric `.vfont` files in Cut Craft's fonts folder) come first,
+    /// Single-line fonts (Vectric font `.vfont` files in Cut Craft's fonts folder) come first,
     /// then the system's TrueType fonts
     #[schemars(schema_with = "font_choices")]
     pub font: String,

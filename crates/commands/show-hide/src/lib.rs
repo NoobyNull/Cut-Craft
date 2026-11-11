@@ -1,4 +1,4 @@
-//! Show / Hide: Aspire's right-click visibility family (Show This, Show Only This, Show All But
+//! Show / Hide: the right-click visibility family (Show This, Show Only This, Show All But
 //! This, Show All, Hide This, Hide All) for layers, toolpaths or components, built from each
 //! kind's properties command.
 

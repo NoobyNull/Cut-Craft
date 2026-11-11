@@ -13,9 +13,9 @@ pub struct DrawRectangle;
 pub enum Corners {
     #[default]
     Square,
-    /// Rounded outwards (Aspire's Radiused External)
+    /// Rounded outwards
     Rounded,
-    /// Cut inwards (Aspire's Radiused Internal)
+    /// Cut inwards
     Notched,
 }
 

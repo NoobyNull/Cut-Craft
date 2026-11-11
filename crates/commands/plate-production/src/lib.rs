@@ -1,5 +1,5 @@
-//! Plate Production: badges or nameplates from a template and a data file (Aspire's help:
-//! Plate Production). The template is the selected vectors; text in it written with Draw
+//! Plate Production: badges or nameplates from a template and a data file. The template is the
+//! selected vectors; text in it written with Draw
 //! Text may hold variables, `!!name!!`, each filled from a column of the data file or from a
 //! counter. Plates fill the material inside the margins, one per row of data; when they need
 //! more than one sheet of material each sheet's plates go on a layer of their own. The
@@ -73,7 +73,7 @@ impl Separator {
     }
 }
 
-/// Aspire's left side: how the plates are laid out on the material.
+/// How the plates are laid out on the material.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Layout {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -100,7 +100,7 @@ pub struct Assignment {
     pub column: usize,
 }
 
-/// Aspire's Number Format: the counter variables set to column 0 take.
+/// The counter variables set to column 0 take.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Counter {
     pub start: i64,
@@ -110,7 +110,7 @@ pub struct Counter {
     pub digits: usize,
 }
 
-/// Aspire's right side: the data merged into the template.
+/// The data merged into the template.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Data {
     /// A text file of rows; empty to number plates with the counter alone

@@ -1,6 +1,5 @@
 //! Convert Text to Curves: the selected text becomes plain vectors that node editing can
-//! change, still grouped; after it, the text cannot be edited as text (Aspire's help:
-//! Convert Text To Curves).
+//! change, still grouped; after it, the text cannot be edited as text.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};

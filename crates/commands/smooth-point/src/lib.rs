@@ -1,4 +1,4 @@
-//! Smooth Point (node editing's right-click, Aspire's popup 142): the node under the point
+//! Smooth Point (node editing's right-click): the node under the point
 //! becomes smooth, its two spans Béziers whose handles there lie on one line.
 
 use cut_craft_core::document::Document;

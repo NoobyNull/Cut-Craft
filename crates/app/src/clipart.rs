@@ -941,8 +941,8 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) 
     if locked > 0 {
         ui.label(
             egui::RichText::new(format!(
-                "{locked} Vectric clipart file{} here can't be shown. Vectric locks .3dclip \
-                 and .v3m files to its own software. If you have Aspire, export them as STL \
+                "{locked} Vectric clipart file{} here can't be shown: .3dclip and .v3m \
+                 files only open in the program that made them. Export them from it as STL \
                  to use them here.",
                 if locked == 1 { "" } else { "s" },
             ))
