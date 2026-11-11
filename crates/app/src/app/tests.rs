@@ -10227,6 +10227,9 @@ fn an_older_pocket_with_a_rest_list_still_shows_it() {
     assert!(
         h.text_at("Rest Machining").is_some(),
         "kept, so it can be changed"
+    );
+}
+
 /// Tools that were only in a menu get a button too (Matthew, 2026-11-10): the left page's
 /// for what changes the shape to cut, the right page's for how it is cut and sent to the
 /// machine, each where Aspire's help puts its icon. Buttons already there stay put.
