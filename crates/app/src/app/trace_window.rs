@@ -547,6 +547,10 @@ impl CutCraftApp {
     fn trace_settings(&mut self, ui: &mut egui::Ui, view: &mut TraceView) {
         let units = self.doc.job.units;
         let material = form::material(&self.doc, units);
+        let quick = self
+            .doc
+            .chosen_bitmap()
+            .map(cmd_trace_bitmap::quick_settings);
         let Some(open) = self.form.as_mut() else {
             return;
         };
@@ -569,6 +573,24 @@ impl CutCraftApp {
                         }
                     }
                 });
+            if ui
+                .add_enabled(quick.is_some(), egui::Button::new("Quick Trace"))
+                .on_hover_hint(
+                    "Let Trace Bitmap look at the picture and choose the settings: its colours \
+                     when it has some, else black and white split where it suits it best",
+                )
+                .clicked()
+                && let Some(q) = &quick
+                && let Ok(p) = serde_json::from_value::<Params>(open.params.clone())
+                && let Ok(v) = serde_json::to_value(Params {
+                    area: p.area,
+                    ..q.clone()
+                })
+            {
+                open.params = v;
+                open.dirty = true;
+                view.selected.clear();
+            }
             if ui
                 .button("Reset")
                 .on_hover_hint("Back to the settings Trace Bitmap starts with")

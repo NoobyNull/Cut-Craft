@@ -549,7 +549,7 @@ say "not implemented yet".
     open, a box dragged over the picture is the part traced (drawn dashed) and a click on the
     picture lets it go; in Colors mode a click ticks the colour under it (again to let go).
     Trace type Outline or Centerline (one line down the middle of each stroke).
-  - Quick Trace: the chosen picture traced in one click with settings picked to suit it
+  - Quick Trace: the chosen picture traced in one click with settings picked to suit it; the trace window has a Quick Trace button that fills in the same settings to preview and adjust
     (its colours, or black and white split at Otsu's threshold).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.

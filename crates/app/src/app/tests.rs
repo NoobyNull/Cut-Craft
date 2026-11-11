@@ -917,6 +917,15 @@ fn trace_bitmap_previews_in_its_window_and_follows_the_settings() {
         h.frame(vec![]);
     }
     assert_eq!(h.app.trace_view.as_ref().unwrap().traced_colours(), Some(2));
+    // Quick Trace in the window picks settings to suit the picture: colours, as it has some
+    h.app.form.as_mut().unwrap().params["mode"] = "black_and_white".into();
+    h.frame(vec![]);
+    let quick = h
+        .text_at("Quick Trace")
+        .expect("the window's Quick Trace button");
+    h.click(quick, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.form.as_ref().unwrap().params["mode"], "colors");
     // closing the form lets the window go
     h.app.form = None;
     h.frame(vec![]);
