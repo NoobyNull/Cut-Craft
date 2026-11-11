@@ -622,9 +622,16 @@ impl General {
     }
 }
 
-/// Importing 3D models: what Orientate 3D Model offers.
+/// Importing pictures and 3D models: the size pictures come in at, and what Orientate 3D
+/// Model offers (not one of Aspire's).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Import {
+    /// How big an imported picture comes in: this many of its pixels make an inch. 96 suits
+    /// screenshots and web pictures; a scan or a photo for printing is usually 300. A picture
+    /// bigger than the material is still shrunk to fit
+    #[serde(default = "picture_pixels_per_inch")]
+    #[schemars(title = "Picture size (pixels per inch)", range(min = 10, max = 1200))]
+    pub picture_pixels_per_inch: f64,
     /// What an imported model is kept as: whole (its underside on the other side of a
     /// double-sided job, wrapped in a rotary one), its top seen from above, or the choice
     /// of both on the form
@@ -649,11 +656,20 @@ fn preview_faces() -> u32 {
     250_000
 }
 
+fn picture_pixels_per_inch() -> f64 {
+    cut_craft_core::import_settings::PIXELS_PER_INCH
+}
+
 fn out_of_bounds_percent() -> u8 {
     5
 }
 
 impl Import {
+    /// Hands these settings to the importers.
+    pub fn apply(&self) {
+        cut_craft_core::import_settings::set_pixels_per_inch(self.picture_pixels_per_inch);
+    }
+
     /// The red a model's parts past the material's edges are drawn in: see-through, as
     /// solid as Out-of-bounds opacity says (kept to 1 to 100 percent).
     pub fn out_of_bounds_colour(&self) -> egui::Color32 {
@@ -666,6 +682,7 @@ impl Import {
 impl Default for Import {
     fn default() -> Self {
         Self {
+            picture_pixels_per_inch: picture_pixels_per_inch(),
             model_types: ModelTypes::default(),
             preview_faces: preview_faces(),
             out_of_bounds_percent: out_of_bounds_percent(),
@@ -689,7 +706,7 @@ pub enum ModelTypes {
 /// only once Show advanced settings is ticked, and put back to their defaults when the file
 /// was changed outside Cut Craft.
 // ponytail: wayland_native moved here from General; one saved there before starts off again
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Advanced {
     /// On a Wayland desktop, open the window there directly rather than through `XWayland`;
     /// files cannot be dragged into it then (from the next start). Listed only on Wayland
@@ -702,6 +719,38 @@ pub struct Advanced {
     #[serde(default)]
     #[schemars(title = "Processor cores to use (0 = all)", range(min = 0, max = 256))]
     pub cores: u32,
+    /// How many points each stretch of a curved DXF spline becomes when it is imported. Fewer
+    /// gives flat-sided curves; more gives smoother curves but bigger, slower jobs
+    // left out of the file (and so the check) at its default, so options sealed before it
+    // existed still pass; every setting added here later wants the same
+    #[serde(
+        default = "dxf_spline_detail",
+        skip_serializing_if = "is_dxf_spline_detail"
+    )]
+    #[schemars(
+        title = "DXF curve detail (points per span)",
+        range(min = 4, max = 256)
+    )]
+    pub dxf_spline_detail: u32,
+}
+
+fn dxf_spline_detail() -> u32 {
+    cut_craft_core::import_settings::SPLINE_SAMPLES
+}
+
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's signature")]
+fn is_dxf_spline_detail(detail: &u32) -> bool {
+    *detail == dxf_spline_detail()
+}
+
+impl Default for Advanced {
+    fn default() -> Self {
+        Self {
+            wayland_native: false,
+            cores: 0,
+            dxf_spline_detail: dxf_spline_detail(),
+        }
+    }
 }
 
 impl Advanced {
@@ -713,23 +762,14 @@ impl Advanced {
     /// Hands these settings to the code they steer.
     pub fn apply(&self) {
         cut_craft_core::simulation::set_core_limit(usize::try_from(self.cores).unwrap_or(0));
+        cut_craft_core::import_settings::set_spline_samples(self.dxf_spline_detail);
     }
 
     /// The check saved beside these settings: a keyed hash of them, so an edit made outside
     /// Cut Craft shows. The key ships in the app, so it stops a hand edit, not a determined
     /// one; that is all it is for.
     fn seal(&self) -> String {
-        use hmac::Mac;
-        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(SEAL_KEY).expect("any key fits");
-        mac.update(&serde_json::to_vec(self).expect("settings serialise"));
-        mac.finalize()
-            .into_bytes()
-            .iter()
-            .fold(String::new(), |mut hex, b| {
-                use std::fmt::Write as _;
-                let _ = write!(hex, "{b:02x}");
-                hex
-            })
+        seal_of(&serde_json::to_vec(self).expect("settings serialise"))
     }
 
     /// Whether `seal` is these settings' own. Options saved before the check have none: they
@@ -746,6 +786,21 @@ impl Advanced {
             }
         }
     }
+}
+
+/// The keyed hash of `bytes` that [`Advanced::seal`] saves, in hex.
+fn seal_of(bytes: &[u8]) -> String {
+    use hmac::Mac;
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(SEAL_KEY).expect("any key fits");
+    mac.update(bytes);
+    mac.finalize()
+        .into_bytes()
+        .iter()
+        .fold(String::new(), |mut hex, b| {
+            use std::fmt::Write as _;
+            let _ = write!(hex, "{b:02x}");
+            hex
+        })
 }
 
 /// The key of [`Advanced::seal`], and the options file's name for it.
@@ -933,7 +988,7 @@ pub struct Options {
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
     #[serde(default)]
-    #[schemars(title = "Importing Models", extend("x-section" = true))]
+    #[schemars(title = "Importing", extend("x-section" = true))]
     pub import: Import,
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
@@ -1090,6 +1145,12 @@ impl Default for Options {
 }
 
 impl Options {
+    /// Hands the settings that code outside the app reads (cores, importing) to it.
+    pub fn apply(&self) {
+        self.advanced.apply();
+        self.import.apply();
+    }
+
     /// The options kept in the config folder; the defaults when there are none.
     pub fn load() -> Self {
         Self::load_checked().0
@@ -1283,7 +1344,7 @@ mod tests {
                 "Toolpath Settings",
                 "General Settings",
                 "Confirmation Choices",
-                "Importing Models",
+                "Importing",
                 "Appearance",
                 "SpaceMouse",
                 "Updates",
@@ -1385,6 +1446,51 @@ mod tests {
         let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
         assert!(tampered);
         assert_eq!(back.advanced, Advanced::default());
+    }
+
+    #[test]
+    fn a_seal_made_before_dxf_curve_detail_still_passes_and_the_detail_is_sealed() {
+        // the seal an older Cut Craft wrote over { wayland_native, cores } alone
+        #[derive(Serialize)]
+        struct Before {
+            wayland_native: bool,
+            cores: u32,
+        }
+        let before = Before {
+            wayland_native: false,
+            cores: 2,
+        };
+        let seal = seal_of(&serde_json::to_vec(&before).unwrap());
+        let mut file = serde_json::to_value(Options::default()).unwrap();
+        file["advanced"] = serde_json::to_value(&before).unwrap();
+        file[SEAL] = seal.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(!tampered, "an upgrade is not an edit");
+        assert_eq!(back.advanced.cores, 2);
+        assert_eq!(back.advanced.dxf_spline_detail, 32);
+        // changed in Cut Craft it loads back; changed by hand it goes back to 32
+        let mut o = Options::default();
+        o.advanced.dxf_spline_detail = 64;
+        let (back, tampered) = Options::from_bytes(&saved(&o));
+        assert!(!tampered);
+        assert_eq!(back.advanced.dxf_spline_detail, 64);
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        file["advanced"]["dxf_spline_detail"] = 200.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced.dxf_spline_detail, 32);
+    }
+
+    #[test]
+    fn importing_settings_reach_the_importers() {
+        let mut o = Options::default();
+        o.import.picture_pixels_per_inch = 300.0;
+        o.advanced.dxf_spline_detail = 64;
+        o.apply();
+        assert_eq!(cut_craft_core::import_settings::pixels_per_inch(), 300.0);
+        assert_eq!(cut_craft_core::import_settings::spline_samples(), 64);
+        Options::default().apply();
+        assert_eq!(cut_craft_core::import_settings::pixels_per_inch(), 96.0);
     }
 
     #[test]
