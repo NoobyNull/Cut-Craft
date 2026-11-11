@@ -164,6 +164,7 @@ impl CutCraftApp {
             solid_gpu: None,
             model_gpu: None,
             ghost_gpu: None,
+            trace_view: None,
             moved_3d: 0.0,
             pacer: crate::frame_rate::Pacer::default(),
             detail_3d: (crate::options::Detail::default(), false),
@@ -4237,7 +4238,10 @@ impl CutCraftApp {
             group_end: Some(&group_end),
         };
         let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
-        open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
+        // Trace Bitmap's settings are in its trace window, beside the preview
+        if open.id != "trace_bitmap" {
+            open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
+        }
         open.dirty |= listed.get();
         let id = open.id;
         let edit_listed = edit_listed.into_inner();
@@ -4352,6 +4356,7 @@ impl CutCraftApp {
                 self.edit_tabs(ui);
                 self.deep_cut_warning(ui.ctx());
             }
+            "trace_bitmap" => self.trace_form(ui),
             "sculpt" => {
                 let (load, round) = ui
                     .horizontal(|ui| {

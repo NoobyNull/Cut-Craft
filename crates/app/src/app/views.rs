@@ -56,6 +56,9 @@ impl CutCraftApp {
         self.busy_window(ctx);
         self.dropped_files(ctx);
         self.follow_form(ctx);
+        if !self.tracing() {
+            self.trace_view = None;
+        }
         self.next_import();
         self.autosave(ctx);
         self.report_bugs(ctx);
@@ -2182,17 +2185,16 @@ impl CutCraftApp {
         let Ok(p) = serde_json::from_value::<cmd_trace_bitmap::Params>(form.params.clone()) else {
             return;
         };
-        if p.mode != cmd_trace_bitmap::Mode::Colors {
-            return;
-        }
-        let Some(n) = cmd_trace_bitmap::colour_at(&self.doc, &p, at) else {
+        let Some(colours) = cmd_trace_bitmap::toggled_at(&self.doc, &p, at) else {
             return;
         };
-        let colours = cmd_trace_bitmap::toggled(&p.trace_colors, n);
-        self.status
-            .set_message(&format!("Colors to trace: {colours:?}"));
+        self.status.set_message(&if colours.is_empty() {
+            "No colours traced: click one on the picture, or tick it in the trace window".into()
+        } else {
+            format!("Colors to trace: {}", colours.join(", "))
+        });
         if let Some(form) = self.form.as_mut() {
-            form.params["trace_colors"] = serde_json::json!(colours);
+            form.params["trace"] = serde_json::json!(colours);
         }
     }
 
