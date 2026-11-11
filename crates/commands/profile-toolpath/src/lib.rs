@@ -98,18 +98,15 @@ pub struct Params {
     /// Below the material surface
     #[schemars(
         title = "Cut Depth",
-        extend(
-            "x-unit" = "mm",
-            "x-group" = "Cutting Depths",
-            "x-enable-when" = {"through": "false"}
-        ),
+        extend("x-unit" = "mm", "x-group" = "Cutting Depths"),
         range(min = 0)
     )]
     pub depth: f64,
     /// Down to the bottom of the material: the cut depth is the material's thickness in Job
-    /// Setup, and follows it if the thickness changes
+    /// Setup, and follows it if the thickness changes. Kept for toolpaths made with it; the
+    /// form no longer offers it (a cut deeper than the material is warned of instead)
     #[serde(default)]
-    #[schemars(title = "Cut right through", extend("x-group" = "Cutting Depths"))]
+    #[schemars(skip)]
     pub through: bool,
     pub tool: Tool,
     /// Outside to cut a part out, Inside to cut a hole, On the Line to follow the line itself
@@ -754,11 +751,9 @@ mod tests {
         let side = &schema["properties"]["side"];
         assert_eq!(side["x-group"], SIDE_GROUP);
         assert_eq!(side["x-widget"], "named-icons");
-        let through = &schema["properties"]["through"];
-        assert_eq!(through["title"], "Cut right through");
-        assert_eq!(
-            schema["properties"]["depth"]["x-enable-when"]["through"], "false",
-            "the depth is greyed while it follows the thickness"
+        assert!(
+            schema["properties"].get("through").is_none(),
+            "a cut past the material is warned of on Calculate instead"
         );
     }
 

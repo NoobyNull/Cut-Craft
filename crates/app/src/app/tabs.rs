@@ -108,8 +108,8 @@ pub(super) fn summary(
 }
 
 /// The Edit Tabs… button, at the foot of a form's Tabs (Profile Toolpath's), with a warning
-/// and Add Tabs when the cut would set the piece loose; a cut right through kept at the
-/// material's thickness under Cutting Depths; then what else a group's foot holds (Edit
+/// and Add Tabs when the cut would set the piece loose; a cut made right through with the
+/// old tick turned into the material's thickness under Cutting Depths; then what else a group's foot holds (Edit
 /// Loops…). Whether the form's settings changed.
 pub(super) fn group_end(
     ui: &mut egui::Ui,
@@ -118,12 +118,11 @@ pub(super) fn group_end(
     stock: Stock,
 ) -> bool {
     let mut changed = false;
-    // the depth field, greyed, shows the depth the cut goes to
-    if group == form::CUTTING_DEPTHS
-        && params["through"] == true
-        && params["depth"].as_f64() != Some(stock.thickness)
-    {
+    // a toolpath made with Cut right through (no longer on the form) reads as a depth of
+    // the material's thickness, to change as any other
+    if group == form::CUTTING_DEPTHS && params["through"] == true {
         params["depth"] = stock.thickness.into();
+        params["through"] = false.into();
         changed = true;
     }
     if group == "Tabs" {

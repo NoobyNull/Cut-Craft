@@ -95,6 +95,7 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
+            deep_cut: None,
             shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
@@ -3858,14 +3859,7 @@ impl CutCraftApp {
             (true, _, true) => self.job_setup_cancel(),
             (false, true, _) => {
                 let (id, params) = (open.id, open.params.clone());
-                // a job that goes on in the background puts what goes wrong on the form
-                if let Some(open) = &mut self.form {
-                    open.error = None;
-                }
-                let result = self.apply_form(id, &params);
-                if let (Err(why), Some(open)) = (result, &mut self.form) {
-                    open.error = Some(why);
-                }
+                self.calculate_checked(id, &params);
             }
             (false, _, true) => {
                 let page = open.page;
@@ -4172,7 +4166,10 @@ impl CutCraftApp {
             },
             "draw_text" => self.spelling(ui),
             "relief_from_photo" => self.depth_section(ui),
-            "profile_toolpath" => self.edit_tabs(ui),
+            "profile_toolpath" => {
+                self.edit_tabs(ui);
+                self.deep_cut_warning(ui.ctx());
+            }
             "sculpt" => {
                 let (load, round) = ui
                     .horizontal(|ui| {

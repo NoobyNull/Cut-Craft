@@ -9013,23 +9013,21 @@ fn the_profile_form_shows_which_side_it_cuts_just_under_the_depth() {
 }
 
 #[test]
-fn cut_right_through_follows_the_material_and_a_loose_part_is_warned_of_with_add_tabs() {
+fn a_cut_right_through_with_no_tabs_is_warned_of_with_add_tabs() {
     let mut h = profile_form();
     let thickness = h.app.doc.job.thickness;
-    assert!(h.text_at("Cut right through").is_some());
+    assert!(
+        h.text_at("Cut right through").is_none(),
+        "no tick: a cut past the material is warned of on Calculate"
+    );
     assert!(
         h.text_at(super::tabs::LOOSE).is_none(),
         "6 mm deep holds the part"
     );
-    h.app.form.as_mut().unwrap().params["through"] = true.into();
+    h.app.form.as_mut().unwrap().params["depth"] = thickness.into();
     h.frame(vec![]);
     h.frame(vec![]);
     let params = |h: &Harness| h.app.form.as_ref().unwrap().params.clone();
-    assert_eq!(
-        params(&h)["depth"].as_f64(),
-        Some(thickness),
-        "the greyed depth shows the thickness"
-    );
     let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
     let add = scroll_above_foot(&mut h, over, "Add Tabs");
     assert!(
@@ -9048,12 +9046,83 @@ fn cut_right_through_follows_the_material_and_a_loose_part_is_warned_of_with_add
     h.frame(vec![]);
     assert_eq!(h.app.form.as_ref().unwrap().params["tabs"], "flat");
     assert!(h.text_at(super::tabs::LOOSE).is_none());
-    // a thicker sheet: the cut follows it when made again
-    h.app.doc.job.thickness = thickness + 5.0;
+}
+
+#[test]
+fn a_toolpath_made_with_cut_right_through_reads_as_the_materials_thickness() {
+    let mut h = profile_form();
+    let thickness = h.app.doc.job.thickness;
+    h.app.form.as_mut().unwrap().params["through"] = true.into();
     h.frame(vec![]);
     h.frame(vec![]);
-    let depth = h.app.form.as_ref().unwrap().params["depth"].as_f64();
-    assert_eq!(depth, Some(thickness + 5.0));
+    let params = &h.app.form.as_ref().unwrap().params;
+    assert_eq!(params["depth"].as_f64(), Some(thickness));
+    assert_eq!(params["through"], false, "an ordinary depth to change");
+}
+
+#[test]
+fn a_cut_deeper_than_the_material_asks_first() {
+    use super::depth::too_deep;
+    let thickness = 18.0;
+    let deep = serde_json::json!({ "depth": 20.0 });
+    assert_eq!(too_deep("profile_toolpath", &deep, thickness), Some(20.0));
+    let exact = serde_json::json!({ "depth": 18.0 });
+    assert_eq!(
+        too_deep("profile_toolpath", &exact, thickness),
+        None,
+        "right through, not past"
+    );
+    let projected = serde_json::json!({ "depth": 20.0, "project_onto_model": true });
+    assert_eq!(too_deep("profile_toolpath", &projected, thickness), None);
+    assert_eq!(too_deep("pocket_toolpath", &deep, thickness), None);
+    assert!(
+        super::depth::warning(20.0, 18.0, Units::Mm)
+            .contains("20 mm deep, 2 mm past the bottom of the 18 mm thick material")
+    );
+
+    let mut h = profile_form();
+    let thickness = h.app.doc.job.thickness;
+    let calculate = |h: &mut Harness| {
+        let apply = h.text_at("Apply").or_else(|| h.text_at("Calculate"));
+        h.click(apply.expect("the form's button"), Modifiers::NONE);
+        h.frame(vec![]);
+        h.frame(vec![]);
+    };
+    // OK: made as set
+    h.app.form.as_mut().unwrap().params["depth"] = (thickness + 2.0).into();
+    h.frame(vec![]);
+    calculate(&mut h);
+    assert!(h.app.deep_cut.is_some(), "held for the warning");
+    assert!(h.text_at("Warning: deeper than the material").is_some());
+    assert!(h.app.doc.toolpaths.is_empty(), "nothing made yet");
+    let ok = *h.texts_at("OK").last().unwrap();
+    h.click(ok, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.deep_cut.is_none());
+    for _ in 0..500 {
+        if !h.app.doc.toolpaths.is_empty() && h.app.busy.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.frame(vec![]);
+    }
+    assert_eq!(h.app.doc.toolpaths.len(), 1, "made as it was set");
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["depth"].as_f64(),
+        Some(thickness + 2.0)
+    );
+    // Cancel: back to the form, the depth corrected
+    calculate(&mut h);
+    assert!(h.app.deep_cut.is_some());
+    let cancel = *h.texts_at("Cancel").last().unwrap();
+    h.click(cancel, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.deep_cut.is_none());
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["depth"].as_f64(),
+        Some(thickness)
+    );
+    assert!(h.app.form.is_some(), "still on the form");
 }
 
 #[test]

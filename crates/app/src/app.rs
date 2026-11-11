@@ -4,6 +4,7 @@
 mod actions;
 mod background;
 mod cutting;
+mod depth;
 mod draw3d;
 mod first_run;
 mod guide;
@@ -946,6 +947,8 @@ struct CutCraftApp {
     tools_path: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
+    /// A Calculate waiting on the deeper-than-the-material warning.
+    deep_cut: Option<depth::DeepCut>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
