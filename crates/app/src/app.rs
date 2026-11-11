@@ -1647,44 +1647,115 @@ fn paint_focus_ring(ctx: &egui::Context) {
     );
 }
 
-/// A toolpath form's tool: picked from the Tool Database (the machine's tool changer's first,
-/// by slot), with Edit… to change it there, and its settings shown read-only. The tool picked
-/// now, and whether Edit… was clicked.
+/// What a toolpath form's Tool section asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ToolAsk {
+    /// Select…: the Tool Database to pick the tool in, opened on this one.
+    Select,
+    /// Edit…: the Tool Database to change this tool in.
+    Edit,
+}
+
+/// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
+/// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
+/// holders are too, and every setting) and Edit… to change it there. What was asked for.
 fn tool_picker(
     ui: &mut egui::Ui,
     tool: &Value,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
-) -> (Option<String>, bool) {
+) -> Option<ToolAsk> {
     let current = tool["name"].as_str().unwrap_or_default();
-    let mut chosen = holders(ui, "form_tool", current, tools, slots);
-    let edit = ui
-        .horizontal(|ui| {
-            if let Some(name) = tool_menu(ui, "form_tool", current, tools, slots) {
-                chosen = Some(name);
-            }
-            ui.label("Tool database");
-            ui.button("Edit…")
-                .on_hover_hint("Change this tool in the Tool Database")
-                .clicked()
-        })
-        .inner;
-    match serde_json::from_value::<Tool>(tool.clone()) {
-        Ok(tool) => {
+    let picked = serde_json::from_value::<Tool>(tool.clone())
+        .ok()
+        .filter(|_| !current.is_empty());
+    match &picked {
+        Some(tool) => {
             // Aspire's Passes: how many the cut depth takes, as set in Edit Passes
             #[expect(clippy::cast_precision_loss, reason = "a small count")]
             let passes = top["depth"]
                 .as_f64()
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
-            tool_summary(ui, &tool, passes, tools.get(&tool.name).is_some());
+            ui.strong(held_name(current, slots));
+            ui.label(tool_line(tool, passes));
+            if tools.get(current).is_none() {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    "Not in the Tool Database: Select… one, or add it there",
+                );
+            }
         }
-        Err(_) => {
-            ui.weak("Pick a tool from the Tool Database");
+        None => {
+            ui.colored_label(
+                ui.visuals().warn_fg_color,
+                "No tool picked yet: Select… one",
+            );
         }
     }
-    (chosen, edit)
+    ui.horizontal(|ui| {
+        let select = ui
+            .button("Select…")
+            .on_hover_hint(
+                "Pick the bit this toolpath cuts with in the Tool Database: it brings its own \
+                 feeds, speeds and pass depth",
+            )
+            .clicked();
+        let edit = ui
+            .button("Edit…")
+            .on_hover_hint("Change this tool in the Tool Database")
+            .clicked();
+        if select {
+            Some(ToolAsk::Select)
+        } else {
+            edit.then_some(ToolAsk::Edit)
+        }
+    })
+    .inner
+}
+
+/// The form tool's name as the tool changer has it: `T3  name` when loaded in holder 3.
+fn held_name(name: &str, slots: &[Option<String>]) -> String {
+    match slots.iter().position(|s| s.as_deref() == Some(name)) {
+        Some(i) => format!("T{}  {name}", i + 1),
+        None => name.to_owned(),
+    }
+}
+
+/// A tool in one line for its form: how wide, its angle or tip if it has one, how deep a
+/// pass, and how many passes the cut takes (`passes`, when known). Lengths in the tool's
+/// own units.
+fn tool_line(tool: &Tool, passes: Option<f64>) -> String {
+    use cut_craft_core::toolpath::ToolShape;
+    let length = |mm: f64| match form::shown_in("mm", tool.units) {
+        Some((per, to)) => format!("{} {to}", trimmed(mm / per)),
+        None => format!("{} mm", trimmed(mm)),
+    };
+    let across = length(tool.diameter);
+    let line = match tool.shape {
+        ToolShape::EndMill => format!("{across} end mill"),
+        ToolShape::BallNose => format!("{across} ball nose"),
+        ToolShape::VBit => format!("{}° V-bit, {across} across", trimmed(tool.angle)),
+        ToolShape::RadiusedEndMill => {
+            format!("{across} end mill, {} tip radius", length(tool.tip_radius))
+        }
+        ToolShape::ThreadMill => format!("{across} thread mill"),
+        ToolShape::FormTool => format!("{across} form tool"),
+    };
+    let pass = length(tool.pass_depth);
+    let line = format!("{line}, {pass} a pass");
+    match passes {
+        Some(passes) => {
+            let s = if (passes - 1.0).abs() < f64::EPSILON {
+                ""
+            } else {
+                "es"
+            };
+            format!("{line}, {} pass{s}", trimmed(passes))
+        }
+        None => line,
+    }
 }
 
 /// The tool changer's magazine, when the machine has one: 0 for a bit changed by hand (the

@@ -150,15 +150,9 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Add tabs to toolpath", extend("x-group" = "Tabs"))]
     pub tabs: Tabs,
+    /// Their size, how many and where: set in the Edit Tabs window, so the form stays short
     #[serde(default)]
-    #[schemars(
-        title = "Tab Size",
-        extend(
-            "x-section" = true,
-            "x-group" = "Tabs",
-            "x-enable-when" = {"tabs": ["flat", "triangular"]}
-        )
-    )]
+    #[schemars(skip)]
     pub tab: TabSettings,
     /// Tabs placed by clicking in the 2D view, on the vectors
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -766,6 +760,20 @@ mod tests {
             schema["properties"]["depth"]["x-enable-when"]["through"], "false",
             "the depth is greyed while it follows the thickness"
         );
+    }
+
+    #[test]
+    fn the_tab_settings_are_in_edit_tabs_not_on_the_form() {
+        let schema = schemars::schema_for!(Params);
+        let schema = schema.as_value();
+        assert_eq!(schema["properties"]["tabs"]["x-group"], "Tabs");
+        assert!(
+            schema["properties"].get("tab").is_none(),
+            "the size and spacing are set in the Edit Tabs window"
+        );
+        // still kept with the toolpath
+        let tp = profile(Side::Outside, 10.0).unwrap();
+        assert_eq!(tp.params["tab"]["spacing"], "automatic");
     }
 
     #[test]

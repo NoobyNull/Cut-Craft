@@ -38,17 +38,24 @@ impl CutCraftApp {
             return;
         };
         match outcome {
-            Outcome::Apply | Outcome::Ok => {
+            Outcome::Apply | Outcome::Ok | Outcome::Select(_) => {
                 self.tools = manager.draft.clone();
                 let changer = manager.changer.clone();
                 if let Some(changer) = &changer {
                     self.tools.number_by_slots(&changer.slots);
                 }
-                if outcome == Outcome::Ok {
+                if matches!(outcome, Outcome::Ok | Outcome::Select(_)) {
                     self.tool_manager = None;
                 }
                 self.tools_changed("Tool database saved");
                 self.refresh_form_tool();
+                if let Outcome::Select(name) = &outcome {
+                    self.choose_tool(name);
+                    if let Some(form) = &mut self.form {
+                        form.dirty = true;
+                    }
+                    self.status.set_message(&format!("Cutting with {name}"));
+                }
                 if let Some(changer) = changer
                     && let Some(machine) = self
                         .machines

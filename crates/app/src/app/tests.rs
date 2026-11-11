@@ -158,10 +158,11 @@ fn a_tools_figures_read_in_the_tools_own_units() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Pocket Toolpath").is_some(), "the form is drawn");
-    assert!(
-        h.text_at("0.236 in").is_some(),
-        "a 6 mm end mill reads in inches in a mm job"
-    );
+    let line = h.shapes.iter().any(|clipped| {
+        matches!(&clipped.shape, egui::Shape::Text(t)
+            if t.galley.text().starts_with("0.236 in end mill"))
+    });
+    assert!(line, "a 6 mm end mill reads in inches in a mm job");
 }
 
 #[test]
@@ -4636,12 +4637,26 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(h.text_at("0  Manual").is_some() && h.text_at("1  (empty)").is_some());
+    // Select… opens the Tool Database, the tool changer's holders over its tree
+    h.click(
+        h.text_at("Select…").expect("the form's tool"),
+        Modifiers::NONE,
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("T1  (empty)").is_some());
     let holder = h
-        .text_at("3  3 mm End Mill")
+        .text_at("T3  3 mm End Mill")
         .expect("holder 3 and its tool");
     h.click(holder, Modifiers::NONE);
     h.frame(vec![]);
+    let select = *h.texts_at("Select").last().expect("Select");
+    h.click(select, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("T3  3 mm End Mill").is_some(),
+        "the form names its holder"
+    );
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("profile_toolpath", &params).unwrap();
     // the G-code calls slot 3
@@ -7608,10 +7623,9 @@ fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
     );
     h.frame(vec![]);
     h.frame(vec![]);
-    h.click(
-        h.text_at("Not on corners").expect("the window"),
-        Modifiers::NONE,
-    );
+    // automatic to start with, as the form says; by number here
+    h.click(h.text_at("Number").expect("the window"), Modifiers::NONE);
+    h.click(h.text_at("Not on corners").unwrap(), Modifiers::NONE);
     h.click(h.text_at("Add Tabs").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     let params = h.app.form.as_ref().unwrap().params.clone();
@@ -9048,7 +9062,7 @@ fn a_long_forms_apply_button_and_error_stay_in_sight() {
     let apply = h.text_at("Apply").expect("Apply");
     assert!(apply.y < 800.0, "Apply is in the window: {apply:?}");
     assert!(
-        h.text_at("Add tabs to toolpath").is_none(),
+        h.text_at("Edit Tabs…").is_none(),
         "the form runs on out of sight, under the pinned buttons"
     );
     h.app.form.as_mut().unwrap().error = Some("select the vectors to profile".into());
@@ -9485,4 +9499,156 @@ fn an_embellishment_follows_its_settings_in_place_and_one_undo_takes_it_away() {
     h.app.invoke(&h.ctx, "undo");
     assert!(pieces(&h).is_empty());
     assert!(h.app.doc.components.is_empty());
+}
+
+#[test]
+fn a_form_tool_reads_in_one_line() {
+    let tool = Tool {
+        diameter: 6.35,
+        pass_depth: 3.0,
+        ..Tool::default()
+    };
+    assert_eq!(
+        tool_line(&tool, Some(2.0)),
+        "6.35 mm end mill, 3 mm a pass, 2 passes"
+    );
+    assert_eq!(
+        tool_line(&tool, Some(1.0)),
+        "6.35 mm end mill, 3 mm a pass, 1 pass"
+    );
+    let v = Tool {
+        shape: cut_craft_core::toolpath::ToolShape::VBit,
+        angle: 60.0,
+        diameter: 12.7,
+        pass_depth: 2.0,
+        ..Tool::default()
+    };
+    assert_eq!(
+        tool_line(&v, None),
+        "60° V-bit, 12.7 mm across, 2 mm a pass"
+    );
+    let slots = [None, Some("Badger".to_owned())];
+    assert_eq!(held_name("Badger", &slots), "T2  Badger");
+    assert_eq!(held_name("Other", &slots), "Other");
+}
+
+#[test]
+fn the_tabs_read_in_one_line_on_the_form() {
+    use cut_craft_core::entry::{TabPlacement, TabSettings, TabSpacing, Tabs};
+    let tab = TabSettings::default();
+    let mm = Units::Mm;
+    assert_eq!(tabs::summary(Tabs::None, tab, true, 0, mm), None);
+    assert_eq!(
+        tabs::summary(Tabs::Flat, tab, true, 0, mm).unwrap(),
+        "12.7 mm long, 6.35 mm thick (from the tool), about one every 150 mm, at least 3 a shape"
+    );
+    let by_number = TabSettings {
+        spacing: TabSpacing::ConstantNumber,
+        placement: TabPlacement::AvoidCorners,
+        ..tab
+    };
+    assert_eq!(
+        tabs::summary(Tabs::Triangular, by_number, false, 0, mm).unwrap(),
+        "12.7 mm long, 6.35 mm thick, 4 a shape, off the corners"
+    );
+    let placed = TabSettings {
+        spacing: TabSpacing::Placed,
+        ..tab
+    };
+    assert!(
+        tabs::summary(Tabs::Flat, placed, false, 5, mm)
+            .unwrap()
+            .ends_with("5 placed by hand")
+    );
+}
+
+#[test]
+fn the_profile_form_keeps_tab_and_tool_settings_in_their_windows() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.click(h.at(60.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the form: the tool's name and one line, the tab choice, and the buttons
+    assert!(h.text_at("3 mm End Mill").is_some());
+    assert!(h.text_at("Select…").is_some());
+    for hidden in [
+        "Clearing stepover",
+        "Feed rate",
+        "Tab Size",
+        "Minimum Number",
+        "Constant distance",
+    ] {
+        assert!(h.text_at(hidden).is_none(), "{hidden} is in a window");
+    }
+    // Select… opens the Tool Database to pick in, on the form's tool
+    h.click(h.text_at("Select…").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    assert!(manager.selecting);
+    assert_eq!(manager.shown_tool(), Some("3 mm End Mill"));
+    let other = manager
+        .draft
+        .tools
+        .iter()
+        .position(|t| t.name == "6 mm Ball Nose")
+        .unwrap();
+    manager.pick = Some(cut_craft_tool_database::Pick::Tool(other));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Select Tool").is_some());
+    let select = *h.texts_at("Select").last().expect("Select, in place of OK");
+    h.click(select, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.tool_manager.is_none(), "closed");
+    let form = h.app.form.as_ref().unwrap();
+    let ball = h.app.tools.get("6 mm Ball Nose").unwrap();
+    assert_eq!(form.params["tool"]["name"], "6 mm Ball Nose");
+    assert_eq!(
+        form.params["tool"]["feed_rate"],
+        serde_json::json!(ball.feed_rate),
+        "its own feeds and speeds come with it"
+    );
+    // 2D tabs: the form says what they will be
+    h.app.form.as_mut().unwrap().params["tabs"] = "flat".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.app.form.as_ref().unwrap().params["tab"]["spacing"] == "automatic",
+        "kept with the toolpath"
+    );
+    let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
+    scroll_above_foot(&mut h, over, "Edit Tabs…");
+    let summary = h.shapes.iter().any(|clipped| {
+        matches!(&clipped.shape, egui::Shape::Text(t)
+            if t.galley.text().contains("about one every 150 mm"))
+    });
+    assert!(summary, "the tabs in one line");
+}
+
+#[test]
+fn switching_units_and_back_leaves_every_tool_figure_as_it_was() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    let before = h.app.form.as_ref().unwrap().params.clone();
+    let database = serde_json::to_value(&h.app.tools).unwrap();
+    for units in ["units_inch", "units_mm", "units_inch", "units_mm"] {
+        h.app.set_units(units);
+        h.frame(vec![]);
+        h.frame(vec![]);
+    }
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["tool"],
+        before["tool"],
+        "kept in mm, only shown in inches"
+    );
+    assert_eq!(serde_json::to_value(&h.app.tools).unwrap(), database);
 }

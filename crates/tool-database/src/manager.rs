@@ -46,6 +46,9 @@ pub enum Outcome {
     Import,
     /// Pick where to save these tools.
     Export(ToolDatabase),
+    /// Keep the edited database, close the window and cut with this tool (by name): the
+    /// window was opened from a toolpath form's Select….
+    Select(String),
 }
 
 /// How the window draws: lengths in inches or millimetres, and its pictures.
@@ -71,6 +74,9 @@ pub struct Manager {
     pub hide_unset: bool,
     /// What is typed in the search box over the tree: tools are found by name.
     pub search: String,
+    /// Opened from a toolpath form's Select…: titled Select Tool, with Select for the tool
+    /// shown in place of OK.
+    pub selecting: bool,
     index: crate::search::SearchIndex,
 }
 
@@ -223,8 +229,35 @@ impl Manager {
             copy_cutting_data: true,
             hide_unset: false,
             search: String::new(),
+            selecting: false,
             index: crate::search::SearchIndex::default(),
         }
+    }
+
+    /// Opens on a copy of `db` to pick a toolpath's tool, on `current` when it is listed.
+    pub fn selecting(db: &ToolDatabase, current: &str) -> Self {
+        let mut manager = Self::new(db);
+        manager.selecting = true;
+        manager.pick = db
+            .tools
+            .iter()
+            .position(|t| t.name == current)
+            .map(Pick::Tool);
+        manager
+    }
+
+    /// The name of the tool shown, when one is.
+    pub fn shown_tool(&self) -> Option<&str> {
+        match self.pick {
+            Some(Pick::Tool(i)) => self.draft.tools.get(i).map(|t| t.name.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Select: what the window asks for, when a tool is shown.
+    pub fn select(&self) -> Option<Outcome> {
+        self.shown_tool()
+            .map(|name| Outcome::Select(name.to_owned()))
     }
 
     /// Loads tool `i` into the tool changer's `slot` (counted from 1; `None` takes it out),
@@ -283,7 +316,11 @@ impl Manager {
         cut_craft_bug_report::dialog_with_panels(
             ctx,
             tool_window(),
-            "Tool Database",
+            if self.selecting {
+                "Select Tool"
+            } else {
+                "Tool Database"
+            },
             size,
             &mut open,
             |ui| {
@@ -293,9 +330,26 @@ impl Manager {
                         if ui.button("Cancel").clicked() {
                             outcome = Some(Outcome::Cancel);
                         }
-                        if ui.button("OK").clicked() {
-                            outcome = Some(Outcome::Ok);
+                        if !self.selecting {
+                            if ui.button("OK").clicked() {
+                                outcome = Some(Outcome::Ok);
+                            }
+                            return;
                         }
+                        let select = ui
+                            .add_enabled(self.shown_tool().is_some(), egui::Button::new("Select"))
+                            .on_hover_hint(
+                                "Cut with the tool shown, with its saved feeds, speeds and \
+                                 pass depth (any edits made here are kept)",
+                            )
+                            .on_disabled_hover_text("Pick a tool in the list first");
+                        if select.clicked() {
+                            outcome = self.select();
+                        }
+                        match self.shown_tool() {
+                            Some(name) => ui.label(name),
+                            None => ui.weak("Pick a tool in the list"),
+                        };
                     });
                 });
                 egui::Panel::left("tool_database_tree")
@@ -1379,6 +1433,23 @@ mod tests {
         keep_cutting(&mut tool, &default, "");
         assert!((tool.plunge_rate - 50.0).abs() < 1e-9);
         assert_eq!(tool.materials.len(), 1);
+    }
+
+    #[test]
+    fn select_tool_opens_on_the_forms_tool_and_hands_back_the_one_shown() {
+        let db = ToolDatabase::starter();
+        let name = db.tools[1].name.clone();
+        let mut m = Manager::selecting(&db, &name);
+        assert!(m.selecting);
+        assert_eq!(m.pick, Some(Pick::Tool(1)), "shown first");
+        assert_eq!(m.select(), Some(Outcome::Select(name)));
+        m.pick = Some(Pick::Tool(0));
+        assert_eq!(m.select(), Some(Outcome::Select(db.tools[0].name.clone())));
+        // a group shown, nothing to select
+        m.pick = Some(Pick::Group(String::new()));
+        assert_eq!(m.select(), None);
+        assert_eq!(Manager::selecting(&db, "no such tool").pick, None);
+        assert!(!Manager::new(&db).selecting);
     }
 
     #[test]
