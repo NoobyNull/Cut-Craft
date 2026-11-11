@@ -355,9 +355,11 @@ impl Command for Embellish {
         let mut c = Change::builder(doc);
         if p.make != Make::Carving {
             let group = doc.next_group();
+            let layer = c.add_layer(&p.name);
             for it in &items {
                 for path in outlines(it) {
                     let id = c.add(path);
+                    c.move_to_layer(id, layer);
                     c.set_group(id, Some(group));
                 }
             }
@@ -448,6 +450,41 @@ mod tests {
         let mut after = doc.clone();
         after.apply(&Embellish::run(doc, p).unwrap()).unwrap();
         after
+    }
+
+    #[test]
+    fn each_embellishment_goes_on_a_layer_of_its_own_named_for_it() {
+        let shape = polygon(6, 110.0);
+        let doc = document_with(vec![shape.clone()]);
+        let p = Params {
+            name: "Lid".into(),
+            ..Params::default()
+        };
+        let once = made(&doc, &p);
+        let twice = made(&once, &p);
+        assert_eq!(
+            twice.layers.len(),
+            doc.layers.len() + 2,
+            "a new layer each time"
+        );
+        assert_eq!(
+            twice.current_layer, doc.current_layer,
+            "drawing stays where it was"
+        );
+        for after in [&once, &twice] {
+            let layer = after.layers.last().unwrap();
+            assert_eq!(layer.name, "Lid");
+            let on: Vec<_> = after
+                .vectors
+                .iter()
+                .filter(|(id, _)| after.layer_of(**id) == layer.id)
+                .collect();
+            assert!(on.len() > 40, "{} pieces on it", on.len());
+            assert!(
+                on.iter().all(|(_, v)| **v != shape),
+                "the outline stays put"
+            );
+        }
     }
 
     #[test]
