@@ -358,7 +358,7 @@ impl CutCraftApp {
     /// One tool's icon button: enabled when it is built, highlighted while in hand.
     fn tool_button(&self, ui: &mut egui::Ui, id: &str, edge: f32) -> egui::Response {
         let label = self.tool_label(id);
-        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let explicit = self.explicit_icon(id);
         let button = self
             .icon_button(explicit, id, &label, edge)
             .selected(self.status.current_tool == label);
@@ -382,7 +382,7 @@ impl CutCraftApp {
         let hold_for = self.options.general.flyout_hold();
         let id = button.face;
         let label = self.tool_label(id);
-        let explicit = self.registry.get(id).map_or("", |c| c.meta().icon);
+        let explicit = self.explicit_icon(id);
         let in_hand = button
             .members
             .iter()
@@ -473,7 +473,7 @@ impl CutCraftApp {
         let mut picked = None;
         for &member in &button.members {
             let name = self.tool_label(member);
-            let explicit = self.registry.get(member).map_or("", |c| c.meta().icon);
+            let explicit = self.explicit_icon(member);
             let row = match self.icons.find(explicit, member) {
                 Some(path) => egui::Button::image_and_text(
                     self.icons

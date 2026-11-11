@@ -3822,12 +3822,17 @@ fn a_design_sub_tab_can_have_a_section_of_its_own() {
     assert!(h.text_at("Create Vectors").is_some(), "Create is open");
     assert!(h.text_at("Shape Creation").is_none(), "Model is a tab");
     h.app
-        .invoke(&h.ctx, &format!("{}Model:section", gui::SUBTAB_PLACE));
-    h.app
         .invoke(&h.ctx, &format!("{}Import:section", gui::SUBTAB_PLACE));
+    h.frame(vec![]);
+    for group in ["Create Vectors", "Import"] {
+        assert!(h.text_at(group).is_some(), "{group} shows");
+    }
+    // Model's section comes before Import's, which it pushes down the page
+    h.app
+        .invoke(&h.ctx, &format!("{}Model:section", gui::SUBTAB_PLACE));
     assert_eq!(h.app.options.design_sections, ["Model", "Import"]);
     h.frame(vec![]);
-    for group in ["Create Vectors", "Shape Creation", "Import"] {
+    for group in ["Create Vectors", "Shape Creation"] {
         assert!(h.text_at(group).is_some(), "{group} shows");
     }
     // a tool on a section leaves the row's tab as it was
@@ -5751,11 +5756,8 @@ fn every_tool_on_the_tool_pages_has_an_icon() {
         .chain(&toolbar.modeling_groups)
         .chain(&toolbar.toolpath_groups)
         .flat_map(|g| g.tools.iter().copied())
-        .filter(|id| h.app.registry.get(id).is_some())
-        .filter(|id| {
-            let icon = h.app.registry.get(id).map_or("", |c| c.meta().icon);
-            h.app.icons.find(icon, id).is_none()
-        })
+        .filter(|id| h.app.registry.get(id).is_some() || gui::built_in_label(id).is_some())
+        .filter(|id| h.app.icons.find(h.app.explicit_icon(id), id).is_none())
         .collect();
     assert!(
         missing.is_empty(),
@@ -10225,5 +10227,126 @@ fn an_older_pocket_with_a_rest_list_still_shows_it() {
     assert!(
         h.text_at("Rest Machining").is_some(),
         "kept, so it can be changed"
+/// Tools that were only in a menu get a button too (Matthew, 2026-11-10): the left page's
+/// for what changes the shape to cut, the right page's for how it is cut and sent to the
+/// machine, each where Aspire's help puts its icon. Buttons already there stay put.
+#[test]
+fn menu_only_tools_have_a_button_on_their_side() {
+    let h = Harness::new();
+    let toolbar = &h.app.toolbar;
+    let model = toolbar.subtab_groups(
+        gui::DESIGN_SUBTABS
+            .iter()
+            .position(|t| t.name == "Model")
+            .unwrap(),
+    );
+    let on = |groups: &[gui::ToolGroup], id: &str| groups.iter().any(|g| g.tools.contains(&id));
+    for id in [
+        "reset_inside_selected_vectors",
+        "reset_outside_selected_vectors",
+        "component_boundary",
+        "cross_section",
+        "create_component_from_visible_model",
+        "export_as_stl",
+        "export_as_grayscale_bitmap",
+        "export_as_3d_clipart",
+    ] {
+        assert!(on(&model, id), "{id} on the Model sub-tab");
+    }
+    let design = toolbar.all_design_groups();
+    for id in ["notes", "document_variables"] {
+        assert!(on(&design, id), "{id} on the Design page");
+    }
+    for id in [
+        "load_template",
+        "save_selected_toolpath_as_template",
+        "save_all_visible_toolpaths_as_template",
+        "create_job_sheet",
+        "print_job_sheet",
+        "part_labels",
+        "cut_list",
+    ] {
+        assert!(
+            on(&toolbar.toolpath_groups, id),
+            "{id} on the Toolpaths page"
+        );
+        assert!(
+            !on(&design, id),
+            "{id} is how it is cut, not on the Design page"
+        );
+    }
+    // each says what it is in words, not its id
+    for (id, label) in [
+        ("export_as_stl", "Export Model as STL"),
+        (
+            "export_as_grayscale_bitmap",
+            "Export Model as Grayscale Picture",
+        ),
+        ("export_as_3d_clipart", "Export Model as 3D Clipart"),
+        ("load_template", "Load Toolpath Template"),
+        ("create_job_sheet", "Save Job Sheet"),
+        ("cut_list", "Save Cut List"),
+    ] {
+        assert_eq!(h.app.tool_label(id), label);
+        assert!(gui::about(id).is_some(), "{id} has a tooltip");
+    }
+}
+
+/// Adding buttons moves none of those already there: each group keeps its tools in their
+/// order, the new ones after them.
+#[test]
+fn the_buttons_already_there_keep_their_places() {
+    let toolbar = gui::Toolbar::new();
+    let starts = |name: &str, tools: &[&str]| {
+        let all: Vec<gui::ToolGroup> = toolbar
+            .all_design_groups()
+            .into_iter()
+            .chain(toolbar.toolpath_groups.iter().copied())
+            .collect();
+        let group = all.iter().find(|g| g.name == name).unwrap();
+        assert_eq!(&group.tools[..tools.len()], tools, "{name}");
+    };
+    starts(
+        "File Operations",
+        &[
+            "new",
+            "open",
+            "save",
+            "export_vectors",
+            "paste_in_place",
+            "open_folder",
+            "job_setup",
+        ],
+    );
+    starts(
+        "Shape Editing",
+        &[
+            "sculpt",
+            "smooth_selected_components",
+            "emboss",
+            "distort_object",
+            "offset_model",
+            "slice",
+            "add_draft",
+            "scale_model_z_height",
+            "replace_below",
+            "split",
+            "bake_components",
+            "component_levels",
+        ],
+    );
+    starts(
+        "Toolpath Templates",
+        &["array_copy_toolpath", "merged_toolpath"],
+    );
+    starts(
+        "Output",
+        &[
+            "save_toolpaths",
+            "toolpath_summary",
+            "tool_database",
+            "keep_out_zones",
+            "toolpath_tiling",
+        ],
     );
 }

@@ -623,6 +623,10 @@ I[md + "create_texture_area.svg"] = lambda: [rect(5, 5, 38, 38, 2, INK, 2.5, Non
 I[md + "create_vector_boundary_around_selected_components.svg"] = lambda: [dome(24, 34, 30, 18), rect(4, 8, 40, 32, 5, ACC, 2.5, None, "4 3")]
 I[md + "emboss_component.svg"] = lambda: [plane(40), path("M6,38 C12,26 18,34 24,26 S36,30 42,38 Z", INK, SW, MODEL), arrow(24, 6, 24, 20, ACC, 2.5, 6)]
 I[md + "export_as_stl.svg"] = lambda: [pl([(6, 40), (18, 14), (30, 40)], INK, 2.5, MODEL, True), line(18, 14, 18, 40, INK, 1.5), line(12, 27, 24, 27, INK, 1.5), arrow(28, 20, 43, 5)]
+# the model as a height picture: dark low, light high, saved out
+I[md + "export_as_grayscale_bitmap.svg"] = lambda: [rect(5, 16, 9, 26, 0, None, 0, "#5a5f68"), rect(14, 16, 9, 26, 0, None, 0, "#9aa3b2"),
+                                                    rect(23, 16, 9, 26, 0, None, 0, "#e3e6eb"), rect(5, 16, 27, 26, 2, INK, 2.5),
+                                                    arrow(28, 18, 43, 4)]
 I[md + "extrude_and_weave.svg"] = lambda: [path("M4,30 C12,14 20,14 24,24 S36,34 44,18", INK, 7), path("M4,30 C12,14 20,14 24,24 S36,34 44,18", MODEL, 3)]
 I[md + "import_component_3d_model.svg"] = lambda: [dome(30, 42, 28, 20), arrow(4, 6, 18, 20)]
 I[md + "offset_model.svg"] = lambda: [plane(42), path("M4,40 A20,28 0 0 1 44,40", ACC, 2.5, dash="4 3"), profile("round", 10, 38, 40, 20)]
@@ -729,6 +733,16 @@ I[tp + "keep_out_zones.svg"] = lambda: [material(4, 6, 40, 36), rect(14, 14, 20,
 I[tp + "toolpath_tiling.svg"] = lambda: [rect(4 + 14 * c, 6 + 13 * r, 12, 11, 1, TP, 2, TPL) for r in range(3) for c in range(3)] + [line(16, 4, 16, 44, ACC, 1.5, "2 2"), line(30, 4, 30, 44, ACC, 1.5, "2 2")]
 I[tp + "toolpath_summary.svg"] = lambda: [page(6, 4, 28, 38, 7)] + [line(11, y, 27, y, GREY, 2) for y in (16, 23, 30)] + [circ(36, 35, 9, DARK, 2.5, "none"), line(36, 35, 36, 29, DARK, 2), line(36, 35, 40, 37, DARK, 2)]
 I[tp + "create_job_sheet.svg"] = lambda: [page(8, 4, 30, 40, 7), rect(13, 12, 18, 12, 1, WOODD, 1.5, WOOD), path("M15,22 Q21,14 29,19", TP, 2)] + [line(13, y, 31, y, GREY, 2) for y in (30, 36)]
+# the job sheet coming out of a printer
+I[tp + "print_job_sheet.svg"] = lambda: [page(13, 4, 22, 20, 6), line(17, 12, 29, 12, GREY, 2), line(17, 18, 29, 18, GREY, 2),
+                                         rect(5, 22, 38, 14, 3, INK, 2.5), rect(13, 32, 22, 12, 1, INK, 2.5, WHITE),
+                                         line(17, 38, 31, 38, TP, 2), dot(37, 28, 2.5)]
+# a tag to stick on a cut part: its name and size
+I[tp + "part_labels.svg"] = lambda: [path("M6,14 H32 L43,24 L32,34 H6 Z", INK, 2.5), circ(34, 24, 2.5, ACC, 2),
+                                     line(11, 21, 25, 21, GREY, 2), line(11, 27, 21, 27, GREY, 2)]
+# the parts' list, saved out as a spreadsheet
+I[tp + "cut_list.svg"] = lambda: [rect(4, 14, 30, 28, 2, INK, 2.5), line(4, 23, 34, 23), line(4, 32, 34, 32),
+                                  line(17, 14, 17, 42), arrow(28, 18, 43, 4)]
 I[tp + "load_toolpath_template.svg"] = lambda: [page(14, 6, 28, 36, 7, TPL, TP), arrow(3, 6, 16, 19, ACC)]
 I[tp + "save_toolpath_template.svg"] = lambda: [page(4, 4, 26, 34, 7, TPL, TP), floppy(26, 26, 18)]
 I[tp + "save_all_as_template.svg"] = lambda: [page(4, 2, 22, 30, 6, TPL, TP), page(10, 8, 22, 30, 6, TPL, TP), floppy(26, 26, 18)]

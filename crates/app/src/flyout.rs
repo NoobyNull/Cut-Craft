@@ -59,6 +59,7 @@ pub const FLYOUTS: &[Flyout] = &[
             "text_on_a_curve",
             "auto_layout_text",
             "convert_text_to_curves",
+            "document_variables",
         ],
     ),
     flyout(
@@ -117,6 +118,13 @@ pub const FLYOUTS: &[Flyout] = &[
             "create_shape_angled",
             "create_shape_smooth",
             "create_shape_flat",
+        ],
+    ),
+    flyout(
+        "Clear the Model",
+        &[
+            "reset_inside_selected_vectors",
+            "reset_outside_selected_vectors",
         ],
     ),
 ];
@@ -473,9 +481,9 @@ mod tests {
             .partition(|g| g.name == "Import");
         assert!(count(&rest) <= 45, "{}", count(&rest));
         assert_eq!(count(&import), import[0].tools.len());
-        // the four Create Shape buttons become one
+        // the four Create Shape buttons become one, and the two Reset buttons one
         let modeling: usize = toolbar.modeling_groups.iter().map(|g| g.tools.len()).sum();
-        assert_eq!(count(&toolbar.modeling_groups), modeling - 3);
+        assert_eq!(count(&toolbar.modeling_groups), modeling - 4);
     }
 
     #[test]
