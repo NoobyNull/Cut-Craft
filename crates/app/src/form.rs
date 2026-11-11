@@ -151,8 +151,13 @@ pub enum Kind {
         integer: bool,
         /// `x-steps`: only these values, as radio buttons side by side.
         steps: Vec<f64>,
+        /// `x-widget: slider` (with a minimum and a maximum): a slider along the range.
+        slider: bool,
     },
     Bool,
+    /// A pattern's seed (`x-widget: seed`): its number, and a New variation button that picks
+    /// another.
+    Seed,
     /// A string; `multiline` (`x-widget: multiline`) is a box of several lines.
     Text {
         multiline: bool,
@@ -461,9 +466,13 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             max,
             integer,
             steps,
+            slider,
         } => {
             if !steps.is_empty() {
                 return pick_step(ui, steps, value);
+            }
+            if let (true, Some(lo), Some(hi)) = (*slider, *min, *max) {
+                return slide(ui, lo..=hi, *integer, unit.as_deref(), value);
             }
             let (factor, unit) = match unit.as_deref().map(|u| (u, shown_in(u, look.units))) {
                 Some((_, Some((factor, shown)))) => (factor, Some(shown.to_owned())),
@@ -495,6 +504,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             }
             changed
         }
+        Kind::Seed => seed(ui, value),
         Kind::Bool => {
             let mut b = value.as_bool().unwrap_or_default();
             let changed = ui.checkbox(&mut b, "").changed();
@@ -881,11 +891,77 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
     changed
 }
 
+/// A seed's number, and a New variation button that steps it on.
+fn seed(ui: &mut egui::Ui, value: &mut Value) -> bool {
+    let mut n = value.as_u64().unwrap_or_default();
+    let mut changed = ui
+        .add(egui::DragValue::new(&mut n).range(0..=u32::MAX))
+        .changed();
+    if ui
+        .button("New variation")
+        .on_hover_hint("Another design with the same settings")
+        .clicked()
+    {
+        n = u64::from(next_seed(u32::try_from(n).unwrap_or_default()));
+        changed = true;
+    }
+    if changed {
+        *value = Value::from(n);
+    }
+    changed
+}
+
+/// A slider along `range` for a number with no length unit (a percentage, a 1 to 10
+/// setting).
+fn slide(
+    ui: &mut egui::Ui,
+    range: std::ops::RangeInclusive<f64>,
+    integer: bool,
+    unit: Option<&str>,
+    value: &mut Value,
+) -> bool {
+    let mut n = value.as_f64().unwrap_or_default();
+    let mut slider = egui::Slider::new(&mut n, range);
+    if integer {
+        slider = slider.integer();
+    }
+    if let Some(unit) = unit {
+        slider = slider.suffix(format!(" {unit}"));
+    }
+    let changed = ui.add(slider).changed();
+    if changed {
+        *value = if integer {
+            Value::from(round(n))
+        } else {
+            Value::from(n)
+        };
+    }
+    changed
+}
+
+/// The seed after `seed`: well away from it, the same every time, so a variation can be
+/// found again by stepping from the first.
+pub fn next_seed(seed: u32) -> u32 {
+    let mut random = cut_craft_core::random::Random(u64::from(seed));
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a unit times u32::MAX fits u32"
+    )]
+    let next = (random.unit() * f64::from(u32::MAX)) as u32;
+    if next == seed {
+        next.wrapping_add(1)
+    } else {
+        next
+    }
+}
+
 /// A new item of `kind` with nothing set: numbers at their least, the first choice, every
 /// field of an object so.
 fn blank(kind: &Kind) -> Value {
     match kind {
         Kind::Number { min, .. } => Value::from(min.unwrap_or(0.0).max(0.0)),
+        Kind::Seed => Value::from(1),
         Kind::Bool => Value::Bool(false),
         Kind::Text { .. } => Value::from(""),
         Kind::Choice(options, _) => options
@@ -1022,6 +1098,11 @@ fn kind(root: &Value, property: &Value) -> Kind {
         return Kind::Choice(options, widget);
     }
     match s["type"].as_str() {
+        Some("number" | "integer")
+            if marked("x-widget").and_then(Value::as_str) == Some("seed") =>
+        {
+            Kind::Seed
+        }
         Some(t @ ("number" | "integer")) => Kind::Number {
             unit: s["x-unit"].as_str().map(String::from),
             min: s["minimum"].as_f64(),
@@ -1031,6 +1112,7 @@ fn kind(root: &Value, property: &Value) -> Kind {
                 .and_then(Value::as_array)
                 .map(|steps| steps.iter().filter_map(Value::as_f64).collect())
                 .unwrap_or_default(),
+            slider: marked("x-widget").and_then(Value::as_str) == Some("slider"),
         },
         Some("boolean") => Kind::Bool,
         Some("string") => Kind::Text {
@@ -1095,6 +1177,51 @@ mod tests {
 
     fn field<'a>(fields: &'a [Field], key: &str) -> &'a Field {
         fields.iter().find(|f| f.key == key).unwrap()
+    }
+
+    #[test]
+    fn embellishs_settings_are_sliders_with_where_in_a_row_and_a_new_design_button() {
+        let f = fields(&schema("embellish"));
+        assert_eq!(keys(&f)[..2], ["place", "border"]);
+        // the patterned border's own settings only show for a patterned border
+        let rope = serde_json::json!({ "place": "both", "border": "rope" });
+        let band = serde_json::json!({ "place": "both", "border": "band" });
+        let shown = |key, params| field(&f, key).when.as_ref().is_none_or(|w| w.shown(params));
+        assert!(shown("border_width", &rope) && !shown("border_width", &band));
+        assert!(shown("twist", &rope));
+        assert!(!shown("border", &serde_json::json!({ "place": "fill" })));
+        let Kind::Choice(places, Widget::Row) = &field(&f, "place").kind else {
+            panic!("{:?}", field(&f, "place").kind);
+        };
+        let labels: Vec<&str> = places.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["Fill", "Border", "Both"]);
+        for key in ["refinement", "objects", "tightness"] {
+            assert_eq!(
+                field(&f, key).kind,
+                Kind::Number {
+                    unit: None,
+                    min: Some(1.0),
+                    max: Some(10.0),
+                    integer: true,
+                    steps: vec![],
+                    slider: true,
+                },
+                "{key}"
+            );
+        }
+        assert_eq!(field(&f, "objects").label, "Number of objects");
+        assert!(matches!(
+            field(&f, "height").kind,
+            Kind::Number { slider: false, .. }
+        ));
+        assert_eq!(field(&f, "seed").kind, Kind::Seed);
+    }
+
+    #[test]
+    fn a_new_variation_is_another_seed_and_the_same_one_each_time() {
+        assert_ne!(next_seed(1), 1);
+        assert_eq!(next_seed(1), next_seed(1));
+        assert_ne!(next_seed(next_seed(1)), next_seed(1));
     }
 
     #[test]
@@ -1431,7 +1558,8 @@ mod tests {
                 min: Some(0.0),
                 max: None,
                 integer: false,
-                steps: vec![]
+                steps: vec![],
+                slider: false,
             }
         );
         assert_eq!(field(&f, "x").help.as_deref(), Some("Left edge"));
@@ -1467,7 +1595,8 @@ mod tests {
                 min: Some(3.0),
                 max: Some(100.0),
                 integer: true,
-                steps: vec![]
+                steps: vec![],
+                slider: false,
             }
         );
     }

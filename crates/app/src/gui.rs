@@ -317,6 +317,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
                 "create_fillets",
                 "vector_boundary",
                 "vector_texture",
+                "embellish",
                 "trace_bitmap",
             ],
         ),

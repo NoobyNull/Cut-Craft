@@ -252,6 +252,10 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 
+/// Forms that make many pieces at once and go on remaking them as their settings change
+/// (an ornament and its variations), rather than adding another each time.
+const REMAKE_FORMS: &[&str] = &["embellish"];
+
 const BUILT_INS: [&str; 101] = [
     "try_sample_project",
     "first_run_setup",
@@ -827,6 +831,11 @@ struct OpenForm {
     beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
+    /// A form that remakes what it made ([`REMAKE_FORMS`]): the history's revision and the selection
+    /// just after its pieces were made, and the settings it was made with. While nothing else
+    /// has been done or picked since, a change of settings takes them back and makes them
+    /// again.
+    remade: Option<(u64, cut_craft_core::selection::Selection, Value)>,
     /// While a value is dragged, the undo depth after its last step and the shape and
     /// settings from before that step: the next step takes it back first.
     dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
@@ -1327,6 +1336,7 @@ fn summary_table(
                 max: None,
                 integer: false,
                 steps: vec![],
+                slider: false,
             },
             section: false,
             icon: None,
@@ -1347,6 +1357,7 @@ fn summary_table(
                 max: None,
                 integer: false,
                 steps: vec![],
+                slider: false,
             },
             section: false,
             icon: None,

@@ -134,6 +134,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_close_with_line::CloseWithLine>();
     r.add_interactive::<cmd_interactive_vector_trim::InteractiveVectorTrim>();
     r.add::<cmd_vector_texture::VectorTexture>();
+    r.add::<cmd_embellish::Embellish>();
     r.add_interactive::<cmd_draw_freehand::DrawFreehand>();
     r.add::<cmd_draw_curve::DrawCurve>();
     r.add::<cmd_vector_selector::VectorSelector>();
