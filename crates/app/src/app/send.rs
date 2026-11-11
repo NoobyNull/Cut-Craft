@@ -64,7 +64,12 @@ impl CutCraftApp {
         staging: &Path,
         replace: &dyn Fn(&[String]) -> bool,
     ) -> Result<String, String> {
-        let stem = format!("{}.{}", self.output_name(form), post.extension);
+        // made safe before it is written here too: Windows refuses `:` and the like
+        let stem = format!(
+            "{}.{}",
+            safe_name(&self.output_name(form), short),
+            post.extension
+        );
         let written = self.write_toolpath_files(form, post, &staging.join(stem))?;
         // each file as it goes on the card, in the order they are run
         let mut files: Vec<(PathBuf, String)> = written

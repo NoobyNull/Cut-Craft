@@ -1223,7 +1223,8 @@ impl CutCraftApp {
         };
         let extension = post.extension.clone();
         let mut dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
-        dialog = dialog.set_file_name(format!("{}.{extension}", self.output_name(form)));
+        let named = cut_craft_machines::send::safe_name(&self.output_name(form), false);
+        dialog = dialog.set_file_name(format!("{named}.{extension}"));
         let (key, name) = self.project();
         let programs = self
             .machines
