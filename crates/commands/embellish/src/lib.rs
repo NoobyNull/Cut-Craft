@@ -25,6 +25,7 @@
     reason = "each design is one sequence of steps, read top to bottom, as its sketch was"
 )]
 
+mod border;
 mod design;
 mod field;
 mod free;
@@ -60,6 +61,27 @@ pub enum Place {
     Both,
 }
 
+/// What runs round the edge.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BorderStyle {
+    /// A rounded band with a row of beads inside it, and ornament along it
+    #[default]
+    #[schemars(title = "Band and beads")]
+    Band,
+    /// Slanted strands laid side by side
+    Rope,
+    /// Oval links seen face on, joined by links seen edge on
+    Chain,
+    /// Two strands twisting round each other
+    Twist,
+    /// Three strands plaited over and under
+    Braid,
+    /// Oval beads with a pair of thin discs between each two
+    #[schemars(title = "Bead and reel")]
+    BeadAndReel,
+}
+
 /// What the ornament is made as.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -79,6 +101,24 @@ pub enum Make {
 pub struct Params {
     #[schemars(title = "Where", extend("x-widget" = "row"))]
     pub place: Place,
+    #[schemars(title = "Border", extend("x-hide-when" = {"place": "fill"}))]
+    pub border: BorderStyle,
+    /// How wide the patterned border is
+    #[schemars(title = "Border width", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    pub border_width: f64,
+    /// How long each repeat of the pattern is, against the width; the count is rounded so the
+    /// pattern meets itself
+    #[schemars(title = "Repeat length", range(min = 50, max = 200), extend("x-unit" = "%", "x-widget" = "slider", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    pub repeat: u32,
+    /// How steeply the rope's strands lie
+    #[schemars(title = "Twist angle", range(min = 20, max = 60), extend("x-unit" = "°", "x-widget" = "slider", "x-show-when" = {"border": "rope"}))]
+    pub twist: u32,
+    /// How far in from the edge the patterned border starts
+    #[schemars(title = "Border inset", range(min = 0), extend("x-unit" = "mm", "x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    pub border_inset: f64,
+    /// Raised rails along both sides of the patterned border
+    #[schemars(title = "Rails", extend("x-show-when" = {"border": ["rope", "chain", "twist", "braid", "bead_and_reel"]}))]
+    pub rails: bool,
     /// Low makes bold, plain pieces; high adds bead rows, sunbursts, striped scrolls and
     /// small curls
     #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider"))]
@@ -112,6 +152,12 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             place: Place::Both,
+            border: BorderStyle::Band,
+            border_width: 14.0,
+            repeat: 100,
+            twist: 45,
+            border_inset: 3.0,
+            rails: false,
             refinement: 6,
             objects: 6,
             scroll_size: 100,
@@ -132,6 +178,26 @@ impl Params {
         3.25 - 0.25 * f64::from(self.tightness.clamp(1, 10))
     }
 
+    /// The patterned border, when one is chosen.
+    fn pattern(&self) -> Option<border::Spec> {
+        let style = match self.border {
+            BorderStyle::Band => return None,
+            BorderStyle::Rope => border::Style::Rope,
+            BorderStyle::Chain => border::Style::Chain,
+            BorderStyle::Twist => border::Style::Twist,
+            BorderStyle::Braid => border::Style::Braid,
+            BorderStyle::BeadAndReel => border::Style::BeadAndReel,
+        };
+        Some(border::Spec {
+            style,
+            width: self.border_width,
+            repeat: f64::from(self.repeat.clamp(50, 200)) / 100.0,
+            lay: f64::from(self.twist.clamp(20, 60)).to_radians(),
+            inset: self.border_inset.max(0.0),
+            rails: self.rails,
+        })
+    }
+
     fn settings(&self, seed: u32) -> Settings {
         let unit = |v: u32| f64::from(v.clamp(1, 10) - 1) / 9.0;
         Settings {
@@ -146,6 +212,7 @@ impl Params {
             },
             stipple: self.stipple,
             seed,
+            inner_from: 0.0,
         }
     }
 }
@@ -207,11 +274,30 @@ fn regions(rings: &[Vec<Point>]) -> Vec<Region> {
     out
 }
 
-/// The ornament for one shape, in its field's frame.
-fn design(field: &Field, s: Settings) -> Vec<Item> {
+/// The ornament for one shape, in its field's frame: a patterned border when there is one,
+/// then the ornament inside it, kept clear of it.
+fn design(field: &Field, s: Settings, pattern: Option<border::Spec>) -> Vec<Item> {
+    let Some(b) = pattern.filter(|_| s.place != Where::Fill) else {
+        return fill(field, s, &[]);
+    };
+    let (mut items, reach) = border::design(field, &b, s.gap);
+    if s.place == Where::Border {
+        return items;
+    }
+    let inside = Settings {
+        place: Where::Fill,
+        inner_from: reach + s.gap,
+        ..s
+    };
+    let more = fill(field, inside, &items);
+    items.extend(more);
+    items
+}
+
+fn fill(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
     match sym::detect(field) {
-        Some(found) => sym::design(field, found, s),
-        None => free::design(field, s),
+        Some(found) => sym::design(field, found, s, pre),
+        None => free::design(field, s, pre),
     }
 }
 
@@ -232,6 +318,9 @@ impl Command for Embellish {
         if p.make != Make::Vectors {
             ensure_positive("height", p.height)?;
         }
+        if p.pattern().is_some() {
+            ensure_positive("border width", p.border_width)?;
+        }
         let (_, shapes) = doc.selected_paths(|path| path.closed);
         if shapes.is_empty() {
             return Err(CommandError::Failed(
@@ -249,7 +338,7 @@ impl Command for Embellish {
             let seed = p.seed.wrapping_add(k as u32 * 7919);
             let offset = region.offset;
             items.extend(
-                design(&region.field, p.settings(seed))
+                design(&region.field, p.settings(seed), p.pattern())
                     .iter()
                     .map(|it| it.map(&|q| q + offset)),
             );
@@ -452,6 +541,45 @@ mod tests {
     }
 
     #[test]
+    fn a_patterned_border_runs_round_the_edge_with_the_ornament_clear_inside_it() {
+        let shape = polygon(6, 110.0);
+        let doc = document_with(vec![shape.clone()]);
+        let centre = Point::new(150.0, 150.0);
+        for border in [
+            BorderStyle::Rope,
+            BorderStyle::Chain,
+            BorderStyle::Twist,
+            BorderStyle::Braid,
+            BorderStyle::BeadAndReel,
+        ] {
+            let only = Params {
+                place: Place::Border,
+                border,
+                make: Make::Vectors,
+                ..Params::default()
+            };
+            let after = made(&doc, &only);
+            let pieces: Vec<&Path> = after.vectors.values().filter(|v| **v != shape).collect();
+            assert!(pieces.len() > 30, "{border:?}: {}", pieces.len());
+            // the hexagon's apothem is 95 mm: the border keeps to its outer part
+            for v in &pieces {
+                let d = v.bounds().center().distance(centre);
+                assert!(d > 65.0 || v.bounds().size().x > 100.0, "{border:?} at {d}");
+            }
+            let both = Params {
+                place: Place::Both,
+                ..only
+            };
+            let inside = made(&doc, &both)
+                .vectors
+                .values()
+                .filter(|v| v.bounds().center().distance(centre) < 60.0)
+                .count();
+            assert!(inside > 5, "{border:?}: ornament inside");
+        }
+    }
+
+    #[test]
     fn tightness_sets_the_gap() {
         let p = |tightness| Params {
             tightness,
@@ -582,6 +710,42 @@ mod pictures {
                 "-border",
                 Params {
                     place: Place::Border,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-rope",
+                Params {
+                    border: BorderStyle::Rope,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-chain",
+                Params {
+                    border: BorderStyle::Chain,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-twist",
+                Params {
+                    border: BorderStyle::Twist,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-braid",
+                Params {
+                    border: BorderStyle::Braid,
+                    rails: true,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-bead",
+                Params {
+                    border: BorderStyle::BeadAndReel,
                     ..Params::default()
                 },
             ),

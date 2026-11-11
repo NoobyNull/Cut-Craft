@@ -470,6 +470,10 @@ say "not implemented yet".
     / Border / Both), Refinement, Number of objects, Scroll size and Tightness (smallest gap
     3 to 0.75 mm) are sliders; it makes grouped vectors, a 3D component of Height, or both,
     with stippled ground if asked, and follows its settings live (one undo).
+    The border can instead be a pattern run round the edge with a whole number of
+    repeats so it closes on itself: Rope (twist angle), Chain (face and edge links), Twist
+    (two plaited strands), Braid (three) or Bead and reel, with Border width, Repeat size,
+    Inset from the edge and optional rails; the ornament inside keeps clear of it.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.

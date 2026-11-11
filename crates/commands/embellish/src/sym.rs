@@ -151,7 +151,7 @@ impl Frame {
     }
 }
 
-pub fn design(field: &Field, sym: Symmetry, s: Settings) -> Vec<Item> {
+pub fn design(field: &Field, sym: Symmetry, s: Settings, pre: &[Item]) -> Vec<Item> {
     let g = s.gap;
     let (det, den, sc) = (s.detail, s.density, s.scale);
     let n = sym.n;
@@ -186,13 +186,15 @@ pub fn design(field: &Field, sym: Symmetry, s: Settings) -> Vec<Item> {
         if beads_on { ib + rd + g } else { g + wb + g }
     } else {
         g
-    };
+    }
+    .max(s.inner_from);
     let iband = ii + apothem * 0.3;
     let border_only = s.place == Where::Border;
     let mut gn = Gen::new(field, s, |p, m| {
         let v = field.sample(p);
         v > m && (!border_only || v < iband)
     });
+    gn.occ.mark(pre);
     let all = fr.copies(true);
     let turns = fr.copies(false);
     let put = |gn: &mut Gen, items: &[Item], list: &[(f64, f64)]| {

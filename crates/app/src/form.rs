@@ -1182,17 +1182,14 @@ mod tests {
     #[test]
     fn embellishs_settings_are_sliders_with_where_in_a_row_and_a_new_design_button() {
         let f = fields(&schema("embellish"));
-        assert_eq!(
-            keys(&f)[..6],
-            [
-                "place",
-                "refinement",
-                "objects",
-                "scroll_size",
-                "tightness",
-                "height"
-            ]
-        );
+        assert_eq!(keys(&f)[..2], ["place", "border"]);
+        // the patterned border's own settings only show for a patterned border
+        let rope = serde_json::json!({ "place": "both", "border": "rope" });
+        let band = serde_json::json!({ "place": "both", "border": "band" });
+        let shown = |key, params| field(&f, key).when.as_ref().is_none_or(|w| w.shown(params));
+        assert!(shown("border_width", &rope) && !shown("border_width", &band));
+        assert!(shown("twist", &rope));
+        assert!(!shown("border", &serde_json::json!({ "place": "fill" })));
         let Kind::Choice(places, Widget::Row) = &field(&f, "place").kind else {
             panic!("{:?}", field(&f, "place").kind);
         };

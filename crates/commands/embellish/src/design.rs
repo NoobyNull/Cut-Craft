@@ -28,6 +28,8 @@ pub struct Settings {
     pub place: Where,
     pub stipple: bool,
     pub seed: u32,
+    /// How far in from the edge the ornament starts at the least (past a patterned border).
+    pub inner_from: f64,
 }
 
 pub struct Gen<'a> {

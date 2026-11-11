@@ -123,7 +123,7 @@ struct End {
     at: Point,
 }
 
-pub fn design(field: &Field, s: Settings) -> Vec<Item> {
+pub fn design(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
     let g = s.gap;
     let (det, den, sc) = (s.detail, s.density, s.scale);
     let dm = field.dmax;
@@ -136,13 +136,15 @@ pub fn design(field: &Field, s: Settings) -> Vec<Item> {
         if beads_on { ib + rd + g } else { g + wb + g }
     } else {
         g
-    };
+    }
+    .max(s.inner_from);
     let iband = ii + dm * 0.45;
     let border_only = s.place == Where::Border;
     let mut gn = Gen::new(field, s, |p, m| {
         let v = field.sample(p);
         v > m && (!border_only || v < iband)
     });
+    gn.occ.mark(pre);
     // border band and bead row, at fixed distances in from the outline
     if show_border {
         let mut rings = field.rings(g);
