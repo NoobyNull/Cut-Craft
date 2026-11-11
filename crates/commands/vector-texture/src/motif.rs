@@ -110,6 +110,10 @@ impl Curve {
 /// tightening until its radius is `volute`, then holding, stopping before it comes within
 /// `clear` of itself. Points, headings and curvatures.
 #[expect(clippy::cast_precision_loss, reason = "points along a spine")]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "the usual names for a curve's maths"
+)]
 pub(crate) fn spine(
     length: f64,
     volute: f64,
@@ -142,16 +146,29 @@ pub(crate) fn spine(
     let skip = (clear * 1.6 / step).ceil() as usize + 1;
     let (mut points, mut headings, mut bends) =
         (vec![Point::ZERO], vec![0.0], vec![start + extra(0.0)]);
+    #[expect(clippy::cast_possible_truncation, reason = "grid cells")]
+    let cell = |q: Point| ((q.x / clear).floor() as i64, (q.y / clear).floor() as i64);
+    let mut grid: std::collections::HashMap<(i64, i64), Vec<Point>> =
+        std::collections::HashMap::default();
     let (mut p, mut h) = (Point::ZERO, 0.0);
     for i in 1..=steps {
         let s = i as f64 * step;
         let k = (start * (rate * s).exp()).min(most) + extra(s);
         h += k * step;
         p += Point::from_angle(h) * step;
-        let crowded = points
-            .iter()
-            .take(points.len().saturating_sub(skip))
-            .any(|q| q.distance(p) < clear);
+        // the points from `skip` back go into a grid of cells `clear` wide, so only the
+        // nearby ones are looked at
+        if let Some(back) = points.len().checked_sub(skip) {
+            let q = points[back];
+            grid.entry(cell(q)).or_default().push(q);
+        }
+        let (cx, cy) = cell(p);
+        let crowded = (cx - 1..=cx + 1).any(|x| {
+            (cy - 1..=cy + 1).any(|y| {
+                grid.get(&(x, y))
+                    .is_some_and(|near| near.iter().any(|q| q.distance(p) < clear))
+            })
+        });
         if crowded {
             break;
         }
@@ -431,25 +448,46 @@ pub fn ornament(g: &mut Grower, size: f64, look: Look, axis: Option<(u32, f64)>)
             }
         }
     }
+    // a scroll is built once and tried in a few places and turns before another is
+    // built, and its sample points are turned with it rather than taken again
+    let mut ready: Option<(Motif, Vec<Point>, Point)>;
+    let mut uses = 0;
     while length >= smallest && !g.full() {
         let mut misses = 0;
+        ready = None;
         while misses < 150 && !g.full() {
             let Some(at) = g.area.random_inside(&mut g.random) else {
                 misses += 1;
                 continue;
             };
-            if axis.is_some_and(|(_, x)| at.x >= x) {
+            // no use making a scroll where there isn't room for its middle
+            let middle = length * 0.1;
+            if axis.is_some_and(|(_, x)| at.x >= x) || g.space.room(at, middle) < middle {
                 misses += 1;
                 continue;
             }
-            let motif = scroll(g, length, look, 0);
-            let angle = g.range(0.0, TAU);
-            let flip = g.chance(0.5);
-            let placed = motif.placed(Point::ZERO, angle, flip);
-            let placed = placed.placed(at - placed.centre(), 0.0, false);
-            let points = placed.samples(g.step);
-            if fits(g, &points, None) {
-                lay(g, placed, &points, &mut made);
+            if ready.is_none() || uses >= 12 {
+                let motif = scroll(g, length, look, 0);
+                let points = motif.samples(g.step);
+                let centre = motif.centre();
+                ready = Some((motif, points, centre));
+                uses = 0;
+            }
+            uses += 1;
+            let Some((motif, points, centre)) = &ready else {
+                continue;
+            };
+            let turn = Point::from_angle(g.range(0.0, TAU));
+            let y = if g.chance(0.5) { -1.0 } else { 1.0 };
+            let to = |p: Point| {
+                let d = p - *centre;
+                at + turn.rotate(Point::new(d.x, d.y * y))
+            };
+            let moved: Vec<Point> = points.iter().map(|&p| to(p)).collect();
+            if fits(g, &moved, None) {
+                let placed = motif.map(to);
+                lay(g, placed, &moved, &mut made);
+                ready = None;
                 misses = 0;
             } else {
                 misses += 1;

@@ -70,21 +70,45 @@ pub fn bandanna(g: &mut Grower, size: f64) -> Made {
     let b = g.area.bounds;
     let smallest = (size * 0.35).max(gap * 2.5);
     let mut radius = b.size().x.min(b.size().y) * 0.2;
+    // a paisley is built once and tried in a few places and turns before another is
+    // built, and its sample points are turned with it rather than taken again
+    let mut ready: Option<(Motif, Vec<Point>, Point)>;
+    let mut uses = 0;
     while radius >= smallest && !g.full() {
         let mut misses = 0;
+        ready = None;
         while misses < 80 && !g.full() {
             let Some(at) = g.area.random_inside(&mut g.random) else {
                 misses += 1;
                 continue;
             };
-            let r = radius * g.range(0.9, 1.1);
-            let motif = paisley(g, r);
-            let (angle, flip) = (g.range(0.0, TAU), g.chance(0.5));
-            let placed = motif.placed(Point::ZERO, angle, flip);
-            let placed = placed.placed(at - placed.centre(), 0.0, false);
-            let points = placed.samples(g.step);
-            if fits(g, &points, None) {
-                lay(g, placed, &points, &mut made);
+            if g.space.room(at, radius * 0.5) < radius * 0.5 {
+                misses += 1;
+                continue;
+            }
+            if ready.is_none() || uses >= 12 {
+                let r = radius * g.range(0.9, 1.1);
+                let motif = paisley(g, r);
+                let points = motif.samples(g.step);
+                let centre = motif.centre();
+                ready = Some((motif, points, centre));
+                uses = 0;
+            }
+            uses += 1;
+            let Some((motif, points, centre)) = &ready else {
+                continue;
+            };
+            let turn = Point::from_angle(g.range(0.0, TAU));
+            let y = if g.chance(0.5) { -1.0 } else { 1.0 };
+            let to = |p: Point| {
+                let d = p - *centre;
+                at + turn.rotate(Point::new(d.x, d.y * y))
+            };
+            let moved: Vec<Point> = points.iter().map(|&p| to(p)).collect();
+            if fits(g, &moved, None) {
+                let placed = motif.map(to);
+                lay(g, placed, &moved, &mut made);
+                ready = None;
                 misses = 0;
             } else {
                 misses += 1;

@@ -274,7 +274,10 @@ fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandErro
         Style::Frost => fill::paths(&patterns::frost(&mut g, p.size), p.gap),
         Style::Snowflakes => fill::paths(&patterns::snowflakes(&mut g, p.size), p.gap),
         Style::Fractal => fill::paths(&patterns::fractal(&mut g, p.size), p.gap),
-        Style::Stones => patterns::stones(&mut g, p.size).ok_or_else(too_fine)?,
+        Style::Stones => lighter(
+            &patterns::stones(&mut g, p.size).ok_or_else(too_fine)?,
+            p.gap,
+        ),
         Style::Ripples => patterns::ripples(&area, p.size, p.gap),
         Style::Hammered => patterns::hammered(&mut g, p.size),
         Style::Bandanna => merged(&bandanna::bandanna(&mut g, p.size), p.gap),
@@ -405,37 +408,83 @@ pub use scroll::{Part, Piece};
 fn merged(made: &scroll::Made, gap: f64) -> Vec<Path> {
     use cut_craft_core::polygon::{Corners, offset_regions, union};
     // pieces nearer each other than the gap are joined (grown by half the gap and shrunk
-    // back), then slivers too small to carve are dropped
+    // back, its points thinned between, so the shrink has less to do), then slivers too
+    // small to carve are dropped
     let joined = union(&fill::paths(&made.shapes, gap));
-    let grown = offset_regions(&joined, gap / 2.0, Corners::Round);
-    let mut paths: Vec<Path> = offset_regions(&grown, -gap / 2.0, Corners::Round)
+    let grown = lighter(&offset_regions(&joined, gap / 2.0, Corners::Round), gap);
+    let shrunk = offset_regions(&grown, -gap / 2.0, Corners::Round);
+    let paths: Vec<Path> = lighter(&shrunk, gap)
         .into_iter()
         .filter(|p| {
             let size = p.bounds().size();
             size.x.max(size.y) >= gap && cut_craft_core::polygon::area(p) >= gap * gap * 0.5
         })
         .collect();
+    let mut paths = without_thin_walls(paths, gap);
     let details = clear_of(&made.details, &paths, gap);
     paths.extend(fill::paths(&details, gap));
     paths
 }
 
+/// The outlines with every hole that comes within the gap of an outline filled in (the
+/// pocket a curl wraps round, its wall too thin to carve).
+fn without_thin_walls(paths: Vec<Path>, gap: f64) -> Vec<Path> {
+    use cut_craft_core::geometry::winding;
+    let (outer, holes): (Vec<Path>, Vec<Path>) = paths
+        .into_iter()
+        .partition(|p| winding(&p.flatten(0.01)) > 0.0);
+    if holes.is_empty() {
+        return outer;
+    }
+    let walls = clear_of(
+        &holes
+            .iter()
+            .map(|h| fill::Stroke::shape(h.flatten(0.01)))
+            .collect::<Vec<_>>(),
+        &outer,
+        gap,
+    );
+    // a hole comes back from clear_of whole (closed) only when all of it is clear
+    let kept: Vec<Path> = walls
+        .iter()
+        .filter(|w| w.closed)
+        .map(|w| Path::polyline(&w.points, true))
+        .collect();
+    let mut out = outer;
+    out.extend(kept);
+    out
+}
+
+/// Outlines from the polygon booleans with the points the curve doesn't need dropped (the
+/// round offsets put one every hundredth of a millimetre).
+fn lighter(paths: &[Path], gap: f64) -> Vec<Path> {
+    let rings: Vec<fill::Stroke> = paths
+        .iter()
+        .map(|p| {
+            let mut ring = p.flatten(0.01);
+            if ring.len() > 1 && ring[0] == ring[ring.len() - 1] {
+                ring.pop();
+            }
+            fill::Stroke::shape(ring)
+        })
+        .collect();
+    fill::paths(&rings, gap)
+}
+
 /// The parts of the details at least the gap from every outline, each long enough to carve
 /// (three gaps; shorter scraps read as scratches).
-#[expect(clippy::cast_possible_truncation, reason = "grid cells")]
 fn clear_of(details: &[fill::Stroke], outlines: &[Path], gap: f64) -> Vec<fill::Stroke> {
+    type Grid = std::collections::HashMap<(i64, i64), Vec<Point>>;
+    #[expect(clippy::cast_possible_truncation, reason = "grid cells")]
     let key = |q: Point| ((q.x / gap).floor() as i64, (q.y / gap).floor() as i64);
-    let mut grid: std::collections::HashMap<(i64, i64), Vec<Point>> =
-        std::collections::HashMap::default();
-    for path in outlines {
-        let points = path.flatten(0.01);
+    let put = |grid: &mut Grid, points: &[Point]| {
         for w in points.windows(2) {
             for q in fill::along(w[0], w[1], gap / 4.0) {
                 grid.entry(key(q)).or_default().push(q);
             }
         }
-    }
-    let clear = |q: Point| {
+    };
+    let clear = |grid: &Grid, q: Point| {
         let (cx, cy) = key(q);
         (cx - 1..=cx + 1).all(|x| {
             (cy - 1..=cy + 1).all(|y| {
@@ -444,27 +493,47 @@ fn clear_of(details: &[fill::Stroke], outlines: &[Path], gap: f64) -> Vec<fill::
             })
         })
     };
-    let mut out = Vec::new();
+    let mut grid = Grid::default();
+    for path in outlines {
+        put(&mut grid, &path.flatten(0.01));
+    }
+    // each detail kept clear of the outlines and of the details kept before it
+    let mut out: Vec<fill::Stroke> = Vec::new();
     for d in details {
         let mut points = d.points.clone();
         if d.closed {
             points.push(points[0]);
         }
-        if points.iter().all(|&q| clear(q)) {
+        let dense: Vec<Point> = std::iter::once(points[0])
+            .chain(
+                points
+                    .windows(2)
+                    .flat_map(|w| fill::along(w[0], w[1], gap / 4.0)),
+            )
+            .collect();
+        let kept_before = out.len();
+        if dense.iter().all(|&q| clear(&grid, q)) {
             out.push(d.clone());
-            continue;
-        }
-        let mut run: Vec<Point> = Vec::new();
-        for q in points.into_iter().chain([Point::splat(f64::NAN)]) {
-            if !q.x.is_nan() && clear(q) {
-                run.push(q);
-            } else if !run.is_empty() {
-                let length: f64 = run.windows(2).map(|w| w[0].distance(w[1])).sum();
-                if length >= gap * 3.0 {
-                    out.push(fill::Stroke::open(std::mem::take(&mut run)));
+        } else {
+            let mut run: Vec<Point> = Vec::new();
+            for q in dense.into_iter().chain([Point::splat(f64::NAN)]) {
+                if !q.x.is_nan() && clear(&grid, q) {
+                    run.push(q);
+                } else if !run.is_empty() {
+                    let length: f64 = run.windows(2).map(|w| w[0].distance(w[1])).sum();
+                    if length >= gap * 3.0 {
+                        out.push(fill::Stroke::open(std::mem::take(&mut run)));
+                    }
+                    run.clear();
                 }
-                run.clear();
             }
+        }
+        for kept in &out[kept_before..] {
+            let mut ring = kept.points.clone();
+            if kept.closed {
+                ring.push(ring[0]);
+            }
+            put(&mut grid, &ring);
         }
     }
     out
@@ -663,6 +732,20 @@ mod tests {
             let made = fill(style, 2, vec![square(0.0, 0.0, 90.0)]);
             let closest = closest_pieces(&made, 3.0);
             assert!(closest >= 3.0 * 0.9, "{style:?}: pieces {closest} mm apart");
+        }
+    }
+
+    #[test]
+    fn composed_styles_keep_the_gap_whatever_the_variation() {
+        for style in [Style::Baroque, Style::Western, Style::Bandanna] {
+            for seed in 1..12 {
+                let made = fill(style, seed, vec![square(0.0, 0.0, 90.0)]);
+                let closest = closest_pieces(&made, 3.0);
+                assert!(
+                    closest >= 3.0 * 0.9,
+                    "{style:?} variation {seed}: pieces {closest} mm apart"
+                );
+            }
         }
     }
 
