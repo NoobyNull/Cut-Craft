@@ -10350,3 +10350,70 @@ fn the_buttons_already_there_keep_their_places() {
         ],
     );
 }
+
+#[test]
+fn a_fill_follows_its_settings_in_place_and_one_undo_takes_it_away() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 100.0, 100.0);
+    let square: Vec<EntityId> = h.app.doc.vectors.keys().copied().collect();
+    h.app.doc.selection = square.iter().copied().collect();
+    h.app.invoke(&h.ctx, "vector_texture");
+    h.frame(vec![]);
+    let mut params = h.app.form.as_ref().expect("the form").params.clone();
+    params["style"] = "snowflakes".into();
+    h.app.form.as_mut().unwrap().params = params.clone();
+    h.app.apply_form("vector_texture", &params).unwrap();
+    let fill = |h: &Harness| -> std::collections::BTreeSet<EntityId> {
+        h.app
+            .doc
+            .vectors
+            .keys()
+            .filter(|id| !square.contains(id))
+            .copied()
+            .collect()
+    };
+    let first = fill(&h);
+    assert!(first.len() > 3, "snowflakes made");
+    let shapes = |h: &Harness| -> Vec<String> {
+        let mut all: Vec<String> = fill(h)
+            .iter()
+            .map(|id| format!("{:?}", h.app.doc.vectors[id]))
+            .collect();
+        all.sort();
+        all
+    };
+    let first_shapes = shapes(&h);
+    let undo_depth = h.app.history.undo_depth();
+    // a new variation takes the place of the fill, live, rather than adding another
+    params["seed"] = 99.into();
+    let form = h.app.form.as_mut().unwrap();
+    form.params = params.clone();
+    form.dirty = true;
+    h.frame(vec![]);
+    let second = fill(&h);
+    assert!(
+        !second.is_empty() && shapes(&h) != first_shapes,
+        "made again"
+    );
+    assert_eq!(
+        h.app.history.undo_depth(),
+        undo_depth,
+        "in place of the first"
+    );
+    // and Apply with the same settings has nothing more to do
+    h.app.apply_form("vector_texture", &params).unwrap();
+    assert_eq!(fill(&h), second);
+    // one undo leaves the square as it was
+    h.app.invoke(&h.ctx, "undo");
+    assert!(fill(&h).is_empty());
+    assert_eq!(h.app.doc.vectors.len(), 1);
+    // with another shape picked, Apply fills it too and keeps the first fill
+    h.app.invoke(&h.ctx, "redo");
+    h.rectangle(120.0, 10.0, 80.0, 80.0);
+    let kept = fill(&h);
+    h.app.invoke(&h.ctx, "vector_texture");
+    h.frame(vec![]);
+    h.app.form.as_mut().unwrap().params = params.clone();
+    h.app.apply_form("vector_texture", &params).unwrap();
+    assert!(fill(&h).is_superset(&kept), "the first fill stays");
+}

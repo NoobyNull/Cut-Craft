@@ -465,7 +465,11 @@ say "not implemented yet".
   - Draw Freehand: the whole drag path, smoothed into Béziers within a tolerance.
   - Create Vector Texture: wavy lines at an angle over the selected closed vectors or the
     job, max spacing with variation, wavelength, amplitude, noise and a seed; on the
-    current layer, or (Place Vectors on Layer) on the layer named, made if needed.
+    current layer, or (Place Vectors on Layer) on the layer named, made if needed. Cut Craft
+    adds decorative fills as other styles (Floral, Baroque, Western leaf, Frost, Snowflakes, Fractal,
+    Stones, Ripples, Hammered, Bandanna) with a pattern size, a smallest gap kept between every line
+    and the edge, and New variation; the fill follows the form live once applied (see SPEC,
+    Create Vector Texture: decorative fills).
   - Embellish: folk-swirl ornament designed for the selected closed vectors rather than cut
     out of a pattern, read from each shape's distance to its edge: a border band and bead
     row follow the outline; a shape with n-fold mirror symmetry (a regular polygon, a star,
