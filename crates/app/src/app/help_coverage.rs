@@ -129,22 +129,30 @@ fn tooltip_gaps(id: &str, label: &str, tooltip: Option<&str>) -> Vec<Gap> {
     }
 }
 
-/// The gaps in a tool's form: its intro, then each setting and option, nested ones too.
-fn form_gaps(id: &str, label: &str, schema: &serde_json::Value) -> Vec<Gap> {
+/// The gaps in a tool's help page: its intro, then each setting and option of its form
+/// (`schema`, when it has one), nested ones too.
+fn page_gaps(
+    id: &str,
+    label: &str,
+    intro: Option<&str>,
+    schema: Option<&serde_json::Value>,
+) -> Vec<Gap> {
     let gap = |what| Gap {
         id: id.to_owned(),
         label: label.to_owned(),
         what,
     };
     let mut gaps = vec![];
-    match schema["description"].as_str().map(str::trim) {
+    match intro.map(str::trim) {
         None | Some("") => gaps.push(gap(What::NoIntro)),
         Some(t) if is_placeholder(t) => gaps.push(gap(What::Placeholder("intro".into()))),
         Some(t) if words(t) < ABOUT_WORDS => gaps.push(gap(What::ShortIntro)),
         Some(_) => {}
     }
     let mut whats = vec![];
-    setting_gaps(&form::fields(schema), "", &mut whats);
+    if let Some(schema) = schema {
+        setting_gaps(&form::fields(schema), "", &mut whats);
+    }
     gaps.extend(whats.into_iter().map(gap));
     gaps
 }
@@ -222,15 +230,13 @@ pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
         }
         let label = app.tool_label(&id);
         gaps.extend(tooltip_gaps(&id, &label, crate::gui::about(&id)));
-        match app.registry.get(&id) {
-            Some(cmd) => gaps.extend(form_gaps(&id, &label, &cmd.schema())),
-            // a built-in tool with no form still needs a page saying what it does
-            None => gaps.push(Gap {
-                id: id.clone(),
-                label: label.clone(),
-                what: What::NoIntro,
-            }),
-        }
+        // a built-in tool with no form still needs a page saying what it does
+        let (intro, _) = app.tool_help(&id);
+        let schema = app
+            .registry
+            .get(&id)
+            .map(cut_craft_core::DynCommand::schema);
+        gaps.extend(page_gaps(&id, &label, intro.as_deref(), schema.as_ref()));
     }
     for (action, name) in menu_actions(app) {
         if seen.insert(action.clone()) {
@@ -352,7 +358,8 @@ mod tests {
                 }
             }
         });
-        let whats: Vec<What> = form_gaps("profile", "Profile", &schema)
+        let intro = schema["description"].as_str();
+        let whats: Vec<What> = page_gaps("profile", "Profile", intro, Some(&schema))
             .into_iter()
             .map(|g| g.what)
             .collect();
@@ -370,9 +377,15 @@ mod tests {
             "description": "Cuts along a vector, round its outside, inside or on the line",
             "properties": {}
         });
-        assert_eq!(form_gaps("profile", "Profile", &described), vec![]);
-        let short = json!({ "type": "object", "description": "Cuts things", "properties": {} });
-        assert_eq!(form_gaps("p", "P", &short)[0].what, What::ShortIntro);
+        let intro = described["description"].as_str();
+        assert_eq!(
+            page_gaps("profile", "Profile", intro, Some(&described)),
+            vec![]
+        );
+        assert_eq!(
+            page_gaps("p", "P", Some("Cuts things"), None)[0].what,
+            What::ShortIntro
+        );
     }
 
     #[test]

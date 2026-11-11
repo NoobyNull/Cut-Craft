@@ -86,13 +86,18 @@ impl CutCraftApp {
         }
     }
 
-    /// A command's help, from its params' doc comments: what it does, then each setting.
+    /// A command's help, from its params' doc comments (else its crate's), what it does, then
+    /// each setting.
     pub(super) fn tool_help(&self, id: &str) -> (Option<String>, Vec<(String, String)>) {
+        let own = || gui::intro(id, &self.tool_label(id));
         let Some(cmd) = self.registry.get(id) else {
-            return (None, vec![]);
+            return (own(), vec![]);
         };
         let schema = cmd.schema();
-        let about = schema["description"].as_str().map(String::from);
+        let about = schema["description"]
+            .as_str()
+            .map(String::from)
+            .or_else(own);
         let fields = form::fields(&schema)
             .into_iter()
             .filter_map(|f| Some((f.label, f.help?)))

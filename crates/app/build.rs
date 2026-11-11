@@ -60,7 +60,9 @@ fn main() {
     std::fs::write(out.join("abouts.rs"), abouts()).expect("the command table is written");
 }
 
-/// Each command's id and the first sentence of its crate's `//!` docs, as a Rust table.
+/// Each command's id and the first sentence of its crate's `//!` docs, then the same with
+/// the docs' whole first paragraph (its help page's intro when its params say nothing), as
+/// Rust tables.
 fn abouts() -> String {
     let commands = Path::new(env!("CARGO_MANIFEST_DIR")).join("../commands");
     println!("cargo:rerun-if-changed={}", commands.display());
@@ -76,6 +78,10 @@ fn abouts() -> String {
     let mut table = String::from(
         "/// What each command does, by id: its crate's first sentence.\n\
          pub static ABOUTS: &[(&str, &str)] = &[\n",
+    );
+    let mut intros = String::from(
+        "/// What each command does, by id: its crate's first paragraph.\n\
+         pub static INTROS: &[(&str, &str)] = &[\n",
     );
     for lib in crates {
         let Ok(source) = std::fs::read_to_string(&lib) else {
@@ -98,11 +104,13 @@ fn abouts() -> String {
                 .and_then(|rest| rest.strip_suffix("\";"));
             if let Some(id) = id {
                 let _ = writeln!(table, "    ({id:?}, {sentence:?}),");
+                let _ = writeln!(intros, "    ({id:?}, {docs:?}),");
             }
         }
     }
     table.push_str("];\n");
-    table
+    intros.push_str("];\n");
+    table + &intros
 }
 
 /// `drawing/align/left.png` for that file under `icons`, whatever the platform's separator.

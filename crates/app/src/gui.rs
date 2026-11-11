@@ -521,6 +521,23 @@ pub fn about(id: &str) -> Option<&'static str> {
         })
 }
 
+/// What command `id` does at length (its crate's first paragraph, the lead `Name:` that only
+/// repeats its name taken off), for its help page when its params have no doc comment.
+pub fn intro(id: &str, label: &str) -> Option<String> {
+    let docs = abouts::INTROS
+        .iter()
+        .find(|(command, _)| *command == id)
+        .map(|(_, docs)| *docs)
+        .or_else(|| about(id))?;
+    let body = docs
+        .strip_prefix(label)
+        .and_then(|rest| rest.strip_prefix(':'))
+        .map_or(docs, str::trim_start);
+    let mut chars = body.chars();
+    let first = chars.next()?;
+    Some(first.to_uppercase().chain(chars).collect())
+}
+
 pub struct StatusBar {
     pub message: String,
     pub current_tool: String,
