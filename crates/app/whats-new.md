@@ -1,4 +1,4 @@
-- First-time setup asks for your machine, units and material, and there's a sample project to open
-- Profile cuts show Outside / Inside / On the Line up front, can cut right through, and warn when a part would come loose without tabs
-- Error messages say what to do next; Linux explains a missing library instead of crashing
-- New app icon and logo; Plate Production cuts each plate's own text
+- Embellish (Design ▸ Create): folk-swirl ornament designed to fit any closed shape you pick
+- Sliders for detail, number of pieces, scroll size and spacing, with New variation for another design
+- Borders round the edge: rope, chain, twist, braid or bead and reel
+- Makes grouped vectors on their own layer, a 3D carving, or both, and updates live as you change it
