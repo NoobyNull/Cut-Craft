@@ -8,6 +8,8 @@ mod draw3d;
 mod first_run;
 mod guide;
 mod help;
+#[cfg(test)]
+mod help_coverage;
 mod layouts;
 mod mac;
 mod panels;

@@ -35,7 +35,7 @@ impl CutCraftApp {
     }
 
     /// Every help page: Contents, the two tool pages, and each of their tools.
-    fn help_topics(&self) -> Vec<&'static str> {
+    pub(super) fn help_topics(&self) -> Vec<&'static str> {
         let mut topics = vec!["contents", "design", "toolpaths"];
         for page in [Page::Design, Page::Toolpaths] {
             topics.extend(self.help_groups(page).iter().flat_map(|g| g.tools));
