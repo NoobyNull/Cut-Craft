@@ -17,8 +17,6 @@ fn tool_window() -> egui::Id {
 const WINDOW_SHARE: f32 = 0.7;
 /// The tree's share of the window's width when it first opens.
 const TREE_SHARE: f32 = 0.35;
-/// A tool's picture beside its geometry, in rows of the theme's interactive height.
-const PICTURE_ROWS: f32 = 6.0;
 /// Aspire's tool pictures are 90 × 130: their width for a height.
 const PICTURE_ASPECT: f32 = 90.0 / 130.0;
 /// Lines of the notes boxes.
@@ -776,7 +774,7 @@ fn load_slot(ui: &mut egui::Ui, changer: &Changer, tool: &str) -> Option<usize> 
 }
 
 /// A length (mm) shown in the tool's units; whether it changed.
-fn length(ui: &mut egui::Ui, value: &mut f64, units: Units) -> bool {
+pub(crate) fn length(ui: &mut egui::Ui, value: &mut f64, units: Units) -> bool {
     let (per, unit) = if units == Units::Inch {
         (INCH, "in")
     } else {
@@ -828,7 +826,7 @@ fn tool_details(
     material: &str,
 ) {
     section(ui, "Tool Info", |ui| {
-        tool_info(ui, tool, groups, look, loaded);
+        tool_info(ui, tool, (groups, formats), look, loaded);
     });
     // the cutting data shown is the active material's, as Aspire's
     let own = tool
@@ -846,10 +844,6 @@ fn tool_details(
     section(ui, "Cutting Parameters", |ui| cutting(ui, &mut shown));
     section(ui, "Feeds and Speeds", |ui| feeds(ui, &mut shown));
     keep_cutting(tool, &shown, material);
-    // folded away at the end, as Aspire keeps it in a dialog of its own
-    egui::CollapsingHeader::new("Name Format")
-        .id_salt("name_format")
-        .show(ui, |ui| name_format(ui, tool, formats));
     tool.renamed(material);
 }
 
@@ -895,46 +889,55 @@ fn keep_cutting(tool: &mut Tool, shown: &Tool, material: &str) {
 /// tool, a variable picked from the list put on the end; Set as Default makes it its type's
 /// for new tools, Restore puts the type's back. A tool with a format is named by it.
 fn name_format(ui: &mut egui::Ui, tool: &mut Tool, formats: &mut BTreeMap<String, String>) {
-    use cut_craft_core::tool_names::{VARIABLES, type_key};
+    use cut_craft_core::tool_names::type_key;
     let key = type_key(tool.shape);
-    ui.horizontal(|ui| {
-        ui.label("Name format");
+    ui.vertical(|ui| {
         ui.add(
             egui::TextEdit::singleline(&mut tool.name_format)
                 .hint_text("{Tool Type} {Diameter|F}")
                 .desired_width(f32::INFINITY),
         )
         .on_hover_hint(
-            "Leave empty to type the name. Modifiers: |U upper case, |L lower case, \
-             |0.00 decimals, |F inches as a fraction",
+            "The name made from the tool's own sizes: leave empty to type the name. \
+             Modifiers: |U upper case, |L lower case, |0.00 decimals, |F inches as a \
+             fraction",
         );
+        ui.horizontal(|ui| name_format_buttons(ui, tool, formats, &key));
     });
-    ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("name_variable")
-            .selected_text("Add variable")
-            .show_ui(ui, |ui| {
-                for v in VARIABLES {
-                    if ui.selectable_label(false, v).clicked() {
-                        tool.name_format.extend(["{", v, "}"]);
-                    }
+}
+
+/// Add variable, Set as Default and Restore, under the name format.
+fn name_format_buttons(
+    ui: &mut egui::Ui,
+    tool: &mut Tool,
+    formats: &mut BTreeMap<String, String>,
+    key: &str,
+) {
+    use cut_craft_core::tool_names::VARIABLES;
+    egui::ComboBox::from_id_salt("name_variable")
+        .selected_text("Add variable")
+        .show_ui(ui, |ui| {
+            for v in VARIABLES {
+                if ui.selectable_label(false, v).clicked() {
+                    tool.name_format.extend(["{", v, "}"]);
                 }
-            });
-        if ui
-            .button("Set as Default")
-            .on_hover_hint("New tools of this type are named by this format")
+            }
+        });
+    if ui
+        .button("Set as Default")
+        .on_hover_hint("New tools of this type are named by this format")
+        .clicked()
+    {
+        formats.insert(key.to_owned(), tool.name_format.clone());
+    }
+    if let Some(default) = formats.get(key).filter(|d| **d != tool.name_format)
+        && ui
+            .button("Restore")
+            .on_hover_hint(format!("Back to this type's default: {default}"))
             .clicked()
-        {
-            formats.insert(key.clone(), tool.name_format.clone());
-        }
-        if let Some(default) = formats.get(&key).filter(|d| **d != tool.name_format)
-            && ui
-                .button("Restore")
-                .on_hover_hint(format!("Back to this type's default: {default}"))
-                .clicked()
-        {
-            tool.name_format.clone_from(default);
-        }
-    });
+    {
+        tool.name_format.clone_from(default);
+    }
 }
 
 /// A form tool's row in Tool Info: Use Selected Vector takes its shape from the job's
@@ -973,7 +976,7 @@ fn form_row(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
 fn tool_info(
     ui: &mut egui::Ui,
     tool: &mut Tool,
-    groups: &[String],
+    (groups, formats): (&[String], &mut BTreeMap<String, String>),
     look: &Look,
     loaded: Option<(&str, usize)>,
 ) {
@@ -983,6 +986,18 @@ fn tool_info(
         ui.add_enabled(
             tool.name_format.is_empty(),
             egui::TextEdit::singleline(&mut tool.name).desired_width(f32::INFINITY),
+        );
+        ui.end_row();
+        // under the name it makes (Aspire keeps it in a dialog of its own)
+        ui.label("Name Format");
+        name_format(ui, tool, formats);
+        ui.end_row();
+        ui.label("Manufacturer")
+            .on_hover_hint("Who makes the bit, for the name format's {Manufacturer}; leave it empty if you don't know");
+        ui.add(
+            egui::TextEdit::singleline(&mut tool.manufacturer)
+                .hint_text("e.g. Amana, Whiteside")
+                .desired_width(f32::INFINITY),
         );
         ui.end_row();
         ui.label("Tool Type");
@@ -1044,65 +1059,21 @@ fn tool_info(
         ui.end_row();
     });
     ui.separator();
-    ui.horizontal(|ui| {
-        geometry(ui, tool);
-        if let Some(image) = (look.picture)(picture_path(tool)) {
-            let height = ui.spacing().interact_size.y * PICTURE_ROWS;
-            ui.add(image.fit_to_exact_size(egui::vec2(height * PICTURE_ASPECT, height)));
-        }
-    });
+    geometry(ui, tool);
 }
 
-/// The tool's shape: diameter, angle, tip radius, taper, flute length and flutes.
+/// The tool's shape: drawn from its sizes, each typed on its dimension line, then what the
+/// drawing does not show (flutes, a thread mill's tooth).
 fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
+    crate::profile::editor(ui, tool);
     egui::Grid::new("tool_geometry")
         .num_columns(2)
         .show(ui, |ui| {
-            ui.label("Diameter (D)");
-            length(ui, &mut tool.diameter, tool.units);
-            ui.end_row();
-            if matches!(tool.shape, ToolShape::VBit | ToolShape::ThreadMill) {
-                ui.label(if tool.shape == ToolShape::VBit {
-                    "Included Angle (A)"
-                } else {
-                    "Angle (A)"
-                });
-                ui.add(
-                    egui::DragValue::new(&mut tool.angle)
-                        .range(1.0..=179.0)
-                        .suffix("°"),
-                );
-                ui.end_row();
-            }
-            if tool.shape == ToolShape::RadiusedEndMill {
-                ui.label("Tip Radius (R)");
-                length(ui, &mut tool.tip_radius, tool.units);
-                ui.end_row();
-            }
             if tool.shape == ToolShape::ThreadMill {
                 thread_mill(ui, tool);
             }
-            if matches!(tool.shape, ToolShape::BallNose | ToolShape::EndMill) {
-                ui.label("Taper Angle")
-                    .on_hover_hint("Each side of the axis, for a tapered tool; 0 for straight");
-                ui.add(
-                    egui::DragValue::new(&mut tool.taper)
-                        .range(0.0..=45.0)
-                        .suffix("°"),
-                );
-                ui.end_row();
-                if tool.taper > 0.0 {
-                    ui.label("Shank Diameter");
-                    length(ui, &mut tool.shank_diameter, tool.units);
-                    ui.end_row();
-                }
-            }
-            ui.label("Flute Length").on_hover_hint(
-                "How deep the tool can cut: toolpaths deeper than this are flagged; 0 for not set",
-            );
-            length(ui, &mut tool.flute_length, tool.units);
-            ui.end_row();
-            ui.label("Number of Flutes");
+            ui.label("Number of Flutes")
+                .on_hover_hint("How many cutting edges the bit has, for the chip load");
             ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
             ui.end_row();
         });
@@ -1111,16 +1082,16 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
 /// A single-point thread mill's tooth: size, height (which changes the size, the angle
 /// staying, as Aspire's form does) and offset.
 fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
-    ui.label("Tooth Size (S)");
+    ui.label("Tooth Size");
     length(ui, &mut tool.tooth_size, tool.units);
     ui.end_row();
-    ui.label("Tooth Height (H)");
+    ui.label("Tooth Height");
     let mut height = tool.tooth_height();
     if length(ui, &mut height, tool.units) {
         tool.set_tooth_height(height);
     }
     ui.end_row();
-    ui.label("Tooth Offset (O)")
+    ui.label("Tooth Offset")
         .on_hover_hint("From the bottom of the tool up to the tip of the tooth");
     length(ui, &mut tool.tooth_offset, tool.units);
     ui.end_row();
@@ -1255,6 +1226,20 @@ mod tests {
         tool.shank_diameter = 6.0;
         make_tapered_ball(&mut tool);
         assert!((tool.taper - 4.7).abs() < 1e-9 && (tool.shank_diameter - 6.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn drawing_each_tool_keeps_none_of_the_drawing_s_guesses() {
+        let ctx = egui::Context::default();
+        let db = ToolDatabase::starter();
+        let mut m = Manager::new(&db);
+        for i in 0..db.tools.len() {
+            m.pick = Some(Pick::Tool(i));
+            frame(&mut m, &ctx);
+            frame(&mut m, &ctx);
+        }
+        // the starter tools give no flute or shank length; drawn, they are still unset
+        assert_eq!(m.draft.tools, db.tools);
     }
 
     #[test]
