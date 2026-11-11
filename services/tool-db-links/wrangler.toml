@@ -1,0 +1,12 @@
+name = "cutcraft-tool-db-links"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Weekly: Mondays 14:00 UTC. The Worker also refuses a second check within 24 hours.
+[triggers]
+crons = ["0 14 * * 1"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cutcraft-tool-db-links"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
