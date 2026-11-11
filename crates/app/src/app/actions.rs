@@ -95,6 +95,7 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
+            deep_cut: None,
             shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
@@ -429,21 +430,8 @@ impl CutCraftApp {
                 self.post_window = Some(cut_craft_machines::PostManager::default());
             }
             "tool_database" => {
-                let mut manager = cut_craft_tool_database::Manager::new(&self.tools);
-                // the active machine's tool changer, its tools loaded with the tools
-                manager.changer = self
-                    .machines
-                    .active()
-                    .filter(|m| !m.slots.is_empty())
-                    .map(|m| cut_craft_tool_database::Changer {
-                        machine: m.name.clone(),
-                        slots: m.slots.clone(),
-                    });
-                // tools loaded before slots set their numbers show those numbers now
-                if let Some(changer) = &manager.changer {
-                    manager.draft.number_by_slots(&changer.slots);
-                }
-                self.tool_manager = Some(manager);
+                let manager = cut_craft_tool_database::Manager::new(&self.tools);
+                self.open_tool_manager(manager);
             }
             // the labels' setting is kept with the options, so they stay as left
             "show_keep_out_zone_labels" => {
@@ -3871,14 +3859,7 @@ impl CutCraftApp {
             (true, _, true) => self.job_setup_cancel(),
             (false, true, _) => {
                 let (id, params) = (open.id, open.params.clone());
-                // a job that goes on in the background puts what goes wrong on the form
-                if let Some(open) = &mut self.form {
-                    open.error = None;
-                }
-                let result = self.apply_form(id, &params);
-                if let (Err(why), Some(open)) = (result, &mut self.form) {
-                    open.error = Some(why);
-                }
+                self.calculate_checked(id, &params);
             }
             (false, _, true) => {
                 let page = open.page;
@@ -4037,7 +4018,7 @@ impl CutCraftApp {
         };
         let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
         // the tool block, where the form has its tool: what was picked, and Edit…
-        let asked = std::cell::RefCell::new((None, false));
+        let asked = std::cell::Cell::new(None);
         // a tool in a list whose Edit… was clicked
         let edit_listed = std::cell::RefCell::new(None);
         let listed = std::cell::Cell::new(false);
@@ -4065,7 +4046,7 @@ impl CutCraftApp {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
-                *asked.borrow_mut() = tool_picker(ui, &params["tool"], params, tools, &slots);
+                asked.set(tool_picker(ui, &params["tool"], params, tools, &slots));
                 listed.set(listed.get() | super::passes::edit_passes(ui, params, units));
             });
             // every toolpath that cuts with a tool can rest machine after the tools that cut
@@ -4084,6 +4065,7 @@ impl CutCraftApp {
                 .selection
                 .iter()
                 .any(|id| self.doc.vectors.get(id).is_some_and(|v| v.closed)),
+            units,
         };
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
@@ -4099,18 +4081,17 @@ impl CutCraftApp {
         open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
         open.dirty |= listed.get();
         let id = open.id;
-        let (chosen, edit_tool) = asked.into_inner();
         let edit_listed = edit_listed.into_inner();
         self.form_extras(ui, id);
-        if let Some(name) = chosen {
-            self.choose_tool(&name);
-        }
-        if edit_tool {
+        if let Some(ask) = asked.get() {
             let name = self
                 .form
                 .as_ref()
                 .and_then(|f| f.params["tool"]["name"].as_str().map(str::to_owned));
-            self.edit_tool(ui.ctx(), name);
+            match ask {
+                super::ToolAsk::Select => self.select_tool(name.as_deref().unwrap_or_default()),
+                super::ToolAsk::Edit => self.edit_tool(ui.ctx(), name),
+            }
         }
         if edit_listed.is_some() {
             self.edit_tool(ui.ctx(), edit_listed);
@@ -4185,7 +4166,10 @@ impl CutCraftApp {
             },
             "draw_text" => self.spelling(ui),
             "relief_from_photo" => self.depth_section(ui),
-            "profile_toolpath" => self.edit_tabs(ui),
+            "profile_toolpath" => {
+                self.edit_tabs(ui);
+                self.deep_cut_warning(ui.ctx());
+            }
             "sculpt" => {
                 let (load, round) = ui
                     .horizontal(|ui| {
@@ -4405,6 +4389,31 @@ impl CutCraftApp {
         if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name)) {
             form.params["tool"] = serde_json::to_value(tool).expect("tools serialize");
         }
+    }
+
+    /// The Tool Database window, `manager`, with the active machine's tool changer, its
+    /// tools loaded with the tools.
+    pub(super) fn open_tool_manager(&mut self, mut manager: cut_craft_tool_database::Manager) {
+        manager.changer = self
+            .machines
+            .active()
+            .filter(|m| !m.slots.is_empty())
+            .map(|m| cut_craft_tool_database::Changer {
+                machine: m.name.clone(),
+                slots: m.slots.clone(),
+            });
+        // tools loaded before slots set their numbers show those numbers now
+        if let Some(changer) = &manager.changer {
+            manager.draft.number_by_slots(&changer.slots);
+        }
+        self.tool_manager = Some(manager);
+    }
+
+    /// A toolpath form's Select…: the Tool Database as Select Tool, on `current`; its Select
+    /// gives the form the tool shown, with its own feeds, speeds and pass depth.
+    pub(super) fn select_tool(&mut self, current: &str) {
+        let manager = cut_craft_tool_database::Manager::selecting(&self.tools, current);
+        self.open_tool_manager(manager);
     }
 
     /// The Tool Database, opened on the open form's tool; saving it updates the form.
