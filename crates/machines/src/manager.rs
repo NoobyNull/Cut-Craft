@@ -552,11 +552,12 @@ fn g_code_folders(ui: &mut egui::Ui, machine: &mut Machine) -> Option<MachineOut
                     (
                         "Machine's files",
                         &mut machine.send_to.folder,
-                        "None: the machine is not seen from this computer",
+                        "A folder, or its address such as http://fluidnc.local/sd/",
                         FolderFor::Machine,
-                        "The machine's card as this computer sees it: a network drive or share \
-                         (WiFi controllers), or its SD card or USB stick plugged in here. \
-                         Send to Machine saves straight to it",
+                        "The machine's card: a folder this computer sees it as (a network \
+                         share, or its SD card or USB stick plugged in here), or the address \
+                         a WiFi controller serves it at (WebDAV; FluidNC's is \
+                         http://fluidnc.local/sd/). Send to Machine saves straight to it",
                     ),
                 ] {
                     ui.label(label).on_hover_hint(tip);

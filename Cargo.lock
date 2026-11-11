@@ -2418,8 +2418,10 @@ dependencies = [
  "cut-craft-core",
  "cut-craft-post",
  "eframe",
+ "roxmltree 0.20.0",
  "serde",
  "serde_json",
+ "ureq",
 ]
 
 [[package]]

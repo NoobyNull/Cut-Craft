@@ -7,6 +7,7 @@ pub mod library;
 pub mod machine;
 pub mod manager;
 pub mod send;
+pub mod webdav;
 
 pub use catalogue::{Controller, catalogue, makers};
 pub use library::{Entry, Library};
