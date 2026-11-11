@@ -110,6 +110,7 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_cross_section::CrossSection>();
     r.add::<cmd_notes::Notes>();
     r.add::<cmd_texture_area::TextureArea>();
+    r.add::<cmd_decorative_relief::DecorativeRelief>();
     r.add::<cmd_array_copy::ArrayCopy>();
     r.add::<cmd_circular_copy::CircularCopy>();
     r.add::<cmd_copy_along_vectors::CopyAlongVectors>();

@@ -5,7 +5,7 @@
 //! biggest first, then smaller ones in the room left.
 
 use crate::fill::{Grower, Probe, Stroke, along};
-use crate::scroll::{Look, Made, acanthus, centre_line, circle, rosette, wavy_leaf};
+use crate::scroll::{Look, Made, Part, Piece, acanthus, centre_line, circle, rosette, wavy_leaf};
 use cut_craft_core::geometry::Point;
 use std::f64::consts::{PI, TAU};
 
@@ -15,6 +15,8 @@ use std::f64::consts::{PI, TAU};
 pub(crate) struct Motif {
     pub shapes: Vec<Vec<Point>>,
     pub details: Vec<Stroke>,
+    /// The same shapes as raised pieces, for the relief.
+    pub pieces: Vec<Piece>,
 }
 
 impl Motif {
@@ -33,6 +35,7 @@ impl Motif {
                     closed: d.closed,
                 })
                 .collect(),
+            pieces: self.pieces.iter().map(|piece| piece.map(&f)).collect(),
         }
     }
 
@@ -46,6 +49,7 @@ impl Motif {
     pub(crate) fn add(&mut self, other: Self) {
         self.shapes.extend(other.shapes);
         self.details.extend(other.details);
+        self.pieces.extend(other.pieces);
     }
 
     pub(crate) fn centre(&self) -> Point {
@@ -178,6 +182,48 @@ pub(crate) fn band(points: &[Point], headings: &[f64], bends: &[f64], width: f64
     left
 }
 
+/// Where a scroll's leaves grow: how far along it, how long as a share of it, and which
+/// side (-1 the outside of its curve).
+fn leaf_places(lush: bool, baroque: bool) -> &'static [(f64, f64, f64)] {
+    // on a relief, leaves crowd the band on both sides and overlap, as carved acanthus;
+    // outlined, they go round the outside of the curve (the right, as it curls left),
+    // getting smaller towards the volute
+    if lush && baroque {
+        &[
+            (0.03, 0.42, -1.0),
+            (0.14, 0.36, -1.0),
+            (0.12, 0.2, 1.0),
+            (0.26, 0.32, -1.0),
+            (0.4, 0.26, -1.0),
+            (0.34, 0.16, 1.0),
+            (0.52, 0.22, -1.0),
+            (0.64, 0.16, -1.0),
+        ]
+    } else if lush {
+        &[
+            (0.08, 0.36, -1.0),
+            (0.18, 0.24, 1.0),
+            (0.26, 0.32, -1.0),
+            (0.4, 0.28, -1.0),
+            (0.56, 0.22, -1.0),
+        ]
+    } else if baroque {
+        &[
+            (0.06, 0.36, -1.0),
+            (0.22, 0.3, -1.0),
+            (0.4, 0.24, -1.0),
+            (0.56, 0.18, -1.0),
+        ]
+    } else {
+        &[
+            (0.08, 0.3, -1.0),
+            (0.24, 0.26, -1.0),
+            (0.4, 0.24, -1.0),
+            (0.56, 0.18, -1.0),
+        ]
+    }
+}
+
 /// A whole scroll `length` long in its own frame; `depth` 0 for a main scroll, which also
 /// gets a smaller scroll off it and a leaf or flower at its foot.
 #[expect(
@@ -196,31 +242,25 @@ fn scroll(g: &mut Grower, length: f64, look: Look, depth: u32) -> Motif {
     let count = points.len();
     let at = |u: f64| ((u * (count - 1) as f64).round() as usize).min(count - 1);
     let mut motif = Motif::default();
-    motif.shapes.push(band(&points, &headings, &bends, width));
+    // a smaller scroll stands a little lower than the one it comes off
+    let rise = 0.8_f64.powf(f64::from(depth));
+    let outline = band(&points, &headings, &bends, width);
+    motif.shapes.push(outline.clone());
+    motif
+        .pieces
+        .push(Piece::new(Part::Band, outline, points.clone(), rise));
     // the volute ends in a round eye (a seed, on western leaf)
     let end = count - 1;
     let eye = (width * 0.6).max(gap * 0.5);
-    motif.shapes.push(circle(
-        points[end] - Point::from_angle(headings[end]) * eye * 0.6,
-        eye,
+    let centre = points[end] - Point::from_angle(headings[end]) * eye * 0.6;
+    motif.shapes.push(circle(centre, eye));
+    motif.pieces.push(Piece::new(
+        Part::Eye,
+        circle(centre, eye),
+        vec![centre],
+        rise,
     ));
-    // leaves round the outside of the curve (the right, as it curls left), getting smaller
-    // towards the volute; inside it, a few smaller ones
-    let leaves: &[(f64, f64, f64)] = if baroque {
-        &[
-            (0.06, 0.36, -1.0),
-            (0.22, 0.3, -1.0),
-            (0.4, 0.24, -1.0),
-            (0.56, 0.18, -1.0),
-        ]
-    } else {
-        &[
-            (0.08, 0.3, -1.0),
-            (0.24, 0.26, -1.0),
-            (0.4, 0.24, -1.0),
-            (0.56, 0.18, -1.0),
-        ]
-    };
+    let leaves = leaf_places(g.lush, baroque);
     // like a fractal, smaller scrolls branch off it, and off them in turn, each with its
     // own curve: where one branches, it has no leaf
     let mut branches = Vec::new();
@@ -242,23 +282,23 @@ fn scroll(g: &mut Grower, length: f64, look: Look, depth: u32) -> Motif {
             let heading = heading + side * g.range(0.2, 0.35);
             let bend = bends[i] * leaf_length * 1.1 + g.range(0.25, 0.5);
             let lobes = (leaf_length / (gap * 3.5)).floor().clamp(2.0, 5.0);
-            let wide = (leaf_length * 0.5).max(gap * 0.8);
-            motif.shapes.push(acanthus(
-                base,
-                heading,
-                leaf_length,
-                wide,
-                bend,
-                side,
-                lobes,
-            ));
+            let wide = (leaf_length * if g.lush { 0.62 } else { 0.5 }).max(gap * 0.8);
+            let outline = acanthus(base, heading, leaf_length, wide, bend, side, lobes);
+            motif.shapes.push(outline.clone());
+            let spine = centre_line(base, heading, leaf_length, bend, 0.0, 1.0);
+            motif
+                .pieces
+                .push(Piece::new(Part::Leaf, outline, spine, rise));
         } else {
             let heading = heading + side * g.range(0.6, 0.9);
             let bend = side * g.range(0.3, 0.6);
             let wide = (leaf_length * 0.42).max(gap * 0.8);
+            let outline = wavy_leaf(base, heading, leaf_length, wide, bend);
+            motif.shapes.push(outline.clone());
+            let spine = centre_line(base, heading, leaf_length, bend, 0.0, 1.0);
             motif
-                .shapes
-                .push(wavy_leaf(base, heading, leaf_length, wide, bend));
+                .pieces
+                .push(Piece::new(Part::Leaf, outline, spine, rise));
             if wide >= gap * 2.6 {
                 let vein = centre_line(base, heading, leaf_length, bend, 0.18, 0.72);
                 motif.details.push(Stroke::open(vein));
@@ -280,15 +320,14 @@ fn scroll(g: &mut Grower, length: f64, look: Look, depth: u32) -> Motif {
         let leaf_length = length * 0.3;
         let wide = leaf_length * 0.5;
         let lobes = (leaf_length / (gap * 3.5)).floor().clamp(2.0, 5.0);
-        motif.shapes.push(acanthus(
-            Point::ZERO,
-            PI - g.range(0.3, 0.5),
-            leaf_length,
-            wide,
-            -g.range(0.5, 0.9),
-            1.0,
-            lobes,
-        ));
+        let heading = PI - g.range(0.3, 0.5);
+        let bend = -g.range(0.5, 0.9);
+        let outline = acanthus(Point::ZERO, heading, leaf_length, wide, bend, 1.0, lobes);
+        motif.shapes.push(outline.clone());
+        let spine = centre_line(Point::ZERO, heading, leaf_length, bend, 0.0, 1.0);
+        motif
+            .pieces
+            .push(Piece::new(Part::Leaf, outline, spine, rise));
     } else {
         let radius = (length * 0.11).max(gap * 3.4);
         let centre = Point::new(-radius * 0.7, 0.0);
@@ -303,8 +342,26 @@ fn flower(centre: Point, radius: f64, gap: f64, turn: f64) -> Motif {
     let petals = 5.0;
     let mut m = Motif::default();
     m.shapes.push(rosette(centre, radius, petals, turn));
+    m.pieces.push(Piece::new(
+        Part::Petals,
+        rosette(centre, radius, petals, turn),
+        vec![centre],
+        0.7,
+    ));
     let inner = radius * 0.6 - gap;
     let heart = (inner * 0.22).max(gap * 0.5);
+    m.pieces.push(Piece::new(
+        Part::Petals,
+        rosette(centre, radius * 0.6, petals, turn + PI / petals),
+        vec![centre],
+        0.85,
+    ));
+    m.pieces.push(Piece::new(
+        Part::Eye,
+        circle(centre, radius * 0.25),
+        vec![centre],
+        0.95,
+    ));
     if inner * 0.6 - gap >= heart {
         m.details.push(Stroke::shape(rosette(
             centre,
@@ -342,6 +399,7 @@ pub(crate) fn lay(g: &mut Grower, motif: Motif, points: &[Point], made: &mut Mad
     made.shapes
         .extend(motif.shapes.into_iter().map(Stroke::shape));
     made.details.extend(motif.details);
+    made.pieces.extend(motif.pieces);
 }
 
 /// Composed scrolls over the grower's area, the biggest that fits first, down to about

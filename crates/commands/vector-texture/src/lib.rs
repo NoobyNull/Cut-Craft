@@ -257,24 +257,9 @@ const MOST_PIECES: usize = 40_000;
 
 /// One of the decorative fills grown inside `rings`.
 fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandError> {
-    ensure_positive("pattern size", p.size)?;
-    ensure_positive("smallest gap", p.gap)?;
-    if p.size < p.gap * 3.0 {
-        return Err(CommandError::Failed(format!(
-            "the pattern size must be at least three times the smallest gap ({} mm). Make the \
-             pattern size bigger or the gap smaller",
-            p.gap * 3.0
-        )));
-    }
+    check_sizes(p.size, p.gap)?;
     let area = fill::Area::new(rings);
     let mut g = fill::Grower::new(&area, p.gap, p.seed);
-    let too_fine = || {
-        CommandError::Failed(
-            "the pattern is too fine for an area this big. Make the pattern size or the smallest \
-             gap bigger"
-                .into(),
-        )
-    };
     let paths = match p.style {
         Style::WavyLines => unreachable!("wavy lines are drawn on their own"),
         Style::Floral => fill::paths(
@@ -300,9 +285,37 @@ fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandErro
     Ok(paths)
 }
 
-/// Baroque scrolls: grown on the left of the area's middle, inside the area and its mirror
-/// image, then mirrored and merged, so the two halves meet in the middle.
+/// Positive sizes, the pattern at least three gaps across.
+fn check_sizes(size: f64, gap: f64) -> Result<(), CommandError> {
+    ensure_positive("pattern size", size)?;
+    ensure_positive("smallest gap", gap)?;
+    if size < gap * 3.0 {
+        return Err(CommandError::Failed(format!(
+            "the pattern size must be at least three times the smallest gap ({} mm). Make the \
+             pattern size bigger or the gap smaller",
+            gap * 3.0
+        )));
+    }
+    Ok(())
+}
+
+fn too_fine() -> CommandError {
+    CommandError::Failed(
+        "the pattern is too fine for an area this big. Make the pattern size or the smallest \
+         gap bigger"
+            .into(),
+    )
+}
+
+/// Baroque scrolls, mirrored and merged into outlines.
 fn baroque(g: &mut fill::Grower, size: f64) -> Vec<Path> {
+    let made = mirrored_scrolls(g, size);
+    merged(&made, g.gap())
+}
+
+/// Baroque scrolls: grown on the left of the area's middle, inside the area and its mirror
+/// image, then mirrored, so the two halves meet in the middle.
+fn mirrored_scrolls(g: &mut fill::Grower, size: f64) -> scroll::Made {
     let axis = g.area.bounds.center().x;
     let mirrored: Vec<Vec<Point>> = g
         .area
@@ -333,12 +346,60 @@ fn baroque(g: &mut fill::Grower, size: f64) -> Vec<Path> {
             .flat_map(|s| [s.clone(), s.mirrored(axis)])
             .collect()
     };
-    let mirrored = scroll::Made {
+    let mirror = |p: Point| Point::new(2.0 * axis - p.x, p.y);
+    scroll::Made {
         shapes: both(&made.shapes),
         details: both(&made.details),
-    };
-    merged(&mirrored, g.gap())
+        pieces: made
+            .pieces
+            .iter()
+            .flat_map(|piece| [piece.clone(), piece.map(mirror)])
+            .collect(),
+    }
 }
+
+/// The two fills composed of whole scrolls, which can also be carved as a relief.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Ornament {
+    /// Broad C and S scrolls wrapped in lobed acanthus leaves, as Dutch and French carving,
+    /// mirrored left to right
+    #[default]
+    #[schemars(title = "Baroque")]
+    Baroque,
+    /// Western (Sheridan-style) leaf: curling bands, broad wavy leaves and layered flowers
+    #[schemars(title = "Western leaf")]
+    Western,
+}
+
+/// The scrolls of `style` composed inside `rings` as raised pieces, lowest first: what
+/// the fill of that style would outline, to carve as a relief.
+///
+/// # Errors
+/// When the sizes are not positive, the pattern is under three gaps across, or it is too
+/// fine for the area.
+pub fn ornament_pieces(
+    style: Ornament,
+    rings: Vec<Vec<Point>>,
+    size: f64,
+    gap: f64,
+    seed: u32,
+) -> Result<Vec<scroll::Piece>, CommandError> {
+    check_sizes(size, gap)?;
+    let area = fill::Area::new(rings);
+    let mut g = fill::Grower::new(&area, gap, seed);
+    g.lush = true;
+    let made = match style {
+        Ornament::Baroque => mirrored_scrolls(&mut g, size),
+        Ornament::Western => motif::ornament(&mut g, size, scroll::Look::Western, None),
+    };
+    if g.full() {
+        return Err(too_fine());
+    }
+    Ok(made.pieces)
+}
+
+pub use scroll::{Part, Piece};
 
 /// Scrolls' stems and leaves merged into whole shapes, and their details kept apart.
 fn merged(made: &scroll::Made, gap: f64) -> Vec<Path> {

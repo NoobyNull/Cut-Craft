@@ -725,6 +725,10 @@ say "not implemented yet".
     with the mouse, the per-section Smooth switch.
   - Turn and Spin: an open profile turned round the line between its ends, or spun round
     its left end, optionally scaled to an exact height, with name and combine mode.
+  - Create Decorative Relief (Cut Craft only): the Baroque or Western leaf scrolls of
+    Create Vector Texture raised as one component inside the selected closed vectors or the
+    job: rounded bands, raised eyes, lobed leaves over them, domed flowers; height, pattern
+    size, finishing bit (nothing finer than it), live New variation.
   - Create Texture Area: the chosen component tiled over the selected closed vectors or
     the job, with spacing, alternate shifts and a reflection per tile of each four; the
     tile is hidden. The result is an ordinary component (Aspire's stays re-editable).

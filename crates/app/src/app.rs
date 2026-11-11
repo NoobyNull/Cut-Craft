@@ -258,8 +258,8 @@ const RING_SHARE: f64 = 0.6;
 const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 
 /// Forms that make many pieces at once and go on remaking them as their settings change
-/// (an ornament or a fill, and their variations), rather than adding another each time.
-const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture"];
+/// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
+const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
 
 const BUILT_INS: [&str; 102] = [
     "try_sample_project",

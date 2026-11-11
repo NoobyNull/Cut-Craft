@@ -109,6 +109,7 @@ pub fn bandanna(g: &mut Grower, size: f64) -> Made {
             let bit = Motif {
                 shapes: vec![outline],
                 details: vec![],
+                pieces: vec![],
             };
             let points = bit.samples(g.step);
             if g.space.room(at, r + gap) >= r + gap && fits(g, &points, None) {
