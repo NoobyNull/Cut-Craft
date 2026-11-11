@@ -1728,6 +1728,7 @@ fn rapids_go_round_the_jobs_and_the_machines_keep_out_zones_and_save_refuses_a_c
         post: None,
         add_side: false,
         changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
     };
     let path = std::env::temp_dir().join(format!("cut-craft-keep-out-{}.nc", std::process::id()));
     let refused = h.app.save_toolpaths_to(&form, &post, &path).unwrap_err();
@@ -5862,6 +5863,7 @@ fn save_toolpaths_opens_its_form_and_saves_each_shown_toolpath_to_a_file_of_its_
         post: None,
         add_side: false,
         changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
     };
     let post = h.app.output_post().unwrap();
     let done = h
@@ -7025,6 +7027,7 @@ fn quick_engraves_immediate_output_saves_the_toolpath_calculated_last() {
         post: None,
         add_side: false,
         changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
     };
     let post = h.app.output_post().unwrap();
     let done = h
@@ -8373,6 +8376,7 @@ fn save_toolpaths_refuses_toolpaths_bigger_than_the_machine_and_says_how_to_fix_
         post: None,
         add_side: false,
         changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
     };
     let post = h.app.output_post().unwrap();
     let path = std::env::temp_dir().join(format!("cut-craft-too-big-{}.nc", std::process::id()));
@@ -8415,6 +8419,7 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
         post: None,
         add_side: false,
         changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
     };
     let dir = std::env::temp_dir().join(format!("cut-craft-per-tool-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -8427,6 +8432,130 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
         assert!(dir.join(name).exists(), "{name}");
     }
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn send_to_machine_puts_the_files_and_job_sheet_in_the_projects_own_folder() {
+    use cut_craft_machines::send::{Folder, Store};
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let card = std::env::temp_dir().join(format!("cut-craft-card-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&card);
+    std::fs::create_dir_all(&card).unwrap();
+    h.app.machines.add();
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.name = "Shop router".into();
+    machine.send_to.folder = card.display().to_string();
+    h.app.session.path = Some(std::path::PathBuf::from("/jobs/Oak sign: front.ccjob"));
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: true,
+    };
+    let post = h.app.form_post(&form).unwrap();
+    let store = Folder::new(&card);
+    let never = |_: &[String]| panic!("nothing there to replace yet");
+    let done = h.app.send_to(&form, &post, &store, &never).unwrap();
+    assert_eq!(
+        done,
+        "Sent 2 files to Shop router, in its folder Oak sign_ front"
+    );
+    let folder = ["Oak sign_ front".to_owned()];
+    let names: Vec<String> = store
+        .list(&folder)
+        .unwrap()
+        .into_iter()
+        .map(|i| i.name)
+        .collect();
+    assert_eq!(
+        names,
+        ["Oak sign_ front job sheet.html", "Oak sign_ front.nc"]
+    );
+    let sheet = std::fs::read_to_string(card.join(&folder[0]).join(&names[0])).unwrap();
+    assert!(
+        sheet.contains("Oak sign_ front.nc"),
+        "the sheet lists the file sent"
+    );
+    // sending again asks before replacing what is there, and keeps it on No
+    let no = |there: &[String]| {
+        assert_eq!(there.len(), 2);
+        false
+    };
+    let kept = h.app.send_to(&form, &post, &store, &no).unwrap_err();
+    assert!(kept.contains("were kept"), "{kept}");
+    // the project keeps its folder; another with the same name gets one of its own
+    assert_eq!(
+        h.app.machines.active().unwrap().send_to.projects["/jobs/Oak sign: front.ccjob"],
+        "Oak sign_ front"
+    );
+    h.app.session.path = Some(std::path::PathBuf::from("/old/Oak sign_ front.ccjob"));
+    let yes = |_: &[String]| true;
+    let done = h.app.send_to(&form, &post, &store, &yes).unwrap();
+    assert!(done.ends_with("in its folder Oak sign_ front 2"), "{done}");
+    let _ = std::fs::remove_dir_all(card);
+}
+
+#[test]
+fn machine_files_uploads_renames_makes_folders_and_deletes_only_on_the_second_ask() {
+    let card = std::env::temp_dir().join(format!("cut-craft-files-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&card);
+    std::fs::create_dir_all(card.join("Sign")).unwrap();
+    let local = card.with_extension("local.nc");
+    std::fs::write(&local, "G0 X0").unwrap();
+    let store = cut_craft_machines::send::Folder::new(&card);
+    let mut files = super::send::MachineFiles::new("Router", store, false);
+    files.open_folder("Sign");
+    files.upload(std::slice::from_ref(&local));
+    assert_eq!(files.message, Ok("Uploaded 1 file".to_owned()));
+    let uploaded = crate::app::file_name(&local);
+    files.rename(&uploaded, "Front: v2.nc");
+    assert!(
+        card.join("Sign/Front_ v2.nc").exists(),
+        "{:?}",
+        files.message
+    );
+    files.make_folder("Old jobs");
+    assert!(card.join("Sign/Old jobs").is_dir());
+    files.delete("Old jobs");
+    let names: Vec<String> = files
+        .items
+        .clone()
+        .unwrap()
+        .into_iter()
+        .map(|i| i.name)
+        .collect();
+    assert_eq!(names, ["Front_ v2.nc"]);
+    let _ = std::fs::remove_dir_all(card);
+    let _ = std::fs::remove_file(local);
+}
+
+#[test]
+fn save_toolpaths_offers_send_to_machine_once_the_machine_has_a_files_folder() {
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    h.app.machines.add();
+    h.app.invoke(&h.ctx, "save_toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Send to Machine").is_some(), "shown, greyed");
+    assert!(h.text_at("Machine Files…").is_none());
+    assert!(h.text_at("Save a job sheet with the files").is_some());
+    h.app.machines.active_mut().unwrap().send_to.folder = "/media/card".into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Machine Files…").is_some());
+}
+
+#[test]
+fn a_machine_without_a_files_folder_says_where_to_set_it() {
+    let mut h = Harness::new();
+    h.app.machines.add();
+    h.app.invoke(&h.ctx, "machine_files");
+    assert!(h.app.machine_files.is_none());
+    assert_eq!(h.app.status.message, super::send::NO_MACHINE_FOLDER);
 }
 
 #[test]
@@ -8474,6 +8603,7 @@ fn tool_changes_go_to_files_of_their_own_the_tool_changer_or_a_pause() {
             post: None,
             add_side: false,
             changes,
+            job_sheet: true,
         };
         let post = h.app.form_post(&form).unwrap();
         h.app

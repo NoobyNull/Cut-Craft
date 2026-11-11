@@ -93,6 +93,19 @@ pub enum MachineOutcome {
     Cancel,
     /// Open Post-Processor Management.
     ManagePosts,
+    /// Pick a folder for the machine being edited (the window's draft's active one).
+    PickFolder(FolderFor),
+    /// Open Machine Files on the machine being edited.
+    ManageFiles,
+}
+
+/// Which of a machine's folders is being picked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FolderFor {
+    /// Where its G-code programs are saved.
+    Programs,
+    /// The machine's own files (Send to Machine).
+    Machine,
 }
 
 /// The open Machine Configuration Management window: the machines being edited.
@@ -143,6 +156,9 @@ impl MachineManager {
             tool_changer(ui, machine, None);
             keep_out(ui, machine);
             drill_bank(ui, machine);
+            if let Some(asked) = g_code_folders(ui, machine) {
+                outcome = Some(asked);
+            }
             if names_clash {
                 ui.colored_label(
                     ui.visuals().error_fg_color,
@@ -510,6 +526,76 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
             machine.keep_out.push(crate::machine::Zone::default());
         }
     });
+}
+
+/// G-code Files: where the machine's programs are saved on this computer, and the folder
+/// the machine's own files are in when the computer can see it (a wireless controller's shared
+/// card, or its card or stick plugged in here), which Send to Machine saves straight to.
+fn g_code_folders(ui: &mut egui::Ui, machine: &mut Machine) -> Option<MachineOutcome> {
+    let mut asked = None;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("G-code Files").on_hover_hint(
+            "Each project's G-code goes in a folder of its own, named after the project",
+        );
+        egui::Grid::new("machine_g_code_folders")
+            .num_columns(2)
+            .show(ui, |ui| {
+                for (label, value, hint, which, tip) in [
+                    (
+                        "Save programs to",
+                        &mut machine.send_to.programs,
+                        "Wherever you saved last",
+                        FolderFor::Programs,
+                        "Save Toolpaths' file dialog opens here, in the project's own folder",
+                    ),
+                    (
+                        "Machine's files",
+                        &mut machine.send_to.folder,
+                        "None: the machine is not seen from this computer",
+                        FolderFor::Machine,
+                        "The machine's card as this computer sees it: a network drive or share \
+                         (WiFi controllers), or its SD card or USB stick plugged in here. \
+                         Send to Machine saves straight to it",
+                    ),
+                ] {
+                    ui.label(label).on_hover_hint(tip);
+                    ui.horizontal(|ui| {
+                        let browse = ui.button("Browse…");
+                        let width = ui.available_width();
+                        ui.add(
+                            egui::TextEdit::singleline(value)
+                                .hint_text(hint)
+                                .desired_width(width),
+                        )
+                        .on_hover_hint(tip);
+                        if browse.clicked() {
+                            asked = Some(MachineOutcome::PickFolder(which));
+                        }
+                    });
+                    ui.end_row();
+                }
+                ui.label("");
+                ui.checkbox(
+                    &mut machine.send_to.short_names,
+                    "Short names (8 letters) for controllers that need them",
+                )
+                .on_hover_hint(
+                    "Some older controllers only read names of up to 8 letters off their card. \
+                     Leave this off for FluidNC and most WiFi controllers",
+                );
+                ui.end_row();
+            });
+        let can = machine.send_to.is_set();
+        let manage = ui
+            .add_enabled(can, egui::Button::new("Machine Files…"))
+            .on_hover_hint("See, upload, rename and delete the files on the machine")
+            .on_disabled_hover_text("Set the machine's files folder first");
+        if manage.clicked() {
+            asked = Some(MachineOutcome::ManageFiles);
+        }
+    });
+    asked
 }
 
 /// Drill Bank: whether the head has a bank of drills that drop down together, and if so

@@ -41,6 +41,8 @@ pub struct Machine {
     /// A drill bank: several drills on the head, dropped together to drill rows of holes in
     /// one plunge (Drill Bank Toolpath); `None` when the machine has none.
     pub drill_bank: Option<cut_craft_core::drill_bank::DrillBank>,
+    /// Where its G-code programs are saved, and the folder its files are sent to.
+    pub send_to: crate::send::SendTo,
 }
 
 /// A rectangle of the bed kept out of: its lower-left corner and its size, mm, and what its

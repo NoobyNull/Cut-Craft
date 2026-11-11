@@ -81,6 +81,7 @@ impl CutCraftApp {
                 post: None,
                 add_side: false,
                 changes: files::ToolChanges::SeparateFiles,
+                job_sheet: false,
             },
             depth_estimate: None,
             busy: None,
@@ -132,6 +133,7 @@ impl CutCraftApp {
             stl_result: None,
             layers_on_sheet: false,
             save_form: None,
+            machine_files: None,
             save_checks: None,
             before_preview: None,
             picked_nodes: Vec::new(),
@@ -412,6 +414,15 @@ impl CutCraftApp {
                 self.machine_window = Some(cut_craft_machines::MachineManager::new(&self.machines));
             }
             "tool_changer" => self.tool_changer_window = true,
+            "machine_files" => match self.machines.active() {
+                Some(machine) => {
+                    let (name, send_to) = (machine.name.clone(), machine.send_to.clone());
+                    self.open_machine_files(&name, &send_to);
+                }
+                None => self
+                    .status
+                    .set_message("No machine yet: add one in Machine ▸ Machine Configuration"),
+            },
             "add_machine" => {
                 self.machine_window =
                     Some(cut_craft_machines::MachineManager::adding(&self.machines));
@@ -1174,6 +1185,7 @@ impl CutCraftApp {
                     post: None,
                     add_side: self.doc.job.double_sided.is_some(),
                     changes: self.default_changes(),
+                    job_sheet: true,
                 });
             }
             _ => unreachable!("not a toolpath action: {id}"),
@@ -1201,45 +1213,140 @@ impl CutCraftApp {
         })
     }
 
-    /// Save Toolpaths' Save: the checks before cutting, a file name, then each file of the
-    /// form's plan through its post (and each tile, when the job is tiled).
+    /// Save Toolpaths' Save: the checks before cutting, a file name (the dialog opening in
+    /// the project's folder in the machine's G-code programs folder, when it has one), then
+    /// each file of the form's plan through its post (and each tile, when the job is tiled),
+    /// with the job sheet beside them when the form says so.
     pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
-        let post = match self.form_post(form) {
-            Ok(post) => post,
-            Err(e) => return self.status.set_message(&e),
+        let Some((post, told)) = self.ready_to_save(form) else {
+            return;
         };
-        let plan = match self.plan(form, &post) {
-            Ok(plan) => plan,
-            Err(e) => return self.status.set_message(&e),
-        };
-        let found = self.preflight(&plan, form.changes);
-        if let Some(refused) = Self::refused(&found) {
-            return self.status.set_message(&refused);
-        }
-        let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
-        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
-        if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
-            return self.status.set_message("Toolpaths not saved");
-        }
         let extension = post.extension.clone();
         let mut dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
-        // a group saves under its own name, as Aspire's does
-        if form.mode == files::SaveMode::Selected
-            && let Some(group) = &self.selected_group
-        {
-            dialog = dialog.set_file_name(format!("{group}.{extension}"));
+        dialog = dialog.set_file_name(format!("{}.{extension}", self.output_name(form)));
+        let (key, name) = self.project();
+        let programs = self
+            .machines
+            .active_mut()
+            .and_then(|m| m.send_to.programs_folder(&key, &name));
+        if let Some(folder) = &programs {
+            dialog = dialog.set_directory(folder);
+            self.machines_changed("");
         }
         let Some(path) = dialog.save_file() else {
             return;
         };
+        let path = path.with_extension(&extension);
+        let result = self
+            .write_toolpath_files(form, &post, &path)
+            .and_then(|written| {
+                let done = Self::saved_message(&written, &path);
+                if form.job_sheet {
+                    let folder = path.parent().unwrap_or(std::path::Path::new("."));
+                    let outputs = (written.iter())
+                        .map(|p| (file_name(p), p.is_file()))
+                        .collect();
+                    let sheet = self.job_sheet_with(outputs, folder, &name)?;
+                    return Ok(format!("{done}, with the job sheet {sheet}"));
+                }
+                Ok(done)
+            });
+        self.status
+            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+    }
+
+    /// Save Toolpaths' post and the checks before cutting, asked about when they find
+    /// something (and so may say no): the post and what to add to the message saying what
+    /// was saved; `None` when not saving, the status bar saying why.
+    pub(super) fn ready_to_save(
+        &mut self,
+        form: &SaveForm,
+    ) -> Option<(cut_craft_post::Post, String)> {
+        let post = match self.form_post(form) {
+            Ok(post) => post,
+            Err(e) => {
+                self.status.set_message(&e);
+                return None;
+            }
+        };
+        let plan = match self.plan(form, &post) {
+            Ok(plan) => plan,
+            Err(e) => {
+                self.status.set_message(&e);
+                return None;
+            }
+        };
+        let found = self.preflight(&plan, form.changes);
+        if let Some(refused) = Self::refused(&found) {
+            self.status.set_message(&refused);
+            return None;
+        }
+        let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
+        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
+            self.status.set_message("Toolpaths not saved");
+            return None;
+        }
         let told = if problems.is_empty() || ask {
             String::new()
         } else {
             format!(" (check before cutting: {})", problems.join("; "))
         };
-        let result = self.write_toolpaths(form, &post, &path.with_extension(&extension));
-        self.status
-            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+        Some((post, told))
+    }
+
+    /// The name the form's file is saved under (before its extension): a group's own name,
+    /// as Aspire's, the selected toolpath's when saving only it, else the project's.
+    pub(super) fn output_name(&self, form: &SaveForm) -> String {
+        let selected = (form.mode == files::SaveMode::Selected)
+            .then(|| {
+                self.selected_group.clone().or_else(|| {
+                    let id = self.selected_toolpath?;
+                    Some(self.doc.toolpaths.get(&id)?.name.clone())
+                })
+            })
+            .flatten();
+        selected.unwrap_or_else(|| self.project().1)
+    }
+
+    /// The project, as its folders for G-code are kept: by its file ("" before it is saved)
+    /// and named after it ("Untitled" before it is saved).
+    pub(super) fn project(&self) -> (String, String) {
+        self.session.path.as_deref().map_or_else(
+            || (String::new(), "Untitled".to_owned()),
+            |path| {
+                let kept = crate::clipart::network::kept(path);
+                let name = path
+                    .file_stem()
+                    .map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
+                (kept.display().to_string(), name)
+            },
+        )
+    }
+
+    /// The job sheet for the active sheet and side, its list of toolpath files `outputs`
+    /// (each with whether it is there), saved in `folder` as `<name> job sheet.html`; its
+    /// file name.
+    pub(super) fn job_sheet_with(
+        &mut self,
+        outputs: Vec<(String, bool)>,
+        folder: &std::path::Path,
+        name: &str,
+    ) -> Result<String, String> {
+        let mut setup = self.job_setup();
+        setup.outputs = outputs;
+        let html = fmt_create_job_sheet::sheet_for(&self.doc, &self.options.job_sheet, &setup)
+            .map_err(|e| format!("Toolpaths saved, but not the job sheet: {e}"))?;
+        let sheet =
+            cut_craft_machines::send::safe_file_name(&format!("{name} job sheet.html"), false);
+        let path = folder.join(&sheet);
+        cut_craft_core::file::write_atomic(&path, html.as_bytes()).map_err(|e| {
+            format!(
+                "Toolpaths saved, but not the job sheet: could not write {}: {e}",
+                path.display()
+            )
+        })?;
+        Ok(sheet)
     }
 
     /// Saves the form's plan through `post` at `path`, unless the checks before cutting
@@ -1372,12 +1479,39 @@ impl CutCraftApp {
 
     /// Writes the form's plan through `post` at `path`: each file, or each tile of each file
     /// when the job is tiled, and says what was saved.
+    #[cfg(test)]
     fn write_toolpaths(
         &self,
         form: &SaveForm,
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
+        Ok(Self::saved_message(
+            &self.write_toolpath_files(form, post, path)?,
+            path,
+        ))
+    }
+
+    /// What the status bar says once `written` are saved, beside `path`.
+    fn saved_message(written: &[std::path::PathBuf], path: &std::path::Path) -> String {
+        match written {
+            [one] => format!("Saved toolpaths to {}", one.display()),
+            _ => format!(
+                "Saved {} toolpath files beside {}",
+                written.len(),
+                path.display()
+            ),
+        }
+    }
+
+    /// Writes the form's plan through `post` at `path` (and beside it); the files written,
+    /// in the order they are run.
+    pub(super) fn write_toolpath_files(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<Vec<std::path::PathBuf>, String> {
         let plan = self.plan(form, post)?;
         // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
         let crossing = self.not_kept_out(&plan);
@@ -1401,26 +1535,24 @@ impl CutCraftApp {
         let slots = self.slots();
         let per_tool = Self::split_for(form, post);
         let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
+        let mut written = vec![];
         for (path, part) in &parts {
-            match self.doc.tiling {
-                // one file per tile, each tile moved to the job's corner
-                Some(tiling) => {
-                    let tiles = tiling.tiles(self.doc.job.area());
-                    for (n, &tile) in tiles.iter().enumerate() {
-                        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-                        let extension = path.extension().unwrap_or_default().to_string_lossy();
-                        let named =
-                            path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
-                        files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
-                    }
+            // one file per tile, each tile moved to the job's corner
+            if let Some(tiling) = self.doc.tiling {
+                let tiles = tiling.tiles(self.doc.job.area());
+                for (n, &tile) in tiles.iter().enumerate() {
+                    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+                    let extension = path.extension().unwrap_or_default().to_string_lossy();
+                    let named = path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
+                    files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
+                    written.push(named);
                 }
-                None => files::save_through(post, &slots, part, path, job)?,
+            } else {
+                files::save_through(post, &slots, part, path, job)?;
+                written.push(path.clone());
             }
         }
-        Ok(match parts.len() {
-            1 => format!("Saved toolpaths to {}", parts[0].0.display()),
-            n => format!("Saved {n} toolpath files beside {}", path.display()),
-        })
+        Ok(written)
     }
 
     /// The post toolpaths are saved through: the active machine's default when it suits the
@@ -1609,6 +1741,26 @@ impl CutCraftApp {
                 MachineOutcome::Cancel => self.machine_window = None,
                 MachineOutcome::ManagePosts => {
                     self.post_window = Some(cut_craft_machines::PostManager::default());
+                }
+                MachineOutcome::PickFolder(which) => {
+                    if let Some(folder) = file_dialog().pick_folder()
+                        && let Some(machine) =
+                            (self.machine_window.as_mut()).and_then(|w| w.draft.active_mut())
+                    {
+                        let kept = crate::clipart::network::kept(&folder).display().to_string();
+                        match which {
+                            cut_craft_machines::FolderFor::Programs => {
+                                machine.send_to.programs = kept;
+                            }
+                            cut_craft_machines::FolderFor::Machine => machine.send_to.folder = kept,
+                        }
+                    }
+                }
+                MachineOutcome::ManageFiles => {
+                    if let Some(machine) = draft.active() {
+                        let (name, send_to) = (machine.name.clone(), machine.send_to.clone());
+                        self.open_machine_files(&name, &send_to);
+                    }
                 }
             }
         }
