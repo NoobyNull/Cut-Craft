@@ -10,9 +10,9 @@ use super::{
     SaveForm, Screen, Session, Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES,
     ToolDatabase, VECTOR_EXPORTERS, VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog,
     commands, dialog_size, egui, file_dialog, file_name, files, form, form_settings_dialog, gui,
-    job_dialog, menu_items, message_dialog, on_the_desktop, rest_section, selector_section,
-    shortcut, side_panel, side_tabs, summary_table, template_dialog, texture_dialog, tool_list,
-    tool_picker, toolpath_template_dialog, view3d,
+    job_dialog, menu_items, message_dialog, on_the_desktop, page_width, rest_section,
+    selector_section, shortcut, show_page, side_panel, side_tabs, side_tabs_width, summary_table,
+    template_dialog, texture_dialog, tool_list, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -67,6 +67,9 @@ impl CutCraftApp {
             inspector_tab: 0,
             rail_group: None,
             rail_pinned: false,
+            page_rects: [None, None],
+            flyout_rect: None,
+            buttons_across: std::cell::Cell::new(0.0),
             ribbon_tab: 0,
             options_path: None,
             words_path: None,
@@ -3749,28 +3752,37 @@ impl CutCraftApp {
     pub(super) fn job_pages(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         let style = ctx.global_style();
-        let (row, margin) = (style.spacing.interact_size.y, style.spacing.item_spacing.y);
+        // from the window's room alone, before anything is drawn in it
+        let width = page_width(ui);
+        let margin = style.spacing.item_spacing.y;
         let strip = || egui::Frame::side_top_panel(&style).inner_margin(margin);
         let left_tabs = egui::Panel::left("design_tabs")
             .resizable(false)
-            .exact_size(row + 2.0 * margin)
+            .exact_size(side_tabs_width(&style))
             .frame(strip())
             .show(ui, |ui| self.design_tabs(ui))
             .response
             .rect;
         let right_tabs = egui::Panel::right("toolpath_tabs")
             .resizable(false)
-            .exact_size(row + 2.0 * margin)
+            .exact_size(side_tabs_width(&style))
             .frame(strip())
             .show(ui, |ui| self.toolpath_tabs(ui))
             .response
             .rect;
+        self.page_rects = [None, None];
+        self.flyout_rect = None;
         if self.pages.shown(Page::Design) == Shown::Docked {
-            side_panel(egui::Panel::left("design_panel"), ctx).show(ui, |ui| self.design_page(ui));
+            let rect = show_page(egui::Panel::left("design_panel"), width, ui, |ui| {
+                self.design_page(ui);
+            });
+            self.page_rects[0] = Some(rect);
         }
         if self.pages.shown(Page::Toolpaths) == Shown::Docked {
-            side_panel(egui::Panel::right("toolpaths_panel"), ctx)
-                .show(ui, |ui| self.toolpaths_page(ui));
+            let rect = show_page(egui::Panel::right("toolpaths_panel"), width, ui, |ui| {
+                self.toolpaths_page(ui);
+            });
+            self.page_rects[1] = Some(rect);
         }
         let room = ui.available_rect_before_wrap();
         // a click on the view puts a flown-out page away, unless its form is open
@@ -3784,7 +3796,8 @@ impl CutCraftApp {
             if self.pages.shown(page) != Shown::Flyout {
                 continue;
             }
-            let out = self.flyout(ctx, page, room);
+            let out = self.flyout(ctx, page, room, width);
+            self.flyout_rect = Some(out);
             let form_here = self.form.as_ref().is_some_and(|f| f.page == page);
             let on_view = |at: egui::Pos2| {
                 room.contains(at)
@@ -3911,19 +3924,21 @@ impl CutCraftApp {
         }
     }
 
-    /// An auto-hidden page flown out over the view from its side; returns where it is.
+    /// An auto-hidden page flown out over the view from its side, `outer` wide as a docked
+    /// page is; returns where it is.
     pub(super) fn flyout(
         &mut self,
         ctx: &egui::Context,
         page: Page,
         room: egui::Rect,
+        outer: f32,
     ) -> egui::Rect {
-        let width = DESIGN_PANEL_WIDTHS * ctx.global_style().spacing.interact_size.x;
         let frame = egui::Frame::side_top_panel(&ctx.global_style());
-        let height = room.height() - frame.inner_margin.sum().y - frame.outer_margin.sum().y;
+        let margins = frame.total_margin().sum();
+        let (width, height) = (outer - margins.x, room.height() - margins.y);
         let left = match page {
             Page::Design => room.left(),
-            Page::Toolpaths => room.right() - width - frame.inner_margin.sum().x,
+            Page::Toolpaths => room.right() - outer,
         };
         egui::Area::new(egui::Id::unique(("flyout", page)))
             .fixed_pos(egui::pos2(left, room.top()))
@@ -3932,9 +3947,14 @@ impl CutCraftApp {
                 frame.show(ui, |ui| {
                     ui.set_width(width);
                     ui.set_height(height);
+                    // laid out apart, so contents asking for more room never widen it
+                    let room =
+                        egui::Rect::from_min_size(ui.cursor().min, egui::vec2(width, height));
+                    let mut inside = ui.new_child(egui::UiBuilder::new().max_rect(room));
+                    inside.shrink_clip_rect(room);
                     match page {
-                        Page::Design => self.design_page(ui),
-                        Page::Toolpaths => self.toolpaths_page(ui),
+                        Page::Design => self.design_page(&mut inside),
+                        Page::Toolpaths => self.toolpaths_page(&mut inside),
                     }
                 });
             })

@@ -1095,6 +1095,8 @@ struct Harness {
     copied: String,
     /// The last frame's request for the window's picture, if it made one.
     screenshot: Option<egui::ScreenshotCallback>,
+    /// The window's size.
+    window: egui::Vec2,
 }
 
 impl Harness {
@@ -1107,6 +1109,7 @@ impl Harness {
             shapes: vec![],
             copied: String::new(),
             screenshot: None,
+            window: vec2(1280.0, 800.0),
         };
         // previews appear cut at once unless a test plays one
         h.app.display.animate_preview = false;
@@ -1175,7 +1178,7 @@ impl Harness {
         let mut events = events;
         events.insert(0, Event::ModifiersChanged(modifiers));
         let input = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.window)),
             time: Some(self.time),
             events,
             ..Default::default()
@@ -5931,6 +5934,174 @@ fn a_side_panel_never_takes_more_than_its_share_of_the_window() {
         "{width} of {}",
         window.width()
     );
+}
+
+/// How wide each docked page was drawn over `frames` frames, Design then Toolpaths.
+fn page_widths(h: &mut Harness, frames: usize) -> Vec<[Option<f32>; 2]> {
+    (0..frames)
+        .map(|_| {
+            h.frame(vec![]);
+            h.app.page_rects.map(|r| r.map(|r| r.width()))
+        })
+        .collect()
+}
+
+fn both_pinned() -> Harness {
+    let mut h = Harness::new();
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h
+}
+
+#[test]
+fn a_page_whose_contents_ask_for_more_room_keeps_its_place() {
+    // a field asking for a little more than the page has, as a long form in a big font does
+    let ctx = egui::Context::default();
+    let window = Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0));
+    for frame in 0..20 {
+        let input = RawInput {
+            screen_rect: Some(window),
+            time: Some(f64::from(frame) * 0.1),
+            ..Default::default()
+        };
+        let mut rects = vec![];
+        headless(ctx.run_ui(input, |ui| {
+            for panel in [egui::Panel::left("l"), egui::Panel::right("r")] {
+                rects.push(show_page(panel, 300.0, ui, |ui| {
+                    ui.set_min_width(ui.available_width() + 40.0);
+                }));
+            }
+            rects.push(ui.available_rect_before_wrap());
+        }));
+        assert_eq!(
+            rects[0].x_range(),
+            egui::Rangef::new(0.0, 300.0),
+            "left page"
+        );
+        assert_eq!(
+            rects[1].x_range(),
+            egui::Rangef::new(980.0, 1280.0),
+            "right page"
+        );
+        assert_eq!(
+            rects[2].x_range(),
+            egui::Rangef::new(300.0, 980.0),
+            "the view between"
+        );
+    }
+}
+
+#[test]
+fn pinned_pages_keep_one_width_whatever_they_show() {
+    let mut h = both_pinned();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let start = page_widths(&mut h, 1)[0];
+    assert!(start[0].is_some() && start[1].is_some(), "both docked");
+    let mut seen = vec![];
+    for form in [
+        "job_setup",
+        "profile_toolpath",
+        "pocket_toolpath",
+        "draw_text",
+        "offset_vectors",
+    ] {
+        h.app.invoke(&h.ctx, form);
+        seen.extend(page_widths(&mut h, 8));
+        h.app.form = None;
+        seen.extend(page_widths(&mut h, 3));
+    }
+    for tab in 0..gui::DESIGN_SUBTABS.len() {
+        h.app.design_subtab = tab;
+        seen.extend(page_widths(&mut h, 3));
+    }
+    for widths in seen {
+        assert_eq!(widths, start, "no page grows or shrinks with what it shows");
+    }
+}
+
+#[test]
+fn a_pinned_page_has_room_for_five_tool_buttons_side_by_side() {
+    for text_scale in [1.0, 1.15, 1.5, 2.0] {
+        // a tall window, where the pages are as narrow as they go
+        let mut h = both_pinned();
+        h.window = vec2(1600.0, 1400.0);
+        readable(&h.ctx, text_scale);
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        let across = h.app.buttons_across.get();
+        assert!(across >= 5.0, "{across} at {text_scale}× text");
+    }
+}
+
+#[test]
+fn a_wide_window_widens_the_pages_to_keep_the_view_four_by_three() {
+    let mut h = both_pinned();
+    let narrow = page_widths(&mut h, 2)[1];
+    h.window = vec2(2560.0, 1080.0);
+    let wide = page_widths(&mut h, 3);
+    let [Some(left), Some(right)] = wide[2] else {
+        panic!("both docked")
+    };
+    assert_eq!(left, right, "the pages share the room evenly");
+    assert!(left > narrow[0].unwrap(), "{left} from {narrow:?}");
+    assert_eq!(wide[1], wide[2], "settled in the frame the window changed");
+    let view = h.app.view_area.expect("the 2D view was drawn");
+    let aspect = view.width() / view.height();
+    assert!(
+        (aspect - crate::pages::VIEW_ASPECT).abs() < 0.03,
+        "{aspect} for {view:?}"
+    );
+}
+
+#[test]
+fn unpinning_one_page_leaves_the_others_width_alone() {
+    let mut h = both_pinned();
+    let both = page_widths(&mut h, 2)[1];
+    h.app.pages.set_pinned(Page::Design, false);
+    let one = page_widths(&mut h, 2);
+    assert_eq!(
+        one[0],
+        [None, both[1]],
+        "no jump in the frame it was unpinned"
+    );
+    assert_eq!(one[1], one[0]);
+}
+
+#[test]
+fn a_flown_out_page_is_as_wide_as_a_pinned_one() {
+    let mut h = Harness::new();
+    let docked = h.app.page_rects[0].expect("Design docked").width();
+    h.app.pages.set_pinned(Page::Design, false);
+    h.app.pages.open(Page::Design);
+    h.frame(vec![]);
+    let out = h.app.flyout_rect.expect("Design flown out").width();
+    assert!(
+        (out - docked).abs() <= 1.0,
+        "{out} flown out, {docked} docked"
+    );
+    // nor does a form on it, or the frames after, push it wider
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    for form in ["job_setup", "draw_text", "offset_vectors"] {
+        h.app.invoke(&h.ctx, form);
+        h.app.pages.open(Page::Design);
+        for _ in 0..6 {
+            h.frame(vec![]);
+            let now = h.app.flyout_rect.expect("still out").width();
+            assert_eq!(now, out, "{form}");
+        }
+        h.app.form = None;
+    }
+}
+
+#[test]
+fn job_setup_for_a_new_job_is_as_wide_as_the_design_page_after() {
+    let mut h = Harness::at_start();
+    h.app.invoke(&h.ctx, "new");
+    let setup = page_widths(&mut h, 3);
+    h.app.job_setup_ok();
+    let job = page_widths(&mut h, 2);
+    assert_eq!(setup[2][0], job[1][0], "no jump when the job is made");
 }
 
 #[test]

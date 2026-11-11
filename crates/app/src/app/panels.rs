@@ -5,9 +5,10 @@ use super::RING_SHARE;
 use super::{
     Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FineKey, HEIGHT_DRAG_EVERY,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
-    Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_HEIGHT_DIAMETERS,
-    TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog, file_name, files,
-    gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
+    Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_BOX_MARGIN,
+    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui,
+    file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
+    wrap_for,
 };
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{MachinedArea, Units};
@@ -269,11 +270,14 @@ impl CutCraftApp {
         let full = ui.available_width();
         let spacing = ui.spacing().item_spacing;
         let button = edge + 2.0 * ui.spacing().button_padding.x;
-        let margin = 4.0;
+        let margin = TOOL_BOX_MARGIN;
         let caption_font = egui::TextStyle::Small.resolve(ui.style());
         let caption_color = ui.visuals().weak_text_color();
         let caption_height = ui.fonts_mut(|f| f.row_height(&caption_font));
         let clusters = crate::flyout::clusters(tools);
+        let room = full - 2.0 * margin - 2.0 + spacing.x;
+        let across = (room / (button + spacing.x)).floor();
+        self.buttons_across.set(across);
         let captions: Vec<&str> = clusters
             .iter()
             .map(|c| c.name.unwrap_or_default())

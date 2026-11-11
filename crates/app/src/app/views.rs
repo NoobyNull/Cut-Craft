@@ -7,7 +7,8 @@ use super::{
     OLD_JOB_EXTENSION, Overlay, Path, Point, RESOLUTIONS, Rect, SCROLL_NOTCH, STROKE_TOOLS, Screen,
     Split, TOOL_ICON_ROWS, UNITS, VIEW_BUTTONS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool,
     ViewTransform, bordered, dialog_size, egui, file_dialog, file_name, files, gui, handles,
-    inspected, inspected_rows, measured, measured_rows, paint_focus_ring, side_panel, view2d,
+    inspected, inspected_rows, measured, measured_rows, page_width, paint_focus_ring, show_page,
+    view2d,
 };
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
@@ -318,9 +319,12 @@ impl CutCraftApp {
                 return;
             }
             Screen::NewJob => {
-                side_panel(egui::Panel::left("design_panel"), ctx).show(ui, |ui| {
+                // as wide as the Design page the job opens with
+                let width = page_width(ui);
+                let rect = show_page(egui::Panel::left("design_panel"), width, ui, |ui| {
                     self.form_panel(ui);
                 });
+                self.page_rects = [Some(rect), None];
             }
             Screen::Job => match self.options.general.layout {
                 WindowLayout::Classic => self.job_pages(ui),
