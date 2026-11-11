@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Installs Ubuntu packages on a CI runner without depending on one package server.
+#
+#   scripts/apt-install <package>...
+#
+# The runner's apt sources fall back to security.ubuntu.com, and on 2026-11-11 that name
+# stopped resolving for hours, failing every Linux check before it built anything. Here every
+# Ubuntu source (the runner's mirror list, archive.ubuntu.com and security.ubuntu.com) is
+# pointed at one mirror at a time, which carries all the pockets, -security included; apt
+# retries each download, and a mirror that fails twice gives way to the next.
+#
+# APT_MIRRORS (space separated) overrides the mirrors tried, in order.
+set -euo pipefail
+
+if [[ $# == 0 ]]; then
+  echo "usage: scripts/apt-install <package>..." >&2
+  exit 2
+fi
+
+mirrors=${APT_MIRRORS:-"http://azure.archive.ubuntu.com/ubuntu http://archive.ubuntu.com/ubuntu"}
+
+sudo tee /etc/apt/apt.conf.d/80-cut-craft-ci >/dev/null <<'EOF'
+Acquire::Retries "5";
+Acquire::http::Timeout "30";
+Acquire::https::Timeout "30";
+APT::Get::Assume-Yes "true";
+EOF
+
+# every file that names an Ubuntu source, the deb822 *.sources and the older *.list
+sources=()
+for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+  [[ -f $f ]] && grep -qE 'ubuntu\.com|apt-mirrors\.txt' "$f" && sources+=("$f")
+done
+if [[ ${#sources[@]} == 0 ]]; then
+  echo "::warning::No Ubuntu apt sources found; installing with the runner's own"
+fi
+for f in "${sources[@]}"; do
+  sudo cp "$f" "$f.cut-craft-orig"
+done
+
+use_mirror() {
+  local mirror=$1 f
+  for f in "${sources[@]}"; do
+    sudo sed -E \
+      -e "s#mirror\+file:/etc/apt/apt-mirrors\.txt#${mirror}#g" \
+      -e "s#https?://([a-z0-9.-]+\.)?(archive|security)\.ubuntu\.com/ubuntu/?#${mirror}#g" \
+      "$f.cut-craft-orig" | sudo tee "$f" >/dev/null
+  done
+}
+
+for mirror in $mirrors; do
+  [[ ${#sources[@]} -gt 0 ]] && use_mirror "$mirror"
+  for attempt in 1 2; do
+    echo "::group::apt from $mirror (attempt $attempt)"
+    if sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install "$@"; then
+      echo "::endgroup::"
+      echo "Installed from $mirror: $*"
+      exit 0
+    fi
+    echo "::endgroup::"
+    echo "::warning::apt from $mirror failed (attempt $attempt)"
+    sleep $((attempt * 15))
+  done
+done
+
+echo "::error::Could not install $* from any of: $mirrors"
+exit 1
