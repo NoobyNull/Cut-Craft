@@ -9721,3 +9721,126 @@ fn switching_units_and_back_leaves_every_tool_figure_as_it_was() {
     );
     assert_eq!(serde_json::to_value(&h.app.tools).unwrap(), database);
 }
+
+#[test]
+fn pocket_clears_with_bigger_bits_picked_in_the_tool_database() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.click(h.at(60.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // one picker on the form: no separate Rest Machining list beside clearing
+    assert!(
+        h.text_at("Rest Machining").is_none(),
+        "clearing does its job"
+    );
+    assert!(
+        h.text_at("Add a tool…").is_none(),
+        "no menus of tools on the form"
+    );
+    let tick = h
+        .text_at("Clear with bigger bits first")
+        .expect("clearing, off to start with");
+    assert_eq!(
+        h.app.form.as_ref().unwrap().params["clearance_tools"],
+        serde_json::json!([])
+    );
+    // ticking it opens the Tool Database to pick the clearing bit in
+    h.click(tick, Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    assert!(manager.selecting);
+    let big = manager
+        .draft
+        .tools
+        .iter()
+        .position(|t| t.name == "12 mm End Mill")
+        .unwrap();
+    manager.pick = Some(cut_craft_tool_database::Pick::Tool(big));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let select = *h.texts_at("Select").last().expect("Select, in place of OK");
+    h.click(select, Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(
+        form.params["tool"]["name"], "3 mm End Mill",
+        "the finishing bit stays"
+    );
+    assert_eq!(form.params["clearance_tools"][0]["name"], "12 mm End Mill");
+    assert_eq!(
+        form.params["clearance_tools"][0]["feed_rate"],
+        serde_json::json!(h.app.tools.get("12 mm End Mill").unwrap().feed_rate),
+        "with its own feeds and speeds"
+    );
+    // another, in between: kept largest first
+    h.click(
+        h.text_at("Add a smaller clearing bit…")
+            .expect("another bit"),
+        Modifiers::NONE,
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    let middle = manager
+        .draft
+        .tools
+        .iter()
+        .position(|t| t.name == "6 mm End Mill")
+        .unwrap();
+    manager.pick = Some(cut_craft_tool_database::Pick::Tool(middle));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.click(*h.texts_at("Select").last().unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let names: Vec<&str> = h.app.form.as_ref().unwrap().params["clearance_tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["12 mm End Mill", "6 mm End Mill"]);
+}
+
+#[test]
+fn pocket_says_on_the_form_when_a_clearing_bit_is_not_bigger_than_the_finishing_bit() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.click(h.at(60.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("6 mm End Mill");
+    let small = serde_json::to_value(h.app.tools.get("3 mm End Mill").unwrap()).unwrap();
+    h.app.form.as_mut().unwrap().params["clearance_tools"] = serde_json::json!([small]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let said = h.shapes.iter().any(|clipped| {
+        matches!(&clipped.shape, egui::Shape::Text(t)
+            if t.galley.text().contains("must be bigger than the finishing bit"))
+    });
+    assert!(said, "the problem shows before Calculate");
+}
+
+#[test]
+fn an_older_pocket_with_a_rest_list_still_shows_it() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.click(h.at(60.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    let big = serde_json::to_value(h.app.tools.get("12 mm End Mill").unwrap()).unwrap();
+    h.app.form.as_mut().unwrap().params["rest"] =
+        serde_json::json!({ "after": [big], "minimum_detail": 0.0, "overlap": 0.0 });
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Rest Machining").is_some(),
+        "kept, so it can be changed"
+    );
+}

@@ -103,8 +103,15 @@ impl Command for VcarveEngraveToolpath {
                 "clearance tools clear the flat bottom: give a flat depth".into(),
             ));
         }
+        cut_craft_core::rest::check_clearing(&p.tool, &p.clearance_tools, false)?;
         // each clearance tool, largest first (each kept to what the ones before it left),
         // then the V-bit on the slopes and the edge of the flat bottom
+        let mut sorted = p.clearance_tools.clone();
+        sorted.sort_by(|a, b| b.diameter.total_cmp(&a.diameter));
+        let p = &Params {
+            clearance_tools: sorted,
+            ..p.clone()
+        };
         let smallest = p
             .clearance_tools
             .iter()
