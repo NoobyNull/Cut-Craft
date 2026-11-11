@@ -4,7 +4,7 @@
 //! Shift for more), added to the project with a double-click or by dragging, and a
 //! right-click menu adds, locates, tags or deletes the ones picked, or shows one's Properties.
 
-mod network;
+pub(crate) mod network;
 mod preview;
 mod properties;
 mod tags;

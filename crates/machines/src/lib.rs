@@ -6,8 +6,11 @@ pub mod catalogue;
 pub mod library;
 pub mod machine;
 pub mod manager;
+pub mod send;
 
 pub use catalogue::{Controller, catalogue, makers};
 pub use library::{Entry, Library};
 pub use machine::{Machine, Machines};
-pub use manager::{Look, MachineManager, MachineOutcome, PostManager, PostOutcome, tool_changer};
+pub use manager::{
+    FolderFor, Look, MachineManager, MachineOutcome, PostManager, PostOutcome, tool_changer,
+};

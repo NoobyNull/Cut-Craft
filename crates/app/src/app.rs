@@ -18,6 +18,7 @@ mod passes;
 mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
+mod send;
 mod tabs;
 #[cfg(test)]
 mod tests;
@@ -259,8 +260,9 @@ const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 /// (an ornament and its variations), rather than adding another each time.
 const REMAKE_FORMS: &[&str] = &["embellish"];
 
-const BUILT_INS: [&str; 101] = [
+const BUILT_INS: [&str; 102] = [
     "try_sample_project",
+    "machine_files",
     "first_run_setup",
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
@@ -395,6 +397,8 @@ pub(super) struct SaveForm {
     add_side: bool,
     /// How tools are changed: a file for each, the tool changer, or a pause.
     changes: files::ToolChanges,
+    /// Save the job sheet (the project's sheet, listing these files) beside the files.
+    job_sheet: bool,
 }
 
 /// What the checks before cutting found in Save Toolpaths' plan, kept while the plan, the
@@ -1022,6 +1026,8 @@ struct CutCraftApp {
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.
     save_form: Option<SaveForm>,
+    /// Machine ▸ Machine Files, while it is open.
+    machine_files: Option<send::MachineFiles>,
     /// The checks shown in Save Toolpaths' form.
     save_checks: Option<SaveChecks>,
     /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
