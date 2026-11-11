@@ -180,6 +180,8 @@ fn setting_gaps(fields: &[Field], path: &str, out: &mut Vec<What>) {
         match kind {
             Kind::Group(_) if picked => {}
             Kind::Group(inner) => setting_gaps(inner, &at, out),
+            // the fonts installed on this computer: names, different on each machine
+            Kind::Choice(..) if f.key == "font" => {}
             Kind::Choice(options, _) if options.len() > 1 => {
                 for o in options {
                     let help = o.help.as_deref().map(str::trim).unwrap_or_default();
@@ -345,6 +347,11 @@ mod tests {
                         { "const": "outside", "description": "Cut round the outside of the shape" },
                         { "const": "inside" }
                     ]
+                },
+                "font": {
+                    "type": "string",
+                    "description": "The lettering the text is drawn in",
+                    "enum": ["Lato", "DejaVu Sans"]
                 },
                 "tool": {
                     "type": "object",

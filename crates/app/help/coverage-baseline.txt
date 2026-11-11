@@ -28,34 +28,6 @@ array_copy_toolpath | setting without help: Rows
 array_copy_toolpath | setting without help: Spacing
 array_copy_toolpath | setting without help: X
 array_copy_toolpath | setting without help: Y
-auto_layout_text | option without help: Font = Caladea
-auto_layout_text | option without help: Font = Carlito
-auto_layout_text | option without help: Font = DejaVu Sans
-auto_layout_text | option without help: Font = DejaVu Sans Mono
-auto_layout_text | option without help: Font = DejaVu Serif
-auto_layout_text | option without help: Font = FreeMono
-auto_layout_text | option without help: Font = FreeSans
-auto_layout_text | option without help: Font = FreeSerif
-auto_layout_text | option without help: Font = IPAGothic
-auto_layout_text | option without help: Font = IPAPGothic
-auto_layout_text | option without help: Font = Inter
-auto_layout_text | option without help: Font = Inter Display
-auto_layout_text | option without help: Font = JetBrains Mono
-auto_layout_text | option without help: Font = Liberation Mono
-auto_layout_text | option without help: Font = Liberation Sans
-auto_layout_text | option without help: Font = Liberation Serif
-auto_layout_text | option without help: Font = Loma
-auto_layout_text | option without help: Font = Noto Color Emoji
-auto_layout_text | option without help: Font = OpenSymbol
-auto_layout_text | option without help: Font = Test Boxes
-auto_layout_text | option without help: Font = Unifont
-auto_layout_text | option without help: Font = Unifont CSUR
-auto_layout_text | option without help: Font = Unifont Sample
-auto_layout_text | option without help: Font = Unifont Upper
-auto_layout_text | option without help: Font = Unifont-JP
-auto_layout_text | option without help: Font = WenQuanYi Zen Hei
-auto_layout_text | option without help: Font = WenQuanYi Zen Hei Mono
-auto_layout_text | option without help: Font = WenQuanYi Zen Hei Sharp
 auto_layout_text | option without help: Text alignment = Center
 auto_layout_text | option without help: Text alignment = Left
 auto_layout_text | option without help: Text alignment = Right
@@ -184,34 +156,6 @@ dimensions | setting without help: Kind
 dimensions | setting without help: Text height
 dimensions | setting without help: To ▸ X
 dimensions | setting without help: To ▸ Y
-dimensions | option without help: Font = Caladea
-dimensions | option without help: Font = Carlito
-dimensions | option without help: Font = DejaVu Sans
-dimensions | option without help: Font = DejaVu Sans Mono
-dimensions | option without help: Font = DejaVu Serif
-dimensions | option without help: Font = FreeMono
-dimensions | option without help: Font = FreeSans
-dimensions | option without help: Font = FreeSerif
-dimensions | option without help: Font = IPAGothic
-dimensions | option without help: Font = IPAPGothic
-dimensions | option without help: Font = Inter
-dimensions | option without help: Font = Inter Display
-dimensions | option without help: Font = JetBrains Mono
-dimensions | option without help: Font = Liberation Mono
-dimensions | option without help: Font = Liberation Sans
-dimensions | option without help: Font = Liberation Serif
-dimensions | option without help: Font = Loma
-dimensions | option without help: Font = Noto Color Emoji
-dimensions | option without help: Font = OpenSymbol
-dimensions | option without help: Font = Test Boxes
-dimensions | option without help: Font = Unifont
-dimensions | option without help: Font = Unifont CSUR
-dimensions | option without help: Font = Unifont Sample
-dimensions | option without help: Font = Unifont Upper
-dimensions | option without help: Font = Unifont-JP
-dimensions | option without help: Font = WenQuanYi Zen Hei
-dimensions | option without help: Font = WenQuanYi Zen Hei Mono
-dimensions | option without help: Font = WenQuanYi Zen Hei Sharp
 dimensions | option without help: Kind = Horizontal Dimension
 dimensions | option without help: Kind = Vertical Dimension
 distort_object | setting without help: Corners ▸ Bottom left ▸ X
@@ -279,34 +223,6 @@ draw_text | setting without help: Anchor point ▸ Y
 draw_text | setting without help: Bounding box dimensions ▸ X
 draw_text | setting without help: Bounding box dimensions ▸ Y
 draw_text | setting without help: Mode
-draw_text | option without help: Font = Caladea
-draw_text | option without help: Font = Carlito
-draw_text | option without help: Font = DejaVu Sans
-draw_text | option without help: Font = DejaVu Sans Mono
-draw_text | option without help: Font = DejaVu Serif
-draw_text | option without help: Font = FreeMono
-draw_text | option without help: Font = FreeSans
-draw_text | option without help: Font = FreeSerif
-draw_text | option without help: Font = IPAGothic
-draw_text | option without help: Font = IPAPGothic
-draw_text | option without help: Font = Inter
-draw_text | option without help: Font = Inter Display
-draw_text | option without help: Font = JetBrains Mono
-draw_text | option without help: Font = Liberation Mono
-draw_text | option without help: Font = Liberation Sans
-draw_text | option without help: Font = Liberation Serif
-draw_text | option without help: Font = Loma
-draw_text | option without help: Font = Noto Color Emoji
-draw_text | option without help: Font = OpenSymbol
-draw_text | option without help: Font = Test Boxes
-draw_text | option without help: Font = Unifont
-draw_text | option without help: Font = Unifont CSUR
-draw_text | option without help: Font = Unifont Sample
-draw_text | option without help: Font = Unifont Upper
-draw_text | option without help: Font = Unifont-JP
-draw_text | option without help: Font = WenQuanYi Zen Hei
-draw_text | option without help: Font = WenQuanYi Zen Hei Mono
-draw_text | option without help: Font = WenQuanYi Zen Hei Sharp
 draw_text | option without help: Horizontal stretch = No horizontal stretch
 draw_text | option without help: Text alignment = Center
 draw_text | option without help: Text alignment = Left
@@ -328,34 +244,6 @@ embellish | setting without help: Name
 embellish | option without help: Make = Both
 engrave_part_names | option without help: Engrave = Name only
 engrave_part_names | option without help: Engrave = Number only
-engrave_part_names | option without help: Font = Caladea
-engrave_part_names | option without help: Font = Carlito
-engrave_part_names | option without help: Font = DejaVu Sans
-engrave_part_names | option without help: Font = DejaVu Sans Mono
-engrave_part_names | option without help: Font = DejaVu Serif
-engrave_part_names | option without help: Font = FreeMono
-engrave_part_names | option without help: Font = FreeSans
-engrave_part_names | option without help: Font = FreeSerif
-engrave_part_names | option without help: Font = IPAGothic
-engrave_part_names | option without help: Font = IPAPGothic
-engrave_part_names | option without help: Font = Inter
-engrave_part_names | option without help: Font = Inter Display
-engrave_part_names | option without help: Font = JetBrains Mono
-engrave_part_names | option without help: Font = Liberation Mono
-engrave_part_names | option without help: Font = Liberation Sans
-engrave_part_names | option without help: Font = Liberation Serif
-engrave_part_names | option without help: Font = Loma
-engrave_part_names | option without help: Font = Noto Color Emoji
-engrave_part_names | option without help: Font = OpenSymbol
-engrave_part_names | option without help: Font = Test Boxes
-engrave_part_names | option without help: Font = Unifont
-engrave_part_names | option without help: Font = Unifont CSUR
-engrave_part_names | option without help: Font = Unifont Sample
-engrave_part_names | option without help: Font = Unifont Upper
-engrave_part_names | option without help: Font = Unifont-JP
-engrave_part_names | option without help: Font = WenQuanYi Zen Hei
-engrave_part_names | option without help: Font = WenQuanYi Zen Hei Mono
-engrave_part_names | option without help: Font = WenQuanYi Zen Hei Sharp
 exit | no tooltip
 export_ai | no tooltip
 export_as_3d_clipart | no tooltip
