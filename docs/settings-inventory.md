@@ -140,7 +140,11 @@ Grouped, with the reason.
    256). The Options page "Importing Models" is now "Importing". An Advanced setting left at
    its default is left out of the file, so options sealed before it existed still pass the
    tamper check; any later Advanced setting must do the same.)
-7. Performance (Advanced): threads, most 3D detail, clipart and cache limits.
+7. Performance (Advanced): threads, most 3D detail, clipart and cache limits. (Done: threads
+   as *Processor cores to use* in #177; most 3D detail is 3D View ▸ detail when still; the
+   Library's rescan time (5 s), most files listed (100,000), days an unused preview is kept
+   (60, from the next start) and previews on the graphics card (400, from the next start)
+   are now Advanced settings.)
 8. CAM accuracy (Advanced): curve accuracy, 3D accuracy, rest threshold, nesting limits.
 9. Gadgets (Advanced): Lua limits.
 10. Tool form fields: sculpt brush feel, merged grid rows, PDF line width.

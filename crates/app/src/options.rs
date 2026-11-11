@@ -732,16 +732,94 @@ pub struct Advanced {
         range(min = 4, max = 256)
     )]
     pub dxf_spline_detail: u32,
+    /// How often the Library reads its folders again to find files added, moved or deleted.
+    /// Sooner shows changes quicker, but keeps a network drive or a slow disk busy
+    #[serde(
+        default = "library_rescan_seconds",
+        skip_serializing_if = "is_library_rescan_seconds"
+    )]
+    #[schemars(
+        title = "Library: read the folders again every",
+        extend("x-unit" = "s"),
+        range(min = 1, max = 3600)
+    )]
+    pub library_rescan_seconds: u32,
+    /// The Library stops listing after this many files, so adding a whole drive can't stall
+    /// it. More lists bigger collections, but uses more memory and time on every read
+    #[serde(
+        default = "library_most_files",
+        skip_serializing_if = "is_library_most_files"
+    )]
+    #[schemars(
+        title = "Library: most files listed",
+        range(min = 1000, max = 10_000_000)
+    )]
+    pub library_most_files: u32,
+    /// Saved Library previews not used for this long are deleted when Cut Craft starts. Longer
+    /// keeps more of them on disk, so folders open faster (from the next start)
+    #[serde(
+        default = "preview_cache_days",
+        skip_serializing_if = "is_preview_cache_days"
+    )]
+    #[schemars(
+        title = "Library: keep unused previews for",
+        extend("x-unit" = "days"),
+        range(min = 1, max = 3650)
+    )]
+    pub preview_cache_days: u32,
+    /// How many Library previews are kept on the graphics card at once. More scrolls back
+    /// faster, but uses more video memory, which can run out on built-in graphics (from the
+    /// next start)
+    #[serde(
+        default = "previews_on_card",
+        skip_serializing_if = "is_previews_on_card"
+    )]
+    #[schemars(
+        title = "Library: previews kept on the graphics card",
+        range(min = 50, max = 5000)
+    )]
+    pub previews_on_card: u32,
 }
 
-fn dxf_spline_detail() -> u32 {
+/// The default of an Advanced setting, and whether a value is it: settings at their default
+/// are left out of the file, so the check written before they existed still matches.
+macro_rules! advanced_default {
+    ($default:ident, $is:ident, $value:expr) => {
+        fn $default() -> u32 {
+            $value
+        }
+
+        fn $is(value: &u32) -> bool {
+            *value == $default()
+        }
+    };
+}
+
+advanced_default!(
+    dxf_spline_detail,
+    is_dxf_spline_detail,
     cut_craft_core::import_settings::SPLINE_SAMPLES
-}
-
-#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's signature")]
-fn is_dxf_spline_detail(detail: &u32) -> bool {
-    *detail == dxf_spline_detail()
-}
+);
+advanced_default!(
+    library_rescan_seconds,
+    is_library_rescan_seconds,
+    u32::try_from(crate::clipart::RELIST.as_secs()).expect("a few seconds")
+);
+advanced_default!(
+    library_most_files,
+    is_library_most_files,
+    u32::try_from(crate::clipart::MOST).expect("a count that fits")
+);
+advanced_default!(
+    preview_cache_days,
+    is_preview_cache_days,
+    u32::try_from(crate::clipart::preview::UNUSED_DAYS).expect("a count of days")
+);
+advanced_default!(
+    previews_on_card,
+    is_previews_on_card,
+    u32::try_from(crate::clipart::preview::KEEP).expect("a count that fits")
+);
 
 impl Default for Advanced {
     fn default() -> Self {
@@ -749,6 +827,10 @@ impl Default for Advanced {
             wayland_native: false,
             cores: 0,
             dxf_spline_detail: dxf_spline_detail(),
+            library_rescan_seconds: library_rescan_seconds(),
+            library_most_files: library_most_files(),
+            preview_cache_days: preview_cache_days(),
+            previews_on_card: previews_on_card(),
         }
     }
 }
@@ -763,6 +845,13 @@ impl Advanced {
     pub fn apply(&self) {
         cut_craft_core::simulation::set_core_limit(usize::try_from(self.cores).unwrap_or(0));
         cut_craft_core::import_settings::set_spline_samples(self.dxf_spline_detail);
+        let count = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
+        crate::clipart::limits::set(
+            u64::from(self.library_rescan_seconds.clamp(1, 3600)),
+            count(self.library_most_files.clamp(1000, 10_000_000)),
+            u64::from(self.preview_cache_days.clamp(1, 3650)),
+            count(self.previews_on_card.clamp(50, 5000)),
+        );
     }
 
     /// The check saved beside these settings: a keyed hash of them, so an edit made outside
@@ -1491,6 +1580,43 @@ mod tests {
         assert_eq!(cut_craft_core::import_settings::spline_samples(), 64);
         Options::default().apply();
         assert_eq!(cut_craft_core::import_settings::pixels_per_inch(), 96.0);
+    }
+
+    #[test]
+    fn library_limits_reach_the_library_and_are_sealed() {
+        let mut o = Options::default();
+        o.advanced.library_rescan_seconds = 60;
+        o.advanced.library_most_files = 5000;
+        o.advanced.preview_cache_days = 7;
+        o.advanced.previews_on_card = 100;
+        o.apply();
+        assert_eq!(
+            crate::clipart::limits::relist(),
+            std::time::Duration::from_mins(1)
+        );
+        assert_eq!(crate::clipart::limits::most(), 5000);
+        assert_eq!(
+            crate::clipart::limits::unused(),
+            std::time::Duration::from_hours(24 * 7)
+        );
+        assert_eq!(crate::clipart::limits::keep(), 100);
+        // out of range in the file: kept to the range
+        o.advanced.library_most_files = 1;
+        o.apply();
+        assert_eq!(crate::clipart::limits::most(), 1000);
+        Options::default().apply();
+        assert_eq!(crate::clipart::limits::most(), crate::clipart::MOST);
+        // saved by Cut Craft they load back; edited by hand they go back to the defaults
+        let mut o = Options::default();
+        o.advanced.previews_on_card = 100;
+        let (back, tampered) = Options::from_bytes(&saved(&o));
+        assert!(!tampered);
+        assert_eq!(back.advanced.previews_on_card, 100);
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        file["advanced"]["library_rescan_seconds"] = 1.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced, Advanced::default());
     }
 
     #[test]
