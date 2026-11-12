@@ -1847,7 +1847,7 @@ impl CutCraftApp {
             form::fields(&cmd.schema()),
             cmd.initial_params(&self.doc),
         );
-        // Orientate 3D Model offers what Options ▸ Importing says; one kind alone
+        // Orientate 3D Model offers what Options ▸ Importing and Exporting says; one kind alone
         // is the kind, with no choice shown
         if cmd.id() == "orientate_3d_model" {
             let offered = match self.options.import.model_types {

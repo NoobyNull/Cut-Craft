@@ -81,6 +81,32 @@ pub struct Params {
     /// being added onto them
     #[serde(default)]
     pub merge: bool,
+    /// How far apart the brush presses along a stroke, as a share of its diameter. Closer
+    /// gives a smoother stroke, but each one takes longer and works the surface harder
+    #[serde(default = "dab_spacing")]
+    #[schemars(
+        title = "Dab spacing",
+        extend("x-unit" = "%", "x-group" = "Brush Feel"),
+        range(min = 1, max = 100)
+    )]
+    pub dab_spacing: f64,
+    /// How much Deposit and Remove change the middle of each press at full strength, as a
+    /// share of the diameter. Higher builds up or takes away faster
+    #[serde(default = "deposit_rate")]
+    #[schemars(
+        title = "Build-up rate",
+        extend("x-unit" = "%", "x-group" = "Brush Feel"),
+        range(min = 0.1, max = 50)
+    )]
+    pub deposit_rate: f64,
+    /// How deep a custom brush presses at full strength, as a share of its diameter
+    #[serde(default = "brush_depth")]
+    #[schemars(
+        title = "Custom brush depth",
+        extend("x-unit" = "%", "x-group" = "Brush Feel"),
+        range(min = 1, max = 100)
+    )]
+    pub brush_depth: f64,
     /// The stroke; drag over the component in the 2D view to sculpt
     #[schemars(skip)]
     #[serde(default)]
@@ -102,18 +128,34 @@ impl Default for Params {
             brush_angle: 0.0,
             dynamic_rotation: false,
             merge: false,
+            dab_spacing: dab_spacing(),
+            deposit_rate: deposit_rate(),
+            brush_depth: brush_depth(),
             points: vec![Xy::new(16.0, 20.0), Xy::new(24.0, 20.0)],
         }
     }
 }
 
-/// Dabs along a stroke, this fraction of the brush diameter apart.
+/// Dabs along a stroke, this percent of the brush diameter apart, unless the form says
+/// otherwise.
 // ponytail: an eighth of the diameter [inf]; Aspire's dab spacing is not described
-const DAB_SPACING: f64 = 0.125;
-/// Deposit and Remove change a dab's centre by this fraction of the diameter at full
-/// strength.
+fn dab_spacing() -> f64 {
+    12.5
+}
+
+/// Deposit and Remove change a dab's centre by this percent of the diameter at full
+/// strength, unless the form says otherwise.
 // ponytail: [inf]; Aspire gives no rate for its strength slider
-const DEPOSIT_RATE: f64 = 0.05;
+fn deposit_rate() -> f64 {
+    5.0
+}
+
+/// How deep a custom brush presses at full strength, as a percent of its diameter, unless
+/// the form says otherwise.
+// ponytail: a fifth [inf]; Aspire does not give its custom brush's depth
+fn brush_depth() -> f64 {
+    20.0
+}
 
 impl Params {
     /// The brush's weight at `distance` from its centre: full strength in its hard middle,
@@ -142,7 +184,7 @@ impl Params {
     )]
     fn dabs(&self) -> Vec<Point> {
         let points: Vec<Point> = self.points.iter().map(|&p| p.into()).collect();
-        let step = self.diameter * DAB_SPACING;
+        let step = self.diameter * self.dab_spacing.clamp(1.0, 100.0) / 100.0;
         let mut dabs = points.first().copied().into_iter().collect::<Vec<_>>();
         for pair in points.windows(2) {
             let (a, b) = (pair[0], pair[1]);
@@ -212,7 +254,7 @@ fn sculpted(k: &Component, p: &Params) -> Component {
     let (columns, rows) = (k.columns as isize, k.rows as isize);
     let radius = p.diameter / 2.0;
     let reach = (radius / k.cell).ceil() as isize;
-    let rate = p.diameter * DEPOSIT_RATE;
+    let rate = p.diameter * p.deposit_rate.clamp(0.1, 50.0) / 100.0;
     let dabs = p.dabs();
     let mut previous = dabs[0];
     for &centre in &dabs {
@@ -272,10 +314,6 @@ fn sculpted(k: &Component, p: &Params) -> Component {
     out
 }
 
-/// How deep a custom brush presses at full strength, as a share of its diameter.
-// ponytail: a fifth [inf]; Aspire does not give its custom brush's depth
-const BRUSH_DEPTH: f64 = 0.2;
-
 /// A custom brush: a saved component, its heights taken as 0 (its lowest) to 1 (its highest).
 pub struct Brush {
     shape: Component,
@@ -328,7 +366,7 @@ fn pressed(k: &Component, p: &Params, brush: &Brush) -> Component {
         .get_or_insert_with(|| k.heights.clone())
         .clone();
     let dabs = p.dabs();
-    let depth = p.diameter * p.strength / 100.0 * BRUSH_DEPTH;
+    let depth = p.diameter * p.strength / 100.0 * p.brush_depth.clamp(1.0, 100.0) / 100.0;
     let scale = brush.size() / p.diameter;
     // the brush's square, turned, reaches its corners
     let reach_mm = p.diameter / 2.0 * std::f64::consts::SQRT_2;
@@ -438,6 +476,42 @@ mod tests {
             points: vec![Xy::new(14.0, 20.0), Xy::new(26.0, 20.0)],
             ..Params::default()
         }
+    }
+
+    #[test]
+    fn brush_feel_is_on_the_form_and_defaults_to_the_old_fixed_values() {
+        let old: Params = serde_json::from_value(serde_json::json!({
+            "tool": "deposit", "diameter": 10.0, "strength": 20.0, "smoothness": 50.0,
+            "preserve_transparency": true, "mode": "normal", "erase": false
+        }))
+        .unwrap();
+        assert_eq!(
+            (old.dab_spacing, old.deposit_rate, old.brush_depth),
+            (12.5, 5.0, 20.0)
+        );
+        // a faster deposit raises more under the same stroke
+        let raised = |rate: f64| {
+            let mut doc = plateau(|_| 2.0);
+            run_on::<Sculpt>(
+                &mut doc,
+                &Params {
+                    deposit_rate: rate,
+                    ..stroke(Tool::Deposit)
+                },
+            );
+            height(&doc, 20.0, 20.0).unwrap()
+        };
+        assert!(raised(10.0) > raised(5.0));
+        // closer dabs along the stroke make more of them
+        let dabs = |spacing: f64| {
+            Params {
+                dab_spacing: spacing,
+                ..stroke(Tool::Deposit)
+            }
+            .dabs()
+            .len()
+        };
+        assert!(dabs(5.0) > dabs(12.5));
     }
 
     #[test]

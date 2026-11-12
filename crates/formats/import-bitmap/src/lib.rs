@@ -1,5 +1,5 @@
 //! Import a bitmap picture: kept in grey levels, placed at the job's lower left at the
-//! pixels per inch Options ▸ Importing sets (96 unless changed), shrunk to fit the job if it
+//! pixels per inch Options ▸ Importing and Exporting sets (96 unless changed), shrunk to fit the job if it
 //! is bigger. A 16-bit or floating point picture (a
 //! depth map) keeps its tones at full precision too, for reliefs made from it, and a colour
 //! picture its colours, for tracing by colour.

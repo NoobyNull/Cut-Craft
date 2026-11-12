@@ -5,10 +5,36 @@ use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Point, Segment, arc_to_cubics};
 use cut_craft_core::{CommandError, Exporter, FileFormat};
 use std::fmt::Write as _;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const POINTS_PER_MM: f64 = 72.0 / 25.4;
-/// Line width in points.
-const LINE: f64 = 0.7;
+/// Line width in points, unless Options says otherwise.
+pub const LINE: f64 = 0.7;
+/// The line widths Options offers, in points; values outside are kept to them.
+pub const LINE_RANGE: std::ops::RangeInclusive<f64> = 0.05..=10.0;
+
+/// What Options sets for exports, read on each one; the app sets it when Options loads or
+/// changes.
+static LINE_WIDTH: AtomicU64 = AtomicU64::new(LINE.to_bits());
+
+/// Sets the line width exported PDF, EPS and AI files are drawn with, in points.
+pub fn set_line_width(points: f64) {
+    LINE_WIDTH.store(width_in_range(points).to_bits(), Ordering::Relaxed);
+}
+
+/// The line width exported PDF, EPS and AI files are drawn with, in points.
+pub fn line_width() -> f64 {
+    f64::from_bits(LINE_WIDTH.load(Ordering::Relaxed))
+}
+
+/// `points` kept to the range Options offers; not a number gives the standard width.
+pub fn width_in_range(points: f64) -> f64 {
+    if points.is_nan() {
+        LINE
+    } else {
+        points.clamp(*LINE_RANGE.start(), *LINE_RANGE.end())
+    }
+}
 
 pub struct ExportPdf;
 pub struct ExportEps;
@@ -22,7 +48,7 @@ impl Exporter for ExportPdf {
     };
 
     fn export(doc: &Document) -> Result<Vec<u8>, CommandError> {
-        Ok(pdf(doc))
+        Ok(pdf_with(doc, line_width()))
     }
 }
 
@@ -34,7 +60,7 @@ impl Exporter for ExportAi {
     };
 
     fn export(doc: &Document) -> Result<Vec<u8>, CommandError> {
-        Ok(pdf(doc))
+        Ok(pdf_with(doc, line_width()))
     }
 }
 
@@ -46,16 +72,21 @@ impl Exporter for ExportEps {
     };
 
     fn export(doc: &Document) -> Result<Vec<u8>, CommandError> {
-        let (w, h) = page(doc);
-        let mut out = format!(
-            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 {} {}\n%%HiResBoundingBox: 0 0 {w:.3} {h:.3}\n%%Creator: Cut Craft\n%%EndComments\n{LINE} setlinewidth\n",
-            w.ceil(),
-            h.ceil()
-        );
-        out += &drawing(doc, ["moveto", "lineto", "curveto", "closepath", "stroke"]);
-        out += "showpage\n%%EOF\n";
-        Ok(out.into_bytes())
+        Ok(eps_with(doc, line_width()))
     }
+}
+
+/// `doc` as an EPS file, its lines `line` points wide.
+fn eps_with(doc: &Document, line: f64) -> Vec<u8> {
+    let (w, h) = page(doc);
+    let mut out = format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 {} {}\n%%HiResBoundingBox: 0 0 {w:.3} {h:.3}\n%%Creator: Cut Craft\n%%EndComments\n{line} setlinewidth\n",
+        w.ceil(),
+        h.ceil()
+    );
+    out += &drawing(doc, ["moveto", "lineto", "curveto", "closepath", "stroke"]);
+    out += "showpage\n%%EOF\n";
+    out.into_bytes()
 }
 
 /// The page size in points.
@@ -110,9 +141,10 @@ fn drawing(doc: &Document, ops: [&str; 5]) -> String {
     s
 }
 
-fn pdf(doc: &Document) -> Vec<u8> {
+/// `doc` as a PDF file, its lines `line` points wide.
+fn pdf_with(doc: &Document, line: f64) -> Vec<u8> {
     let (w, h) = page(doc);
-    let content = format!("{LINE} w\n{}", drawing(doc, ["m", "l", "c", "h", "S"]));
+    let content = format!("{line} w\n{}", drawing(doc, ["m", "l", "c", "h", "S"]));
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
@@ -197,5 +229,24 @@ mod tests {
         assert!(text.starts_with("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 1701 1134\n"));
         assert!(text.contains("0.000 0.000 moveto") && text.contains("closepath\nstroke"));
         assert!(text.ends_with("showpage\n%%EOF\n"));
+    }
+}
+
+#[cfg(test)]
+mod line_width_tests {
+    use super::*;
+
+    #[test]
+    fn line_width_comes_from_options_and_is_kept_to_its_range() {
+        // what exports use until Options sets it; nothing in these tests sets it
+        assert!((line_width() - LINE).abs() < 1e-12);
+        assert!((width_in_range(0.0) - 0.05).abs() < 1e-12);
+        assert!((width_in_range(100.0) - 10.0).abs() < 1e-12);
+        assert!((width_in_range(f64::NAN) - LINE).abs() < 1e-12);
+        let doc = Document::default();
+        let page = String::from_utf8(pdf_with(&doc, 2.5)).unwrap();
+        assert!(page.contains("2.5 w\n"), "{page}");
+        let eps = String::from_utf8(eps_with(&doc, 2.5)).unwrap();
+        assert!(eps.contains("2.5 setlinewidth"), "{eps}");
     }
 }

@@ -24,7 +24,7 @@ moves them again.
 |---|---|
 | Toolpath save tolerances (2D, 3D, V-carve: 0.00254 mm) | Options ▸ Toolpath Settings |
 | Recent files kept (`files::RECENT_COUNT` = 4) | Options ▸ General |
-| Imported model preview faces (250,000) | Options ▸ Importing |
+| Imported model preview faces (250,000) | Options ▸ Importing and Exporting |
 | Snap radius, nudge distances, grid, rotate snap angles | Snapping Options (kept between runs) |
 | Job defaults: clearance 5 mm, home, sizes | Job Setup ▸ Set as Default |
 | Tool feeds, speeds, stepovers | Tool Database |
@@ -135,7 +135,7 @@ Grouped, with the reason.
    (a choice of 90°, 45°, 22.5°, 10° or 5°: halves of a turn down to 22.5°, then every 10°
    or 5°; 22.5° by default, Matthew's call) and *with Ctrl* (1°, 0.1 to 45°). Snapping Options are now kept between runs in
    `options.json`, where before they reset at every start.)
-6. Import: picture DPI, DXF spline detail. (Done: Options ▸ Importing ▸ *Picture size (pixels
+6. Import: picture DPI, DXF spline detail. (Done: Options ▸ Importing and Exporting ▸ *Picture size (pixels
    per inch)* 96 (10 to 1200), and Advanced ▸ *DXF curve detail (points per span)* 32 (4 to
    256). The Options page "Importing Models" is now "Importing". An Advanced setting left at
    its default is left out of the file, so options sealed before it existed still pass the
@@ -159,3 +159,7 @@ Grouped, with the reason.
    gadget runs through `cut_craft_scripting::set_gadget_limits`. Reading a gadget's name and
    settings when the list loads keeps the standard limits.)
 10. Tool form fields: sculpt brush feel, merged grid rows, PDF line width.
+    (Done: Sculpt ▸ Brush Feel *Dab spacing* 12.5%, *Build-up rate* 5% and *Custom brush depth*
+    20% of the diameter; Merged Toolpath *Grid rows* 8, shown when Grid is ticked; exported
+    PDF, EPS and AI *line width* 0.7 pt in Options ▸ Importing and Exporting (renamed from
+    Importing; exports have no form). Saved jobs and forms without them get the old values.)

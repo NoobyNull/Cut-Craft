@@ -13,6 +13,7 @@ fmt-export-as-3d-clipart = { path = "../../formats/export-as-3d-clipart" }
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true
