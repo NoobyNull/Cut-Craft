@@ -229,3 +229,38 @@ fn recalculating_each_says_how_far_it_has_got_and_stops_when_cancelled() {
         "a cancelled recalculation makes nothing"
     );
 }
+
+#[test]
+fn a_toolpath_following_a_vector_selector_is_stale_once_new_vectors_pass_it() {
+    use cut_craft_core::geometry::Path;
+    use cut_craft_core::selector::Selector;
+    let (mut doc, tp) = job();
+    let open_only = Selector {
+        open_vectors: true,
+        closed_vectors: false,
+        ..Selector::default()
+    };
+    let mut toolpath = doc.toolpaths[&tp].clone();
+    toolpath.params = serde_json::json!({ "selector": open_only });
+    let mut c = Change::builder(&doc);
+    c.replace_toolpath(tp, toolpath);
+    doc.apply(&c.finish()).unwrap();
+    let mut history = History::default();
+    let add = |doc: &Document, path: Path| {
+        let mut c = Change::builder(doc);
+        c.add(path);
+        c.finish()
+    };
+    let change = add(&doc, square(100.0, 0.0, 10.0));
+    history.apply(&mut doc, change).unwrap();
+    assert!(
+        !doc.toolpaths[&tp].stale,
+        "a closed vector does not pass it"
+    );
+    let line = Path::polyline(&[Point::new(0.0, 30.0), Point::new(20.0, 30.0)], false);
+    let change = add(&doc, line);
+    history.apply(&mut doc, change).unwrap();
+    assert!(doc.toolpaths[&tp].stale, "an open one does");
+    history.undo(&mut doc);
+    assert!(!doc.toolpaths[&tp].stale, "undone with it");
+}

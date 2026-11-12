@@ -3750,6 +3750,11 @@ impl CutCraftApp {
     }
 }
 
+/// What "by rule" beside a toolpath in the list means.
+pub(super) const FOLLOWS_RULE_HINT: &str = "This toolpath follows a Vector Selector: each time it is calculated it takes the vectors \
+     that pass its filters (open or closed, circles, layers), so vectors added later are cut \
+     too once it is recalculated";
+
 /// What the selection count in the status bar and on toolpath forms means.
 pub(super) const SELECTION_COUNT_HINT: &str = "A closed vector goes all the way round and ends where it starts, so it has an inside to \
      pocket or carve. An open vector is a line with two loose ends: Pocket, V-Carve and the \
@@ -3786,7 +3791,7 @@ fn toolpath_row(
             if let Some((place, material)) = swatch {
                 rgb = preview_swatch(ui, toolpath, place, material);
             }
-            if toolpath.stale {
+            let row = if toolpath.stale {
                 let name = egui::RichText::new(format!("⚠ {}", toolpath.name))
                     .color(ui.visuals().warn_fg_color);
                 ui.selectable_label(selected, name).on_hover_hint(format!(
@@ -3796,7 +3801,12 @@ fn toolpath_row(
             } else {
                 ui.selectable_label(selected, &toolpath.name)
                     .on_hover_hint(&toolpath.tool.name)
+            };
+            // made from whatever passes its Vector Selector, not a fixed set of vectors
+            if cut_craft_core::selector::Selector::of(&toolpath.params).is_some() {
+                ui.weak("by rule").on_hover_hint(FOLLOWS_RULE_HINT);
             }
+            row
         })
         .inner;
     (label, ticked, rgb)

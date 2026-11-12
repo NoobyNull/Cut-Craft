@@ -518,6 +518,11 @@ pub struct Confirmations {
         range(min = 0, max = 10)
     )]
     pub material_left: f64,
+    /// After an edit leaves toolpaths out of date, ask whether to recalculate them all. Off,
+    /// they are still marked ⚠ in the Toolpaths list, and saving them still asks first
+    #[serde(default = "ask_to_recalculate")]
+    #[schemars(title = "Ask to recalculate out-of-date toolpaths")]
+    pub ask_to_recalculate: bool,
 }
 
 impl Default for Confirmations {
@@ -528,8 +533,13 @@ impl Default for Confirmations {
             sharp_offset_intersections: IntersectionCheck::default(),
             cutting_checks: CuttingChecks::default(),
             material_left: material_left(),
+            ask_to_recalculate: ask_to_recalculate(),
         }
     }
+}
+
+fn ask_to_recalculate() -> bool {
+    true
 }
 
 fn material_left() -> f64 {
