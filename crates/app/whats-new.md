@@ -2,3 +2,4 @@
 - Send to Machine: save toolpaths straight to the CNC's card or WebDAV folder, a folder per project
 - Trace Bitmap trace window with live preview, Centerline and Quick Trace; decorative fills and relief
 - Pockets clear round islands, V-Carve is much faster, and every toolpath checks the bit can reach
+- My Tools kept apart from read-only maker catalogues, Suggest picks clearing bits, and every tool now has help
