@@ -52,8 +52,7 @@ impl Command for LayerProperties {
     fn initial_params(doc: &Document) -> Params {
         doc.layer(doc.current_layer)
             .cloned()
-            .map(Into::into)
-            .unwrap_or_default()
+            .map_or_default(Into::into)
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {

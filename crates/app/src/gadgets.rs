@@ -78,8 +78,7 @@ pub fn load(registry: &mut Registry, mine: Option<&Path>, addons: &[(PathBuf, bo
         for path in lua_files(&dir) {
             let file = path
                 .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
+                .map_or_default(|n| n.to_string_lossy().into_owned());
             let added = std::fs::read_to_string(&path)
                 .map_err(|e| format!("{file}: could not be read ({e})"))
                 .and_then(|source| add(registry, &file, &source, &commands));
@@ -117,17 +116,13 @@ fn add(
 
 /// The `.lua` files in `dir`, by name.
 fn lua_files(dir: &Path) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .filter(|p| {
-                    p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("lua"))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir).map_or_default(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("lua")))
+            .collect()
+    });
     files.sort();
     files
 }

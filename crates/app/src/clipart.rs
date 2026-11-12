@@ -268,10 +268,7 @@ impl Clipart {
     /// The folders kept at `store`, looking in the folder looked in last (all of them, if
     /// none was or it is no longer in the library).
     fn kept(store: Option<PathBuf>) -> Self {
-        let loaded: Vec<PathBuf> = store
-            .as_deref()
-            .map(crate::files::load_recent)
-            .unwrap_or_default();
+        let loaded: Vec<PathBuf> = store.as_deref().map_or_default(crate::files::load_recent);
         let folders = outermost(&loaded);
         if folders != loaded
             && let Some(store) = &store

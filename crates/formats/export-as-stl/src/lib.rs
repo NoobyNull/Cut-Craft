@@ -192,7 +192,7 @@ fn back_heights(doc: &Document, m: &Material, back: Back) -> Option<Vec<f64>> {
         Back::FlatPlane => vec![0.0; m.heights.len()],
         Back::InvertedFront => m.heights.clone(),
         Back::OtherSide => {
-            let flip = doc.job.double_sided.map(|d| d.flip).unwrap_or_default();
+            let flip = doc.job.double_sided.map_or_default(|d| d.flip);
             let turn = flip.mirror(doc.job.area());
             let mut other = doc.clone();
             other.components = doc.other_side.components.clone();

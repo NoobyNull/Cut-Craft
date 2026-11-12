@@ -188,7 +188,7 @@ fn setting_gaps(fields: &[Field], path: &str, out: &mut Vec<What>) {
             Kind::Choice(..) if f.key == "font" => {}
             Kind::Choice(options, _) if options.len() > 1 => {
                 for o in options {
-                    let help = o.help.as_deref().map(str::trim).unwrap_or_default();
+                    let help = o.help.as_deref().map_or_default(str::trim);
                     if words(help) < SETTING_WORDS || is_placeholder(help) {
                         out.push(What::NoOptionHelp(at.clone(), o.label.clone()));
                     }

@@ -622,8 +622,7 @@ pub fn title_case(id: &str) -> String {
         .map(|w| {
             let mut c = w.chars();
             c.next()
-                .map(|f| f.to_uppercase().chain(c).collect::<String>())
-                .unwrap_or_default()
+                .map_or_default(|f| f.to_uppercase().chain(c).collect::<String>())
         })
         .collect::<Vec<_>>()
         .join(" ")
@@ -784,9 +783,8 @@ impl MenuSystem {
         };
         // Add-ons... stays last, after the gadgets
         let addons = menu.items.iter().position(|i| i.action == "addons");
-        let tail: Vec<MenuItem> = addons
-            .map(|at| menu.items.drain(at.saturating_sub(1)..).collect())
-            .unwrap_or_default();
+        let tail: Vec<MenuItem> =
+            addons.map_or_default(|at| menu.items.drain(at.saturating_sub(1)..).collect());
         menu.items.push(MenuItem::separator());
         menu.items.extend(loaded.built_in.iter().map(item));
         menu.items.push(MenuItem::submenu("My Gadgets", mine));
