@@ -11218,3 +11218,25 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
     });
     assert!(said, "how much quicker, on the form");
 }
+
+#[test]
+fn suggest_picks_from_my_tools_not_a_catalogue() {
+    let mut h = Harness::new();
+    let catalogue = cut_craft_core::toolpath::ToolDatabase {
+        tools: vec![cut_craft_core::toolpath::Tool {
+            name: "Catalogue 25 mm".into(),
+            diameter: 25.0,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    cut_craft_tool_database::tree::import(&mut h.app.tools, catalogue, "Maker");
+    let names: Vec<String> = h
+        .app
+        .suggest_candidates()
+        .into_iter()
+        .map(|c| c.tool.name)
+        .collect();
+    assert!(!names.is_empty());
+    assert!(!names.iter().any(|n| n == "Catalogue 25 mm"), "{names:?}");
+}
