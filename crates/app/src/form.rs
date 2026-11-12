@@ -1,6 +1,7 @@
 //! Settings forms generated from a command's parameter schema, so no command writes UI.
 
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use eframe::egui;
 use serde_json::Value;
@@ -482,7 +483,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             let mut n = value.as_f64().unwrap_or_default() / factor;
             // a sum typed in (Aspire's calculation edit boxes) is worked out
             let material = look.material.clone();
-            let mut drag = egui::DragValue::new(&mut n)
+            let mut drag = Number::new(&mut n)
                 .custom_parser(move |text| cut_craft_core::calc::evaluate(text, &material))
                 .range(
                     min.map_or(f64::NEG_INFINITY, |m| m / factor)
@@ -894,9 +895,7 @@ fn edit_list(ui: &mut egui::Ui, item: &Kind, value: &mut Value, look: &Look) -> 
 /// A seed's number, and a New variation button that steps it on.
 fn seed(ui: &mut egui::Ui, value: &mut Value) -> bool {
     let mut n = value.as_u64().unwrap_or_default();
-    let mut changed = ui
-        .add(egui::DragValue::new(&mut n).range(0..=u32::MAX))
-        .changed();
+    let mut changed = ui.add(Number::new(&mut n).range(0..=u32::MAX)).changed();
     if ui
         .button("New variation")
         .on_hover_hint("Another design with the same settings")
@@ -921,14 +920,24 @@ fn slide(
     value: &mut Value,
 ) -> bool {
     let mut n = value.as_f64().unwrap_or_default();
-    let mut slider = egui::Slider::new(&mut n, range);
-    if integer {
-        slider = slider.integer();
-    }
-    if let Some(unit) = unit {
-        slider = slider.suffix(format!(" {unit}"));
-    }
-    let changed = ui.add(slider).changed();
+    // the slider's value is the number box beside it, with its up and down buttons
+    let changed = ui
+        .horizontal(|ui| {
+            let mut slider = egui::Slider::new(&mut n, range.clone()).show_value(false);
+            if integer {
+                slider = slider.integer();
+            }
+            let slid = ui.add(slider).changed();
+            let mut number = Number::new(&mut n).range(range);
+            if integer {
+                number = number.fixed_decimals(0);
+            }
+            if let Some(unit) = unit {
+                number = number.suffix(format!(" {unit}"));
+            }
+            slid | ui.add(number).changed()
+        })
+        .inner;
     if changed {
         *value = if integer {
             Value::from(round(n))

@@ -5,6 +5,7 @@
 use crate::library::{Entry, Library, Source};
 use crate::machine::{Machine, Machines};
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use eframe::egui;
 use std::path::PathBuf;
 
@@ -292,7 +293,7 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library) {
 fn measure(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) {
     let mut shown = *value / per;
     let speed = (shown.abs() / 100.0).max(f64::EPSILON);
-    let drag = egui::DragValue::new(&mut shown)
+    let drag = Number::new(&mut shown)
         .speed(speed)
         .range(0.0..=f64::MAX)
         .max_decimals(3)
@@ -341,7 +342,7 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
                 ui.label("Spindle");
                 for value in &mut machine.spindle {
                     ui.add(
-                        egui::DragValue::new(value)
+                        Number::new(value)
                             .speed(100.0)
                             .range(0.0..=f64::MAX)
                             .suffix(" rpm"),
@@ -386,7 +387,7 @@ pub fn tool_changer(
         ui.horizontal(|ui| {
             ui.label("Slots");
             if ui
-                .add(egui::DragValue::new(&mut count).range(1..=MOST_SLOTS))
+                .add(Number::new(&mut count).range(1..=MOST_SLOTS))
                 .changed()
             {
                 machine.set_slot_count(count);
@@ -485,7 +486,7 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
                     // the corner may be either side of the origin
                     for value in [&mut zone.x, &mut zone.y] {
                         let mut shown = *value / per;
-                        let drag = egui::DragValue::new(&mut shown)
+                        let drag = Number::new(&mut shown)
                             .max_decimals(3)
                             .suffix(format!(" {length}"));
                         if ui.add(drag).changed() {
@@ -640,11 +641,11 @@ fn bank_layout(
                 let (mut across, mut along) = (bank.horizontal.len(), bank.vertical.len());
                 ui.label("Drills along X")
                     .on_hover_hint("How many drills are on the arm running left to right");
-                let a = ui.add(egui::DragValue::new(&mut across).range(0..=32));
+                let a = ui.add(Number::new(&mut across).range(0..=32));
                 ui.end_row();
                 ui.label("Drills along Y")
                     .on_hover_hint("How many drills are on the arm running front to back; 0 for a single row");
-                let b = ui.add(egui::DragValue::new(&mut along).range(0..=32));
+                let b = ui.add(Number::new(&mut along).range(0..=32));
                 ui.end_row();
                 if a.changed() || b.changed() {
                     bank.set_counts(across, along);
@@ -662,7 +663,7 @@ fn bank_layout(
                         for (place, most) in bank.central.iter_mut().zip(limits) {
                             let mut shown = *place + 1;
                             if ui
-                                .add(egui::DragValue::new(&mut shown).range(1..=most))
+                                .add(Number::new(&mut shown).range(1..=most))
                                 .changed()
                             {
                                 *place = shown - 1;
@@ -715,14 +716,13 @@ fn bank_drills(
                         Arm::Horizontal => &mut bank.horizontal[id.index],
                         Arm::Vertical => &mut bank.vertical[id.index],
                     };
-                    ui.add(egui::DragValue::new(&mut drill.number))
-                        .on_hover_hint(
-                            "The number the controller picks this drill by; controllers that \
+                    ui.add(Number::new(&mut drill.number)).on_hover_hint(
+                        "The number the controller picks this drill by; controllers that \
                              take a bitmask expect 1, 2, 4, 8...",
-                        );
+                    );
                     if crossing {
                         let y = &mut bank.vertical[bank.central[1]].number;
-                        ui.add(egui::DragValue::new(y).prefix("Y ")).on_hover_hint(
+                        ui.add(Number::new(y).prefix("Y ")).on_hover_hint(
                             "Its number on the Y arm, for controllers that number the \
                                  arms apart",
                         );

@@ -5,6 +5,7 @@
 
 use crate::manager::length;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::toolpath::{Tool, ToolShape};
 use eframe::egui;
 
@@ -451,12 +452,8 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
         changed |= on_left(ui, view, height, pointing, |ui| {
             ui.weak(caption)
                 .on_hover_hint("The angle across the point, from one side to the other");
-            ui.add(
-                egui::DragValue::new(&mut tool.angle)
-                    .range(1.0..=179.0)
-                    .suffix("°"),
-            )
-            .changed()
+            ui.add(Number::new(&mut tool.angle).range(1.0..=179.0).suffix("°"))
+                .changed()
         });
     }
     if tool.shape == ToolShape::RadiusedEndMill {
@@ -475,12 +472,8 @@ fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) 
             ui.weak("Taper angle").on_hover_hint(
                 "For a tapered bit, how far each side leans from straight; 0 for straight",
             );
-            ui.add(
-                egui::DragValue::new(&mut tool.taper)
-                    .range(0.0..=45.0)
-                    .suffix("°"),
-            )
-            .changed()
+            ui.add(Number::new(&mut tool.taper).range(0.0..=45.0).suffix("°"))
+                .changed()
         });
     }
     changed

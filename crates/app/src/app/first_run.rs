@@ -6,6 +6,7 @@
 
 use super::CutCraftApp;
 use crate::options::CrashLogs;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{Job, Units};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_machines::{Controller, Machine, Machines};
@@ -210,7 +211,7 @@ fn length(ui: &mut egui::Ui, mm: &mut f64, inches: bool) -> egui::Response {
     let scale = if inches { MM_PER_INCH } else { 1.0 };
     let mut shown = *mm / scale;
     let response = ui.add(
-        egui::DragValue::new(&mut shown)
+        Number::new(&mut shown)
             .range(0.01..=100_000.0)
             .speed(if inches { 0.05 } else { 1.0 })
             .max_decimals(if inches { 3 } else { 1 })

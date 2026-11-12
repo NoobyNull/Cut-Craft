@@ -4,6 +4,7 @@
 //! window and, smaller, in the form beside the Cutting… button.
 
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::entry::{Loops, Turn, trochoid};
 use cut_craft_core::geometry::Point;
 use eframe::egui::{self, Pos2, Vec2, pos2, vec2};
@@ -493,15 +494,11 @@ fn loops_editor(ui: &mut egui::Ui, loops: &mut Loops, diameter: f64) {
     egui::Grid::new("loops").num_columns(2).show(ui, |ui| {
         ui.label("Loop Width")
             .on_hover_hint("How wide each loop is, of the tool's diameter");
-        ui.add(egui::Slider::new(&mut loops.width, 10.0..=400.0).suffix(" %"));
+        slider(ui, &mut loops.width, 10.0..=400.0, false);
         ui.end_row();
         ui.label("Loop Step")
             .on_hover_hint("How far each loop moves on from the last, of the tool's diameter");
-        ui.add(
-            egui::Slider::new(&mut loops.step, 1.0..=100.0)
-                .logarithmic(true)
-                .suffix(" %"),
-        );
+        slider(ui, &mut loops.step, 1.0..=100.0, true);
         ui.end_row();
         ui.label("Loops Turn");
         ui.horizontal(|ui| {
@@ -580,6 +577,18 @@ fn loops_strip(ui: &mut egui::Ui, radius: f64, advance: f64, diameter: f64, anti
         vec2(row, 0.0),
         visuals.widgets.noninteractive.fg_stroke,
     );
+}
+
+/// A percentage on a slider, its value in a number box with up and down buttons beside it.
+fn slider(ui: &mut egui::Ui, percent: &mut f64, range: std::ops::RangeInclusive<f64>, log: bool) {
+    ui.horizontal(|ui| {
+        ui.add(
+            egui::Slider::new(percent, range.clone())
+                .logarithmic(log)
+                .show_value(false),
+        );
+        ui.add(Number::new(percent).range(range).suffix(" %"));
+    });
 }
 
 #[cfg(test)]

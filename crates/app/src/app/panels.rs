@@ -11,6 +11,7 @@ use super::{
     wrap_for,
 };
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{MachinedArea, Units};
 
 /// The push-pin's two drawings (`scripts/make_icons.py`).
@@ -2497,7 +2498,7 @@ impl CutCraftApp {
                     {
                         s.anchors = Some((Anchor::Fade, None));
                     }
-                    let percent = egui::DragValue::new(&mut p.fade.percent)
+                    let percent = Number::new(&mut p.fade.percent)
                         .range(0.0..=100.0)
                         .suffix(" %");
                     s.dirty |= ui.add_enabled(p.fade.on, percent).changed();
@@ -2511,7 +2512,7 @@ impl CutCraftApp {
                     {
                         s.anchors = Some((Anchor::Tilt, None));
                     }
-                    let angle = egui::DragValue::new(&mut p.tilt.angle)
+                    let angle = Number::new(&mut p.tilt.angle)
                         .range(-90.0..=90.0)
                         .suffix(" °");
                     s.dirty |= ui.add_enabled(p.tilt.on, angle).changed();

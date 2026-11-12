@@ -15,6 +15,13 @@ a CNC machine cuts them with.
 
 ## Number fields
 
+Every number field has small up and down arrows on its right. Click one to nudge the value
+by a step that suits it: 0.1 mm or 0.01 in for a length, 1 for a percentage, an angle or a
+count, 100 mm/min (5 in/min) for a feed rate, 1000 rpm for a spindle speed. Hold the arrow to
+keep going, and hold **Shift** for steps ten times as big. The arrows stop at the field's
+lowest and highest values. You can also drag sideways on the value (the pointer shows a
+two-way arrow there) or just click it and type.
+
 A number field takes a sum as well as a number, worked out when it is entered:
 `+ - * / ^` and brackets, and these letters:
 

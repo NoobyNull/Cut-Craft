@@ -13,6 +13,7 @@ use super::{
 use crate::flyout::DragWay;
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::snap::Snap;
 
@@ -1581,12 +1582,19 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Position");
-                    ui.add(egui::DragValue::new(&mut props.position).speed(0.1));
+                    ui.add(Number::new(&mut props.position).speed(0.1));
                 });
                 ui.horizontal(|ui| {
                     ui.label("Angle");
-                    ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).suffix("°"))
-                        .on_hover_hint("Degrees anticlockwise from the X axis");
+                    let hint = "Degrees anticlockwise from the X axis";
+                    ui.add(egui::Slider::new(&mut props.angle, -180.0..=180.0).show_value(false))
+                        .on_hover_hint(hint);
+                    ui.add(
+                        Number::new(&mut props.angle)
+                            .range(-180.0..=180.0)
+                            .suffix("°"),
+                    )
+                    .on_hover_hint(hint);
                 });
                 ui.checkbox(&mut props.locked, "Lock Guide")
                     .on_hover_hint("A locked guide cannot be dragged");
@@ -1602,9 +1610,9 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label(if props.relative { "Offset" } else { "Position" });
-                    ui.add(egui::DragValue::new(&mut props.new_at).speed(0.1));
+                    ui.add(Number::new(&mut props.new_at).speed(0.1));
                     ui.label("Count");
-                    ui.add(egui::DragValue::new(&mut props.count).range(1..=100));
+                    ui.add(Number::new(&mut props.count).range(1..=100));
                 });
                 create = ui
                     .button("Create New Guide")
