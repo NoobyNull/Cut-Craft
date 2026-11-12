@@ -305,9 +305,12 @@ pub struct Reporter {
     /// crash's log goes there by itself for people who said yes.
     pub crash_service: Option<String>,
     /// How a crash's log is posted to the service (replaced in tests).
-    pub post: fn(&str, &str) -> Result<(), String>,
+    pub post: fn(&str, &str) -> Result<(), relay::Failure>,
+    /// Where a crash log that could not be sent for now is put back, to be sent at the next
+    /// start (the folder `crash.log` is kept in).
+    pub retry_dir: Option<PathBuf>,
     /// A crash log on its way to the service, and how that went.
-    crash_sending: Option<(String, mpsc::Receiver<Result<(), String>>)>,
+    crash_sending: Option<(String, mpsc::Receiver<Result<(), relay::Failure>>)>,
 }
 
 /// What the app gives a report: its state, and a picker for pictures to add.
@@ -333,6 +336,7 @@ impl Reporter {
             crash: None,
             crash_service: None,
             post: relay::post_https,
+            retry_dir: None,
             crash_sending: None,
         }
     }
@@ -355,7 +359,8 @@ impl Reporter {
         self.crash_sending = Some((crash, rx));
     }
 
-    /// A crash log sent to the service: thanks; one that could not go opens the form.
+    /// A crash log sent to the service: thanks. One that could not go for now is put back
+    /// to try at the next start; one the service refused opens the form.
     fn crash_sent(&mut self) -> Option<String> {
         let (_, rx) = self.crash_sending.as_ref()?;
         let result = rx.try_recv().ok()?;
@@ -366,8 +371,18 @@ impl Reporter {
                  you, it helps fix Cut Craft."
                     .into(),
             ),
-            Err(why) => {
-                log::warn!("{why}");
+            Err(failed) => {
+                log::warn!("{}", failed.why);
+                if failed.retry
+                    && let Some(dir) = &self.retry_dir
+                    && logs::put_back_crash(dir, &crash).is_ok()
+                {
+                    return Some(
+                        "Cut Craft closed with an error last time. Its crash report could not \
+                         be sent just now; Cut Craft will try again the next time it starts."
+                            .into(),
+                    );
+                }
                 self.crash = Some((crash, true));
                 None
             }

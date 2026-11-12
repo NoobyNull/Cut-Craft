@@ -261,6 +261,12 @@ fn crash_text(panic: &str) -> String {
     )
 }
 
+/// Puts crash log `text` back in `dir`, to be taken at the next start (a report that could
+/// not be sent yet).
+pub fn put_back_crash(dir: &Path, text: &str) -> std::io::Result<()> {
+    std::fs::write(dir.join(CRASH_FILE), text)
+}
+
 /// The crash log the last run left in `dir`, taken so it is offered once.
 pub fn take_crash(dir: &Path) -> Option<String> {
     let path = dir.join(CRASH_FILE);

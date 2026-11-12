@@ -15,7 +15,27 @@ pub const MOST_LOG_BYTES: usize = 60 * 1024;
 const HEAD_BYTES: usize = 16 * 1024;
 
 /// Posts `body` (JSON) to `url`; why it failed, if it did.
-pub type Post<'a> = &'a dyn Fn(&str, &str) -> Result<(), String>;
+pub type Post<'a> = &'a dyn Fn(&str, &str) -> Result<(), Failure>;
+
+/// A crash report the service did not take: why, and whether to try again at a later start
+/// (no connection, the service busy or down, or too soon after the last one) rather than
+/// give up on it (the service refused it as it is).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Failure {
+    pub retry: bool,
+    pub why: String,
+}
+
+impl Failure {
+    /// The service answered `status`: worth trying again later only when it was busy (429)
+    /// or failing (5xx).
+    pub fn of_status(status: u16) -> Self {
+        Self {
+            retry: status == 429 || status >= 500,
+            why: format!("the crash-report service answered {status}"),
+        }
+    }
+}
 
 /// What is sent for crash log `crash` from install `install`.
 pub fn payload(crash: &str, install: &str) -> serde_json::Value {
@@ -31,12 +51,12 @@ pub fn payload(crash: &str, install: &str) -> serde_json::Value {
 }
 
 /// Sends crash log `crash` to the service at `url`.
-pub fn send(url: &str, crash: &str, install: &str, post: Post) -> Result<(), String> {
+pub fn send(url: &str, crash: &str, install: &str, post: Post) -> Result<(), Failure> {
     post(url, &payload(crash, install).to_string())
 }
 
 /// Posts JSON over HTTPS.
-pub fn post_https(url: &str, body: &str) -> Result<(), String> {
+pub fn post_https(url: &str, body: &str) -> Result<(), Failure> {
     ureq::post(url)
         .header("Content-Type", "application/json")
         .header(
@@ -45,7 +65,14 @@ pub fn post_https(url: &str, body: &str) -> Result<(), String> {
         )
         .send(body)
         .map(drop)
-        .map_err(|e| format!("the crash report could not be sent: {e}"))
+        .map_err(|e| match e {
+            ureq::Error::StatusCode(status) => Failure::of_status(status),
+            // no connection, no name lookup, a time-out: another start may do better
+            other => Failure {
+                retry: true,
+                why: format!("the crash report could not be sent: {other}"),
+            },
+        })
 }
 
 /// What groups crashes with the same cause: the panic's first line (where it was raised,
@@ -151,6 +178,14 @@ mod tests {
         let log = body["log"].as_str().unwrap();
         assert!(!log.contains("/home/sam"), "{log}");
         assert!(log.contains("~/Jobs/sign.ccjob"));
+    }
+
+    #[test]
+    fn only_a_busy_or_failing_service_is_tried_again() {
+        assert!(Failure::of_status(503).retry);
+        assert!(Failure::of_status(429).retry);
+        assert!(!Failure::of_status(400).retry);
+        assert!(!Failure::of_status(413).retry);
     }
 
     #[test]
