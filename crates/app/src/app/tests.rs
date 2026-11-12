@@ -2475,23 +2475,110 @@ fn the_tool_database_window_keeps_edits_only_on_ok() {
     assert_eq!(h.app.tools.tools.len(), count - 1, "Cancel drops the edits");
 }
 
+/// Picks `name` in the open Select Tool window and clicks its Select.
+fn select_in_tool_database(h: &mut Harness, name: &str) {
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    assert!(manager.selecting, "the Tool Database opens to pick in");
+    let at = manager
+        .draft
+        .tools
+        .iter()
+        .position(|t| t.name == name)
+        .unwrap();
+    manager.pick = Some(cut_craft_tool_database::Pick::Tool(at));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let select = *h.texts_at("Select").last().expect("Select, in place of OK");
+    h.click(select, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.tool_manager.is_none(), "closed");
+}
+
 #[test]
-fn rest_machining_takes_its_tools_from_the_database() {
+fn three_d_finishing_picks_its_tools_in_the_tool_database() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "3d_finishing_toolpath");
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
     h.frame(vec![]);
-    // the list's last menu adds a tool, as the form's own tool is picked
-    let add = *h.texts_at("Add a tool…").last().expect("an Add menu");
+    let first = h.app.form.as_ref().unwrap().params["tools"][0]["name"].clone();
+    // no drop-down of tools: each has Select… and Edit…, and Add a tool… opens the database
+    assert!(h.text_at("Select…").is_some(), "the first tool's Select…");
+    let add = h.text_at("Add a tool…").expect("an Add button");
     h.click(add, Modifiers::NONE);
-    h.frame(vec![]);
-    let ball = *h.texts_at("6 mm Ball Nose").last().expect("in the menu");
-    h.click(ball, Modifiers::NONE);
-    h.frame(vec![]);
+    select_in_tool_database(&mut h, "6 mm Ball Nose");
     let form = h.app.form.as_ref().unwrap();
-    // after the ball nose the form starts with
+    assert_eq!(form.params["tools"][0]["name"], first, "kept");
+    assert_eq!(
+        form.params["tools"][1]["name"], "6 mm Ball Nose",
+        "added after it"
+    );
+    let ball = h.app.tools.get("6 mm Ball Nose").unwrap();
+    assert_eq!(
+        form.params["tools"][1]["feed_rate"],
+        serde_json::json!(ball.feed_rate),
+        "its own feeds and speeds come with it"
+    );
+    // the first tool's Select… puts another in its place
+    let select = *h.texts_at("Select…").first().unwrap();
+    h.click(select, Modifiers::NONE);
+    select_in_tool_database(&mut h, "3 mm End Mill");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["tools"][0]["name"], "3 mm End Mill");
     assert_eq!(form.params["tools"][1]["name"], "6 mm Ball Nose");
+    assert_eq!(form.params["tools"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn rest_machining_picks_its_earlier_tools_in_the_tool_database() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    // what Rest Machining's Add a tool… asks for: Select Tool, for its list
+    h.app
+        .ask_listed(&h.ctx, ToolList::Rest, ListAsk::Select(ListSlot::New));
+    select_in_tool_database(&mut h, "6 mm End Mill");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["rest"]["after"][0]["name"], "6 mm End Mill");
+    assert_eq!(
+        form.params["tool"]["name"], "3 mm End Mill",
+        "the form's own tool is left as it was"
+    );
+    // and its Select… replaces that one
+    h.app
+        .ask_listed(&h.ctx, ToolList::Rest, ListAsk::Select(ListSlot::At(0)));
+    select_in_tool_database(&mut h, "6 mm Ball Nose");
+    let after = &h.app.form.as_ref().unwrap().params["rest"]["after"];
+    assert_eq!(after.as_array().unwrap().len(), 1);
+    assert_eq!(after[0]["name"], "6 mm Ball Nose");
+}
+
+#[test]
+fn the_tool_changer_window_loads_a_holder_with_select_tool() {
+    let mut h = Harness::new();
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().set_slot_count(3);
+    h.app.invoke(&h.ctx, "tool_changer");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // each holder: its tool, then Select… to pick one in the Tool Database
+    let selects = h.texts_at("Select…");
+    assert_eq!(selects.len(), 3, "a Select… per holder");
+    h.click(selects[1], Modifiers::NONE);
+    select_in_tool_database(&mut h, "6 mm Ball Nose");
+    let machine = h.app.machines.active().unwrap();
+    assert_eq!(machine.slots[1].as_deref(), Some("6 mm Ball Nose"));
+    assert_eq!(
+        h.app.tools.get("6 mm Ball Nose").unwrap().number,
+        2,
+        "loaded in holder 2, it is tool 2"
+    );
+    assert!(h.app.form.is_none(), "no form was touched");
 }
 
 #[test]

@@ -41,7 +41,13 @@ impl CutCraftApp {
         match outcome {
             Outcome::Apply | Outcome::Ok | Outcome::Select(_) => {
                 self.tools = manager.draft.clone();
-                let changer = manager.changer.clone();
+                let mut changer = manager.changer.clone();
+                // the Tool Changer window's Select…: the tool goes in that holder
+                if let (Outcome::Select(name), Some(super::PickFor::Holder(slot)), Some(c)) =
+                    (&outcome, self.picking, &mut changer)
+                {
+                    c.load(name, Some(slot));
+                }
                 if let Some(changer) = &changer {
                     self.tools.number_by_slots(&changer.slots);
                 }
@@ -51,13 +57,26 @@ impl CutCraftApp {
                 self.tools_changed("Tool database saved");
                 self.refresh_form_tool();
                 if let Outcome::Select(name) = &outcome {
-                    let clearing = self.selecting_clearing.is_some();
+                    let picking = self.picking;
                     self.selected_tool(name);
                     if let Some(form) = &mut self.form {
                         form.dirty = true;
                     }
-                    let doing = if clearing { "Clearing" } else { "Cutting" };
-                    self.status.set_message(&format!("{doing} with {name}"));
+                    let done = match picking {
+                        Some(super::PickFor::Listed(super::ToolList::Clearing, _)) => {
+                            format!("Clearing with {name}")
+                        }
+                        Some(super::PickFor::Listed(super::ToolList::Rest, _)) => {
+                            format!("Rest machining after {name}")
+                        }
+                        Some(super::PickFor::Holder(slot)) => {
+                            format!("{name} loaded in holder T{slot}")
+                        }
+                        Some(super::PickFor::Listed(super::ToolList::Tools, _)) | None => {
+                            format!("Cutting with {name}")
+                        }
+                    };
+                    self.status.set_message(&done);
                 }
                 if let Some(changer) = changer
                     && let Some(machine) = self
@@ -76,7 +95,7 @@ impl CutCraftApp {
             }
             Outcome::Cancel => {
                 self.tool_manager = None;
-                self.selecting_clearing = None;
+                self.picking = None;
             }
             Outcome::Import => {
                 if let Some(path) = file_dialog()

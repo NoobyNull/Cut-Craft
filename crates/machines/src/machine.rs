@@ -94,6 +94,18 @@ impl Machine {
             .map(|i| i + 1)
     }
 
+    /// Loads `tool` into holder `slot` (from 1), taking it out of any other holder.
+    pub fn load_tool(&mut self, tool: &str, slot: usize) {
+        for s in &mut self.slots {
+            if s.as_deref() == Some(tool) {
+                *s = None;
+            }
+        }
+        if let Some(s) = slot.checked_sub(1).and_then(|i| self.slots.get_mut(i)) {
+            *s = Some(tool.to_owned());
+        }
+    }
+
     /// Ticking the 4th axis: for each of Cut Craft's flat posts the machine has, its rotary
     /// twins in `library` (`… Wrap Y to A G93 (units)` and `… Wrap X to A G93 (units)`), so
     /// both directions of cylinder can be cut. Custom posts have no twins to find.
