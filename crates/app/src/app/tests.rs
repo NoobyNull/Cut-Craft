@@ -10529,3 +10529,70 @@ fn a_decorative_relief_follows_its_settings_as_one_component() {
     h.app.invoke(&h.ctx, "undo");
     assert!(h.app.doc.components.is_empty());
 }
+
+/// Matthew's 3D finishing toolpath (6.8 million tiny cuts) crashed the app as it was shown:
+/// a line for each cut was more than the graphics card's 2 GB buffer takes. A frame showing
+/// a toolpath that dense stays small.
+#[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "small counts"
+)]
+fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() {
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::toolpath::{Move, MoveKind};
+    let mut h = Harness::new();
+    h.app.display.previews_2d = true;
+    let (width, height) = (h.app.doc.job.width, h.app.doc.job.height);
+    let (rows, step) = (400_usize, 0.02);
+    let along = (width / step) as usize;
+    let mut moves = Vec::with_capacity(rows * along);
+    for row in 0..rows {
+        let across = height * row as f64 / rows as f64;
+        for step_along in 0..along {
+            let at = if row % 2 == 0 {
+                step_along
+            } else {
+                along - 1 - step_along
+            };
+            // over a bumpy model, as a finishing pass is
+            let x = at as f64 * step;
+            let depth = -1.0 - (x * 0.7).sin() * (across * 0.3).cos();
+            moves.push(Move {
+                kind: MoveKind::Cut,
+                to: DVec3::new(x, across, depth),
+            });
+        }
+    }
+    assert!(moves.len() > 2_000_000, "{} cuts", moves.len());
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(cut_craft_core::toolpath::Toolpath {
+        name: "3D Finishing".into(),
+        strategy: "3d_finishing_toolpath".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![],
+        moves,
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+    });
+    h.app.record(Ok(c.finish()), "made");
+    h.frame(vec![]);
+    let shapes = std::mem::take(&mut h.shapes);
+    let vertices: usize = h
+        .ctx
+        .tessellate(shapes, 1.0)
+        .iter()
+        .map(|p| match &p.primitive {
+            egui::epaint::Primitive::Mesh(mesh) => mesh.vertices.len(),
+            egui::epaint::Primitive::Callback(_) => 0,
+        })
+        .sum();
+    // egui's vertices are 20 bytes: 100 MB at most, the card's limit is 2 GB
+    assert!(vertices < 5_000_000, "{vertices} vertices");
+}
