@@ -26,8 +26,10 @@ pub enum ThreadType {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Hand {
+    /// Tightens turning clockwise, as most threads do
     #[default]
     RightHanded,
+    /// Tightens turning anticlockwise
     LeftHanded,
 }
 
@@ -46,60 +48,88 @@ pub enum CutDirection {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PitchPreset {
+    /// The pitch typed below
     #[default]
     Custom,
+    /// Metric 2 mm bolt thread, 0.4 mm from ridge to ridge
     #[schemars(title = "ISO M2 × 0.4")]
     IsoM2,
+    /// Metric 3 mm bolt thread, 0.5 mm from ridge to ridge
     #[schemars(title = "ISO M3 × 0.5")]
     IsoM3,
+    /// Metric 4 mm bolt thread, 0.7 mm from ridge to ridge
     #[schemars(title = "ISO M4 × 0.7")]
     IsoM4,
+    /// Metric 5 mm bolt thread, 0.8 mm from ridge to ridge
     #[schemars(title = "ISO M5 × 0.8")]
     IsoM5,
+    /// Metric 6 mm bolt thread, 1.0 mm from ridge to ridge
     #[schemars(title = "ISO M6 × 1.0")]
     IsoM6,
+    /// Metric 8 mm bolt thread, 1.25 mm from ridge to ridge
     #[schemars(title = "ISO M8 × 1.25")]
     IsoM8,
+    /// Metric 10 mm bolt thread, 1.5 mm from ridge to ridge
     #[schemars(title = "ISO M10 × 1.5")]
     IsoM10,
+    /// Metric 12 mm bolt thread, 1.75 mm from ridge to ridge
     #[schemars(title = "ISO M12 × 1.75")]
     IsoM12,
+    /// Metric 14 mm bolt thread, 2.0 mm from ridge to ridge
     #[schemars(title = "ISO M14 × 2.0")]
     IsoM14,
+    /// Metric 16 mm bolt thread, 2.0 mm from ridge to ridge
     #[schemars(title = "ISO M16 × 2.0")]
     IsoM16,
+    /// Metric 20 mm bolt thread, 2.5 mm from ridge to ridge
     #[schemars(title = "ISO M20 × 2.5")]
     IsoM20,
+    /// Metric 24 mm bolt thread, 3.0 mm from ridge to ridge
     #[schemars(title = "ISO M24 × 3.0")]
     IsoM24,
+    /// Number 4 machine screw thread, coarse, 40 threads per inch
     #[schemars(title = "#4-40 UNC")]
     Uts4x40,
+    /// Number 6 machine screw thread, coarse, 32 threads per inch
     #[schemars(title = "#6-32 UNC")]
     Uts6x32,
+    /// Number 8 machine screw thread, coarse, 32 threads per inch
     #[schemars(title = "#8-32 UNC")]
     Uts8x32,
+    /// Number 10 machine screw thread, coarse, 24 threads per inch
     #[schemars(title = "#10-24 UNC")]
     Uts10x24,
+    /// Number 10 machine screw thread, fine, 32 threads per inch
     #[schemars(title = "#10-32 UNF")]
     Uts10x32,
+    /// 1/4 inch bolt thread, coarse, 20 threads per inch
     #[schemars(title = "1/4-20 UNC")]
     UtsQuarterX20,
+    /// 1/4 inch bolt thread, fine, 28 threads per inch
     #[schemars(title = "1/4-28 UNF")]
     UtsQuarterX28,
+    /// 5/16 inch bolt thread, coarse, 18 threads per inch
     #[schemars(title = "5/16-18 UNC")]
     UtsFiveSixteenthsX18,
+    /// 3/8 inch bolt thread, coarse, 16 threads per inch
     #[schemars(title = "3/8-16 UNC")]
     UtsThreeEighthsX16,
+    /// 7/16 inch bolt thread, coarse, 14 threads per inch
     #[schemars(title = "7/16-14 UNC")]
     UtsSevenSixteenthsX14,
+    /// 1/2 inch bolt thread, coarse, 13 threads per inch
     #[schemars(title = "1/2-13 UNC")]
     UtsHalfX13,
+    /// 9/16 inch bolt thread, coarse, 12 threads per inch
     #[schemars(title = "9/16-12 UNC")]
     UtsNineSixteenthsX12,
+    /// 5/8 inch bolt thread, coarse, 11 threads per inch
     #[schemars(title = "5/8-11 UNC")]
     UtsFiveEighthsX11,
+    /// 3/4 inch bolt thread, coarse, 10 threads per inch
     #[schemars(title = "3/4-10 UNC")]
     UtsThreeQuartersX10,
+    /// 1 inch bolt thread, coarse, 8 threads per inch
     #[schemars(title = "1-8 UNC")]
     UtsOneX8,
 }
@@ -141,6 +171,7 @@ impl PitchPreset {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface where the thread starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -167,10 +198,13 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Thread"))]
     pub fit_tolerance: f64,
+    /// A thread inside a hole, or round a post
     #[schemars(extend("x-group" = "Thread"))]
     pub thread_type: ThreadType,
+    /// Which way the thread turns to tighten
     #[schemars(extend("x-group" = "Thread"))]
     pub thread_direction: Hand,
+    /// Which way the tool spirals along the thread
     #[schemars(extend("x-group" = "Thread"))]
     pub cut_direction: CutDirection,
     /// Internal threads: also draws a circle of the thread's minor diameter at each centre,

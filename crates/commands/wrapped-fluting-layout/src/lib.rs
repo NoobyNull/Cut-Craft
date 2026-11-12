@@ -12,6 +12,7 @@ pub struct WrappedFlutingLayout;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// How many flutes run along the piece, spaced evenly round it
     #[schemars(title = "Number of flutes", range(min = 1))]
     pub flutes: u32,
     /// From the start of the work piece to where the flutes start

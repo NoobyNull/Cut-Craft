@@ -20,7 +20,9 @@ pub enum Direction {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The layer to move in the list
     pub layer: LayerId,
+    /// Which way it moves in the Layers list
     pub direction: Direction,
 }
 

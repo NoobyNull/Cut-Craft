@@ -69,13 +69,16 @@ pub struct Params {
     /// The lines' angle from the X axis
     #[schemars(extend("x-unit" = "deg", "x-show-when" = {"style": "wavy_lines"}), range(min = -90, max = 90))]
     pub angle: f64,
+    /// The widest gap between neighbouring lines
     #[schemars(title = "Max. spacing", extend("x-unit" = "mm", "x-show-when" = {"style": "wavy_lines"}), range(min = 0))]
     pub max_spacing: f64,
     /// 0 keeps the lines evenly spaced; 100 lets the gaps run from nothing to the maximum
     #[schemars(title = "Spacing variation", extend("x-unit" = "%", "x-show-when" = {"style": "wavy_lines"}), range(min = 0, max = 100))]
     pub variation: f64,
+    /// How far each wave runs before it repeats: longer gives gentler waves
     #[schemars(extend("x-unit" = "mm", "x-show-when" = {"style": "wavy_lines"}), range(min = 0))]
     pub wavelength: f64,
+    /// How far each wave swings to either side: 0 gives straight lines
     #[schemars(extend("x-unit" = "mm", "x-show-when" = {"style": "wavy_lines"}), range(min = 0))]
     pub amplitude: f64,
     /// Randomness in the waves
@@ -98,6 +101,7 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Place vectors on layer")]
     pub place_on_layer: bool,
+    /// The layer the lines are put on
     #[serde(default = "texture_layer")]
     #[schemars(title = "Name", extend("x-show-when" = {"place_on_layer": true}))]
     pub layer_name: String,

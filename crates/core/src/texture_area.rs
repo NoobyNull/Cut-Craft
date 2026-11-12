@@ -11,10 +11,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Reflection {
+    /// The tile as it is
     #[default]
     None,
+    /// The tile flipped left to right
     Horizontal,
+    /// The tile flipped top to bottom
     Vertical,
+    /// The tile flipped both ways
     Both,
 }
 

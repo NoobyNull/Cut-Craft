@@ -24,6 +24,7 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default)]
     pub level: u64,
+    /// Which way it moves in the component tree
     pub direction: Direction,
 }
 

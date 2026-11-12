@@ -172,7 +172,7 @@ impl Direction {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Ramp {
-    /// Straight down
+    /// Straight down into the cut
     #[default]
     None,
     /// Down along the path at a steady slope
@@ -194,9 +194,12 @@ pub enum RampBy {
     Angle,
 }
 
+/// How long or steep each ramp is.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Ramping {
+    /// Size the ramp by its length or by its angle
     pub by: RampBy,
+    /// How far along the path the ramp runs
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub distance: f64,
     /// Down from level, when ramping by angle
@@ -228,6 +231,7 @@ pub enum Lead {
     Circular,
 }
 
+/// The size and shape of the lead in and out.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Leads {
     /// A straight lead's angle to the path
@@ -236,6 +240,7 @@ pub struct Leads {
     /// A circular lead's radius; its sweep is the length over the radius, at most 90°
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub radius: f64,
+    /// How long the lead in is
     #[schemars(title = "Lead Length", extend("x-unit" = "mm"), range(min = 0))]
     pub length: f64,
     /// Leave the path the same way at the end
@@ -262,6 +267,7 @@ impl Default for Leads {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Tabs {
+    /// No tabs: the part comes loose when cut through
     #[default]
     None,
     /// Up at the start of each tab, across, and down at its end

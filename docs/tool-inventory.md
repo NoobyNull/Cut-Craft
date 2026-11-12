@@ -334,7 +334,10 @@ say "not implemented yet".
   diameter and flute length (tapered ball noses and flat bottoms are cut with their whole
   taper, read from .vtdb and Fusion .tools files). The editor draws the tool to scale from
   its sizes, each typed on its dimension line, with neck and shank lengths and a
-  Manufacturer (`{Manufacturer}` in name formats).
+  Manufacturer (`{Manufacturer}` in name formats). My Tools (the bits toolpaths, the tool
+  changer and suggestions use) apart from read-only maker Catalogues: imports become
+  catalogues, bits are copied into My Tools (Maker / Type group) to edit, select or load.
+  Tool types show both names ("Radiused End Mill (bowl / bull nose)").
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
   (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.
@@ -392,7 +395,9 @@ say "not implemented yet".
 - Clearing bits on Pocket and V-Carve ("Clear with bigger bits first" / "Clear the flat
   bottom with end mills first", each bit picked with Select… in the Tool Database, kept
   largest first; Pocket checks each is bigger than the finishing bit and none the same size;
-  the separate Rest Machining list shows on these forms only for an older job that has one):
+  the separate Rest Machining list shows on these forms only for an older job that has one;
+  Pocket's Suggest clearing bits picks the quickest one or two of the user's own bigger end
+  mills, tool changer bits first, and says how long against the finishing bit alone):
   each makes a toolpath of its own, named `[1]`, `[2]`... in
   cutting order. Pocket's later tools (its own last) cut only what the ones before left
   (rest machining, kept on each so it recalculates alone; a raster only for the first).
@@ -485,6 +490,9 @@ say "not implemented yet".
     repeats so it closes on itself: Rope (twist angle), Chain (face and edge links), Twist
     (two plaited strands), Braid (three) or Bead and reel, with Border width, Repeat size,
     Inset from the edge and optional rails; the ornament inside keeps clear of it.
+    Direction sets which way the 3D carving goes: Raised (Raise height), Sunk in (Sink
+    depth, an incised carving) or Mixed (the border and bigger pieces raised, the small
+    fillers hollowed in), each distance set on its own.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.

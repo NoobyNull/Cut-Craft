@@ -18,18 +18,24 @@ pub struct NestParts;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Corner {
+    /// Start in the bottom left corner
     #[default]
     BottomLeft,
+    /// Start in the bottom right corner
     BottomRight,
+    /// Start in the top left corner
     TopLeft,
+    /// Start in the top right corner
     TopRight,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
+    /// Rows run across the material, side to side
     #[default]
     AlongX,
+    /// Rows run up the material, bottom to top
     AlongY,
 }
 
@@ -45,6 +51,7 @@ pub struct Params {
     /// Added to the tool diameter between parts, and to the border
     #[schemars(title = "Clearance (C)", extend("x-unit" = "mm"), range(min = 0))]
     pub clearance: f64,
+    /// Room left clear round the edge of the material
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub border_gap: f64,
     /// Turn parts a quarter turn where that fits better
@@ -52,8 +59,10 @@ pub struct Params {
     pub rotate_parts: bool,
     /// Move the parts; otherwise copies are nested and the originals stay
     pub remove_original_parts: bool,
+    /// The corner of the material the parts are packed into first
     #[schemars(extend("x-widget" = "corners"))]
     pub nest_from: Corner,
+    /// Which way the rows of parts run from that corner
     #[schemars(extend("x-widget" = "row"))]
     pub nest_direction: Direction,
     /// Nest by the parts' own shapes, not their boxes: parts fit round each other and into

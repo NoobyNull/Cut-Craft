@@ -1,7 +1,7 @@
 //! A gadget file as a command: named, filed under Gadgets, with a settings form built from the
 //! `settings` list it declares.
 
-use crate::{Limits, ScriptError, describe, run_gadget};
+use crate::{ScriptError, describe, run_gadget};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
 use cut_craft_core::{Change, CommandError, Drag, DynCommand, Meta, Registry};
@@ -203,7 +203,7 @@ impl DynCommand for GadgetCommand {
             doc,
             &self.commands,
             params,
-            Limits::default(),
+            crate::gadget_limits(),
         )
         .map_err(|e| CommandError::Failed(e.to_string()))
     }

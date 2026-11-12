@@ -17,20 +17,26 @@ pub enum Direction {
     /// From the entry hole up the job
     #[default]
     BottomToTop,
+    /// From the entry hole down the job
     TopToBottom,
+    /// From the entry hole to the right
     LeftToRight,
+    /// From the entry hole to the left
     RightToLeft,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
+    /// Which way the slot runs from the entry hole
     #[schemars(extend("x-group" = "Keyhole"))]
     pub direction: Direction,
     /// Deep enough that the cutter's wide part is below the surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     pub slot_depth: f64,
+    /// How far the slot runs from the entry hole
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Keyhole"))]
     pub slot_length: f64,

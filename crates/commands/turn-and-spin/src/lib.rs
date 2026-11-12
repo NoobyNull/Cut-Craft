@@ -22,12 +22,15 @@ pub enum Shape {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// How the profile is swept round to make the shape
     #[schemars(title = "Type of shape")]
     pub shape: Shape,
     /// Scale the shape so its highest point is the height
     pub scale_to_exact_height: bool,
+    /// The highest point of the shape, with Scale to exact height
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
+    /// What the new component is called in the component tree
     pub name: String,
     #[schemars(title = "Combine with other components")]
     pub combine: Combine,

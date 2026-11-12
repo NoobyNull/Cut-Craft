@@ -366,22 +366,31 @@ impl Default for Level {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Mirror {
+    /// No mirroring: the level is as modelled
     #[default]
     Off,
+    /// The left half is copied, flipped, onto the right half
     #[schemars(title = "Left to Right")]
     LeftToRight,
+    /// The right half is copied, flipped, onto the left half
     #[schemars(title = "Right to Left")]
     RightToLeft,
+    /// The top half is copied, flipped, onto the bottom half
     #[schemars(title = "Top to Bottom")]
     TopToBottom,
+    /// The bottom half is copied, flipped, onto the top half
     #[schemars(title = "Bottom to Top")]
     BottomToTop,
+    /// The top left quarter is copied, flipped, into the other three
     #[schemars(title = "Top Left Quadrant")]
     TopLeft,
+    /// The top right quarter is copied, flipped, into the other three
     #[schemars(title = "Top Right Quadrant")]
     TopRight,
+    /// The bottom left quarter is copied, flipped, into the other three
     #[schemars(title = "Bottom Left Quadrant")]
     BottomLeft,
+    /// The bottom right quarter is copied, flipped, into the other three
     #[schemars(title = "Bottom Right Quadrant")]
     BottomRight,
 }

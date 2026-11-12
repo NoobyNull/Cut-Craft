@@ -32,6 +32,7 @@ pub struct GroupToolpaths;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct GroupParams {
+    /// The toolpaths to put in the group; none makes an empty group
     pub toolpaths: Vec<EntityId>,
     /// The group's name; empty for no group
     pub group: String,
@@ -144,6 +145,7 @@ pub struct UngroupToolpaths;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct UngroupParams {
+    /// The toolpath group to take apart
     pub group: String,
     /// Delete the group's toolpaths with it, not only the group
     pub delete_toolpaths: bool,

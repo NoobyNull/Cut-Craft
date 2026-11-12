@@ -1,4 +1,5 @@
-//! Subtract Vectors.
+//! Subtract Vectors: cuts the other selected closed shapes out of the largest one, like a
+//! cookie cutter.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::polygon;

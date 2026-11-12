@@ -32,6 +32,7 @@ pub struct Params {
     #[serde(default = "default_diameter")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0), extend("x-show-when" = {"copy": "circles"}))]
     pub circle_diameter: f64,
+    /// Space the copies by how many there are, or by the distance between them
     pub spacing: Spacing,
     /// How many copies on each vector, when spacing by count
     #[schemars(range(min = 1))]

@@ -18,6 +18,7 @@ pub struct MergedToolpath;
     reason = "Aspire's Ordering tick boxes"
 )]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// The toolpaths to merge (none: the visible ones)
     pub sources: Vec<EntityId>,
@@ -330,6 +331,7 @@ pub struct UngroupMergedToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct UngroupParams {
+    /// The merged toolpath to take apart
     pub toolpath: EntityId,
 }
 

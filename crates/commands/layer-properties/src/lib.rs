@@ -1,4 +1,4 @@
-//! Layer Properties: rename, hide or lock a layer.
+//! Layer Properties: changes a layer's name, and whether it is shown or locked against changes.
 
 use cut_craft_core::document::{Document, Layer, LayerId};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_named, existing_layer};
@@ -9,8 +9,11 @@ pub struct LayerProperties;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The layer to change
     pub layer: LayerId,
+    /// What the layer is called in the layer list
     pub name: String,
+    /// Show the layer's vectors; hidden ones are not drawn or picked
     pub visible: bool,
     /// Locked vectors are drawn but cannot be selected or edited.
     pub locked: bool,

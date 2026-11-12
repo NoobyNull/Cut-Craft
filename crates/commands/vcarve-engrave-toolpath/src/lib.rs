@@ -1,5 +1,5 @@
-//! V-Carve / Engrave Toolpath: a V-bit carves the selected shapes, going deeper the further
-//! it is from their edges so its sides cut the edges exactly.
+//! V-Carve / Engrave Toolpath (V-bit carving): a V-bit carves the selected shapes, going deeper the
+//! further it is from their edges so its sides cut the edges exactly.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, inside};
@@ -15,6 +15,7 @@ pub struct VcarveEngraveToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface where carving starts (the floor of an earlier pocket)
     #[serde(default)]

@@ -1403,8 +1403,10 @@ mod tests {
     }
 
     /// Units a number may be shown in that are not lengths, so never change with mm / inches.
-    const NOT_LENGTHS: [&str; 10] = [
+    const NOT_LENGTHS: [&str; 12] = [
         "%",
+        "min",
+        "MB",
         "°",
         "deg",
         "rpm",
@@ -1419,7 +1421,7 @@ mod tests {
     /// Numbers with no unit that are not measurements: counts, ids, shares and strengths. A
     /// new number that is none of these needs an `x-unit` (`mm` for a length), so it is
     /// shown converted in an inch job, or a place here saying why not.
-    const UNITLESS: [&str; 61] = [
+    const UNITLESS: [&str; 63] = [
         // counts
         "sides",
         "points",
@@ -1485,6 +1487,8 @@ mod tests {
         "speed",
         "grid_point_size",
         "picture_pixels_per_inch",
+        "gadget_million_instructions",
+        "gadget_most_commands",
     ];
 
     /// Numbers with no unit that are measurements of something other than the job's
@@ -1959,7 +1963,10 @@ mod tests {
                 percent_when: None,
             }
         );
-        assert_eq!(field(&f, "x").help.as_deref(), Some("Left edge"));
+        assert_eq!(
+            field(&f, "x").help.as_deref(),
+            Some("Where the left edge sits, along the job's X axis")
+        );
     }
 
     #[test]

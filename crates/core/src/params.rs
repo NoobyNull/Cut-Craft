@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 /// A position in millimetres.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Xy {
+    /// Left to right, along the job's X axis
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
+    /// Bottom to top, along the job's Y axis
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
 }
@@ -29,15 +31,24 @@ impl From<Xy> for Point {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Anchor {
+    /// The top left corner of the selection's box
     TopLeft,
+    /// The middle of the box's top edge
     Top,
+    /// The top right corner of the selection's box
     TopRight,
+    /// The middle of the box's left edge
     Left,
+    /// The middle of the selection's box
     #[default]
     Center,
+    /// The middle of the box's right edge
     Right,
+    /// The bottom left corner of the selection's box
     BottomLeft,
+    /// The middle of the box's bottom edge
     Bottom,
+    /// The bottom right corner of the selection's box
     BottomRight,
 }
 
@@ -62,10 +73,14 @@ impl Anchor {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Items {
+    /// The layers in the layer list
     #[default]
     Layers,
+    /// The toolpaths in the toolpath list
     Toolpaths,
+    /// The 3D components in the component list
     Components,
+    /// The levels the 3D components sit on
     Levels,
 }
 

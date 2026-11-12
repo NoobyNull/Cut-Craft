@@ -29,6 +29,7 @@ pub enum Strategy {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Of the laser's maximum
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
@@ -38,6 +39,7 @@ pub struct Params {
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Laser"))]
     pub passes: u32,
+    /// Cut along the shapes, or fill them with lines
     #[schemars(extend("x-group" = "Fill"))]
     pub strategy: Strategy,
     /// Extra offset for cutting outside or inside, to ease or tighten a fit
@@ -48,6 +50,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Fill"))]
     pub stepover: f64,
+    /// The angle of the hatch lines: 0° along X, 90° along Y
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Fill"))]
     pub hatch_angle: f64,

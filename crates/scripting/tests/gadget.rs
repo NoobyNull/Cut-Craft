@@ -225,3 +225,37 @@ fn a_gadget_that_runs_too_many_commands_is_stopped() {
     .unwrap_err();
     assert_eq!(err, ScriptError::TooManyCommands(10));
 }
+
+#[test]
+fn gadget_limits_are_kept_to_what_options_offers() {
+    use cut_craft_scripting::{gadget_limits, kept_to_ranges};
+    assert_eq!(kept_to_ranges(Limits::default()), Limits::default());
+    let tiny = Limits {
+        instructions: 0,
+        memory: 0,
+        commands: 0,
+    };
+    let huge = Limits {
+        instructions: u64::MAX,
+        memory: usize::MAX,
+        commands: usize::MAX,
+    };
+    assert_eq!(
+        kept_to_ranges(tiny),
+        Limits {
+            instructions: 10_000_000,
+            memory: 8 << 20,
+            commands: 100,
+        }
+    );
+    assert_eq!(
+        kept_to_ranges(huge),
+        Limits {
+            instructions: 5_000_000_000,
+            memory: 1024 << 20,
+            commands: 1_000_000,
+        }
+    );
+    // what gadgets run with until Options sets it; nothing in these tests sets it
+    assert_eq!(gadget_limits(), Limits::default());
+}

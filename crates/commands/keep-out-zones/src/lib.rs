@@ -23,13 +23,14 @@ pub enum Action {
     /// The selected closed vectors, grown by the clearance, are added to the zones there are
     #[schemars(title = "Add Selection")]
     Add,
-    /// No zones
+    /// All the keep-out zones are removed
     #[schemars(title = "Clear Zones")]
     Clear,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What happens to the keep-out zones
     #[schemars(extend("x-widget" = "row"))]
     pub action: Action,
     /// What the zones are called on their labels: "Clamp" names one zone "Clamp" and

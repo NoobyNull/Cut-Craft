@@ -28,6 +28,7 @@ pub struct Params {
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
+    /// Which point of the material is the machine's X0, Y0
     #[schemars(
         title = "XY Datum Position",
         extend("x-section" = true),
@@ -40,6 +41,7 @@ pub struct Params {
     /// model to it (Set). 0 when there is no model, or to leave it alone
     #[schemars(title = "Model Thickness", extend("x-unit" = "mm"), range(min = 0))]
     pub model_thickness: f64,
+    /// How high the tool travels between cuts
     #[schemars(
         title = "Rapid Z Gaps above Material",
         extend("x-section" = true),

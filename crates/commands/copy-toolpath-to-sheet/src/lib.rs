@@ -10,6 +10,7 @@ pub struct CopyToolpathToSheet;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The toolpath to copy onto the other sheets
     pub toolpath: EntityId,
     /// The sheet's place in the Sheets list, from 0.
     pub sheet: usize,

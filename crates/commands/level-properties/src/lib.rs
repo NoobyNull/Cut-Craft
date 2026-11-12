@@ -14,6 +14,7 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default)]
     pub level: u64,
+    /// What the level is called in the component list
     pub name: String,
     #[schemars(title = "Combine Mode")]
     pub combine: Combine,

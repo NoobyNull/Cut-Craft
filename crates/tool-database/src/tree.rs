@@ -1,7 +1,7 @@
 //! The tool tree: groups are `/`-separated paths, named by tools ([`Tool::group`]) and listed
 //! with their notes ([`ToolDatabase::groups`]).
 
-use cut_craft_core::toolpath::{Tool, ToolDatabase, ToolGroup};
+use cut_craft_core::toolpath::{CATALOGUES, Tool, ToolDatabase, ToolGroup};
 
 /// The group a path sits in; `""` at the top.
 pub fn parent(path: &str) -> &str {
@@ -127,11 +127,13 @@ pub fn rename_group(db: &mut ToolDatabase, group: &str, name: &str) -> String {
     };
     db.groups.iter_mut().for_each(|g| moved(&mut g.path));
     db.tools.iter_mut().for_each(|t| moved(&mut t.group));
+    db.catalogues.iter_mut().for_each(moved);
     renamed
 }
 
-/// Takes `group` out, with every group and tool inside it.
+/// Takes `group` out, with every group, tool and catalogue inside it.
 pub fn delete_group(db: &mut ToolDatabase, group: &str) {
+    db.catalogues.retain(|c| !within(c, group));
     db.groups.retain(|g| !within(&g.path, group));
     db.tools.retain(|t| !within(&t.group, group));
 }
@@ -168,18 +170,21 @@ pub fn export_group(db: &ToolDatabase, group: &str) -> ToolDatabase {
         materials: db.materials.clone(),
         material: String::new(),
         name_formats: db.name_formats.clone(),
+        // exported tools are plain tools: whoever imports them decides
+        catalogues: vec![],
     }
 }
 
-/// Adds `incoming` inside a new top-level group named `name` (made unique), so imported tools
-/// stay apart from the database's own; tool names already taken get a number. Its materials
-/// join the material list.
+/// Adds `incoming` as a read-only catalogue: inside a new group named `name` (made unique)
+/// under [`CATALOGUES`], apart from My Tools; tool names already taken get a number. Its
+/// materials join the material list. Its tools are copied into My Tools
+/// ([`copy_to_mine`]) to be edited or loaded in a tool changer.
 pub fn import(db: &mut ToolDatabase, incoming: ToolDatabase, name: &str) -> String {
     for m in &incoming.materials {
         db.add_material(m);
     }
     let all = groups(db);
-    let top = unique(name, &|p| all.iter().any(|g| g == p));
+    let top = unique(&join(CATALOGUES, name), &|p| all.iter().any(|g| g == p));
     db.groups.push(ToolGroup {
         path: top.clone(),
         notes: String::new(),
@@ -197,7 +202,34 @@ pub fn import(db: &mut ToolDatabase, incoming: ToolDatabase, name: &str) -> Stri
         tool.name = unique(&tool.name, &|n| db.get(n).is_some());
         db.tools.push(tool);
     }
+    db.catalogues.push(top.clone());
     top
+}
+
+/// A catalogue's tool `i` copied into My Tools, to edit or load in a tool changer: in its
+/// maker's group by type ([`Tool::own_group`], the catalogue's name standing in for a
+/// maker it does not give), under its own name (the copy is the one toolpaths use). One
+/// already copied under that name is the one given back. Its index.
+pub fn copy_to_mine(db: &mut ToolDatabase, i: usize) -> usize {
+    let mut tool = db.tools[i].clone();
+    if !db.is_catalogue(&tool) {
+        return i;
+    }
+    if let Some(mine) = db
+        .tools
+        .iter()
+        .position(|t| t.name == tool.name && !db.is_catalogue(t))
+    {
+        return mine;
+    }
+    if tool.manufacturer.trim().is_empty() {
+        let catalogue = db.catalogues.iter().find(|c| within(&tool.group, c));
+        tool.manufacturer = catalogue.map(|c| leaf(c).to_owned()).unwrap_or_default();
+    }
+    tool.group = tool.own_group();
+    tool.number = 0;
+    db.tools.push(tool);
+    db.tools.len() - 1
 }
 
 #[cfg(test)]
@@ -268,20 +300,63 @@ mod tests {
     }
 
     #[test]
-    fn imports_go_in_a_group_of_their_own() {
+    fn imports_become_read_only_catalogues_of_their_own() {
         let mut d = db();
         let incoming = export_group(&db(), "Metric Tools");
         let n = incoming.tools.len();
         let top = import(&mut d, incoming.clone(), "Vendor");
-        assert_eq!(top, "Vendor");
+        assert_eq!(top, "Catalogues/Vendor");
+        assert_eq!(d.catalogues, ["Catalogues/Vendor"]);
         assert_eq!(
-            tools_in(&d, "Vendor/Metric Tools/End Mills").len(),
+            tools_in(&d, "Catalogues/Vendor/Metric Tools/End Mills").len(),
             tools_in(&db(), "Metric Tools/End Mills").len()
         );
-        assert_eq!(import(&mut d, incoming, "Vendor"), "Vendor 2");
+        assert_eq!(d.my_tools().count(), db().tools.len(), "My Tools unchanged");
+        assert_eq!(import(&mut d, incoming, "Vendor"), "Catalogues/Vendor 2");
         let names: std::collections::HashSet<_> = d.tools.iter().map(|t| &t.name).collect();
         assert_eq!(names.len(), d.tools.len(), "tool names stay unique");
         assert_eq!(d.tools.len(), db().tools.len() + 2 * n);
+    }
+
+    #[test]
+    fn a_catalogue_tool_copies_into_my_tools_under_its_maker_once() {
+        let mut d = ToolDatabase::default();
+        let incoming = ToolDatabase {
+            tools: vec![
+                Tool {
+                    name: "46171".into(),
+                    group: "Up-cut".into(),
+                    ..Tool::default()
+                },
+                Tool {
+                    name: "V 60".into(),
+                    manufacturer: "Whiteside".into(),
+                    shape: cut_craft_core::toolpath::ToolShape::VBit,
+                    number: 4,
+                    ..Tool::default()
+                },
+            ],
+            ..ToolDatabase::default()
+        };
+        import(&mut d, incoming, "Amana Tool");
+        let mine = copy_to_mine(&mut d, 0);
+        let copy = &d.tools[mine];
+        assert_eq!(
+            (copy.name.as_str(), copy.group.as_str()),
+            ("46171", "Amana Tool/End Mills")
+        );
+        assert_eq!(
+            copy.manufacturer, "Amana Tool",
+            "the catalogue stands in for the maker"
+        );
+        assert!(!d.is_catalogue(copy));
+        assert_eq!(d.index_of("46171"), Some(mine), "the copy is the one used");
+        assert_eq!(copy_to_mine(&mut d, 0), mine, "copied once");
+        let v = copy_to_mine(&mut d, 1);
+        assert_eq!(d.tools[v].group, "Whiteside/V-Bits");
+        assert_eq!(d.tools[v].number, 0, "no holder until loaded");
+        assert_eq!(copy_to_mine(&mut d, v), v, "already mine");
+        assert_eq!(d.tools.len(), 4);
     }
 
     #[test]

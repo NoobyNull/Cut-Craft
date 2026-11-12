@@ -24,6 +24,7 @@ pub enum CutDirection {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface where the prism's top is (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -41,6 +42,7 @@ pub struct Params {
         "x-widget" = "named-icons",
         "x-icon" = "toolpaths/cut_{}_outside.png"
     ))]
+    /// Which way round the shapes the tool travels
     pub cut_direction: CutDirection,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
@@ -53,7 +55,7 @@ pub struct Params {
         )
     )]
     pub ways: Ways,
-    /// A V-bit
+    /// The V-bit that carves the prism
     pub tool: Tool,
 }
 

@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize};
 /// `reach` (the 2D view's pick distance).
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct NodeAt {
+    /// The vector being edited: the one you click on
     pub vector: EntityId,
     pub at: Xy,
+    /// How close the click must be to the node or span
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub reach: f64,
 }

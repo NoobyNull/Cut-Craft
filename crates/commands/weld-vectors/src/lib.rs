@@ -1,4 +1,5 @@
-//! Weld Vectors.
+//! Weld Vectors: merges overlapping closed shapes into one outline, the lines inside them taken
+//! away.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::polygon;

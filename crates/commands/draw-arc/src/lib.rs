@@ -12,11 +12,14 @@ pub struct DrawArc;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub center: Xy,
+    /// From the centre to the curve
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub radius: f64,
     /// Measured counter-clockwise from +X
     #[schemars(extend("x-unit" = "deg"))]
     pub start_angle: f64,
+    /// Where the arc stops, measured counter-clockwise from the right (0° is to the right, 90°
+    /// straight up)
     #[schemars(extend("x-unit" = "deg"))]
     pub end_angle: f64,
 }

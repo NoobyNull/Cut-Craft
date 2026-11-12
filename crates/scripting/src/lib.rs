@@ -17,6 +17,7 @@ use serde_json::Value;
 use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 mod gadget;
 pub use gadget::{GadgetCommand, load_gadget};
@@ -40,6 +41,47 @@ impl Default for Limits {
             memory: 64 * 1024 * 1024,
             commands: 10_000,
         }
+    }
+}
+
+/// The ranges Options offers for each limit; values outside are kept to them.
+pub const INSTRUCTIONS_RANGE: std::ops::RangeInclusive<u64> = 10_000_000..=5_000_000_000;
+pub const MEMORY_RANGE: std::ops::RangeInclusive<usize> = (8 << 20)..=(1024 << 20);
+pub const COMMANDS_RANGE: std::ops::RangeInclusive<usize> = 100..=1_000_000;
+
+/// `limits` with each one kept to the range Options offers.
+pub fn kept_to_ranges(limits: Limits) -> Limits {
+    let keep =
+        |v, r: &std::ops::RangeInclusive<usize>| std::cmp::Ord::clamp(v, *r.start(), *r.end());
+    Limits {
+        instructions: limits
+            .instructions
+            .clamp(*INSTRUCTIONS_RANGE.start(), *INSTRUCTIONS_RANGE.end()),
+        memory: keep(limits.memory, &MEMORY_RANGE),
+        commands: keep(limits.commands, &COMMANDS_RANGE),
+    }
+}
+
+/// What Options ▸ Advanced sets for gadgets, read whenever one runs; the app sets it when
+/// Options loads or changes.
+static INSTRUCTIONS: AtomicU64 = AtomicU64::new(200_000_000);
+static MEMORY: AtomicUsize = AtomicUsize::new(64 * 1024 * 1024);
+static COMMANDS: AtomicUsize = AtomicUsize::new(10_000);
+
+/// Sets the limits gadgets run with, each kept to its range.
+pub fn set_gadget_limits(limits: Limits) {
+    let limits = kept_to_ranges(limits);
+    INSTRUCTIONS.store(limits.instructions, Ordering::Relaxed);
+    MEMORY.store(limits.memory, Ordering::Relaxed);
+    COMMANDS.store(limits.commands, Ordering::Relaxed);
+}
+
+/// The limits gadgets run with.
+pub fn gadget_limits() -> Limits {
+    Limits {
+        instructions: INSTRUCTIONS.load(Ordering::Relaxed),
+        memory: MEMORY.load(Ordering::Relaxed),
+        commands: COMMANDS.load(Ordering::Relaxed),
     }
 }
 

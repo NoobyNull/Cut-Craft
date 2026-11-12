@@ -21,8 +21,10 @@ type Contour = Vec<[f64; 2]>;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Corners {
+    /// Corners curve round, like the path of a round bit
     #[default]
     Round,
+    /// Corners stay pointed, the sides carried on until they meet
     Sharp,
 }
 

@@ -1,4 +1,5 @@
-//! Draw Circle.
+//! Draw Circle: drag from the centre out to the edge, or type the centre and radius. The circle
+//! is a closed vector, ready to cut round, pocket or V-carve.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Segment};
@@ -13,6 +14,7 @@ pub struct DrawCircle;
 pub struct Params {
     #[schemars(title = "Center Point", extend("x-icon" = "drawing_forms/circle_center.png"))]
     pub center: Xy,
+    /// From the centre to the edge: half the width across
     #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/circle_radius.png"), range(min = 0))]
     pub radius: f64,
 }

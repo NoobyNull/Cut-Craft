@@ -35,13 +35,16 @@ pub enum FillPattern {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface (or below the nose cone)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     pub depth: f64,
+    /// Follow the lines, or fill the shapes
     #[schemars(extend("x-group" = "Engrave"))]
     pub strategy: Strategy,
+    /// The pattern that fills the shapes, with Fill
     #[schemars(extend("x-group" = "Engrave"))]
     pub fill_pattern: FillPattern,
     /// Between fill lines (set here, not from the tool)
@@ -52,6 +55,7 @@ pub struct Params {
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     pub passes: u32,
+    /// The engraving bit or drag point that marks the lines
     pub tool: Tool,
 }
 

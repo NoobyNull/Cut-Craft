@@ -21,8 +21,10 @@ pub enum Kind {
     #[default]
     #[schemars(title = "Length Dimension")]
     Length,
+    /// The up-and-down distance only, however far apart the points are sideways
     #[schemars(title = "Vertical Dimension")]
     Vertical,
+    /// The side-to-side distance only, however far apart the points are up and down
     #[schemars(title = "Horizontal Dimension")]
     Horizontal,
     /// The angle at a corner: drag from the corner to where the arc and its text go
@@ -35,14 +37,19 @@ pub enum Kind {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What to measure: a length, a horizontal or vertical distance, an angle or an arc
     pub kind: Kind,
     /// Drag from one point to the other to set both
     pub from: Xy,
+    /// The second point measured
     pub to: Xy,
+    /// The lettering the measurement is written in
     #[schemars(schema_with = "font_choices")]
     pub font: String,
+    /// How tall the measurement's letters are
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub text_height: f64,
+    /// How many digits after the decimal point the measurement shows
     #[schemars(range(min = 0, max = 6))]
     pub decimal_places: u32,
     /// How far the dimension line sits from the measured points, to their left

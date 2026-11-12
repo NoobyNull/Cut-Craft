@@ -12,7 +12,9 @@ pub struct DocumentVariables;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Variable {
+    /// What you type in braces to use it, such as depth for {depth}
     pub name: String,
+    /// The number it stands for wherever it is used
     pub value: f64,
 }
 

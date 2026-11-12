@@ -910,6 +910,8 @@ struct OpenForm {
     drawn: Option<EntityId>,
     /// Settings changed since the shape it made last followed them.
     dirty: bool,
+    /// What Suggest last found for the form's clearing bits, shown under them.
+    suggested: Option<String>,
     /// Orientate 3D Model's Model Size (X, Y, Z) as last shown, and the sizes the user typed
     /// (with the ratio locked, only the latest): the rest follow the model as it turns.
     shown_size: Option<[f64; 3]>,
@@ -1787,12 +1789,12 @@ enum ToolAsk {
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
 fn tool_picker(
     ui: &mut egui::Ui,
-    tool: &Value,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
     units: cut_craft_core::document::Units,
 ) -> Option<ToolAsk> {
+    let tool = &top["tool"];
     let current = tool["name"].as_str().unwrap_or_default();
     let picked = serde_json::from_value::<Tool>(tool.clone())
         .ok()
@@ -1868,6 +1870,8 @@ enum ListAsk {
     Select(ListSlot),
     /// The Tool Database to change this tool in.
     Edit(String),
+    /// Suggest: the quickest clearing bits from the user's own tools.
+    Suggest,
 }
 
 /// A form's lists of tools, each picked in Select Tool as the form's own tool is.
@@ -1900,6 +1904,7 @@ fn clearing_section(
     params: &mut Value,
     slots: &[Option<String>],
     finishing_smallest: bool,
+    suggested: Option<&str>,
     units: cut_craft_core::document::Units,
 ) -> (bool, Option<ListAsk>) {
     if !params["clearance_tools"].is_array() {
@@ -1935,39 +1940,40 @@ fn clearing_section(
                 changed = true;
             }
         }
+        // Pocket: the quickest bits from the user's own, tool changer bits first
+        if finishing_smallest
+            && finishing.is_some()
+            && ui
+                .button("Suggest clearing bits")
+                .on_hover_hint(
+                    "Try your own bigger end mills, one or two at a time, and pick the quickest \
+                     way to finish this pocket (bits in the tool changer first; Options sets \
+                     how long a bit change takes)",
+                )
+                .clicked()
+        {
+            ask = Some(ListAsk::Suggest);
+        }
+        if let Some(note) = suggested {
+            ui.weak(note);
+        }
         if list.is_empty() {
             return;
         }
         ui.weak(about);
+        let depth = params["depth"].as_f64().filter(|d| *d > 0.0);
         let mut remove = None;
         for (i, tool) in list.iter().enumerate() {
-            ui.push_id(("clearing", i), |ui| {
-                ui.strong(held_name(&tool.name, slots));
-                ui.label(tool_line(tool, None, units));
-                ui.horizontal(|ui| {
-                    if ui
-                        .button("Select…")
-                        .on_hover_hint("Pick another bit for this in the Tool Database")
-                        .clicked()
-                    {
-                        ask = Some(ListAsk::Select(ListSlot::At(i)));
-                    }
-                    if ui
-                        .button("Edit…")
-                        .on_hover_hint("Change this bit in the Tool Database")
-                        .clicked()
-                    {
-                        ask = Some(ListAsk::Edit(tool.name.clone()));
-                    }
-                    if ui
-                        .small_button("×")
-                        .on_hover_hint("Remove this bit")
-                        .clicked()
-                    {
-                        remove = Some(i);
-                    }
-                });
-            });
+            match ui
+                .push_id(("clearing", i), |ui| {
+                    clearing_bit(ui, i, tool, slots, depth, units)
+                })
+                .inner
+            {
+                Some(BitAsk::List(asked)) => ask = Some(asked),
+                Some(BitAsk::Remove) => remove = Some(i),
+                None => {}
+            }
         }
         if let Some(i) = remove {
             list.remove(i);
@@ -1994,6 +2000,51 @@ fn clearing_section(
         params["clearance_tools"] = serde_json::to_value(&list).expect("tools serialize");
     }
     (changed, ask)
+}
+
+/// What a clearing bit's own buttons ask for.
+enum BitAsk {
+    List(ListAsk),
+    Remove,
+}
+
+/// The `i`th clearing bit: its name (with its holder), one line, whether it reaches `depth`,
+/// and Select…, Edit… and Remove.
+fn clearing_bit(
+    ui: &mut egui::Ui,
+    i: usize,
+    tool: &Tool,
+    slots: &[Option<String>],
+    depth: Option<f64>,
+    units: cut_craft_core::document::Units,
+) -> Option<BitAsk> {
+    ui.strong(held_name(&tool.name, slots));
+    ui.label(tool_line(tool, None, units));
+    // can this bit reach the depth? the same line the form's own Tool has
+    if let Some(line) = cut_craft_core::reach::form_line(tool, depth, None, units) {
+        reach::show(ui, &line);
+    }
+    ui.horizontal(|ui| {
+        if ui
+            .button("Select…")
+            .on_hover_hint("Pick another bit for this in the Tool Database")
+            .clicked()
+        {
+            return Some(BitAsk::List(ListAsk::Select(ListSlot::At(i))));
+        }
+        if ui
+            .button("Edit…")
+            .on_hover_hint("Change this bit in the Tool Database")
+            .clicked()
+        {
+            return Some(BitAsk::List(ListAsk::Edit(tool.name.clone())));
+        }
+        ui.small_button("×")
+            .on_hover_hint("Remove this bit")
+            .clicked()
+            .then_some(BitAsk::Remove)
+    })
+    .inner
 }
 
 /// `params`' list `which` with `tool` put `at` its slot: clearing bits kept largest first,

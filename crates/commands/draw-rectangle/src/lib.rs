@@ -1,4 +1,5 @@
-//! Draw Rectangle: square, rounded or notched corners.
+//! Draw Rectangle: drag from one corner to the opposite one, or type its position and size. Its
+//! corners can be square, rounded or notched; it is a closed vector.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Path, Point, Segment};
@@ -11,6 +12,7 @@ pub struct DrawRectangle;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Corners {
+    /// Plain sharp corners
     #[default]
     Square,
     /// Each corner rounded off outwards, by the radius
@@ -21,18 +23,20 @@ pub enum Corners {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// Left edge
+    /// Where the left edge sits, along the job's X axis
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
-    /// Bottom edge
+    /// Where the bottom edge sits, along the job's Y axis
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
+    /// How wide it is from side to side
     #[schemars(
         title = "Width (X)",
         extend("x-unit" = "mm", "x-icon" = "drawing_forms/width.png"),
         range(min = 0)
     )]
     pub width: f64,
+    /// How tall it is from bottom to top
     #[schemars(
         title = "Height (Y)",
         extend("x-unit" = "mm", "x-icon" = "drawing_forms/height.png"),
@@ -45,7 +49,7 @@ pub struct Params {
         extend("x-section" = true, "x-icon" = "drawing_forms/corner_{}.png")
     )]
     pub corners: Corners,
-    /// Corner radius
+    /// How big each rounded or notched corner is, from the corner's centre to its edge
     #[schemars(
         extend("x-unit" = "mm", "x-hide-when" = {"corners": "square"}),
         range(min = 0)

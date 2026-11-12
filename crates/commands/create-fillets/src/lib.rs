@@ -39,6 +39,7 @@ pub enum Corners {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What is cut into each corner
     pub kind: Kind,
     /// Of the fillet, or of the cutter for dog-bones and T-bones
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

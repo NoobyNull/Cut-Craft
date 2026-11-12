@@ -31,6 +31,7 @@ pub struct Params {
     /// Lower left, lower right, upper left, upper right tile of each group of four
     #[schemars(length(min = 4, max = 4))]
     pub reflection: Vec<Reflection>,
+    /// What the new component is called in the component tree
     pub name: String,
     pub combine: Combine,
     /// The texture area being edited: tiled again over its own box. Set when the form

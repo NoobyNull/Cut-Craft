@@ -28,7 +28,9 @@ pub enum InlayType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
+    /// Which part of the inlay this toolpath cuts
     #[schemars(extend("x-group" = "Inlay Type"))]
     pub inlay_type: InlayType,
     /// Below the material surface where cutting starts

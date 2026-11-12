@@ -1517,10 +1517,10 @@ impl CutCraftApp {
         if !self.tool_changer_window {
             return;
         }
+        // a tool changer holds My Tools only, not a catalogue's
         let tools: Vec<(String, u32)> = self
             .tools
-            .tools
-            .iter()
+            .my_tools()
             .map(|t| (t.name.clone(), t.number))
             .collect();
         let mut open = true;
