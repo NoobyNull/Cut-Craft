@@ -404,11 +404,12 @@ pub struct ToolpathSettings {
     #[serde(default = "tolerance")]
     #[schemars(title = "V-Carve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance_vcarve: f64,
-    /// How fast a toolpath preview plays when it starts, in mm of tool travel a second; the
-    /// slider under the preview changes it while it plays
+    /// How many times faster than the machine a toolpath preview plays when it starts: 1
+    /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
+    /// slider over the preview changes it while it plays
     #[serde(default = "preview_speed")]
-    #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
-    pub preview_speed: f64,
+    #[schemars(extend("x-unit" = "×"), range(min = 0.25, max = 1000))]
+    pub preview_multiplier: f64,
     /// Write each keep-out zone's name on it in the 2D and 3D views ("Keep-out: Clamp 1").
     /// The View menu turns them on and off too
     #[serde(default = "on")]
@@ -427,9 +428,9 @@ fn preview_speed() -> f64 {
 }
 
 impl ToolpathSettings {
-    /// The preview's starting speed, mm/s, kept to the slider's range.
+    /// The preview's starting speed, times the machine's, kept to the slider's range.
     pub fn preview_speed(&self) -> f64 {
-        self.preview_speed.clamp(5.0, 20_000.0)
+        self.preview_multiplier.clamp(0.25, 1000.0)
     }
 }
 
@@ -1200,7 +1201,7 @@ impl Default for Options {
                 tolerance_2d: tolerance(),
                 tolerance_3d: tolerance(),
                 tolerance_vcarve: tolerance(),
-                preview_speed: preview_speed(),
+                preview_multiplier: preview_speed(),
                 keep_out_labels: d.keep_out_labels,
                 clip_at_keep_out_zones: false,
             },
@@ -1709,10 +1710,10 @@ mod tests {
             "older options get the same"
         );
         let wild = ToolpathSettings {
-            preview_speed: 1e9,
+            preview_multiplier: 1e9,
             ..o.toolpaths
         };
-        assert!((wild.preview_speed() - 20_000.0).abs() < 1e-9);
+        assert!((wild.preview_speed() - 1000.0).abs() < 1e-9);
     }
 
     #[test]

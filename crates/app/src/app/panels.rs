@@ -1021,6 +1021,8 @@ impl CutCraftApp {
             .simulation
             .clone()
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
+        // rapids as fast as the Toolpath Summary times them
+        let rapid = self.summary.rapid;
         let what = match &list[..] {
             [one] => format!("Getting {} ready to preview", one.name),
             _ => format!("Getting {} toolpaths ready to preview", list.len()),
@@ -1029,7 +1031,7 @@ impl CutCraftApp {
             &what,
             move || {
                 let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
-                cut_craft_core::playback::Playback::new(start, &list).marked(&marks)
+                cut_craft_core::playback::Playback::new(start, &list, rapid).marked(&marks)
             },
             move |app, playback| {
                 app.playback = Some(playback);
@@ -1139,8 +1141,13 @@ impl CutCraftApp {
             ui.add(
                 egui::Slider::new(&mut self.playback_speed, PLAYBACK_SPEEDS)
                     .logarithmic(true)
-                    .suffix(" mm/s")
+                    .prefix("×")
+                    .custom_formatter(|x, _| times(x))
                     .text("Speed"),
+            )
+            .on_hover_hint(
+                "×1 plays at the machine's own speed: each move at its tool's feed or plunge \
+                 rate, rapids at the Toolpath Summary's rapid rate. ×10 plays ten times faster",
             );
         });
         // the progress across the view: drag it to move the tool on through the toolpaths, or
@@ -4003,10 +4010,32 @@ fn playback_note(at: f64, length: f64, goal: Option<f64>, playing: bool, speed: 
             percent(goal),
             percent(at)
         ),
-        None if playing => format!(
-            "About {} left at {speed:.0} mm/s. Speed it up, drag Progress on, or Stop (Esc) to keep what is cut",
-            crate::busy::seconds((length - at) / speed)
-        ),
+        None if playing => {
+            let left = (length - at).max(0.0);
+            let watch = if (speed - 1.0).abs() < 1e-9 {
+                String::new()
+            } else {
+                format!(
+                    ", {} at ×{}",
+                    crate::busy::seconds(left / speed),
+                    times(speed)
+                )
+            };
+            format!(
+                "Machine time left: about {}{watch}. Speed it up, drag Progress on, or Stop \
+                 (Esc) to keep what is cut",
+                crate::busy::seconds(left)
+            )
+        }
         None => "Paused. Run goes on; Stop (Esc) keeps what is cut".to_owned(),
+    }
+}
+
+/// A speed multiplier as the slider shows it: 0.25, 0.5, 2, 10, 250.
+fn times(x: f64) -> String {
+    if x < 1.0 {
+        format!("{x:.2}").trim_end_matches('0').to_owned()
+    } else {
+        format!("{x:.0}")
     }
 }

@@ -4212,11 +4212,29 @@ fn a_preview_can_be_stopped_from_the_2d_view_too() {
 #[test]
 fn a_playing_preview_says_how_long_it_has_left() {
     let mut h = playing_preview();
-    h.app.playback_speed = 5.0;
+    h.app.playback_speed = 1.0;
     h.frame(vec![]);
+    let note = |h: &Harness| {
+        h.texts()
+            .into_iter()
+            .find(|t| t.starts_with("Machine time left"))
+            .expect("the time the machine takes")
+    };
+    assert!(!note(&h).contains(" at ×"), "{}", note(&h));
+    h.app.playback_speed = 10.0;
+    h.frame(vec![]);
+    assert!(note(&h).contains(" at ×10"), "{}", note(&h));
+}
+
+#[test]
+fn a_preview_plays_as_long_as_the_toolpath_summary_says_the_machine_takes() {
+    let h = playing_preview();
+    let toolpath = h.app.doc.toolpaths.values().next().unwrap();
+    let summary = toolpath.machining_minutes(h.app.summary.rapid) * 60.0;
+    let length = h.app.playback.as_ref().unwrap().length();
     assert!(
-        h.texts().iter().any(|t| t.contains("left at 5 mm/s")),
-        "how long it will take at this speed"
+        (length - summary).abs() < 1e-6,
+        "{length} s, the summary {summary} s"
     );
 }
 
