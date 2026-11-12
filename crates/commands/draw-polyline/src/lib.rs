@@ -12,6 +12,8 @@ pub struct DrawPolyline;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The corners the line passes through, in order: click them in the 2D view, or type them
+    /// here
     pub points: Vec<Xy>,
     /// Join the last point back to the first
     pub closed: bool,

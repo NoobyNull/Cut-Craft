@@ -90,7 +90,7 @@ impl CutCraftApp {
     /// each setting.
     pub(super) fn tool_help(&self, id: &str) -> (Option<String>, Vec<(String, String)>) {
         let own = || gui::intro(id, &self.tool_label(id));
-        let Some(cmd) = self.registry.get(id) else {
+        let Some(cmd) = self.registry.get(form_of(id)) else {
             return (own(), vec![]);
         };
         let schema = cmd.schema();
@@ -103,5 +103,16 @@ impl CutCraftApp {
             .filter_map(|f| Some((f.label, f.help?)))
             .collect();
         (about, fields)
+    }
+}
+
+/// The command whose form tool `id` opens: itself, or the one a flyout variant or a Create
+/// Shape icon or Edit Text opens with its own settings.
+fn form_of(id: &str) -> &str {
+    match crate::flyout::variant(id) {
+        Some(v) => v.command,
+        None if id.starts_with("create_shape_") => "create_shape",
+        None if id == "edit_text" => "draw_text",
+        None => id,
     }
 }

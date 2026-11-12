@@ -26,6 +26,7 @@ pub enum Mode {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum VerticalStretch {
+    /// The text keeps its shape; the room above and below stays empty
     #[default]
     NoVerticalStretch,
     /// The lines move apart to fill the height
@@ -38,6 +39,7 @@ pub enum VerticalStretch {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HorizontalStretch {
+    /// The text keeps its shape; the room at the sides stays empty
     #[default]
     NoHorizontalStretch,
     /// The spaces between words grow
@@ -63,6 +65,7 @@ pub enum Margin {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// Plain text at a set height, or text that grows or shrinks to fill a box
     #[serde(default)]
     #[schemars(extend("x-widget" = "row"))]
     pub mode: Mode,
@@ -82,11 +85,10 @@ pub struct Params {
     /// Height of a capital letter
     #[schemars(title = "Text height", extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
-    /// Where the last line's baseline starts (left), centres or ends (right); click the
-    /// drawing to set it
+    /// Where the text sits: its lower-left corner. Click in the 2D view to place it
     #[schemars(title = "Anchor point")]
     pub anchor: Xy,
-    /// Text in a Box: the box's width and height
+    /// The box the text fills: its width (X) and height (Y)
     #[serde(default = "default_box")]
     #[schemars(
         title = "Bounding box dimensions",

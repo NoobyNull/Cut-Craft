@@ -19,6 +19,7 @@ mod form;
 mod frame_rate;
 mod gadgets;
 mod gui;
+mod hints;
 mod icons;
 mod options;
 mod pages;

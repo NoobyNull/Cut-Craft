@@ -31,7 +31,9 @@ pub enum Profile {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the new component is called in the Components list
     pub name: String,
+    /// The shape of the sides as they rise from the edge
     pub profile: Profile,
     /// How steeply round and angular sides rise from the edge
     #[schemars(extend("x-unit" = "°"), range(min = 1, max = 89))]

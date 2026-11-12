@@ -1616,7 +1616,10 @@ mod tests {
                 slider: false,
             }
         );
-        assert_eq!(field(&f, "x").help.as_deref(), Some("Left edge"));
+        assert_eq!(
+            field(&f, "x").help.as_deref(),
+            Some("Where the left edge sits, along the job's X axis")
+        );
     }
 
     #[test]
