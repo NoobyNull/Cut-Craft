@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out pack
-          cp crates/depth-addon/addon.toml crates/depth-addon/README.md "target/release/${{ matrix.exe }}" pack/
+          cp crates/depth-addon/addon.toml crates/depth-addon/README.md LICENSE "target/release/${{ matrix.exe }}" pack/
           if [[ "$RUNNER_OS" == Windows ]]; then
             (cd pack && 7z a -tzip "../out/depth-${{ matrix.name }}.zip" .)
           else

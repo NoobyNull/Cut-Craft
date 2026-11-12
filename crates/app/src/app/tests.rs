@@ -104,6 +104,60 @@ fn about_thanks_vectric_and_says_cut_craft_is_independent() {
 }
 
 #[test]
+fn about_states_cut_craft_s_own_licence() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::About);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("License").is_some());
+    let licence = super::actions::LICENCE_SUMMARY;
+    assert!(licence.contains("not open source"), "{licence}");
+    assert!(licence.contains("noncommercial"), "{licence}");
+    assert!(
+        licence.contains("PolyForm Noncommercial License 1.0.0"),
+        "{licence}"
+    );
+}
+
+/// FNV-1a, so the test needs no hashing crate.
+fn fnv1a(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+#[test]
+fn licence_file_keeps_the_polyform_text_word_for_word() {
+    let licence = include_str!("../../../../LICENSE");
+    let start = licence
+        .find("# PolyForm Noncommercial License 1.0.0")
+        .expect("the PolyForm text is in LICENSE");
+    // a Windows checkout may turn line ends into CR LF
+    let polyform = licence[start..].replace('\r', "");
+    // the official text, from github.com/polyformproject/polyform-licenses at tag 1.0.0:
+    // Cut Craft's own terms go above it, never into it
+    assert_eq!(polyform.len(), 4_563, "the PolyForm text was changed");
+    assert_eq!(
+        fnv1a(&polyform),
+        POLYFORM_FNV1A,
+        "the PolyForm text was changed"
+    );
+}
+
+const POLYFORM_FNV1A: u64 = 0xcf71_f592_48dd_cd09;
+
+#[test]
+fn licence_file_is_plain_polyform_noncommercial_with_the_credit_line() {
+    let licence = include_str!("../../../../LICENSE").replace('\r', "");
+    let ours = &licence[..licence.find("# PolyForm").unwrap()];
+    // nothing but the credit line goes above the PolyForm text: no extra terms
+    assert_eq!(
+        ours.trim(),
+        "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)"
+    );
+}
+
+#[test]
 fn importing_models_offers_what_the_options_say() {
     use crate::options::ModelTypes;
     let mut h = Harness::new();

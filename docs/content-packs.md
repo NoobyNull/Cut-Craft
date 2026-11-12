@@ -12,8 +12,9 @@ whose `pack.json` passes `Pack::parse` and `Pack::verify`.
 
 ## Licences
 
-Packs may only hold items under **CC0**, **public domain** or **CC BY** (3.0 or 4.0), so
-everyone can sell what they make with them. Non-commercial (NC) and no-derivatives (ND)
+Packs may only hold items under **CC0**, **public domain** or **CC BY** (3.0 or 4.0), so a
+pack's own licence never stops anyone selling what they make with it. (Whether someone may
+use Cut Craft itself to make things for sale is set by Cut Craft's LICENSE, not by the pack.) Non-commercial (NC) and no-derivatives (ND)
 licences are refused when a pack is read (`cut-craft-content-pack`). CC BY items need
 their author and source in the manifest, and they are listed by `Pack::credits` for the
 Credits page.
