@@ -1,0 +1,17 @@
+name = "cutcraft-crash-reports"
+main = "src/index.js"
+compatibility_date = "2025-09-15"
+
+# Daily clean-up at 03:17 UTC: deletes logs older than RETAIN_DAYS and old rate-limit rows.
+[triggers]
+crons = ["17 3 * * *"]
+
+[vars]
+RETAIN_DAYS = "30"   # example logs are deleted after this many days even if never looked at
+STATS_DAYS = "400"   # daily counts (no logs) kept this long for the charts
+DAILY_LIMIT = "2000" # reports accepted per day across everyone, so a crash storm can't fill D1
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cutcraft-crash-reports"
+database_id = "4c4b6d9c-95b9-4784-8f03-9afa441b5331"
