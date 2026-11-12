@@ -557,11 +557,21 @@ fn is_grey(path: &Path) -> bool {
 /// over, and so are links to folders, which can lead round in a circle; a folder added
 /// inside another one added is read once, as part of it.
 fn read_all(roots: &[PathBuf], importable: &Importable, greys: &mut Greys) -> Listing {
+    read_most(roots, importable, greys, limits::most())
+}
+
+/// [`read_all`], stopping once `most` files are listed.
+fn read_most(
+    roots: &[PathBuf],
+    importable: &Importable,
+    greys: &mut Greys,
+    most: usize,
+) -> Listing {
     let mut all = Listing::default();
     for root in &outermost(roots) {
         let mut waiting = vec![root.clone()];
         while let Some(folder) = waiting.pop() {
-            if all.entries.len() >= limits::most() {
+            if all.entries.len() >= most {
                 all.full = true;
                 break;
             }
@@ -2105,9 +2115,8 @@ mod tests {
         let stl = importable(&["stl"]);
         let read = read_all(std::slice::from_ref(&dir), &stl, &mut HashMap::new());
         assert!(!read.full && read.entries.len() == 3);
-        limits::set(5, 1, 60, 400);
-        let read = read_all(std::slice::from_ref(&dir), &stl, &mut HashMap::new());
-        limits::set(5, MOST, 60, 400);
+        // the most allowed is passed in, not set, since tests beside this one read it
+        let read = read_most(std::slice::from_ref(&dir), &stl, &mut HashMap::new(), 1);
         assert!(read.full, "stopped");
         assert!(read.entries.len() < 3, "{}", read.entries.len());
         std::fs::remove_dir_all(&dir).unwrap();
