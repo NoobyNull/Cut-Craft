@@ -6,9 +6,8 @@ use super::{
     Align, Anchor, Change, Cow, CutCraftApp, EXPORT_LEVEL, EntityId, FineKey, HEIGHT_DRAG_EVERY,
     Handle, Handle3d, LayerId, Layout, MESH_CELLS, MODELING_PLANE_ALPHA, MODELING_PLANE_MARGIN,
     Material, Menus, PLAYBACK_SPEEDS, Page, Point, Screen, Settings3d, TOOL_BOX_MARGIN,
-    TOOL_HEIGHT_DIAMETERS, TOOL_ICON_ROWS, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui,
-    file_dialog, file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d,
-    wrap_for,
+    TOOL_ICON_ROWS, TOOL_SHANK, VIEW_ZOOM_QUARTERS, Value, View, ViewTool, egui, file_dialog,
+    file_name, files, gui, handles, menu_items, sheet_length, view2d, view3d, wrap_for,
 };
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{MachinedArea, Units};
@@ -3060,12 +3059,12 @@ impl CutCraftApp {
         }
         let job = self.shown_job();
         let previewing = self.simulation.is_some() || self.playback.is_some();
-        // a playing preview's tool: where its tip is, and its diameter
+        // a playing preview's tool: where its tip is, and the parts it is drawn in
         let tool_at = self
             .playback
             .as_ref()
             .and_then(cut_craft_core::playback::Playback::tool)
-            .map(|(tip, tool)| (tip, tool.diameter));
+            .map(|(tip, tool)| (tip, view3d::tool_parts(tool)));
         let Some(surface) = self.surface_3d().map(Cow::into_owned) else {
             return;
         };
@@ -3191,7 +3190,7 @@ impl CutCraftApp {
         surface: &Material,
         camera: &view3d::Camera,
         look: view3d::Look,
-        tool_at: Option<(cut_craft_core::glam::DVec3, f64)>,
+        tool_at: Option<(cut_craft_core::glam::DVec3, Vec<Vec<[f64; 2]>>)>,
         gpu: Option<&mut Option<view3d::gpu::Draw>>,
     ) {
         let (job, painter) = (self.shown_job(), ui.painter_at(area));
@@ -3225,20 +3224,27 @@ impl CutCraftApp {
                 }
             }
         }
-        // a playing preview's tool, an upright cylinder at the tip
-        // ponytail: drawn whole, over the surface it is cutting into
-        if let Some((tip, diameter)) = tool_at {
-            let at = local(tip.truncate(), tip.z);
-            let outline =
-                view3d::cylinder(screen, at, diameter / 2.0, diameter * TOOL_HEIGHT_DIAMETERS);
-            let selection = ui.visuals().selection;
-            painter.add(egui::Shape::convex_polygon(
-                outline,
-                selection.bg_fill,
-                selection.stroke,
-            ));
-        }
         self.overlays_3d(ui, &painter, surface, (orbit, framing), fit);
+        // a playing preview's tool standing upright on its tip, its own shape and size: the
+        // cutting end highlighted, the shank above it steel; over the vectors, which would
+        // otherwise print onto it
+        // ponytail: drawn whole, over the surface it is cutting into
+        if let Some((tip, parts)) = tool_at {
+            let at = local(tip.truncate(), tip.z);
+            let selection = ui.visuals().selection;
+            for (i, rings) in parts.iter().enumerate() {
+                let fill = if i == 0 {
+                    selection.bg_fill
+                } else {
+                    TOOL_SHANK
+                };
+                painter.add(egui::Shape::convex_polygon(
+                    view3d::turned_outline(screen, at, rings),
+                    fill,
+                    selection.stroke,
+                ));
+            }
+        }
     }
 
     /// The vectors, modeling plane and origin over the 3D view's (unwrapped) `surface`, each

@@ -608,8 +608,8 @@ const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30
 /// How many times faster than the machine a preview can play: a long finishing toolpath
 /// takes hours at the machine's speed.
 const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=1000.0;
-/// The tool drawn in the 3D view while a preview plays: this many diameters tall.
-const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
+/// The shank of the tool drawn in the 3D view while a preview plays: steel grey.
+const TOOL_SHANK: egui::Color32 = egui::Color32::from_rgb(168, 172, 178);
 /// Beside each recently opened file.
 const RECENT_FILE_ICON: &str = "file/new.png";
 /// This version's changes, one `- ` line each, shown on the start page.
