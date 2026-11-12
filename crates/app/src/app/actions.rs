@@ -129,6 +129,7 @@ impl CutCraftApp {
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
             sketch_areas: None,
+            reach_found: None,
             summary: super::Summary::default(),
             stroke: Vec::new(),
             snap_window: false,
@@ -4204,6 +4205,7 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
         let slots = self.slots();
         self.form_heading(ui);
+        let reach = self.form_reach();
         let Some(open) = &mut self.form else { return };
         // a form that sets the units (Job Setup) shows its lengths in them as they change
         let edge = SECTION_PICTURE_ROWS * ui.spacing().interact_size.y;
@@ -4223,6 +4225,8 @@ impl CutCraftApp {
         let tools = &self.tools;
         let layers: Vec<String> = self.doc.layers.iter().map(|l| l.name.clone()).collect();
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
+        // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
+        let cuts = open.id != "relief_from_photo";
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
                 let (changed, ask) =
@@ -4246,24 +4250,22 @@ impl CutCraftApp {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
                 asked.set(tool_picker(ui, &params["tool"], params, tools, &slots));
+                if let Some(line) = &reach {
+                    super::reach::show(ui, line);
+                }
                 listed.set(listed.get() | super::passes::edit_passes(ui, params, units));
             });
-            if super::shows_rest(params)
+            if cuts
+                && super::shows_rest(params)
                 && let Some(ask) = rest_section(ui, params, tools, &slots)
             {
                 *list_ask.borrow_mut() = Some((super::ToolList::Rest, ask));
             }
-            selector_section(ui, params, &layers, units);
+            if cuts {
+                selector_section(ui, params, &layers, units);
+            }
         };
-        let stock = super::tabs::Stock {
-            thickness: self.doc.job.thickness,
-            closed: self
-                .doc
-                .selection
-                .iter()
-                .any(|id| self.doc.vectors.get(id).is_some_and(|v| v.closed)),
-            units,
-        };
+        let stock = form_stock(&self.doc, units);
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
         };
@@ -4392,7 +4394,10 @@ impl CutCraftApp {
                 _ => {}
             },
             "draw_text" => self.spelling(ui),
-            "relief_from_photo" => self.depth_section(ui),
+            "relief_from_photo" => {
+                self.depth_section(ui);
+                self.bit_note(ui);
+            }
             "profile_toolpath" => {
                 self.edit_tabs(ui);
                 self.deep_cut_warning(ui.ctx());
@@ -4434,6 +4439,27 @@ impl CutCraftApp {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Relief from Photo, with Only What the Bit Can Carve ticked: says when the job's 3D
+    /// model is too coarse to hold what the bit can cut, and what makes it finer.
+    fn bit_note(&self, ui: &mut egui::Ui) {
+        use cut_craft_core::document::Resolution;
+        let Some(form) = &self.form else { return };
+        if form.params["only_what_the_bit_can_carve"] != true {
+            return;
+        }
+        let tip = form.params["tool"]["diameter"].as_f64().unwrap_or(0.0);
+        let job = &self.doc.job;
+        let finest = (job.width * job.height / Resolution::Highest.points()).sqrt();
+        let (per, unit) = form::shown_in("mm", job.units).unwrap_or((1.0, "mm"));
+        let places = if unit == "in" { 3 } else { 2 };
+        let length = |mm: f64| format!("{:.places$} {unit}", mm / per);
+        if let Some(note) =
+            cmd_relief_from_photo::resolution_note(job.model_cell(), finest, tip, length)
+        {
+            ui.label(note);
         }
     }
 
@@ -5153,3 +5179,19 @@ pub(super) const CLIP_HOW: &str = "Keep-out zones (red outlines, such as clamps)
     down past it, as if the zone were cut out of whatever is under it.\n\nTo change a zone \
     instead: Toolpaths ▸ Keep-Out Zones… for the job's, Machine Configuration for the \
     machine's.";
+
+/// The material a profile's tabs are judged against: how thick, and whether a closed shape
+/// is selected.
+fn form_stock(
+    doc: &cut_craft_core::document::Document,
+    units: cut_craft_core::document::Units,
+) -> super::tabs::Stock {
+    super::tabs::Stock {
+        thickness: doc.job.thickness,
+        closed: doc
+            .selection
+            .iter()
+            .any(|id| doc.vectors.get(id).is_some_and(|v| v.closed)),
+        units,
+    }
+}
