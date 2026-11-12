@@ -8,52 +8,18 @@
 3d_roughing_toolpath | setting without help: Order
 3d_roughing_toolpath | setting without help: Ramp distance
 3d_roughing_toolpath | setting without help: Roughing Strategy
-about_cut_craft | no tooltip
 add_layer | setting without help: Name
-add_machine | no tooltip
 add_sheet | setting without help: Name
-add_zero_plane | short help page intro
-addons | no tooltip
-align_bottom | short help page intro
-align_left | short help page intro
-align_right | short help page intro
-align_top | short help page intro
-animate_preview | no tooltip
 array_copy_toolpath | setting without help: Columns
 array_copy_toolpath | setting without help: Name
 array_copy_toolpath | setting without help: Rows
 array_copy_toolpath | setting without help: Spacing
 array_copy_toolpath | setting without help: X
 array_copy_toolpath | setting without help: Y
-auto_open_3d_view | no tooltip
-auto_wrapping_view | no tooltip
-bake_components | short help page intro
-bottom_to_top | no tooltip
-bottom_to_top | no help page intro
-cascade_windows | no tooltip
-center | short help page intro
-center_horizontally | short help page intro
-center_horizontally_in_material | short help page intro
-center_in_material | short help page intro
-center_vertically | short help page intro
-center_vertically_in_material | short help page intro
 chamfer_toolpath | setting without help: Cut direction
 chamfer_toolpath | setting without help: Name
 chamfer_toolpath | setting without help: Side
 chamfer_toolpath | setting without help: Slope
-check_for_updates | no tooltip
-close | no tooltip
-color_shaded_view | no tooltip
-community:0 | no tooltip
-community:1 | no tooltip
-community:2 | no tooltip
-community:3 | no tooltip
-community:4 | no tooltip
-community:5 | no tooltip
-community:6 | no tooltip
-component_boundary | short help page intro
-component_levels | no tooltip
-component_levels | no help page intro
 component_properties | setting without help: Component
 component_properties | setting without help: Fade ▸ Fade
 component_properties | setting without help: Fade ▸ Percent
@@ -62,79 +28,36 @@ component_properties | setting without help: Tilt ▸ Angle
 component_properties | setting without help: Tilt ▸ Tilt
 component_properties | option without help: Appearance = Same as Parent
 component_properties | option without help: Appearance = Solid Color
-convert_text_to_curves | short help page intro
-copy | no tooltip
-copy_to_other_side | short help page intro
 copy_toolpath_to_sheet | setting without help: Toolpath
 create_component_from_bitmap | setting without help: Name
-create_component_from_toolpath_preview | no tooltip
-create_component_from_visible_model | short help page intro
-crop_bitmap | short help page intro
-cut | no tooltip
-delete | short help page intro
-delete_all_guides | no tooltip
-delete_toolpath | short tooltip
-delete_toolpath | short help page intro
-delete_toolpath | setting without help: Toolpath
 document_variables | setting without help: Variables ▸ Name
 document_variables | setting without help: Variables ▸ Value
 drag_knife_toolpath | setting without help: Name
-draw_2d_previews | no tooltip
-draw_join_moves | no tooltip
-draw_keep_out_zones_in_3d_view | no tooltip
-draw_material_block | no tooltip
-draw_modeling_plane | no tooltip
-draw_origin | no tooltip
-draw_plunge_moves | no tooltip
-draw_rapid_moves | no tooltip
-draw_retract_moves | no tooltip
-draw_vectors_in_3d_view | no tooltip
 drill_bank_toolpath | setting without help: Name
 drilling_toolpath | setting without help: Name
 duplicate_component | setting without help: Component
 duplicate_toolpath | setting without help: Toolpath
-edit_object | no tooltip
 engrave_part_names | option without help: Engrave = Name only
 engrave_part_names | option without help: Engrave = Number only
-exit | no tooltip
-export_ai | no tooltip
-export_dxf | no tooltip
-export_eps | no tooltip
-export_pdf | no tooltip
-export_svg | no tooltip
-export_vectors | no tooltip
-export_vectors | no help page intro
 extrude_and_weave | setting without help: Height
 extrude_and_weave | setting without help: Name
 extrude_and_weave | setting without help: Z Over
 extrude_and_weave | setting without help: Z Under
-find_tool | no tooltip
-first_run_setup | no tooltip
 fluting_toolpath | setting without help: Flute type
 fluting_toolpath | setting without help: Name
 fluting_toolpath | setting without help: Ramp type
 fluting_toolpath | setting without help: Tool
-gadget_drill_grid | no tooltip
 gadget_drill_grid | setting without help: Columns (across)
 gadget_drill_grid | setting without help: Hole diameter
 gadget_drill_grid | setting without help: Rows (up)
-gadget_hole_pattern | no tooltip
 gadget_hole_pattern | setting without help: Hole diameter
 gadget_hole_pattern | setting without help: Number of holes
-group | short help page intro
 group_components | setting without help: Name
 group_properties | setting without help: Name
 group_toolpaths | setting without help: Toolpaths
-guides_visible | no tooltip
-help_contents | no tooltip
-increment_and_save | no tooltip
 inlay_toolpath | setting without help: Inlay type
 inlay_toolpath | setting without help: Name
 insert_level | setting without help: Name
-install_offline_package | no tooltip
-install_post_processor | no tooltip
-interface_layout | no tooltip
-interface_layout | no help page intro
 job_setup | setting without help: Home / Start Position ▸ X
 job_setup | setting without help: Home / Start Position ▸ Y
 job_setup | setting without help: Home / Start Position ▸ Z Gap above Material
@@ -157,17 +80,8 @@ job_setup | option without help: XY Datum Position ▸ Position = Bottom right
 job_setup | option without help: XY Datum Position ▸ Position = Centre
 job_setup | option without help: XY Datum Position ▸ Position = Top left
 job_setup | option without help: XY Datum Position ▸ Position = Top right
-job_sheet_editor | no tooltip
-job_size_and_position | no tooltip
-join_move_end_points | no tooltip
-join_move_end_points | no help page intro
-join_smooth_curve | no tooltip
-join_smooth_curve | no help page intro
-join_straight_line | no tooltip
-join_straight_line | no help page intro
 keep_out_zones | setting without help: Action
 keep_out_zones | option without help: Action = Clear Zones
-keyboard_shortcuts | no tooltip
 keyhole_toolpath | setting without help: Direction
 keyhole_toolpath | setting without help: Name
 keyhole_toolpath | setting without help: Slot length
@@ -179,17 +93,8 @@ laser_picture_toolpath | setting without help: Line angle
 laser_picture_toolpath | setting without help: Name
 laser_picture_toolpath | setting without help: Passes
 laser_picture_toolpath | setting without help: Strategy
-layout_classic | no tooltip
-layout_rail | no tooltip
-layout_ribbon | no tooltip
-left_to_right | no tooltip
-left_to_right | no help page intro
 level_clipping | setting without help: Action
 level_clipping | option without help: Action = Remove
-light_follows_viewer | no tooltip
-lock_all_existing_guides | no tooltip
-machine_configuration | no tooltip
-make_2d_previews_solid | no tooltip
 material_setup | setting without help: Home / Start Position ▸ X
 material_setup | setting without help: Home / Start Position ▸ Y
 material_setup | setting without help: Home / Start Position ▸ Z Gap above Material
@@ -209,24 +114,8 @@ materials | option without help: Material = Birch Plywood
 materials | option without help: Material = HDPE (White)
 materials | option without help: Material = MDF
 materials | option without help: Material = Pine
-measure_inspect | no tooltip
-measure_inspect | no help page intro
 merged_toolpath | setting without help: Name
-model_resolution_high | no tooltip
-model_resolution_highest | no tooltip
-model_resolution_standard | no tooltip
 moulding_toolpath | setting without help: Name
-new | no tooltip
-new | no help page intro
-new_from_template | no tooltip
-node_edit | no tooltip
-node_edit | no help page intro
-open | no tooltip
-open | no help page intro
-open_application_data_folder | no tooltip
-open_folder | no tooltip
-open_folder | no help page intro
-options | no tooltip
 orientate_3d_model | setting without help: Initial Orientation ▸ Rotation about Z Axis
 orientate_3d_model | setting without help: Interactive Rotation ▸ X
 orientate_3d_model | setting without help: Interactive Rotation ▸ Y
@@ -246,12 +135,6 @@ orientate_3d_model | option without help: Model Size ▸ Units = Mm
 orientate_3d_model | option without help: Offered = Both
 orientate_3d_model | option without help: Offered = Flat
 orientate_3d_model | option without help: Offered = Full
-overlap_intersect | short help page intro
-pan | no tooltip
-pan | no help page intro
-paste | no tooltip
-paste_in_place | no tooltip
-paste_in_place | no help page intro
 photo_vcarve_toolpath | setting without help: Name
 photo_vcarve_toolpath | setting without help: Strategy
 photo_vcarve_toolpath | setting without help: Tool
@@ -274,14 +157,6 @@ pocket_toolpath | setting without help: Profile pass
 pocket_toolpath | setting without help: Ramp distance
 pocket_toolpath | setting without help: Strategy
 pocket_toolpath | setting without help: Tool
-post_processor_management | no tooltip
-preview_quality_1 | no tooltip
-preview_quality_2 | no tooltip
-preview_quality_25 | no tooltip
-preview_quality_4 | no tooltip
-preview_quality_8 | no tooltip
-print | no tooltip
-print_preview | no tooltip
 prism_toolpath | setting without help: Cut direction
 prism_toolpath | setting without help: Name
 prism_toolpath | setting without help: Tool
@@ -298,10 +173,6 @@ quick_engrave_toolpath | setting without help: Fill pattern
 quick_engrave_toolpath | setting without help: Name
 quick_engrave_toolpath | setting without help: Strategy
 quick_engrave_toolpath | setting without help: Tool
-recalculate_all_toolpaths | no tooltip
-recent_files | no tooltip
-redo | no tooltip
-refresh_2d_view | no tooltip
 relief_from_photo | setting without help: Name
 reorder_component | setting without help: Component
 reorder_component | setting without help: Direction
@@ -311,56 +182,23 @@ reorder_level | setting without help: Direction
 reorder_toolpath | setting without help: Direction
 reorder_toolpath | setting without help: Toolpath
 replace_below | setting without help: Replace value with
-reset_inside_selected_vectors | short help page intro
-reset_outside_selected_vectors | short help page intro
-right_to_left | no tooltip
-right_to_left | no help page intro
 rounding_toolpath | setting without help: Blank
 rounding_toolpath | setting without help: Method
 rounding_toolpath | setting without help: Name
-run:space_horizontally:{"order":"as_placed","inside_last_vector":true} | no tooltip
-run:space_horizontally:{"order":"left_to_right","inside_last_vector":false} | no tooltip
-run:space_horizontally:{"order":"right_to_left","inside_last_vector":false} | no tooltip
-run:space_vertically:{"order":"as_placed","inside_last_vector":true} | no tooltip
-run:space_vertically:{"order":"bottom_to_top","inside_last_vector":false} | no tooltip
-run:space_vertically:{"order":"top_to_bottom","inside_last_vector":false} | no tooltip
-save | no tooltip
-save | no help page intro
-save_as | no tooltip
-save_as_template | no tooltip
-save_shaded_image | no tooltip
-save_toolpaths | no tooltip
-save_toolpaths | no help page intro
 sculpt | setting without help: Diameter
 sculpt | option without help: Tool = Deposit
-search_for_machine_online | no tooltip
 segment_3d_model | option without help: Cut segments again ▸ Plane square to = X
 segment_3d_model | option without help: Segment orientations ▸ Face up = Bottom
 segment_3d_model | option without help: Segmenting plane square to = X
 segment_3d_model | option without help: Units = Inches
 segment_3d_model | option without help: Units = Mm
-segment_3d_model_file | no tooltip
-select | no tooltip
-select | no help page intro
-select_all_duplicate_vectors | short help page intro
-select_all_open_vectors | short help page intro
-select_all_vectors | short help page intro
-select_all_vectors_on_current_layer | no tooltip
-select_vectors_inside | short help page intro
-set_current_layer | short help page intro
 sheet_properties | setting without help: Name
-show_keep_out_zone_labels | no tooltip
-show_toolpaths_tab | no tooltip
 sketch_carving_toolpath | setting without help: Boundary
 sketch_carving_toolpath | setting without help: Name
 sketch_carving_toolpath | setting without help: Source
 slice | setting without help: Model slicing
 slice | setting without help: Number of slices
 slice | setting without help: Slice thickness
-snap_options | no tooltip
-split | short help page intro
-subtract_vectors | short help page intro
-swap_sides | short help page intro
 texture_area | setting without help: Name
 texture_area | option without help: Reflection = Both
 texture_area | option without help: Reflection = Horizontal
@@ -368,7 +206,6 @@ texture_area | option without help: Reflection = None
 texture_area | option without help: Reflection = Vertical
 texture_toolpath | setting without help: Name
 texture_toolpath | setting without help: Tool
-third_party_licenses | no tooltip
 thread_milling_toolpath | setting without help: Cut direction
 thread_milling_toolpath | setting without help: Name
 thread_milling_toolpath | setting without help: Thread direction
@@ -403,22 +240,11 @@ thread_milling_toolpath | option without help: Pitch preset = ISO M6 × 1.0
 thread_milling_toolpath | option without help: Pitch preset = ISO M8 × 1.25
 thread_milling_toolpath | option without help: Thread direction = Left handed
 thread_milling_toolpath | option without help: Thread direction = Right handed
-tile_windows_horizontal | no tooltip
-tile_windows_vertical | no tooltip
-tool_changer | no tooltip
-tool_database | no tooltip
-tool_database | no help page intro
 toolpath_properties | setting without help: Name
 toolpath_properties | setting without help: Toolpath
-toolpath_summary | no tooltip
-toolpath_summary | no help page intro
 toolpath_tiling | setting without help: Tile toolpaths
 toolpath_tiling | setting without help: Tiling Options
 toolpath_tiling | setting without help: Tiling Options ▸ Layout
-top_to_bottom | no tooltip
-top_to_bottom | no help page intro
-transform | no tooltip
-transform | no help page intro
 turn_and_spin | setting without help: Height
 turn_and_spin | setting without help: Name
 turn_and_spin | setting without help: Type of shape
@@ -427,26 +253,8 @@ two_rail_sweep | setting without help: Name
 two_rail_sweep | setting without help: Reverse rail 1 direction
 two_rail_sweep | setting without help: Reverse rail 2 direction
 two_rail_sweep | setting without help: Scale to exact height
-undo | no tooltip
-ungroup | short help page intro
 ungroup_merged_toolpath | setting without help: Toolpath
-ungroup_onto_current_layer | short help page intro
 ungroup_toolpaths | setting without help: Group
-units_inch | no tooltip
-units_mm | no tooltip
-unlock_all_existing_guides | no tooltip
-unselect_all | short help page intro
-update_post_processor_database | no tooltip
-use_shaded_background | no tooltip
-use_shadow_shading | no tooltip
 vcarve_engrave_toolpath | setting without help: Name
 vcarve_inlay_toolpath | setting without help: Name
 vcarve_inlay_toolpath | setting without help: Plug boundary
-weld_vectors | short help page intro
-zoom_box | no tooltip
-zoom_box | no help page intro
-zoom_selected | no tooltip
-zoom_selected | no help page intro
-zoom_to_drawing | no tooltip
-zoom_to_job | no tooltip
-zoom_to_job | no help page intro
