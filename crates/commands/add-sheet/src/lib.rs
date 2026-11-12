@@ -10,6 +10,7 @@ pub struct AddSheet;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the new sheet is called in the Sheets list
     pub name: String,
     /// The sheet whose size it takes, from 0 (the active one if none)
     #[serde(default, skip_serializing_if = "Option::is_none")]

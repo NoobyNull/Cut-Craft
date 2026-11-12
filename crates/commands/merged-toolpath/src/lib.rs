@@ -330,6 +330,7 @@ pub struct UngroupMergedToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct UngroupParams {
+    /// The merged toolpath to take apart
     pub toolpath: EntityId,
 }
 

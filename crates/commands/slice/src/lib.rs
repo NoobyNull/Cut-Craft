@@ -24,12 +24,15 @@ pub enum Slicing {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// How the model's thickness is shared out between the slices
     #[schemars(title = "Model slicing")]
     pub slicing: Slicing,
+    /// How thick each slice is, with Slice Thickness
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub slice_thickness: f64,
     /// Slice from the top down, so the thinner last slice is at the bottom
     pub from_top: bool,
+    /// How many equal slices, with Number of Slices
     #[schemars(range(min = 1, max = 100))]
     pub number_of_slices: u32,
     /// A closed vector round each slice

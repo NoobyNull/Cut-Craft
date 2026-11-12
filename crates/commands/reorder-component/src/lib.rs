@@ -22,7 +22,9 @@ pub enum Direction {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The component to move in the tree
     pub component: EntityId,
+    /// Which way it moves in the component tree
     pub direction: Direction,
 }
 

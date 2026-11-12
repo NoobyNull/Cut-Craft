@@ -11,6 +11,7 @@ pub struct CreateComponentFromBitmap;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the new component is called in the component tree
     pub name: String,
     /// Height added by the lightest (or darkest) parts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

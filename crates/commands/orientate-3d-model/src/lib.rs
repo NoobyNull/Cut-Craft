@@ -76,20 +76,28 @@ fn read_file(path: &str) -> Result<Read, CommandError> {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Face {
+    /// The top as drawn stays on top
     #[default]
     Top,
+    /// Turned over, so its underside faces up
     Bottom,
+    /// The side facing you as drawn turns up
     Front,
+    /// The side facing away as drawn turns up
     Back,
+    /// The left side as drawn turns up
     Left,
+    /// The right side as drawn turns up
     Right,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FileUnits {
+    /// The file was drawn in millimetres
     #[default]
     Mm,
+    /// The file was drawn in inches
     Inches,
 }
 
@@ -103,6 +111,7 @@ pub struct Orientation {
         extend("x-icon" = "import/initial_orientation.png")
     )]
     pub face: Face,
+    /// Then a turn about the upright axis, in degrees
     #[schemars(
         title = "Rotation about Z Axis",
         extend("x-unit" = "deg"),
@@ -151,6 +160,7 @@ pub struct Placing {
     #[schemars(title = "Create both sides")]
     #[serde(default)]
     pub both_sides: bool,
+    /// Throw away the part of the model below the zero plane, keeping only what is above
     #[schemars(title = "Discard data below zero plane")]
     pub discard_below_zero: bool,
 }
@@ -167,10 +177,13 @@ pub struct Turn {
         extend("x-icon" = "import/turn_{}.png")
     )]
     pub mode: TurnMode,
+    /// How far the model is turned about the X axis, in degrees
     #[schemars(title = "X", extend("x-unit" = "deg"))]
     pub x: f64,
+    /// How far the model is turned about the Y axis, in degrees
     #[schemars(title = "Y", extend("x-unit" = "deg"))]
     pub y: f64,
+    /// How far the model is turned about the Z axis, in degrees
     #[schemars(title = "Z", extend("x-unit" = "deg"))]
     pub z: f64,
 }
@@ -186,10 +199,13 @@ pub enum TurnMode {
     /// The model about all three axes: sideways about Z, up and down about X
     #[schemars(title = "XYZ model")]
     Xyz,
+    /// The model about the X axis only (tips it forward and back)
     #[schemars(title = "X")]
     X,
+    /// The model about the Y axis only (rolls it side to side)
     #[schemars(title = "Y")]
     Y,
+    /// The model about the Z axis only (spins it flat)
     #[schemars(title = "Z")]
     Z,
 }
@@ -271,8 +287,11 @@ pub struct Params {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Offered {
+    /// Only full 3D models are offered
     Full,
+    /// Only flat models are offered
     Flat,
+    /// Both kinds are offered, to pick from
     #[default]
     Both,
 }

@@ -7,13 +7,16 @@ gadget = {
 }
 
 settings = {
-  { key = "columns", label = "Columns (across)", type = "integer", default = 5, min = 1 },
-  { key = "rows", label = "Rows (up)", type = "integer", default = 4, min = 1 },
+  { key = "columns", label = "Columns (across)", type = "integer", default = 5, min = 1,
+    help = "How many holes in each row, left to right." },
+  { key = "rows", label = "Rows (up)", type = "integer", default = 4, min = 1,
+    help = "How many rows of holes, bottom to top." },
   { key = "spacing_x", label = "Spacing across", type = "length", default = 25, min = 0,
     help = "From one hole's centre to the next one's, left to right." },
   { key = "spacing_y", label = "Spacing up", type = "length", default = 25, min = 0,
     help = "From one hole's centre to the next one's, bottom to top." },
-  { key = "hole_diameter", label = "Hole diameter", type = "length", default = 6, min = 0.1 },
+  { key = "hole_diameter", label = "Hole diameter", type = "length", default = 6, min = 0.1,
+    help = "How wide each hole is drawn." },
 }
 
 function run(s)

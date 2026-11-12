@@ -10,6 +10,7 @@ pub struct DuplicateComponent;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The component to make a copy of
     pub component: EntityId,
 }
 

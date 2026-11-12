@@ -46,10 +46,14 @@ type StepFn = Box<dyn Fn(&Document) -> Result<Change, CommandError>>;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Separator {
+    /// Fields split at commas (a .csv file)
     #[default]
     Comma,
+    /// Fields split at tabs (as copied from a spreadsheet)
     Tab,
+    /// Fields split at semicolons
     Semicolon,
+    /// Fields split at spaces, one record per line
     Space,
 }
 
@@ -76,12 +80,16 @@ impl Separator {
 /// How the plates are laid out on the material.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Layout {
+    /// Space left clear along the material's top edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub top_margin: f64,
+    /// Space left clear along the material's bottom edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub bottom_margin: f64,
+    /// Space left clear along the material's left edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub left_margin: f64,
+    /// Space left clear along the material's right edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub right_margin: f64,
     /// Between plates side by side
@@ -95,6 +103,7 @@ pub struct Layout {
 /// Where a variable's text comes from.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Assignment {
+    /// The variable's name, as written between !! marks in the template text
     pub variable: String,
     /// The data file's column, from 1; 0 for the counter
     pub column: usize,
@@ -103,7 +112,9 @@ pub struct Assignment {
 /// The counter variables set to column 0 take.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Counter {
+    /// The number the first plate gets
     pub start: i64,
+    /// How much the number goes up from one plate to the next
     pub step: i64,
     /// Padded with zeros to at least this many digits
     #[schemars(range(min = 0, max = 12))]
@@ -115,13 +126,16 @@ pub struct Counter {
 pub struct Data {
     /// A text file of rows; empty to number plates with the counter alone
     pub file: String,
+    /// What splits one field of a row from the next
     #[schemars(extend("x-widget" = "row"))]
     pub separator: Separator,
+    /// The file's first row holds the column names, not a plate
     #[schemars(title = "First row is column names")]
     pub first_row_names: bool,
     /// How many plates when there is no data file
     #[schemars(range(min = 1))]
     pub plates: usize,
+    /// Which column fills each !!name!! variable in the template text
     pub variables: Vec<Assignment>,
 }
 

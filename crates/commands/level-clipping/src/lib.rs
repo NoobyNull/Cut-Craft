@@ -17,7 +17,7 @@ pub enum Action {
     Apply,
     /// Clip again to the selected vectors, else the ones used last
     Update,
-    /// No clipping
+    /// The whole level shows again, unclipped
     Remove,
 }
 
@@ -26,6 +26,7 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default)]
     pub level: u64,
+    /// What happens to the level's clipping
     pub action: Action,
 }
 
