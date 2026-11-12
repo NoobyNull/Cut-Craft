@@ -10,6 +10,9 @@ crons = ["17 3 * * *"]
 RETAIN_DAYS = "30"   # example logs are deleted after this many days even if never looked at
 STATS_DAYS = "400"   # daily counts (no logs) kept this long for the charts
 DAILY_LIMIT = "2000" # reports accepted per day across everyone, so a crash storm can't fill D1
+IP_PER_CRASH = "2"   # reports of one crash a network (IP) may send a day
+IP_DAILY = "10"      # reports in all a network may send a day
+POW_BITS = "22"      # proof of work: leading zero bits the app must find (~4M hashes, well under a second)
 
 [[d1_databases]]
 binding = "DB"

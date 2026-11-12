@@ -6,6 +6,7 @@ import {
   receive, summary, detail, markHandled, markIssue, reopen, deleteSample, forget, cleanup,
 } from './store.js';
 import { PAGE, SCRIPT } from './page.js';
+import { checkShape, checkWork, ipWait, countIp, crashId, countRefusal } from './guard.js';
 import {
   AuthError, keyCount, listKeys, removeKey, registerOptions, register, loginOptions, login,
   startSession, hasSession, endSession,
@@ -49,6 +50,11 @@ const settings = (env) => ({
   retainDays: setting(env.RETAIN_DAYS, 30),
   statsDays: setting(env.STATS_DAYS, 400),
   dailyLimit: setting(env.DAILY_LIMIT, 2000),
+  ipPerCrash: setting(env.IP_PER_CRASH, 2),
+  ipDaily: setting(env.IP_DAILY, 10),
+  // '0' turns these off (tests of storage, local runs); anything else or unset keeps them on
+  powBits: env.POW_BITS === '0' ? 0 : setting(env.POW_BITS, 22),
+  strictLog: env.STRICT_LOG !== '0',
 });
 
 const PAGE_HEADERS = {
@@ -62,24 +68,45 @@ const PAGE_HEADERS = {
 };
 
 async function takeReport(request, env, now) {
+  const ip = request.headers.get('cf-connecting-ip') ?? '';
+  // every refusal is counted by reason (and network hash, never the IP) for the dashboard
+  const refuse = async (reason, status, error, extra) => {
+    await countRefusal(env.DB, ip, reason, now);
+    return problem(status, error, extra);
+  };
   const declared = Number(request.headers.get('content-length') ?? 0);
-  if (declared > MAX_BODY_BYTES) return problem(413, 'Report is too big.');
+  if (declared > MAX_BODY_BYTES) return refuse('too big', 413, 'Report is too big.');
   const raw = new Uint8Array(await request.arrayBuffer());
-  if (raw.length > MAX_BODY_BYTES) return problem(413, 'Report is too big.');
+  if (raw.length > MAX_BODY_BYTES) return refuse('too big', 413, 'Report is too big.');
   let body;
   try {
     body = JSON.parse(new TextDecoder().decode(raw));
   } catch {
-    return problem(400, 'Report is not valid JSON.');
+    return refuse('not JSON', 400, 'Report is not valid JSON.');
   }
   const checked = validate(body);
-  if (checked.error) return problem(checked.status, checked.error);
-  const r = await receive(env.DB, checked.report, settings(env), now);
-  if (!r.accepted) {
-    const secs = Math.max(1, Math.ceil(r.retryAfterMs / 1000));
-    const why = r.reason === 'daily' ? 'Too many reports today.' : 'This install already sent a report in the last hour.';
-    return problem(429, why, { 'retry-after': String(secs) });
+  if (checked.error) return refuse(checked.status === 413 ? 'too big' : 'bad fields', checked.status, checked.error);
+  const report = checked.report;
+  const s = settings(env);
+  if (s.strictLog) {
+    const shape = checkShape(report);
+    if (shape) return refuse('not a CutCraft log', 400, shape);
+    const id = await crashId(report.log);
+    if (!id) return refuse('not a CutCraft log', 400, 'log does not say where it panicked.');
+    report.signature = id; // the server's crash ID, not the one the app sent
   }
+  if (!(await checkWork(report, body.work, s.powBits, now))) {
+    return refuse('no proof of work', 400, 'work is missing or wrong (see APP-HOOKUP.md).');
+  }
+  const retry = (ms) => ({ 'retry-after': String(Math.max(1, Math.ceil(ms / 1000))) });
+  const ipMs = await ipWait(env.DB, ip, report.signature, s, now);
+  if (ipMs > 0) return refuse('network limit', 429, 'Too many reports from this network today.', retry(ipMs));
+  const r = await receive(env.DB, report, s, now);
+  if (!r.accepted) {
+    if (r.reason === 'daily') return refuse('daily limit', 429, 'Too many reports today.', retry(r.retryAfterMs));
+    return refuse('install limit', 429, 'This install already sent a report in the last hour.', retry(r.retryAfterMs));
+  }
+  await countIp(env.DB, ip, report.signature, now);
   return json({ ok: true }, 202);
 }
 

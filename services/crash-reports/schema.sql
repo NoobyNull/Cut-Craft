@@ -85,3 +85,23 @@ CREATE TABLE IF NOT EXISTS challenges (
   purpose     TEXT NOT NULL,                -- login | register
   expires_at  TEXT NOT NULL
 );
+
+-- Reports per network per day, for the per-IP allowance. `who` is a hash of the IP with a
+-- random salt made each day (meta 'ip_salt:<day>'); rows and salts are deleted after the day.
+CREATE TABLE IF NOT EXISTS ip_counts (
+  day         TEXT NOT NULL,
+  who         TEXT NOT NULL,
+  signature   TEXT NOT NULL,
+  count       INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, who, signature)
+);
+
+-- Refused reports per day, by reason and network hash (as ip_counts; never the IP), so the
+-- dashboard can show junk arriving. Deleted after 30 days.
+CREATE TABLE IF NOT EXISTS refusals (
+  day         TEXT NOT NULL,
+  reason      TEXT NOT NULL,
+  who         TEXT NOT NULL,
+  count       INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, reason, who)
+);
