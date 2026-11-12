@@ -1910,6 +1910,10 @@ mod tests {
     fn the_toolpath_settings_start_as_the_values_they_replace() {
         let o = Options::default();
         assert!((o.toolpaths.preview_speed() - crate::app::PLAYBACK_SPEED).abs() < 1e-9);
+        assert!(
+            (o.toolpaths.preview_speed() - 10.0).abs() < 1e-9,
+            "previews start ten times faster than the machine"
+        );
         assert!((o.confirmations.left() - cut_craft_core::checks::LEFT).abs() < 1e-9);
         let older: Confirmations = serde_json::from_str(r#"{ "cutting_checks": "ask" }"#).unwrap();
         assert_eq!(
