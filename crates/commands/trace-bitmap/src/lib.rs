@@ -3,6 +3,7 @@
 //! colour mode a colour picture is cut down to a few colours and the colours asked for are
 //! traced, each on a layer of its own named after it.
 
+pub mod centerline;
 pub mod colours;
 
 use colours::{Grouping, Swatches, grouped};
@@ -35,8 +36,24 @@ pub enum Mode {
     Colors,
 }
 
+/// How a shape is traced: round its outline, or down its middle.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Method {
+    /// Closed shapes round each dark area, for cutting out, pocketing or carving
+    #[default]
+    Outline,
+    /// One line down the middle of each stroke, for engraving or V-carving a drawing,
+    /// signature or lettering along its lines
+    Centerline,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// Round each shape's outline, or one line down the middle of each stroke
+    #[serde(default)]
+    #[schemars(title = "Trace type", extend("x-widget" = "row"))]
+    pub method: Method,
     #[serde(default)]
     #[schemars(extend("x-widget" = "row"))]
     pub mode: Mode,
@@ -89,6 +106,7 @@ fn twelve() -> u8 {
 impl Default for Params {
     fn default() -> Self {
         Self {
+            method: Method::Outline,
             mode: Mode::BlackAndWhite,
             similarity: twelve(),
             trace: None,
@@ -107,6 +125,8 @@ impl Default for Params {
 /// What kind of picture is traced: each fills in settings that suit it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PictureType {
+    TechnicalDrawing,
+    LineDrawing,
     LineArt,
     Logo,
     DetailedLogo,
@@ -116,7 +136,9 @@ pub enum PictureType {
 }
 
 impl PictureType {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 8] = [
+        Self::TechnicalDrawing,
+        Self::LineDrawing,
         Self::LineArt,
         Self::Logo,
         Self::DetailedLogo,
@@ -128,6 +150,8 @@ impl PictureType {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
+            Self::TechnicalDrawing => "Technical drawing (centerline)",
+            Self::LineDrawing => "Line drawing (centerline)",
             Self::LineArt => "Line art",
             Self::Logo => "Logo",
             Self::DetailedLogo => "Detailed logo",
@@ -140,6 +164,10 @@ impl PictureType {
     #[must_use]
     pub fn hint(self) -> &'static str {
         match self {
+            Self::TechnicalDrawing => {
+                "Thin, faint black lines (plans, maps, signatures) traced as one line each"
+            }
+            Self::LineDrawing => "Bold black lines and sketches traced as one line each",
             Self::LineArt => "Black and white drawings and sketches: thin lines kept",
             Self::Logo => "Simple logos with few colours and little detail",
             Self::DetailedLogo => "Logos with fine detail and more colours",
@@ -154,6 +182,8 @@ impl PictureType {
     #[must_use]
     pub fn settings(self, p: &Params) -> Params {
         let (mode, similarity, corner_fit, noise_filter) = match self {
+            Self::TechnicalDrawing => (Mode::BlackAndWhite, 12, 8, 2),
+            Self::LineDrawing => (Mode::BlackAndWhite, 12, 5, 3),
             Self::LineArt => (Mode::BlackAndWhite, 12, 8, 1),
             Self::Logo => (Mode::Colors, 20, 6, 3),
             Self::DetailedLogo => (Mode::Colors, 10, 7, 2),
@@ -161,7 +191,19 @@ impl PictureType {
             Self::RoughPhoto => (Mode::Colors, 28, 2, 6),
             Self::DetailedPhoto => (Mode::Colors, 14, 3, 3),
         };
+        let centerline = matches!(self, Self::TechnicalDrawing | Self::LineDrawing);
         Params {
+            method: if centerline {
+                Method::Centerline
+            } else {
+                Method::Outline
+            },
+            // faint lines count as ink too
+            threshold: if self == Self::TechnicalDrawing {
+                170
+            } else {
+                p.threshold
+            },
             mode,
             similarity,
             corner_fit,
@@ -235,6 +277,8 @@ pub struct Traced {
     /// Black in black and white mode, else the group's colour.
     pub colour: [u8; 3],
     pub paths: Vec<Path>,
+    /// Lines down the middle of strokes (Centerline), drawn as lines, not filled.
+    pub strokes: bool,
 }
 
 /// What a trace makes: each colour's shapes (none left out), traced off `b` (the chosen
@@ -262,7 +306,8 @@ pub fn traced(
             .into_iter()
             .map(|g| Traced {
                 colour: c.grouping.groups[g].colour,
-                paths: traced_paths(b, p, scale, |i| c.labels[i] == g),
+                paths: shapes_of(b, p, scale, |i| c.labels[i] == g),
+                strokes: p.method == Method::Centerline,
             })
             .filter(|t| !t.paths.is_empty())
             .collect()
@@ -273,7 +318,8 @@ pub fn traced(
         };
         vec![Traced {
             colour: [0, 0, 0],
-            paths: traced_paths(b, p, scale, |i| on(b.grey[i])),
+            paths: shapes_of(b, p, scale, |i| on(b.grey[i])),
+            strokes: p.method == Method::Centerline,
         }]
         .into_iter()
         .filter(|t| !t.paths.is_empty())
@@ -392,6 +438,52 @@ impl Colours {
         now.sort_unstable();
         now.into_iter().map(|k| self.keys[k].clone()).collect()
     }
+}
+
+/// The shapes `p.method` traces round (or down the middle of) the pixels `on` says.
+fn shapes_of(b: &Bitmap, p: &Params, scale: f64, on: impl Fn(usize) -> bool) -> Vec<Path> {
+    match p.method {
+        Method::Outline => traced_paths(b, p, scale, on),
+        Method::Centerline => centre_paths(b, p, scale, on),
+    }
+}
+
+/// Lines down the middle of the strokes of the pixels `on` says, fitted with arcs; lines
+/// shorter than the noise filter (in the full picture's pixels) left out.
+#[expect(clippy::cast_precision_loss, reason = "pixel counts are small")]
+fn centre_paths(b: &Bitmap, p: &Params, scale: f64, on: impl Fn(usize) -> bool) -> Vec<Path> {
+    let pixel = b.rect.size() / Point::new(b.columns as f64, b.rows as f64);
+    let in_area = |i: usize| {
+        let (c, r) = (i % b.columns, i / b.columns);
+        p.area.is_none_or(|area| {
+            area.contains(Point::new(
+                b.rect.min.x + (c as f64 + 0.5) * pixel.x,
+                b.rect.max.y - (r as f64 + 0.5) * pixel.y,
+            ))
+        })
+    };
+    let shortest = 2.0 * f64::from(p.noise_filter) / scale.max(1.0);
+    let corner = (150.0 - 12.0 * f64::from(p.corner_fit.clamp(1, 10) - 1)).to_radians();
+    // ponytail: 0.6 px; the middle line steps a pixel at a time, so it is fitted looser
+    // than an outline
+    let tolerance = 0.6 * pixel.min_element();
+    centerline::lines(b.columns, b.rows, |i| in_area(i) && on(i), shortest)
+        .into_iter()
+        .filter(|l| l.points.len() > 1)
+        .map(|l| {
+            let placed: Vec<Point> = l
+                .points
+                .iter()
+                .map(|&(x, y)| {
+                    Point::new(
+                        b.rect.min.x + (x + 0.5) * pixel.x,
+                        b.rect.max.y - (y + 0.5) * pixel.y,
+                    )
+                })
+                .collect();
+            trace::fit(&placed, l.closed, Fit::Arcs, tolerance, corner)
+        })
+        .collect()
 }
 
 /// Which of `groups` groups (`labels` holding each pixel's, `w` × `h`) are edge blends; a
@@ -600,6 +692,12 @@ pub fn drawn(shapes: &[Traced], rect: Rect, width: usize, height: usize) -> Vec<
                     .collect()
             })
             .collect();
+        if t.strokes {
+            for (path, line) in t.paths.iter().zip(&rings) {
+                stroke(&mut out, width, height, line, path.closed, t.colour);
+            }
+            continue;
+        }
         let mut crossings = vec![];
         for row in 0..height {
             let y = row as f64 + 0.5;
@@ -624,6 +722,102 @@ pub fn drawn(shapes: &[Traced], rect: Rect, width: usize, height: usize) -> Vec<
         }
     }
     out
+}
+
+/// `line` (in pixels) drawn into `out` (RGBA, `width` × `height`) in `colour`, a 400th of
+/// the picture wide (two pixels at least), so it reads when the picture is shown smaller.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "pixel positions"
+)]
+fn stroke(
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    line: &[Point],
+    closed: bool,
+    colour: [u8; 3],
+) {
+    let half = (width.max(height) as f64 / 800.0).max(1.0);
+    let mut dot = |p: Point| {
+        let (x0, x1) = ((p.x - half).floor().max(0.0), (p.x + half).ceil());
+        let (y0, y1) = ((p.y - half).floor().max(0.0), (p.y + half).ceil());
+        for y in y0 as usize..(y1 as usize).min(height) {
+            for x in x0 as usize..(x1 as usize).min(width) {
+                let at = (y * width + x) * 4;
+                out[at..at + 3].copy_from_slice(&colour);
+            }
+        }
+    };
+    let ends = if closed {
+        line.len()
+    } else {
+        line.len().saturating_sub(1)
+    };
+    for i in 0..ends {
+        let (a, b) = (line[i], line[(i + 1) % line.len()]);
+        let steps = (a.distance(b) * 2.0).ceil().max(1.0) as usize;
+        for k in 0..=steps {
+            dot(a + (b - a) * (k as f64 / steps as f64));
+        }
+    }
+    if line.len() == 1 {
+        dot(line[0]);
+    }
+}
+
+/// The grey level halfway between a picture's dark and light (Otsu's method: the level
+/// that best splits its grey levels in two), for tracing a picture without settings.
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "grey levels and pixel counts"
+)]
+pub fn auto_threshold(grey: &[u8]) -> u8 {
+    let mut counts = [0usize; 256];
+    for &g in grey {
+        counts[usize::from(g)] += 1;
+    }
+    let total = grey.len() as f64;
+    let sum: f64 = (0..256).map(|g| g as f64 * counts[g] as f64).sum();
+    let (mut below, mut below_sum, mut best, mut at) = (0.0, 0.0, -1.0, 128usize);
+    for (g, &n) in counts.iter().enumerate() {
+        below += n as f64;
+        below_sum += g as f64 * n as f64;
+        let above = total - below;
+        if below == 0.0 || above == 0.0 {
+            continue;
+        }
+        let (m1, m2) = (below_sum / below, (sum - below_sum) / above);
+        let between = below * above * (m1 - m2).powi(2);
+        if between > best {
+            (best, at) = (between, g);
+        }
+    }
+    // levels darker than the threshold are black: the split's dark side up to `at`
+    (at + 1).clamp(1, 255) as u8
+}
+
+/// Settings that suit `b` with no one choosing them (Quick Trace): its colours when it has
+/// some, else black and white split at [`auto_threshold`].
+#[must_use]
+pub fn quick_settings(b: &Bitmap) -> Params {
+    let coloured = b.rgb.len() == b.columns * b.rows * 3
+        && b.rgb.as_chunks::<3>().0.iter().any(|&[r, g, bl]| {
+            let (lo, hi) = (r.min(g).min(bl), r.max(g).max(bl));
+            hi - lo > 24
+        });
+    if coloured {
+        PictureType::Clipart.settings(&Params::default())
+    } else {
+        Params {
+            threshold: auto_threshold(&b.grey),
+            ..Params::default()
+        }
+    }
 }
 
 /// The group (by number in the colours' grouping) colour mode puts the chosen picture's
@@ -1088,6 +1282,7 @@ mod tests {
         let shapes = [Traced {
             colour: [200, 20, 20],
             paths: vec![outside, hole],
+            strokes: false,
         }];
         let picture = drawn(
             &shapes,
@@ -1102,6 +1297,102 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::cast_precision_loss, reason = "small test picture")]
+    fn centerline_traces_one_open_line_down_each_stroke() {
+        // 80 x 40 pixels on 80 x 40 mm: a bar 5 px thick, and a ring 4 px thick
+        let (w, h) = (80usize, 40usize);
+        let grey: Vec<u8> = (0..w * h)
+            .map(|i| {
+                let (x, y) = ((i % w) as f64 + 0.5, (i / w) as f64 + 0.5);
+                let bar = (5.0..35.0).contains(&x) && (18.0..23.0).contains(&y);
+                let ring = (10.0..14.0).contains(&(x - 58.0).hypot(y - 20.0));
+                if bar || ring { 0 } else { 255 }
+            })
+            .collect();
+        let mut doc = Document::default();
+        let mut c = Change::builder(&doc);
+        c.add_bitmap(Bitmap {
+            name: "strokes".into(),
+            columns: w,
+            rows: h,
+            grey,
+            rect: Rect::new(Point::ZERO, Point::new(80.0, 40.0)),
+            depth: Vec::new(),
+            rgb: Vec::new(),
+        });
+        doc.apply(&c.finish()).unwrap();
+        run_on::<TraceBitmap>(
+            &mut doc,
+            &Params {
+                method: Method::Centerline,
+                ..Params::default()
+            },
+        );
+        assert_eq!(doc.vectors.len(), 2, "one line per stroke");
+        let bar = doc
+            .vectors
+            .values()
+            .find(|p| !p.closed)
+            .expect("the bar is open");
+        let b = bar.bounds();
+        // down the bar's middle (y = 40 - 20.5) along most of its length
+        assert!((b.center().y - 19.5).abs() < 1.0, "{b:?}");
+        assert!(b.size().x > 20.0, "{b:?}");
+        let ring = doc
+            .vectors
+            .values()
+            .find(|p| p.closed)
+            .expect("the ring is closed");
+        assert!(
+            (ring.bounds().size().x - 24.0).abs() < 2.0,
+            "{:?}",
+            ring.bounds()
+        );
+    }
+
+    #[test]
+    fn lines_are_drawn_as_lines_not_filled() {
+        let line = Path::polyline(&[Point::new(1.0, 5.0), Point::new(9.0, 5.0)], false);
+        let shapes = [Traced {
+            colour: [0, 0, 0],
+            paths: vec![line],
+            strokes: true,
+        }];
+        let picture = drawn(
+            &shapes,
+            Rect::new(Point::ZERO, Point::new(10.0, 10.0)),
+            10,
+            10,
+        );
+        let at = |c: usize, r: usize| picture[(r * 10 + c) * 4];
+        assert_eq!(at(5, 5), 0, "on the line");
+        assert_eq!(at(5, 1), 255, "off it");
+    }
+
+    #[test]
+    fn quick_settings_split_a_grey_picture_and_keep_colours() {
+        // a dark half (40) and a light half (200)
+        let grey: Vec<u8> = (0..100).map(|i| if i < 50 { 40 } else { 200 }).collect();
+        let t = auto_threshold(&grey);
+        assert!((41..=200).contains(&t), "{t}");
+        let grey_picture = Bitmap {
+            name: "g".into(),
+            columns: 10,
+            rows: 10,
+            grey: grey.clone(),
+            rect: Rect::new(Point::ZERO, Point::new(10.0, 10.0)),
+            depth: Vec::new(),
+            // grey stored as colour: still grey
+            rgb: grey.iter().flat_map(|&g| [g, g, g]).collect(),
+        };
+        let p = quick_settings(&grey_picture);
+        assert_eq!((p.mode, p.threshold), (Mode::BlackAndWhite, t));
+        let mut coloured = grey_picture;
+        coloured.rgb[0..3].copy_from_slice(&[200, 20, 20]);
+        assert_eq!(quick_settings(&coloured).mode, Mode::Colors);
+    }
+
+    #[test]
     fn picture_types_fill_in_settings_and_keep_the_area() {
         let area = Some(Rect::new(Point::ZERO, Point::new(5.0, 5.0)));
         let p = Params {
@@ -1109,7 +1400,10 @@ mod tests {
             trace: Some(vec!["#000000".into()]),
             ..Params::default()
         };
+        let drawing = PictureType::LineDrawing.settings(&p);
+        assert_eq!(drawing.method, Method::Centerline);
         let line_art = PictureType::LineArt.settings(&p);
+        assert_eq!(line_art.method, Method::Outline);
         assert_eq!(line_art.mode, Mode::BlackAndWhite);
         assert_eq!(line_art.area, area);
         assert_eq!(line_art.trace, None, "the colours are picked again");

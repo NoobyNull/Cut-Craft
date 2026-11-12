@@ -80,6 +80,8 @@ pub const FLYOUTS: &[Flyout] = &[
     // naming parts, then marking them with their names (cut lists and part labels)
     flyout("Part Names", &["name_part", "engrave_part_names"]),
     flyout("Pictures", &["edit_picture", "crop_bitmap"]),
+    // picture to vectors: with every setting to hand, or in one click
+    flyout("Trace Picture", &["trace_bitmap", "quick_trace"]),
     flyout(
         "Center on the Material",
         &[

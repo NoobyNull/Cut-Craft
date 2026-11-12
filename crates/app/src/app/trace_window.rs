@@ -1,5 +1,5 @@
 //! Trace Bitmap's trace window: the settings beside a large preview of what the trace makes
-//! (before and after, the result alone, or its outlines over the picture), traced again as
+//! (before and after, the result alone, or its outlines or middle lines over the picture), traced again as
 //! the settings change (Live updates) or when Update preview is clicked, off the window's
 //! thread and from a smaller copy of a big picture. In colour mode it lists the picture's
 //! colours in the groups they are traced as, to tick, merge and separate.
@@ -547,6 +547,10 @@ impl CutCraftApp {
     fn trace_settings(&mut self, ui: &mut egui::Ui, view: &mut TraceView) {
         let units = self.doc.job.units;
         let material = form::material(&self.doc, units);
+        let quick = self
+            .doc
+            .chosen_bitmap()
+            .map(cmd_trace_bitmap::quick_settings);
         let Some(open) = self.form.as_mut() else {
             return;
         };
@@ -569,6 +573,24 @@ impl CutCraftApp {
                         }
                     }
                 });
+            if ui
+                .add_enabled(quick.is_some(), egui::Button::new("Quick Trace"))
+                .on_hover_hint(
+                    "Let Trace Bitmap look at the picture and choose the settings: its colours \
+                     when it has some, else black and white split where it suits it best",
+                )
+                .clicked()
+                && let Some(q) = &quick
+                && let Ok(p) = serde_json::from_value::<Params>(open.params.clone())
+                && let Ok(v) = serde_json::to_value(Params {
+                    area: p.area,
+                    ..q.clone()
+                })
+            {
+                open.params = v;
+                open.dirty = true;
+                view.selected.clear();
+            }
             if ui
                 .button("Reset")
                 .on_hover_hint("Back to the settings Trace Bitmap starts with")
@@ -813,7 +835,9 @@ fn paint_outlines(
             .into_iter()
             .map(|p| map.to_screen(p))
             .collect();
-        if let Some(&first) = points.first() {
+        if path.closed
+            && let Some(&first) = points.first()
+        {
             points.push(first);
         }
         painter.add(egui::Shape::line(points, stroke));
@@ -999,7 +1023,12 @@ fn details(ui: &mut egui::Ui, view: &TraceView) {
     match &shown.result {
         Ok(shapes) => {
             let (paths, nodes) = counts(shapes);
-            let mut line = format!("{paths} shapes, {nodes} nodes");
+            let what = if shapes.iter().any(|t| t.strokes) {
+                "lines"
+            } else {
+                "shapes"
+            };
+            let mut line = format!("{paths} {what}, {nodes} nodes");
             if shown.colours.is_some() {
                 use std::fmt::Write as _;
                 let _ = write!(line, ", {} colours traced", shapes.len());
