@@ -127,6 +127,9 @@ pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
 /// A node handle's edge, as a share of the theme's interactive row height.
 // ponytail: fixed share until a preferences dialog sizes handles
 pub const NODE_HANDLE_SHARE: f32 = 0.35;
+/// How big the circle on an open vector's end is (its radius), as a share of a row: big
+/// enough to see and click, smaller than a node handle's box.
+pub const OPEN_END_SHARE: f32 = 0.25;
 
 /// What the pointer did on the canvas this frame.
 #[derive(Clone, Copy, Debug)]
@@ -492,6 +495,9 @@ impl Canvas {
         // toolpaths seen from above: cutting moves (as wide as the tool when solid), and if
         // asked for, rapids dashed, plunges as dots, retracts as rings and joins dotted
         let marker = gap;
+        // what lies off the view is left out, and a frame draws so many points at most
+        let view = painter.clip_rect().expand(marker + datum.width);
+        let mut room = MOST_TOOLPATH_POINTS;
         for (id, toolpath) in doc
             .toolpaths
             .iter()
@@ -512,46 +518,63 @@ impl Canvas {
             };
             let cut = Stroke::new(cut_width.max(datum.width), colour);
             let travel = Stroke::new(datum.width, visuals.error_fg_color);
+            // the cuts as lines thinned to what the screen shows: one for each cut was
+            // millions on a fine 3D finish, more than the graphics card takes
+            let mut cuts = Runs::new(view.expand(cut.width), room);
+            let mut marks = vec![];
             let mut from: Option<cut_craft_core::glam::DVec3> = None;
             for m in &toolpath.moves {
                 let to = t.to_screen(m.to.truncate());
-                if let Some(was) = from {
-                    let start = t.to_screen(was.truncate());
-                    let vertical = (was.truncate() - m.to.truncate()).length() < 1e-9;
-                    // ponytail: a join is a feed move wholly above the material [inf]
-                    let join = m.kind == MoveKind::Cut && was.z >= 0.0 && m.to.z >= 0.0;
-                    match m.kind {
-                        MoveKind::Cut if join => {
-                            if display.joins {
-                                painter.extend(Shape::dotted_line(
-                                    &[start, to],
-                                    colour,
-                                    gap,
-                                    datum.width,
-                                ));
-                            }
-                        }
-                        MoveKind::Cut => {
-                            painter.line_segment([start, to], cut);
-                        }
-                        // a ramp: down at the plunge rate while moving along
-                        MoveKind::Plunge if !vertical => {
-                            painter.line_segment([start, to], cut);
-                        }
-                        MoveKind::Plunge if display.plunges => {
-                            painter.circle_filled(to, marker, travel.color);
-                        }
-                        MoveKind::Rapid if vertical && m.to.z > was.z && display.retracts => {
-                            painter.circle_stroke(to, marker, travel);
-                        }
-                        MoveKind::Rapid if !vertical && display.rapids => {
-                            painter.extend(Shape::dashed_line(&[start, to], travel, dash, gap));
-                        }
-                        _ => {}
+                let Some(was) = from.replace(m.to) else {
+                    continue;
+                };
+                let start = t.to_screen(was.truncate());
+                let vertical = (was.truncate() - m.to.truncate()).length() < 1e-9;
+                // ponytail: a join is a feed move wholly above the material [inf]
+                let join = m.kind == MoveKind::Cut && was.z >= 0.0 && m.to.z >= 0.0;
+                let (seen, full) = (
+                    view.intersects(Rect::from_two_pos(start, to)),
+                    marks.len() + cuts.used() >= room,
+                );
+                match m.kind {
+                    MoveKind::Cut | MoveKind::Plunge if !join && !vertical => {
+                        cuts.line(start, to);
                     }
+                    // straight down: the line goes on from where it is
+                    MoveKind::Plunge if vertical => {
+                        if display.plunges && seen && !full {
+                            marks.push(Shape::circle_filled(to, marker, travel.color));
+                        }
+                    }
+                    MoveKind::Cut if join => {
+                        cuts.gap();
+                        if display.joins && seen && !full {
+                            marks.extend(Shape::dotted_line(
+                                &[start, to],
+                                colour,
+                                gap,
+                                datum.width,
+                            ));
+                        }
+                    }
+                    MoveKind::Rapid if vertical => {
+                        cuts.gap();
+                        if m.to.z > was.z && display.retracts && seen && !full {
+                            marks.push(Shape::circle_stroke(to, marker, travel));
+                        }
+                    }
+                    MoveKind::Rapid => {
+                        cuts.gap();
+                        if display.rapids && seen && !full {
+                            marks.extend(Shape::dashed_line(&[start, to], travel, dash, gap));
+                        }
+                    }
+                    _ => {}
                 }
-                from = Some(m.to);
             }
+            room = room.saturating_sub(cuts.used() + marks.len());
+            painter.extend(cuts.finish().into_iter().map(|run| Shape::line(run, cut)));
+            painter.extend(marks);
         }
     }
 
@@ -705,6 +728,15 @@ impl Canvas {
         self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
         self.paint_toolpaths(&painter, ui, doc, highlighted, display);
+        if display.open_ends {
+            // a circle on each open end, in the warning colour: where a shape has a gap
+            let radius = ui.spacing().interact_size.y * OPEN_END_SHARE;
+            let ring = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
+            for end in cmd_join_open_ends::open_ends(doc) {
+                let at = t.to_screen(end.point);
+                painter.circle(at, radius, visuals.extreme_bg_color, ring);
+            }
+        }
 
         match overlay {
             Overlay::None => {}
@@ -856,6 +888,114 @@ pub fn fitting(ctx: &egui::Context, image: egui::ColorImage) -> egui::ColorImage
     within(image, ctx.input(|i| i.max_texture_side))
 }
 
+/// Most points (and marks) a frame draws toolpaths with: about 100 MB of the graphics card's
+/// buffer however dense they are, where a line for each of a fine 3D finish's millions of
+/// cuts was more than the 2 GB it takes, and crashed the app.
+pub const MOST_TOOLPATH_POINTS: usize = 1_000_000;
+
+/// How far a thinned line strays from the cuts it stands for, in points (the screen's).
+const THINNED_WITHIN: f32 = 0.25;
+
+/// Cuts as lines on screen, thinned to what shows: a cut too short to see is joined to the
+/// next, cuts in a line are drawn as one, and those wholly off the view are left out. Each
+/// point kept stays within half a point of the cuts.
+#[derive(Debug)]
+pub struct Runs {
+    view: Rect,
+    /// Points it may still keep.
+    room: usize,
+    used: usize,
+    /// The lines finished, and the one being drawn.
+    done: Vec<Vec<Pos2>>,
+    run: Vec<Pos2>,
+    /// Where the cuts have got to, past the last point kept when too near it to keep.
+    end: Option<Pos2>,
+    /// The line the last point is being moved along: from the point before, this way.
+    along: Option<(Pos2, Vec2)>,
+}
+
+impl Runs {
+    /// For cuts in `view`, keeping `room` points at most.
+    pub fn new(view: Rect, room: usize) -> Self {
+        Self {
+            view,
+            room,
+            used: 0,
+            done: vec![],
+            run: vec![],
+            end: None,
+            along: None,
+        }
+    }
+
+    /// The points kept so far.
+    pub fn used(&self) -> usize {
+        self.used
+    }
+
+    fn keep(&mut self, p: Pos2) -> bool {
+        if self.used >= self.room {
+            return false;
+        }
+        self.used += 1;
+        self.run.push(p);
+        true
+    }
+
+    /// A cut from `from` to `to`, on screen.
+    pub fn line(&mut self, from: Pos2, to: Pos2) {
+        if !self.view.intersects(Rect::from_two_pos(from, to)) {
+            self.gap();
+            return;
+        }
+        if self.end.is_none_or(|end| end.distance(from) > 1e-3) {
+            self.gap();
+            if !self.keep(from) {
+                return;
+            }
+        }
+        self.end = Some(to);
+        let Some(&last) = self.run.last() else {
+            return;
+        };
+        if last.distance(to) < 2.0 * THINNED_WITHIN {
+            return;
+        }
+        if let Some((start, way)) = self.along {
+            let off = (to - start).dot(way.rot90()).abs();
+            if off <= THINNED_WITHIN && (to - start).dot(way) >= (last - start).dot(way) {
+                *self.run.last_mut().expect("a point kept") = to;
+                return;
+            }
+        }
+        if self.keep(to) {
+            self.along = Some((last, (to - last).normalized()));
+        } else {
+            self.end = None;
+        }
+    }
+
+    /// No cut joins the last to the next.
+    pub fn gap(&mut self) {
+        if let Some(end) = self.end.take()
+            && self.run.last().is_some_and(|&last| last != end)
+        {
+            self.keep(end);
+        }
+        let run = std::mem::take(&mut self.run);
+        if run.len() >= 2 {
+            self.done.push(run);
+        }
+        self.along = None;
+    }
+
+    /// The lines to draw.
+    pub fn finish(mut self) -> Vec<Vec<Pos2>> {
+        self.gap();
+        self.done
+    }
+}
+
 /// Job coordinates are f64 millimetres; the screen is f32 pixels.
 #[expect(
     clippy::cast_possible_truncation,
@@ -901,6 +1041,140 @@ mod tests {
 
     use super::*;
     use eframe::egui::{pos2, vec2};
+
+    /// Points of `runs` all told.
+    fn points(runs: &[Vec<Pos2>]) -> usize {
+        runs.iter().map(Vec::len).sum()
+    }
+
+    /// The distance from `p` to the nearest of `runs`' lines.
+    fn off(runs: &[Vec<Pos2>], p: Pos2) -> f32 {
+        runs.iter()
+            .flat_map(|run| run.windows(2))
+            .map(|w| {
+                let (a, b) = (w[0], w[1]);
+                let along = (b - a).length_sq();
+                let t = if along > 0.0 {
+                    ((p - a).dot(b - a) / along).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                p.distance(a + (b - a) * t)
+            })
+            .fold(f32::INFINITY, f32::min)
+    }
+
+    /// A 3D finishing raster of millions of tiny cuts (Matthew's: 6.8 million) drew a line
+    /// for each, and the 2 GB of lines crashed the graphics card's buffer: rows that are
+    /// straight on screen are drawn as a line each.
+    #[test]
+    fn a_dense_raster_is_drawn_with_a_line_a_row() {
+        let view = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0));
+        let mut runs = Runs::new(view, usize::MAX);
+        let (rows, steps) = (200, 10_000);
+        let mut at = pos2(10.0, 10.0);
+        for row in 0..rows {
+            let dir = if row % 2 == 0 { 1.0 } else { -1.0 };
+            for _ in 0..steps {
+                let to = at + vec2(dir * 0.09, 0.0);
+                runs.line(at, to);
+                at = to;
+            }
+            // the stepover, a cut too
+            let to = at + vec2(0.0, 3.5);
+            runs.line(at, to);
+            at = to;
+        }
+        let drawn = runs.finish();
+        assert_eq!(drawn.len(), 1, "one run: nothing broke it");
+        assert!(
+            points(&drawn) <= 2 * rows + 2,
+            "{} points for {rows} rows",
+            points(&drawn)
+        );
+    }
+
+    #[test]
+    #[expect(clippy::cast_precision_loss, reason = "small counts")]
+    fn a_curve_drawn_thinned_stays_within_half_a_pixel() {
+        let view = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0));
+        let mut runs = Runs::new(view, usize::MAX);
+        let centre = pos2(400.0, 400.0);
+        let on = |i: usize| {
+            let a = i as f32 * 0.0005;
+            centre + vec2(a.cos(), a.sin()) * (300.0 + 40.0 * (7.0 * a).sin())
+        };
+        let count = 12_000;
+        for i in 0..count {
+            runs.line(on(i), on(i + 1));
+        }
+        let drawn = runs.finish();
+        assert!(points(&drawn) < count / 4, "{} points", points(&drawn));
+        for i in (0..=count).step_by(37) {
+            let gap = off(&drawn, on(i));
+            assert!(gap <= 0.5, "point {i} is {gap} px off");
+        }
+        let last = *drawn.last().unwrap().last().unwrap();
+        assert!(
+            last.distance(on(count)) < 1e-3,
+            "it ends where the cuts end"
+        );
+    }
+
+    #[test]
+    fn cuts_out_of_view_are_left_out_and_break_the_line() {
+        let view = Rect::from_min_size(Pos2::ZERO, vec2(100.0, 100.0));
+        let mut runs = Runs::new(view, usize::MAX);
+        runs.line(pos2(10.0, 10.0), pos2(50.0, 10.0));
+        runs.line(pos2(50.0, 10.0), pos2(50.0, 500.0));
+        runs.line(pos2(50.0, 500.0), pos2(90.0, 500.0));
+        runs.line(pos2(90.0, 500.0), pos2(90.0, 50.0));
+        runs.line(pos2(90.0, 50.0), pos2(60.0, 50.0));
+        let drawn = runs.finish();
+        assert_eq!(
+            drawn,
+            vec![
+                vec![pos2(10.0, 10.0), pos2(50.0, 10.0), pos2(50.0, 500.0)],
+                vec![pos2(90.0, 500.0), pos2(90.0, 50.0), pos2(60.0, 50.0)],
+            ]
+        );
+    }
+
+    #[test]
+    fn a_gap_between_cuts_starts_a_new_line() {
+        let view = Rect::from_min_size(Pos2::ZERO, vec2(100.0, 100.0));
+        let mut runs = Runs::new(view, usize::MAX);
+        runs.line(pos2(10.0, 10.0), pos2(20.0, 10.0));
+        runs.gap();
+        runs.line(pos2(20.0, 10.0), pos2(30.0, 10.0));
+        // not starting where the last ended: a jump, not a line across
+        runs.line(pos2(30.0, 40.0), pos2(40.0, 40.0));
+        assert_eq!(
+            runs.finish(),
+            vec![
+                vec![pos2(10.0, 10.0), pos2(20.0, 10.0)],
+                vec![pos2(20.0, 10.0), pos2(30.0, 10.0)],
+                vec![pos2(30.0, 40.0), pos2(40.0, 40.0)],
+            ]
+        );
+    }
+
+    /// However the cuts fall, a frame draws no more than its share of points.
+    #[test]
+    #[expect(clippy::cast_precision_loss, reason = "small counts")]
+    fn toolpaths_draw_no_more_than_the_points_they_are_given() {
+        let view = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0));
+        let mut runs = Runs::new(view, 1000);
+        // a zigzag every point of which turns
+        for i in 0..100_000 {
+            let x = (i % 900) as f32 + 10.0;
+            let y = if i % 2 == 0 { 10.0 } else { 700.0 };
+            let (tx, ty) = ((i + 1) % 900, if i % 2 == 0 { 700.0 } else { 10.0 });
+            runs.line(pos2(x, y), pos2(tx as f32 + 10.0, ty));
+        }
+        assert!(runs.used() <= 1000, "{}", runs.used());
+        assert!(points(&runs.finish()) <= 1000);
+    }
 
     /// A picture wider or taller than the graphics card takes is shrunk to fit, not
     /// refused: a 16 604 pixel scan crashed the app (wgpu's limit was 8192).

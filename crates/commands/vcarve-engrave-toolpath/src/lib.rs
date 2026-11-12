@@ -227,7 +227,7 @@ fn clearing(
     let mut rings = vec![];
     let mut ring = flat;
     while !ring.is_empty() {
-        let next = polygon::offset(&ring, -step, Corners::Round);
+        let next = polygon::offset_again(&ring, -step);
         rings.extend(ring);
         ring = next;
     }
@@ -328,38 +328,46 @@ fn started_near(mut points: Vec<Point>, starts: &[Point]) -> Vec<Point> {
 
 /// The regions shrunk by `step`, `2 step`, ... until nothing is left, plus about where the
 /// last of them vanishes, so shapes narrower than a step are still carved down the middle.
+/// Each pass shrinks the one before it by a step (shrinking by a then by b, with round
+/// corners, is shrinking by a + b), so later passes work on less and less: shrinking the
+/// whole design each time grew slower the deeper it went, a minute on a 3,000-shape SVG.
 // ponytail: concentric passes; a medial-axis path would carve the middle in one pass
 fn inward_offsets(regions: &[Path], step: f64) -> Vec<(f64, Vec<Path>)> {
-    let shrink = |by: f64| polygon::offset_regions(regions, -by, Corners::Round);
-    let mut offsets = vec![];
+    let shrink = |from: &[Path], by: f64| polygon::offset_regions_again(from, -by);
+    let mut offsets: Vec<(f64, Vec<Path>)> = vec![];
     let mut offset = step;
-    loop {
-        let rings = shrink(offset);
-        if rings.is_empty() {
-            let (mut inside, mut gone) = (offset - step, offset);
-            let mut last = None;
-            for _ in 0..6 {
-                let middle = f64::midpoint(inside, gone);
-                let rings = shrink(middle);
-                if rings.is_empty() {
-                    gone = middle;
-                } else {
-                    inside = middle;
-                    last = Some((middle, rings));
-                }
-            }
-            offsets.extend(last);
-            return offsets;
-        }
+    let mut rings = shrink(regions, step);
+    while !rings.is_empty() {
+        let next = shrink(&rings, step);
         offsets.push((offset, rings));
+        rings = next;
         offset += step;
     }
+    // between the last pass and a step further in, where its rings vanish
+    let (inside, from) = offsets
+        .last()
+        .map_or((0.0, regions), |(o, r)| (*o, r.as_slice()));
+    let (mut low, mut high) = (inside, offset);
+    let mut last = None;
+    for _ in 0..6 {
+        let middle = f64::midpoint(low, high);
+        let rings = shrink(from, middle - inside);
+        if rings.is_empty() {
+            high = middle;
+        } else {
+            low = middle;
+            last = Some((middle, rings));
+        }
+    }
+    offsets.extend(last);
+    offsets
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use cut_craft_core::document::Job;
+    use cut_craft_core::geometry::polyline_distance;
     use cut_craft_core::simulation::Material;
     use cut_craft_core::testing::{made_toolpath, square};
     use cut_craft_core::toolpath::{MoveKind, Toolpath};
@@ -544,6 +552,53 @@ mod tests {
             let z = m.at(Point::new(50.0, y)).unwrap();
             assert!((z + depth).abs() <= step + 0.25, "at y {y}: {z}");
         }
+    }
+
+    #[test]
+    fn each_pass_is_the_shapes_shrunk_by_its_offset() {
+        // a star with a hole, and a thin sliver that vanishes between passes
+        let star: Vec<Point> = (0..10)
+            .map(|k| {
+                let r = if k % 2 == 0 { 12.0 } else { 5.0 };
+                Point::from_angle(f64::from(k) * std::f64::consts::PI / 5.0) * r
+            })
+            .collect();
+        let paths = [
+            Path::polyline(&star, true),
+            moved(&rectangle(2.0, 2.0), Point::new(-1.0, -1.0)),
+            moved(&rectangle(20.0, 1.1), Point::new(20.0, 0.0)),
+        ];
+        let regions = polygon::regions(&paths);
+        let offsets = inward_offsets(&regions, 0.5);
+        assert!(offsets.len() > 5);
+        for (offset, rings) in &offsets {
+            let direct = polygon::offset_regions(&regions, -offset, Corners::Round);
+            assert_eq!(rings.len(), direct.len(), "at {offset}");
+            // each ring all the way round, back to its first point
+            let direct: Vec<Vec<Point>> = direct
+                .iter()
+                .map(|d| {
+                    let mut points = cut_points(d);
+                    points.push(points[0]);
+                    points
+                })
+                .collect();
+            for ring in rings {
+                for q in cut_points(ring) {
+                    let off = direct
+                        .iter()
+                        .map(|d| polyline_distance(d, q))
+                        .fold(f64::INFINITY, f64::min);
+                    assert!(off < 0.03, "at {offset}: {q} is {off} off");
+                }
+            }
+        }
+        // the sliver, 1.1 wide, still gets a pass near its middle
+        let near_middle = |y: f64| (y - 0.55).abs() < 0.1;
+        assert!(offsets.iter().any(|(_, rings)| rings.iter().any(|r| {
+            let b = r.bounds();
+            b.min.x > 19.0 && near_middle(b.center().y)
+        })));
     }
 
     #[test]

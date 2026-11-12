@@ -11,7 +11,7 @@ use ureq::http::{Method, Request};
 /// How long to wait for the machine to answer before saying it can't be reached.
 const CONNECTING: Duration = Duration::from_secs(5);
 /// How long one request may take in all: a big file over a controller's WiFi is slow.
-const LONGEST: Duration = Duration::from_secs(300);
+const LONGEST: Duration = Duration::from_mins(5);
 
 /// Whether `place` is a web address rather than a folder.
 pub fn is_address(place: &str) -> bool {

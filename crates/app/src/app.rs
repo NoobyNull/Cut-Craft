@@ -594,8 +594,14 @@ const LINE_SCALE: f32 = 1.5;
 const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
 /// A playing preview's speed to start with, in mm of tool travel a second, until Options says
 /// otherwise, and the slider's range.
-pub(crate) const PLAYBACK_SPEED: f64 = 200.0;
-const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 5.0..=20_000.0;
+/// A preview plays at the machine's own speed to begin with: each move at its tool's feed or
+/// plunge rate, rapids at the Toolpath Summary's rapid rate.
+pub(crate) const PLAYBACK_SPEED: f64 = 1.0;
+/// A frame's time for cutting a playing preview: the window still answers at once.
+const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30);
+/// How many times faster than the machine a preview can play: a long finishing toolpath
+/// takes hours at the machine's speed.
+const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=1000.0;
 /// The tool drawn in the 3D view while a preview plays: this many diameters tall.
 const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
 /// Beside each recently opened file.
@@ -1038,8 +1044,9 @@ struct CutCraftApp {
     tools_path: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
-    /// Which clearing bit the open Select Tool picks; `None` picks the form's own tool.
-    selecting_clearing: Option<ClearingSlot>,
+    /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
+    /// changer holder; `None` picks the form's own tool.
+    picking: Option<PickFor>,
     /// A Calculate waiting on the deeper-than-the-material warning.
     deep_cut: Option<depth::DeepCut>,
     /// Right-click ▸ Report a Bug Here…
@@ -1198,7 +1205,18 @@ struct CutCraftApp {
     /// A preview playing (or paused): the tool cutting the material a distance at a time.
     playback: Option<cut_craft_core::playback::Playback>,
     playing: bool,
-    /// How fast the preview plays, in mm of tool travel a second.
+    /// Where the tool is being moved to (Single Step, Run to Retract, the Progress slider),
+    /// cut a little each frame until it gets there, or Stop.
+    playback_goal: Option<f64>,
+    /// A preview stopped or played to its end, kept so its controls stay to scrub it back
+    /// and forth, till another preview or Reset Preview.
+    kept_playback: Option<cut_craft_core::playback::Playback>,
+    /// Where the Close up slider is centred, held while it is dragged so it stays put.
+    close_up: Option<f64>,
+    /// How long a frame may spend cutting a playing preview; the rest waits for the next
+    /// frame, so a long toolpath plays slower instead of freezing the window.
+    playback_budget: std::time::Duration,
+    /// How many times faster than the machine the preview plays (1: the machine's speed).
     playback_speed: f64,
     /// Component tree levels collapsed (Aspire's Expand / Collapse).
     collapsed_levels: std::collections::HashSet<u64>,
@@ -1813,9 +1831,9 @@ fn tool_picker(
     .inner
 }
 
-/// Which of a form's clearing bits a pick is for.
+/// Which tool of a list a pick is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ClearingSlot {
+enum ListSlot {
     /// One more.
     New,
     /// In place of this one.
@@ -1832,13 +1850,33 @@ fn shows_rest(params: &Value) -> bool {
             || cut_craft_core::rest::Rest::of(params).is_some())
 }
 
-/// What a toolpath form's Clearing section asks for.
+/// What a form's list of tools asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum ClearingAsk {
-    /// Select Tool for a clearing bit.
-    Select(ClearingSlot),
-    /// The Tool Database to change this bit in.
+enum ListAsk {
+    /// Select Tool, for a tool of the list.
+    Select(ListSlot),
+    /// The Tool Database to change this tool in.
     Edit(String),
+}
+
+/// A form's lists of tools, each picked in Select Tool as the form's own tool is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ToolList {
+    /// The clearing bits (`clearance_tools`), largest first.
+    Clearing,
+    /// The form's tools, in the order they cut (3D Finishing's `tools`).
+    Tools,
+    /// Rest Machining's earlier tools (`rest.after`).
+    Rest,
+}
+
+/// What Select Tool picks for, other than the open form's own tool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PickFor {
+    /// A tool of one of the open form's lists.
+    Listed(ToolList, ListSlot),
+    /// The active machine's tool changer holder (counted from 1).
+    Holder(usize),
 }
 
 /// A form's clearing bits (`clearance_tools`): off, the form's tool cuts it all; on, bigger
@@ -1851,7 +1889,7 @@ fn clearing_section(
     params: &mut Value,
     slots: &[Option<String>],
     finishing_smallest: bool,
-) -> (bool, Option<ClearingAsk>) {
+) -> (bool, Option<ListAsk>) {
     if !params["clearance_tools"].is_array() {
         params["clearance_tools"] = Value::Array(vec![]);
     }
@@ -1879,7 +1917,7 @@ fn clearing_section(
         };
         if ui.checkbox(&mut on, label).on_hover_hint(hint).changed() {
             if on {
-                ask = Some(ClearingAsk::Select(ClearingSlot::New));
+                ask = Some(ListAsk::Select(ListSlot::New));
             } else {
                 list.clear();
                 changed = true;
@@ -1900,14 +1938,14 @@ fn clearing_section(
                         .on_hover_hint("Pick another bit for this in the Tool Database")
                         .clicked()
                     {
-                        ask = Some(ClearingAsk::Select(ClearingSlot::At(i)));
+                        ask = Some(ListAsk::Select(ListSlot::At(i)));
                     }
                     if ui
                         .button("Edit…")
                         .on_hover_hint("Change this bit in the Tool Database")
                         .clicked()
                     {
-                        ask = Some(ClearingAsk::Edit(tool.name.clone()));
+                        ask = Some(ListAsk::Edit(tool.name.clone()));
                     }
                     if ui
                         .small_button("×")
@@ -1931,7 +1969,7 @@ fn clearing_section(
             )
             .clicked()
         {
-            ask = Some(ClearingAsk::Select(ClearingSlot::New));
+            ask = Some(ListAsk::Select(ListSlot::New));
         }
         if let Some(finishing) = &finishing
             && let Err(e) =
@@ -1946,16 +1984,29 @@ fn clearing_section(
     (changed, ask)
 }
 
-/// `params`' clearing bits with `tool` put `at` its slot, largest first.
-fn put_clearing(params: &mut Value, at: ClearingSlot, tool: &Tool) {
-    let mut list: Vec<Tool> =
-        serde_json::from_value(params["clearance_tools"].clone()).unwrap_or_default();
+/// `params`' list `which` with `tool` put `at` its slot: clearing bits kept largest first,
+/// the others in the order they were picked.
+fn put_listed(params: &mut Value, which: ToolList, at: ListSlot, tool: &Tool) {
+    let list = match which {
+        ToolList::Clearing => &mut params["clearance_tools"],
+        ToolList::Tools => &mut params["tools"],
+        ToolList::Rest => {
+            if !params["rest"].is_object() {
+                params["rest"] = serde_json::to_value(cut_craft_core::rest::Rest::default())
+                    .expect("rest settings serialise");
+            }
+            &mut params["rest"]["after"]
+        }
+    };
+    let mut tools: Vec<Tool> = serde_json::from_value(list.clone()).unwrap_or_default();
     match at {
-        ClearingSlot::At(i) if i < list.len() => list[i] = tool.clone(),
-        _ => list.push(tool.clone()),
+        ListSlot::At(i) if i < tools.len() => tools[i] = tool.clone(),
+        _ => tools.push(tool.clone()),
     }
-    list.sort_by(|a, b| b.diameter.total_cmp(&a.diameter));
-    params["clearance_tools"] = serde_json::to_value(&list).expect("tools serialize");
+    if which == ToolList::Clearing {
+        tools.sort_by(|a, b| b.diameter.total_cmp(&a.diameter));
+    }
+    *list = serde_json::to_value(&tools).expect("tools serialize");
 }
 
 /// The form tool's name as the tool changer has it: `T3  name` when loaded in holder 3.
@@ -2001,211 +2052,98 @@ fn tool_line(tool: &Tool, passes: Option<f64>) -> String {
     }
 }
 
-/// The tool changer's magazine, when the machine has one: 0 for a bit changed by hand (the
-/// Tool Database menu below picks it), then each holder with the tool in it. The holder
-/// holding `current` is ticked; the tool of a holder clicked, if any.
-fn holders(
-    ui: &mut egui::Ui,
-    id: impl std::hash::Hash + std::fmt::Debug,
-    current: &str,
-    tools: &ToolDatabase,
-    slots: &[Option<String>],
-) -> Option<String> {
-    if slots.is_empty() {
-        return None;
-    }
-    let held = slots.iter().position(|s| s.as_deref() == Some(current));
-    let mut chosen = None;
-    ui.push_id(id, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            ui.label("ATC");
-            ui.selectable_label(held.is_none(), "0  Manual")
-                .on_hover_hint("A bit changed by hand: pick it from the Tool Database below");
-            for (i, slot) in slots.iter().enumerate() {
-                let name = slot.as_deref().filter(|t| tools.get(t).is_some());
-                let text = format!("{}  {}", i + 1, name.unwrap_or("(empty)"));
-                let button = ui.add_enabled(
-                    name.is_some(),
-                    egui::Button::selectable(held == Some(i), text),
-                );
-                if button.clicked() {
-                    chosen = name.map(str::to_owned);
-                }
-            }
-        });
-    });
-    chosen
-}
-
-/// The Tool Database's tools to pick from, the tool changer's loaded ones first (as `T1
-/// name`, by slot): the one picked now, if any.
-fn tool_menu(
-    ui: &mut egui::Ui,
-    id: impl std::hash::Hash + std::fmt::Debug,
-    current: &str,
-    tools: &ToolDatabase,
-    slots: &[Option<String>],
-) -> Option<String> {
-    let loaded: Vec<(usize, &str)> = slots
-        .iter()
-        .enumerate()
-        .filter_map(|(i, s)| Some((i + 1, s.as_deref()?)))
-        .filter(|(_, t)| tools.get(t).is_some())
-        .collect();
-    let mut chosen = None;
-    let shown = if current.is_empty() {
-        "Add a tool…"
-    } else {
-        current
-    };
-    egui::ComboBox::from_id_salt(id)
-        .selected_text(shown)
-        .show_ui(ui, |ui| {
-            for &(n, name) in &loaded {
-                let label = format!("T{n}  {name}");
-                if ui.selectable_label(name == current, label).clicked() {
-                    chosen = Some(name.to_owned());
-                }
-            }
-            if !loaded.is_empty() {
-                ui.separator();
-            }
-            for tool in &tools.tools {
-                if loaded.iter().any(|&(_, t)| t == tool.name) {
-                    continue;
-                }
-                if ui
-                    .selectable_label(tool.name == current, &tool.name)
-                    .clicked()
-                {
-                    chosen = Some(tool.name.clone());
-                }
-            }
-        });
-    chosen
-}
-
-/// A list of tools (clearance tools, a set of finishing tools, rest machining's earlier
-/// tools), each with the form tool's picker, Edit… and summary, and Remove; the last menu
-/// adds one. `largest_first` keeps them in that order. Whether it changed, and the tool
-/// whose Edit… was clicked.
+/// A list of tools (a set of finishing tools, rest machining's earlier tools), each as the
+/// form's own tool is shown: its name (with its tool changer holder) and size in one line,
+/// Select… to pick another in the Tool Database, Edit… to change it there, and × to remove
+/// it; Add a tool… picks one more. `empty` is said while there are none. Whether it changed
+/// (a removal), and what was asked for.
 fn tool_list(
     ui: &mut egui::Ui,
     key: &str,
     list: &mut Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
-    largest_first: bool,
-) -> (bool, Option<String>) {
-    if !list.is_array() {
-        *list = Value::Array(vec![]);
+    empty: &str,
+) -> (bool, Option<ListAsk>) {
+    let mut items: Vec<Tool> = serde_json::from_value(list.clone()).unwrap_or_default();
+    let (mut ask, mut remove) = (None, None);
+    if items.is_empty() {
+        ui.weak(empty);
     }
-    let items = list.as_array_mut().expect("made a list");
-    let (mut changed, mut edit, mut remove) = (false, None, None);
-    for (i, item) in items.iter_mut().enumerate() {
-        let current = item["name"].as_str().unwrap_or_default().to_owned();
-        if let Some(name) = holders(ui, (key, i, "atc"), &current, tools, slots)
-            && let Some(tool) = tools.pick(&name)
-        {
-            *item = serde_json::to_value(tool).expect("tools serialize");
-            changed = true;
-        }
-        ui.horizontal(|ui| {
-            if let Some(name) = tool_menu(ui, (key, i), &current, tools, slots)
-                && let Some(tool) = tools.pick(&name)
-            {
-                *item = serde_json::to_value(tool).expect("tools serialize");
-                changed = true;
+    for (i, tool) in items.iter().enumerate() {
+        ui.push_id((key, i), |ui| {
+            ui.strong(held_name(&tool.name, slots));
+            ui.label(tool_line(tool, None));
+            if tools.get(&tool.name).is_none() {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    "Not in the Tool Database: Select… one, or add it there",
+                );
             }
-            if ui
-                .button("Edit…")
-                .on_hover_hint("Change this tool in the Tool Database")
-                .clicked()
-            {
-                edit = Some(current.clone());
-            }
-            if ui.small_button("×").on_hover_hint("Remove").clicked() {
-                remove = Some(i);
-            }
-        });
-        if let Ok(tool) = serde_json::from_value::<Tool>(item.clone()) {
-            ui.push_id((key, i), |ui| {
-                tool_summary(ui, &tool, None, tools.get(&tool.name).is_some());
-            });
-        }
-    }
-    if let Some(i) = remove {
-        items.remove(i);
-        changed = true;
-    }
-    if let Some(name) = tool_menu(ui, (key, "add"), "", tools, slots)
-        && let Some(tool) = tools.pick(&name)
-    {
-        items.push(serde_json::to_value(tool).expect("tools serialize"));
-        changed = true;
-    }
-    if largest_first && changed {
-        let across = |t: &Value| t["diameter"].as_f64().unwrap_or(0.0);
-        items.sort_by(|a, b| across(b).total_cmp(&across(a)));
-    }
-    (changed, edit)
-}
-
-/// A toolpath form's tool as the Tool Database has it, read-only: what its shape uses, then
-/// its cutting data for the active material, lengths in the tool's own units.
-fn tool_summary(ui: &mut egui::Ui, tool: &Tool, passes: Option<f64>, in_database: bool) {
-    use cut_craft_core::toolpath::ToolShape;
-    let shown = |value: f64, unit: &str| match form::shown_in(unit, tool.units) {
-        Some((per, to)) => format!("{} {to}", trimmed(value / per)),
-        None => format!("{} {unit}", trimmed(value)),
-    };
-    let length = |mm| shown(mm, "mm");
-    let rate = |mm_min| shown(mm_min, "mm/min");
-    let mut rows = vec![("Diameter", length(tool.diameter))];
-    match tool.shape {
-        ToolShape::VBit | ToolShape::ThreadMill => {
-            rows.push(("Angle", format!("{}°", trimmed(tool.angle))));
-        }
-        ToolShape::RadiusedEndMill => rows.push(("Tip radius", length(tool.tip_radius))),
-        ToolShape::EndMill | ToolShape::BallNose | ToolShape::FormTool => {}
-    }
-    if tool.taper > 0.0 {
-        rows.push(("Taper angle", format!("{}°", trimmed(tool.taper))));
-    }
-    rows.extend([
-        ("Pass depth", length(tool.pass_depth)),
-        (
-            "Clearing stepover",
-            format!("{}%", trimmed(tool.stepover * 100.0)),
-        ),
-        (
-            "Finishing stepover",
-            format!("{}%", trimmed(tool.finishing_stepover() * 100.0)),
-        ),
-        ("Feed rate", rate(tool.feed_rate)),
-        ("Plunge rate", rate(tool.plunge_rate)),
-        (
-            "Spindle speed",
-            format!("{} rpm", trimmed(tool.spindle_speed)),
-        ),
-    ]);
-    if let Some(passes) = passes {
-        rows.push(("Passes", trimmed(passes)));
-    }
-    ui.vertical(|ui| {
-        egui::Grid::new("tool_summary")
-            .num_columns(2)
-            .show(ui, |ui| {
-                for (label, value) in rows {
-                    ui.weak(label);
-                    ui.label(value);
-                    ui.end_row();
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Select…")
+                    .on_hover_hint(
+                        "Pick another bit for this in the Tool Database: it brings its own \
+                         feeds, speeds and pass depth",
+                    )
+                    .clicked()
+                {
+                    ask = Some(ListAsk::Select(ListSlot::At(i)));
+                }
+                if ui
+                    .button("Edit…")
+                    .on_hover_hint("Change this tool in the Tool Database")
+                    .clicked()
+                {
+                    ask = Some(ListAsk::Edit(tool.name.clone()));
+                }
+                if ui.small_button("×").on_hover_hint("Remove").clicked() {
+                    remove = Some(i);
                 }
             });
-        if !in_database {
-            ui.weak("Not in the Tool Database: pick one, or add it there");
-        }
-    });
+        });
+    }
+    if ui
+        .push_id((key, "add"), |ui| {
+            ui.button("Add a tool…")
+                .on_hover_hint("Pick one more in the Tool Database")
+        })
+        .inner
+        .clicked()
+    {
+        ask = Some(ListAsk::Select(ListSlot::New));
+    }
+    let changed = remove.is_some();
+    if let Some(i) = remove {
+        items.remove(i);
+        *list = serde_json::to_value(&items).expect("tools serialize");
+    }
+    (changed, ask)
+}
+
+/// A form's own list of tools (3D Finishing's `tools`, in the order they cut), under its
+/// heading: see [`tool_list`].
+fn tools_section(
+    ui: &mut egui::Ui,
+    key: &str,
+    params: &mut Value,
+    tools: &ToolDatabase,
+    slots: &[Option<String>],
+) -> (bool, Option<ListAsk>) {
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.strong("Tools");
+        tool_list(
+            ui,
+            key,
+            &mut params[key],
+            tools,
+            slots,
+            "No tool picked yet: Add a tool… to pick one",
+        )
+    })
+    .inner
 }
 
 /// `value` to three places at most, without trailing zeros.
@@ -2319,21 +2257,28 @@ fn rest_section(
     params: &mut Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
-) -> Option<String> {
+) -> Option<ListAsk> {
     use cut_craft_core::rest::Rest;
     let mut rest: Rest = params
         .get("rest")
         .and_then(|r| serde_json::from_value(r.clone()).ok())
         .unwrap_or_default();
     let before = rest.clone();
-    let mut edit = None;
+    let mut ask = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         ui.strong("Rest Machining")
             .on_hover_hint("Cut only what the tools that ran before this one could not reach");
         let mut after = serde_json::to_value(&rest.after).expect("tools serialize");
-        let (changed, edited) = tool_list(ui, "rest_after", &mut after, tools, slots, false);
-        edit = edited;
+        let (changed, asked) = tool_list(
+            ui,
+            "rest_after",
+            &mut after,
+            tools,
+            slots,
+            "Off: add the bigger tools that cut before this one to cut only what they left",
+        );
+        ask = asked;
         if changed && let Ok(list) = serde_json::from_value(after) {
             rest.after = list;
         }
@@ -2363,7 +2308,7 @@ fn rest_section(
     if rest != before {
         params["rest"] = serde_json::to_value(&rest).expect("rest settings serialise");
     }
-    edit
+    ask
 }
 
 /// A category of a drop-down in a border filling its width, as menus draw theirs.

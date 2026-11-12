@@ -6,7 +6,7 @@
 use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_model};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
-use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::polygon;
 use cut_craft_core::progress;
 use cut_craft_core::simulation::rest_areas;
 use cut_craft_core::toolpath::{
@@ -27,9 +27,6 @@ pub enum Strategy {
     /// Rings stepping in from the machining boundary
     Offset,
 }
-
-/// How far a straight move may pass under where the tool should be before it is split.
-const GOUGE: f64 = 0.002;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
@@ -222,17 +219,19 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
                     points.push(points[0]);
                     points
                 }));
-                rings = polygon::offset_regions(&rings, -step, Corners::Round);
+                rings = polygon::offset_regions_again(&rings, -step);
             }
             lines
         }
     };
     // at each point as low as the tool goes without touching the model
     let peaks = surface.peaks();
+    // how far a straight move may pass under where the tool should be before it is split
+    let gouge = cut_craft_core::accuracy::get().finishing_3d;
     let drop = Drop {
         grid: &surface,
         tool,
-        tolerance: GOUGE,
+        tolerance: gouge,
         floor: f64::NEG_INFINITY,
         ceiling: f64::INFINITY,
         over_ceiling: false,
@@ -249,7 +248,7 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
         Strategy::Offset => p.stepover_retract.max(0.0),
         Strategy::Raster => 0.0,
     };
-    let clear = |a, b| surface.overcut_on(tool, a, b, &peaks) <= GOUGE;
+    let clear = |a, b| surface.overcut_on(tool, a, b, &peaks) <= gouge;
     let moves = follow_linked(&runs, doc.job.clearance, 2.0 * step, lift, &clear);
     Ok(made_by::<FinishingToolpath3d>(
         p,
@@ -328,6 +327,28 @@ mod tests {
                 "({x}, {y}) left at {z}, model at {model_z}"
             );
         }
+    }
+
+    #[test]
+    fn the_finishing_accuracy_set_in_options_is_used() {
+        use cut_craft_core::accuracy::{self, Accuracy};
+        let doc = domed();
+        let params = Params {
+            tools: vec![ball("6 mm Ball Nose")],
+            ..Params::default()
+        };
+        let fine = finish(&doc, &params).moves.len();
+        // a coarser accuracy splits fewer moves to keep off the model
+        accuracy::set(Accuracy {
+            finishing_3d: 0.02,
+            ..Accuracy::default()
+        });
+        let coarse = finish(&doc, &params).moves.len();
+        accuracy::set(Accuracy::default());
+        assert!(
+            coarse < fine,
+            "{coarse} moves at 0.02 mm, {fine} at 0.002 mm"
+        );
     }
 
     #[test]

@@ -12,7 +12,7 @@ use super::{
     file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
     message_dialog, on_the_desktop, page_width, rest_section, selector_section, shortcut,
     show_page, side_tabs, side_tabs_width, summary_table, template_dialog, texture_dialog,
-    tool_list, tool_picker, toolpath_template_dialog, view3d,
+    tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -99,7 +99,7 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
-            selecting_clearing: None,
+            picking: None,
             deep_cut: None,
             shots: None,
             space_mouse: None,
@@ -178,6 +178,10 @@ impl CutCraftApp {
             recent: vec![],
             playback: None,
             playing: false,
+            playback_goal: None,
+            kept_playback: None,
+            close_up: None,
+            playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
@@ -574,6 +578,7 @@ impl CutCraftApp {
             "undo_last_preview" => {
                 if let Some(before) = self.before_preview.take() {
                     self.simulation = before.0;
+                    self.kept_playback = None;
                     (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                     self.status.set_message("Undid the last preview");
                 }
@@ -586,7 +591,8 @@ impl CutCraftApp {
                     self.fine_3d,
                     self.surface_gpu,
                 ) = (None, None, None, None);
-                (self.playback, self.playing) = (None, false);
+                (self.playback, self.playing, self.playback_goal) = (None, false, None);
+                self.kept_playback = None;
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -3364,6 +3370,23 @@ impl CutCraftApp {
         {
             self.cancel_drag_3d();
         }
+        // Escape with an open end picked lets the end go, keeping Join Open Ends open
+        if self.join_ends_first().is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.join_ends_forget();
+            self.status.set_message("End let go");
+        }
+        // Escape stops a preview playing (keeping what it has cut), and does nothing else
+        if self.playback.is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.finish_playback();
+            self.status
+                .set_message("Preview stopped: what it had cut is kept");
+        }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {
@@ -4194,35 +4217,29 @@ impl CutCraftApp {
         let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
         // the tool block, where the form has its tool: what was picked, and Edit…
         let asked = std::cell::Cell::new(None);
-        // a tool in a list whose Edit… was clicked
-        let edit_listed = std::cell::RefCell::new(None);
+        // a list of tools whose Select…, Edit… or Add a tool… was clicked
+        let list_ask = std::cell::RefCell::new(None);
         let listed = std::cell::Cell::new(false);
         let tools = &self.tools;
         let layers: Vec<String> = self.doc.layers.iter().map(|l| l.name.clone()).collect();
-        let clearing_ask = std::cell::RefCell::new(None);
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
                 let (changed, ask) =
                     super::clearing_section(ui, params, &slots, finishing_smallest);
                 listed.set(listed.get() | changed);
-                if ask.is_some() {
-                    *clearing_ask.borrow_mut() = ask;
+                if let Some(ask) = ask {
+                    *list_ask.borrow_mut() = Some((super::ToolList::Clearing, ask));
                 }
                 return;
             }
             if key != "tool" {
-                // a list of tools, each picked as the form's own tool is
-                ui.group(|ui| {
-                    ui.set_width(ui.available_width());
-                    ui.strong("Tools");
-                    let (changed, edit) =
-                        tool_list(ui, key, &mut params[key], tools, &slots, false);
-                    listed.set(listed.get() | changed);
-                    if edit.is_some() {
-                        *edit_listed.borrow_mut() = edit;
-                    }
-                });
+                // the form's tools in the order they cut, each picked as the form's own tool
+                let (changed, ask) = super::tools_section(ui, key, params, tools, &slots);
+                listed.set(listed.get() | changed);
+                if let Some(ask) = ask {
+                    *list_ask.borrow_mut() = Some((super::ToolList::Tools, ask));
+                }
                 return;
             }
             ui.group(|ui| {
@@ -4232,9 +4249,9 @@ impl CutCraftApp {
                 listed.set(listed.get() | super::passes::edit_passes(ui, params, units));
             });
             if super::shows_rest(params)
-                && let Some(edit) = rest_section(ui, params, tools, &slots)
+                && let Some(ask) = rest_section(ui, params, tools, &slots)
             {
-                *edit_listed.borrow_mut() = Some(edit);
+                *list_ask.borrow_mut() = Some((super::ToolList::Rest, ask));
             }
             selector_section(ui, params, &layers, units);
         };
@@ -4264,7 +4281,6 @@ impl CutCraftApp {
         }
         open.dirty |= listed.get();
         let id = open.id;
-        let edit_listed = edit_listed.into_inner();
         self.form_extras(ui, id);
         if let Some(ask) = asked.get() {
             let name = self
@@ -4276,31 +4292,36 @@ impl CutCraftApp {
                 super::ToolAsk::Edit => self.edit_tool(ui.ctx(), name),
             }
         }
-        if edit_listed.is_some() {
-            self.edit_tool(ui.ctx(), edit_listed);
-        }
-        if let Some(ask) = clearing_ask.into_inner() {
-            self.clearing_asked(ui.ctx(), ask);
+        if let Some((which, ask)) = list_ask.into_inner() {
+            self.ask_listed(ui.ctx(), which, ask);
         }
     }
 
-    /// The Clearing section's Select… or Edit…: the Tool Database, to pick a clearing bit in
-    /// or change one.
-    fn clearing_asked(&mut self, ctx: &egui::Context, ask: super::ClearingAsk) {
+    /// A list of tools' Select…, Add a tool… or Edit…: the Tool Database, to pick a tool of
+    /// list `which` in or change one.
+    pub(super) fn ask_listed(
+        &mut self,
+        ctx: &egui::Context,
+        which: super::ToolList,
+        ask: super::ListAsk,
+    ) {
         match ask {
-            super::ClearingAsk::Select(at) => {
+            super::ListAsk::Select(at) => {
                 let current = match at {
-                    super::ClearingSlot::At(i) => self.form.as_ref().and_then(|form| {
-                        form.params["clearance_tools"][i]["name"]
-                            .as_str()
-                            .map(str::to_owned)
+                    super::ListSlot::At(i) => self.form.as_ref().and_then(|form| {
+                        let list = match which {
+                            super::ToolList::Clearing => &form.params["clearance_tools"],
+                            super::ToolList::Tools => &form.params["tools"],
+                            super::ToolList::Rest => &form.params["rest"]["after"],
+                        };
+                        list[i]["name"].as_str().map(str::to_owned)
                     }),
-                    super::ClearingSlot::New => None,
+                    super::ListSlot::New => None,
                 };
                 self.select_tool(&current.unwrap_or_default());
-                self.selecting_clearing = Some(at);
+                self.picking = Some(super::PickFor::Listed(which, at));
             }
-            super::ClearingAsk::Edit(name) => self.edit_tool(ctx, Some(name)),
+            super::ListAsk::Edit(name) => self.edit_tool(ctx, Some(name)),
         }
     }
 
@@ -4621,17 +4642,23 @@ impl CutCraftApp {
     pub(super) fn select_tool(&mut self, current: &str) {
         let manager = cut_craft_tool_database::Manager::selecting(&self.tools, current);
         self.open_tool_manager(manager);
-        self.selecting_clearing = None;
+        self.picking = None;
     }
 
-    /// Select Tool's Select: `name` as the clearing bit it was opened for, or else as the
-    /// open form's tool.
+    /// Select Tool's Select: `name` for what it was opened for (a tool of one of the form's
+    /// lists, or a tool changer holder), or else as the open form's tool.
     pub(super) fn selected_tool(&mut self, name: &str) {
-        match self.selecting_clearing.take() {
-            Some(at) => {
+        match self.picking.take() {
+            Some(super::PickFor::Listed(which, at)) => {
                 if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name)) {
-                    super::put_clearing(&mut form.params, at, &tool);
+                    super::put_listed(&mut form.params, which, at, &tool);
                 }
+            }
+            Some(super::PickFor::Holder(slot)) => {
+                if let Some(machine) = self.machines.active_mut() {
+                    machine.load_tool(name, slot);
+                }
+                self.tool_changer_changed();
             }
             None => self.choose_tool(name),
         }
@@ -4659,13 +4686,12 @@ impl CutCraftApp {
                 form.dirty = true;
             }
         }
-        // clearing bits too, with what the database has for them now
-        if let Some(form) = &mut self.form
-            && let Some(list) = form
-                .params
-                .get_mut("clearance_tools")
-                .and_then(Value::as_array_mut)
-        {
+        // the form's lists of tools too, with what the database has for them now
+        let Some(form) = &mut self.form else { return };
+        for at in ["/clearance_tools", "/tools", "/rest/after"] {
+            let Some(list) = form.params.pointer_mut(at).and_then(Value::as_array_mut) else {
+                continue;
+            };
             for item in list {
                 let name = item["name"].as_str().unwrap_or_default().to_owned();
                 if let Some(tool) = self.tools.pick(&name) {
