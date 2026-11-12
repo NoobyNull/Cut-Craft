@@ -4241,7 +4241,7 @@ impl CutCraftApp {
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
                 let (changed, ask) =
-                    super::clearing_section(ui, params, &slots, finishing_smallest);
+                    super::clearing_section(ui, params, &slots, finishing_smallest, units);
                 listed.set(listed.get() | changed);
                 if let Some(ask) = ask {
                     *list_ask.borrow_mut() = Some((super::ToolList::Clearing, ask));
@@ -4250,7 +4250,7 @@ impl CutCraftApp {
             }
             if key != "tool" {
                 // the form's tools in the order they cut, each picked as the form's own tool
-                let (changed, ask) = super::tools_section(ui, key, params, tools, &slots);
+                let (changed, ask) = super::tools_section(ui, key, params, tools, &slots, units);
                 listed.set(listed.get() | changed);
                 if let Some(ask) = ask {
                     *list_ask.borrow_mut() = Some((super::ToolList::Tools, ask));
@@ -4260,7 +4260,14 @@ impl CutCraftApp {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
-                asked.set(tool_picker(ui, &params["tool"], params, tools, &slots));
+                asked.set(tool_picker(
+                    ui,
+                    &params["tool"],
+                    params,
+                    tools,
+                    &slots,
+                    units,
+                ));
                 if let Some(line) = &reach {
                     super::reach::show(ui, line);
                 }
@@ -4268,7 +4275,7 @@ impl CutCraftApp {
             });
             if cuts
                 && super::shows_rest(params)
-                && let Some(ask) = rest_section(ui, params, tools, &slots)
+                && let Some(ask) = rest_section(ui, params, tools, &slots, units)
             {
                 *list_ask.borrow_mut() = Some((super::ToolList::Rest, ask));
             }

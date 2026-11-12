@@ -8,7 +8,7 @@ pub mod relief;
 
 use cmd_vector_texture::{Ornament, ornament_pieces};
 use cut_craft_core::component::{Combine, Component};
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, Units};
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -111,7 +111,7 @@ impl Command for DecorativeRelief {
                 Point::new(area.min.x, area.max.y),
             ]);
         }
-        let part = carve(p, rings, area, doc.job.model_cell())?;
+        let part = carve(p, rings, area, doc.job.model_cell(), doc.job.units)?;
         let mut c = Change::builder(doc);
         c.add_component(part);
         Ok(c.finish())
@@ -128,13 +128,14 @@ pub fn carve(
     rings: Vec<Vec<Point>>,
     area: Rect,
     model_cell: f64,
+    units: Units,
 ) -> Result<Component, CommandError> {
     // scrolls closer than the bit could not be carved apart
     let pieces = ornament_pieces(p.style, rings, p.size, p.bit, p.seed).map_err(|e| match e {
         CommandError::Failed(m) if m.contains("smallest gap") => CommandError::Failed(format!(
-            "the pattern size must be at least three times the finishing bit ({:.1} mm). Make \
-             the pattern size bigger",
-            p.bit * 3.0
+            "the pattern size must be at least three times the finishing bit ({}). Make the \
+             pattern size bigger",
+            units.length(p.bit * 3.0, 1)
         )),
         e => e,
     })?;
@@ -331,7 +332,7 @@ mod tests {
                         bit: std::env::var("RELIEF_BIT").map_or(3.175, |v| v.parse().unwrap()),
                         ..Params::default()
                     };
-                    let part = carve(&p, vec![ring.clone()], area, 0.25).unwrap();
+                    let part = carve(&p, vec![ring.clone()], area, 0.25, Units::Mm).unwrap();
                     shade(&part, ring)
                         .save(format!("{dir}/{style:?}-{name}-{seed}.png"))
                         .unwrap();

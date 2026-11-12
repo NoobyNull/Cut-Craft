@@ -10,7 +10,7 @@ mod motif;
 mod patterns;
 mod scroll;
 
-use cut_craft_core::document::Document;
+use cut_craft_core::document::{Document, Units};
 use cut_craft_core::geometry::{Path, Point, Rect, inside};
 use cut_craft_core::random::Random;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
@@ -170,7 +170,7 @@ impl Command for VectorTexture {
                     Point::new(area.min.x, area.max.y),
                 ]);
             }
-            decorate(p, rings)?
+            decorate(p, rings, doc.job.units)?
         };
         if lines.is_empty() {
             return Err(CommandError::Failed(
@@ -256,8 +256,8 @@ fn wavy(p: &Params, rings: &[Vec<Point>], area: Rect) -> Vec<Path> {
 const MOST_PIECES: usize = 40_000;
 
 /// One of the decorative fills grown inside `rings`.
-fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandError> {
-    check_sizes(p.size, p.gap)?;
+fn decorate(p: &Params, rings: Vec<Vec<Point>>, units: Units) -> Result<Vec<Path>, CommandError> {
+    check_sizes(p.size, p.gap, units)?;
     let area = fill::Area::new(rings);
     let mut g = fill::Grower::new(&area, p.gap, p.seed);
     let paths = match p.style {
@@ -288,15 +288,15 @@ fn decorate(p: &Params, rings: Vec<Vec<Point>>) -> Result<Vec<Path>, CommandErro
     Ok(paths)
 }
 
-/// Positive sizes, the pattern at least three gaps across.
-fn check_sizes(size: f64, gap: f64) -> Result<(), CommandError> {
+/// Positive sizes, the pattern at least three gaps across; a problem said in `units`.
+fn check_sizes(size: f64, gap: f64, units: Units) -> Result<(), CommandError> {
     ensure_positive("pattern size", size)?;
     ensure_positive("smallest gap", gap)?;
     if size < gap * 3.0 {
         return Err(CommandError::Failed(format!(
-            "the pattern size must be at least three times the smallest gap ({} mm). Make the \
+            "the pattern size must be at least three times the smallest gap ({}). Make the \
              pattern size bigger or the gap smaller",
-            gap * 3.0
+            units.length(gap * 3.0, 1)
         )));
     }
     Ok(())
@@ -388,7 +388,8 @@ pub fn ornament_pieces(
     gap: f64,
     seed: u32,
 ) -> Result<Vec<scroll::Piece>, CommandError> {
-    check_sizes(size, gap)?;
+    // the caller says the gap in its own words and units
+    check_sizes(size, gap, Units::Mm)?;
     let area = fill::Area::new(rings);
     let mut g = fill::Grower::new(&area, gap, seed);
     g.lush = true;

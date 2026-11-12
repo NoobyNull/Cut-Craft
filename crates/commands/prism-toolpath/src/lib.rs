@@ -137,8 +137,8 @@ impl Command for PrismToolpath {
             let half = widest_half(&paths);
             if half > tool.diameter / 2.0 {
                 return Err(CommandError::Failed(format!(
-                    "the V-bit is too narrow for a full prism: the widest shape needs {:.2} mm across. Pick a wider V-bit",
-                    2.0 * half
+                    "the V-bit is too narrow for a full prism: the widest shape needs {} across. Pick a wider V-bit",
+                    doc.job.units.length(2.0 * half, 2)
                 )));
             }
             half / spread

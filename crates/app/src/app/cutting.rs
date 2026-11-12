@@ -138,7 +138,12 @@ impl Cutting {
 /// Under Profile's Machine Vectors… or Pocket's Clear Pocket: the picture of the cutting
 /// chosen, what it does, and Cutting… to change it, with its window while open. Whether the
 /// settings changed.
-pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value) -> bool {
+pub(super) fn group_end(
+    ui: &mut egui::Ui,
+    group: &str,
+    params: &mut Value,
+    units: cut_craft_core::document::Units,
+) -> bool {
     if group == crate::form::WHICH_SIDE {
         ui.label(side_said(params["side"].as_str().unwrap_or_default()));
         return false;
@@ -178,7 +183,7 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value) -> b
             .open(&mut open)
             .resizable(false)
             .collapsible(false)
-            .show(ui.ctx(), |ui| window(ui, params, diameter));
+            .show(ui.ctx(), |ui| window(ui, params, diameter, units));
     }
     ui.data_mut(|d| d.insert_temp(id, open));
     before != *params
@@ -204,7 +209,12 @@ pub(super) fn side_said(side: &str) -> &'static str {
 }
 
 /// The window's inside: the choices, the picture, then the loops when trochoidal.
-fn window(ui: &mut egui::Ui, params: &mut Value, diameter: f64) {
+fn window(
+    ui: &mut egui::Ui,
+    params: &mut Value,
+    diameter: f64,
+    units: cut_craft_core::document::Units,
+) {
     choices(ui, params);
     let cutting = Cutting::read(params);
     let row = ui.spacing().interact_size.y;
@@ -219,7 +229,7 @@ fn window(ui: &mut egui::Ui, params: &mut Value, diameter: f64) {
     if cutting.trochoidal {
         ui.separator();
         let mut loops = cutting.loops;
-        loops_editor(ui, &mut loops, diameter);
+        loops_editor(ui, &mut loops, diameter, units);
         if loops != cutting.loops {
             params["loops"] = serde_json::to_value(loops).expect("loops serialise");
         }
@@ -488,8 +498,28 @@ fn point_along(pts: &[Pos2], f: f32) -> Option<(Pos2, Vec2)> {
     None
 }
 
+/// The loops' sizes in a line, in the job's `units`.
+fn loops_said(
+    radius: f64,
+    advance: f64,
+    diameter: f64,
+    units: cut_craft_core::document::Units,
+) -> String {
+    format!(
+        "Loops {} across, each {} on; the cutter {}",
+        units.length(2.0 * radius, 2),
+        units.length(advance, 2),
+        units.length(diameter, 2)
+    )
+}
+
 /// The loops' settings over a strip of them at the cutter's size.
-fn loops_editor(ui: &mut egui::Ui, loops: &mut Loops, diameter: f64) {
+fn loops_editor(
+    ui: &mut egui::Ui,
+    loops: &mut Loops,
+    diameter: f64,
+    units: cut_craft_core::document::Units,
+) {
     egui::Grid::new("loops").num_columns(2).show(ui, |ui| {
         ui.label("Loop Width")
             .on_hover_hint("How wide each loop is, of the tool's diameter");
@@ -513,12 +543,7 @@ fn loops_editor(ui: &mut egui::Ui, loops: &mut Loops, diameter: f64) {
         ui.end_row();
     });
     let (radius, advance) = loops.sized(diameter);
-    ui.weak(format!(
-        "Loops {:.2} mm across, each {:.2} mm on; the cutter {:.2} mm",
-        2.0 * radius,
-        advance,
-        diameter
-    ));
+    ui.weak(loops_said(radius, advance, diameter, units));
     loops_strip(
         ui,
         radius,
@@ -588,6 +613,19 @@ mod tests {
 
     fn told(params: &Value) -> Vec<String> {
         Cutting::read(params).told()
+    }
+
+    #[test]
+    fn the_loops_sizes_read_in_the_jobs_units() {
+        use cut_craft_core::document::Units;
+        assert_eq!(
+            loops_said(3.175, 1.27, 6.35, Units::Mm),
+            "Loops 6.35 mm across, each 1.27 mm on; the cutter 6.35 mm"
+        );
+        assert_eq!(
+            loops_said(3.175, 1.27, 6.35, Units::Inch),
+            "Loops 0.2500 in across, each 0.0500 in on; the cutter 0.2500 in"
+        );
     }
 
     #[test]

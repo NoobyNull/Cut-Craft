@@ -131,6 +131,13 @@ fn the_placed_model_has_its_top_at_the_surface_and_must_fit() {
         why.contains("6.0 mm tall") && why.contains("5.0 mm thick"),
         "{why}"
     );
+    // an inch job is told in inches
+    doc.job.units = cut_craft_core::document::Units::Inch;
+    let why = placed_model(&doc, &tool).unwrap_err().to_string();
+    assert!(
+        why.contains("0.236 in tall") && why.contains("0.197 in thick"),
+        "{why}"
+    );
 }
 
 #[test]

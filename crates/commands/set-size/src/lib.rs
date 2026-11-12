@@ -29,10 +29,16 @@ pub struct Params {
     #[schemars(extend("x-widget" = "row"))]
     pub mode: Mode,
     /// The width, or with Percent, the share of the present width
-    #[schemars(range(min = 0))]
+    #[schemars(
+        range(min = 0),
+        extend("x-unit" = "mm", "x-percent-when" = {"percent": "true"})
+    )]
     pub width: f64,
     /// Ignored when keeping proportions
-    #[schemars(range(min = 0))]
+    #[schemars(
+        range(min = 0),
+        extend("x-unit" = "mm", "x-percent-when" = {"percent": "true"})
+    )]
     pub height: f64,
     /// Width and height are percentages of the present size, not millimetres
     #[serde(default)]

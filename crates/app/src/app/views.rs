@@ -1567,6 +1567,7 @@ impl CutCraftApp {
         };
         let mut open = true;
         let (mut apply, mut create, mut delete) = (false, false, false);
+        let units = self.doc.job.units;
         egui::Window::new("Guide Properties")
             .id(egui::Id::unique("guide_properties"))
             .collapsible(false)
@@ -1581,7 +1582,7 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Position");
-                    ui.add(egui::DragValue::new(&mut props.position).speed(0.1));
+                    crate::form::length_edit(ui, &mut props.position, units, f64::NEG_INFINITY);
                 });
                 ui.horizontal(|ui| {
                     ui.label("Angle");
@@ -1602,7 +1603,7 @@ impl CutCraftApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label(if props.relative { "Offset" } else { "Position" });
-                    ui.add(egui::DragValue::new(&mut props.new_at).speed(0.1));
+                    crate::form::length_edit(ui, &mut props.new_at, units, f64::NEG_INFINITY);
                     ui.label("Count");
                     ui.add(egui::DragValue::new(&mut props.count).range(1..=100));
                 });

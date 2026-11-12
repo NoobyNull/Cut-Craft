@@ -332,14 +332,14 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
             h,
             "<h3>{}</h3><table><tr><th>Tool</th><td>{}</td></tr><tr><th>{slot_heading}</th><td>{}</td></tr>\
              <tr><th>Diameter</th><td>{}</td></tr>\
-             <tr><th>Feed rate</th><td>{:.0} mm/min</td></tr><tr><th>Plunge rate</th><td>{:.0} mm/min</td></tr>\
+             <tr><th>Feed rate</th><td>{}</td></tr><tr><th>Plunge rate</th><td>{}</td></tr>\
              <tr><th>Spindle speed</th><td>{:.0} rpm</td></tr><tr><th>Estimated time</th><td>{}</td></tr></table>",
             escape(&t.name),
             escape(&tool.name),
             slot(number(&tool.name)),
             len(tool.diameter),
-            tool.feed_rate,
-            tool.plunge_rate,
+            job.units.feed(tool.feed_rate, 0),
+            job.units.feed(tool.plunge_rate, 0),
             tool.spindle_speed,
             hms(minutes(t)),
         );
@@ -457,6 +457,19 @@ mod tests {
         ] {
             assert!(html.contains(part), "missing {part}");
         }
+    }
+
+    #[test]
+    fn an_inch_jobs_sheet_gives_every_size_and_speed_in_inches() {
+        let mut doc = cut_craft_core::testing::with_toolpath();
+        doc.job.units = Units::Inch;
+        let html = String::from_utf8(JobSheet::export(&doc).unwrap()).unwrap();
+        assert!(html.contains("23.622 in"), "the material's width");
+        assert!(
+            html.contains(" in/min</td>"),
+            "feed rates in inches a minute"
+        );
+        assert!(!html.contains("mm/min"), "{html}");
     }
 
     #[test]

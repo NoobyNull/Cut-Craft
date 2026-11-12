@@ -45,7 +45,7 @@ pub struct SnapOptions {
     #[serde(default = "on")]
     pub smart_snapping: bool,
     /// How near, in screen pixels, the pointer must come to a point to snap to it
-    #[schemars(range(min = 1, max = 50))]
+    #[schemars(range(min = 1, max = 50), extend("x-unit" = "px"))]
     pub snapping_radius: f64,
     /// How far Ctrl and an arrow key move the selection
     #[serde(default = "nudge")]
