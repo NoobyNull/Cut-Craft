@@ -519,6 +519,19 @@ fn floor_rings(floor: &[Path], step: f64, within: f64, level: f64, starts: &[Poi
         .collect()
 }
 
+/// Where `p` carves `paths` at the surface: the areas a beginner should see shaded before
+/// calculating. Fill carves the closed shapes (every other band of loops nested one in
+/// another, a loop there twice cancelling out); Inside and Outside the band the groove's
+/// width beside the edge; On the Line the groove along the lines, open ones too.
+pub fn carved_area(paths: &[Path], p: &Params) -> Vec<Path> {
+    let half_width = p.depth * (p.tool.angle.to_radians() / 2.0).tan();
+    if p.place == Place::OnTheLine {
+        return polygon::stroke(paths, half_width);
+    }
+    let closed: Vec<Path> = paths.iter().filter(|path| path.closed).cloned().collect();
+    grooved(&polygon::regions(&closed), p.place, half_width)
+}
+
 /// What `place` carves of `regions`: all of them for Fill, or the band `2 half_width` wide
 /// inside or outside their edges (its middle `half_width` from them), so filling it carves a
 /// groove `half_width` from the edge with sharp corners.
@@ -1174,6 +1187,58 @@ mod tests {
             "one wide band"
         );
         assert!(depth_at(doubled, 20.0).abs() < 1e-9, "inner middle left");
+    }
+
+    #[test]
+    fn the_area_to_carve_is_what_the_form_will_carve() {
+        let area = |place: Place, paths: Vec<Path>| -> f64 {
+            let p = Params {
+                place,
+                depth: 1.0,
+                ..Params::default()
+            };
+            // outlines run anticlockwise and holes clockwise: their signed areas add up
+            carved_area(&paths, &p)
+                .iter()
+                .map(|r| {
+                    let q = cut_points(r);
+                    (0..q.len())
+                        .map(|i| q[i].perp_dot(q[(i + 1) % q.len()]) / 2.0)
+                        .sum::<f64>()
+                })
+                .sum()
+        };
+        let loops = || {
+            vec![
+                square(0.0, 0.0, 40.0),
+                square(5.0, 5.0, 30.0),
+                square(12.0, 12.0, 16.0),
+            ]
+        };
+        // every other band: 40² - 30² + 16²
+        assert!((area(Place::Fill, loops()) - (1600.0 - 900.0 + 256.0)).abs() < 1e-6);
+        // a 90° bit 1 mm deep: a groove 2 mm wide inside a 10 mm square
+        let inside = area(Place::Inside, vec![square(0.0, 0.0, 10.0)]);
+        assert!((inside - (100.0 - 36.0)).abs() < 1e-6, "{inside}");
+        // and along an open line, 2 mm wide with round ends
+        let line = Path::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false);
+        let along = area(Place::OnTheLine, vec![line]);
+        assert!(
+            (along - (20.0 + std::f64::consts::PI)).abs() < 0.05,
+            "{along}"
+        );
+        // Fill leaves open vectors out, as the carving does
+        assert!(
+            area(
+                Place::Fill,
+                vec![Path::polyline(
+                    &[Point::new(0.0, 0.0), Point::new(10.0, 0.0)],
+                    false
+                )]
+            )
+            .abs()
+                < 1e-9
+        );
     }
 
     #[test]

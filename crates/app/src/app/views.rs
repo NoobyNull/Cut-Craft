@@ -1439,11 +1439,66 @@ impl CutCraftApp {
     }
 
     /// What open forms mark in the 2D view: Draw Text's arc handles, Sketch Carving's areas,
-    /// Trace Bitmap's area.
+    /// V-Carve's area to carve, Trace Bitmap's area.
     fn paint_form_marks(&mut self, ui: &egui::Ui, canvas: &Canvas) {
         self.paint_arc_handles(ui, canvas);
         self.paint_sketch_areas(ui, canvas);
+        self.paint_carve_area(ui, canvas);
         self.paint_trace_area(ui, canvas);
+    }
+
+    /// While V-Carve's form is open, the area it would carve shaded over the vectors: the
+    /// shapes for Fill (every other band of nested loops), the groove beside the edge for
+    /// Inside and Outside, along the lines for On the Line. Found again only when the
+    /// settings, the job or the selection change.
+    fn paint_carve_area(&mut self, ui: &egui::Ui, canvas: &Canvas) {
+        let Some(form) = self
+            .form
+            .as_ref()
+            .filter(|f| f.id == "vcarve_engrave_toolpath")
+        else {
+            self.carve_area = None;
+            return;
+        };
+        let fresh = self.carve_area.as_ref().is_some_and(|c| {
+            c.params == form.params
+                && c.revision == self.history.revision()
+                && c.selection == self.doc.selection
+        });
+        if !fresh {
+            let triangles = serde_json::from_value(form.params.clone())
+                .ok()
+                .map(|p| {
+                    let (_, paths) = self.doc.selected_paths(|_| true);
+                    cut_craft_core::medial::triangles(&cmd_vcarve_engrave_toolpath::carved_area(
+                        &paths, &p,
+                    ))
+                })
+                .unwrap_or_default();
+            self.carve_area = Some(super::CarveArea {
+                params: form.params.clone(),
+                revision: self.history.revision(),
+                selection: self.doc.selection.clone(),
+                triangles,
+            });
+        }
+        let Some(area) = &self.carve_area else {
+            return;
+        };
+        let colour = ui
+            .visuals()
+            .selection
+            .bg_fill
+            .gamma_multiply(super::CARVE_AREA_ALPHA);
+        let mut mesh = egui::Mesh::default();
+        for t in &area.triangles {
+            let base = u32::try_from(mesh.vertices.len()).unwrap_or(u32::MAX);
+            for &p in t {
+                mesh.colored_vertex(canvas.transform.to_screen(p), colour);
+            }
+            mesh.add_triangle(base, base + 1, base + 2);
+        }
+        ui.painter_at(canvas.area).add(mesh);
     }
 
     /// While Job Setup is open a red square marks the datum, as in Aspire.

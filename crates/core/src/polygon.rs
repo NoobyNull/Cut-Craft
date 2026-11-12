@@ -6,7 +6,8 @@ use i_overlay::core::fill_rule::FillRule;
 use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::single::SingleFloatOverlay;
 use i_overlay::mesh::float::outline::offset::OutlineOffset;
-use i_overlay::mesh::float::style::{LineJoin, OutlineStyle};
+use i_overlay::mesh::float::stroke::offset::StrokeOffset;
+use i_overlay::mesh::float::style::{LineCap, LineJoin, OutlineStyle, StrokeStyle};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
@@ -141,6 +142,24 @@ fn outline(contours: &[Contour], distance: f64, corners: Corners) -> Vec<Path> {
 
 fn joined(contours: &[Contour], distance: f64, join: LineJoin<f64>) -> Vec<Path> {
     to_paths(contours.outline(&OutlineStyle::new(distance).line_join(join)))
+}
+
+/// The area within `half_width` of the lines of `paths`, open or closed, with round ends and
+/// corners: the band a bit that wide cuts following them.
+pub fn stroke(paths: &[Path], half_width: f64) -> Vec<Path> {
+    if half_width <= 0.0 {
+        return vec![];
+    }
+    let round = 2.0 * (1.0 - (crate::accuracy::curve() / half_width).min(1.0)).acos();
+    let style = StrokeStyle::new(2.0 * half_width)
+        .line_join(LineJoin::Round(round))
+        .start_cap(LineCap::Round(round))
+        .end_cap(LineCap::Round(round));
+    let bands: Vec<Path> = paths
+        .iter()
+        .flat_map(|p| to_paths(contour(p).stroke(style.clone(), p.closed)))
+        .collect();
+    union(&bands)
 }
 
 /// Enclosed area of a closed path (curves flattened).

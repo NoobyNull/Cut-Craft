@@ -112,6 +112,37 @@ pub fn centre_lines(regions: &[Path], spacing: f64) -> Vec<CentreLine> {
     chains(&kept, &corners, spacing)
 }
 
+/// Triangles covering `regions` (closed paths, holes inside outlines, as
+/// [`crate::polygon::regions`] gives them), for drawing them filled.
+pub fn triangles(regions: &[Path]) -> Vec<[Point; 3]> {
+    let mut points: Vec<Point2<f64>> = vec![];
+    let mut edges: Vec<[usize; 2]> = vec![];
+    for region in regions.iter().filter(|r| r.closed) {
+        let ring = cut_points(region);
+        if ring.len() < 3 {
+            continue;
+        }
+        let first = points.len();
+        points.extend(ring.iter().map(|q| Point2::new(q.x, q.y)));
+        let last = points.len();
+        edges.extend((first..last).map(|i| [i, if i + 1 == last { first } else { i + 1 }]));
+    }
+    if points.len() < 3 {
+        return vec![];
+    }
+    let Ok(outlines) =
+        ConstrainedDelaunayTriangulation::<Point2<f64>>::try_bulk_load_cdt(points, edges, |_| {})
+    else {
+        return vec![];
+    };
+    let inside = Inside::new(&outlines);
+    outlines
+        .inner_faces()
+        .filter(|f| inside.within[f.fix().index()])
+        .map(|f| f.positions().map(|q| Point::new(q.x, q.y)))
+        .collect()
+}
+
 /// Whether points are inside the shapes: the triangles of the edges' constrained
 /// triangulation, inside or outside by how many edges lie between them and the outside.
 struct Inside<'a> {
@@ -473,6 +504,25 @@ mod tests {
             .unwrap();
         assert!(p.distance(Point::new(10.0, 10.0)) < 0.05, "{p}");
         assert!((r - 0.4).abs() < 0.03, "{r}");
+    }
+
+    #[test]
+    fn triangles_cover_the_shapes_and_not_their_holes() {
+        let paths = [
+            rectangle(0.0, 0.0, 20.0, 10.0),
+            rectangle(5.0, 2.0, 4.0, 4.0),
+        ];
+        let triangles = triangles(&polygon::regions(&paths));
+        let area: f64 = triangles
+            .iter()
+            .map(|[a, b, c]| (*b - *a).perp_dot(*c - *a).abs() / 2.0)
+            .sum();
+        assert!((area - (200.0 - 16.0)).abs() < 1e-6, "{area}");
+        let middle = |[a, b, c]: &[Point; 3]| (*a + *b + *c) / 3.0;
+        assert!(triangles.iter().all(|t| {
+            let m = middle(t);
+            !(m.x > 5.0 && m.x < 9.0 && m.y > 2.0 && m.y < 6.0)
+        }));
     }
 
     #[test]

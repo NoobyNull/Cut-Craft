@@ -138,6 +138,7 @@ impl CutCraftApp {
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
             sketch_areas: None,
+            carve_area: None,
             reach_found: None,
             summary: super::Summary::default(),
             stroke: Vec::new(),
