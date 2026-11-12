@@ -7267,6 +7267,64 @@ fn with_create_fillets_open_a_click_rounds_a_corner_and_a_click_on_the_fillet_ta
 }
 
 #[test]
+fn with_join_open_ends_open_two_clicks_on_ends_join_the_vectors() {
+    let mut h = Harness::new();
+    let line = |a: (f64, f64), b: (f64, f64)| {
+        Path::polyline(&[Point::new(a.0, a.1), Point::new(b.0, b.1)], false)
+    };
+    let paths = vec![
+        line((10.0, 10.0), (40.0, 10.0)),
+        line((45.0, 10.0), (80.0, 10.0)),
+    ];
+    let change = Change::swap(&h.app.doc, [], paths);
+    h.app.doc.apply(&change).unwrap();
+    h.app.invoke(&h.ctx, "join_open_ends");
+    assert!(h.app.joining_ends());
+    h.frame(vec![]);
+    // a click away from any end picks nothing
+    h.click(h.at(25.0, 10.0), Modifiers::NONE);
+    assert!(h.app.join_ends_first().is_none());
+    h.frame(vec![]);
+    h.click(h.at(40.0, 10.0), Modifiers::NONE);
+    assert!(h.app.join_ends_first().is_some(), "the first end is picked");
+    h.frame(vec![]);
+    h.click(h.at(45.0, 10.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.vectors.len(), 1, "joined into one");
+    assert!(h.app.join_ends_first().is_none(), "ready for the next pair");
+    assert!(h.app.joining_ends(), "the tool stays open");
+    // its two ends clicked, the one vector closes
+    h.frame(vec![]);
+    h.click(h.at(10.0, 10.0), Modifiers::NONE);
+    h.frame(vec![]);
+    h.click(h.at(80.0, 10.0), Modifiers::NONE);
+    assert!(h.app.doc.vectors.values().next().unwrap().closed);
+}
+
+#[test]
+fn escape_lets_a_picked_open_end_go_and_keeps_join_open_ends_open() {
+    let mut h = Harness::new();
+    let path = Path::polyline(&[Point::new(10.0, 10.0), Point::new(40.0, 10.0)], false);
+    let change = Change::swap(&h.app.doc, [], vec![path]);
+    h.app.doc.apply(&change).unwrap();
+    h.app.invoke(&h.ctx, "join_open_ends");
+    h.frame(vec![]);
+    h.click(h.at(40.0, 10.0), Modifiers::NONE);
+    assert!(h.app.join_ends_first().is_some());
+    h.frame(vec![key(Key::Escape)]);
+    assert!(h.app.join_ends_first().is_none(), "the end let go");
+    assert!(h.app.joining_ends(), "the tool still open");
+}
+
+#[test]
+fn show_open_vector_ends_is_a_view_menu_switch() {
+    let mut h = Harness::new();
+    assert!(!h.app.display.open_ends, "off to start with");
+    h.app.invoke(&h.ctx, "show_open_vector_ends");
+    assert!(h.app.display.open_ends);
+    assert_eq!(h.app.display.checked("show_open_vector_ends"), Some(true));
+}
+
+#[test]
 fn freehands_stabilizing_circle_is_drawn_round_the_paths_end_while_dragging() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "draw_freehand");

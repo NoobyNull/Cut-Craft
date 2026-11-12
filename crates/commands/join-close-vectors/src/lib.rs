@@ -125,7 +125,7 @@ fn join(a: &Path, b: &Path, method: Method) -> Path {
 }
 
 /// The way `path` heads as it leaves its start.
-fn leaving(path: &Path) -> Point {
+pub fn leaving(path: &Path) -> Point {
     match path.segments.first() {
         Some(&Segment::Line { to }) => to - path.start,
         Some(&Segment::Cubic { c1, to, .. }) => {
@@ -141,7 +141,7 @@ fn leaving(path: &Path) -> Point {
 }
 
 /// The way `path` heads as it arrives at its end.
-fn arriving(path: &Path) -> Point {
+pub fn arriving(path: &Path) -> Point {
     let n = path.segments.len();
     let before = if n >= 2 {
         path.segments[n - 2].end()

@@ -475,6 +475,8 @@ I[eo + "edit_picture.svg"] = lambda: [picture(4, 4, 34, 28), line(8, 41, 42, 41,
 I["drawing/join/join_straight_line.svg"] = lambda: [path("M5,10 Q14,28 17,34", INK, SW), path("M43,10 Q34,28 31,34", INK, SW), line(17, 34, 31, 34, ACC, 4), node(17, 34), node(31, 34)]
 I["drawing/join/join_smooth_curve.svg"] = lambda: [path("M5,10 Q12,24 16,30", INK, SW), path("M43,10 Q36,24 32,30", INK, SW), path("M16,30 Q24,44 32,30", ACC, 4), node(16, 30), node(32, 30)]
 I["drawing/join/join_move_end_points.svg"] = lambda: [path("M5,10 Q14,28 24,34", INK, SW), path("M43,10 Q36,24 31,30", GREY, 2, dash="3 3"), path("M43,10 Q34,28 24,34", INK, SW), node(24, 34, 5, ACC)]
+# two open ends, each marked with its circle, joined where they are clicked
+I["drawing/join/join_open_ends.svg"] = lambda: [path("M5,10 Q12,24 15,32", INK, SW), path("M43,10 Q36,24 33,32", INK, SW), line(19, 33, 29, 33, ACC, 2.5, "2.5 2.5"), circ(15, 33, 3.5, ACC, 2, WHITE), circ(33, 33, 3.5, ACC, 2, WHITE)]
 
 # weld and offset
 wo = "drawing/weld_and_offset/"

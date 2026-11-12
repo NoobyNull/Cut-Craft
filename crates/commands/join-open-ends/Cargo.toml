@@ -1,0 +1,19 @@
+[package]
+name = "cmd-join-open-ends"
+description = "Join Open Ends"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cmd-join-close-vectors = { path = "../join-close-vectors" }
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

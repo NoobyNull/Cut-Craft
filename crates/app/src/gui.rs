@@ -265,6 +265,12 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "Save Cut List",
         "Save a list of the job's parts and their sizes, as a spreadsheet (CSV)",
     ),
+    (
+        "show_open_vector_ends",
+        "Show Open Vector Ends",
+        "Put a circle on each end of every open vector, so a gap that stops a shape being \
+         pocketed or carved stands out",
+    ),
 ];
 
 /// The icons of built-in tools whose file is not named for their id.
@@ -430,6 +436,7 @@ fn drawing_groups() -> Vec<ToolGroup> {
             "Join, Combine and Trim",
             &[
                 "join_vectors",
+                "join_open_ends",
                 "join_straight_line",
                 "join_smooth_curve",
                 "join_move_end_points",
@@ -1947,6 +1954,7 @@ impl MenuSystem {
                             ],
                         ),
                         k("Join Vectors", "J"),
+                        a("Join Open Ends...", "join_open_ends"),
                         a("Curve Fit Vectors", "fit_curves_to_vectors"),
                         a("Nest Selected Objects", "nest_parts"),
                         a("Name Part...", "name_part"),
@@ -2129,6 +2137,7 @@ impl MenuSystem {
                         i("Draw Vectors in 3D View"),
                         i("Draw Keep-Out Zones in 3D View"),
                         i("Show Keep-Out Zone Labels"),
+                        i("Show Open Vector Ends"),
                         sep(),
                         i("Auto-Wrapping View"),
                         i("Color Shaded View"),
