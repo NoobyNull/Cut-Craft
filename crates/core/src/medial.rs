@@ -361,7 +361,7 @@ mod tests {
             .iter()
             .filter(|(p, _)| p.x > 3.0 && p.x < 37.0)
             .collect();
-        assert!(!middle.is_empty());
+        assert_ne!(middle.len(), 0);
         for (p, r) in &middle {
             assert!((p.y - 2.0).abs() < 0.01, "{p}");
             assert!((r - 2.0).abs() < 0.01, "{r}");
@@ -477,6 +477,6 @@ mod tests {
 
     #[test]
     fn nothing_for_nothing() {
-        assert!(centre_lines(&[], 0.05).is_empty());
+        assert_eq!(centre_lines(&[], 0.05).len(), 0);
     }
 }
