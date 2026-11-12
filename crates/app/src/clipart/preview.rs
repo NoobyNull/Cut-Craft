@@ -36,8 +36,7 @@ fn name(path: &Path) -> String {
 /// What a file's extension says it is, lower case.
 pub fn extension(path: &Path) -> String {
     path.extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .unwrap_or_default()
+        .map_or_default(|e| e.to_string_lossy().to_lowercase())
 }
 
 /// `model` seen from its best side.

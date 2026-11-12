@@ -1110,8 +1110,7 @@ fn kind(root: &Value, property: &Value) -> Kind {
             integer: t == "integer",
             steps: marked("x-steps")
                 .and_then(Value::as_array)
-                .map(|steps| steps.iter().filter_map(Value::as_f64).collect())
-                .unwrap_or_default(),
+                .map_or_default(|steps| steps.iter().filter_map(Value::as_f64).collect()),
             slider: marked("x-widget").and_then(Value::as_str) == Some("slider"),
         },
         Some("boolean") => Kind::Bool,
@@ -1157,8 +1156,7 @@ fn sentence_case(key: &str) -> String {
     let mut chars = words.chars();
     chars
         .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
+        .map_or_default(|c| c.to_uppercase().chain(chars).collect())
 }
 
 #[cfg(test)]

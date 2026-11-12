@@ -76,7 +76,7 @@ mod tests {
                 l.locked = locked;
             });
             let result = SelectLayerVectors::run(&doc, &Params { layer: LayerId(2) });
-            let why = result.err().map(|e| e.to_string()).unwrap_or_default();
+            let why = result.err().map_or_default(|e| e.to_string());
             assert!(why.contains("hidden or locked"), "{why}");
         }
         let why = after_err::<SelectLayerVectors>(&Params { layer: LayerId(9) });

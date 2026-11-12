@@ -242,8 +242,7 @@ impl Speller {
         let mut cap = lower.chars();
         let capital: String = cap
             .next()
-            .map(|c| c.to_uppercase().chain(cap).collect())
-            .unwrap_or_default();
+            .map_or_default(|c| c.to_uppercase().chain(cap).collect());
         word.chars().any(|c| c.is_ascii_digit())
             || self.user.contains(&lower)
             || self.known(word)
@@ -290,8 +289,7 @@ impl Speller {
             let t = if capitalised {
                 let mut c = t.chars();
                 c.next()
-                    .map(|f| f.to_uppercase().chain(c).collect())
-                    .unwrap_or_default()
+                    .map_or_default(|f| f.to_uppercase().chain(c).collect())
             } else {
                 t
             };

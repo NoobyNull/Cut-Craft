@@ -180,8 +180,7 @@ impl CutCraftApp {
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
             .extension()
-            .map(|e| e.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string_lossy().to_lowercase());
         let job = [
             JOB_EXTENSION,
             OLD_JOB_EXTENSION,
@@ -846,8 +845,7 @@ impl CutCraftApp {
         self.registry
             .get("draw_text")
             .and_then(|cmd| cmd.run_json(&self.doc, &value).ok())
-            .map(|change| change.added().cloned().collect())
-            .unwrap_or_default()
+            .map_or_default(|change| change.added().cloned().collect())
     }
 
     /// The text settings `p` into Draw Text's form, and the text made again with them.
@@ -1468,13 +1466,12 @@ impl CutCraftApp {
         if !fresh {
             let triangles = serde_json::from_value(form.params.clone())
                 .ok()
-                .map(|p| {
+                .map_or_default(|p| {
                     let (_, paths) = self.doc.selected_paths(|_| true);
                     cut_craft_core::medial::triangles(&cmd_vcarve_engrave_toolpath::carved_area(
                         &paths, &p,
                     ))
-                })
-                .unwrap_or_default();
+                });
             self.carve_area = Some(super::CarveArea {
                 params: form.params.clone(),
                 revision: self.history.revision(),
@@ -2707,8 +2704,7 @@ impl CutCraftApp {
                     let cmd = self.registry.get("move_nodes")?;
                     cmd.run_json(&self.doc, &params).ok()
                 })
-                .map(|change| change.added().cloned().collect())
-                .unwrap_or_default(),
+                .map_or_default(|change| change.added().cloned().collect()),
             Some(Gesture::Dragging(drag)) => self
                 .node_target(drag.start, reach)
                 .and_then(|t| {
@@ -2853,8 +2849,7 @@ impl CutCraftApp {
         let mut paths: Vec<Path> = cmd
             .drag_params(form.way.apply(drag), &self.with_stroke(id, &form.params))
             .and_then(|params| cmd.run_json(&self.doc, &params))
-            .map(|change| change.added().cloned().collect())
-            .unwrap_or_default();
+            .map_or_default(|change| change.added().cloned().collect());
         // Freehand's stabilizing circle, round the path's end: the pointer pulls from its edge
         if id == "draw_freehand"
             && let Some(radius) = form.params["stabilize"].as_f64().filter(|r| *r > 0.0)
@@ -3486,8 +3481,7 @@ impl CutCraftApp {
         {
             let ext = path
                 .extension()
-                .map(|e| e.to_string_lossy().into_owned())
-                .unwrap_or_default();
+                .map_or_default(|e| e.to_string_lossy().into_owned());
             match std::fs::read(&path)
                 .map_err(|e| e.to_string())
                 .and_then(|bytes| fmt_create_job_sheet::logo(&bytes, &ext))

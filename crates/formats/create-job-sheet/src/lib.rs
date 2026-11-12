@@ -143,8 +143,7 @@ pub fn sheets(
     let side = |d: &Document| {
         d.job
             .double_sided
-            .map(|_| if d.bottom_side { "_Bottom" } else { "_Top" })
-            .unwrap_or_default()
+            .map_or_default(|_| if d.bottom_side { "_Bottom" } else { "_Top" })
     };
     if doc.sheets.len() <= 1 {
         return Ok(vec![(side(doc).to_owned(), sheet_for(doc, style, setup)?)]);
@@ -295,8 +294,7 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
         let layout = String::from_utf8(fmt_export_svg::ExportSvg::export(doc)?)
             .unwrap_or_default()
             .split_once("<svg")
-            .map(|(_, svg)| format!("<svg{svg}"))
-            .unwrap_or_default();
+            .map_or_default(|(_, svg)| format!("<svg{svg}"));
         let _ = write!(h, "<h2>Job Layout</h2>{layout}");
     }
     if style.notes && !doc.notes.is_empty() {
