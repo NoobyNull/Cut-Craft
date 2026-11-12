@@ -1,4 +1,5 @@
-//! Delete Toolpath.
+//! Delete Toolpath: removes a toolpath from the toolpath list. The vectors it was made from
+//! stay; Undo brings it back.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::{Change, Command, CommandError, Meta, existing};
@@ -9,6 +10,7 @@ pub struct DeleteToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The toolpath to delete
     pub toolpath: EntityId,
 }
 

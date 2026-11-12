@@ -186,7 +186,8 @@ pub trait Interactive: Command {
     fn from_drag(drag: Drag, current: &Self::Params) -> Self::Params;
 }
 
-/// Parameters for commands that take none.
+// Parameters for commands that take none. A plain comment: a doc comment would be every
+// such command's help page intro.
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct NoParams {}
 
