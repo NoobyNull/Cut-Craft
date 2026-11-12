@@ -12,6 +12,9 @@ cut-craft-post = { path = "../post" }
 eframe.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Send to Machine over WebDAV (a WiFi controller's card): its requests, and its lists of files
+ureq = { version = "3", features = ["platform-verifier"] }
+roxmltree = "0.20"
 
 [lints]
 workspace = true

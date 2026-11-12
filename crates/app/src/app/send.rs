@@ -7,6 +7,7 @@
 
 use super::{CutCraftApp, SaveForm, dialog_size, file_dialog, message_dialog};
 use cut_craft_machines::send::{Folder, Item, SendTo, Store, safe_file_name, safe_name, size_text};
+use cut_craft_machines::webdav;
 use eframe::egui;
 use std::path::{Path, PathBuf};
 
@@ -25,7 +26,7 @@ impl CutCraftApp {
         let Some((post, told)) = self.ready_to_save(form) else {
             return;
         };
-        let result = self.send_to(form, &post, &store, &|names| ask_replace(names));
+        let result = self.send_to(form, &post, store.as_ref(), &|names| ask_replace(names));
         self.status
             .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
     }
@@ -82,6 +83,9 @@ impl CutCraftApp {
             let sheet = self.job_sheet_with(outputs, staging, &name)?;
             let on_card = safe_file_name(&sheet, short);
             files.push((staging.join(sheet), on_card));
+        }
+        if let Some(busy) = store.busy() {
+            return Err(format!("Not sent: {busy}"));
         }
         let at = [folder.to_owned()];
         let mut there = vec![];
@@ -146,11 +150,17 @@ impl CutCraftApp {
     }
 }
 
-/// The machine's files as this computer reaches them now: a share kept by its network
-/// location (`smb://...`, as a desktop's share mounts are) is found where it is mounted now.
-fn store_of(send_to: &SendTo) -> Option<Folder> {
-    let kept = send_to.store()?;
-    Some(crate::clipart::network::find(kept.root()).map_or(kept, Folder::new))
+/// The machine's files as this computer reaches them now: a web address as it is, and a
+/// share kept by its network location (`smb://...`, as a desktop's share mounts are) found
+/// where it is mounted now.
+fn store_of(send_to: &SendTo) -> Option<Box<dyn Store>> {
+    let place = send_to.folder.trim();
+    if !send_to.is_set() || webdav::is_address(place) {
+        return send_to.store();
+    }
+    let kept = PathBuf::from(place);
+    let found = crate::clipart::network::find(&kept).unwrap_or(kept);
+    Some(Box::new(Folder::new(found)))
 }
 
 /// A fresh folder of this computer's to write the files in before they are sent.
@@ -180,7 +190,7 @@ fn ask_replace(names: &[String]) -> bool {
 /// Machine Files: a folder of the machine's, what is in it, and what is being done to it.
 pub(super) struct MachineFiles {
     machine: String,
-    store: Folder,
+    store: Box<dyn Store>,
     short: bool,
     /// The folder shown, from the top of the machine's files.
     pub(super) at: Vec<String>,
@@ -196,7 +206,7 @@ pub(super) struct MachineFiles {
 }
 
 impl MachineFiles {
-    pub(super) fn new(machine: &str, store: Folder, short: bool) -> Self {
+    pub(super) fn new(machine: &str, store: Box<dyn Store>, short: bool) -> Self {
         let mut files = Self {
             machine: machine.to_owned(),
             store,
@@ -243,7 +253,21 @@ impl MachineFiles {
         (safe, note)
     }
 
+    /// Whether the machine can be changed now; else says why not.
+    fn free(&mut self) -> bool {
+        match self.store.busy() {
+            Some(busy) => {
+                self.message = Err(busy);
+                false
+            }
+            None => true,
+        }
+    }
+
     pub(super) fn upload(&mut self, paths: &[PathBuf]) {
+        if !self.free() {
+            return;
+        }
         let mut sent = 0;
         for path in paths {
             let name = safe_file_name(&super::file_name(path), self.short);
@@ -262,6 +286,9 @@ impl MachineFiles {
     }
 
     pub(super) fn rename(&mut self, from: &str, to: &str) {
+        if !self.free() {
+            return;
+        }
         let folder = self
             .items
             .as_ref()
@@ -272,11 +299,17 @@ impl MachineFiles {
     }
 
     pub(super) fn delete(&mut self, name: &str) {
+        if !self.free() {
+            return;
+        }
         let result = self.store.delete(&self.at, name);
         self.done(result.map(|()| format!("Deleted {name}")));
     }
 
     pub(super) fn make_folder(&mut self, name: &str) {
+        if !self.free() {
+            return;
+        }
         let (name, note) = self.safe(name, true);
         let result = self.store.make_folder(&self.at, &name);
         self.done(result.map(|()| format!("Made the folder {name}{note}")));
@@ -284,10 +317,7 @@ impl MachineFiles {
 
     /// The window's contents; whether Upload Files was pressed.
     fn show(&mut self, ui: &mut egui::Ui) -> bool {
-        ui.weak(format!(
-            "The machine's files at {}",
-            self.store.root().display()
-        ));
+        ui.weak(format!("The machine's files at {}", self.store.place()));
         self.path_row(ui);
         ui.separator();
         let mut asked = None;
