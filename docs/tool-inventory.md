@@ -485,6 +485,9 @@ say "not implemented yet".
     repeats so it closes on itself: Rope (twist angle), Chain (face and edge links), Twist
     (two plaited strands), Braid (three) or Bead and reel, with Border width, Repeat size,
     Inset from the edge and optional rails; the ornament inside keeps clear of it.
+    Direction sets which way the 3D carving goes: Raised (Raise height), Sunk in (Sink
+    depth, an incised carving) or Mixed (the border and bigger pieces raised, the small
+    fillers hollowed in), each distance set on its own.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.

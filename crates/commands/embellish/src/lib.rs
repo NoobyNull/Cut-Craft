@@ -82,6 +82,20 @@ pub enum BorderStyle {
     BeadAndReel,
 }
 
+/// Which way the carving's pieces go.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    /// Every piece stands up from the material
+    #[default]
+    Raised,
+    /// Every piece is hollowed into the material, as an incised carving
+    #[schemars(title = "Sunk in")]
+    Sunk,
+    /// The border and the bigger pieces stand up; the small fillers are hollowed in
+    Mixed,
+}
+
 /// What the ornament is made as.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -133,9 +147,15 @@ pub struct Params {
     /// 10. Finish with a ball-nose bit no wider than the gap
     #[schemars(range(min = 1, max = 10), extend("x-widget" = "slider"))]
     pub tightness: u32,
+    /// Whether the 3D carving's pieces stand up, are hollowed in, or both
+    #[schemars(extend("x-widget" = "row"))]
+    pub direction: Direction,
     /// How far the carving's highest pieces stand above the material
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "Raise height", extend("x-unit" = "mm", "x-hide-when" = {"direction": "sunk"}), range(min = 0))]
     pub height: f64,
+    /// How deep the carving's hollowed pieces go into the material
+    #[schemars(title = "Sink depth", extend("x-unit" = "mm", "x-hide-when" = {"direction": "raised"}), range(min = 0))]
+    pub depth: f64,
     #[schemars(extend("x-widget" = "row"))]
     pub make: Make,
     /// Small dots punched into the open ground of the 3D carving
@@ -162,7 +182,9 @@ impl Default for Params {
             objects: 6,
             scroll_size: 100,
             tightness: 7,
+            direction: Direction::Raised,
             height: 3.0,
+            depth: 2.0,
             make: Make::Both,
             stipple: false,
             seed: 4,
@@ -275,14 +297,16 @@ fn regions(rings: &[Vec<Point>]) -> Vec<Region> {
 }
 
 /// The ornament for one shape, in its field's frame: a patterned border when there is one,
-/// then the ornament inside it, kept clear of it.
-fn design(field: &Field, s: Settings, pattern: Option<border::Spec>) -> Vec<Item> {
+/// then the ornament inside it, kept clear of it. Also how many of the pieces, from the
+/// start, are the patterned border's.
+fn design(field: &Field, s: Settings, pattern: Option<border::Spec>) -> (Vec<Item>, usize) {
     let Some(b) = pattern.filter(|_| s.place != Where::Fill) else {
-        return fill(field, s, &[]);
+        return (fill(field, s, &[]), 0);
     };
     let (mut items, reach) = border::design(field, &b, s.gap);
+    let n = items.len();
     if s.place == Where::Border {
-        return items;
+        return (items, n);
     }
     let inside = Settings {
         place: Where::Fill,
@@ -291,7 +315,32 @@ fn design(field: &Field, s: Settings, pattern: Option<border::Spec>) -> Vec<Item
     };
     let more = fill(field, inside, &items);
     items.extend(more);
+    (items, n)
+}
+
+/// Which of one shape's pieces a Mixed carving hollows in: the small fillers (dots, beads,
+/// buds), less than half the size of its big pieces; never the patterned border's first `n`.
+fn small_ones(items: &[Item], n: usize) -> Vec<bool> {
+    let size = |it: &Item| it.area().abs().sqrt();
+    let mut sizes: Vec<f64> = items[n..]
+        .iter()
+        .filter(|it| matches!(it, Item::Shape { sink: false, .. }))
+        .map(size)
+        .collect();
+    sizes.sort_by(f64::total_cmp);
+    // the big pieces' size, past the one outsized band round the edge
+    let big = sizes
+        .get((sizes.len() as f64 * 0.95) as usize)
+        .or(sizes.last())
+        .copied()
+        .unwrap_or(0.0);
     items
+        .iter()
+        .enumerate()
+        .map(|(k, it)| {
+            k >= n && matches!(it, Item::Shape { sink: false, .. }) && size(it) < big * 0.5
+        })
+        .collect()
 }
 
 fn fill(field: &Field, s: Settings, pre: &[Item]) -> Vec<Item> {
@@ -316,7 +365,12 @@ impl Command for Embellish {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         if p.make != Make::Vectors {
-            ensure_positive("height", p.height)?;
+            if p.direction != Direction::Sunk {
+                ensure_positive("raise height", p.height)?;
+            }
+            if p.direction != Direction::Raised {
+                ensure_positive("sink depth", p.depth)?;
+            }
         }
         if p.pattern().is_some() {
             ensure_positive("border width", p.border_width)?;
@@ -334,14 +388,17 @@ impl Command for Embellish {
             .collect();
         let regions = regions(&rings);
         let mut items: Vec<Item> = vec![];
+        let mut sunk: Vec<bool> = vec![];
         for (k, region) in regions.iter().enumerate() {
             let seed = p.seed.wrapping_add(k as u32 * 7919);
             let offset = region.offset;
-            items.extend(
-                design(&region.field, p.settings(seed), p.pattern())
-                    .iter()
-                    .map(|it| it.map(&|q| q + offset)),
-            );
+            let (made, n) = design(&region.field, p.settings(seed), p.pattern());
+            sunk.extend(match p.direction {
+                Direction::Raised => vec![false; made.len()],
+                Direction::Sunk => vec![true; made.len()],
+                Direction::Mixed => small_ones(&made, n),
+            });
+            items.extend(made.iter().map(|it| it.map(&|q| q + offset)));
         }
         if !items
             .iter()
@@ -365,7 +422,7 @@ impl Command for Embellish {
             }
         }
         if p.make != Make::Vectors {
-            c.add_component(carving(p, &regions, &items, doc.job.model_cell()));
+            c.add_component(carving(p, &regions, &items, &sunk, doc.job.model_cell()));
         }
         Ok(c.finish())
     }
@@ -386,8 +443,14 @@ fn outlines(it: &Item) -> Vec<Path> {
     }
 }
 
-/// The pieces raised as one component over the shapes.
-fn carving(p: &Params, regions: &[Region], items: &[Item], model_cell: f64) -> Component {
+/// The pieces raised, or hollowed where `sunk`, as one component over the shapes.
+fn carving(
+    p: &Params,
+    regions: &[Region],
+    items: &[Item],
+    sunk: &[bool],
+    model_cell: f64,
+) -> Component {
     let area = regions
         .iter()
         .map(|r| {
@@ -406,7 +469,7 @@ fn carving(p: &Params, regions: &[Region], items: &[Item], model_cell: f64) -> C
     let mut grid = relief::grid(area.min, cell, part.columns, part.rows, |q| {
         regions.iter().any(|r| r.field.sample(q - r.offset) > 0.0)
     });
-    relief::raise(&mut grid, items, p.height);
+    relief::raise(&mut grid, items, sunk, p.height, p.depth);
     part.heights = grid.heights;
     part
 }
@@ -485,6 +548,65 @@ mod tests {
                 "the outline stays put"
             );
         }
+    }
+
+    fn range_of(doc: &Document) -> (f64, f64) {
+        let part = doc.components.values().next().unwrap();
+        part.heights
+            .iter()
+            .filter(|h| !h.is_nan())
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &h| {
+                (lo.min(h), hi.max(h))
+            })
+    }
+
+    #[test]
+    fn the_pieces_stand_up_sink_in_or_both_by_their_own_distances() {
+        let doc = document_with(vec![polygon(6, 110.0)]);
+        let with = |direction| Params {
+            direction,
+            height: 3.0,
+            depth: 1.5,
+            ..Params::default()
+        };
+        let (lo, hi) = range_of(&made(&doc, &with(Direction::Raised)));
+        assert!((hi - 3.0).abs() < 0.15 && lo > -0.5, "raised {lo} {hi}");
+        let (lo, hi) = range_of(&made(&doc, &with(Direction::Sunk)));
+        assert!(hi <= 0.0 && (lo + 1.5).abs() < 0.3, "sunk {lo} {hi}");
+        let (lo, hi) = range_of(&made(&doc, &with(Direction::Mixed)));
+        assert!((hi - 3.0).abs() < 0.15 && lo < -1.0, "mixed {lo} {hi}");
+        for pattern in [BorderStyle::Band, BorderStyle::Rope] {
+            let p = Params {
+                border: pattern,
+                ..with(Direction::Mixed)
+            };
+            let (pieces, n) = {
+                let rings: Vec<Vec<Point>> = vec![polygon(6, 110.0).flatten(0.05)];
+                let r = regions(&rings);
+                design(&r[0].field, p.settings(4), p.pattern())
+            };
+            let small = small_ones(&pieces, n);
+            assert!(small[..n].iter().all(|s| !s), "the border stays raised");
+            let raised = small
+                .iter()
+                .zip(&pieces)
+                .filter(|(s, it)| !**s && matches!(it, Item::Shape { sink: false, .. }));
+            assert!(raised.count() >= 12, "the main pieces stay raised");
+            assert!(small.iter().filter(|s| **s).count() >= 12, "fillers sink");
+        }
+    }
+
+    #[test]
+    fn a_direction_needs_its_own_distance() {
+        let doc = document_with(vec![polygon(6, 110.0)]);
+        let sunk = Params {
+            direction: Direction::Sunk,
+            height: 0.0,
+            ..Params::default()
+        };
+        assert!(Embellish::run(&doc, &sunk).is_ok(), "no height wanted");
+        let flat = Params { depth: 0.0, ..sunk };
+        assert!(Embellish::run(&doc, &flat).is_err());
     }
 
     #[test]
@@ -783,6 +905,28 @@ mod pictures {
                 "-bead",
                 Params {
                     border: BorderStyle::BeadAndReel,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-sunk",
+                Params {
+                    direction: Direction::Sunk,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-mixed",
+                Params {
+                    direction: Direction::Mixed,
+                    ..Params::default()
+                },
+            ),
+            (
+                "-mixed-rope",
+                Params {
+                    direction: Direction::Mixed,
+                    border: BorderStyle::Rope,
                     ..Params::default()
                 },
             ),
