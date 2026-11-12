@@ -1773,6 +1773,7 @@ fn every_way_of_cutting_has_a_picture_for_each_choice() {
     let wanted = [
         ("chamfer_toolpath", &["cut_direction", "ways"][..]),
         ("prism_toolpath", &["cut_direction", "ways"]),
+        ("moulding_toolpath", &["cut_direction", "ways"]),
     ];
     for (id, keys) in wanted {
         let f = fields(&registry.get(id).unwrap().schema());
