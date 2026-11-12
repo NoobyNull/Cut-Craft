@@ -7,7 +7,7 @@ use cut_craft_core::document::Document;
 use cut_craft_core::entry::{
     Direction, Entry, Loops, Motion, Ramp, Ramping, Ways, path_moves, trochoid,
 };
-use cut_craft_core::geometry::Path;
+use cut_craft_core::geometry::{Path, Point, winding};
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, cut_points, hatch_lines, made_by, project_onto_model};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
@@ -240,10 +240,11 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 "select the closed vectors to pocket".into(),
             ));
         }
-        // ponytail: each selected shape is a filled region, so islands (shapes inside shapes)
-        // are pocketed over; nest-aware regions when islands are needed
-        let ring = polygon::offset(
-            &polygon::union(&paths),
+        // a shape inside another is an island the pocket goes round (a ring between two
+        // circles), as in the other toolpaths
+        // ponytail: overlapping shapes go even-odd too, their overlap left uncut
+        let ring = polygon::offset_regions(
+            &polygon::regions(&paths),
             -(p.tool.diameter / 2.0 + p.allowance),
             Corners::Round,
         );
@@ -283,7 +284,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 .iter()
                 .flat_map(|r| {
                     let mut points = if r.closed {
-                        p.direction.orient(cut_points(r), true)
+                        oriented(p.direction, r)
                     } else {
                         cut_points(r)
                     };
@@ -341,12 +342,20 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
 fn rings_in(mut ring: Vec<Path>, step: f64) -> Vec<Path> {
     let mut rings = vec![];
     while !ring.is_empty() {
-        let next = polygon::offset(&ring, -step, Corners::Round);
+        let next = polygon::offset_regions(&ring, -step, Corners::Round);
         rings.extend(ring);
         ring = next;
     }
     rings.reverse();
     rings
+}
+
+/// A ring of the pocket's regions turned to cut `direction`: an outline (anticlockwise) has
+/// the waste inside it, an island's (clockwise) outside it.
+fn oriented(direction: Direction, ring: &Path) -> Vec<Point> {
+    let points = cut_points(ring);
+    let outline = winding(&points) > 0.0;
+    direction.orient(points, outline)
 }
 
 /// The trochoidal clearing of the region inside `edge` (where the tool's middle may go):
@@ -356,21 +365,21 @@ fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
     let (radius, advance) = p.loops.sized(p.tool.diameter);
     let step = p.tool.stepover * p.tool.diameter;
     let mut out = vec![];
-    let mut band = polygon::offset(edge, -radius, Corners::Round);
+    let mut band = polygon::offset_regions(edge, -radius, Corners::Round);
     let mut last = vec![];
     while !band.is_empty() {
         for ring in &band {
-            let ring = p.direction.orient(cut_points(ring), true);
+            let ring = oriented(p.direction, ring);
             let points = trochoid(&ring, true, radius, advance, p.loops.anticlockwise());
             out.push(Path::polyline(&points, false));
         }
         last = band;
-        band = polygon::offset(&last, -(2.0 * radius + step), Corners::Round);
+        band = polygon::offset_regions(&last, -(2.0 * radius + step), Corners::Round);
     }
     // the last band cleared to a loop and a tool radius inside it; rings for the rest
-    let mut ring = polygon::offset(&last, -(radius + step), Corners::Round);
+    let mut ring = polygon::offset_regions(&last, -(radius + step), Corners::Round);
     while !ring.is_empty() {
-        let next = polygon::offset(&ring, -step, Corners::Round);
+        let next = polygon::offset_regions(&ring, -step, Corners::Round);
         out.extend(ring);
         ring = next;
     }
@@ -462,6 +471,89 @@ mod tests {
             .filter(|w| w[1].kind == MoveKind::Cut)
             .map(|w| polyline_distance(&[w[0].to.truncate(), w[1].to.truncate()], at))
             .fold(f64::MAX, f64::min)
+    }
+
+    /// A 40 mm square with a 10 mm square island in its middle, pocketed with `p`.
+    fn ring_pocket(p: &Params) -> Toolpath {
+        made_toolpath::<PocketToolpath>(vec![square(0.0, 0.0, 40.0), square(15.0, 15.0, 10.0)], p)
+            .unwrap()
+    }
+
+    #[test]
+    fn a_shape_inside_another_is_an_island_the_pocket_goes_round() {
+        let radius = Tool::default().diameter / 2.0;
+        for (strategy, motion) in [
+            (Strategy::Offset, Motion::Straight),
+            (Strategy::Raster, Motion::Straight),
+            (Strategy::Offset, Motion::Trochoidal),
+        ] {
+            let tp = ring_pocket(&Params {
+                strategy,
+                motion,
+                ..Params::default()
+            });
+            let middle = nearest_cut(&tp, Point::new(20.0, 20.0));
+            assert!(
+                middle >= 5.0 + radius - 0.05,
+                "{strategy:?} {motion:?}: cuts {middle} mm from the island's middle"
+            );
+            // and the ring round it is still cleared
+            for at in [Point::new(7.5, 20.0), Point::new(32.5, 32.5)] {
+                let gap = nearest_cut(&tp, at);
+                assert!(
+                    gap <= radius,
+                    "{strategy:?} {motion:?}: {at:?} {gap} mm from a cut"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_islands_wall_is_cut_the_chosen_direction_too() {
+        for direction in [Direction::Climb, Direction::Conventional] {
+            let tp = ring_pocket(&Params {
+                direction,
+                ..Params::default()
+            });
+            // the island's wall ring: the cut nearest the island's side
+            let wall = nearest_cut(&tp, Point::new(20.0, 20.0));
+            let middle = Point::new(20.0, 20.0);
+            let mut ring: Vec<Point> = vec![];
+            let mut from = None;
+            for m in &tp.moves {
+                if m.kind == MoveKind::Cut {
+                    if ring.is_empty() {
+                        ring.extend(from);
+                    }
+                    ring.push(m.to.truncate());
+                } else if !ring.is_empty() {
+                    if (polyline_distance(&ring, middle) - wall).abs() < 0.01 {
+                        break;
+                    }
+                    ring.clear();
+                }
+                from = Some(m.to.truncate());
+            }
+            assert!(!ring.is_empty(), "{direction:?}: no ring round the island");
+            // climb on an island's wall (waste outside it) runs clockwise
+            let clockwise = cut_craft_core::geometry::winding(&ring) < 0.0;
+            assert_eq!(clockwise, direction == Direction::Climb, "{direction:?}");
+        }
+    }
+
+    #[test]
+    fn shapes_side_by_side_are_each_pocketed() {
+        let tp = made_toolpath::<PocketToolpath>(
+            vec![square(0.0, 0.0, 20.0), square(30.0, 0.0, 20.0)],
+            &Params::default(),
+        )
+        .unwrap();
+        for at in [Point::new(10.0, 10.0), Point::new(40.0, 10.0)] {
+            assert!(
+                nearest_cut(&tp, at) <= Tool::default().diameter / 2.0,
+                "{at:?}"
+            );
+        }
     }
 
     #[test]

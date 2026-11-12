@@ -227,7 +227,8 @@ fn clearing(
     let mut rings = vec![];
     let mut ring = flat;
     while !ring.is_empty() {
-        let next = polygon::offset(&ring, -step, Corners::Round);
+        // as regions, so a shape inside another (the middle of an "O") stays an island
+        let next = polygon::offset_regions(&ring, -step, Corners::Round);
         rings.extend(ring);
         ring = next;
     }
@@ -461,6 +462,37 @@ mod tests {
         let mut m = Material::new(job, 400);
         m.cut(t);
         m
+    }
+
+    #[test]
+    fn the_clearance_tool_goes_round_a_shape_inside_another() {
+        use cut_craft_core::testing::{document_with, square};
+        let p = Params {
+            flat_depth: 3.0,
+            clearance_tools: vec![Tool::default()],
+            ..Params::default()
+        };
+        let mut doc = document_with(vec![rectangle(60.0, 40.0), square(25.0, 15.0, 10.0)]);
+        doc.apply(&VcarveEngraveToolpath::run(&doc, &p).unwrap())
+            .unwrap();
+        let mill = doc.toolpaths.values().next().unwrap();
+        let island = Point::new(30.0, 20.0);
+        let nearest = mill
+            .moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Cut)
+            .map(|w| {
+                cut_craft_core::geometry::polyline_distance(
+                    &[w[0].to.truncate(), w[1].to.truncate()],
+                    island,
+                )
+            })
+            .fold(f64::MAX, f64::min);
+        // the island's 5 mm half-width and the mill's 3 mm radius
+        assert!(
+            nearest >= 8.0 - 0.05,
+            "the mill cuts {nearest} mm from the island's middle"
+        );
     }
 
     #[test]
