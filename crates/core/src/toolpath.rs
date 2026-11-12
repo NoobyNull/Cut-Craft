@@ -292,6 +292,22 @@ impl Tool {
         (self.flute_length.is_finite() && self.flute_length > 0.0).then_some(self.flute_length)
     }
 
+    /// The My Tools group a tool copied in from a catalogue (or added) goes in: its maker,
+    /// then its type, as `Amana/V-Bits` (`Generic/...` with no maker).
+    pub fn own_group(&self) -> String {
+        let maker = self.manufacturer.trim().replace('/', "-");
+        let maker = if maker.is_empty() { "Generic" } else { &maker };
+        let kind = match self.shape {
+            ToolShape::EndMill => "End Mills",
+            ToolShape::BallNose => "Ball Noses",
+            ToolShape::VBit => "V-Bits",
+            ToolShape::RadiusedEndMill => "Radiused End Mills",
+            ToolShape::ThreadMill => "Thread Mills",
+            ToolShape::FormTool => "Form Tools",
+        };
+        format!("{maker}/{kind}")
+    }
+
     /// How much each flute cuts per turn (mm): the feed rate over the spindle speed and
     /// flutes, to compare with the cutter maker's figure. `None` with no spindle or flutes.
     pub fn chip_load(&self) -> Option<f64> {
@@ -577,7 +593,16 @@ pub struct ToolDatabase {
     /// (added with name formats)
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub name_formats: std::collections::BTreeMap<String, String>,
+    /// The groups that are read-only catalogues: tool databases imported from a maker (a
+    /// `.vtdb` or Fusion library), each under [`CATALOGUES`]. Their tools are copied into My Tools to be
+    /// edited or loaded in a tool changer. Empty in databases saved before catalogues,
+    /// whose tools are all the user's own (added with My Tools)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub catalogues: Vec<String>,
 }
+
+/// The top-level group the catalogues are imported into, apart from My Tools.
+pub const CATALOGUES: &str = "Catalogues";
 
 /// A Tool Database group: `/` between levels, as [`Tool::group`].
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -665,8 +690,41 @@ impl ToolDatabase {
         }
     }
 
+    /// Whether `tool` sits in a read-only catalogue (its group is in one of
+    /// [`Self::catalogues`]).
+    pub fn is_catalogue(&self, tool: &Tool) -> bool {
+        self.is_catalogue_group(&tool.group)
+    }
+
+    /// Whether the group `path` is a catalogue or inside one.
+    pub fn is_catalogue_group(&self, path: &str) -> bool {
+        self.catalogues.iter().any(|c| {
+            path == c
+                || path
+                    .strip_prefix(c.as_str())
+                    .is_some_and(|rest| rest.starts_with('/'))
+        })
+    }
+
+    /// My Tools: the user's own tools, the ones toolpaths, tool changers and suggestions
+    /// take; every tool outside the catalogues.
+    pub fn my_tools(&self) -> impl Iterator<Item = &Tool> {
+        self.tools.iter().filter(|t| !self.is_catalogue(t))
+    }
+
     pub fn get(&self, name: &str) -> Option<&Tool> {
-        self.tools.iter().find(|t| t.name == name)
+        self.index_of(name).map(|i| &self.tools[i])
+    }
+
+    /// Where the tool `name` is: in My Tools when it is there, else in a catalogue (a tool
+    /// copied in from a catalogue keeps its name, and the copy is the one used).
+    pub fn index_of(&self, name: &str) -> Option<usize> {
+        let named = |i: &usize| self.tools[*i].name == name;
+        let all = 0..self.tools.len();
+        all.clone()
+            .filter(named)
+            .find(|&i| !self.is_catalogue(&self.tools[i]))
+            .or_else(|| all.clone().find(named))
     }
 
     /// The tool `name` as a toolpath takes it: cutting with the active material's data.
@@ -682,9 +740,18 @@ impl ToolDatabase {
                 .position(|s| s.as_deref() == Some(name))
                 .and_then(|i| u32::try_from(i + 1).ok())
         };
-        let taken: Vec<u32> = self.tools.iter().filter_map(|t| slot_of(&t.name)).collect();
+        // only My Tools go in a tool changer: a catalogue's tool of the same name is not
+        // the one loaded
+        let catalogue: Vec<bool> = self.tools.iter().map(|t| self.is_catalogue(t)).collect();
+        let taken: Vec<u32> = self
+            .tools
+            .iter()
+            .zip(&catalogue)
+            .filter(|(_, c)| !**c)
+            .filter_map(|(t, _)| slot_of(&t.name))
+            .collect();
         let mut changed = false;
-        for tool in &mut self.tools {
+        for (tool, _) in self.tools.iter_mut().zip(&catalogue).filter(|(_, c)| !**c) {
             let number = match slot_of(&tool.name) {
                 Some(slot) => slot,
                 None if taken.contains(&tool.number) => 0,
@@ -765,9 +832,14 @@ impl ToolDatabase {
     }
 
     /// Replaces the tool with the same name, or adds it at the end.
-    pub fn put(&mut self, tool: Tool) {
-        match self.tools.iter_mut().find(|t| t.name == tool.name) {
-            Some(existing) => *existing = tool,
+    pub fn put(&mut self, mut tool: Tool) {
+        match self.index_of(&tool.name) {
+            Some(i) if !self.is_catalogue(&self.tools[i]) => self.tools[i] = tool,
+            // a catalogue stays as it came: the changed tool joins My Tools
+            Some(_) => {
+                tool.group = tool.own_group();
+                self.tools.push(tool);
+            }
             None => self.tools.push(tool),
         }
     }
