@@ -29,8 +29,10 @@ pub enum Words {
     #[default]
     #[schemars(title = "Number and name")]
     NumberAndName,
+    /// Just the part's name, such as "Side"
     #[schemars(title = "Name only")]
     Name,
+    /// Just the part's number, such as "3"
     #[schemars(title = "Number only")]
     Number,
 }

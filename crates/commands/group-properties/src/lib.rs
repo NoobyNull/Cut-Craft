@@ -14,6 +14,7 @@ pub struct Params {
     #[schemars(skip)]
     #[serde(default)]
     pub group: u64,
+    /// What the group is called in the component tree
     pub name: String,
     #[schemars(title = "Combine Mode")]
     pub combine: Combine,

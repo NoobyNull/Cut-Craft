@@ -15,6 +15,7 @@ pub struct JobSetup;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum JobType {
+    /// Cut from the top face only
     #[default]
     #[schemars(title = "Single Sided")]
     SingleSided,
@@ -27,18 +28,21 @@ pub enum JobType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Size {
+    /// The material's size across, left to right
     #[schemars(
         title = "Width (X)",
         extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
         range(min = 0)
     )]
     pub width: f64,
+    /// The material's size up the job, front to back
     #[schemars(
         title = "Height (Y)",
         extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
         range(min = 0)
     )]
     pub height: f64,
+    /// How thick the material is
     #[schemars(
         title = "Thickness (Z)",
         extend("x-unit" = "mm", "x-hide-when" = {"job_type": "rotary"}),
@@ -71,20 +75,24 @@ pub struct DatumPosition {
     pub position: Datum,
     /// Give that point coordinates other than 0, 0
     pub use_offset: bool,
+    /// The X the datum point is given
     #[schemars(title = "X", extend("x-unit" = "mm"))]
     pub x: f64,
+    /// The Y the datum point is given
     #[schemars(title = "Y", extend("x-unit" = "mm"))]
     pub y: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// Cut from one face, both faces, or round a cylinder
     #[schemars(
         title = "Job Type",
         extend("x-section" = true),
         extend("x-icon" = "job_setup/{}_job.png")
     )]
     pub job_type: JobType,
+    /// The size of the material you are cutting
     #[schemars(
         title = "Job Size",
         extend("x-section" = true),
@@ -97,6 +105,7 @@ pub struct Params {
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
+    /// Which point of the material is the machine's X0, Y0
     #[schemars(
         title = "XY Datum Position",
         extend("x-section" = true),
@@ -130,6 +139,7 @@ pub struct Params {
         extend("x-kind" = "colour")
     )]
     pub colour: [u8; 3],
+    /// How high the tool travels between cuts
     #[schemars(
         title = "Rapid Z Gaps above Material",
         extend("x-section" = true),

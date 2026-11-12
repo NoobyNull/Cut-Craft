@@ -25,6 +25,7 @@ pub struct Params {
     /// The component's own heights lower than this are replaced
     #[schemars(title = "Replace value below", extend("x-unit" = "mm"))]
     pub below: f64,
+    /// What happens to the parts lower than that height
     #[schemars(title = "Replace value with", extend("x-widget" = "row"))]
     pub replace_with: ReplaceWith,
     /// Drop what is left by the height, so it starts at the zero plane

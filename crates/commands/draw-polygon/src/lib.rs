@@ -16,9 +16,10 @@ pub struct Params {
     /// Centre to vertex
     #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/polygon_radius.png"), range(min = 0))]
     pub radius: f64,
+    /// How many straight sides it has: 3 for a triangle, 6 for a hexagon
     #[schemars(range(min = 3, max = 100))]
     pub sides: u32,
-    /// Counter-clockwise
+    /// Turns the shape counter-clockwise by this angle; at 0 a corner points straight up
     #[schemars(extend("x-unit" = "deg"))]
     pub rotation: f64,
 }

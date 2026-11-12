@@ -9,6 +9,7 @@ pub struct AddLayer;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the new layer is called in the Layers list
     pub name: String,
 }
 

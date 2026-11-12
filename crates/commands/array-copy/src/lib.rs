@@ -61,9 +61,12 @@ pub struct Params {
     /// Copies across the job, the original's column included
     #[schemars(range(min = 1))]
     pub columns: u32,
+    /// Whether X and Y below are the gaps between copies or the distance between their starts
     pub spacing: Spacing,
+    /// Across: the distance between copies side by side
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
+    /// Up: the distance between rows of copies
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
     #[serde(default)]

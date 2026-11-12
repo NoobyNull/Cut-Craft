@@ -11,7 +11,9 @@ pub struct ToolpathProperties;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The toolpath these settings belong to
     pub toolpath: EntityId,
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Hidden toolpaths are not drawn or previewed
     pub visible: bool,

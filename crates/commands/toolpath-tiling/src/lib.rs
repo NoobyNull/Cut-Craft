@@ -12,8 +12,10 @@ pub struct ToolpathTiling;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// Save the toolpaths as tiles, one file each
     #[schemars(title = "Tile toolpaths")]
     pub enabled: bool,
+    /// How the job is split into tiles
     #[schemars(title = "Tiling Options", extend("x-section" = true))]
     pub tiling: Tiling,
 }

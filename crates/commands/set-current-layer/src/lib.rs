@@ -1,4 +1,5 @@
-//! Set Current Layer: where new vectors go.
+//! Set Current Layer: picks the layer you are working on. New vectors, text and imports go onto
+//! it.
 
 use cut_craft_core::document::{Document, LayerId};
 use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};

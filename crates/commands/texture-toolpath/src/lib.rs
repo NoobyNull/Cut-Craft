@@ -18,6 +18,7 @@ pub struct TextureToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Cut along the selected vectors instead of a random pattern inside them
     #[schemars(extend("x-group" = "Texture"))]
@@ -64,6 +65,7 @@ pub struct Params {
     /// Another number gives another random pattern
     #[schemars(extend("x-group" = "Texture"))]
     pub seed: u32,
+    /// The bit that cuts the texture, usually a ball nose
     pub tool: Tool,
     /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
     /// model's surface, going no lower than the bottom of the material

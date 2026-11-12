@@ -1887,6 +1887,7 @@ impl CutCraftApp {
                 editing: None,
                 drawn: None,
                 dirty: false,
+                suggested: None,
                 shown_size: None,
                 typed_size: [None; 3],
                 dragged: None,
@@ -4238,10 +4239,16 @@ impl CutCraftApp {
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
         let cuts = open.id != "relief_from_photo";
+        let suggested = open.suggested.clone();
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
-                let (changed, ask) =
-                    super::clearing_section(ui, params, &slots, finishing_smallest);
+                let (changed, ask) = super::clearing_section(
+                    ui,
+                    params,
+                    &slots,
+                    finishing_smallest,
+                    suggested.as_deref(),
+                );
                 listed.set(listed.get() | changed);
                 if let Some(ask) = ask {
                     *list_ask.borrow_mut() = Some((super::ToolList::Clearing, ask));
@@ -4335,7 +4342,79 @@ impl CutCraftApp {
                 self.picking = Some(super::PickFor::Listed(which, at));
             }
             super::ListAsk::Edit(name) => self.edit_tool(ctx, Some(name)),
+            super::ListAsk::Suggest => self.suggest_clearing(),
         }
+    }
+
+    /// The bits Suggest may pick from: the user's own (not a read-only catalogue's), each
+    /// with whether the tool changer holds it.
+    fn suggest_candidates(&self) -> Vec<cmd_pocket_toolpath::Candidate> {
+        let slots = self.slots();
+        self.tools
+            .tools
+            .iter()
+            .map(|tool| cmd_pocket_toolpath::Candidate {
+                tool: self.tools.pick(&tool.name).unwrap_or_else(|| tool.clone()),
+                loaded: slots
+                    .iter()
+                    .any(|s| s.as_deref() == Some(tool.name.as_str())),
+            })
+            .collect()
+    }
+
+    /// Pocket's Suggest clearing bits: every plan of one or two bigger bits calculated and
+    /// timed off the window's thread; the quickest becomes the form's clearing bits, and
+    /// the form says how long it takes against the finishing bit alone.
+    pub(super) fn suggest_clearing(&mut self) {
+        let Some(form) = &self.form else { return };
+        let params: cmd_pocket_toolpath::Params = match serde_json::from_value(form.params.clone())
+        {
+            Ok(p) => p,
+            Err(e) => {
+                self.status
+                    .set_message(&format!("Suggest could not read the form: {e}"));
+                return;
+            }
+        };
+        let candidates = self.suggest_candidates();
+        let finishing_loaded = self
+            .slots()
+            .iter()
+            .any(|s| s.as_deref() == Some(params.tool.name.as_str()));
+        let changes = cmd_pocket_toolpath::Changes {
+            by_hand: self.options.toolpaths.change_by_hand,
+            by_changer: self.options.toolpaths.change_by_changer,
+        };
+        let (doc, rapid) = (self.doc.clone(), self.summary.rapid);
+        let finishing = params.tool.name.clone();
+        self.in_background(
+            "Suggesting clearing bits",
+            move || {
+                cmd_pocket_toolpath::suggest(
+                    &doc,
+                    &params,
+                    &candidates,
+                    finishing_loaded,
+                    rapid,
+                    changes,
+                )
+                .map_err(|e| e.to_string())
+            },
+            move |app, made| {
+                let Some(form) = &mut app.form else { return };
+                match made {
+                    Ok(s) => {
+                        let note = suggestion_note(&s, &finishing);
+                        form.params["clearance_tools"] =
+                            serde_json::to_value(&s.clearing).expect("tools serialize");
+                        form.dirty = true;
+                        form.suggested = Some(note.clone());
+                        app.status.set_message(&note);
+                    }
+                    Err(e) => form.suggested = Some(format!("Suggest: {e}")),
+                }
+            },
+        );
     }
 
     /// Texture Toolpath's Load… or Save…: the texture as a `.vtexture` file, in the textures
@@ -4706,7 +4785,7 @@ impl CutCraftApp {
         self.invoke(ctx, "tool_database");
         if let Some(manager) = &mut self.tool_manager {
             manager.pick = name
-                .and_then(|n| manager.draft.tools.iter().position(|t| t.name == n))
+                .and_then(|n| manager.draft.index_of(&n))
                 .map(cut_craft_tool_database::Pick::Tool);
         }
     }
@@ -5205,4 +5284,23 @@ fn form_stock(
             .any(|id| doc.vectors.get(id).is_some_and(|v| v.closed)),
         units,
     }
+}
+
+/// What Suggest found, in a sentence for the form.
+fn suggestion_note(s: &cmd_pocket_toolpath::Suggestion, finishing: &str) -> String {
+    let minutes = |m: f64| format!("{:.0}", m.max(1.0).round());
+    if s.clearing.is_empty() {
+        return format!(
+            "Suggest: {finishing} alone is quickest here, about {} min; no bigger bit of yours \
+             saves time",
+            minutes(s.alone)
+        );
+    }
+    let names: Vec<&str> = s.clearing.iter().map(|t| t.name.as_str()).collect();
+    format!(
+        "Suggest: {} then {finishing}, about {} min against {} min with {finishing} alone",
+        names.join(", "),
+        minutes(s.minutes),
+        minutes(s.alone)
+    )
 }

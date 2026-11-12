@@ -34,9 +34,12 @@ pub struct Font {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Align {
+    /// Lines line up on their left ends
     #[default]
     Left,
+    /// Each line centred on the others
     Center,
+    /// Lines line up on their right ends
     Right,
 }
 

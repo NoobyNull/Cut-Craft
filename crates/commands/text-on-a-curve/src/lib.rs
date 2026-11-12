@@ -16,6 +16,7 @@ pub struct TextOnACurve;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Size {
+    /// The letters stay the size they are
     #[default]
     MaintainTextSize,
     /// The letters grow or shrink so the text runs the curve's whole length
@@ -25,18 +26,24 @@ pub enum Size {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Position {
+    /// The letters stand on top of the curve
     #[default]
     AboveCurve,
+    /// The curve runs through the middle of the letters
     OnCurve,
+    /// The letters hang below the curve
     BelowCurve,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Along {
+    /// The text starts at the curve's start
     #[default]
     Left,
+    /// The text is centred along the curve
     Middle,
+    /// The text ends at the curve's end
     Right,
 }
 
@@ -46,16 +53,19 @@ pub enum Turn {
     /// Each letter leans with the curve
     #[default]
     AlignToCurve,
+    /// Every letter stays upright, as on the page
     KeepVertical,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// Keep the letters their own size, or grow them to run the whole curve
     #[schemars(title = "Text size")]
     pub size: Size,
     /// Spacing between letters, as a share of their normal spacing
     #[schemars(title = "Text spacing", extend("x-unit" = "%"), range(min = -50, max = 300))]
     pub spacing: f64,
+    /// Which side of the curve the letters stand on
     #[schemars(title = "Text position")]
     pub position: Position,
     /// Put the text on the curve's other side
@@ -63,8 +73,10 @@ pub struct Params {
     /// Gap between the curve and the text
     #[schemars(title = "Offset distance", extend("x-unit" = "mm"), range(min = 0))]
     pub offset: f64,
+    /// Where along the curve the text starts
     #[schemars(title = "Text alignment")]
     pub alignment: Along,
+    /// Whether each letter leans to follow the curve or stays upright
     #[schemars(title = "Letters")]
     pub turn: Turn,
 }

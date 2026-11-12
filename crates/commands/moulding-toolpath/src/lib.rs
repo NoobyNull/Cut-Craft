@@ -43,6 +43,7 @@ fn both_ways() -> Ways {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[expect(clippy::struct_excessive_bools, reason = "one tick box per option")]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Mitred corners where the rails have sharp corners, instead of rolling round them
     #[schemars(extend("x-group" = "Moulding"))]

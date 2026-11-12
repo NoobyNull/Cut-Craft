@@ -56,6 +56,7 @@ pub enum Order {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Left on the model for the finishing toolpath to take off
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -74,14 +75,17 @@ pub struct Params {
     #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub boundary_level: String,
+    /// Grows the boundary outward by this much (negative shrinks it)
     #[serde(default)]
     #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary_offset: f64,
+    /// How the bulk of the material is cleared away
     #[serde(default)]
     #[schemars(title = "Roughing Strategy")]
     #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,
+    /// Which order the levels and areas are cut in
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": "z_level"}))]
     #[schemars(extend("x-group" = "Strategy"))]
@@ -116,6 +120,7 @@ pub struct Params {
         "x-group" = "Ramp Plunge Moves",
         "x-enable-when" = {"ramp_plunge_moves": "true"}
     ))]
+    /// How far along the cut each zig zag ramp runs
     pub ramp_distance: f64,
 }
 

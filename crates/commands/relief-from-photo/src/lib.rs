@@ -29,6 +29,7 @@ pub enum DepthFrom {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct Params {
+    /// What the new component is called in the component tree
     pub name: String,
     /// Heights from the estimated depth, or from the picture itself when it is a depth map
     pub depth_from: DepthFrom,

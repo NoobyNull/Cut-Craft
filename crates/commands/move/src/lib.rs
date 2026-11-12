@@ -15,8 +15,12 @@ pub struct Move;
 pub struct Params {
     /// Move by X/Y instead of to X/Y
     pub relative: bool,
+    /// Where to put the anchor point along X, or with Relative ticked, how far to move left
+    /// (negative) or right
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
+    /// Where to put the anchor point along Y, or with Relative ticked, how far to move down
+    /// (negative) or up
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
     /// Point of the selection placed at X/Y (absolute moves only)

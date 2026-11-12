@@ -22,7 +22,7 @@ pub enum Tool {
     Smooth,
     /// Drags the material along the stroke, like clay under a thumb
     Smudge,
-    /// Adds height
+    /// Adds height where you drag
     Deposit,
     /// Takes height away
     Remove,
@@ -48,6 +48,7 @@ pub enum Mode {
 #[expect(clippy::struct_excessive_bools, reason = "Aspire's tick boxes")]
 pub struct Params {
     pub tool: Tool,
+    /// How wide the brush is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub diameter: f64,
     /// How much each stroke changes

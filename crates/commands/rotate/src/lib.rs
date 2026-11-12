@@ -1,4 +1,4 @@
-//! Rotate.
+//! Rotate: turns the selected objects by an angle, about a point of their box.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::glam::DAffine2;
@@ -11,7 +11,7 @@ pub struct Rotate;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// Counter-clockwise
+    /// How far to turn, counter-clockwise; a negative angle turns clockwise
     #[schemars(extend("x-unit" = "deg"))]
     pub angle: f64,
     /// Point of the selection to rotate about

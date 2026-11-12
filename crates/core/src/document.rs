@@ -148,9 +148,11 @@ fn first_layer() -> LayerId {
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
 )]
 pub enum Units {
+    /// Lengths shown in millimetres
     #[default]
     #[schemars(title = "mm")]
     Mm,
+    /// Lengths shown in inches
     #[schemars(title = "inches")]
     Inch,
 }
@@ -225,9 +227,11 @@ pub struct Rotary {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum Along {
+    /// The cylinder lies left to right
     #[default]
     #[schemars(title = "Along X Axis")]
     X,
+    /// The cylinder lies front to back
     #[schemars(title = "Along Y Axis")]
     Y,
 }
@@ -238,11 +242,16 @@ pub enum Along {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum Datum {
+    /// The material's bottom left corner
     #[default]
     BottomLeft,
+    /// The material's top left corner
     TopLeft,
+    /// The material's top right corner
     TopRight,
+    /// The material's bottom right corner
     BottomRight,
+    /// The middle of the material
     Centre,
 }
 
@@ -308,6 +317,7 @@ pub enum GapFrom {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ModelPosition {
     pub from: GapFrom,
+    /// How far the model sits from the material's face
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub gap: f64,
 }
@@ -316,10 +326,13 @@ pub struct ModelPosition {
 /// end, X and Y in job coordinates and Z as a gap above the material.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Home {
+    /// Where the tool starts and ends, across the job
     #[schemars(title = "X", extend("x-unit" = "mm"))]
     pub x: f64,
+    /// Where the tool starts and ends, up the job
     #[schemars(title = "Y", extend("x-unit" = "mm"))]
     pub y: f64,
+    /// How high above the material it waits
     #[schemars(title = "Z Gap above Material", extend("x-unit" = "mm"), range(min = 0))]
     pub z: f64,
 }

@@ -37,6 +37,7 @@ pub struct Params {
     /// Width and height are percentages of the present size, not millimetres
     #[serde(default)]
     pub percent: bool,
+    /// Change the width and the height is worked out, so the shape is not stretched
     #[schemars(title = "Link XY")]
     pub keep_proportions: bool,
     /// Point of the selection that stays put

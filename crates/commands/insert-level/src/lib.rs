@@ -10,6 +10,7 @@ pub struct InsertLevel;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the new level is called in the component tree
     pub name: String,
 }
 

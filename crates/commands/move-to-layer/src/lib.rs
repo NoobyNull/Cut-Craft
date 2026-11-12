@@ -1,4 +1,5 @@
-//! Move to Layer: puts the selected vectors on a layer.
+//! Move to Layer: puts the selected vectors on another layer, to show, hide or machine them
+//! with that layer's other vectors.
 
 use cut_craft_core::document::{Document, LayerId};
 use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};

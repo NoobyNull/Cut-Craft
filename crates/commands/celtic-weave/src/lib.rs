@@ -18,9 +18,11 @@ pub struct CelticWeave;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CutKind {
+    /// A wall up and down: strands turn back to the side they came from
     #[default]
     #[schemars(title = "Cut Vertical")]
     Vertical,
+    /// A wall across: strands turn back up or down
     #[schemars(title = "Cut Horizontal")]
     Horizontal,
 }
@@ -29,8 +31,11 @@ pub enum CutKind {
 /// inside the grid where column + row is odd.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Cut {
+    /// Which crossing across, counted in half cells from the left
     pub column: i32,
+    /// Which crossing up, counted in half cells from the bottom
     pub row: i32,
+    /// Which way the strands turn back at this crossing
     #[schemars(extend("x-widget" = "row"))]
     pub cut: CutKind,
 }
@@ -40,8 +45,10 @@ pub struct Params {
     /// The knot grid's size in cells
     #[schemars(range(min = 1, max = 50))]
     pub columns: i32,
+    /// How many cells tall the knot grid is
     #[schemars(range(min = 1, max = 50))]
     pub rows: i32,
+    /// The size of each square cell of the grid: bigger cells make a bigger knot
     #[schemars(title = "Cell size", extend("x-unit" = "mm"), range(min = 0))]
     pub cell: f64,
     /// Crossings the strands turn at rather than cross

@@ -1,4 +1,5 @@
-//! Offset Vectors.
+//! Offset Vectors: draws a copy of each selected vector a set distance outside or inside it,
+//! for a border, an inlay or a frame.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::polygon::{self, Corners};
@@ -13,6 +14,7 @@ pub struct Params {
     /// Outwards when positive, inwards when negative
     #[schemars(extend("x-unit" = "mm"))]
     pub distance: f64,
+    /// Whether the offset's outside corners are round or sharp
     pub corners: Corners,
     /// Keep the original vectors as well as the offset ones
     pub keep_original: bool,

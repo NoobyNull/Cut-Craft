@@ -154,4 +154,8 @@ Grouped, with the reason.
    Drawing on screen keeps `polygon::TOLERANCE`. Toolpaths already made keep the accuracy
    they were made with until recalculated.)
 9. Gadgets (Advanced): Lua limits.
+   (Done: Advanced ▸ *Gadgets: most work* 200 million steps (10 to 5000), *most memory*
+   64 MB (8 to 1024) and *most commands in one run* 10,000 (100 to 1,000,000), handed to
+   gadget runs through `cut_craft_scripting::set_gadget_limits`. Reading a gadget's name and
+   settings when the list loads keeps the standard limits.)
 10. Tool form fields: sculpt brush feel, merged grid rows, PDF line width.

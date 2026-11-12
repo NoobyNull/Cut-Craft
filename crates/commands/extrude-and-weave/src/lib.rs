@@ -93,6 +93,7 @@ pub struct Params {
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"weave": true}))]
     pub weave_by: WeaveBy,
+    /// Where rails cross, the height of the one going under, as a percentage of its own
     #[serde(default = "under")]
     #[schemars(
         title = "Z Under",
@@ -101,6 +102,7 @@ pub struct Params {
         extend("x-show-when" = {"weave": true})
     )]
     pub z_under: f64,
+    /// Where rails cross, the height of the one going over, as a percentage of its own
     #[serde(default = "over")]
     #[schemars(
         title = "Z Over",
@@ -111,8 +113,10 @@ pub struct Params {
     pub z_over: f64,
     /// Scale the shape so its highest point is the height
     pub scale_to_exact_height: bool,
+    /// The highest point of the shape, with Scale to exact height
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
+    /// What the new component is called in the component tree
     pub name: String,
     #[schemars(title = "Combine with other components")]
     pub combine: Combine,
