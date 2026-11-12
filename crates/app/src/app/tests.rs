@@ -11186,3 +11186,35 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
     // egui's vertices are 20 bytes: 100 MB at most, the card's limit is 2 GB
     assert!(vertices < 5_000_000, "{vertices} vertices");
 }
+
+#[test]
+fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 150.0, 150.0);
+    h.click(h.at(160.0, 85.0), Modifiers::NONE);
+    assert!(!h.app.doc.selection.is_empty(), "the rectangle is selected");
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.app.form.as_mut().unwrap().params["depth"] = 6.0.into();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.click(
+        h.text_at("Suggest clearing bits")
+            .expect("Suggest, beside the clearing bits"),
+        Modifiers::NONE,
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let form = h.app.form.as_ref().unwrap();
+    let picked = form.params["clearance_tools"].as_array().unwrap();
+    assert!(!picked.is_empty(), "a bigger bit clears this pocket first");
+    for bit in picked {
+        assert!(bit["diameter"].as_f64().unwrap() > 3.0, "{bit}");
+    }
+    let said = h.shapes.iter().any(|clipped| {
+        matches!(&clipped.shape, egui::Shape::Text(t)
+            if t.galley.text().contains("min with 3 mm End Mill alone"))
+    });
+    assert!(said, "how much quicker, on the form");
+}

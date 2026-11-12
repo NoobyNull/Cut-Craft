@@ -392,7 +392,9 @@ say "not implemented yet".
 - Clearing bits on Pocket and V-Carve ("Clear with bigger bits first" / "Clear the flat
   bottom with end mills first", each bit picked with Select… in the Tool Database, kept
   largest first; Pocket checks each is bigger than the finishing bit and none the same size;
-  the separate Rest Machining list shows on these forms only for an older job that has one):
+  the separate Rest Machining list shows on these forms only for an older job that has one;
+  Pocket's Suggest clearing bits picks the quickest one or two of the user's own bigger end
+  mills, tool changer bits first, and says how long against the finishing bit alone):
   each makes a toolpath of its own, named `[1]`, `[2]`... in
   cutting order. Pocket's later tools (its own last) cut only what the ones before left
   (rest machining, kept on each so it recalculates alone; a raster only for the first).
