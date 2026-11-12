@@ -1,4 +1,4 @@
-//! Delete.
+//! Delete: removes the selected vectors, text and pictures from the job. Undo brings them back.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta, NoParams};

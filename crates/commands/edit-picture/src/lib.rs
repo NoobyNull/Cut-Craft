@@ -29,9 +29,11 @@ pub struct Tones {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Shape {
+    /// Fades in from the four sides
     #[default]
     #[schemars(title = "Rectangular Border")]
     Rectangular,
+    /// Fades in round an oval, like an old portrait
     #[schemars(title = "Oval Border")]
     Oval,
 }
@@ -39,8 +41,10 @@ pub enum Shape {
 /// A border fading the edges to white.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Border {
+    /// Fade the picture's edges to white
     #[schemars(title = "Add Border")]
     pub add: bool,
+    /// The shape the fade follows
     #[schemars(extend("x-widget" = "row"))]
     pub shape: Shape,
     /// How far in the fade reaches, as a percentage of the picture's shorter side

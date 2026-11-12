@@ -1,4 +1,5 @@
-//! Select Vectors on Layer.
+//! Select Vectors on Layer: selects every vector on one layer, to move, edit or machine them
+//! together.
 
 use cut_craft_core::document::{Document, LayerId};
 use cut_craft_core::{Change, Command, CommandError, Meta, existing_layer};

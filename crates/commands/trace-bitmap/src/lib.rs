@@ -21,8 +21,10 @@ pub struct TraceBitmap;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TraceColor {
+    /// Trace the dark parts of the picture
     #[default]
     Black,
+    /// Trace the light parts of the picture
     White,
 }
 
@@ -30,6 +32,7 @@ pub enum TraceColor {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
+    /// The picture is read as dark and light only
     #[default]
     BlackAndWhite,
     /// A colour picture cut down to a few colours

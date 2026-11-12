@@ -41,8 +41,10 @@ pub struct Params {
     /// Of the centre, when copying around a point
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
+    /// Of the centre, when copying around a point: up the job
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
+    /// Whether the angle below is shared out among the copies or is the step between two
     pub angle_mode: AngleMode,
     /// Positive places the copies clockwise, negative counter-clockwise
     #[schemars(extend("x-unit" = "°"))]

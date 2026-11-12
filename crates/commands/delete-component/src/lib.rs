@@ -1,4 +1,4 @@
-//! Delete Component.
+//! Delete Component: removes a 3D component from the model. Undo brings it back.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::{Change, Command, CommandError, Meta, existing};
@@ -9,6 +9,7 @@ pub struct DeleteComponent;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The component to delete
     pub component: EntityId,
 }
 

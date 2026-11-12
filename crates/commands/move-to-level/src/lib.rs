@@ -1,4 +1,5 @@
-//! Move to Level: the selected components onto another level.
+//! Move to Level: moves the selected 3D components onto another level of the model, which
+//! changes how they combine with the rest.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::{Change, Command, CommandError, Meta};

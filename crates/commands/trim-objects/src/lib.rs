@@ -23,6 +23,7 @@ pub enum Clear {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// Which side of the boundary is trimmed away
     pub clear: Clear,
     /// Turn the trimmed pieces back into curves rather than many short lines
     pub refit_curves_after_clipping: bool,

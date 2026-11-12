@@ -19,6 +19,7 @@ pub enum Flip {
     Horizontal,
     /// Top to bottom
     Vertical,
+    /// Left to right and top to bottom at once
     Both,
 }
 
@@ -45,6 +46,7 @@ pub enum About {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// Which way the selection is flipped
     #[schemars(extend("x-show-when" = {"about": ["selection", "job_centre"]}))]
     pub flip: Flip,
     #[serde(default)]

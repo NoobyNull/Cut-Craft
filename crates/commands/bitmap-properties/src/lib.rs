@@ -13,15 +13,18 @@ pub struct BitmapProperties;
 pub struct Params {
     /// The bitmap to change
     pub bitmap: EntityId,
+    /// What the picture is called
     pub name: String,
-    /// Left edge
+    /// Where the picture's left edge sits, along X
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
-    /// Bottom edge
+    /// Where the picture's bottom edge sits, along Y
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
+    /// How wide the picture is on the job
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub width: f64,
+    /// How tall the picture is on the job
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
 }

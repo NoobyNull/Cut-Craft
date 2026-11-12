@@ -1,4 +1,5 @@
-//! Join Vectors.
+//! Join Vectors: joins selected open vectors whose ends lie close together into one longer
+//! vector, closing it when its ends meet.
 
 use cut_craft_core::document::{Document, EntityId};
 use cut_craft_core::geometry::{Path, Point, Segment};

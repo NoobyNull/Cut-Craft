@@ -636,10 +636,14 @@ mod abouts {
 
 /// What command `id` does (its crate's first sentence), for its tooltip and the status bar.
 pub fn about(id: &str) -> Option<&'static str> {
-    abouts::ABOUTS
-        .iter()
-        .find(|(command, _)| *command == id)
-        .map(|(_, about)| *about)
+    // the hints first: a crate holding several commands says one thing for all of them
+    crate::hints::hint(id)
+        .or_else(|| {
+            abouts::ABOUTS
+                .iter()
+                .find(|(command, _)| *command == id)
+                .map(|(_, about)| *about)
+        })
         .or_else(|| {
             BUILT_IN_ABOUTS
                 .iter()
@@ -647,16 +651,18 @@ pub fn about(id: &str) -> Option<&'static str> {
                 .map(|(_, _, about)| *about)
         })
         .or_else(|| crate::flyout::variant(id).map(|v| v.hint))
-        .or_else(|| crate::hints::hint(id))
 }
 
 /// What command `id` does at length (its crate's first paragraph, the lead `Name:` that only
 /// repeats its name taken off), for its help page when its params have no doc comment.
 pub fn intro(id: &str, label: &str) -> Option<String> {
-    let docs = abouts::INTROS
-        .iter()
-        .find(|(command, _)| *command == id)
-        .map(|(_, docs)| *docs)
+    let docs = crate::hints::hint(id)
+        .or_else(|| {
+            abouts::INTROS
+                .iter()
+                .find(|(command, _)| *command == id)
+                .map(|(_, docs)| *docs)
+        })
         .or_else(|| about(id))?;
     let body = docs
         .strip_prefix(label)

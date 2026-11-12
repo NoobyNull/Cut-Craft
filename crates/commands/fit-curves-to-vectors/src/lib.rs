@@ -12,23 +12,28 @@ pub struct FitCurvesToVectors;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FittingType {
+    /// Arcs of circles, which machines cut smoothly
     #[default]
     #[schemars(title = "Circular Arcs")]
     CircularArcs,
+    /// Free-flowing curves, best for organic shapes
     #[schemars(title = "Bezier Curves")]
     BezierCurves,
+    /// Short straight lines only
     #[schemars(title = "Straight Lines")]
     StraightLines,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the new vectors are made of
     pub fitting_type: FittingType,
     /// The new vectors stay within this distance of the old
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance: f64,
     /// Corners turning more than the max angle stay sharp
     pub keep_sharp_corners: bool,
+    /// With Keep Sharp Corners ticked: corners turning more than this stay sharp
     #[schemars(title = "Max. angle", extend("x-unit" = "deg"), range(min = 0, max = 180))]
     pub max_angle: f64,
     /// Delete the originals; otherwise the fitted vectors are added beside them

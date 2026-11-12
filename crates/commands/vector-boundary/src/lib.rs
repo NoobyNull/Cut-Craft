@@ -17,8 +17,10 @@ pub struct Params {
     /// Grow the boundary outwards by the distance
     #[schemars(title = "Offset Boundary")]
     pub offset: bool,
+    /// How far out the boundary is grown
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub distance: f64,
+    /// Whether the grown boundary's corners are round or sharp
     #[schemars(extend("x-widget" = "row"))]
     pub corners: Corners,
     /// The boundary a rubber band stretched round the selection would make

@@ -13,17 +13,23 @@ pub struct ShowHide;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Action {
+    /// Shows the one you right-clicked
     #[schemars(title = "Show This")]
     ShowThis,
+    /// Shows the one you right-clicked and hides all the others
     #[schemars(title = "Show Only This")]
     ShowOnlyThis,
+    /// Shows all the others and hides the one you right-clicked
     #[schemars(title = "Show All But This")]
     ShowAllButThis,
+    /// Shows every one of them
     #[default]
     #[schemars(title = "Show All")]
     ShowAll,
+    /// Hides the one you right-clicked
     #[schemars(title = "Hide This")]
     HideThis,
+    /// Hides every one of them
     #[schemars(title = "Hide All")]
     HideAll,
 }
@@ -33,6 +39,7 @@ pub struct Params {
     pub items: Items,
     /// The item right-clicked (a layer, toolpath or component id)
     pub item: u64,
+    /// What to show or hide
     pub action: Action,
 }
 
