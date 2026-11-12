@@ -6,6 +6,10 @@ import {
   receive, summary, detail, markHandled, markIssue, reopen, deleteSample, forget, cleanup,
 } from './store.js';
 import { PAGE, SCRIPT } from './page.js';
+import {
+  AuthError, keyCount, listKeys, removeKey, registerOptions, register, loginOptions, login,
+  startSession, hasSession, endSession,
+} from './auth.js';
 
 const NO_STORE = { 'cache-control': 'no-store' };
 
@@ -27,8 +31,19 @@ function sameToken(given, expected) {
   return diff === 0;
 }
 
-const isAdmin = (request, env) =>
-  sameToken((request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, ''), env.ADMIN_TOKEN);
+/**
+ * Who is asking: 'session' (signed in with a security key), 'token' (the admin token, accepted
+ * only while no security key is registered), or null.
+ */
+async function adminFrom(request, env, now) {
+  if (await hasSession(request, env.DB, now)) return 'session';
+  const bearer = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+  if (bearer && sameToken(bearer, env.ADMIN_TOKEN) && (await keyCount(env.DB)) === 0) return 'token';
+  return null;
+}
+
+const fail = (e) => (e instanceof AuthError ? problem(e.status, e.message) : problem(400, e.message));
+const readJson = (request) => request.json().catch(() => ({}));
 
 const settings = (env) => ({
   retainDays: setting(env.RETAIN_DAYS, 30),
@@ -68,8 +83,24 @@ async function takeReport(request, env, now) {
   return json({ ok: true }, 202);
 }
 
-async function adminApi(request, env, path, url, now) {
+async function adminApi(request, env, path, url, now, who) {
   const method = request.method;
+  if (path === '/admin/api/keys') {
+    if (method === 'GET') return json({ keys: await listKeys(env.DB) });
+    if (method !== 'POST') return problem(405, 'Use GET or POST.');
+    await register(env.DB, url, await readJson(request), now);
+    // the first key, added with the token: sign in with a session so the token is no longer needed
+    const extra = who === 'token' ? { 'set-cookie': await startSession(env.DB, now) } : {};
+    return json({ keys: await listKeys(env.DB) }, 200, extra);
+  }
+  if (method === 'POST' && path === '/admin/api/keys/options') {
+    return json(await registerOptions(env.DB, url, now));
+  }
+  const key = path.match(/^\/admin\/api\/keys\/([A-Za-z0-9_-]{1,1400})$/);
+  if (key && method === 'DELETE') {
+    if (!(await removeKey(env.DB, key[1]))) return problem(404, 'No such key.');
+    return json({ keys: await listKeys(env.DB) });
+  }
   if (method === 'GET' && path === '/admin/api/summary') {
     const days = Math.min(setting(url.searchParams.get('days'), 30), 400);
     return json({ ...(await summary(env.DB, days, now)), settings: settings(env) });
@@ -117,12 +148,33 @@ export async function handle(request, env, now = new Date()) {
   if (method === 'GET' && path === '/robots.txt') {
     return new Response('User-agent: *\nDisallow: /\n', { headers: { 'content-type': 'text/plain' } });
   }
-  if (path.startsWith('/admin/api/')) {
-    if (!isAdmin(request, env)) return problem(401, 'Admin token missing or wrong.');
+  if (path.startsWith('/auth/')) {
     try {
-      return await adminApi(request, env, path, url, now);
+      if (method === 'GET' && path === '/auth/status') {
+        return json({ keys: await keyCount(env.DB), signedIn: await hasSession(request, env.DB, now) });
+      }
+      if (method !== 'POST') return problem(405, 'Use POST.', { allow: 'POST' });
+      if (path === '/auth/options') return json(await loginOptions(env.DB, url, now));
+      if (path === '/auth/verify') {
+        return json({ ok: true }, 200, { 'set-cookie': await login(env.DB, url, await readJson(request), now) });
+      }
+      if (path === '/auth/logout') return json({ ok: true }, 200, { 'set-cookie': await endSession(request, env.DB) });
     } catch (e) {
-      return problem(400, e.message);
+      return fail(e);
+    }
+    return problem(404, 'Nothing here.');
+  }
+  if (path.startsWith('/admin/api/')) {
+    const who = await adminFrom(request, env, now);
+    if (!who) return problem(401, 'Not signed in.');
+    // a session rides on a cookie, so a change must come from this page, not another site
+    if (who === 'session' && method !== 'GET' && request.headers.get('origin') !== url.origin) {
+      return problem(403, 'Changes must come from the dashboard itself.');
+    }
+    try {
+      return await adminApi(request, env, path, url, now, who);
+    } catch (e) {
+      return fail(e);
     }
   }
   return problem(404, 'Nothing here.');

@@ -59,3 +59,29 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Security keys (WebAuthn, e.g. YubiKeys) that sign in to the dashboard. Once one exists the
+-- admin token no longer signs in. Lost every key: DELETE FROM passkeys (with wrangler), and the
+-- token works again.
+CREATE TABLE IF NOT EXISTS passkeys (
+  id           TEXT PRIMARY KEY,            -- credential id, base64url
+  name         TEXT NOT NULL,
+  public_key   TEXT NOT NULL,               -- P-256 public key as a JWK (JSON)
+  sign_count   INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL,
+  last_used_at TEXT
+);
+
+-- Signed-in dashboard sessions. Only the SHA-256 of the cookie is kept.
+CREATE TABLE IF NOT EXISTS sessions (
+  id          TEXT PRIMARY KEY,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL
+);
+
+-- One-use WebAuthn challenges, good for five minutes.
+CREATE TABLE IF NOT EXISTS challenges (
+  challenge   TEXT PRIMARY KEY,
+  purpose     TEXT NOT NULL,                -- login | register
+  expires_at  TEXT NOT NULL
+);
