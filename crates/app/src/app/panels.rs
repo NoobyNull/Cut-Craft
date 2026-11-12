@@ -920,8 +920,9 @@ impl CutCraftApp {
             .map(|(&id, _)| id)
             .collect();
         if self.display.animate_preview {
-            self.preview_ids(&visible);
-            self.preview_other_side(visible_only);
+            self.finish_playback();
+            self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+            self.play(&visible, move |app| app.preview_other_side(visible_only));
         } else {
             self.preview_fresh(&visible, move |app| app.preview_other_side(visible_only));
         }
@@ -934,8 +935,8 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        self.before_preview = Some(super::BeforePreview(self.simulation.take()));
-        self.play(ids);
+        self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
+        self.play(ids, |_| {});
     }
 
     /// Cuts `ids` in order into fresh material, as one preview to undo, then `then`.
@@ -1005,8 +1006,10 @@ impl CutCraftApp {
         }
     }
 
-    /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet).
-    pub(super) fn play(&mut self, toolpaths: &[EntityId]) {
+    /// Starts playing `toolpaths` into the previewed material (uncut if there is none yet),
+    /// then `then`. Their moves are laid out off the window's thread, with Cancel should
+    /// that take a while (millions of moves); the preview before stays shown till then.
+    pub(super) fn play(&mut self, toolpaths: &[EntityId], then: impl FnOnce(&mut Self) + 'static) {
         self.finish_playback();
         let source = self.preview_source();
         let (list, marks): (Vec<cut_craft_core::toolpath::Toolpath>, Vec<u32>) = toolpaths
@@ -1016,23 +1019,66 @@ impl CutCraftApp {
         drop(source);
         let start = self
             .simulation
-            .take()
+            .clone()
             .unwrap_or_else(|| Material::new(&self.doc.job, self.display.preview_cells()));
-        let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
-        self.playback = Some(cut_craft_core::playback::Playback::new(start, &list).marked(&marks));
-        (
-            self.playing,
-            self.simulation_coarse,
-            self.fine_3d,
-            self.surface_gpu,
-        ) = (true, None, None, None);
-        if self.display.auto_open_3d {
-            self.view = View::ThreeD;
+        let what = match &list[..] {
+            [one] => format!("Getting {} ready to preview", one.name),
+            _ => format!("Getting {} toolpaths ready to preview", list.len()),
+        };
+        self.in_background(
+            &what,
+            move || {
+                let list: Vec<&cut_craft_core::toolpath::Toolpath> = list.iter().collect();
+                cut_craft_core::playback::Playback::new(start, &list).marked(&marks)
+            },
+            move |app, playback| {
+                app.playback = Some(playback);
+                app.simulation = None;
+                (
+                    app.playing,
+                    app.playback_goal,
+                    app.simulation_coarse,
+                    app.fine_3d,
+                    app.surface_gpu,
+                ) = (true, None, None, None, None);
+                if app.display.auto_open_3d {
+                    app.view = View::ThreeD;
+                }
+                then(app);
+            },
+        );
+    }
+
+    /// Once a frame: a playing preview's tool moved on at its speed, or toward where it was
+    /// sent, cutting for no longer than the frame's budget; the rest waits for the next
+    /// frame, so the window answers (Stop, Esc) however long the toolpath. At the end, the
+    /// cut material becomes the preview.
+    pub(super) fn advance_playback(&mut self, ctx: &egui::Context) {
+        let Some(playback) = self.playback.as_mut() else {
+            self.playback_goal = None;
+            return;
+        };
+        // a slow frame does not send the tool further on the next
+        let dt = f64::from(ctx.input(|i| i.stable_dt)).min(0.1);
+        let goal = self.playback_goal.or_else(|| {
+            self.playing
+                .then(|| playback.at() + self.playback_speed * dt)
+        });
+        if let Some(goal) = goal {
+            let until = std::time::Instant::now() + self.playback_budget;
+            if playback.seek_until(goal, || std::time::Instant::now() >= until) {
+                self.playback_goal = None;
+            }
+            ctx.request_repaint();
+        }
+        if playback.finished() {
+            self.finish_playback();
         }
     }
 
     /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path).
     pub(super) fn finish_playback(&mut self) {
+        self.playback_goal = None;
         if let Some(playback) = self.playback.take() {
             self.simulation = Some(playback.material().clone());
             (
@@ -1048,7 +1094,7 @@ impl CutCraftApp {
         if self.display.animate_preview {
             self.finish_playback();
             self.before_preview = Some(super::BeforePreview(self.simulation.clone()));
-            self.play(&[id]);
+            self.play(&[id], |_| {});
             return;
         }
         self.finish_playback();
@@ -1065,35 +1111,30 @@ impl CutCraftApp {
     }
 
     /// Aspire's Preview Control while a preview plays: Run / Pause, Single Step, Run to
-    /// Retract and Stop, the tool's place along the path (drag to scrub) and the speed. A
-    /// playing preview moves on here each frame.
+    /// Retract and Stop, the tool's place along the path (drag to scrub), the speed and how
+    /// long is left at it. Over both views, so Stop is always to hand; Esc stops it too.
     pub(super) fn playback_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath playback bar");
-        let Some(playback) = self.playback.as_mut() else {
+        let Some(playback) = self.playback.as_ref() else {
             return;
         };
-        if self.playing {
-            let dt = f64::from(ui.input(|i| i.stable_dt));
-            playback.seek(playback.at() + self.playback_speed * dt);
-            ui.ctx().request_repaint();
-        }
-        let mut stop = playback.finished();
+        let mut stop = false;
+        let mut goal = None;
         ui.horizontal(|ui| {
             let run = if self.playing { "Pause" } else { "Run" };
             if ui.button(run).clicked() {
                 self.playing = !self.playing;
+                self.playback_goal = None;
             }
             if ui.button("Single Step").clicked() {
-                self.playing = false;
-                playback.seek(playback.next_step());
+                goal = Some(playback.next_step());
             }
             if ui.button("Run to Retract").clicked() {
-                self.playing = false;
-                playback.seek(playback.next_retract());
+                goal = Some(playback.next_retract());
             }
             stop |= ui
                 .button("Stop")
-                .on_hover_hint("Keep what is cut so far")
+                .on_hover_hint("Stop the preview here, keeping what is cut so far (Esc)")
                 .clicked();
             ui.add(
                 egui::Slider::new(&mut self.playback_speed, PLAYBACK_SPEEDS)
@@ -1106,7 +1147,7 @@ impl CutCraftApp {
         // back
         ui.horizontal(|ui| {
             ui.label("Progress");
-            let mut at = playback.at();
+            let mut at = self.playback_goal.unwrap_or_else(|| playback.at());
             let length = playback.length();
             let percent = move |d: f64| {
                 if length > 0.0 {
@@ -1129,13 +1170,24 @@ impl CutCraftApp {
                 .on_hover_hint("Where the tool is along the toolpaths: drag to move it on or back")
                 .changed()
             {
-                self.playing = false;
-                playback.seek(at);
+                goal = Some(at);
             }
         });
+        ui.weak(playback_note(
+            playback.at(),
+            playback.length(),
+            self.playback_goal,
+            self.playing,
+            self.playback_speed,
+        ));
+        if let Some(goal) = goal {
+            // sent somewhere: it pauses there, cut a frame's worth at a time
+            (self.playing, self.playback_goal) = (false, Some(goal));
+        }
         if stop {
             self.finish_playback();
         }
+        ui.separator();
     }
 
     /// Aspire's arrows over the tree: the picked component up or down its level, as
@@ -1560,7 +1612,6 @@ impl CutCraftApp {
     pub(super) fn view_3d(&mut self, ui: &mut egui::Ui) {
         self.framing.field_of_view = self.options.view_3d.field_of_view();
         cut_craft_bug_report::mark(ui, "3D view");
-        self.playback_bar(ui);
         if self.simulation.is_none() && self.playback.is_none() && self.doc.components.is_empty() {
             let empty = ui.centered_and_justified(|ui| {
                 ui.weak("Nothing in 3D yet: create a shape or preview the toolpaths")
@@ -3934,4 +3985,28 @@ fn step_heading(ui: &mut egui::Ui, n: u8, text: &str) {
         );
         ui.strong(text);
     });
+}
+
+/// The line under a preview's controls: where the tool is being sent and how far it has
+/// got, else how long the rest takes at this speed, with how to stop.
+fn playback_note(at: f64, length: f64, goal: Option<f64>, playing: bool, speed: f64) -> String {
+    let percent = |d: f64| {
+        if length > 0.0 {
+            d / length * 100.0
+        } else {
+            100.0
+        }
+    };
+    match goal {
+        Some(goal) => format!(
+            "Cutting up to {:.0}%: {:.0}% so far. Stop (Esc) stops it here",
+            percent(goal),
+            percent(at)
+        ),
+        None if playing => format!(
+            "About {} left at {speed:.0} mm/s. Speed it up, drag Progress on, or Stop (Esc) to keep what is cut",
+            crate::busy::seconds((length - at) / speed)
+        ),
+        None => "Paused. Run goes on; Stop (Esc) keeps what is cut".to_owned(),
+    }
 }

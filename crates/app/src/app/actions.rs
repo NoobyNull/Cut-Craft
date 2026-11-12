@@ -178,6 +178,8 @@ impl CutCraftApp {
             recent: vec![],
             playback: None,
             playing: false,
+            playback_goal: None,
+            playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
             collapsed_levels: std::collections::HashSet::new(),
             guide_drag: None,
@@ -586,7 +588,7 @@ impl CutCraftApp {
                     self.fine_3d,
                     self.surface_gpu,
                 ) = (None, None, None, None);
-                (self.playback, self.playing) = (None, false);
+                (self.playback, self.playing, self.playback_goal) = (None, false, None);
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -3363,6 +3365,15 @@ impl CutCraftApp {
             && ctx.input_mut(|i| i.consume_shortcut(&escape))
         {
             self.cancel_drag_3d();
+        }
+        // Escape stops a preview playing (keeping what it has cut), and does nothing else
+        if self.playback.is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.finish_playback();
+            self.status
+                .set_message("Preview stopped: what it had cut is kept");
         }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()

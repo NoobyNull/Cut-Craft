@@ -27,12 +27,22 @@ pub struct Playback {
 }
 
 impl Playback {
-    /// `toolpaths` to be played, in order, into `start`.
+    /// `toolpaths` to be played, in order, into `start`. Says how far it has got
+    /// ([`crate::progress`]), as millions of moves take a while; asked to stop, it leaves
+    /// the rest out, for a job that is thrown away.
     pub fn new(start: Material, toolpaths: &[&Toolpath]) -> Self {
-        let (mut tools, mut steps) = (vec![], vec![]);
-        for t in toolpaths {
+        const EVERY: usize = 1 << 16;
+        let total: usize = toolpaths.iter().map(|t| t.moves.len()).sum();
+        let (mut tools, mut steps) = (vec![], Vec::with_capacity(total));
+        'toolpaths: for t in toolpaths {
             tools.push(t.tool.clone());
             for pair in t.moves.windows(2) {
+                if steps.len() % EVERY == 0 {
+                    if crate::progress::cancelled() {
+                        break 'toolpaths;
+                    }
+                    crate::progress::report_steps(steps.len(), total);
+                }
                 steps.push(Step {
                     tool: tools.len() - 1,
                     from: pair[0].to,
@@ -122,27 +132,39 @@ impl Playback {
     /// Moves the tool to distance `d` (kept within the path), cutting on the way; going back
     /// cuts again from the start.
     pub fn seek(&mut self, d: f64) {
+        self.seek_until(d, || false);
+    }
+
+    /// [`Self::seek`], a step at a time, stopping at the end of the first step after which
+    /// `out_of_time` says so: whether the tool got to `d`. Going back starts again from the
+    /// start before it stops. Each call cuts at least one step, so calls in turn get there.
+    pub fn seek_until(&mut self, d: f64, mut out_of_time: impl FnMut() -> bool) -> bool {
         let d = d.clamp(0.0, self.length());
-        let mut from = self.at;
-        if d < from {
+        if d < self.at {
             self.material = self.start.clone();
-            from = 0.0;
+            self.at = 0.0;
         }
-        if let (Some((i, ti)), Some((j, tj))) = (self.locate(from), self.locate(d)) {
+        if let (Some((i, ti)), Some((j, tj))) = (self.locate(self.at), self.locate(d)) {
             for k in i..=j {
                 let s = &self.steps[k];
                 let (a, b) = (if k == i { ti } else { 0.0 }, if k == j { tj } else { 1.0 });
-                if b > a {
-                    self.material.cutting = self.marks[s.tool];
-                    self.material.sweep(
-                        s.from.lerp(s.to, a),
-                        s.from.lerp(s.to, b),
-                        &self.tools[s.tool],
-                    );
+                if b <= a {
+                    continue;
+                }
+                self.material.cutting = self.marks[s.tool];
+                self.material.sweep(
+                    s.from.lerp(s.to, a),
+                    s.from.lerp(s.to, b),
+                    &self.tools[s.tool],
+                );
+                if k < j && out_of_time() {
+                    self.at = self.ends[k];
+                    return false;
                 }
             }
         }
         self.at = d;
+        true
     }
 
     /// The end of the step after the tool's position (Single Step).
@@ -257,5 +279,34 @@ mod tests {
         p.seek(p.next_step());
         assert_eq!(p.next_step(), 87.0, "the cut");
         assert_eq!(p.next_retract(), 94.0, "out at the end");
+    }
+
+    #[test]
+    fn a_long_seek_stops_when_out_of_time_and_goes_on_from_there() {
+        let (start, toolpath) = line();
+        let mut p = Playback::new(start, &[&toolpath]);
+        // out of time after every step: one step a call, never none
+        assert!(!p.seek_until(p.length(), || true), "not there yet");
+        assert_eq!(p.at(), 7.0, "the plunge done");
+        assert!(!p.seek_until(p.length(), || true));
+        assert_eq!(p.at(), 87.0, "then the cut");
+        assert!(depth_at(&p, 80.0) < -1.0, "cut as far as it went");
+        assert!(
+            p.seek_until(p.length(), || true),
+            "the last step gets there"
+        );
+        assert!(p.finished());
+    }
+
+    #[test]
+    fn a_seek_back_out_of_time_starts_again_from_uncut() {
+        let (start, toolpath) = line();
+        let mut p = Playback::new(start, &[&toolpath]);
+        p.seek(p.length());
+        assert!(!p.seek_until(7.0 + 40.0, || true));
+        assert_eq!(p.at(), 7.0, "back to the start, the plunge cut again");
+        assert!(depth_at(&p, 80.0) > -0.5, "uncut again");
+        assert!(p.seek_until(7.0 + 40.0, || true));
+        assert_eq!(p.at(), 47.0, "part of the cut, where it was asked to go");
     }
 }

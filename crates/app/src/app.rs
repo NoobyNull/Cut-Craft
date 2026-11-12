@@ -595,6 +595,8 @@ const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI"
 /// A playing preview's speed to start with, in mm of tool travel a second, until Options says
 /// otherwise, and the slider's range.
 pub(crate) const PLAYBACK_SPEED: f64 = 200.0;
+/// A frame's time for cutting a playing preview: the window still answers at once.
+const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30);
 const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 5.0..=20_000.0;
 /// The tool drawn in the 3D view while a preview plays: this many diameters tall.
 const TOOL_HEIGHT_DIAMETERS: f64 = 4.0;
@@ -1198,6 +1200,12 @@ struct CutCraftApp {
     /// A preview playing (or paused): the tool cutting the material a distance at a time.
     playback: Option<cut_craft_core::playback::Playback>,
     playing: bool,
+    /// Where the tool is being moved to (Single Step, Run to Retract, the Progress slider),
+    /// cut a little each frame until it gets there, or Stop.
+    playback_goal: Option<f64>,
+    /// How long a frame may spend cutting a playing preview; the rest waits for the next
+    /// frame, so a long toolpath plays slower instead of freezing the window.
+    playback_budget: std::time::Duration,
     /// How fast the preview plays, in mm of tool travel a second.
     playback_speed: f64,
     /// Component tree levels collapsed (Aspire's Expand / Collapse).
