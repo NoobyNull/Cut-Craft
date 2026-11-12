@@ -1133,6 +1133,50 @@ mod tests {
     }
 
     #[test]
+    fn nested_loops_carve_every_other_band() {
+        // three loops one inside another: the band between the outer two is carved, the
+        // band between the inner two is left standing, the middle of the inner one is carved
+        let loops = || {
+            vec![
+                square(0.0, 0.0, 40.0),
+                square(5.0, 5.0, 30.0),
+                square(12.0, 12.0, 16.0),
+            ]
+        };
+        let job = Job {
+            width: 40.0,
+            height: 40.0,
+            ..Job::default()
+        };
+        let depth_at = |paths: Vec<Path>, x: f64| {
+            carved(&carve(paths, &Params::default()), &job)
+                .at(Point::new(x, 20.0))
+                .unwrap()
+        };
+        assert!(
+            (depth_at(loops(), 2.5) + 2.5).abs() < 0.1,
+            "outer band carved"
+        );
+        assert!(
+            depth_at(loops(), 8.5).abs() < 1e-9,
+            "middle band left standing"
+        );
+        assert!(
+            (depth_at(loops(), 20.0) + 6.35).abs() < 0.1,
+            "inner middle carved"
+        );
+        // the same loop twice cancels out: with the middle loop doubled, the outer and
+        // inner loops make one 12 mm band, carved as one, and the inner middle is left
+        let mut doubled = loops();
+        doubled.push(square(5.0, 5.0, 30.0));
+        assert!(
+            (depth_at(doubled.clone(), 8.5) + 3.5).abs() < 0.1,
+            "one wide band"
+        );
+        assert!(depth_at(doubled, 20.0).abs() < 1e-9, "inner middle left");
+    }
+
+    #[test]
     fn it_never_carves_below_the_material() {
         use cut_craft_core::testing::document_with;
         let mut doc = document_with(vec![rectangle(40.0, 10.0)]);
