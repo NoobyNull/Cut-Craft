@@ -3,6 +3,7 @@
 //! network smooths away hair, scales and faces) and the noise smoothed while keeping edges.
 //! Every grid is row by row from the top, `columns` wide.
 
+use cut_craft_core::toolpath::Tool;
 /// A grid of values, row by row from the top.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Grid {
@@ -473,37 +474,8 @@ fn soften(grid: &mut Grid, fig: &[bool], floor: f32, width: usize) {
     }
 }
 
-/// A tapered ball nose bit: a ball at the tip, then a cone widening above it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Bit {
-    /// The ball's diameter, in the same unit as the relief's heights and cells.
-    pub tip: f64,
-    /// The cone's angle from the bit's axis, degrees a side; 0 for a straight ball nose.
-    pub taper: f64,
-}
-
-impl Bit {
-    /// How high the bit's cutting surface is above its tip, `r` from its axis: the ball
-    /// out to where the cone leaves it (at a tangent), then the cone. `None` beyond a
-    /// straight ball nose's radius, which nothing can stand beside.
-    pub fn profile(&self, r: f64) -> Option<f64> {
-        let radius = self.tip / 2.0;
-        let a = self.taper.to_radians();
-        let on_ball = |r: f64| radius - (radius * radius - r * r).max(0.0).sqrt();
-        if a <= 0.0 {
-            return (r <= radius).then(|| on_ball(r));
-        }
-        let hand_over = radius * a.cos();
-        Some(if r <= hand_over {
-            on_ball(r)
-        } else {
-            radius - radius * a.sin() + (r - hand_over) / a.tan()
-        })
-    }
-}
-
-/// What `bit` can carve of `heights` (cells `cell` apart, a height of 1 standing `relief`
-/// high): the bit is lowered everywhere as far as it goes without cutting into the
+/// What `bit` (a tool from the Tool Database, the one Calculate's reach check uses) can
+/// carve of `heights` (cells `cell` apart, a height of 1 standing `relief` high): the bit is lowered everywhere as far as it goes without cutting into the
 /// relief, and what its shape leaves behind is the answer. Pits and grooves too narrow for
 /// it fill in and the foot of a wall slopes at its taper; nothing is ever cut lower than
 /// asked. (depth2stl's carve simulation.)
@@ -514,8 +486,8 @@ impl Bit {
     clippy::cast_sign_loss,
     reason = "cell offsets of a kernel a few dozen cells wide"
 )]
-pub fn carvable(heights: &Grid, cell: f64, relief: f64, bit: &Bit) -> Grid {
-    if cell <= 0.0 || relief <= 0.0 || bit.tip <= 0.0 || heights.values.is_empty() {
+pub fn carvable(heights: &Grid, cell: f64, relief: f64, bit: &Tool) -> Grid {
+    if cell <= 0.0 || relief <= 0.0 || bit.diameter <= 0.0 || heights.values.is_empty() {
         return heights.clone();
     }
     // no part of the bit higher than the relief's whole range can touch it
@@ -526,11 +498,7 @@ pub fn carvable(heights: &Grid, cell: f64, relief: f64, bit: &Bit) -> Grid {
             (lo.min(v), hi.max(v))
         });
     let range = f64::from(hi - lo);
-    let reach = if bit.taper > 0.0 {
-        bit.tip / 2.0 + range * relief * bit.taper.to_radians().tan()
-    } else {
-        bit.tip / 2.0
-    };
+    let reach = bit.reach_below(range * relief);
     let most = (reach / cell).ceil().max(1.0) as isize;
     // each cell offset under the bit, with the bit's height there in relief heights
     let mut under: Vec<(isize, isize, f32)> = Vec::new();
@@ -643,6 +611,7 @@ fn window(line: &[f32], radius: usize, wins: impl Fn(f32, f32) -> bool, out: &mu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cut_craft_core::toolpath::ToolShape;
 
     fn close(a: f32, b: f32) -> bool {
         (a - b).abs() < 1e-4
@@ -911,28 +880,15 @@ mod tests {
         assert!(h.at(5, 6) > h.at(4, 6), "order kept");
     }
 
-    #[test]
-    fn a_bit_is_a_ball_then_a_cone() {
-        let bit = Bit {
-            tip: 0.4,
-            taper: 10.0,
-        };
-        assert!(bit.profile(0.0).unwrap().abs() < 1e-12);
-        // on the ball: 0.1 out, a 0.2 radius
-        let on_ball = 0.2 - (0.04_f64 - 0.01).sqrt();
-        assert!((bit.profile(0.1).unwrap() - on_ball).abs() < 1e-12);
-        // far out, the cone rises 1 / tan(10 degrees) for each 1 out
-        let rise = bit.profile(2.0).unwrap() - bit.profile(1.0).unwrap();
-        assert!(
-            (rise - 1.0 / 10.0_f64.to_radians().tan()).abs() < 1e-9,
-            "{rise}"
-        );
-        let straight = Bit {
-            tip: 0.4,
-            taper: 0.0,
-        };
-        assert_eq!(straight.profile(0.21), None);
-        assert!((straight.profile(0.2).unwrap() - 0.2).abs() < 1e-12);
+    /// A tapered ball nose `tip` across, `taper` degrees a side, up to a 1/4 inch shank.
+    fn tapered_ball(tip: f64, taper: f64) -> Tool {
+        Tool {
+            shape: ToolShape::BallNose,
+            diameter: tip,
+            taper,
+            shank_diameter: 6.35,
+            ..Tool::default()
+        }
     }
 
     /// 40 x 40 cells 0.05 mm apart, 8 mm of relief: a flat at half height with a one-cell
@@ -952,10 +908,7 @@ mod tests {
     #[test]
     fn a_pit_narrower_than_the_bit_fills_in_and_tops_survive() {
         let flat = carved_test();
-        let bit = Bit {
-            tip: 0.397,
-            taper: 10.0,
-        };
+        let bit = tapered_ball(0.397, 10.0);
         let cut = carvable(&flat, 0.05, 8.0, &bit);
         assert!(
             cut.values
@@ -990,16 +943,10 @@ mod tests {
             }
         }
         let wide = Grid::new(40, 40, values);
-        let straight = Bit {
-            tip: 0.397,
-            taper: 0.0,
-        };
+        let straight = tapered_ball(0.397, 0.0);
         assert!(carvable(&wide, 0.05, 8.0, &straight).at(20, 20) < 1e-6);
         // no bit, no relief: nothing to do
-        let none = Bit {
-            tip: 0.0,
-            taper: 10.0,
-        };
+        let none = tapered_ball(0.0, 10.0);
         assert_eq!(carvable(&wide, 0.05, 8.0, &none), wide);
     }
 }

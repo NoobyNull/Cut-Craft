@@ -125,8 +125,8 @@ say "not implemented yet".
   from Photo (Cut Craft's own: Estimate Depth runs the optional Depth add-on on the chosen
   photo, or a depth map made elsewhere is used as it is; background cut by colour and by
   depth, invert, fine detail, sharpen, smoothing, lift, soft edge and base shape it into a relief
-  that follows its settings live; Only What the Bit Can Carve leaves what a tapered ball nose
-  of a given tip and taper can reach, and says when the job's model is coarser than the bit), Bake
+  that follows its settings live; Only What the Bit Can Carve leaves what the bit picked from the
+  Tool Database can reach, and says when the job's model is coarser than the bit), Bake
   Components, Smooth, Reset Inside / Outside Selected Vectors, Scale Model Z Height, Selected
   Component Properties, Export as STL (its form: limit by tolerance or triangle count; back
   left open or closed by a flat plane, the inverted front or the other side; Triangulate shows

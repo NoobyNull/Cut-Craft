@@ -1014,9 +1014,18 @@ fn relief_from_photo_carves_only_what_the_bit_can() {
         k.height_range().unwrap().0
     };
     let as_drawn = lowest(&h);
+    // ticked before a bit is picked: the form says to Select… one
     let form = h.app.form.as_mut().unwrap();
     form.params["only_what_the_bit_can_carve"] = true.into();
-    form.dirty = true;
+    let params = form.params.clone();
+    let refused = h.app.apply_form("relief_from_photo", &params).unwrap_err();
+    assert!(refused.contains("Select…"), "{refused}");
+    // the bit comes from the Tool Database, as on a toolpath form; no passes or rest there
+    h.frame(vec![]);
+    assert!(h.text_at("Select…").is_some(), "the form's tool");
+    assert!(h.text_at("Edit Passes…").is_none());
+    h.app.choose_tool("6 mm Ball Nose");
+    h.app.form.as_mut().unwrap().dirty = true;
     h.frame(vec![]);
     assert_eq!(h.app.doc.components.len(), 1, "made again in place");
     assert!(
@@ -10143,6 +10152,35 @@ fn the_tabs_read_in_one_line_on_the_form() {
             .unwrap()
             .ends_with("5 placed by hand")
     );
+}
+
+#[test]
+fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
+    let mut h = Harness::new();
+    // a slot 2 mm wide: a 3 mm bit can't get into it at all
+    h.rectangle(10.0, 10.0, 2.0, 50.0);
+    h.click(h.at(10.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let line = h.app.form_reach().expect("a reach line under the tool");
+    assert!(
+        matches!(line, cut_craft_core::reach::Line::Short(_)),
+        "{line:?}"
+    );
+    assert!(h.text_at(line.text()).is_some(), "shown: {line:?}");
+    assert!(line.text().contains("too wide for 1 spot"), "{line:?}");
+    // a wider shape fits; the starter bit has no flute length, so depth is not checked
+    h.app.form = None;
+    h.rectangle(30.0, 10.0, 40.0, 50.0);
+    h.click(h.at(70.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    let line = h.app.form_reach().expect("a reach line");
+    assert!(line.text().starts_with("Fits every spot"), "{line:?}");
 }
 
 #[test]

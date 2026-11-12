@@ -7,6 +7,7 @@ pub mod shape;
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::component::{Combine, Component};
 use cut_craft_core::document::Document;
+use cut_craft_core::toolpath::Tool;
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -68,26 +69,9 @@ pub struct Params {
     /// the bit fill in, and the foot of a steep wall slopes at the bit's taper
     #[schemars(extend("x-group" = "Carving bit"))]
     pub only_what_the_bit_can_carve: bool,
-    /// The ball nose bit's tip diameter (1/64 inch is 0.397 mm)
-    #[schemars(
-        extend(
-            "x-unit" = "mm",
-            "x-group" = "Carving bit",
-            "x-enable-when" = {"only_what_the_bit_can_carve": "true"}
-        ),
-        range(min = 0)
-    )]
-    pub bit_tip_diameter: f64,
-    /// A tapered bit's angle on each side, from its listing; 0 for a straight ball nose
-    #[schemars(
-        extend(
-            "x-unit" = "deg",
-            "x-group" = "Carving bit",
-            "x-enable-when" = {"only_what_the_bit_can_carve": "true"}
-        ),
-        range(min = 0, max = 45)
-    )]
-    pub bit_taper: f64,
+    /// The bit you will carve it with, picked with Select… in the Tool Database: the same
+    /// bit the 3D Finishing toolpath uses, and that Calculate checks can reach everything
+    pub tool: Tool,
     pub combine: Combine,
 }
 
@@ -107,9 +91,11 @@ impl Default for Params {
             soft_edge: 0.0,
             base_height: 0.0,
             only_what_the_bit_can_carve: false,
-            // a 1/64 inch tapered ball nose
-            bit_tip_diameter: 0.397,
-            bit_taper: 10.0,
+            // none picked yet: Select… one before ticking the box above
+            tool: Tool {
+                name: String::new(),
+                ..Tool::default()
+            },
             combine: Combine::Add,
         }
     }
@@ -172,11 +158,11 @@ impl Command for ReliefFromPhoto {
                 "set the soft edge and base to 0 or more".into(),
             ));
         }
-        if p.only_what_the_bit_can_carve
-            && !(p.bit_tip_diameter > 0.0 && (0.0..=45.0).contains(&p.bit_taper))
-        {
+        if p.only_what_the_bit_can_carve && (p.tool.name.is_empty() || p.tool.diameter <= 0.0) {
             return Err(CommandError::InvalidParams(
-                "set the bit's tip diameter above 0 and its taper from 0 to 45 degrees".into(),
+                "pick the bit you will carve with: Select… under Tool, or untick Only What the \
+                 Bit Can Carve"
+                    .into(),
             ));
         }
         let shaped = shaped(photo, p, doc.job.model_cell());
@@ -271,11 +257,7 @@ fn shaped(photo: &Bitmap, p: &Params, cell: f64) -> Bitmap {
     };
     let mut heights = shape::heights(&light, &depth, &shaping);
     if p.only_what_the_bit_can_carve {
-        let bit = shape::Bit {
-            tip: p.bit_tip_diameter,
-            taper: p.bit_taper,
-        };
-        heights = shape::carvable(&heights, 1.0 / pixels_per_mm, p.max_height, &bit);
+        heights = shape::carvable(&heights, 1.0 / pixels_per_mm, p.max_height, &p.tool);
     }
     Bitmap {
         columns,
@@ -517,6 +499,15 @@ mod tests {
         assert!(as_drawn < 0.5, "the groove as drawn: {as_drawn}");
         let carved = Params {
             only_what_the_bit_can_carve: true,
+            // a 1/64 inch ball nose tapering 10 degrees a side to a 1/4 inch shank
+            tool: Tool {
+                name: "1/64 Tapered Ball Nose".into(),
+                shape: cut_craft_core::toolpath::ToolShape::BallNose,
+                diameter: 0.397,
+                taper: 10.0,
+                shank_diameter: 6.35,
+                ..Tool::default()
+            },
             ..asked.clone()
         };
         let r = relief(&mut with_groove(), &carved);
@@ -525,7 +516,7 @@ mod tests {
         assert!(left > 7.0 && left < 9.5, "the groove as carved: {left}");
         assert!((r.height_at(Point::new(5.0, 15.0)).unwrap() - 10.0).abs() < 1e-4);
         let no_bit = Params {
-            bit_tip_diameter: 0.0,
+            tool: Params::default().tool,
             ..carved
         };
         assert!(matches!(

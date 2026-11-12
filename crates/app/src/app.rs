@@ -15,6 +15,7 @@ mod layouts;
 mod mac;
 mod panels;
 mod passes;
+mod reach;
 mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
@@ -1087,6 +1088,8 @@ struct CutCraftApp {
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
+    /// The open form's reach line's measured shapes, kept while nothing they depend on changes.
+    reach_found: Option<reach::ReachFound>,
     /// Toolpath Summary's settings.
     summary: Summary,
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
