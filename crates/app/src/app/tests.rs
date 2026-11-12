@@ -11218,3 +11218,25 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
     });
     assert!(said, "how much quicker, on the form");
 }
+
+#[test]
+fn suggest_takes_bits_from_my_tools_only() {
+    let mut h = Harness::new();
+    let mut catalogue = h.app.tools.get("12 mm End Mill").unwrap().clone();
+    catalogue.name = "Vendor 16 mm End Mill".into();
+    catalogue.diameter = 16.0;
+    catalogue.group = "Vendor/End Mills".into();
+    h.app.tools.tools.push(catalogue);
+    h.app.tools.catalogues = vec!["Vendor".into()];
+    let names: Vec<String> = h
+        .app
+        .suggest_candidates()
+        .into_iter()
+        .map(|c| c.tool.name)
+        .collect();
+    assert!(names.iter().any(|n| n == "12 mm End Mill"), "{names:?}");
+    assert!(
+        !names.iter().any(|n| n.starts_with("Vendor")),
+        "a read-only catalogue's bit is not suggested: {names:?}"
+    );
+}

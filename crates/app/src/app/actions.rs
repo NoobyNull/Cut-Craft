@@ -4348,11 +4348,10 @@ impl CutCraftApp {
 
     /// The bits Suggest may pick from: the user's own (not a read-only catalogue's), each
     /// with whether the tool changer holds it.
-    fn suggest_candidates(&self) -> Vec<cmd_pocket_toolpath::Candidate> {
+    pub(super) fn suggest_candidates(&self) -> Vec<cmd_pocket_toolpath::Candidate> {
         let slots = self.slots();
         self.tools
-            .tools
-            .iter()
+            .my_tools()
             .map(|tool| cmd_pocket_toolpath::Candidate {
                 tool: self.tools.pick(&tool.name).unwrap_or_else(|| tool.clone()),
                 loaded: slots
