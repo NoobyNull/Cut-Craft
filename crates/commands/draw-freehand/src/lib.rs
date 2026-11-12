@@ -33,7 +33,7 @@ pub struct Params {
 impl Default for Params {
     fn default() -> Self {
         Self {
-            // ponytail: 0.5 mm [inf]; Aspire's freehand smoothing is not described
+            // ponytail: 0.5 mm [inf]
             tolerance: 0.5,
             stabilize: 0.0,
             end_at_cursor: false,

@@ -52,7 +52,7 @@ impl Default for Params {
     }
 }
 
-/// The layer the drive rails go on, as Aspire names it.
+/// The layer the drive rails go on.
 const RAILS_LAYER: &str = "Unwrapped Vectors Drive Rails";
 /// Angles sampled round the cross-section.
 // ponytail: every half degree [inf]

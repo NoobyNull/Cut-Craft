@@ -216,7 +216,7 @@ pub struct Group {
     pub combine: Combine,
 }
 
-/// A component's dynamic properties (Aspire's Component Properties): they change how its
+/// A component's dynamic properties (Component Properties): they change how its
 /// heights enter the model without changing the heights, until the component is baked.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
@@ -703,7 +703,7 @@ pub fn silhouette(parts: &[&Component]) -> Vec<crate::geometry::Path> {
             .iter()
             .any(|part| part.height_at(centre(c, r)).is_some())
     });
-    // ponytail: arcs within half a cell, corners over 60° kept [inf]; Aspire's own smoothing
+    // ponytail: arcs within half a cell, corners over 60° kept [inf]; the own smoothing
     // is not described
     rings
         .iter()

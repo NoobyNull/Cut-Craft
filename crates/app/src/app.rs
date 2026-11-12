@@ -48,7 +48,7 @@ use eframe::egui::{self, Align, Key, KeyboardShortcut, Layout, Modifiers};
 use serde_json::Value;
 use std::borrow::Cow;
 
-/// Aspire 12's side tabs: Design holds the drawing and modeling tools.
+/// The side tabs: Design holds the drawing and modeling tools.
 const DESIGN_TABS: [&str; 5] = ["Design", "Sheets", "Layers", "Components", "Library"];
 /// The browser's tabs in the Rail and Ribbon layouts: the design tabs' panels and the
 /// toolpath list under one row of tabs.
@@ -392,7 +392,7 @@ enum Info {
 #[derive(Clone, Debug)]
 pub(super) struct BeforePreview(Option<Material>);
 
-/// Save Toolpaths' choices (Aspire's Save Toolpaths form), while its window is open.
+/// Save Toolpaths' choices (Save Toolpaths form), while its window is open.
 #[derive(Clone, Debug)]
 pub(super) struct SaveForm {
     /// Which toolpaths go in which file.
@@ -428,7 +428,7 @@ struct Summary {
     rapid: f64,
     units: cut_craft_core::toolpath::RateUnits,
     scale: f64,
-    /// Aspire's Machine Acceleration: the times allow for the active machine's accelerations.
+    /// The Machine Acceleration: the times allow for the active machine's accelerations.
     acceleration: bool,
     picked: Option<EntityId>,
     notes: String,
@@ -549,7 +549,7 @@ const VECTOR_EXPORTERS: [&str; 5] = [
     "export_eps",
     "export_ai",
 ];
-/// Aspire's layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
+/// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned).
 const LAYOUT_KEYS: [(&str, &str); 3] = [
     ("design_layout", "F11"),
     ("machining_layout", "F12"),
@@ -569,7 +569,7 @@ const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
 /// Scrolling a view's height divided by this doubles the zoom.
 // ponytail: fixed rate until a preferences dialog exists
 const VIEW_ZOOM_QUARTERS: f32 = 4.0;
-/// Aspire's startup tasks: action, label and icon.
+/// The startup tasks: action, label and icon.
 const STARTUP_TASKS: [(&str, &str, &str); 4] = [
     ("new", "Create a new file", "file/new.png"),
     (
@@ -762,7 +762,7 @@ const APP_ID: &str = "cut-craft";
 // ponytail: fixed ratio until a preferences dialog exists
 const TOOL_ICON_ROWS: f32 = 1.75;
 
-/// What the window shows: Aspire's start page, Job Setup for a new job, or the job.
+/// What the window shows: the start page, Job Setup for a new job, or the job.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Screen {
     /// No job open: the startup tasks and recently opened files.
@@ -792,7 +792,7 @@ enum View {
     ThreeD,
 }
 
-/// Both views at once, as Aspire's top bar splits them.
+/// Both views at once.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Split {
     /// 2D above 3D
@@ -801,7 +801,7 @@ enum Split {
     SideBySide,
 }
 
-/// Aspire 12's component editing icons in the 3D view (help: Editing in the 3D View):
+/// The component editing icons in the 3D view (help: Editing in the 3D View):
 /// Total Height, Shape Height, Base Height and Additional Settings, a row of round buttons
 /// along the near edge of the selected component's box in Transform mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -814,7 +814,7 @@ enum Handle3d {
     Base,
     /// Opens its combine mode, fade, tilt and appearance.
     Settings,
-    /// One of Aspire's 3D Transform Handles over the selection's box: the 2D view's handle
+    /// One of the 3D Transform Handles over the selection's box: the 2D view's handle
     /// at the same place; the rotation arrow above the far edge is `Rotate { x: 0, y: 1 }`.
     Transform(Handle),
 }
@@ -864,7 +864,7 @@ struct Settings3d {
     anchors: Option<(Anchor, Option<Point>)>,
 }
 
-/// Whose anchors the 3D view's clicks place (Aspire's help: in the 3D view, the fade's or
+/// Whose anchors the 3D view's clicks place (help: in the 3D view, the fade's or
 /// tilt's direction is set there).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Anchor {
@@ -906,7 +906,7 @@ struct OpenForm {
     /// Edit Toolpath: the toolpath Apply replaces rather than adding a new one.
     editing: Option<EntityId>,
     /// The shape a drawing tool's form last made: its Apply makes it again, in its place,
-    /// while it is the one shape selected (as Aspire's drawing forms do).
+    /// while it is the one shape selected (as the drawing forms do).
     drawn: Option<EntityId>,
     /// Settings changed since the shape it made last followed them.
     dirty: bool,
@@ -1228,7 +1228,7 @@ struct CutCraftApp {
     playback_budget: std::time::Duration,
     /// How many times faster than the machine the preview plays (1: the machine's speed).
     playback_speed: f64,
-    /// Component tree levels collapsed (Aspire's Expand / Collapse).
+    /// Component tree levels collapsed (Expand / Collapse).
     collapsed_levels: std::collections::HashSet<u64>,
     /// A guide being dragged: whether it is vertical, and which it is (`None` a new one).
     guide_drag: Option<(bool, Option<usize>)>,
@@ -1265,7 +1265,7 @@ struct CutCraftApp {
     title_bar_at_start: bool,
 }
 
-/// A sheet's size in the Sheets List: one decimal in mm, as Aspire's, three in inches.
+/// A sheet's size in the Sheets List: one decimal in mm, three in inches.
 fn sheet_length(mm: f64, units: cut_craft_core::document::Units) -> String {
     match units {
         cut_craft_core::document::Units::Mm => format!("{mm:.1}"),
@@ -1399,7 +1399,7 @@ fn hms(minutes: f64) -> String {
 /// Each toolpath's estimated time, the visible ones' total, and the rate (in the units
 /// picked) and scale they use; a toolpath clicked has its notes written below, and Apply
 /// gives back the notes to keep with it.
-/// Aspire's Machine Acceleration: the summary's times allow for the active `machine`'s
+/// The Machine Acceleration: the summary's times allow for the active `machine`'s
 /// accelerations (its name and X, Y, Z from Machine Configuration), while there is one.
 fn acceleration_tick(
     ui: &mut egui::Ui,
@@ -1685,7 +1685,7 @@ fn menu_items(
     }
 }
 
-/// A menu item's shortcut as the system writes them: as Aspire does, or ⌘Z on a Mac.
+/// A menu item's shortcut as the system writes them: `Ctrl+Z`, or ⌘Z on a Mac.
 fn shortcut_label<'a>(ctx: &egui::Context, text: &'a str) -> Cow<'a, str> {
     if mac::is_mac(ctx) {
         Cow::Owned(mac::shortcut_text(text))
@@ -1798,7 +1798,7 @@ fn tool_picker(
         .filter(|_| !current.is_empty());
     match &picked {
         Some(tool) => {
-            // Aspire's Passes: how many the cut depth takes, as set in Edit Passes
+            // The Passes: how many the cut depth takes, as set in Edit Passes
             #[expect(clippy::cast_precision_loss, reason = "a small count")]
             let passes = top["depth"]
                 .as_f64()
@@ -2422,7 +2422,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
     }
 }
 
-/// Tabs down a side of the window, text reading downwards as Aspire's side tabs do; the tab
+/// Tabs down a side of the window, text reading downwards as the side tabs do; the tab
 /// hovered and the tab clicked this frame.
 fn side_tabs(ui: &mut egui::Ui, labels: &[&str], current: Option<usize>) -> Vec<egui::Response> {
     let font = egui::TextStyle::Button.resolve(ui.style());

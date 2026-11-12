@@ -13,10 +13,7 @@ use serde::{Deserialize, Serialize};
 pub struct MergedToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "Aspire's Ordering tick boxes"
-)]
+#[expect(clippy::struct_excessive_bools, reason = "the Ordering tick boxes")]
 pub struct Params {
     /// What the toolpath is called in the toolpath list
     pub name: String,

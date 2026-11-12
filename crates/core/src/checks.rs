@@ -1,5 +1,5 @@
-//! Checks before cutting: what in a toolpath the tool may not manage on the machine. Aspire
-//! makes none of these; they are Cut Craft's own.
+//! Checks before cutting: what in a toolpath the tool may not manage on the machine. These
+//! checks are Cut Craft's own.
 
 use crate::component::placed_model;
 use crate::document::Document;

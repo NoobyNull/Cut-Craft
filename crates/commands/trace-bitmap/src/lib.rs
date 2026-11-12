@@ -116,7 +116,7 @@ impl Default for Params {
             merged: vec![],
             threshold: 128,
             trace_color: TraceColor::Black,
-            // ponytail: Aspire's dialog shows 2 on both sliders before a bitmap is chosen [inf]
+            // ponytail: the dialog shows 2 on both sliders before a bitmap is chosen [inf]
             corner_fit: 2,
             noise_filter: 2,
             group_vectors: true,

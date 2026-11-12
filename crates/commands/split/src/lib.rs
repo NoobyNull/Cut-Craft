@@ -28,8 +28,8 @@ impl Command for Split {
                 "select a component and one vector to split it along".into(),
             ));
         };
-        // ponytail: closed cutters only; Aspire extends an open vector to the modeling area's
-        // edges, add that when it is asked for
+        // ponytail: closed cutters only; extending an open vector to the modeling area's
+        // edges is still to do, add that when it is asked for
         if !cutter.closed {
             return Err(CommandError::Failed(
                 "select a closed vector to split with".into(),

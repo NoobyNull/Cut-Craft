@@ -1,4 +1,4 @@
-//! Keep-out zones: areas of the material a tool must not pass over, such as clamps (Aspire's
+//! Keep-out zones: areas of the material a tool must not pass over, such as clamps (the
 //! help: Keep-out Zones). They are closed paths of their own, made from selected vectors and
 //! kept when those are deleted, each with a name shown as its label ("Keep-out: Clamp 1").
 //!
@@ -263,7 +263,7 @@ pub fn crossed(zones: &[Path], moves: &[Move]) -> bool {
 }
 
 /// `moves` with each rapid that would pass over one of the `zones` routed round it at the
-/// same height, the shortest way round the zone's outline, as Aspire's rapids between parts
+/// same height, the shortest way round the zone's outline
 /// go round its keep-out zones; and whether the tool still passes over one (a cut, a plunge,
 /// or a rapid that starts or ends inside one or can find no way round): a toolpath that
 /// cannot abide by the zones.

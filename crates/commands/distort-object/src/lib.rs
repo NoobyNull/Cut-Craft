@@ -90,7 +90,7 @@ fn corners_of(r: Rect) -> Corners {
 // ponytail: 256 [inf]; enough that the curves' chords are far finer than the shapes
 const EDGE_SAMPLES: usize = 256;
 /// Distorted vectors are refitted with Béziers within this, mm.
-// ponytail: a fixed 0.01 mm; Aspire keeps the distortion live instead
+// ponytail: a fixed 0.01 mm; the distortion could stay live instead
 const FIT_TOLERANCE: f64 = 0.01;
 
 /// The band between a bottom and a top edge, each sampled evenly along its length: unit

@@ -1,7 +1,7 @@
 //! Cut Craft's own 3D clipart (`.ccclip`): Model ▸ Export as 3D Clipart saves the selected
 //! components, baked into one with their shaping, as a component whose grid starts at the
 //! origin; Import Component / 3D Model puts one back, centred on the job, on the first
-//! level. (Aspire's `.3dclip` files are encrypted, so they are not read; see `re/SPEC.md`.)
+//! level. (`.3dclip` files are encrypted, so they are not read; see `re/SPEC.md`.)
 
 use cut_craft_core::component::{Component, chosen_or_baked};
 use cut_craft_core::document::Document;

@@ -331,7 +331,7 @@ impl Sketch {
     }
 }
 
-/// The areas the settings `p` would carve, as Aspire's green highlight shows them while its
+/// The areas the settings `p` would carve, shown in green while the
 /// form is open: each row's runs of line cells inside the boundary, a rectangle each.
 pub fn areas(doc: &Document, p: &Params) -> Result<Vec<Rect>, CommandError> {
     let sketch = Sketch::new(doc, p)?;

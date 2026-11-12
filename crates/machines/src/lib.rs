@@ -1,4 +1,4 @@
-//! Aspire's Machine menu: machines (name, maker, model, controller, bed size) each with the
+//! The Machine menu: machines (name, maker, model, controller, bed size) each with the
 //! post-processors it saves toolpaths through, and the post library they come from: Cut
 //! Craft's own posts and the user's custom ones, kept in a folder of their own.
 

@@ -121,14 +121,14 @@ impl Default for Params {
                 on: false,
                 from: Xy::default(),
                 to: Xy::default(),
-                // ponytail: a starting value; Aspire's default fade is not documented
+                // ponytail: a starting value
                 percent: 50.0,
             },
             tilt: Tilt {
                 on: false,
                 pivot: Xy::default(),
                 toward: Xy::default(),
-                // ponytail: a starting value; Aspire's default tilt is not documented
+                // ponytail: a starting value
                 angle: 5.0,
             },
             bake: false,

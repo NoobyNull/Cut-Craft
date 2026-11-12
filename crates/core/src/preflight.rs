@@ -1,8 +1,8 @@
 //! The checks Save Toolpaths makes before writing a file: the job is simulated in cutting
 //! order to find rapid moves that would crash into the material and cutting that only cuts
 //! air, and each toolpath is checked against the machine (bed, Z travel, speeds, tool
-//! changer) and for settings that cannot cut (no moves, no feed rate). Aspire makes none of
-//! these; they are Cut Craft's own. Every message says how to put the problem right.
+//! changer) and for settings that cannot cut (no moves, no feed rate). These
+//! are Cut Craft's own. Every message says how to put the problem right.
 
 use crate::checks::{LEFT, problems_over};
 use crate::document::Document;

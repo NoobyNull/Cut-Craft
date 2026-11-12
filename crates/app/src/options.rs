@@ -1,4 +1,4 @@
-//! Edit ▸ Options: settings kept between runs, in Aspire's sections. Only the settings Cut
+//! Edit ▸ Options: settings kept between runs, in the sections. Only the settings Cut
 //! Craft acts on are here: what the views draw when it starts, and the recent files kept.
 
 use crate::display::Display;
@@ -457,7 +457,7 @@ fn solid_colour() -> [u8; 3] {
 }
 
 /// A ten-thousandth of an inch.
-// ponytail: Aspire's defaults are not known
+// ponytail: our own defaults
 fn tolerance() -> f64 {
     0.002_54
 }
@@ -1265,7 +1265,7 @@ impl Default for Theme {
 }
 
 impl Theme {
-    /// Light, as Aspire is; on a Mac the desktop's own, as Mac users expect apps to follow
+    /// Light; on a Mac the desktop's own, as Mac users expect apps to follow
     /// their light or dark appearance.
     pub fn for_system(os: egui::os::OperatingSystem) -> Self {
         if os == egui::os::OperatingSystem::Mac {
@@ -1297,7 +1297,7 @@ pub enum WindowLayout {
     Ribbon,
 }
 
-// ponytail: Aspire's third choice, a folder remembered for each kind of operation, is left out
+// ponytail: the third choice, a folder remembered for each kind of operation, is left out
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FileDialogDefault {

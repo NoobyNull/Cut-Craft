@@ -2,7 +2,7 @@
 """Decode a Vectric .vfont (OLE compound file holding MFC-serialized glyphs).
 
 Usage: vfont.py FONT.vfont [OUT.svg]  -- prints a summary; with OUT.svg draws every glyph.
-Layout (worked out from the 23 samples in Aspire's Fonts/) is written up in re/SPEC.md.
+Layout (worked out from sample font files) is written up in re/SPEC.md.
 Output stays under re/extracted/ (gitignored).
 """
 import math

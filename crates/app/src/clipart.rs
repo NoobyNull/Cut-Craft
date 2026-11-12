@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// A thumbnail's edge, in rows of the theme's interactive height.
-// ponytail: one size; Aspire's three view sizes can come with a setting
+// ponytail: one size; the three view sizes can come with a setting
 const THUMBNAIL_ROWS: f32 = 4.0;
 /// The pop-up preview's edge, in rows of buttons.
 const LARGE_ROWS: f32 = 16.0;

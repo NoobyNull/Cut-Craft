@@ -152,7 +152,7 @@ pub trait Command: 'static {
     fn run(doc: &Document, params: &Self::Params) -> Result<Change, CommandError>;
 }
 
-/// A pointer drag in job coordinates, with the modifier meanings Aspire uses.
+/// A pointer drag in job coordinates, with the usual modifier meanings.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Drag {
     pub start: Point,

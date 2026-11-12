@@ -391,7 +391,7 @@ impl Command for ThreadMillingToolpath {
         ensure_positive("diameter", p.diameter)?;
         ensure_positive("tool diameter", p.tool.diameter)?;
         ensure_positive("tooth offset", p.tooth_offset())?;
-        // Aspire's rule for a single-point tool's offset
+        // The rule for a single-point tool's offset
         if p.tool.shape == ToolShape::ThreadMill && p.tool.tooth_offset < p.tool.tooth_size / 2.0 {
             return Err(CommandError::InvalidParams(
                 "set the thread mill's tooth offset to at least half the tooth size".into(),

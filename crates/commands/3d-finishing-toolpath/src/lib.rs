@@ -100,7 +100,7 @@ impl Default for Params {
                     .find(|t| t.shape == ToolShape::BallNose)
                     .expect("the starter tools include a ball nose"),
             ],
-            // ponytail: Aspire's defaults are not known; a millimetre each
+            // ponytail: our own defaults; a millimetre each
             minimum_detail: 1.0,
             boundary_offset: 1.0,
             machining_boundary: MachiningBoundary::Material,

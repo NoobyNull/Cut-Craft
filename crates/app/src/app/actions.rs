@@ -353,7 +353,7 @@ impl CutCraftApp {
             | "save_all_visible_toolpaths_as_template"
             | "load_template" => self.template_action(id),
             id if TOP_BAR_TOGGLES.contains(&id) => self.top_bar_toggle(id),
-            // Aspire's four Create Shape icons: the form with that profile chosen
+            // The four Create Shape icons: the form with that profile chosen
             "create_shape_round"
             | "create_shape_angled"
             | "create_shape_smooth"
@@ -383,7 +383,7 @@ impl CutCraftApp {
             id if crate::flyout::variant(id).is_some() => self.start_variant(id),
             // Edit Text: Draw Text opens on the selected text's settings
             "edit_text" => self.start_command("draw_text"),
-            // Aspire's three Join icons: Join / Close Vectors their way
+            // The three Join icons: Join / Close Vectors their way
             "join_straight_line" | "join_smooth_curve" | "join_move_end_points" => {
                 let method = id.trim_start_matches("join_");
                 let params = serde_json::json!({ "method": method });
@@ -404,7 +404,7 @@ impl CutCraftApp {
                 );
                 self.pages.open(Page::Design);
             }
-            // the Components tab, as Aspire's Component Levels icon shows
+            // the Components tab, as its Component Levels icon shows
             "component_levels" => {
                 self.set_design_tab(
                     DESIGN_TABS
@@ -880,8 +880,7 @@ impl CutCraftApp {
 
     /// Orientate 3D Model again on a model's own file, with the settings it was imported
     /// with, its Apply replacing the model: only while the file is where it was; a file
-    /// that has changed since is taken as it is now, with a warning (Aspire re-imports a
-    /// model "provided it has not been changed significantly").
+    /// that has changed since is taken as it is now, with a warning.
     fn reimport_model(&mut self, action: &str) {
         let Some(source) = self.model_source(action).cloned() else {
             return;
@@ -915,7 +914,7 @@ impl CutCraftApp {
 
     pub(super) fn file_action(&mut self, id: &str) {
         match id {
-            // a new job starts in Job Setup, as Aspire's does
+            // a new job starts in Job Setup
             "new" => {
                 if self.confirm_discard() {
                     self.reset_job();
@@ -1106,7 +1105,7 @@ impl CutCraftApp {
         changed
     }
 
-    /// The keep-out zones changed: every toolpath is made again round them, as Aspire's
+    /// The keep-out zones changed: every toolpath is made again round them
     /// are, and any that still cannot keep out is warned about.
     pub(super) fn keep_out_changed(&mut self) {
         if !self.doc.toolpaths.is_empty() {
@@ -1308,7 +1307,7 @@ impl CutCraftApp {
     }
 
     /// The name the form's file is saved under (before its extension): a group's own name,
-    /// as Aspire's, the selected toolpath's when saving only it, else the project's.
+    ///, the selected toolpath's when saving only it, else the project's.
     pub(super) fn output_name(&self, form: &SaveForm) -> String {
         let selected = (form.mode == files::SaveMode::Selected)
             .then(|| {
@@ -1525,7 +1524,7 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
         let plan = self.plan(form, post)?;
-        // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
+        // a toolpath that cannot abide by the keep-out zones is not saved
         let crossing = self.not_kept_out(&plan);
         if !crossing.is_empty() {
             return Err(format!(
@@ -1862,7 +1861,7 @@ impl CutCraftApp {
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
         self.fill_drill_bank(cmd.id(), &mut params);
-        // a toolpath's form in Aspire's order
+        // a toolpath's form in the standard order
         let fields = if fields.iter().any(|f| f.key == "tool") {
             form::arrange(fields)
         } else {
@@ -2392,7 +2391,7 @@ impl CutCraftApp {
         answer == rfd::MessageDialogResult::Yes
     }
 
-    /// Aspire's icons over the toolpath list: edit and hide the selected toolpath, and save
+    /// The icons over the toolpath list: edit and hide the selected toolpath, and save
     /// it, or every visible one, as a template.
     pub(super) fn toolpath_list_buttons(&mut self, ui: &mut egui::Ui) {
         let edge = ui.spacing().interact_size.y * TOOL_ICON_ROWS;
@@ -2449,7 +2448,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The file icons Aspire has beside its menus: Import Vectors and Export Vectors (vector
+    /// The file icons beside the menus: Import Vectors and Export Vectors (vector
     /// formats only), Open Folder (the job's folder) and Open Clipart Folder.
     pub(super) fn file_icon_action(&mut self, id: &str) {
         let result = match id {
@@ -2771,7 +2770,7 @@ impl CutCraftApp {
                     form.params["size"][key] = Value::from(value);
                 }
                 // Depth Below Top reads the model's height while the plane is at its
-                // bottom (0, or where its bottom was before it was sized), as Aspire's
+                // bottom (0, or where its bottom was before it was sized)
                 // does; a depth typed above the bottom stays, and one past it lifts the
                 // model off the plane, up to the material's top
                 let depth = &mut form.params["placing"]["depth_below_top"];
@@ -3043,7 +3042,7 @@ impl CutCraftApp {
     }
 
     /// Opens drawing tool `command` on vector `id` with `params`: changing the form redraws
-    /// that shape rather than drawing another, as Aspire's E and Shift-click do.
+    /// that shape rather than drawing another (E, or Shift-click).
     pub(super) fn edit_shape(&mut self, id: EntityId, command: &'static str, params: Value) {
         if self.form.as_ref().is_none_or(|f| f.id != command) {
             self.start_command(command);
@@ -3158,11 +3157,11 @@ impl CutCraftApp {
         }
         self.status
             .set_message(&format!("{} applied", cmd.meta().label));
-        // new keep-out zones: the toolpaths are made again round them, as Aspire's are
+        // new keep-out zones: the toolpaths are made again round them
         if id == "keep_out_zones" {
             self.keep_out_changed();
         }
-        // the spiral gadget says how many times round each strand goes, as Aspire's does
+        // the spiral gadget says how many times round each strand goes
         if id == "wrapped_spiral_layout"
             && let Ok(p) = serde_json::from_value(params.clone())
             && let Some(turns) = cmd_wrapped_spiral_layout::revolutions(&self.doc, &p)
@@ -3276,8 +3275,7 @@ impl CutCraftApp {
     }
 
     /// The arrow keys nudge the selection by the snapping grid's squares: a whole one, half
-    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps; Aspire nudges with Ctrl +
-    /// Shift); with Ctrl alone, by Snapping Options' Fixed Nudge Distance.
+    /// with Shift, a tenth with Ctrl + Shift (Matthew's steps); with Ctrl alone, by Snapping Options' Fixed Nudge Distance.
     pub(super) fn nudge(&mut self, ctx: &egui::Context) {
         if self.screen != Screen::Job || ctx.egui_wants_keyboard_input() {
             return;
@@ -3526,7 +3524,7 @@ impl CutCraftApp {
             .collect()
     }
 
-    /// No job open: Aspire's startup tasks and the jobs opened lately.
+    /// No job open: the startup tasks and the jobs opened lately.
     pub(super) fn start_page(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Start page");
         let edge = ui.spacing().interact_size.y;
@@ -3617,7 +3615,7 @@ impl CutCraftApp {
         cut_craft_bug_report::mark(ui, "Design page");
         self.page_header(ui, Page::Design, DESIGN_TABS[self.design_tab]);
         let tab = DESIGN_TABS[self.design_tab];
-        // a tool's form takes the page's place, as Aspire's does
+        // a tool's form takes the page's place
         if self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
             self.form_panel(ui);
             return;
@@ -3745,7 +3743,7 @@ impl CutCraftApp {
         }
     }
 
-    /// A page's title with its push-pin and Aspire's Switch Layout button.
+    /// A page's title with its push-pin and the Switch Layout button.
     pub(super) fn page_header(&mut self, ui: &mut egui::Ui, page: Page, title: &str) {
         let row = ui.spacing().interact_size.y;
         let (mut pin, mut switch, mut help) = (false, false, false);
@@ -3875,7 +3873,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Aspire's design tabs, down the left edge.
+    /// The design tabs, down the left edge.
     pub(super) fn design_tabs(&mut self, ui: &mut egui::Ui) {
         let shown = self.pages.shown(Page::Design) != Shown::Hidden;
         let only = self.options.favourites.of(Page::Design).1;
@@ -3933,7 +3931,7 @@ impl CutCraftApp {
         self.save_options();
     }
 
-    /// Going to another design tab closes a form open on the Design page, as Aspire's does.
+    /// Going to another design tab closes a form open on the Design page.
     pub(super) fn set_design_tab(&mut self, tab: usize) {
         if tab != self.design_tab && self.form.as_ref().is_some_and(|f| f.page == Page::Design) {
             self.form = None;
@@ -4886,7 +4884,7 @@ impl CutCraftApp {
                 None => self.file_action("save_as"),
             },
             // ponytail: the drawing as a PDF opened in the system viewer, which prints it;
-            // Aspire's own print window (scale, tiling) is not done
+            // The own print window (scale, tiling) is not done
             "print" | "print_preview" => {
                 let path = std::env::temp_dir().join("cut-craft-print.pdf");
                 let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)

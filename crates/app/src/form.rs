@@ -13,7 +13,7 @@ const CORNER_PICKER_ROWS: f32 = 3.0;
 /// The picture the face radio buttons sit round, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const FACES_PICTURE_ROWS: f32 = 4.0;
-/// A field's own picture beside its label (Aspire's small width / radius pictures), in rows
+/// A field's own picture beside its label (small width / radius pictures), in rows
 /// of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const FIELD_PICTURE_ROWS: f32 = 1.5;
@@ -26,25 +26,25 @@ pub struct Field {
     /// Doc comment of the parameter, shown on hover.
     pub help: Option<String>,
     pub kind: Kind,
-    /// Marked `x-section`: drawn as a framed block with a heading, as Aspire's forms are.
+    /// Marked `x-section`: drawn as a framed block with a heading.
     pub section: bool,
     /// `x-icon`: the section's picture, which may follow its value (see [`icon_path`]).
     pub icon: Option<String>,
     /// Only shown while another choice says so.
     pub when: Option<When>,
     /// Greyed out unless another choice says so (`x-enable-when`, written as `x-show-when`),
-    /// as Aspire greys a section's settings until it is ticked.
+    /// so a section's settings stay greyed until it is ticked.
     pub enabled: Option<When>,
     /// `x-group`: neighbouring fields with the same group share a framed block under it as a
-    /// heading (Aspire's Cutting Depths, Machine Vectors…).
+    /// heading (Cutting Depths, Machine Vectors…).
     pub group: Option<String>,
     /// `x-tab`: neighbouring fields with a tab show as a strip of tabs, a tab's fields under
-    /// it (Aspire's Ramp, Leads, Order, Start At, Corners).
+    /// it (Ramp, Leads, Order, Start At, Corners).
     pub tab: Option<String>,
 }
 
 /// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
-/// judged on the form's top-level parameters: Aspire's forms change with what is chosen.
+/// judged on the form's top-level parameters: the forms change with what is chosen.
 #[derive(Debug, PartialEq)]
 pub struct When {
     pub key: String,
@@ -173,7 +173,7 @@ pub enum Kind {
     Other,
 }
 
-/// How a choice is drawn (`x-widget`); Aspire's forms use each of these.
+/// How a choice is drawn (`x-widget`); the forms use each of these.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Widget {
     /// Radio buttons, one under another, for a few options; a drop-down for more.
@@ -186,10 +186,10 @@ pub enum Widget {
     /// A square with a spot at each corner and the centre, as the XY datum picker (`corners`).
     Corners,
     /// A radio button for each face of a model round its picture (`faces`, with `x-icon`),
-    /// as Aspire's Initial Orientation.
+    /// as the Initial Orientation.
     Faces { picture: Option<String> },
     /// A row of picture buttons, one an option, the chosen one pressed (`icons`, with
-    /// `x-icon` naming each picture by the value, `{}`), as Aspire's Combine Mode; with
+    /// `x-icon` naming each picture by the value, `{}`), like Combine Mode; with
     /// `named-icons` larger, each with its name under it.
     Icons {
         picture: Option<String>,
@@ -480,7 +480,7 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
                 None => (1.0, None),
             };
             let mut n = value.as_f64().unwrap_or_default() / factor;
-            // a sum typed in (Aspire's calculation edit boxes) is worked out
+            // a sum typed in (calculation edit boxes) is worked out
             let material = look.material.clone();
             let mut drag = egui::DragValue::new(&mut n)
                 .custom_parser(move |text| cut_craft_core::calc::evaluate(text, &material))
@@ -690,7 +690,7 @@ fn drop_down(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<Str
     picked
 }
 
-/// Aspire's XY datum picker: the material as a square, a spot at each corner and the centre.
+/// The XY datum picker: the material as a square, a spot at each corner and the centre.
 fn corners(ui: &mut egui::Ui, options: &[Choice], current: &str) -> Option<String> {
     let row = ui.spacing().interact_size.y;
     let (rect, response) = ui.allocate_exact_size(
@@ -755,7 +755,7 @@ fn pick_step(ui: &mut egui::Ui, steps: &[f64], value: &mut Value) -> bool {
     }
 }
 
-/// A step as Aspire labels it: positive ones carry a plus.
+/// A step: positive ones carry a plus.
 pub fn step_label(step: f64) -> String {
     if step > 0.0 {
         format!("+{step}")
@@ -764,7 +764,7 @@ pub fn step_label(step: f64) -> String {
     }
 }
 
-/// Aspire's Initial Orientation: the model's picture with a radio button for each face round it.
+/// The Initial Orientation: the model's picture with a radio button for each face round it.
 fn faces(
     ui: &mut egui::Ui,
     options: &[Choice],
@@ -830,7 +830,7 @@ fn faces(
 }
 
 /// Where a face's radio button sits round the picture: column (left, middle, right) and line
-/// (above, upper, lower, below), as in Aspire's dialog.
+/// (above, upper, lower, below).
 pub fn face_spot(value: &str) -> Option<(u8, u8)> {
     Some(match value {
         "top" => (1, 0),
@@ -990,10 +990,10 @@ fn round(n: f64) -> i64 {
 pub const CUTTING_DEPTHS: &str = "Cutting Depths";
 
 /// The group that picks which side of the vectors a profile cuts, shown just after the cutting
-/// depths: Aspire keeps it lower, under Machine Vectors.
+/// depths rather than lower down, under Machine Vectors.
 pub const WHICH_SIDE: &str = cmd_profile_toolpath::SIDE_GROUP;
 
-/// A toolpath form's fields in Aspire's order: the cutting depths, the tool, then the rest
+/// A toolpath form's fields in the standard order: the cutting depths, the tool, then the rest
 /// as declared with each group's (and the tab strip's) fields gathered where the first of
 /// them is, and Project onto 3D Model and the name last.
 pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
@@ -1279,7 +1279,7 @@ mod tests {
     }
 
     #[test]
-    fn toolpath_fields_are_arranged_as_aspires_forms() {
+    fn toolpath_fields_are_arranged_in_the_standard_order() {
         let schema = serde_json::json!({
             "type": "object",
             "properties": {
@@ -1469,7 +1469,7 @@ mod tests {
     }
 
     #[test]
-    fn orientate_3d_model_is_in_aspires_sections() {
+    fn orientate_3d_model_is_in_sections() {
         let f = fields(&schema("orientate_3d_model"));
         let sections: Vec<&str> = f
             .iter()
@@ -1533,7 +1533,7 @@ mod tests {
     }
 
     #[test]
-    fn faces_sit_round_the_picture_as_in_aspire() {
+    fn faces_sit_round_the_picture() {
         // columns left, middle, right; rows above, upper, lower, below the picture
         assert_eq!(face_spot("top"), Some((1, 0)));
         assert_eq!(face_spot("back"), Some((0, 1)));

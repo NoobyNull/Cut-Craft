@@ -1,4 +1,4 @@
-//! Snapping: points the pointer jumps to while drawing or moving nodes, as Aspire's Snapping
+//! Snapping: points the pointer jumps to while drawing or moving nodes. Snapping
 //! Options (F4) choose them: geometry (span ends and middles, arc centres, object centres),
 //! the job's centre and corners, and a grid. Smart snapping lines the pointer up with those
 //! points across or up and down when none is near, and puts it on the tangent of a span
@@ -140,7 +140,7 @@ impl Default for SnapOptions {
             arc_centers: true,
             tangent_and_perpendicular: true,
             smart_snapping: true,
-            // ponytail: Aspire's slider runs Small to Large; 8 px is our middle [inf]
+            // ponytail: the slider runs Small to Large; 8 px is our middle [inf]
             snapping_radius: 8.0,
             fixed_nudge: nudge(),
             rotate_step: RotateSnap::default(),
@@ -285,7 +285,7 @@ impl SnapOptions {
     /// snapping) and, with smart snapping, lines through every snap point across and up and
     /// down, and along or square to a span where it ends.
     fn lined(&self, doc: &Document, at: Point, reach: f64) -> Option<Snap> {
-        // ponytail: Aspire's smart lines go only through the nodes hovered
+        // ponytail: the smart lines go only through the nodes hovered
         let (mut xs, mut ys) = (vec![], vec![]);
         // angled guides: the point on them nearest the pointer
         let mut tilted: Vec<Snap> = vec![];

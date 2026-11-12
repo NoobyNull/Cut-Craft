@@ -37,7 +37,7 @@ pub struct Display {
     /// A circle on each end of every open vector in the 2D view, so gaps that stop a shape
     /// being pocketed or carved can be seen.
     pub open_ends: bool,
-    /// Previews play the tool cutting (Aspire's Animate preview) rather than appearing cut.
+    /// Previews play the tool cutting (Animate preview) rather than appearing cut.
     pub animate_preview: bool,
     /// What solid 2D previews are drawn in ([r, g, b]).
     pub solid_colour: [u8; 3],

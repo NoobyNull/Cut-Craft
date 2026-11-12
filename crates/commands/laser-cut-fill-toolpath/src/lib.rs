@@ -172,7 +172,7 @@ impl Command for LaserCutFillToolpath {
                     angles.push(p.hatch_angle + 90.0);
                 }
                 // ponytail: every region is filled together; filling each on its own is
-                // Aspire's "Fill Regionally"
+                // The "Fill Regionally"
                 let mut moves: Vec<Move> = angles
                     .into_iter()
                     .flat_map(|a| hatch_lines(&regions, p.stepover, a))

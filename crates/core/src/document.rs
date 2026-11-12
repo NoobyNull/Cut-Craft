@@ -634,7 +634,7 @@ impl Guide {
     }
 
     /// Its direction in degrees anticlockwise from the X axis: 0 across, 90 up, plus its
-    /// tilt (Aspire's guide angle).
+    /// tilt (guide angle).
     #[must_use]
     pub fn angle(&self) -> f64 {
         let own = if self.vertical { 90.0 } else { 0.0 };
