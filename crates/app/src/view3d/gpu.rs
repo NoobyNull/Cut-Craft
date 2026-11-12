@@ -367,6 +367,72 @@ impl Piece {
     }
 }
 
+/// Whether a device can run the GPU 3D view and the grid kernels: they read a storage buffer
+/// in the vertex shader and run compute shaders. A card with neither DX12 nor Vulkan (common
+/// on older Windows 10 PCs) gets OpenGL, which wgpu runs with WebGL 2's limits: neither.
+/// Such a window draws its 3D view with egui and runs the kernels on the processor, rather
+/// than stopping at wgpu's first validation error.
+pub fn fits(flags: wgpu::DownlevelFlags, limits: &wgpu::Limits) -> bool {
+    flags.contains(wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::VERTEX_STORAGE)
+        && limits.max_storage_buffers_per_shader_stage >= 1
+        && limits.max_compute_workgroups_per_dimension >= 1
+        && limits.max_compute_invocations_per_workgroup >= 1
+}
+
+/// Whether the device `adapter` gets ([`device`]) fits ([`fits`]).
+fn adapter_fits(adapter: &wgpu::Adapter) -> bool {
+    fits(
+        adapter.get_downlevel_capabilities().flags,
+        &device(adapter).required_limits,
+    )
+}
+
+/// The order the window's adapters are tried in, lowest first: a real card before the
+/// processor's software one (WARP, llvmpipe), then one that fits ([`fits`]) before one that
+/// doesn't, then a discrete card before an integrated one. So an OpenGL-only card still draws
+/// the window in hardware, and WARP is the last resort.
+pub fn rank(fits: bool, kind: wgpu::DeviceType) -> (bool, bool, u8) {
+    let order = match kind {
+        wgpu::DeviceType::DiscreteGpu => 0,
+        wgpu::DeviceType::IntegratedGpu => 1,
+        wgpu::DeviceType::Other => 2,
+        wgpu::DeviceType::VirtualGpu => 3,
+        wgpu::DeviceType::Cpu => 4,
+    };
+    (kind == wgpu::DeviceType::Cpu, !fits, order)
+}
+
+/// Picks the window's adapter by [`rank`] among those that can draw to `surface`. wgpu's own
+/// choice goes by the kind of card alone, so an integrated card's OpenGL beat DX12 on WARP,
+/// and then the 3D view's first pipeline was a validation error: a crash without a word.
+pub fn choose_adapter(
+    adapters: &[wgpu::Adapter],
+    surface: Option<&wgpu::Surface<'_>>,
+) -> Result<wgpu::Adapter, String> {
+    adapters
+        .iter()
+        .filter(|a| surface.is_none_or(|s| a.is_surface_supported(s)))
+        .min_by_key(|a| rank(adapter_fits(a), a.get_info().device_type))
+        .cloned()
+        .ok_or_else(|| {
+            let found: Vec<String> = adapters
+                .iter()
+                .map(|a| {
+                    let info = a.get_info();
+                    format!("{} ({:?})", info.name, info.backend)
+                })
+                .collect();
+            format!(
+                "no graphics adapter can draw the window (found: {})",
+                if found.is_empty() {
+                    "none".to_owned()
+                } else {
+                    found.join(", ")
+                }
+            )
+        })
+}
+
 /// The window's device: eframe's, but with buffers as big as the card allows rather than
 /// wgpu's conservative defaults (128 MB a storage binding), so a model's size is bounded by
 /// the card's memory alone.
@@ -626,6 +692,36 @@ mod tests {
         fn geometry(&self) -> &Arc<Geometry> {
             self
         }
+    }
+
+    #[test]
+    fn opengl_with_webgl2_limits_does_not_fit_and_a_full_card_does() {
+        // what wgpu gives an OpenGL-only card (older Windows 10 PCs): no compute, no storage
+        let gl = wgpu::DownlevelCapabilities::default();
+        assert!(!fits(
+            wgpu::DownlevelFlags::empty(),
+            &wgpu::Limits::downlevel_webgl2_defaults()
+        ));
+        assert!(!fits(gl.flags, &wgpu::Limits::downlevel_webgl2_defaults()));
+        assert!(fits(gl.flags, &wgpu::Limits::default()));
+        // flags alone are not enough when the limits allow no storage buffer
+        let none = wgpu::Limits {
+            max_storage_buffers_per_shader_stage: 0,
+            ..wgpu::Limits::default()
+        };
+        assert!(!fits(gl.flags, &none));
+    }
+
+    #[test]
+    fn a_real_card_comes_before_software_and_one_that_fits_before_one_that_does_not() {
+        use wgpu::DeviceType::{Cpu, DiscreteGpu, IntegratedGpu, Other, VirtualGpu};
+        // an Intel HD 4000 on Windows 10: OpenGL on the card, or DX12 on WARP (software)
+        assert!(rank(false, IntegratedGpu) < rank(true, Cpu));
+        assert!(rank(true, IntegratedGpu) < rank(false, IntegratedGpu));
+        assert!(rank(true, DiscreteGpu) < rank(true, IntegratedGpu));
+        assert!(rank(false, DiscreteGpu) < rank(false, Cpu));
+        assert!(rank(true, Other) < rank(true, Cpu));
+        assert!(rank(true, VirtualGpu) < rank(true, Cpu));
     }
 
     #[test]

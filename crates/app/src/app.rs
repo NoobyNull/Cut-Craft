@@ -2530,6 +2530,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(
                 eframe::egui_wgpu::WgpuSetupCreateNew {
                     device_descriptor: std::sync::Arc::new(view3d::gpu::device),
+                    // a card that can run the 3D view before OpenGL or software (see `rank`)
+                    native_adapter_selector: Some(std::sync::Arc::new(view3d::gpu::choose_adapter)),
                     ..eframe::egui_wgpu::WgpuSetupCreateNew::without_display_handle()
                 },
             ),
@@ -2544,7 +2546,6 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         name,
         options,
         Box::new(|cc| {
-            crate::startup::window_opened();
             cc.egui_ctx.set_theme(theme.preference());
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx, text_scale);
@@ -2559,15 +2560,25 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                     info.driver,
                     rs.device.limits().max_storage_buffer_binding_size / 1_000_000
                 );
-                app.gpu_3d = Some(view3d::gpu::Gpu::new(rs, samples));
-                // the grid kernels (preview, 3D toolpaths) on the same card
-                cut_craft_core::compute::use_compute(Some(std::sync::Arc::new(
-                    crate::compute::GpuCompute::new(rs.device.clone(), rs.queue.clone()),
-                )));
+                let flags = rs.adapter.get_downlevel_capabilities().flags;
+                if view3d::gpu::fits(flags, &rs.device.limits()) {
+                    app.gpu_3d = Some(view3d::gpu::Gpu::new(rs, samples));
+                    // the grid kernels (preview, 3D toolpaths) on the same card
+                    cut_craft_core::compute::use_compute(Some(std::sync::Arc::new(
+                        crate::compute::GpuCompute::new(rs.device.clone(), rs.queue.clone()),
+                    )));
+                } else {
+                    // OpenGL on an older card: no compute shaders or storage buffers
+                    log::warn!(
+                        "GPU can't run the 3D view's shaders: drawing it without them, \
+                         grid work on the processor"
+                    );
+                }
             }
             if let Some(dir) = shots {
                 // what a fresh clone shows: its icons, the starter tools, nothing of the user's
                 app.shots = Some(screenshots::Shots::new(dir));
+                crate::startup::window_opened();
                 return Ok(Box::new(app));
             }
             app.load_tools();
@@ -2587,6 +2598,9 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             }
             app.space_mouse = Some(crate::spacemouse::listen(cc.egui_ctx.clone()));
             app.check_for_updates_at_startup(&cc.egui_ctx);
+            // only now: a panic setting up the app (above) still says why in a message box,
+            // rather than the window never appearing and nothing said
+            crate::startup::window_opened();
             Ok(Box::new(app))
         }),
     )

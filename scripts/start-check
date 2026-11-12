@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Starts the built Linux program on a virtual screen and checks that it keeps running with its
+# window set up, once per graphics path: Vulkan, and OpenGL alone (what an older card without
+# Vulkan or DX12 gets). Mesa's software drivers stand in for a card. On OpenGL the 3D view and
+# its compute shaders can't run; Cut Craft must notice and carry on, not stop at wgpu's first
+# validation error with no message (the Windows 10 no-launch of v0.6.3).
+#
+#   scripts/start-check <path to cut-craft> [seconds]
+#
+# Needs xvfb-run, Mesa's EGL and Vulkan drivers (libegl1, mesa-vulkan-drivers) and the window's
+# libraries.
+set -euo pipefail
+
+exe=$(realpath "$1")
+seconds=${2:-20}
+failed=0
+for backend in vulkan gl; do
+  home=$(mktemp -d)
+  status=0
+  HOME=$home XDG_CONFIG_HOME=$home/.config WGPU_BACKEND=$backend \
+    timeout "$seconds" xvfb-run -a -s "-screen 0 1600x1000x24" "$exe" >"$home/out.txt" 2>&1 \
+    || status=$?
+  log=$home/.config/cut-craft/cut-craft.log
+  echo "--- $backend: cut-craft.log"
+  cat "$log" 2>/dev/null || true
+  # timeout's 124: still running when the time was up, as it should be
+  if [[ $status != 124 ]]; then
+    echo "::error::Cut Craft on $backend stopped within $seconds s (exit $status)"
+    cat "$home/out.txt"
+    failed=1
+  elif ! grep -q "GPU:" "$log" 2>/dev/null; then
+    echo "::error::Cut Craft on $backend never set up its window (no GPU line in its log)"
+    cat "$home/out.txt"
+    failed=1
+  else
+    echo "Cut Craft on $backend kept running for $seconds s"
+  fi
+  rm -rf "$home"
+done
+exit $failed
