@@ -12,16 +12,20 @@ pub struct DeleteItems;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Which {
+    /// Only the one you right-clicked
     #[schemars(title = "Delete This")]
     This,
+    /// Every one that is shown
     #[schemars(title = "Delete Visible")]
     Visible,
+    /// Every one that is hidden
     #[schemars(title = "Delete Invisible")]
     Invisible,
     /// Layers with no vectors on them
     #[default]
     #[schemars(title = "Delete Empty")]
     Empty,
+    /// Every one of them
     #[schemars(title = "Delete All")]
     All,
 }
@@ -31,6 +35,7 @@ pub struct Params {
     pub items: Items,
     /// The item right-clicked, for Delete This
     pub item: u64,
+    /// Which of them to delete
     pub which: Which,
 }
 

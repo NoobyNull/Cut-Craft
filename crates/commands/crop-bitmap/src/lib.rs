@@ -1,6 +1,6 @@
-//! Crop Bitmap: the selected picture cleared to white outside the selected closed vectors
-//! and trimmed to them. Several vectors keep what is inside any
-//! of them, a vector inside another making a hole.
+//! Crop Bitmap: trims the selected picture to the selected closed vectors, everything outside
+//! them cleared to white. With several vectors, what is inside any of them is kept, and a
+//! vector inside another makes a hole.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::{Point, Rect, inside};

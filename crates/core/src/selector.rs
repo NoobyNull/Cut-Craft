@@ -11,14 +11,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ClosedKind {
+    /// Any shape whose ends meet
     #[default]
     AllClosedVectors,
+    /// Circles only, no other shapes
     OnlyCircles,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Circles {
+    /// Every circle, whatever its size
     #[default]
     SelectAllCircles,
     /// Circles within the tolerance of the diameter
@@ -28,8 +31,10 @@ pub enum Circles {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Layers {
+    /// Every layer that is shown
     #[default]
     AllVisibleLayers,
+    /// Only the layer you are working on
     CurrentLayerOnly,
     /// The layers named below, shown or not
     SelectedLayers,
@@ -37,14 +42,21 @@ pub enum Layers {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Selector {
+    /// Pick vectors whose ends do not meet
     pub open_vectors: bool,
+    /// Pick shapes whose ends meet
     pub closed_vectors: bool,
+    /// Every closed shape, or circles only
     pub closed_kind: ClosedKind,
+    /// Every circle, or only circles of one size
     pub circles: Circles,
+    /// The size of circle to pick, for holes of one size
     #[schemars(title = "Circle diameter", extend("x-unit" = "mm"), range(min = 0))]
     pub diameter: f64,
+    /// How far a circle may be from that size and still be picked
     #[schemars(title = "Circle tolerance", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance: f64,
+    /// Which layers to pick vectors from
     #[schemars(title = "Select vectors on")]
     pub layers: Layers,
     /// Selected layers: their names

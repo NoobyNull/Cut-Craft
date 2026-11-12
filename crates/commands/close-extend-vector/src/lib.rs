@@ -26,6 +26,7 @@ pub enum Method {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// How each vector is closed
     pub method: Method,
     /// Only close vectors whose ends are at most this far apart; 0 closes any
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

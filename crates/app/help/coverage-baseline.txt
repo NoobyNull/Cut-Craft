@@ -19,9 +19,6 @@ align_left | short help page intro
 align_right | short help page intro
 align_top | short help page intro
 animate_preview | no tooltip
-array_copy | setting without help: Spacing
-array_copy | setting without help: X
-array_copy | setting without help: Y
 array_copy_toolpath | setting without help: Columns
 array_copy_toolpath | setting without help: Name
 array_copy_toolpath | setting without help: Rows
@@ -31,11 +28,6 @@ array_copy_toolpath | setting without help: Y
 auto_open_3d_view | no tooltip
 auto_wrapping_view | no tooltip
 bake_components | short help page intro
-bitmap_properties | setting without help: Height
-bitmap_properties | setting without help: Name
-bitmap_properties | setting without help: Width
-bitmap_properties | setting without help: X
-bitmap_properties | setting without help: Y
 bottom_to_top | no tooltip
 bottom_to_top | no help page intro
 cascade_windows | no tooltip
@@ -50,12 +42,7 @@ chamfer_toolpath | setting without help: Name
 chamfer_toolpath | setting without help: Side
 chamfer_toolpath | setting without help: Slope
 check_for_updates | no tooltip
-circular_copy | setting without help: Angle mode
-circular_copy | setting without help: Y
 close | no tooltip
-close_extend_vector | setting without help: Method
-close_with_line | setting without help: Reach
-close_with_line | setting without help: Vector
 color_shaded_view | no tooltip
 community:0 | no tooltip
 community:1 | no tooltip
@@ -77,34 +64,15 @@ component_properties | option without help: Appearance = Same as Parent
 component_properties | option without help: Appearance = Solid Color
 convert_text_to_curves | short help page intro
 copy | no tooltip
-copy_along_vectors | setting without help: Spacing
 copy_to_other_side | short help page intro
 copy_toolpath_to_sheet | setting without help: Toolpath
 create_component_from_bitmap | setting without help: Name
 create_component_from_toolpath_preview | no tooltip
 create_component_from_visible_model | short help page intro
-create_fillets | setting without help: Kind
 crop_bitmap | short help page intro
 cut | no tooltip
-cut_vector | setting without help: Reach
-cut_vector | setting without help: Vector
-delete | short tooltip
 delete | short help page intro
 delete_all_guides | no tooltip
-delete_component | short tooltip
-delete_component | short help page intro
-delete_component | setting without help: Component
-delete_items | setting without help: Which
-delete_items | option without help: Items = Components
-delete_items | option without help: Items = Layers
-delete_items | option without help: Items = Levels
-delete_items | option without help: Items = Toolpaths
-delete_items | option without help: Which = Delete All
-delete_items | option without help: Which = Delete Invisible
-delete_items | option without help: Which = Delete This
-delete_items | option without help: Which = Delete Visible
-delete_point | setting without help: Reach
-delete_point | setting without help: Vector
 delete_toolpath | short tooltip
 delete_toolpath | short help page intro
 delete_toolpath | setting without help: Toolpath
@@ -126,10 +94,6 @@ drilling_toolpath | setting without help: Name
 duplicate_component | setting without help: Component
 duplicate_toolpath | setting without help: Toolpath
 edit_object | no tooltip
-edit_picture | setting without help: Border ▸ Add Border
-edit_picture | setting without help: Border ▸ Shape
-edit_picture | option without help: Border ▸ Shape = Oval Border
-edit_picture | option without help: Border ▸ Shape = Rectangular Border
 engrave_part_names | option without help: Engrave = Name only
 engrave_part_names | option without help: Engrave = Number only
 exit | no tooltip
@@ -146,11 +110,6 @@ extrude_and_weave | setting without help: Z Over
 extrude_and_weave | setting without help: Z Under
 find_tool | no tooltip
 first_run_setup | no tooltip
-fit_curves_to_vectors | setting without help: Fitting type
-fit_curves_to_vectors | setting without help: Max. angle
-fit_curves_to_vectors | option without help: Fitting type = Bezier Curves
-fit_curves_to_vectors | option without help: Fitting type = Circular Arcs
-fit_curves_to_vectors | option without help: Fitting type = Straight Lines
 fluting_toolpath | setting without help: Flute type
 fluting_toolpath | setting without help: Name
 fluting_toolpath | setting without help: Ramp type
@@ -172,8 +131,6 @@ increment_and_save | no tooltip
 inlay_toolpath | setting without help: Inlay type
 inlay_toolpath | setting without help: Name
 insert_level | setting without help: Name
-insert_point | setting without help: Reach
-insert_point | setting without help: Vector
 install_offline_package | no tooltip
 install_post_processor | no tooltip
 interface_layout | no tooltip
@@ -202,18 +159,12 @@ job_setup | option without help: XY Datum Position ▸ Position = Top left
 job_setup | option without help: XY Datum Position ▸ Position = Top right
 job_sheet_editor | no tooltip
 job_size_and_position | no tooltip
-join_close_vectors | setting without help: Method
-join_close_vectors | option without help: Method = Move end points
-join_close_vectors | option without help: Method = Smooth curve
-join_close_vectors | option without help: Method = Straight line
 join_move_end_points | no tooltip
 join_move_end_points | no help page intro
 join_smooth_curve | no tooltip
 join_smooth_curve | no help page intro
 join_straight_line | no tooltip
 join_straight_line | no help page intro
-join_vectors | short tooltip
-join_vectors | short help page intro
 keep_out_zones | setting without help: Action
 keep_out_zones | option without help: Action = Clear Zones
 keyboard_shortcuts | no tooltip
@@ -228,10 +179,6 @@ laser_picture_toolpath | setting without help: Line angle
 laser_picture_toolpath | setting without help: Name
 laser_picture_toolpath | setting without help: Passes
 laser_picture_toolpath | setting without help: Strategy
-layer_properties | short help page intro
-layer_properties | setting without help: Layer
-layer_properties | setting without help: Name
-layer_properties | setting without help: Visible
 layout_classic | no tooltip
 layout_rail | no tooltip
 layout_ribbon | no tooltip
@@ -239,22 +186,10 @@ left_to_right | no tooltip
 left_to_right | no help page intro
 level_clipping | setting without help: Action
 level_clipping | option without help: Action = Remove
-level_properties | setting without help: Name
-level_properties | option without help: Mirror Mode = Bottom Left Quadrant
-level_properties | option without help: Mirror Mode = Bottom Right Quadrant
-level_properties | option without help: Mirror Mode = Bottom to Top
-level_properties | option without help: Mirror Mode = Left to Right
-level_properties | option without help: Mirror Mode = Off
-level_properties | option without help: Mirror Mode = Right to Left
-level_properties | option without help: Mirror Mode = Top Left Quadrant
-level_properties | option without help: Mirror Mode = Top Right Quadrant
-level_properties | option without help: Mirror Mode = Top to Bottom
 light_follows_viewer | no tooltip
 lock_all_existing_guides | no tooltip
 machine_configuration | no tooltip
 make_2d_previews_solid | no tooltip
-make_start_point | setting without help: Reach
-make_start_point | setting without help: Vector
 material_setup | setting without help: Home / Start Position ▸ X
 material_setup | setting without help: Home / Start Position ▸ Y
 material_setup | setting without help: Home / Start Position ▸ Z Gap above Material
@@ -277,48 +212,15 @@ materials | option without help: Material = Pine
 measure_inspect | no tooltip
 measure_inspect | no help page intro
 merged_toolpath | setting without help: Name
-mirror | setting without help: Flip
-mirror | option without help: Flip = Both
 model_resolution_high | no tooltip
 model_resolution_highest | no tooltip
 model_resolution_standard | no tooltip
 moulding_toolpath | setting without help: Name
-move | setting without help: X
-move | setting without help: Y
-move | option without help: Anchor = Bottom
-move | option without help: Anchor = Bottom left
-move | option without help: Anchor = Bottom right
-move | option without help: Anchor = Center
-move | option without help: Anchor = Left
-move | option without help: Anchor = Right
-move | option without help: Anchor = Top
-move | option without help: Anchor = Top left
-move | option without help: Anchor = Top right
-move_node | setting without help: From ▸ Reach
-move_node | setting without help: From ▸ Vector
-move_nodes | setting without help: Nodes ▸ Reach
-move_nodes | setting without help: Nodes ▸ Vector
-move_to_layer | short help page intro
-move_to_level | short help page intro
-nest_parts | setting without help: Border gap
-nest_parts | setting without help: Nest direction
-nest_parts | setting without help: Nest from
-nest_parts | option without help: Nest direction = Along x
-nest_parts | option without help: Nest direction = Along y
-nest_parts | option without help: Nest from = Bottom left
-nest_parts | option without help: Nest from = Bottom right
-nest_parts | option without help: Nest from = Top left
-nest_parts | option without help: Nest from = Top right
 new | no tooltip
 new | no help page intro
 new_from_template | no tooltip
 node_edit | no tooltip
 node_edit | no help page intro
-offset_vectors | short tooltip
-offset_vectors | short help page intro
-offset_vectors | setting without help: Corners
-offset_vectors | option without help: Corners = Round
-offset_vectors | option without help: Corners = Sharp
 open | no tooltip
 open | no help page intro
 open_application_data_folder | no tooltip
@@ -344,7 +246,6 @@ orientate_3d_model | option without help: Model Size ▸ Units = Mm
 orientate_3d_model | option without help: Offered = Both
 orientate_3d_model | option without help: Offered = Flat
 orientate_3d_model | option without help: Offered = Full
-overlap_intersect | short tooltip
 overlap_intersect | short help page intro
 pan | no tooltip
 pan | no help page intro
@@ -393,15 +294,6 @@ profile_toolpath | setting without help: Specify Ramp ▸ Distance
 profile_toolpath | setting without help: Tool
 profile_toolpath | option without help: Add ramps to toolpath = None
 profile_toolpath | option without help: Add tabs to toolpath = None
-profile_toolpath | option without help: Start near = Bottom
-profile_toolpath | option without help: Start near = Bottom left
-profile_toolpath | option without help: Start near = Bottom right
-profile_toolpath | option without help: Start near = Center
-profile_toolpath | option without help: Start near = Left
-profile_toolpath | option without help: Start near = Right
-profile_toolpath | option without help: Start near = Top
-profile_toolpath | option without help: Start near = Top left
-profile_toolpath | option without help: Start near = Top right
 quick_engrave_toolpath | setting without help: Fill pattern
 quick_engrave_toolpath | setting without help: Name
 quick_engrave_toolpath | setting without help: Strategy
@@ -421,22 +313,8 @@ reorder_toolpath | setting without help: Toolpath
 replace_below | setting without help: Replace value with
 reset_inside_selected_vectors | short help page intro
 reset_outside_selected_vectors | short help page intro
-reverse_direction | setting without help: Reach
-reverse_direction | setting without help: Vector
 right_to_left | no tooltip
 right_to_left | no help page intro
-rotate | short tooltip
-rotate | short help page intro
-rotate | setting without help: Angle
-rotate | option without help: Anchor = Bottom
-rotate | option without help: Anchor = Bottom left
-rotate | option without help: Anchor = Bottom right
-rotate | option without help: Anchor = Center
-rotate | option without help: Anchor = Left
-rotate | option without help: Anchor = Right
-rotate | option without help: Anchor = Top
-rotate | option without help: Anchor = Top left
-rotate | option without help: Anchor = Top right
 rounding_toolpath | setting without help: Blank
 rounding_toolpath | setting without help: Method
 rounding_toolpath | setting without help: Name
@@ -468,32 +346,9 @@ select_all_duplicate_vectors | short help page intro
 select_all_open_vectors | short help page intro
 select_all_vectors | short help page intro
 select_all_vectors_on_current_layer | no tooltip
-select_layer_vectors | short tooltip
-select_layer_vectors | short help page intro
 select_vectors_inside | short help page intro
 set_current_layer | short help page intro
-set_size | setting without help: Link XY
-set_size | option without help: Anchor = Bottom
-set_size | option without help: Anchor = Bottom left
-set_size | option without help: Anchor = Bottom right
-set_size | option without help: Anchor = Center
-set_size | option without help: Anchor = Left
-set_size | option without help: Anchor = Right
-set_size | option without help: Anchor = Top
-set_size | option without help: Anchor = Top left
-set_size | option without help: Anchor = Top right
 sheet_properties | setting without help: Name
-show_hide | setting without help: Action
-show_hide | option without help: Action = Hide All
-show_hide | option without help: Action = Hide This
-show_hide | option without help: Action = Show All
-show_hide | option without help: Action = Show All But This
-show_hide | option without help: Action = Show Only This
-show_hide | option without help: Action = Show This
-show_hide | option without help: Items = Components
-show_hide | option without help: Items = Layers
-show_hide | option without help: Items = Levels
-show_hide | option without help: Items = Toolpaths
 show_keep_out_zone_labels | no tooltip
 show_toolpaths_tab | no tooltip
 sketch_carving_toolpath | setting without help: Boundary
@@ -502,17 +357,8 @@ sketch_carving_toolpath | setting without help: Source
 slice | setting without help: Model slicing
 slice | setting without help: Number of slices
 slice | setting without help: Slice thickness
-smooth_point | setting without help: Reach
-smooth_point | setting without help: Vector
 snap_options | no tooltip
-span_to_arc | setting without help: Reach
-span_to_arc | setting without help: Vector
-span_to_bezier | setting without help: Reach
-span_to_bezier | setting without help: Vector
-span_to_line | setting without help: Reach
-span_to_line | setting without help: Vector
 split | short help page intro
-subtract_vectors | short tooltip
 subtract_vectors | short help page intro
 swap_sides | short help page intro
 texture_area | setting without help: Name
@@ -571,12 +417,8 @@ toolpath_tiling | setting without help: Tiling Options
 toolpath_tiling | setting without help: Tiling Options ▸ Layout
 top_to_bottom | no tooltip
 top_to_bottom | no help page intro
-trace_bitmap | option without help: Mode = Black and white
-trace_bitmap | option without help: Trace color = Black
-trace_bitmap | option without help: Trace color = White
 transform | no tooltip
 transform | no help page intro
-trim_objects | setting without help: Clear
 turn_and_spin | setting without help: Height
 turn_and_spin | setting without help: Name
 turn_and_spin | setting without help: Type of shape
@@ -600,33 +442,7 @@ use_shadow_shading | no tooltip
 vcarve_engrave_toolpath | setting without help: Name
 vcarve_inlay_toolpath | setting without help: Name
 vcarve_inlay_toolpath | setting without help: Plug boundary
-vector_boundary | setting without help: Corners
-vector_boundary | setting without help: Distance
-vector_boundary | option without help: Corners = Round
-vector_boundary | option without help: Corners = Sharp
-vector_selector | setting without help: Circle diameter
-vector_selector | setting without help: Circle tolerance
-vector_selector | setting without help: Circles
-vector_selector | setting without help: Closed kind
-vector_selector | setting without help: Closed vectors
-vector_selector | setting without help: Open vectors
-vector_selector | setting without help: Select vectors on
-vector_selector | option without help: Circles = Select all circles
-vector_selector | option without help: Closed kind = All closed vectors
-vector_selector | option without help: Closed kind = Only circles
-vector_selector | option without help: Select vectors on = All visible layers
-weld_vectors | short tooltip
 weld_vectors | short help page intro
-wrapped_fluting_layout | setting without help: Number of flutes
-wrapped_spiral_layout | setting without help: Cove at end
-wrapped_spiral_layout | setting without help: Cove at start
-wrapped_spiral_layout | setting without help: End offset
-wrapped_spiral_layout | setting without help: Number of strands
-wrapped_spiral_layout | setting without help: Spacing
-wrapped_spiral_layout | setting without help: Start offset
-wrapped_spiral_layout | setting without help: Twist
-wrapped_spiral_layout | option without help: Twist = Left hand
-wrapped_spiral_layout | option without help: Twist = Right hand
 zoom_box | no tooltip
 zoom_box | no help page intro
 zoom_selected | no tooltip

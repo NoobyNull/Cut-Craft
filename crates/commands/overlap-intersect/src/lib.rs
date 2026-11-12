@@ -1,4 +1,4 @@
-//! Overlap.
+//! Overlap: replaces the selected closed shapes with only the part where they all overlap.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::polygon;

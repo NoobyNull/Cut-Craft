@@ -14,14 +14,18 @@ pub struct JoinCloseVectors;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Method {
+    /// A straight line across the gap
     #[default]
     StraightLine,
+    /// A curve that carries on smoothly from both ends
     SmoothCurve,
+    /// The two ends are moved to meet halfway, with no new line
     MoveEndPoints,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// How the gap between the ends is filled
     #[schemars(extend("x-widget" = "row"))]
     pub method: Method,
 }

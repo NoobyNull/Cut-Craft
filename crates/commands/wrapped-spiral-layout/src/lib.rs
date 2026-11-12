@@ -15,9 +15,11 @@ pub struct WrappedSpiralLayout;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Twist {
+    /// Turns like an ordinary screw thread
     #[default]
     #[schemars(title = "Right hand")]
     Right,
+    /// Turns the other way, like a left-hand thread
     #[schemars(title = "Left hand")]
     Left,
 }
@@ -36,21 +38,28 @@ pub enum Spacing {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// How many strands twist round the piece
     #[schemars(title = "Number of strands", range(min = 1))]
     pub strands: u32,
+    /// From the start of the work piece to where the strands start
     #[schemars(title = "Start offset", extend("x-unit" = "mm"), range(min = 0))]
     pub start: f64,
+    /// From the end of the work piece back to where the strands end
     #[schemars(title = "End offset", extend("x-unit" = "mm"), range(min = 0))]
     pub end: f64,
+    /// Whether the distance below is the pitch of one strand or the gap between strands
     #[schemars(extend("x-widget" = "row"))]
     pub spacing: Spacing,
     /// The pitch, or the spacing between strands, as chosen above
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub distance: f64,
+    /// Which way the strands spiral, like the thread of a screw
     #[schemars(extend("x-widget" = "row"))]
     pub twist: Twist,
+    /// A groove round the piece where the strands start
     #[schemars(title = "Cove at start")]
     pub cove_start: bool,
+    /// A groove round the piece where the strands end
     #[schemars(title = "Cove at end")]
     pub cove_end: bool,
 }

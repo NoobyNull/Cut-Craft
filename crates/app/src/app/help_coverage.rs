@@ -67,6 +67,9 @@ pub(super) enum What {
     NoOptionHelp(String, String),
     /// Where the placeholder is: `tooltip`, `intro`, or a setting's label.
     Placeholder(String),
+    /// The same tooltip as another tool (a crate holding several commands says one thing
+    /// for all of them): by the other tool's id.
+    SharedTooltip(String),
 }
 
 impl Gap {
@@ -80,6 +83,7 @@ impl Gap {
             What::NoSettingHelp(s) => format!("setting without help: {s}"),
             What::NoOptionHelp(s, o) => format!("option without help: {s} = {o}"),
             What::Placeholder(at) => format!("placeholder text in {at}"),
+            What::SharedTooltip(other) => format!("same tooltip as {other}"),
         };
         format!("{} | {what}", self.id)
     }
@@ -245,8 +249,35 @@ pub(super) fn gaps(app: &CutCraftApp) -> Vec<Gap> {
             gaps.extend(tooltip_gaps(&action, &name, crate::gui::about(&action)));
         }
     }
+    let tooltips = seen
+        .iter()
+        .filter_map(|id| Some((id.as_str(), crate::gui::about(id)?)));
+    for (id, other) in shared_tooltips(tooltips) {
+        gaps.push(Gap {
+            id: id.to_owned(),
+            label: app.tool_label(id),
+            what: What::SharedTooltip(other.to_owned()),
+        });
+    }
     gaps.sort();
     gaps
+}
+
+/// Each tool whose tooltip an earlier one (by id) already has, with that one's id.
+fn shared_tooltips<'a>(
+    tooltips: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> Vec<(&'a str, &'a str)> {
+    let mut first: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
+    let mut shared = vec![];
+    for (id, tooltip) in tooltips {
+        match first.get(tooltip.trim()) {
+            Some(other) => shared.push((id, *other)),
+            None => {
+                first.insert(tooltip.trim(), id);
+            }
+        }
+    }
+    shared
 }
 
 /// The gaps as Markdown, grouped by tool: the body of the GitHub issue.
@@ -273,6 +304,9 @@ pub(super) fn report(gaps: &[Gap]) -> String {
                 What::NoSettingHelp(s) => format!("**{s}** has no help"),
                 What::NoOptionHelp(s, o) => format!("**{s}**: option **{o}** has no help"),
                 What::Placeholder(at) => format!("placeholder text in {at}"),
+                What::SharedTooltip(other) => {
+                    format!("tooltip is the same as `{other}`'s: say what this one does")
+                }
             };
             let _ = writeln!(md, "- [ ] {line}");
         }
@@ -317,6 +351,19 @@ mod tests {
         assert_eq!(
             tooltip_gaps("x", "X", Some("TODO: write what this does"))[0].what,
             What::Placeholder("tooltip".into())
+        );
+    }
+
+    #[test]
+    fn two_tools_with_one_tooltip_is_a_gap() {
+        let tooltips = [
+            ("align_left", "Align: lines the selection up"),
+            ("align_right", "Align: lines the selection up"),
+            ("rotate", "Rotate: turns the selection about a point"),
+        ];
+        assert_eq!(
+            shared_tooltips(tooltips),
+            vec![("align_right", "align_left")]
         );
     }
 
