@@ -829,8 +829,8 @@ impl Post {
         }
         let unit = if self.inches { MM_PER_INCH } else { 1.0 };
         Some(arcs::Limits {
-            // ponytail: the tolerance curves were flattened to; an Options setting if it matters
-            tolerance: cut_craft_core::polygon::TOLERANCE,
+            // the tolerance curves were flattened to, Options ▸ Advanced's curve accuracy
+            tolerance: cut_craft_core::accuracy::curve(),
             min_radius: self.arc_radius.0.map_or(0.0, |r| r * unit),
             max_radius: self.arc_radius.1.map_or(LARGEST_ARC, |r| r * unit),
             helical: has(["CW_HELICAL_ARC_MOVE", "CCW_HELICAL_ARC_MOVE"]),

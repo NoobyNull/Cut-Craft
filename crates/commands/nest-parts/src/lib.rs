@@ -124,11 +124,6 @@ fn yes() -> bool {
     true
 }
 
-/// The most sheets Add sheets as needed makes in one nesting.
-const MOST_SHEETS: usize = 50;
-/// The most filler parts one nesting places.
-const MOST_FILLERS: usize = 2000;
-
 fn one() -> u32 {
     1
 }
@@ -431,7 +426,7 @@ fn place(doc: &Document, p: &Params, parts: &[Part], fresh: impl Fn() -> Grid) -
             .map(|spin| spin * DAffine2::from_translation(-part.bounds.center()))
             .collect();
         let wanted = if part.filler {
-            MOST_FILLERS
+            cut_craft_core::accuracy::get().nest_fillers
         } else {
             p.copies.max(1) as usize
         };
@@ -461,7 +456,7 @@ fn place(doc: &Document, p: &Params, parts: &[Part], fresh: impl Fn() -> Grid) -
             }
             sheet += 1;
             if sheet == grids.len() {
-                if !p.more_sheets || grids.len() > MOST_SHEETS {
+                if !p.more_sheets || grids.len() > cut_craft_core::accuracy::get().nest_sheets {
                     break;
                 }
                 grids.push(fresh());

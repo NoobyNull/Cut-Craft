@@ -2,6 +2,7 @@
 //! leaving an allowance for the finishing toolpath: flat at each level (Z level), or riding
 //! over the model a pass depth at a time (3D raster).
 
+use cut_craft_core::accuracy;
 use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_model};
 use cut_craft_core::compute::compute;
 use cut_craft_core::document::Document;
@@ -52,9 +53,6 @@ pub enum Order {
     /// Each separate area all the way down before moving to the next
     DepthFirst,
 }
-
-/// How far a straight move may pass under the allowance before it is split.
-const TOLERANCE: f64 = 0.01;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
@@ -193,7 +191,8 @@ impl Command for RoughingToolpath3d {
         }
         let material = doc.job.area();
         let inside = |at: Point| material.contains(at);
-        let peaks = leave.peaks();
+        // how far a move may dip under the allowance before it is split: Options ▸ Advanced
+        let (peaks, tolerance) = (leave.peaks(), accuracy::get().roughing_3d);
         // down to the lowest of the allowance
         let levels = tool.pass_depths(-(lowest + p.allowance).min(0.0));
         let z_level = p.strategy == Strategy::ZLevel;
@@ -227,7 +226,7 @@ impl Command for RoughingToolpath3d {
                 let drop = Drop {
                     grid: &leave,
                     tool,
-                    tolerance: TOLERANCE,
+                    tolerance,
                     floor: level,
                     ceiling,
                     // a 3D raster still cuts up to where it rides over the last pass's cut
@@ -246,7 +245,7 @@ impl Command for RoughingToolpath3d {
                 .flat_map(|i| (0..runs[i].len()).map(move |j| (i, j)))
                 .collect()
         };
-        let clear = |a, b| leave.overcut_on(tool, a, b, &peaks) <= TOLERANCE;
+        let clear = |a, b| leave.overcut_on(tool, a, b, &peaks) <= tolerance;
         let moves = connect(
             &runs,
             order,

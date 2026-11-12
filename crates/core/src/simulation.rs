@@ -641,12 +641,9 @@ fn covered(from: DVec2, along: DVec2, radius: f64) -> Option<(f64, f64)> {
     (t0 <= t1).then_some((t0, t1))
 }
 
-/// How far above the model what was left must stand to count as unmachined.
-// ponytail: one fixed tolerance; a setting if finishes need finer or coarser rest areas
-const REST_TOLERANCE: f64 = 0.05;
-
 /// Rest machining's areas on `model`'s grid: where the surface `left` (on any grid) stands
-/// above the model, leaving out areas smaller across than `minimum_detail`, and grown by
+/// above the model by more than Options ▸ Advanced's rest machining threshold
+/// ([`crate::accuracy::REST`] unless changed), leaving out areas smaller across than `minimum_detail`, and grown by
 /// `offset`. True for a point inside them.
 #[expect(
     clippy::cast_possible_truncation,
@@ -662,6 +659,7 @@ pub fn rest_areas(
     offset: f64,
 ) -> impl Fn(Point) -> bool + use<> {
     let (columns, rows) = (model.columns, model.rows);
+    let rest = crate::accuracy::get().rest;
     let height = |c: usize, r: usize| model.heights[r * columns + c];
     // how steep the model is: tool positions only at cell centres make `left` up to about
     // slope x cell too high there, which is not material left behind
@@ -686,7 +684,7 @@ pub fn rest_areas(
         for (i, cell) in band.iter_mut().enumerate() {
             let (c, r) = (i % columns, first + i / columns);
             let here = height(c, r);
-            let allowed = REST_TOLERANCE + slope(c, r) * model.cell;
+            let allowed = rest + slope(c, r) * model.cell;
             *cell = left.at(model.centre(c, r)).unwrap_or(here) - here > allowed;
         }
     });

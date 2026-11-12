@@ -11,7 +11,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
-/// Chord tolerance (mm) for flattening curves before a boolean or offset.
+/// Chord tolerance (mm) for flattening curves before a boolean or offset unless Options ▸
+/// Advanced says otherwise ([`crate::accuracy::curve`]); drawing keeps to this one.
 // ponytail: results are polylines; fit arcs back onto them if curve fidelity matters downstream
 pub const TOLERANCE: f64 = 0.01;
 
@@ -68,9 +69,9 @@ pub fn offset_regions_mitred(regions: &[Path], distance: f64, reach: f64) -> Vec
 fn outline(contours: &[Contour], distance: f64, corners: Corners) -> Vec<Path> {
     let join = match corners {
         // segment angle that keeps each arc chord within TOLERANCE of the true corner arc
-        Corners::Round => {
-            LineJoin::Round(2.0 * (1.0 - (TOLERANCE / distance.abs()).min(1.0)).acos())
-        }
+        Corners::Round => LineJoin::Round(
+            2.0 * (1.0 - (crate::accuracy::curve() / distance.abs()).min(1.0)).acos(),
+        ),
         Corners::Sharp => LineJoin::Miter(0.01 * PI),
     };
     joined(contours, distance, join)
@@ -106,7 +107,7 @@ fn contours(paths: &[Path]) -> Vec<Contour> {
 
 fn contour(path: &Path) -> Contour {
     let mut points: Contour = path
-        .flatten(TOLERANCE)
+        .flatten(crate::accuracy::curve())
         .into_iter()
         .map(|p| [p.x, p.y])
         .collect();
