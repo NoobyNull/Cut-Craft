@@ -98,6 +98,8 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
 .note { font-size: 13px; color: var(--ink-2); background: var(--code-bg); border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
 .empty { color: var(--ink-3); padding: 18px 0; text-align: center; }
 [hidden] { display: none !important; }
+.refused { margin-bottom: 14px; }
+.cid { display: block; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--ink-3); }
 .keys { margin-bottom: 14px; }
 .keys.warn { border-color: var(--accent); }
 .keylist { list-style: none; margin: 0 0 10px; padding: 0; }
@@ -159,6 +161,11 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
       <div class="card chart"><h3>Reports per day</h3><div id="perday"></div></div>
       <div class="card"><h3>By version</h3><div id="byversion"></div></div>
       <div class="card"><h3>By system</h3><div id="byos"></div></div>
+    </div>
+    <div class="card refused">
+      <h3>Refused reports</h3>
+      <p class="small muted" id="refused-note"></p>
+      <div id="refused"></div>
     </div>
     <div class="card">
       <h3>Crashes</h3>
@@ -350,6 +357,14 @@ function render(s) {
   perDayChart(s);
   hbars('byversion', s.byVersion, 'version');
   hbars('byos', s.byOs, 'os');
+  const refused = s.refused || [];
+  const nRefused = refused.reduce((n, r) => n + r.count, 0);
+  const nets = refused.reduce((n, r) => n + r.networks, 0);
+  $('refused-note').textContent = nRefused
+    ? nRefused + ' refused in the last ' + s.days + ' days, from about ' + nets + ' network' + (nets === 1 ? '' : 's') +
+      ' (counted per day; networks are hashed, IPs are never kept).'
+    : 'Nothing refused in the last ' + s.days + ' days.';
+  hbars('refused', refused, 'reason');
 
   const body = $('crashes');
   body.replaceChildren();
@@ -359,7 +374,7 @@ function render(s) {
     const tr = el('tr', { tabindex: '0', onclick: () => openCrash(c.signature),
       onkeydown: (e) => { if (e.key === 'Enter') openCrash(c.signature); } },
       el('td', {}, pill(c.status)),
-      el('td', { text: c.title }),
+      el('td', {}, c.title, el('span', { class: 'cid', text: c.signature })),
       el('td', { class: 'num', text: String(c.recent) }),
       el('td', { class: 'num', text: String(c.count) }),
       el('td', { class: 'num', text: String(c.installs) }),

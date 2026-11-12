@@ -94,7 +94,10 @@ export async function summary(db, days, now = new Date()) {
     q('SELECT COUNT(*) AS logs, COALESCE(SUM(LENGTH(log)), 0) AS bytes, MIN(received_at) AS oldest FROM samples'),
   ]);
   const total = perDay.reduce((n, d) => n + d.count, 0);
-  return { days, from, total, perDay, byVersion, byOs, crashes, held: held[0] };
+  const refused = await q(
+    `SELECT reason, SUM(count) AS count, COUNT(DISTINCT CASE WHEN who NOT IN ('-', 'many') THEN day || who END) AS networks
+     FROM refusals WHERE day >= ? GROUP BY reason ORDER BY count DESC`, from);
+  return { days, from, total, perDay, byVersion, byOs, crashes, held: held[0], refused };
 }
 
 /** One crash with its example logs and its counts by version and system. */
@@ -174,6 +177,9 @@ export async function cleanup(db, { retainDays, statsDays }, now = new Date()) {
     db.prepare('DELETE FROM daily WHERE day < ?').bind(dayOf(daysBefore(now, statsDays))),
     db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now.toISOString()),
     db.prepare('DELETE FROM challenges WHERE expires_at <= ?').bind(now.toISOString()),
+    db.prepare('DELETE FROM ip_counts WHERE day < ?').bind(dayOf(now.toISOString())),
+    db.prepare("DELETE FROM meta WHERE key LIKE 'ip_salt:%' AND key < ?").bind(`ip_salt:${dayOf(now.toISOString())}`),
+    db.prepare('DELETE FROM refusals WHERE day < ?').bind(dayOf(daysBefore(now, 30))),
   ]);
   const n = (i) => results?.[i]?.meta?.changes ?? 0;
   await db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_cleanup', ?)").bind(now.toISOString()).run();

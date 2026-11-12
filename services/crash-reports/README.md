@@ -13,6 +13,13 @@ owners agreed to send them, groups them by crash, and shows the maintainer a pri
   keeping example logs again. Reports for a crash that is a GitHub issue are only counted.
 - **No personal data kept.** The `install_id` is stored only as a salted SHA-256 hash (salt made
   once, kept in D1). No IP addresses are stored.
+- **Junk is refused.** A report must carry CutCraft's own crash-log layout and a small proof of work
+  (see `APP-HOOKUP.md`), and one network (IP) may send 2 reports of a crash and 10 in all a day. IPs
+  are never stored: only a hash with a random salt made each day and deleted after it. Refused
+  reports are counted by reason on the dashboard.
+- **Crash ID worked out here.** The relay groups reports by an ID it makes from the panicked file and
+  the panic message (numbers, addresses and paths taken out), so it is the same on every machine and
+  version and no client can choose it.
 - **Limits.** One report per install per hour; `DAILY_LIMIT` (2000) reports a day across
   everyone; a log over 64 KB or a body over 72 KB is refused.
 - **Private dashboard, signed in with security keys.** `GET /` is a sign-in page with no data in
@@ -33,6 +40,7 @@ owners agreed to send them, groups them by crash, and shows the maintainer a pri
 | `signature` | 8–64 of `A-Z a-z 0-9 _ -` (a hex hash is fine) |
 | `install_id` | random id made at install, 8–64 of `A-Z a-z 0-9 -` (a UUID) |
 | `log` | the scrubbed crash log, up to 64 KB (UTF-8 bytes) |
+| `work` | proof-of-work nonce; see `APP-HOOKUP.md` |
 
 Other fields are ignored. Replies: **202** taken; **400** a field is wrong (don't retry);
 **413** too big (don't retry); **429** with `Retry-After` seconds (same install within the hour,
