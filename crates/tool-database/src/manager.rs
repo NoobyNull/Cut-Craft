@@ -5,7 +5,7 @@
 use crate::tree;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
-use cut_craft_core::toolpath::{CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
+use cut_craft_core::toolpath::{CATALOGUES, CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
 use std::collections::BTreeMap;
 
@@ -76,6 +76,9 @@ pub struct Manager {
     /// shown in place of OK.
     pub selecting: bool,
     index: crate::search::SearchIndex,
+    /// The picked tool and the maker ▸ type group it had last drawn: while its group is
+    /// still that one, the group follows its maker and type.
+    followed: Option<(usize, String)>,
 }
 
 /// A machine's automatic tool changer: the tool in each slot by name, slot 1 first.
@@ -140,14 +143,20 @@ pub fn picture_path(tool: &Tool) -> &'static str {
     }
 }
 
+/// The Tool Type list: each type's trade name with what woodworkers call it, so either
+/// one finds it.
 const SHAPES: [(ToolShape, &str); 6] = [
-    (ToolShape::EndMill, "End Mill"),
-    (ToolShape::BallNose, "Ball Nose"),
-    (ToolShape::VBit, "V-Bit"),
-    (ToolShape::RadiusedEndMill, "Radiused End Mill"),
-    (ToolShape::ThreadMill, "Thread Mill"),
-    (ToolShape::FormTool, "Form Tool"),
+    (ToolShape::EndMill, "End Mill (flat / straight bit)"),
+    (ToolShape::BallNose, "Ball Nose (core box)"),
+    (ToolShape::VBit, "V-Bit (engraving / chamfer)"),
+    (
+        ToolShape::RadiusedEndMill,
+        "Radiused End Mill (bowl / bull nose)",
+    ),
+    (ToolShape::ThreadMill, "Thread Mill (cuts screw threads)"),
+    (ToolShape::FormTool, "Form Tool (custom profile)"),
 ];
+const TAPERED_BALL: &str = "Tapered Ball Nose (cone ball nose)";
 
 /// A tapered ball nose (a TBN or cone ball nose): a ball nose whose sides open out to its
 /// shank at its taper angle. The editor lists it as a type of its own.
@@ -159,7 +168,7 @@ fn tapered_ball(tool: &Tool) -> bool {
 fn tool_type(ui: &mut egui::Ui, tool: &mut Tool) {
     let tapered = tapered_ball(tool);
     let shown = if tapered {
-        "Tapered Ball Nose"
+        TAPERED_BALL
     } else {
         shape_name(tool.shape)
     };
@@ -177,7 +186,7 @@ fn tool_type(ui: &mut egui::Ui, tool: &mut Tool) {
                     }
                 }
                 if shape == ToolShape::BallNose
-                    && ui.selectable_label(tapered, "Tapered Ball Nose").clicked()
+                    && ui.selectable_label(tapered, TAPERED_BALL).clicked()
                     && !tapered
                 {
                     make_tapered_ball(tool);
@@ -206,7 +215,7 @@ fn shape_name(shape: ToolShape) -> &'static str {
 }
 
 /// What a tree button asked for.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum TreeAction {
     NewTool,
     NewGroup,
@@ -229,6 +238,7 @@ impl Manager {
             search: String::new(),
             selecting: false,
             index: crate::search::SearchIndex::default(),
+            followed: None,
         }
     }
 
@@ -236,11 +246,7 @@ impl Manager {
     pub fn selecting(db: &ToolDatabase, current: &str) -> Self {
         let mut manager = Self::new(db);
         manager.selecting = true;
-        manager.pick = db
-            .tools
-            .iter()
-            .position(|t| t.name == current)
-            .map(Pick::Tool);
+        manager.pick = db.index_of(current).map(Pick::Tool);
         manager
     }
 
@@ -252,8 +258,31 @@ impl Manager {
         }
     }
 
-    /// Select: what the window asks for, when a tool is shown.
-    pub fn select(&self) -> Option<Outcome> {
+    /// Whether the tool shown is a read-only catalogue's.
+    fn shown_is_catalogue(&self) -> bool {
+        match self.pick {
+            Some(Pick::Tool(i)) => self
+                .draft
+                .tools
+                .get(i)
+                .is_some_and(|t| self.draft.is_catalogue(t)),
+            _ => false,
+        }
+    }
+
+    /// Copies the catalogue tool shown into My Tools and shows the copy.
+    fn copy_shown_to_mine(&mut self) {
+        if let Some(Pick::Tool(i)) = self.pick
+            && self.shown_is_catalogue()
+        {
+            self.pick = Some(Pick::Tool(tree::copy_to_mine(&mut self.draft, i)));
+        }
+    }
+
+    /// Select: what the window asks for, when a tool is shown. A catalogue's tool is
+    /// copied into My Tools first, toolpaths cutting with My Tools.
+    pub fn select(&mut self) -> Option<Outcome> {
+        self.copy_shown_to_mine();
         self.shown_tool()
             .map(|name| Outcome::Select(name.to_owned()))
     }
@@ -264,6 +293,10 @@ impl Manager {
         let (Some(changer), Some(tool)) = (&mut self.changer, self.draft.tools.get(i)) else {
             return;
         };
+        // a tool changer holds My Tools only
+        if self.draft.is_catalogue(tool) {
+            return;
+        }
         changer.load(&tool.name, slot);
         self.draft.number_by_slots(&changer.slots);
     }
@@ -334,11 +367,17 @@ impl Manager {
                             }
                             return;
                         }
+                        let text = if self.shown_is_catalogue() {
+                            "Copy to My Tools and Select"
+                        } else {
+                            "Select"
+                        };
                         let select = ui
-                            .add_enabled(self.shown_tool().is_some(), egui::Button::new("Select"))
+                            .add_enabled(self.shown_tool().is_some(), egui::Button::new(text))
                             .on_hover_hint(
                                 "Cut with the tool shown, with its saved feeds, speeds and \
-                                 pass depth (any edits made here are kept)",
+                                 pass depth (any edits made here are kept); a catalogue's \
+                                 tool is copied into My Tools first",
                             )
                             .on_disabled_hover_text("Pick a tool in the list first");
                         if select.clicked() {
@@ -393,7 +432,18 @@ impl Manager {
         );
         if self.search.trim().is_empty() {
             let all = tree::groups(&self.draft);
-            self.branch(ui, look, &all, "");
+            ui.strong("My Tools")
+                .on_hover_hint("Your own tools: the ones toolpaths and the tool changer use");
+            for sub in tree::subgroups(&all, "") {
+                if sub != CATALOGUES {
+                    self.group_row(ui, look, &all, sub);
+                }
+            }
+            self.tool_rows(ui, look, "");
+            if all.iter().any(|g| g == CATALOGUES) {
+                ui.separator();
+                self.group_row(ui, look, &all, CATALOGUES);
+            }
         } else {
             self.found(ui, look);
         }
@@ -435,9 +485,7 @@ impl Manager {
             .show(ui, |ui| {
                 for (i, slot) in changer.slots.iter().enumerate() {
                     let text = format!("T{}  {}", i + 1, slot.as_deref().unwrap_or("(empty)"));
-                    let at = slot
-                        .as_deref()
-                        .and_then(|t| self.draft.tools.iter().position(|x| x.name == t));
+                    let at = slot.as_deref().and_then(|t| self.draft.index_of(t));
                     let on = at.is_some() && self.pick == at.map(Pick::Tool);
                     if ui.selectable_label(on, text).clicked() {
                         picked = at;
@@ -451,26 +499,47 @@ impl Manager {
     }
 
     fn branch(&mut self, ui: &mut egui::Ui, look: &Look, all: &[String], group: &str) {
-        let row = ui.spacing().interact_size.y;
         for sub in tree::subgroups(all, group) {
-            let id = ui.make_persistent_id(("tool_group", sub.as_str()));
-            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
-                .show_header(ui, |ui| {
-                    if let Some(image) = (look.picture)("common/tool_database.png") {
-                        ui.add(image.fit_to_exact_size(egui::vec2(row, row)));
-                    }
-                    let picked = self.pick == Some(Pick::Group(sub.clone()));
-                    let label = egui::RichText::new(tree::leaf(sub)).strong();
-                    let label = ui.selectable_label(picked, label);
-                    cut_craft_bug_report::context_menu(&label, |ui| {
-                        ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
-                    });
-                    if label.clicked() {
-                        self.pick = Some(Pick::Group(sub.clone()));
-                    }
-                })
-                .body(|ui| self.branch(ui, look, all, sub));
+            self.group_row(ui, look, all, sub);
         }
+        self.tool_rows(ui, look, group);
+    }
+
+    /// The group `sub`, opening onto its groups and tools.
+    fn group_row(&mut self, ui: &mut egui::Ui, look: &Look, all: &[String], sub: &str) {
+        let row = ui.spacing().interact_size.y;
+        let id = ui.make_persistent_id(("tool_group", sub));
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
+            .show_header(ui, |ui| {
+                if let Some(image) = (look.picture)("common/tool_database.png") {
+                    ui.add(image.fit_to_exact_size(egui::vec2(row, row)));
+                }
+                let picked = self.pick == Some(Pick::Group(sub.to_owned()));
+                let text = if sub == CATALOGUES {
+                    "Catalogues (read only)"
+                } else {
+                    tree::leaf(sub)
+                };
+                let label = ui.selectable_label(picked, egui::RichText::new(text).strong());
+                if sub == CATALOGUES {
+                    label.clone().on_hover_hint(
+                        "Tool databases imported from makers, kept as they came: copy a tool \
+                         into My Tools to edit it, cut with it or load it in the tool changer",
+                    );
+                }
+                cut_craft_bug_report::context_menu(&label, |ui| {
+                    ui.checkbox(&mut self.hide_unset, "Hide Unset Tools");
+                });
+                if label.clicked() {
+                    self.pick = Some(Pick::Group(sub.to_owned()));
+                }
+            })
+            .body(|ui| self.branch(ui, look, all, sub));
+    }
+
+    /// The tools straight inside `group`.
+    fn tool_rows(&mut self, ui: &mut egui::Ui, look: &Look, group: &str) {
+        let row = ui.spacing().interact_size.y;
         for i in tree::tools_in(&self.draft, group) {
             let tool = &self.draft.tools[i];
             let unset = !tool.has_data_for(&self.draft.material);
@@ -512,6 +581,12 @@ impl Manager {
         let edge = ui.spacing().interact_size.y;
         let picked = self.pick.is_some();
         let tool = matches!(self.pick, Some(Pick::Tool(_)));
+        let deletable = self.deletable();
+        let copy = if self.shown_is_catalogue() {
+            "Copy to My Tools"
+        } else {
+            "Copy Tool"
+        };
         let mut action = None;
         ui.horizontal(|ui| {
             let buttons = [
@@ -522,12 +597,7 @@ impl Manager {
                     true,
                     TreeAction::NewGroup,
                 ),
-                (
-                    "common/copy_duplicate.png",
-                    "Copy Tool",
-                    tool,
-                    TreeAction::Copy,
-                ),
+                ("common/copy_duplicate.png", copy, tool, TreeAction::Copy),
                 ("common/open.png", "Import Tools", true, TreeAction::Import),
                 (
                     "common/save.png",
@@ -535,7 +605,7 @@ impl Manager {
                     picked,
                     TreeAction::Export,
                 ),
-                ("common/delete.png", "Delete", picked, TreeAction::Delete),
+                ("common/delete.png", "Delete", deletable, TreeAction::Delete),
             ];
             for (icon, label, enabled, asked) in buttons {
                 let button = match (look.picture)(icon) {
@@ -556,13 +626,39 @@ impl Manager {
         action
     }
 
+    /// Whether the pick can be deleted: anything in My Tools, or a whole catalogue (not
+    /// a catalogue's tools or groups one by one).
+    fn deletable(&self) -> bool {
+        match &self.pick {
+            Some(Pick::Tool(_)) => !self.shown_is_catalogue(),
+            Some(Pick::Group(g)) => {
+                !self.draft.is_catalogue_group(g) || self.draft.catalogues.contains(g)
+            }
+            None => false,
+        }
+    }
+
+    /// Whether `group` is the catalogues' top group or inside it.
+    fn in_catalogues(&self, group: &str) -> bool {
+        tree::within(group, CATALOGUES) || self.draft.is_catalogue_group(group)
+    }
+
     fn act(&mut self, action: TreeAction) -> Option<Outcome> {
-        // new things go in the picked group, or the picked tool's
+        // new things go in the picked group, or the picked tool's; in My Tools, a new
+        // tool picked in a catalogue going in its maker ▸ type group
         let group = match &self.pick {
             Some(Pick::Group(g)) => g.clone(),
             Some(Pick::Tool(i)) => self.draft.tools[*i].group.clone(),
             None => String::new(),
         };
+        let group = match action {
+            TreeAction::NewTool if self.in_catalogues(&group) => Tool::default().own_group(),
+            TreeAction::NewGroup if self.in_catalogues(&group) => String::new(),
+            _ => group,
+        };
+        if action == TreeAction::Delete && !self.deletable() {
+            return None;
+        }
         let outcome = self.do_action(action, &group);
         // a tool deleted leaves its slot
         if let Some(changer) = &mut self.changer {
@@ -580,6 +676,7 @@ impl Manager {
             TreeAction::NewGroup => {
                 self.pick = Some(Pick::Group(tree::add_group(&mut self.draft, &group)));
             }
+            TreeAction::Copy if self.shown_is_catalogue() => self.copy_shown_to_mine(),
             TreeAction::Copy => {
                 if let Some(Pick::Tool(i)) = self.pick {
                     self.pick = Some(Pick::Tool(tree::copy_tool(&mut self.draft, i)));
@@ -619,7 +716,11 @@ impl Manager {
         cut_craft_bug_report::mark(ui, "Tool Database details");
         match self.pick.clone() {
             Some(Pick::Group(group)) => self.group_details(ui, &group),
+            Some(Pick::Tool(i)) if i < self.draft.tools.len() && self.shown_is_catalogue() => {
+                self.catalogue_tool(ui, look, i);
+            }
             Some(Pick::Tool(i)) if i < self.draft.tools.len() => {
+                self.follow_own_group(i);
                 let groups = tree::groups(&self.draft);
                 let before = self.draft.tools[i].name.clone();
                 let material = self.draft.material.clone();
@@ -713,7 +814,82 @@ impl Manager {
         });
     }
 
+    /// A catalogue's tool, read only, with Copy to My Tools.
+    fn catalogue_tool(&mut self, ui: &mut egui::Ui, look: &Look, i: usize) {
+        let mut copy = false;
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    "This tool is in a maker's catalogue, which stays as it came. Copy it into \
+                     My Tools to change it, cut with it or load it in the tool changer.",
+                );
+                copy = ui.button("Copy to My Tools").clicked();
+            });
+        });
+        let groups = tree::groups(&self.draft);
+        let material = self.draft.material.clone();
+        // drawn from a copy: nothing typed here reaches the catalogue
+        let mut shown = self.draft.tools[i].clone();
+        let mut formats = self.draft.name_formats.clone();
+        ui.add_enabled_ui(false, |ui| {
+            tool_details(
+                ui,
+                &mut shown,
+                (&groups, &mut formats),
+                (look, None),
+                &material,
+            );
+        });
+        if copy {
+            self.copy_shown_to_mine();
+        }
+    }
+
+    /// Copies every catalogue tool in `group` into My Tools (each once).
+    pub fn copy_group_to_mine(&mut self, group: &str) {
+        let inside: Vec<usize> = (0..self.draft.tools.len())
+            .filter(|&i| tree::within(&self.draft.tools[i].group, group))
+            .collect();
+        for i in inside {
+            tree::copy_to_mine(&mut self.draft, i);
+        }
+    }
+
+    /// A My Tools tool's group follows its maker and type while it is still the group they
+    /// gave it (the user moving it to another group keeps it there).
+    fn follow_own_group(&mut self, i: usize) {
+        let tool = &mut self.draft.tools[i];
+        let own = tool.own_group();
+        if let Some((at, last)) = &self.followed
+            && *at == i
+            && tool.group == *last
+        {
+            tool.group.clone_from(&own);
+        }
+        self.followed = Some((i, own));
+    }
+
     fn group_details(&mut self, ui: &mut egui::Ui, group: &str) {
+        if self.in_catalogues(group) {
+            ui.label(egui::RichText::new(tree::leaf(group)).strong());
+            ui.weak(
+                "A maker's catalogue, kept as it came: copy its tools into My Tools to edit \
+                 them. Delete takes a whole catalogue out (copies in My Tools stay).",
+            );
+            if let Some(notes) = self.draft.groups.iter().find(|g| g.path == group)
+                && !notes.notes.is_empty()
+            {
+                ui.label(&notes.notes);
+            }
+            if ui
+                .button("Copy All to My Tools")
+                .on_hover_hint("Every tool in this group, each into its maker ▸ type group")
+                .clicked()
+            {
+                self.copy_group_to_mine(group);
+            }
+            return;
+        }
         egui::Grid::new("tool_group_details")
             .num_columns(2)
             .show(ui, |ui| {
@@ -1523,11 +1699,142 @@ mod tests {
         assert!(!out.tools.is_empty() && out.tools.iter().all(|t| t.group.starts_with("Imperial")));
         assert_eq!(m.act(TreeAction::Import), Some(Outcome::Import));
         m.import(out, "Vendor");
-        assert_eq!(m.pick, Some(Pick::Group("Vendor".into())));
+        assert_eq!(m.pick, Some(Pick::Group("Catalogues/Vendor".into())));
         assert_eq!(
             ToolDatabase::starter(),
             db,
             "the database itself is untouched"
         );
+    }
+
+    /// The starter tools as My Tools, with an "Amana" catalogue of two tools; the
+    /// catalogue's first tool's index.
+    fn with_catalogue() -> (Manager, usize) {
+        let mut db = ToolDatabase::starter();
+        let catalogue = ToolDatabase {
+            tools: vec![
+                Tool {
+                    name: "46171".into(),
+                    group: "Up-cut".into(),
+                    ..Tool::default()
+                },
+                Tool {
+                    name: "45700".into(),
+                    shape: ToolShape::VBit,
+                    ..Tool::default()
+                },
+            ],
+            ..ToolDatabase::default()
+        };
+        let first = db.tools.len();
+        tree::import(&mut db, catalogue, "Amana");
+        (Manager::new(&db), first)
+    }
+
+    #[test]
+    fn a_catalogue_tool_is_copied_into_my_tools_not_edited_or_loaded() {
+        let (mut m, i) = with_catalogue();
+        let before = m.draft.tools.len();
+        m.changer = Some(Changer {
+            machine: "Router".into(),
+            slots: vec![None; 4],
+        });
+        m.load_into(i, Some(1));
+        assert_eq!(
+            m.changer.as_ref().unwrap().slots[0],
+            None,
+            "a catalogue's tool is not loaded"
+        );
+        m.pick = Some(Pick::Tool(i));
+        m.act(TreeAction::Copy);
+        let Some(Pick::Tool(mine)) = m.pick else {
+            panic!("the copy is picked")
+        };
+        assert_eq!(m.draft.tools.len(), before + 1);
+        assert_eq!(m.draft.tools[mine].name, "46171");
+        assert_eq!(m.draft.tools[mine].group, "Amana/End Mills");
+        m.load_into(mine, Some(1));
+        assert_eq!(m.changer.as_ref().unwrap().slot_of("46171"), Some(1));
+        // a catalogue tool or its groups are not deleted one by one; the catalogue is
+        m.pick = Some(Pick::Tool(i));
+        m.act(TreeAction::Delete);
+        assert_eq!(m.draft.tools.len(), before + 1);
+        m.pick = Some(Pick::Group("Catalogues/Amana".into()));
+        m.act(TreeAction::Delete);
+        assert_eq!(
+            m.draft.tools.len(),
+            before - 1,
+            "the catalogue goes, the copy stays"
+        );
+        assert_eq!(m.draft.catalogues, Vec::<String>::new());
+        assert_eq!(m.changer.as_ref().unwrap().slot_of("46171"), Some(1));
+    }
+
+    #[test]
+    fn new_tools_and_groups_picked_in_a_catalogue_go_in_my_tools() {
+        let (mut m, i) = with_catalogue();
+        m.pick = Some(Pick::Tool(i));
+        m.act(TreeAction::NewTool);
+        let Some(Pick::Tool(new)) = m.pick else {
+            panic!("the new tool is picked")
+        };
+        assert!(!m.draft.is_catalogue(&m.draft.tools[new]));
+        assert_eq!(m.draft.tools[new].group, "Generic/End Mills");
+        m.pick = Some(Pick::Group("Catalogues/Amana".into()));
+        m.act(TreeAction::NewGroup);
+        let Some(Pick::Group(g)) = m.pick.clone() else {
+            panic!("the new group is picked")
+        };
+        assert!(!m.draft.is_catalogue_group(&g), "{g}");
+        let mine = m.draft.my_tools().count();
+        m.copy_group_to_mine("Catalogues/Amana");
+        m.copy_group_to_mine("Catalogues");
+        assert_eq!(m.draft.my_tools().count(), mine + 2, "each copied once");
+    }
+
+    #[test]
+    fn selecting_a_catalogue_tool_copies_it_into_my_tools() {
+        let (m, i) = with_catalogue();
+        let mut m = Manager::selecting(&m.draft, "46171");
+        assert_eq!(m.pick, Some(Pick::Tool(i)));
+        let before = m.draft.tools.len();
+        assert_eq!(m.select(), Some(Outcome::Select("46171".into())));
+        assert_eq!(m.draft.tools.len(), before + 1);
+        let mine = m.draft.index_of("46171").unwrap();
+        assert!(!m.draft.is_catalogue(&m.draft.tools[mine]));
+        assert_eq!(m.pick, Some(Pick::Tool(mine)), "the copy is shown");
+        assert_eq!(
+            Manager::selecting(&m.draft, "46171").pick,
+            Some(Pick::Tool(mine)),
+            "the copy opens, not the catalogue's"
+        );
+    }
+
+    #[test]
+    fn a_tool_s_group_follows_its_maker_and_type_until_moved() {
+        let ctx = egui::Context::default();
+        let (mut m, i) = with_catalogue();
+        m.pick = Some(Pick::Tool(i));
+        m.act(TreeAction::Copy);
+        let Some(Pick::Tool(mine)) = m.pick else {
+            panic!()
+        };
+        frame(&mut m, &ctx);
+        m.draft.tools[mine].manufacturer = "Amana Tool".into();
+        m.draft.tools[mine].shape = ToolShape::BallNose;
+        frame(&mut m, &ctx);
+        assert_eq!(m.draft.tools[mine].group, "Amana Tool/Ball Noses");
+        m.draft.tools[mine].group = "Favourites".into();
+        frame(&mut m, &ctx);
+        m.draft.tools[mine].manufacturer = "Whiteside".into();
+        frame(&mut m, &ctx);
+        assert_eq!(
+            m.draft.tools[mine].group, "Favourites",
+            "moved by hand: stays"
+        );
+        // a catalogue's tool is drawn read-only, and the window still draws it
+        m.pick = Some(Pick::Tool(i));
+        frame(&mut m, &ctx);
+        assert_eq!(m.draft.tools[i].group, "Catalogues/Amana/Up-cut");
     }
 }

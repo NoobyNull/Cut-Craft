@@ -334,7 +334,10 @@ say "not implemented yet".
   diameter and flute length (tapered ball noses and flat bottoms are cut with their whole
   taper, read from .vtdb and Fusion .tools files). The editor draws the tool to scale from
   its sizes, each typed on its dimension line, with neck and shank lengths and a
-  Manufacturer (`{Manufacturer}` in name formats).
+  Manufacturer (`{Manufacturer}` in name formats). My Tools (the bits toolpaths, the tool
+  changer and suggestions use) apart from read-only maker Catalogues: imports become
+  catalogues, bits are copied into My Tools (Maker / Type group) to edit, select or load.
+  Tool types show both names ("Radiused End Mill (bowl / bull nose)").
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
   (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.

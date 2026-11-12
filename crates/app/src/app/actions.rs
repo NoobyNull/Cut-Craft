@@ -4706,7 +4706,7 @@ impl CutCraftApp {
         self.invoke(ctx, "tool_database");
         if let Some(manager) = &mut self.tool_manager {
             manager.pick = name
-                .and_then(|n| manager.draft.tools.iter().position(|t| t.name == n))
+                .and_then(|n| manager.draft.index_of(&n))
                 .map(cut_craft_tool_database::Pick::Tool);
         }
     }

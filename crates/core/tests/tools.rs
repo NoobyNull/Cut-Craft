@@ -507,3 +507,118 @@ fn a_flute_length_is_known_only_when_one_was_given() {
         assert_eq!(t.known_flute_length(), None, "{unset}");
     }
 }
+
+#[test]
+fn catalogue_tools_are_not_my_tools_and_old_databases_are_all_mine() {
+    let mut db = ToolDatabase {
+        tools: vec![
+            Tool {
+                group: "Metric Tools/End Mills".into(),
+                ..tool("mine", 6.0)
+            },
+            Tool {
+                group: "Amana/End Mills".into(),
+                ..tool("theirs", 6.35)
+            },
+            Tool {
+                group: "Amana".into(),
+                ..tool("theirs too", 3.0)
+            },
+        ],
+        ..ToolDatabase::default()
+    };
+    assert_eq!(
+        db.my_tools().count(),
+        3,
+        "no catalogues: every tool is mine"
+    );
+    let json = serde_json::to_value(&db).unwrap();
+    assert!(json.get("catalogues").is_none(), "nothing written for none");
+    db.catalogues.push("Amana".into());
+    let mine: Vec<&str> = db.my_tools().map(|t| t.name.as_str()).collect();
+    assert_eq!(mine, ["mine"]);
+    assert!(db.is_catalogue(&db.tools[1]) && db.is_catalogue(&db.tools[2]));
+    assert!(!db.is_catalogue(&db.tools[0]));
+    // a group only starting with the catalogue's name is not in it
+    let near = Tool {
+        group: "Amana Copies".into(),
+        ..tool("near", 1.0)
+    };
+    assert!(!db.is_catalogue(&near));
+    let back: ToolDatabase = serde_json::from_value(serde_json::to_value(&db).unwrap()).unwrap();
+    assert_eq!(back.catalogues, ["Amana"]);
+}
+
+#[test]
+fn a_tool_s_own_group_is_its_maker_then_its_type() {
+    let amana = Tool {
+        manufacturer: "Amana".into(),
+        shape: ToolShape::VBit,
+        ..tool("v", 12.7)
+    };
+    assert_eq!(amana.own_group(), "Amana/V-Bits");
+    assert_eq!(tool("plain", 6.0).own_group(), "Generic/End Mills");
+    let bowl = Tool {
+        shape: ToolShape::RadiusedEndMill,
+        manufacturer: "  Whiteside ".into(),
+        ..tool("bowl", 25.4)
+    };
+    assert_eq!(bowl.own_group(), "Whiteside/Radiused End Mills");
+}
+
+#[test]
+fn a_catalogue_tool_copied_into_my_tools_keeps_its_name_and_the_copy_is_used() {
+    let theirs = Tool {
+        group: "Amana/End Mills".into(),
+        feed_rate: 1000.0,
+        ..tool("46171 End Mill", 6.35)
+    };
+    let mut db = ToolDatabase {
+        tools: vec![theirs.clone()],
+        catalogues: vec!["Amana".into()],
+        ..ToolDatabase::default()
+    };
+    // until copied, the catalogue's is the one found
+    assert_eq!(db.index_of("46171 End Mill"), Some(0));
+    db.tools.push(Tool {
+        group: "Amana/End Mills".into(),
+        ..theirs.clone()
+    });
+    db.tools[1].group = "Mine".into();
+    db.tools[1].feed_rate = 1500.0;
+    assert_eq!(db.index_of("46171 End Mill"), Some(1), "My Tools first");
+    assert_eq!(db.get("46171 End Mill").unwrap().feed_rate, 1500.0);
+    // a put changes the copy, never the catalogue
+    let mut changed = db.get("46171 End Mill").unwrap().clone();
+    changed.feed_rate = 1800.0;
+    db.put(changed);
+    assert_eq!(db.tools[0].feed_rate, 1000.0);
+    assert_eq!(db.tools[1].feed_rate, 1800.0);
+    // a slot numbers the copy only
+    db.number_by_slots(&[Some("46171 End Mill".into())]);
+    assert_eq!((db.tools[0].number, db.tools[1].number), (0, 1));
+}
+
+#[test]
+fn putting_a_catalogue_tool_back_adds_it_to_my_tools() {
+    let mut db = ToolDatabase {
+        tools: vec![Tool {
+            group: "Catalogues/Amana/V-Bits".into(),
+            shape: ToolShape::VBit,
+            manufacturer: "Amana".into(),
+            ..tool("V", 12.7)
+        }],
+        catalogues: vec!["Catalogues/Amana".into()],
+        ..ToolDatabase::default()
+    };
+    let mut edited = db.tools[0].clone();
+    edited.angle = 60.0;
+    db.put(edited);
+    assert_eq!(db.tools.len(), 2);
+    assert_eq!(db.tools[0].angle, 90.0, "the catalogue is unchanged");
+    assert_eq!(db.tools[1].group, "Amana/V-Bits");
+    assert!(
+        !db.is_catalogue(&db.tools[1]),
+        "My Tools' Amana is not the catalogue"
+    );
+}
