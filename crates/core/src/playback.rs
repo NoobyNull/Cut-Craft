@@ -1,17 +1,42 @@
 //! Animated toolpath preview (Aspire's help: Preview Toolpaths ▸ Animate preview, Preview
-//! Control): the toolpaths' moves played into the material a distance at a time. The
-//! position is the distance the tool has travelled; moving it on cuts up to there, part of a
-//! move if need be, and moving it back cuts again from the material it started from.
+//! Control): the toolpaths' moves played into the material as the machine would cut them.
+//! The position is the machine's time in seconds, each move taking as long as it would at
+//! its tool's feed or plunge rate (rapids at the rapid rate); moving it on cuts up to there,
+//! part of a move if need be, and moving it back cuts again from the material it started
+//! from.
 
 use crate::simulation::Material;
-use crate::toolpath::{Tool, Toolpath};
+use crate::toolpath::{MoveKind, Tool, Toolpath};
 use glam::DVec3;
 
 /// One straight move of the tool.
 struct Step {
     tool: usize,
+    kind: MoveKind,
     from: DVec3,
     to: DVec3,
+}
+
+/// The most saves of the material a playback keeps, so going back starts near where it
+/// is going instead of from the start.
+const MOST_SAVES: usize = 20;
+/// The memory the saves may take in all, bytes.
+const SAVES_MEMORY: usize = 400 << 20;
+
+/// How many saves a material of `cells` cells gets: [`MOST_SAVES`], fewer for a large one,
+/// so they keep to [`SAVES_MEMORY`]; at least one.
+fn saves_for(cells: usize) -> usize {
+    let each = cells * (size_of::<f64>() + size_of::<u32>());
+    (SAVES_MEMORY / each.max(1)).clamp(1, MOST_SAVES)
+}
+
+/// The material as cut at the end of a step.
+struct Save {
+    /// Which stretch of [`Playback::save_every`] it is in (one save each).
+    slot: u64,
+    time: f64,
+    heights: Vec<f64>,
+    cut_by: Vec<u32>,
 }
 
 pub struct Playback {
@@ -19,35 +44,62 @@ pub struct Playback {
     /// The id each tool's cells are marked with (`Material::cut_by`), by tool.
     marks: Vec<u32>,
     steps: Vec<Step>,
-    /// Distance travelled at the end of each step.
+    /// The machine's time (seconds) at the end of each step.
     ends: Vec<f64>,
     start: Material,
     material: Material,
     at: f64,
+    /// The material saved along the way, in time order.
+    saves: Vec<Save>,
+    /// How far apart the saves are, seconds.
+    save_every: f64,
 }
 
 impl Playback {
-    /// `toolpaths` to be played, in order, into `start`.
-    pub fn new(start: Material, toolpaths: &[&Toolpath]) -> Self {
-        let (mut tools, mut steps) = (vec![], vec![]);
-        for t in toolpaths {
+    /// `toolpaths` to be played, in order, into `start`. Says how far it has got
+    /// ([`crate::progress`]), as millions of moves take a while; asked to stop, it leaves
+    /// the rest out, for a job that is thrown away. Rapids run at `rapid_rate` (mm/min), as
+    /// does a move whose tool has no rate set.
+    pub fn new(start: Material, toolpaths: &[&Toolpath], rapid_rate: f64) -> Self {
+        const EVERY: usize = 1 << 16;
+        let total: usize = toolpaths.iter().map(|t| t.moves.len()).sum();
+        let (mut tools, mut steps) = (vec![], Vec::with_capacity(total));
+        'toolpaths: for t in toolpaths {
             tools.push(t.tool.clone());
             for pair in t.moves.windows(2) {
+                if steps.len() % EVERY == 0 {
+                    if crate::progress::cancelled() {
+                        break 'toolpaths;
+                    }
+                    crate::progress::report_steps(steps.len(), total);
+                }
                 steps.push(Step {
                     tool: tools.len() - 1,
+                    kind: pair[1].kind,
                     from: pair[0].to,
                     to: pair[1].to,
                 });
             }
         }
+        let rapid = if rapid_rate > 0.0 { rapid_rate } else { 5000.0 };
         let mut total = 0.0;
-        let ends = steps
+        let ends: Vec<f64> = steps
             .iter()
             .map(|s| {
-                total += s.from.distance(s.to);
+                let tool: &Tool = &tools[s.tool];
+                let rate = match s.kind {
+                    MoveKind::Rapid => rapid,
+                    MoveKind::Plunge => tool.plunge_rate,
+                    MoveKind::Cut => tool.feed_rate,
+                };
+                let per_second = if rate > 0.0 { rate } else { rapid } / 60.0;
+                total += s.from.distance(s.to) / per_second;
                 total
             })
             .collect();
+        let length: f64 = ends.last().copied().unwrap_or(0.0);
+        #[expect(clippy::cast_precision_loss, reason = "a handful of saves")]
+        let save_every = length / (saves_for(start.heights.len()) + 1) as f64;
         Self {
             marks: vec![0; tools.len()],
             tools,
@@ -56,6 +108,8 @@ impl Playback {
             material: start.clone(),
             start,
             at: 0.0,
+            saves: vec![],
+            save_every,
         }
     }
 
@@ -80,12 +134,12 @@ impl Playback {
         &self.material
     }
 
-    /// How far the tool travels in all.
+    /// How long the machine takes in all, seconds.
     pub fn length(&self) -> f64 {
         self.ends.last().copied().unwrap_or(0.0)
     }
 
-    /// How far it has travelled.
+    /// How long it has been going, seconds.
     pub fn at(&self) -> f64 {
         self.at
     }
@@ -94,7 +148,7 @@ impl Playback {
         self.at >= self.length()
     }
 
-    /// The step under distance `d`, and how far into it (0 to 1).
+    /// The step under time `d`, and how far into it (0 to 1).
     fn locate(&self, d: f64) -> Option<(usize, f64)> {
         let i = self
             .ends
@@ -119,30 +173,85 @@ impl Playback {
         Some((s.from.lerp(s.to, t), &self.tools[s.tool]))
     }
 
-    /// Moves the tool to distance `d` (kept within the path), cutting on the way; going back
+    /// Moves the tool to time `d` (seconds) (kept within the path), cutting on the way; going back
     /// cuts again from the start.
     pub fn seek(&mut self, d: f64) {
+        self.seek_until(d, || false);
+    }
+
+    /// [`Self::seek`], a step at a time, stopping at the end of the first step after which
+    /// `out_of_time` says so: whether the tool got to `d`. Going back starts again from the
+    /// start before it stops. Each call cuts at least one step, so calls in turn get there.
+    pub fn seek_until(&mut self, d: f64, mut out_of_time: impl FnMut() -> bool) -> bool {
         let d = d.clamp(0.0, self.length());
-        let mut from = self.at;
-        if d < from {
-            self.material = self.start.clone();
-            from = 0.0;
+        // from the last save before `d`, when it is ahead or the tool goes back; else back
+        // to the start
+        let save = (self.saves.iter())
+            .rposition(|s| s.time <= d)
+            .filter(|&i| d < self.at || self.saves[i].time > self.at);
+        if let Some(i) = save {
+            let save = &self.saves[i];
+            self.material.heights.clone_from(&save.heights);
+            self.material.cut_by.clone_from(&save.cut_by);
+            self.at = save.time;
+        } else if d < self.at {
+            self.material.heights.clone_from(&self.start.heights);
+            self.material.cut_by.clone_from(&self.start.cut_by);
+            self.at = 0.0;
         }
-        if let (Some((i, ti)), Some((j, tj))) = (self.locate(from), self.locate(d)) {
+        if let (Some((i, ti)), Some((j, tj))) = (self.locate(self.at), self.locate(d)) {
             for k in i..=j {
                 let s = &self.steps[k];
                 let (a, b) = (if k == i { ti } else { 0.0 }, if k == j { tj } else { 1.0 });
-                if b > a {
-                    self.material.cutting = self.marks[s.tool];
-                    self.material.sweep(
-                        s.from.lerp(s.to, a),
-                        s.from.lerp(s.to, b),
-                        &self.tools[s.tool],
-                    );
+                if b <= a {
+                    continue;
+                }
+                self.material.cutting = self.marks[s.tool];
+                self.material.sweep(
+                    s.from.lerp(s.to, a),
+                    s.from.lerp(s.to, b),
+                    &self.tools[s.tool],
+                );
+                if b >= 1.0 {
+                    self.save_at(k);
+                }
+                if k < j && out_of_time() {
+                    self.at = self.ends[k];
+                    return false;
                 }
             }
         }
         self.at = d;
+        true
+    }
+
+    /// The material saved at the end of step `k` when no save has been made in its stretch
+    /// of time yet.
+    fn save_at(&mut self, k: usize) {
+        let time = self.ends[k];
+        // none at the very end: nothing goes on from there
+        if self.save_every <= 0.0 || time >= self.length() {
+            return;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a small slot number"
+        )]
+        let slot = (time / self.save_every).floor() as u64;
+        if slot == 0 || self.saves.iter().any(|s| s.slot == slot) {
+            return;
+        }
+        let at = self.saves.partition_point(|s| s.time < time);
+        self.saves.insert(
+            at,
+            Save {
+                slot,
+                time,
+                heights: self.material.heights.clone(),
+                cut_by: self.material.cut_by.clone(),
+            },
+        );
     }
 
     /// The end of the step after the tool's position (Single Step).
@@ -168,7 +277,7 @@ impl Playback {
 mod tests {
     use super::*;
     use crate::document::Job;
-    use crate::toolpath::{Move, MoveKind};
+    use crate::toolpath::Move;
 
     /// A 100 × 100 job, and a cut 2 deep along y = 50 from x = 10 to 90 between a plunge and
     /// a retract.
@@ -186,7 +295,12 @@ mod tests {
             name: "line".into(),
             strategy: String::new(),
             params: serde_json::Value::Null,
-            tool: Tool::default(),
+            // a millimetre a second, rapids too: seconds along read as millimetres
+            tool: Tool {
+                feed_rate: 60.0,
+                plunge_rate: 60.0,
+                ..Tool::default()
+            },
             vectors: vec![],
             moves: vec![
                 m(MoveKind::Rapid, 10.0, 5.0),
@@ -206,7 +320,7 @@ mod tests {
     #[test]
     fn the_cells_a_toolpath_cuts_are_marked_with_its_id() {
         let (start, toolpath) = line();
-        let mut p = Playback::new(start, &[&toolpath]).marked(&[7]);
+        let mut p = Playback::new(start, &[&toolpath], 60.0).marked(&[7]);
         p.seek(p.length());
         // millimetre cells: the cell at (50, 50) is cut, the one at (50, 10) is not
         let m = p.material();
@@ -226,7 +340,7 @@ mod tests {
     #[test]
     fn cuts_as_far_as_the_tool_has_gone() {
         let (start, toolpath) = line();
-        let mut p = Playback::new(start, &[&toolpath]);
+        let mut p = Playback::new(start, &[&toolpath], 60.0);
         assert_eq!(p.length(), 7.0 + 80.0 + 7.0);
         p.seek(7.0 + 40.0);
         assert!(depth_at(&p, 30.0) < -1.0, "cut where it has been");
@@ -242,7 +356,7 @@ mod tests {
     #[test]
     fn going_back_cuts_again_from_the_start() {
         let (start, toolpath) = line();
-        let mut p = Playback::new(start, &[&toolpath]);
+        let mut p = Playback::new(start, &[&toolpath], 60.0);
         p.seek(p.length());
         p.seek(7.0 + 10.0);
         assert!(depth_at(&p, 80.0) > -0.5, "uncut again");
@@ -252,10 +366,110 @@ mod tests {
     #[test]
     fn steps_and_retracts() {
         let (start, toolpath) = line();
-        let mut p = Playback::new(start, &[&toolpath]);
+        let mut p = Playback::new(start, &[&toolpath], 60.0);
         assert_eq!(p.next_step(), 7.0, "the plunge");
         p.seek(p.next_step());
         assert_eq!(p.next_step(), 87.0, "the cut");
         assert_eq!(p.next_retract(), 94.0, "out at the end");
+    }
+
+    #[test]
+    fn plays_at_the_tools_feeds_and_the_rapid_rate() {
+        let (start, mut toolpath) = line();
+        // cut at 1200 mm/min (20 mm/s), plunge at 120 (2 mm/s), rapids at 6000 (100 mm/s)
+        toolpath.tool.feed_rate = 1200.0;
+        toolpath.tool.plunge_rate = 120.0;
+        let p = Playback::new(start, &[&toolpath], 6000.0);
+        let seconds = 7.0 / 2.0 + 80.0 / 20.0 + 7.0 / 100.0;
+        assert!((p.length() - seconds).abs() < 1e-9, "{} s", p.length());
+        assert!((p.next_step() - 3.5).abs() < 1e-9, "the plunge takes 3.5 s");
+    }
+
+    #[test]
+    fn a_rate_not_set_plays_at_the_rapid_rate() {
+        let (start, mut toolpath) = line();
+        toolpath.tool.feed_rate = 0.0;
+        toolpath.tool.plunge_rate = 0.0;
+        let p = Playback::new(start, &[&toolpath], 60.0);
+        assert_eq!(p.length(), 94.0);
+    }
+
+    /// A zig-zag of 100 cuts, 1 mm a second, across the 100 × 100 job.
+    fn zigzag() -> (Material, Toolpath) {
+        let (start, mut toolpath) = line();
+        let origin = start.origin;
+        toolpath.moves = (0..=100)
+            .map(|i| Move {
+                kind: MoveKind::Cut,
+                to: DVec3::new(
+                    origin.x + if i % 2 == 0 { 10.0 } else { 90.0 },
+                    origin.y + 10.0 + f64::from(i) * 0.8,
+                    -2.0,
+                ),
+            })
+            .collect();
+        (start, toolpath)
+    }
+
+    #[test]
+    fn played_through_once_it_goes_back_from_the_nearest_save_not_the_start() {
+        let (start, toolpath) = zigzag();
+        let mut p = Playback::new(start.clone(), &[&toolpath], 60.0);
+        p.seek(p.length());
+        let middle = p.length() * 0.55;
+        let mut calls = 0;
+        while !p.seek_until(middle, || true) {
+            calls += 1;
+        }
+        assert!(calls < 10, "{calls} steps back, not 55 from the start");
+        let mut straight = Playback::new(start, &[&toolpath], 60.0);
+        straight.seek(middle);
+        assert!(
+            p.material().heights == straight.material().heights,
+            "the same cut as played straight there"
+        );
+    }
+
+    #[test]
+    fn saves_are_few_for_a_large_material() {
+        let (start, toolpath) = zigzag();
+        let mut p = Playback::new(start, &[&toolpath], 60.0);
+        p.seek(p.length());
+        assert!(p.saves.len() <= MOST_SAVES, "{}", p.saves.len());
+        assert!(
+            saves_for(10_000 * 10_000) <= 2,
+            "a huge grid gets few saves"
+        );
+    }
+
+    #[test]
+    fn a_long_seek_stops_when_out_of_time_and_goes_on_from_there() {
+        let (start, toolpath) = line();
+        let mut p = Playback::new(start, &[&toolpath], 60.0);
+        // out of time after every step: one step a call, never none
+        assert!(!p.seek_until(p.length(), || true), "not there yet");
+        assert_eq!(p.at(), 7.0, "the plunge done");
+        assert!(!p.seek_until(p.length(), || true));
+        assert_eq!(p.at(), 87.0, "then the cut");
+        assert!(depth_at(&p, 80.0) < -1.0, "cut as far as it went");
+        assert!(
+            p.seek_until(p.length(), || true),
+            "the last step gets there"
+        );
+        assert!(p.finished());
+    }
+
+    #[test]
+    fn a_seek_back_goes_from_a_save_and_uncuts_what_is_past_it() {
+        let (start, toolpath) = line();
+        let mut p = Playback::new(start, &[&toolpath], 60.0);
+        p.seek(p.length());
+        assert!(
+            p.seek_until(7.0 + 40.0, || true),
+            "from the save after the plunge, in one go"
+        );
+        assert_eq!(p.at(), 47.0);
+        assert!(depth_at(&p, 80.0) > -0.5, "uncut again");
+        assert!(depth_at(&p, 15.0) < -1.0);
     }
 }

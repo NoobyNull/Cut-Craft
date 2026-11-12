@@ -404,11 +404,12 @@ pub struct ToolpathSettings {
     #[serde(default = "tolerance")]
     #[schemars(title = "V-Carve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance_vcarve: f64,
-    /// How fast a toolpath preview plays when it starts, in mm of tool travel a second; the
-    /// slider under the preview changes it while it plays
+    /// How many times faster than the machine a toolpath preview plays when it starts: 1
+    /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
+    /// slider over the preview changes it while it plays
     #[serde(default = "preview_speed")]
-    #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
-    pub preview_speed: f64,
+    #[schemars(extend("x-unit" = "×"), range(min = 0.25, max = 1000))]
+    pub preview_multiplier: f64,
     /// Write each keep-out zone's name on it in the 2D and 3D views ("Keep-out: Clamp 1").
     /// The View menu turns them on and off too
     #[serde(default = "on")]
@@ -427,9 +428,9 @@ fn preview_speed() -> f64 {
 }
 
 impl ToolpathSettings {
-    /// The preview's starting speed, mm/s, kept to the slider's range.
+    /// The preview's starting speed, times the machine's, kept to the slider's range.
     pub fn preview_speed(&self) -> f64 {
-        self.preview_speed.clamp(5.0, 20_000.0)
+        self.preview_multiplier.clamp(0.25, 1000.0)
     }
 }
 
@@ -779,6 +780,65 @@ pub struct Advanced {
         range(min = 50, max = 5000)
     )]
     pub previews_on_card: u32,
+    /// How closely curves are followed by the straight pieces offsets, pockets and profiles
+    /// are cut from, and by the arcs written to G-code. Coarser shows as flats on curved cuts;
+    /// finer makes toolpaths slower to work out and G-code files bigger
+    #[serde(default = "curve_accuracy", skip_serializing_if = "is_curve_accuracy")]
+    #[schemars(
+        title = "Curve accuracy for toolpaths",
+        extend("x-unit" = "µm"),
+        range(min = 1, max = 100)
+    )]
+    pub curve_accuracy: u32,
+    /// How far a 3D roughing move may dip below the machining allowance before it is split.
+    /// Coarser eats into the allowance left for finishing; finer makes bigger files
+    #[serde(
+        default = "roughing_3d_accuracy",
+        skip_serializing_if = "is_roughing_3d_accuracy"
+    )]
+    #[schemars(
+        title = "3D roughing accuracy",
+        extend("x-unit" = "µm"),
+        range(min = 1, max = 100)
+    )]
+    pub roughing_3d_accuracy: u32,
+    /// ⚠ How far a 3D finishing move may dip below the model before it is split. Raising this
+    /// lets the tool cut into the finished part (gouging); lowering it makes much bigger files
+    #[serde(
+        default = "finishing_3d_accuracy",
+        skip_serializing_if = "is_finishing_3d_accuracy"
+    )]
+    #[schemars(
+        title = "3D finishing accuracy",
+        extend("x-unit" = "µm"),
+        range(min = 1, max = 20)
+    )]
+    pub finishing_3d_accuracy: u32,
+    /// How much material must be left above the model for rest machining to go back for it.
+    /// Lower finds smaller leftovers but may chase marks the last tool left; higher skips them
+    #[serde(default = "rest_threshold", skip_serializing_if = "is_rest_threshold")]
+    #[schemars(
+        title = "Rest machining threshold",
+        extend("x-unit" = "µm"),
+        range(min = 5, max = 1000)
+    )]
+    pub rest_threshold: u32,
+    /// The most sheets Nest Parts' Add sheets as needed makes in one go. More nests bigger
+    /// batches, but a part that can never fit makes it run much longer before it gives up
+    #[serde(
+        default = "nest_most_sheets",
+        skip_serializing_if = "is_nest_most_sheets"
+    )]
+    #[schemars(title = "Nesting: most sheets added", range(min = 1, max = 1000))]
+    pub nest_most_sheets: u32,
+    /// The most filler parts one nesting places. More fills big sheets with small parts, but
+    /// slows nesting down
+    #[serde(
+        default = "nest_most_fillers",
+        skip_serializing_if = "is_nest_most_fillers"
+    )]
+    #[schemars(title = "Nesting: most filler parts", range(min = 1, max = 100_000))]
+    pub nest_most_fillers: u32,
 }
 
 /// The default of an Advanced setting, and whether a value is it: settings at their default
@@ -820,6 +880,46 @@ advanced_default!(
     is_previews_on_card,
     u32::try_from(crate::clipart::preview::KEEP).expect("a count that fits")
 );
+advanced_default!(
+    curve_accuracy,
+    is_curve_accuracy,
+    micrometres(cut_craft_core::accuracy::CURVE)
+);
+advanced_default!(
+    roughing_3d_accuracy,
+    is_roughing_3d_accuracy,
+    micrometres(cut_craft_core::accuracy::ROUGHING_3D)
+);
+advanced_default!(
+    finishing_3d_accuracy,
+    is_finishing_3d_accuracy,
+    micrometres(cut_craft_core::accuracy::FINISHING_3D)
+);
+advanced_default!(
+    rest_threshold,
+    is_rest_threshold,
+    micrometres(cut_craft_core::accuracy::REST)
+);
+advanced_default!(
+    nest_most_sheets,
+    is_nest_most_sheets,
+    u32::try_from(cut_craft_core::accuracy::NEST_SHEETS).expect("a small count")
+);
+advanced_default!(
+    nest_most_fillers,
+    is_nest_most_fillers,
+    u32::try_from(cut_craft_core::accuracy::NEST_FILLERS).expect("a small count")
+);
+
+/// `mm` in whole micrometres, as the accuracy settings show it.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "small positive lengths"
+)]
+fn micrometres(mm: f64) -> u32 {
+    (mm * 1000.0).round() as u32
+}
 
 impl Default for Advanced {
     fn default() -> Self {
@@ -831,6 +931,12 @@ impl Default for Advanced {
             library_most_files: library_most_files(),
             preview_cache_days: preview_cache_days(),
             previews_on_card: previews_on_card(),
+            curve_accuracy: curve_accuracy(),
+            roughing_3d_accuracy: roughing_3d_accuracy(),
+            finishing_3d_accuracy: finishing_3d_accuracy(),
+            rest_threshold: rest_threshold(),
+            nest_most_sheets: nest_most_sheets(),
+            nest_most_fillers: nest_most_fillers(),
         }
     }
 }
@@ -852,6 +958,15 @@ impl Advanced {
             u64::from(self.preview_cache_days.clamp(1, 3650)),
             count(self.previews_on_card.clamp(50, 5000)),
         );
+        let mm = |um: u32| f64::from(um) / 1000.0;
+        cut_craft_core::accuracy::set(cut_craft_core::accuracy::Accuracy {
+            curve: mm(self.curve_accuracy),
+            roughing_3d: mm(self.roughing_3d_accuracy),
+            finishing_3d: mm(self.finishing_3d_accuracy),
+            rest: mm(self.rest_threshold),
+            nest_sheets: count(self.nest_most_sheets),
+            nest_fillers: count(self.nest_most_fillers),
+        });
     }
 
     /// The check saved beside these settings: a keyed hash of them, so an edit made outside
@@ -1200,7 +1315,7 @@ impl Default for Options {
                 tolerance_2d: tolerance(),
                 tolerance_3d: tolerance(),
                 tolerance_vcarve: tolerance(),
-                preview_speed: preview_speed(),
+                preview_multiplier: preview_speed(),
                 keep_out_labels: d.keep_out_labels,
                 clip_at_keep_out_zones: false,
             },
@@ -1620,6 +1735,47 @@ mod tests {
     }
 
     #[test]
+    fn cutting_accuracy_reaches_the_toolpaths_in_mm_and_is_sealed() {
+        use cut_craft_core::accuracy::{self, Accuracy};
+        assert_eq!(
+            (
+                Advanced::default().curve_accuracy,
+                Advanced::default().finishing_3d_accuracy
+            ),
+            (10, 2),
+            "the fixed values they replace, in micrometres"
+        );
+        let mut o = Options::default();
+        o.advanced.curve_accuracy = 50;
+        o.advanced.roughing_3d_accuracy = 20;
+        o.advanced.finishing_3d_accuracy = 5;
+        o.advanced.rest_threshold = 100;
+        o.advanced.nest_most_sheets = 200;
+        o.advanced.nest_most_fillers = 10;
+        o.apply();
+        assert_eq!(
+            accuracy::get(),
+            Accuracy {
+                curve: 0.05,
+                roughing_3d: 0.02,
+                finishing_3d: 0.005,
+                rest: 0.1,
+                nest_sheets: 200,
+                nest_fillers: 10,
+            }
+        );
+        Options::default().apply();
+        assert_eq!(accuracy::get(), Accuracy::default());
+        // a gouging finish set by hand goes back to the safe default
+        let mut file: serde_json::Value =
+            serde_json::from_slice(&saved(&Options::default())).unwrap();
+        file["advanced"]["finishing_3d_accuracy"] = 20.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced.finishing_3d_accuracy, 2);
+    }
+
+    #[test]
     fn options_saved_before_the_check_keep_their_wayland_choice() {
         let older = r#"{ "view_3d": { "draw_origin": true, "draw_material_block": true,
             "color_shaded_view": true, "shaded_background": true, "light_follows_viewer": true },
@@ -1709,10 +1865,10 @@ mod tests {
             "older options get the same"
         );
         let wild = ToolpathSettings {
-            preview_speed: 1e9,
+            preview_multiplier: 1e9,
             ..o.toolpaths
         };
-        assert!((wild.preview_speed() - 20_000.0).abs() < 1e-9);
+        assert!((wild.preview_speed() - 1000.0).abs() < 1e-9);
     }
 
     #[test]

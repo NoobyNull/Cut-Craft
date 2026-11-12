@@ -1,7 +1,7 @@
 //! Booleans and offsets on closed paths, via `i_overlay`. Each closed path is treated as a
 //! filled region; curves are flattened first and results come back as closed polylines.
 
-use crate::geometry::{Path, Point};
+use crate::geometry::{Path, Point, Segment};
 use i_overlay::core::fill_rule::FillRule;
 use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::single::SingleFloatOverlay;
@@ -11,7 +11,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
-/// Chord tolerance (mm) for flattening curves before a boolean or offset.
+/// Chord tolerance (mm) for flattening curves before a boolean or offset unless Options ▸
+/// Advanced says otherwise ([`crate::accuracy::curve`]); drawing keeps to this one.
 // ponytail: results are polylines; fit arcs back onto them if curve fidelity matters downstream
 pub const TOLERANCE: f64 = 0.01;
 
@@ -56,6 +57,66 @@ pub fn offset_regions(regions: &[Path], distance: f64, corners: Corners) -> Vec<
     outline(&oriented, distance, corners)
 }
 
+/// [`offset`] with round corners, for offsetting the result again and again (rings stepping
+/// in from the edge): points that lie within a tenth of [`TOLERANCE`] of the line past them
+/// are dropped. Without that each step's round corners got a little round corner at every
+/// point of the last step's, doubling their points each step, so a big pocket or carving
+/// took minutes.
+pub fn offset_again(paths: &[Path], distance: f64) -> Vec<Path> {
+    thinned(offset(paths, distance, Corners::Round))
+}
+
+/// [`offset_regions`] with round corners, thinned as [`offset_again`] is.
+pub fn offset_regions_again(regions: &[Path], distance: f64) -> Vec<Path> {
+    thinned(offset_regions(regions, distance, Corners::Round))
+}
+
+fn thinned(rings: Vec<Path>) -> Vec<Path> {
+    rings
+        .into_iter()
+        .map(|ring| without_spare_points(ring, TOLERANCE / 10.0))
+        .collect()
+}
+
+/// A closed polyline without the points within `tolerance` of the line from the last point
+/// kept to the next; other paths as they are.
+fn without_spare_points(ring: Path, tolerance: f64) -> Path {
+    let mut points = vec![ring.start];
+    for s in &ring.segments {
+        match s {
+            Segment::Line { to } => points.push(*to),
+            _ => return ring,
+        }
+    }
+    if points.len() > 1 && points.first() == points.last() {
+        points.pop();
+    }
+    if !ring.closed || points.len() < 4 {
+        return ring;
+    }
+    let off_line = |a: Point, b: Point, q: Point| {
+        let ab = b - a;
+        let length = ab.length();
+        if length == 0.0 {
+            q.distance(a)
+        } else {
+            (ab.perp_dot(q - a) / length).abs()
+        }
+    };
+    let n = points.len();
+    let mut kept = vec![points[0]];
+    for i in 1..n {
+        let next = points[(i + 1) % n];
+        if off_line(*kept.last().expect("starts with one"), next, points[i]) > tolerance {
+            kept.push(points[i]);
+        }
+    }
+    if kept.len() < 3 {
+        return ring;
+    }
+    Path::polyline(&kept, true)
+}
+
 /// [`offset_regions`] with sharp corners, each mitred out no further than `reach` times the
 /// distance from its corner; a corner too sharp for that is squared off at the limit.
 pub fn offset_regions_mitred(regions: &[Path], distance: f64, reach: f64) -> Vec<Path> {
@@ -68,9 +129,9 @@ pub fn offset_regions_mitred(regions: &[Path], distance: f64, reach: f64) -> Vec
 fn outline(contours: &[Contour], distance: f64, corners: Corners) -> Vec<Path> {
     let join = match corners {
         // segment angle that keeps each arc chord within TOLERANCE of the true corner arc
-        Corners::Round => {
-            LineJoin::Round(2.0 * (1.0 - (TOLERANCE / distance.abs()).min(1.0)).acos())
-        }
+        Corners::Round => LineJoin::Round(
+            2.0 * (1.0 - (crate::accuracy::curve() / distance.abs()).min(1.0)).acos(),
+        ),
         Corners::Sharp => LineJoin::Miter(0.01 * PI),
     };
     joined(contours, distance, join)
@@ -106,7 +167,7 @@ fn contours(paths: &[Path]) -> Vec<Contour> {
 
 fn contour(path: &Path) -> Contour {
     let mut points: Contour = path
-        .flatten(TOLERANCE)
+        .flatten(crate::accuracy::curve())
         .into_iter()
         .map(|p| [p.x, p.y])
         .collect();
