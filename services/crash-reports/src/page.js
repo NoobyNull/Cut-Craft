@@ -145,7 +145,7 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
       <p class="small" id="keys-note"></p>
       <ul class="keylist" id="keylist"></ul>
       <div class="row">
-        <input type="text" id="key-name" maxlength="60" placeholder="Name, e.g. YubiKey on keyring" aria-label="Key name">
+        <input type="text" id="key-name" maxlength="60" placeholder="Name, e.g. YubiKey 5C or Bitwarden" aria-label="Key name">
         <button id="key-add">Add a security key</button>
       </div>
       <div class="error small" id="keys-error" role="alert"></div>
@@ -554,7 +554,8 @@ async function addKey() {
       rp: opts.rp,
       user: { id: fromB64(opts.user.id), name: opts.user.name, displayName: opts.user.displayName },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-      authenticatorSelection: { residentKey: 'discouraged', userVerification: 'preferred' },
+      // 'preferred' so password managers such as Bitwarden offer to save it; a YubiKey keeps it too
+      authenticatorSelection: { residentKey: 'preferred', requireResidentKey: false, userVerification: 'preferred' },
       excludeCredentials: opts.exclude.map((id) => ({ type: 'public-key', id: fromB64(id) })),
       attestation: 'none',
       timeout: opts.timeout,

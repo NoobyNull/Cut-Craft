@@ -50,7 +50,7 @@ class SoftKey {
   async authData(rpId, withKey) {
     const counter = new Uint8Array(4);
     new DataView(counter.buffer).setUint32(0, this.counter);
-    const flags = 0x01 | 0x04 | (withKey ? 0x40 : 0);
+    const flags = 0x01 | 0x04 | (this.synced ? 0x18 : 0) | (withKey ? 0x40 : 0);
     const base = join(await sha(utf8(rpId)), [flags], counter);
     if (!withKey) return base;
     const jwk = await crypto.subtle.exportKey('jwk', this.pair.publicKey);
@@ -65,7 +65,7 @@ class SoftKey {
   }
 
   async get(opts, { origin = ORIGIN, rpId = opts.rpId } = {}) {
-    this.counter += 1;
+    if (!this.synced) this.counter += 1;
     const clientData = utf8(JSON.stringify({ type: 'webauthn.get', challenge: opts.challenge, origin }));
     const authData = await this.authData(rpId, false);
     const raw = new Uint8Array(await crypto.subtle.sign(
@@ -232,4 +232,17 @@ test('the WebAuthn helpers refuse malformed input', () => {
   assert.throws(() => derToRaw(Uint8Array.of(0x30, 2, 2, 0)));
   const raw = Uint8Array.from({ length: 64 }, (_, i) => (i === 0 || i === 32 ? 0x80 : i));
   assert.deepEqual(derToRaw(der(raw)), raw);
+});
+
+test('a synced passkey (Bitwarden) with backup flags and a counter stuck at 0 signs in every time', async () => {
+  const e = env();
+  const yubikey = await SoftKey.make();
+  const cookie = await addKey(e, yubikey, { token: TOKEN }, 'YubiKey 5C');
+  const bitwarden = await SoftKey.make();
+  bitwarden.synced = true; // BE and BS set, signCount always 0, as Bitwarden does
+  await addKey(e, bitwarden, { cookie }, 'Bitwarden');
+  for (let i = 0; i < 3; i++) assert.equal((await signIn(e, bitwarden)).status, 200);
+  assert.equal((await signIn(e, yubikey)).status, 200);
+  const names = (await (await call(e, 'GET', '/admin/api/keys', { cookie })).json()).keys.map((k) => k.name);
+  assert.deepEqual(names, ['YubiKey 5C', 'Bitwarden']);
 });
