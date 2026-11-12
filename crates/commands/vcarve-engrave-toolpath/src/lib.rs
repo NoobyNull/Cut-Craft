@@ -14,6 +14,8 @@ use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+mod link;
+
 pub struct VcarveEngraveToolpath;
 
 /// Where the V-bit carves, measured from the vectors.
@@ -396,67 +398,139 @@ fn carve_together(paths: &[Path], p: &Params, safe: f64, bottom: Option<f64>) ->
     if let Some(bottom) = bottom {
         reach = reach.min(((bottom - p.start_depth) * spread).max(0.0));
     }
-    // the flat bottom's middle, cleared by end mills, is left alone
-    let cleared = p.cleared_within.map_or(f64::INFINITY, |r| reach + r);
-    let regions = grooved(&polygon::regions(paths), p.place, p.depth * spread);
-    let lines = medial::centre_lines(&regions, CENTRE_SPACING);
-    let widest_shape = lines
-        .iter()
-        .flat_map(|l| l.radii.iter().copied())
-        .fold(0.0, f64::max);
-    let widest = widest_shape.min(reach);
-    if widest <= 0.0 {
+    if reach <= 0.0 {
         return vec![];
     }
-    let depth_at = |r: f64| -(p.start_depth + r.min(reach) / spread);
-    let mut moves = vec![];
-    let mut above = -p.start_depth;
-    // the first run starts by the first vector's start point, when asked
+    let carving = Carving {
+        p,
+        spread,
+        reach,
+        // the flat bottom's middle, cleared by end mills, is left alone
+        cleared: p.cleared_within.map_or(f64::INFINITY, |r| reach + r),
+        starts: &starts,
+    };
+    let regions = grooved(&polygon::regions(paths), p.place, p.depth * spread);
+    let mut pieces: Vec<(Vec<Path>, Vec<Point>)> = polygon::pieces(&regions)
+        .into_iter()
+        .map(|piece| {
+            let marks = marks(&piece);
+            (piece, marks)
+        })
+        .collect();
+    // the first piece by the first vector's start point, when asked
     let mut from = starts
         .first()
         .copied()
-        .unwrap_or(Point::new(f64::NAN, f64::NAN));
-    let levels = tool.pass_depths(p.start_depth + widest / spread);
-    let last_level = levels.last().copied().unwrap_or(above);
-    for level in levels {
-        if level >= above - 1e-9 {
-            continue;
-        }
-        // the centre lines, where they are deeper than the last pass, down to this one
-        let runs = centre_runs(
-            &lines,
-            level,
-            |r| depth_at(r) < above - 1e-9 && r <= cleared,
-            depth_at,
-        );
-        let mut runs = nearest_first(runs, from);
-        // the floor: where this pass is too deep for the cone to reach the edges
-        let floor_reach = ((-level - p.start_depth) * spread).min(reach);
-        // (none where only the centre line itself is that far from the edges)
-        if floor_reach > 1e-6 && floor_reach < widest_shape - CENTRE_SPACING {
-            let floor = polygon::offset_regions(&regions, -floor_reach, Corners::Round);
-            let finishing = (level - last_level).abs() < 1e-9;
-            // a pass on the way down only has to leave ridges low enough for the next
-            // pass to take with the rest: a quarter of a pass depth
-            let step = if finishing {
-                tool.finishing_stepover() * tool.diameter
-            } else {
-                (tool.pass_depth * spread / 2.0)
-                    .min(tool.diameter / 2.0)
-                    .max(tool.finishing_stepover() * tool.diameter)
-            };
-            let mut rings = floor_rings(&floor, step, cleared - floor_reach, level, &starts);
-            // from the middle out, the edge of the floor last
-            rings.reverse();
-            runs.extend(rings);
-        }
+        .or_else(|| pieces.first().and_then(|(_, marks)| marks.first().copied()))
+        .unwrap_or(Point::ZERO);
+    let mut moves = vec![];
+    // each piece of the shapes (an outline with its holes) carved in full, the bit staying
+    // down from its first cut to its last, then the nearest piece next
+    while !pieces.is_empty() {
+        let away = |marks: &[Point]| {
+            marks
+                .iter()
+                .map(|m| m.distance(from))
+                .fold(f64::INFINITY, f64::min)
+        };
+        let nearest = (0..pieces.len())
+            .min_by(|&i, &k| away(&pieces[i].1).total_cmp(&away(&pieces[k].1)))
+            .expect("pieces are left");
+        let (piece, _) = pieces.swap_remove(nearest);
+        let lines = medial::centre_lines(&piece, CENTRE_SPACING);
+        let runs = carving.runs(&piece, &lines, from);
         if let Some(last) = runs.last().and_then(Run::end) {
             from = last;
         }
-        moves.extend(run_moves(&runs, safe));
-        above = level;
+        let ways = link::Links::new(&piece, &lines, |r| carving.depth_at(r));
+        moves.extend(run_moves(&runs, safe, |a, b| ways.between(a, b)));
     }
     moves
+}
+
+/// A few points round `piece`'s outlines, to find which piece is nearest quickly.
+fn marks(piece: &[Path]) -> Vec<Point> {
+    const MARKS: usize = 16;
+    let points: Vec<Point> = piece.iter().flat_map(cut_points).collect();
+    let every = points.len().div_ceil(MARKS).max(1);
+    points.into_iter().step_by(every).collect()
+}
+
+/// How one toolpath carves each piece of its shapes.
+struct Carving<'a> {
+    p: &'a Params,
+    /// How far the cone reaches sideways for each millimetre down.
+    spread: f64,
+    /// Further in from the edges than this the bottom is cut flat.
+    reach: f64,
+    /// Further in than this the bottom was cleared by end mills.
+    cleared: f64,
+    starts: &'a [Point],
+}
+
+impl Carving<'_> {
+    /// How deep the tip goes `r` from the edges.
+    fn depth_at(&self, r: f64) -> f64 {
+        -(self.p.start_depth + r.min(self.reach) / self.spread)
+    }
+
+    /// The cuts carving `piece` (whose centre lines are `lines`), pass after pass, starting
+    /// nearest `from`.
+    fn runs(&self, piece: &[Path], lines: &[medial::CentreLine], mut from: Point) -> Vec<Run> {
+        let (p, tool, spread) = (self.p, &self.p.tool, self.spread);
+        let widest_shape = lines
+            .iter()
+            .flat_map(|l| l.radii.iter().copied())
+            .fold(0.0, f64::max);
+        let widest = widest_shape.min(self.reach);
+        if widest <= 0.0 {
+            return vec![];
+        }
+        let mut all = vec![];
+        let mut above = -p.start_depth;
+        let levels = tool.pass_depths(p.start_depth + widest / spread);
+        let last_level = levels.last().copied().unwrap_or(above);
+        for level in levels {
+            if level >= above - 1e-9 {
+                continue;
+            }
+            // the centre lines, where they are deeper than the last pass, down to this one
+            let runs = centre_runs(
+                lines,
+                level,
+                |r| self.depth_at(r) < above - 1e-9 && r <= self.cleared,
+                |r| self.depth_at(r),
+            );
+            let mut runs = nearest_first(runs, from);
+            // the floor: where this pass is too deep for the cone to reach the edges
+            let floor_reach = ((-level - p.start_depth) * spread).min(self.reach);
+            // (none where only the centre line itself is that far from the edges)
+            if floor_reach > 1e-6 && floor_reach < widest_shape - CENTRE_SPACING {
+                let floor = polygon::offset_regions(piece, -floor_reach, Corners::Round);
+                let finishing = (level - last_level).abs() < 1e-9;
+                // a pass on the way down only has to leave ridges low enough for the next
+                // pass to take with the rest: a quarter of a pass depth
+                let step = if finishing {
+                    tool.finishing_stepover() * tool.diameter
+                } else {
+                    (tool.pass_depth * spread / 2.0)
+                        .min(tool.diameter / 2.0)
+                        .max(tool.finishing_stepover() * tool.diameter)
+                };
+                let mut rings =
+                    floor_rings(&floor, step, self.cleared - floor_reach, level, self.starts);
+                // from the middle out, the edge of the floor last
+                rings.reverse();
+                runs.extend(rings);
+            }
+            if let Some(last) = runs.last().and_then(Run::end) {
+                from = last;
+            }
+            all.extend(runs);
+            above = level;
+        }
+        all
+    }
 }
 
 /// The stretches of `lines` where `deeper` (given the distance to the edge) holds, one point
@@ -662,8 +736,13 @@ fn nearest_first(mut runs: Vec<Run>, mut from: Point) -> Vec<Run> {
 }
 
 /// The moves cutting `runs` in order: one running on from where the last ended continues
-/// without lifting; otherwise up to `safe`, across, and down.
-fn run_moves(runs: &[Run], safe: f64) -> Vec<Move> {
+/// without lifting, as does one `link` finds a way to (cutting through the points it
+/// gives); otherwise up to `safe`, across, and down.
+fn run_moves(
+    runs: &[Run],
+    safe: f64,
+    link: impl Fn(DVec3, DVec3) -> Option<Vec<DVec3>>,
+) -> Vec<Move> {
     let mut moves: Vec<Move> = vec![];
     let mut at: Option<DVec3> = None;
     for run in runs {
@@ -672,21 +751,28 @@ fn run_moves(runs: &[Run], safe: f64) -> Vec<Move> {
         };
         let joined = at.is_some_and(|a| a.distance(start) < 1e-9);
         if !joined {
-            if at.is_some() {
-                let up = moves.last().expect("a cut came before").to;
+            if let Some(via) = at.and_then(|a| link(a, start)) {
+                moves.extend(via.into_iter().chain([start]).map(|to| Move {
+                    kind: MoveKind::Cut,
+                    to,
+                }));
+            } else {
+                if at.is_some() {
+                    let up = moves.last().expect("a cut came before").to;
+                    moves.push(Move {
+                        kind: MoveKind::Rapid,
+                        to: DVec3::new(up.x, up.y, safe),
+                    });
+                }
                 moves.push(Move {
                     kind: MoveKind::Rapid,
-                    to: DVec3::new(up.x, up.y, safe),
+                    to: DVec3::new(start.x, start.y, safe),
+                });
+                moves.push(Move {
+                    kind: MoveKind::Plunge,
+                    to: start,
                 });
             }
-            moves.push(Move {
-                kind: MoveKind::Rapid,
-                to: DVec3::new(start.x, start.y, safe),
-            });
-            moves.push(Move {
-                kind: MoveKind::Plunge,
-                to: start,
-            });
         }
         let back = run.closed.then_some(start);
         moves.extend(run.points[1..].iter().chain(back.as_ref()).map(|&to| Move {
@@ -1081,6 +1167,76 @@ mod tests {
             m.sweep(w[0].to, w[1].to, &t.tool);
         }
         assert!(air < all * 0.02, "{air} mm of {all} in air");
+    }
+
+    /// A C: a 30 mm square with a 20 x 14 mm notch out of its right side, arms 8 mm wide.
+    fn c_shape() -> Path {
+        Path::polyline(
+            &[
+                Point::new(0.0, 0.0),
+                Point::new(30.0, 0.0),
+                Point::new(30.0, 8.0),
+                Point::new(10.0, 8.0),
+                Point::new(10.0, 22.0),
+                Point::new(30.0, 22.0),
+                Point::new(30.0, 30.0),
+                Point::new(0.0, 30.0),
+            ],
+            true,
+        )
+    }
+
+    #[test]
+    fn each_shape_is_carved_with_one_plunge_and_one_lift() {
+        // the bit stays down between the cuts of a shape, pass after pass, round its bends
+        let mut p = Params::default();
+        p.tool.pass_depth = 1.0;
+        let apart = moved(&rectangle(10.0, 6.0), Point::new(50.0, 0.0));
+        let t = carve(vec![c_shape(), apart], &p);
+        let plunges = t
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Plunge)
+            .count();
+        let lifts = t
+            .moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Rapid && w[1].to.z > w[0].to.z)
+            .count();
+        assert_eq!((plunges, lifts), (2, 2));
+        // the widest circle in the C sits in a back corner, touching the notch's corner
+        let widest = 18.0 - 164.0f64.mul_add(-1.0, 18.0 * 18.0).sqrt();
+        assert!((deepest(&t) + widest).abs() < 0.02, "{}", deepest(&t));
+    }
+
+    #[test]
+    fn staying_down_between_cuts_never_cuts_outside_the_shape() {
+        let mut p = Params::default();
+        p.tool.pass_depth = 1.0;
+        let shape = c_shape();
+        let t = carve(vec![shape.clone()], &p);
+        let job = Job {
+            width: 40.0,
+            height: 40.0,
+            ..Job::default()
+        };
+        let m = carved(&t, &job);
+        let ring = [cut_points(&shape)];
+        let mut edges = ring[0].clone();
+        edges.push(edges[0]);
+        for column in 0..160 {
+            for row in 0..160 {
+                let at = Point::new(f64::from(column) * 0.25, f64::from(row) * 0.25);
+                let edge = polyline_distance(&edges, at);
+                let z = m.at(at).unwrap();
+                if inside(&ring, at) {
+                    // and no deeper than the bit's sides touching the edges
+                    assert!(z >= -edge - 0.1, "{at} cut to {z}, {edge} from the edge");
+                } else if edge > 0.3 {
+                    assert!(z > -0.05, "{at} outside the shape cut to {z}");
+                }
+            }
+        }
     }
 
     #[test]

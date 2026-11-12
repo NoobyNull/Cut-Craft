@@ -54,6 +54,21 @@ pub fn regions(paths: &[Path]) -> Vec<Path> {
     overlay(paths, &[], OverlayRule::Union, FillRule::EvenOdd)
 }
 
+/// [`regions`] (or paths as `regions` gives them) as separate pieces: each outline with the
+/// holes in it, so each can be worked on by itself.
+pub fn pieces(regions: &[Path]) -> Vec<Vec<Path>> {
+    contours(regions)
+        .overlay(
+            &Vec::<Contour>::new(),
+            OverlayRule::Union,
+            FillRule::EvenOdd,
+        )
+        .into_iter()
+        .map(|shape| to_paths(vec![shape]))
+        .filter(|piece| !piece.is_empty())
+        .collect()
+}
+
 /// Grows or shrinks [`regions`]: shrinking pulls outlines in and pushes holes out.
 pub fn offset_regions(regions: &[Path], distance: f64, corners: Corners) -> Vec<Path> {
     let oriented: Vec<Contour> = regions.iter().filter(|p| p.closed).map(contour).collect();
