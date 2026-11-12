@@ -8,8 +8,6 @@
 3d_roughing_toolpath | setting without help: Order
 3d_roughing_toolpath | setting without help: Ramp distance
 3d_roughing_toolpath | setting without help: Roughing Strategy
-add_layer | setting without help: Name
-add_sheet | setting without help: Name
 array_copy_toolpath | setting without help: Columns
 array_copy_toolpath | setting without help: Name
 array_copy_toolpath | setting without help: Rows
@@ -20,44 +18,17 @@ chamfer_toolpath | setting without help: Cut direction
 chamfer_toolpath | setting without help: Name
 chamfer_toolpath | setting without help: Side
 chamfer_toolpath | setting without help: Slope
-component_properties | setting without help: Component
-component_properties | setting without help: Fade ▸ Fade
-component_properties | setting without help: Fade ▸ Percent
-component_properties | setting without help: Name
-component_properties | setting without help: Tilt ▸ Angle
-component_properties | setting without help: Tilt ▸ Tilt
-component_properties | option without help: Appearance = Same as Parent
-component_properties | option without help: Appearance = Solid Color
 copy_toolpath_to_sheet | setting without help: Toolpath
-create_component_from_bitmap | setting without help: Name
-document_variables | setting without help: Variables ▸ Name
-document_variables | setting without help: Variables ▸ Value
 drag_knife_toolpath | setting without help: Name
 drill_bank_toolpath | setting without help: Name
 drilling_toolpath | setting without help: Name
-duplicate_component | setting without help: Component
 duplicate_toolpath | setting without help: Toolpath
-engrave_part_names | option without help: Engrave = Name only
-engrave_part_names | option without help: Engrave = Number only
-extrude_and_weave | setting without help: Height
-extrude_and_weave | setting without help: Name
-extrude_and_weave | setting without help: Z Over
-extrude_and_weave | setting without help: Z Under
 fluting_toolpath | setting without help: Flute type
 fluting_toolpath | setting without help: Name
 fluting_toolpath | setting without help: Ramp type
 fluting_toolpath | setting without help: Tool
-gadget_drill_grid | setting without help: Columns (across)
-gadget_drill_grid | setting without help: Hole diameter
-gadget_drill_grid | setting without help: Rows (up)
-gadget_hole_pattern | setting without help: Hole diameter
-gadget_hole_pattern | setting without help: Number of holes
-group_components | setting without help: Name
-group_properties | setting without help: Name
-group_toolpaths | setting without help: Toolpaths
 inlay_toolpath | setting without help: Inlay type
 inlay_toolpath | setting without help: Name
-insert_level | setting without help: Name
 job_setup | setting without help: Home / Start Position ▸ X
 job_setup | setting without help: Home / Start Position ▸ Y
 job_setup | setting without help: Home / Start Position ▸ Z Gap above Material
@@ -80,8 +51,6 @@ job_setup | option without help: XY Datum Position ▸ Position = Bottom right
 job_setup | option without help: XY Datum Position ▸ Position = Centre
 job_setup | option without help: XY Datum Position ▸ Position = Top left
 job_setup | option without help: XY Datum Position ▸ Position = Top right
-keep_out_zones | setting without help: Action
-keep_out_zones | option without help: Action = Clear Zones
 keyhole_toolpath | setting without help: Direction
 keyhole_toolpath | setting without help: Name
 keyhole_toolpath | setting without help: Slot length
@@ -93,8 +62,6 @@ laser_picture_toolpath | setting without help: Line angle
 laser_picture_toolpath | setting without help: Name
 laser_picture_toolpath | setting without help: Passes
 laser_picture_toolpath | setting without help: Strategy
-level_clipping | setting without help: Action
-level_clipping | option without help: Action = Remove
 material_setup | setting without help: Home / Start Position ▸ X
 material_setup | setting without help: Home / Start Position ▸ Y
 material_setup | setting without help: Home / Start Position ▸ Z Gap above Material
@@ -116,42 +83,9 @@ materials | option without help: Material = MDF
 materials | option without help: Material = Pine
 merged_toolpath | setting without help: Name
 moulding_toolpath | setting without help: Name
-orientate_3d_model | setting without help: Initial Orientation ▸ Rotation about Z Axis
-orientate_3d_model | setting without help: Interactive Rotation ▸ X
-orientate_3d_model | setting without help: Interactive Rotation ▸ Y
-orientate_3d_model | setting without help: Interactive Rotation ▸ Z
-orientate_3d_model | setting without help: Position relative to Modeling Plane ▸ Discard data below zero plane
-orientate_3d_model | option without help: Initial Orientation ▸ Face up = Back
-orientate_3d_model | option without help: Initial Orientation ▸ Face up = Bottom
-orientate_3d_model | option without help: Initial Orientation ▸ Face up = Front
-orientate_3d_model | option without help: Initial Orientation ▸ Face up = Left
-orientate_3d_model | option without help: Initial Orientation ▸ Face up = Right
-orientate_3d_model | option without help: Initial Orientation ▸ Face up = Top
-orientate_3d_model | option without help: Interactive Rotation ▸ Drag turns = X
-orientate_3d_model | option without help: Interactive Rotation ▸ Drag turns = Y
-orientate_3d_model | option without help: Interactive Rotation ▸ Drag turns = Z
-orientate_3d_model | option without help: Model Size ▸ Units = Inches
-orientate_3d_model | option without help: Model Size ▸ Units = Mm
-orientate_3d_model | option without help: Offered = Both
-orientate_3d_model | option without help: Offered = Flat
-orientate_3d_model | option without help: Offered = Full
 photo_vcarve_toolpath | setting without help: Name
 photo_vcarve_toolpath | setting without help: Strategy
 photo_vcarve_toolpath | setting without help: Tool
-plate_production | setting without help: Data ▸ First row is column names
-plate_production | setting without help: Data ▸ Separator
-plate_production | setting without help: Data ▸ Variables
-plate_production | setting without help: Data ▸ Variables ▸ Variable
-plate_production | setting without help: Layout ▸ Bottom margin
-plate_production | setting without help: Layout ▸ Left margin
-plate_production | setting without help: Layout ▸ Right margin
-plate_production | setting without help: Layout ▸ Top margin
-plate_production | setting without help: Number Format ▸ Start
-plate_production | setting without help: Number Format ▸ Step
-plate_production | option without help: Data ▸ Separator = Comma
-plate_production | option without help: Data ▸ Separator = Semicolon
-plate_production | option without help: Data ▸ Separator = Space
-plate_production | option without help: Data ▸ Separator = Tab
 pocket_toolpath | setting without help: Name
 pocket_toolpath | setting without help: Profile pass
 pocket_toolpath | setting without help: Ramp distance
@@ -173,37 +107,17 @@ quick_engrave_toolpath | setting without help: Fill pattern
 quick_engrave_toolpath | setting without help: Name
 quick_engrave_toolpath | setting without help: Strategy
 quick_engrave_toolpath | setting without help: Tool
-relief_from_photo | setting without help: Name
-reorder_component | setting without help: Component
-reorder_component | setting without help: Direction
 reorder_layer | setting without help: Direction
 reorder_layer | setting without help: Layer
 reorder_level | setting without help: Direction
 reorder_toolpath | setting without help: Direction
 reorder_toolpath | setting without help: Toolpath
-replace_below | setting without help: Replace value with
 rounding_toolpath | setting without help: Blank
 rounding_toolpath | setting without help: Method
 rounding_toolpath | setting without help: Name
-sculpt | setting without help: Diameter
-sculpt | option without help: Tool = Deposit
-segment_3d_model | option without help: Cut segments again ▸ Plane square to = X
-segment_3d_model | option without help: Segment orientations ▸ Face up = Bottom
-segment_3d_model | option without help: Segmenting plane square to = X
-segment_3d_model | option without help: Units = Inches
-segment_3d_model | option without help: Units = Mm
-sheet_properties | setting without help: Name
 sketch_carving_toolpath | setting without help: Boundary
 sketch_carving_toolpath | setting without help: Name
 sketch_carving_toolpath | setting without help: Source
-slice | setting without help: Model slicing
-slice | setting without help: Number of slices
-slice | setting without help: Slice thickness
-texture_area | setting without help: Name
-texture_area | option without help: Reflection = Both
-texture_area | option without help: Reflection = Horizontal
-texture_area | option without help: Reflection = None
-texture_area | option without help: Reflection = Vertical
 texture_toolpath | setting without help: Name
 texture_toolpath | setting without help: Tool
 thread_milling_toolpath | setting without help: Cut direction
@@ -245,16 +159,6 @@ toolpath_properties | setting without help: Toolpath
 toolpath_tiling | setting without help: Tile toolpaths
 toolpath_tiling | setting without help: Tiling Options
 toolpath_tiling | setting without help: Tiling Options ▸ Layout
-turn_and_spin | setting without help: Height
-turn_and_spin | setting without help: Name
-turn_and_spin | setting without help: Type of shape
-two_rail_sweep | setting without help: Height
-two_rail_sweep | setting without help: Name
-two_rail_sweep | setting without help: Reverse rail 1 direction
-two_rail_sweep | setting without help: Reverse rail 2 direction
-two_rail_sweep | setting without help: Scale to exact height
-ungroup_merged_toolpath | setting without help: Toolpath
-ungroup_toolpaths | setting without help: Group
 vcarve_engrave_toolpath | setting without help: Name
 vcarve_inlay_toolpath | setting without help: Name
 vcarve_inlay_toolpath | setting without help: Plug boundary

@@ -12,6 +12,7 @@ pub struct SheetProperties;
 pub struct Params {
     /// The sheet's place in the Sheets list, from 0.
     pub sheet: usize,
+    /// What the sheet is called in the Sheets list
     pub name: String,
     /// Shown in the 2D view
     pub visible: bool,

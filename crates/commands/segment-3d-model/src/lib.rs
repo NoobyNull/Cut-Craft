@@ -18,7 +18,9 @@ pub struct Segment3dModel;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Axis {
+    /// Across the model's length: a left and a right segment
     X,
+    /// Across the model's width: a front and a back segment
     Y,
     /// Across the model's height: a top and a bottom segment
     #[default]
@@ -28,8 +30,10 @@ pub enum Axis {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FileUnits {
+    /// The file was drawn in millimetres
     #[default]
     Mm,
+    /// The file was drawn in inches
     Inches,
 }
 
@@ -88,7 +92,7 @@ pub enum Face {
     /// As in the model
     #[default]
     Top,
-    /// Turned over
+    /// Turned over, its underside up
     Bottom,
     /// The side facing -Y turned up
     Front,

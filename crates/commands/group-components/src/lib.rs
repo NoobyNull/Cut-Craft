@@ -12,6 +12,7 @@ pub struct GroupComponents;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the new group is called in the component tree
     pub name: String,
 }
 

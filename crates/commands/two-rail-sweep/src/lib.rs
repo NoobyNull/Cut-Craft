@@ -16,16 +16,21 @@ pub struct TwoRailSweep;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[expect(clippy::struct_excessive_bools, reason = "the form's own check boxes")]
 pub struct Params {
+    /// Run along the first rail from its other end
     #[schemars(title = "Reverse rail 1 direction")]
     pub reverse_rail_1: bool,
+    /// Run along the second rail from its other end
     #[schemars(title = "Reverse rail 2 direction")]
     pub reverse_rail_2: bool,
     /// The cross-section's height grows and shrinks with the gap between the rails
     #[schemars(title = "Scale cross section with width")]
     pub scale_with_width: bool,
+    /// Scale the shape so its highest point is the height
     pub scale_to_exact_height: bool,
+    /// The highest point of the shape, with Scale to exact height
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
+    /// What the new component is called in the component tree
     pub name: String,
     #[schemars(title = "Combine with other components")]
     pub combine: Combine,

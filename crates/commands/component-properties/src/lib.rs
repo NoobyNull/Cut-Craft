@@ -13,7 +13,9 @@ pub struct ComponentProperties;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The component these settings belong to
     pub component: EntityId,
+    /// What the component is called in the component tree
     pub name: String,
     #[schemars(
         title = "Combine Mode",
@@ -50,9 +52,11 @@ pub struct Params {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Appearance {
+    /// Takes the colour of the group or level it is in
     #[default]
     #[schemars(title = "Same as Parent")]
     SameAsParent,
+    /// Shown in its own colour, picked below
     #[schemars(title = "Solid Color")]
     SolidColor,
 }
@@ -76,12 +80,14 @@ fn solid() -> [u8; 3] {
 /// Fades the heights down from the first point toward the second.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Fade {
+    /// Fade the heights down between the two points
     #[schemars(title = "Fade")]
     pub on: bool,
     /// Keeps its height
     pub from: Xy,
     /// Faded down by the percentage
     pub to: Xy,
+    /// How much lower the second point ends up, as a percentage of the height
     #[schemars(extend("x-unit" = "%"))]
     pub percent: f64,
 }
@@ -89,12 +95,14 @@ pub struct Fade {
 /// Tilts the component up about the first point toward the second.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Tilt {
+    /// Tilt the component up between the two points
     #[schemars(title = "Tilt")]
     pub on: bool,
     /// Does not move
     pub pivot: Xy,
     /// Raised by the angle
     pub toward: Xy,
+    /// How steeply it tilts up, in degrees
     #[schemars(extend("x-unit" = "deg"))]
     pub angle: f64,
 }
