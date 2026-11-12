@@ -5,7 +5,9 @@ import { handle } from '../src/index.js';
 import { cleanup } from '../src/store.js';
 
 const TOKEN = 'a-long-admin-token-for-tests';
-const env = (over = {}) => ({ DB: d1('schema.sql'), ADMIN_TOKEN: TOKEN, ...over });
+// These tests are about storage, so the junk guards (format, proof of work) are off here;
+// test/guard.test.js covers them with the production defaults.
+const env = (over = {}) => ({ DB: d1('schema.sql'), ADMIN_TOKEN: TOKEN, POW_BITS: '0', STRICT_LOG: '0', ...over });
 const at = (iso) => new Date(iso);
 let n = 0;
 const report = (over = {}) => ({
