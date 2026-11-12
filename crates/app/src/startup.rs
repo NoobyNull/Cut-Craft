@@ -55,10 +55,12 @@ pub fn print(text: &str) {
     let _ = std::io::stdout().write_all(text.as_bytes());
 }
 
-/// Set once the window is open: from then on a crash is the crash log's to report.
+/// Set once the app is set up in its window: from then on a crash is the crash log's to
+/// report (offered at the next start). Before that, the next start would most likely crash
+/// the same way before it could offer anything.
 static WINDOW_OPEN: AtomicBool = AtomicBool::new(false);
 
-/// The window is up.
+/// The window is up and the app set up in it.
 pub fn window_opened() {
     WINDOW_OPEN.store(true, Ordering::Relaxed);
 }

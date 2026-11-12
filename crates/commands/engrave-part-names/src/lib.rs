@@ -40,7 +40,7 @@ pub struct Params {
     /// What each part is marked with
     #[schemars(title = "Engrave")]
     pub words: Words,
-    /// Single-line fonts (Vectric `.vfont` files in Cut Craft's fonts folder) engrave
+    /// Single-line fonts (Vectric font `.vfont` files in Cut Craft's fonts folder) engrave
     /// fastest; TrueType fonts work too
     #[schemars(schema_with = "font_choices")]
     pub font: String,

@@ -4,10 +4,13 @@
 mod actions;
 mod background;
 mod cutting;
+mod depth;
 mod draw3d;
 mod first_run;
 mod guide;
 mod help;
+#[cfg(test)]
+mod help_coverage;
 mod layouts;
 mod mac;
 mod panels;
@@ -15,10 +18,12 @@ mod passes;
 mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
+mod send;
 mod tabs;
 #[cfg(test)]
 mod tests;
 mod title_bar;
+mod trace_window;
 mod updates;
 mod views;
 
@@ -252,8 +257,13 @@ const RING_SHARE: f64 = 0.6;
 /// Forms whose model is made as soon as they open and then follows their settings.
 const LIVE_FORMS: &[&str] = &["orientate_3d_model", "relief_from_photo"];
 
-const BUILT_INS: [&str; 101] = [
+/// Forms that make many pieces at once and go on remaking them as their settings change
+/// (an ornament, a fill or a relief, and their variations), rather than adding another each time.
+const REMAKE_FORMS: &[&str] = &["embellish", "vector_texture", "decorative_relief"];
+
+const BUILT_INS: [&str; 102] = [
     "try_sample_project",
+    "machine_files",
     "first_run_setup",
     "draw_rectangle_from_center",
     "draw_circle_from_edge",
@@ -388,6 +398,8 @@ pub(super) struct SaveForm {
     add_side: bool,
     /// How tools are changed: a file for each, the tool changer, or a pause.
     changes: files::ToolChanges,
+    /// Save the job sheet (the project's sheet, listing these files) beside the files.
+    job_sheet: bool,
 }
 
 /// What the checks before cutting found in Save Toolpaths' plan, kept while the plan, the
@@ -638,6 +650,82 @@ const DESIGN_PANEL_WIDTHS: f32 = 7.0;
 // ponytail: fixed share until panel widths are saved with the window layout
 const SIDE_PANEL_SHARE: f32 = 1.0 / 3.0;
 
+/// Tool buttons a pinned page always has room for side by side, in a captioned box.
+// ponytail: fixed count until a preferences dialog exists
+const PAGE_BUTTONS: f32 = 5.0;
+/// Inner margin of a captioned box of tools on a page.
+const TOOL_BOX_MARGIN: f32 = 4.0;
+
+/// The narrowest a tool page is, outer edge to outer edge: [`PAGE_BUTTONS`] tool buttons in a
+/// captioned box, inside the page's frame.
+fn least_page_width(style: &egui::Style) -> f32 {
+    let s = &style.spacing;
+    let button = TOOL_ICON_ROWS * s.interact_size.y + 2.0 * s.button_padding.x;
+    let row = PAGE_BUTTONS * button + (PAGE_BUTTONS - 1.0) * s.item_spacing.x;
+    // the box's margins and its 1-point border, as `spread_tools` draws it
+    let boxed = row + 2.0 * TOOL_BOX_MARGIN + 2.0;
+    // room for the frame's border and rounding, so the fifth button never just misses
+    let slack = s.item_spacing.x;
+    boxed + egui::Frame::side_top_panel(style).total_margin().sum().x + slack
+}
+
+/// How wide a side tab strip is, outer edge to outer edge.
+fn side_tabs_width(style: &egui::Style) -> f32 {
+    style.spacing.interact_size.y + 2.0 * style.spacing.item_spacing.y
+}
+
+/// How far the views start below the top of the room the pages share: the central panel's
+/// margin, the top bar and the line under it, as `views` lays them out.
+fn views_top(style: &egui::Style) -> f32 {
+    let s = &style.spacing;
+    let bar = s.interact_size.y + 2.0 * s.button_padding.y;
+    // `ui.separator()`'s own room, and the gap after the bar and after the line
+    let line = 6.0;
+    egui::Frame::central_panel(style).total_margin().top + bar + line + 2.0 * s.item_spacing.y
+}
+
+/// How wide the Design and Toolpaths pages are in `ui`'s room, docked or flown out (see
+/// [`crate::pages::page_width`]). Called with the room between the menu and status bars, before
+/// the side tabs take theirs; the result never depends on what the pages show.
+fn page_width(ui: &egui::Ui) -> f32 {
+    let style = ui.style();
+    let room = ui.available_rect_before_wrap();
+    let between_tabs = room.width() - 2.0 * side_tabs_width(style);
+    crate::pages::page_width(
+        (between_tabs, room.height()),
+        views_top(style),
+        least_page_width(style),
+    )
+}
+
+/// A tool page docked beside the views, drawn by `add`: exactly `width` wide whatever it
+/// shows, so forms and fields sizing themselves to the room can never widen, narrow or
+/// shift it, and it never keeps a width from an earlier run. Returns where it is.
+///
+/// What the page shows is laid out in a child that does not report its size to the panel:
+/// egui moves a right-hand panel's inner edge over by however much its contents overflow,
+/// so a field a few points too wide would otherwise nudge the view every frame it shows.
+fn show_page<R>(
+    panel: egui::Panel,
+    width: f32,
+    ui: &mut egui::Ui,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::Rect {
+    panel
+        .resizable(false)
+        .exact_size(width)
+        .show(ui, |ui| {
+            let room = ui.max_rect();
+            let mut page = ui.new_child(egui::UiBuilder::new().max_rect(room).layout(*ui.layout()));
+            page.shrink_clip_rect(room);
+            add(&mut page);
+            // the page's whole height, as the panel would have taken
+            ui.allocate_rect(room, egui::Sense::hover());
+        })
+        .response
+        .rect
+}
+
 /// A resizable page beside the views: it starts [`DESIGN_PANEL_WIDTHS`] wide and never takes
 /// more than [`SIDE_PANEL_SHARE`] of the window. Forms and frames inside size themselves to the
 /// room they are given, so an unbounded panel could widen a little every frame while the window
@@ -827,6 +915,11 @@ struct OpenForm {
     beyond: Option<std::sync::Arc<Vec<cmd_orientate_3d_model::Seen>>>,
     /// The settings the shape it made was last made with.
     applied: Option<Value>,
+    /// A form that remakes what it made ([`REMAKE_FORMS`]): the history's revision and the selection
+    /// just after its pieces were made, and the settings it was made with. While nothing else
+    /// has been done or picked since, a change of settings takes them back and makes them
+    /// again.
+    remade: Option<(u64, cut_craft_core::selection::Selection, Value)>,
     /// While a value is dragged, the undo depth after its last step and the shape and
     /// settings from before that step: the next step takes it back first.
     dragged: Option<(usize, Option<EntityId>, Option<Value>)>,
@@ -870,6 +963,8 @@ struct CutCraftApp {
     view: View,
     cursor: Option<Point>,
     form: Option<OpenForm>,
+    /// Trace Bitmap's trace window, while its form is open.
+    trace_view: Option<trace_window::TraceView>,
     /// How the 2D view mapped the job last frame.
     view_transform: Option<ViewTransform>,
     /// Where the 2D view was on screen last frame.
@@ -885,6 +980,12 @@ struct CutCraftApp {
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,
+    /// Where the docked Design and Toolpaths pages were drawn last frame, if docked.
+    page_rects: [Option<egui::Rect>; 2],
+    /// Where a flown-out page was drawn last frame, if one was.
+    flyout_rect: Option<egui::Rect>,
+    /// How many tool buttons fit side by side in a captioned box on the last page drawn.
+    buttons_across: std::cell::Cell<f32>,
     /// Find Tool (Ctrl+K): the text typed, while its window is open.
     search: Option<String>,
     /// The browser's tab (`INSPECTOR_TABS`) in the Rail and Ribbon layouts.
@@ -937,6 +1038,10 @@ struct CutCraftApp {
     tools_path: Option<std::path::PathBuf>,
     /// The open Tool Database window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
+    /// Which clearing bit the open Select Tool picks; `None` picks the form's own tool.
+    selecting_clearing: Option<ClearingSlot>,
+    /// A Calculate waiting on the deeper-than-the-material warning.
+    deep_cut: Option<depth::DeepCut>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
@@ -1006,6 +1111,8 @@ struct CutCraftApp {
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.
     save_form: Option<SaveForm>,
+    /// Machine ▸ Machine Files, while it is open.
+    machine_files: Option<send::MachineFiles>,
     /// The checks shown in Save Toolpaths' form.
     save_checks: Option<SaveChecks>,
     /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
@@ -1327,6 +1434,7 @@ fn summary_table(
                 max: None,
                 integer: false,
                 steps: vec![],
+                slider: false,
             },
             section: false,
             icon: None,
@@ -1347,6 +1455,7 @@ fn summary_table(
                 max: None,
                 integer: false,
                 steps: vec![],
+                slider: false,
             },
             section: false,
             icon: None,
@@ -1636,44 +1745,260 @@ fn paint_focus_ring(ctx: &egui::Context) {
     );
 }
 
-/// A toolpath form's tool: picked from the Tool Database (the machine's tool changer's first,
-/// by slot), with Edit… to change it there, and its settings shown read-only. The tool picked
-/// now, and whether Edit… was clicked.
+/// What a toolpath form's Tool section asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ToolAsk {
+    /// Select…: the Tool Database to pick the tool in, opened on this one.
+    Select,
+    /// Edit…: the Tool Database to change this tool in.
+    Edit,
+}
+
+/// A toolpath form's tool, kept short: its name (with its tool changer holder), its size and
+/// pass in one line, Select… to pick it in the Tool Database (where the tool changer's
+/// holders are too, and every setting) and Edit… to change it there. What was asked for.
 fn tool_picker(
     ui: &mut egui::Ui,
     tool: &Value,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
-) -> (Option<String>, bool) {
+) -> Option<ToolAsk> {
     let current = tool["name"].as_str().unwrap_or_default();
-    let mut chosen = holders(ui, "form_tool", current, tools, slots);
-    let edit = ui
-        .horizontal(|ui| {
-            if let Some(name) = tool_menu(ui, "form_tool", current, tools, slots) {
-                chosen = Some(name);
-            }
-            ui.label("Tool database");
-            ui.button("Edit…")
-                .on_hover_hint("Change this tool in the Tool Database")
-                .clicked()
-        })
-        .inner;
-    match serde_json::from_value::<Tool>(tool.clone()) {
-        Ok(tool) => {
+    let picked = serde_json::from_value::<Tool>(tool.clone())
+        .ok()
+        .filter(|_| !current.is_empty());
+    match &picked {
+        Some(tool) => {
             // Aspire's Passes: how many the cut depth takes, as set in Edit Passes
             #[expect(clippy::cast_precision_loss, reason = "a small count")]
             let passes = top["depth"]
                 .as_f64()
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
-            tool_summary(ui, &tool, passes, tools.get(&tool.name).is_some());
+            ui.strong(held_name(current, slots));
+            ui.label(tool_line(tool, passes));
+            if tools.get(current).is_none() {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    "Not in the Tool Database: Select… one, or add it there",
+                );
+            }
         }
-        Err(_) => {
-            ui.weak("Pick a tool from the Tool Database");
+        None => {
+            ui.colored_label(
+                ui.visuals().warn_fg_color,
+                "No tool picked yet: Select… one",
+            );
         }
     }
-    (chosen, edit)
+    ui.horizontal(|ui| {
+        let select = ui
+            .button("Select…")
+            .on_hover_hint(
+                "Pick the bit this toolpath cuts with in the Tool Database: it brings its own \
+                 feeds, speeds and pass depth",
+            )
+            .clicked();
+        let edit = ui
+            .button("Edit…")
+            .on_hover_hint("Change this tool in the Tool Database")
+            .clicked();
+        if select {
+            Some(ToolAsk::Select)
+        } else {
+            edit.then_some(ToolAsk::Edit)
+        }
+    })
+    .inner
+}
+
+/// Which of a form's clearing bits a pick is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ClearingSlot {
+    /// One more.
+    New,
+    /// In place of this one.
+    At(usize),
+}
+
+/// Whether a toolpath form shows Rest Machining: every toolpath that cuts with a tool can
+/// rest machine after the tools that cut before it, except 3D Finishing (its own, as `after`)
+/// and a form with clearing bits, which does that with them (an older job's list still
+/// shows, so it can be changed).
+fn shows_rest(params: &Value) -> bool {
+    params.get("after").is_none()
+        && (params.get("clearance_tools").is_none()
+            || cut_craft_core::rest::Rest::of(params).is_some())
+}
+
+/// What a toolpath form's Clearing section asks for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ClearingAsk {
+    /// Select Tool for a clearing bit.
+    Select(ClearingSlot),
+    /// The Tool Database to change this bit in.
+    Edit(String),
+}
+
+/// A form's clearing bits (`clearance_tools`): off, the form's tool cuts it all; on, bigger
+/// bits cut first, largest first, each picked with Select… in the Tool Database, and the
+/// form's tool cuts only what they left. `finishing_smallest` (Pocket) wants each bigger than
+/// the form's tool; V-Carve's V-bit follows end mills of any size. Whether the list changed,
+/// and what was asked for.
+fn clearing_section(
+    ui: &mut egui::Ui,
+    params: &mut Value,
+    slots: &[Option<String>],
+    finishing_smallest: bool,
+) -> (bool, Option<ClearingAsk>) {
+    if !params["clearance_tools"].is_array() {
+        params["clearance_tools"] = Value::Array(vec![]);
+    }
+    let finishing: Option<Tool> = serde_json::from_value(params["tool"].clone()).ok();
+    let mut list: Vec<Tool> =
+        serde_json::from_value(params["clearance_tools"].clone()).unwrap_or_default();
+    let (mut changed, mut ask) = (false, None);
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        let mut on = !list.is_empty();
+        let (label, hint, about) = if finishing_smallest {
+            (
+                "Clear with bigger bits first",
+                "Bigger bits take out most of the material first, so the Tool above only \
+                 cuts what they could not reach: quicker, and easier on a small bit",
+                "Biggest first. The Tool above finishes: it cuts only what these left.",
+            )
+        } else {
+            (
+                "Clear the flat bottom with end mills first",
+                "End mills clear the flat bottom first, so the V-bit only carves the slopes \
+                 and what they could not reach",
+                "Biggest first. The V-bit finishes: it carves only what these left.",
+            )
+        };
+        if ui.checkbox(&mut on, label).on_hover_hint(hint).changed() {
+            if on {
+                ask = Some(ClearingAsk::Select(ClearingSlot::New));
+            } else {
+                list.clear();
+                changed = true;
+            }
+        }
+        if list.is_empty() {
+            return;
+        }
+        ui.weak(about);
+        let mut remove = None;
+        for (i, tool) in list.iter().enumerate() {
+            ui.push_id(("clearing", i), |ui| {
+                ui.strong(held_name(&tool.name, slots));
+                ui.label(tool_line(tool, None));
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("Select…")
+                        .on_hover_hint("Pick another bit for this in the Tool Database")
+                        .clicked()
+                    {
+                        ask = Some(ClearingAsk::Select(ClearingSlot::At(i)));
+                    }
+                    if ui
+                        .button("Edit…")
+                        .on_hover_hint("Change this bit in the Tool Database")
+                        .clicked()
+                    {
+                        ask = Some(ClearingAsk::Edit(tool.name.clone()));
+                    }
+                    if ui
+                        .small_button("×")
+                        .on_hover_hint("Remove this bit")
+                        .clicked()
+                    {
+                        remove = Some(i);
+                    }
+                });
+            });
+        }
+        if let Some(i) = remove {
+            list.remove(i);
+            changed = true;
+        }
+        if ui
+            .button("Add a smaller clearing bit…")
+            .on_hover_hint(
+                "Another bit, between the ones above and the finishing bit, for corners too \
+                 tight for them",
+            )
+            .clicked()
+        {
+            ask = Some(ClearingAsk::Select(ClearingSlot::New));
+        }
+        if let Some(finishing) = &finishing
+            && let Err(e) =
+                cut_craft_core::rest::check_clearing(finishing, &list, finishing_smallest)
+        {
+            ui.colored_label(ui.visuals().error_fg_color, e.to_string());
+        }
+    });
+    if changed {
+        params["clearance_tools"] = serde_json::to_value(&list).expect("tools serialize");
+    }
+    (changed, ask)
+}
+
+/// `params`' clearing bits with `tool` put `at` its slot, largest first.
+fn put_clearing(params: &mut Value, at: ClearingSlot, tool: &Tool) {
+    let mut list: Vec<Tool> =
+        serde_json::from_value(params["clearance_tools"].clone()).unwrap_or_default();
+    match at {
+        ClearingSlot::At(i) if i < list.len() => list[i] = tool.clone(),
+        _ => list.push(tool.clone()),
+    }
+    list.sort_by(|a, b| b.diameter.total_cmp(&a.diameter));
+    params["clearance_tools"] = serde_json::to_value(&list).expect("tools serialize");
+}
+
+/// The form tool's name as the tool changer has it: `T3  name` when loaded in holder 3.
+fn held_name(name: &str, slots: &[Option<String>]) -> String {
+    match slots.iter().position(|s| s.as_deref() == Some(name)) {
+        Some(i) => format!("T{}  {name}", i + 1),
+        None => name.to_owned(),
+    }
+}
+
+/// A tool in one line for its form: how wide, its angle or tip if it has one, how deep a
+/// pass, and how many passes the cut takes (`passes`, when known). Lengths in the tool's
+/// own units.
+fn tool_line(tool: &Tool, passes: Option<f64>) -> String {
+    use cut_craft_core::toolpath::ToolShape;
+    let length = |mm: f64| match form::shown_in("mm", tool.units) {
+        Some((per, to)) => format!("{} {to}", trimmed(mm / per)),
+        None => format!("{} mm", trimmed(mm)),
+    };
+    let across = length(tool.diameter);
+    let line = match tool.shape {
+        ToolShape::EndMill => format!("{across} end mill"),
+        ToolShape::BallNose => format!("{across} ball nose"),
+        ToolShape::VBit => format!("{}° V-bit, {across} across", trimmed(tool.angle)),
+        ToolShape::RadiusedEndMill => {
+            format!("{across} end mill, {} tip radius", length(tool.tip_radius))
+        }
+        ToolShape::ThreadMill => format!("{across} thread mill"),
+        ToolShape::FormTool => format!("{across} form tool"),
+    };
+    let pass = length(tool.pass_depth);
+    let line = format!("{line}, {pass} a pass");
+    match passes {
+        Some(passes) => {
+            let s = if (passes - 1.0).abs() < f64::EPSILON {
+                ""
+            } else {
+                "es"
+            };
+            format!("{line}, {} pass{s}", trimmed(passes))
+        }
+        None => line,
+    }
 }
 
 /// The tool changer's magazine, when the machine has one: 0 for a bit changed by hand (the
@@ -2205,6 +2530,8 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(
                 eframe::egui_wgpu::WgpuSetupCreateNew {
                     device_descriptor: std::sync::Arc::new(view3d::gpu::device),
+                    // a card that can run the 3D view before OpenGL or software (see `rank`)
+                    native_adapter_selector: Some(std::sync::Arc::new(view3d::gpu::choose_adapter)),
                     ..eframe::egui_wgpu::WgpuSetupCreateNew::without_display_handle()
                 },
             ),
@@ -2219,7 +2546,6 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
         name,
         options,
         Box::new(|cc| {
-            crate::startup::window_opened();
             cc.egui_ctx.set_theme(theme.preference());
             egui_extras::install_image_loaders(&cc.egui_ctx);
             readable(&cc.egui_ctx, text_scale);
@@ -2234,15 +2560,25 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
                     info.driver,
                     rs.device.limits().max_storage_buffer_binding_size / 1_000_000
                 );
-                app.gpu_3d = Some(view3d::gpu::Gpu::new(rs, samples));
-                // the grid kernels (preview, 3D toolpaths) on the same card
-                cut_craft_core::compute::use_compute(Some(std::sync::Arc::new(
-                    crate::compute::GpuCompute::new(rs.device.clone(), rs.queue.clone()),
-                )));
+                let flags = rs.adapter.get_downlevel_capabilities().flags;
+                if view3d::gpu::fits(flags, &rs.device.limits()) {
+                    app.gpu_3d = Some(view3d::gpu::Gpu::new(rs, samples));
+                    // the grid kernels (preview, 3D toolpaths) on the same card
+                    cut_craft_core::compute::use_compute(Some(std::sync::Arc::new(
+                        crate::compute::GpuCompute::new(rs.device.clone(), rs.queue.clone()),
+                    )));
+                } else {
+                    // OpenGL on an older card: no compute shaders or storage buffers
+                    log::warn!(
+                        "GPU can't run the 3D view's shaders: drawing it without them, \
+                         grid work on the processor"
+                    );
+                }
             }
             if let Some(dir) = shots {
                 // what a fresh clone shows: its icons, the starter tools, nothing of the user's
                 app.shots = Some(screenshots::Shots::new(dir));
+                crate::startup::window_opened();
                 return Ok(Box::new(app));
             }
             app.load_tools();
@@ -2262,6 +2598,9 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             }
             app.space_mouse = Some(crate::spacemouse::listen(cc.egui_ctx.clone()));
             app.check_for_updates_at_startup(&cc.egui_ctx);
+            // only now: a panic setting up the app (above) still says why in a message box,
+            // rather than the window never appearing and nothing said
+            crate::startup::window_opened();
             Ok(Box::new(app))
         }),
     )

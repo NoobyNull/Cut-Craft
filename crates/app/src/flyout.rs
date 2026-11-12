@@ -59,6 +59,7 @@ pub const FLYOUTS: &[Flyout] = &[
             "text_on_a_curve",
             "auto_layout_text",
             "convert_text_to_curves",
+            "document_variables",
         ],
     ),
     flyout(
@@ -79,6 +80,8 @@ pub const FLYOUTS: &[Flyout] = &[
     // naming parts, then marking them with their names (cut lists and part labels)
     flyout("Part Names", &["name_part", "engrave_part_names"]),
     flyout("Pictures", &["edit_picture", "crop_bitmap"]),
+    // picture to vectors: with every setting to hand, or in one click
+    flyout("Trace Picture", &["trace_bitmap", "quick_trace"]),
     flyout(
         "Center on the Material",
         &[
@@ -117,6 +120,13 @@ pub const FLYOUTS: &[Flyout] = &[
             "create_shape_angled",
             "create_shape_smooth",
             "create_shape_flat",
+        ],
+    ),
+    flyout(
+        "Clear the Model",
+        &[
+            "reset_inside_selected_vectors",
+            "reset_outside_selected_vectors",
         ],
     ),
 ];
@@ -471,11 +481,12 @@ mod tests {
             .iter()
             .copied()
             .partition(|g| g.name == "Import");
-        assert!(count(&rest) <= 45, "{}", count(&rest));
+        // 46 since the menu-only tools got buttons (#230) alongside Embellish (#236)
+        assert!(count(&rest) <= 46, "{}", count(&rest));
         assert_eq!(count(&import), import[0].tools.len());
-        // the four Create Shape buttons become one
+        // the four Create Shape buttons become one, and the two Reset buttons one
         let modeling: usize = toolbar.modeling_groups.iter().map(|g| g.tools.len()).sum();
-        assert_eq!(count(&toolbar.modeling_groups), modeling - 3);
+        assert_eq!(count(&toolbar.modeling_groups), modeling - 4);
     }
 
     #[test]

@@ -324,13 +324,16 @@ say "not implemented yet".
 - Rest machining for every toolpath (a Rest Machining section in each toolpath form; 3D
   Finishing keeps its own): what the toolpath would leave is simulated, each earlier tool's
   best try at it shows what that tool left, and only the cuts over areas every earlier tool
-  left are kept (minimum detail, overlap). Kept with the toolpath, so recalculating does it
+  left are kept (minimum detail, overlap; a cut counts where the tool's edge is over what was
+  left), each leftover spot finished before the nearest next. Kept with the toolpath, so recalculating does it
   again. The rest grid is a quarter of the tool across [inf].
 - Toolpath menu: Duplicate. Edit Objects: Edit Picture (contrast, brightness, gamma,
   invert, a rectangular or oval border fading to white) and Crop Bitmap.
 - Tool Database: flutes and chip load; Radiused End Mill (toroidal) tools; taper angle, shank
   diameter and flute length (tapered ball noses and flat bottoms are cut with their whole
-  taper, read from .vtdb and Fusion .tools files).
+  taper, read from .vtdb and Fusion .tools files). The editor draws the tool to scale from
+  its sizes, each typed on its dimension line, with neck and shank lengths and a
+  Manufacturer (`{Manufacturer}` in name formats).
   Import of Vectric `.vtdb` tool databases (the vendor libraries for Aspire / VCarve 12.5):
   ball nose, end mill, radiused end mill, V-bit, engraving (as a V-bit), tapered ball nose
   (its tip, taper and shank), drill (as an end mill); one tool per material it has cutting data for.
@@ -385,8 +388,11 @@ say "not implemented yet".
 - Snap grid: while Snap to Grid is on, the 2D view draws its points over the job (thinned
   when zoomed out so they never crowd); Options ▸ Appearance sets the grid colour and point size.
 - Project toolpath onto 3D Model: Profile, Pocket, Fluting, Texture, Photo V-Carve, V-Carve.
-- Clearance Tools on Pocket and V-Carve (the form's "Add a clearance tool from the
-  database", kept largest first): each makes a toolpath of its own, named `[1]`, `[2]`... in
+- Clearing bits on Pocket and V-Carve ("Clear with bigger bits first" / "Clear the flat
+  bottom with end mills first", each bit picked with Select… in the Tool Database, kept
+  largest first; Pocket checks each is bigger than the finishing bit and none the same size;
+  the separate Rest Machining list shows on these forms only for an older job that has one):
+  each makes a toolpath of its own, named `[1]`, `[2]`... in
   cutting order. Pocket's later tools (its own last) cut only what the ones before left
   (rest machining, kept on each so it recalculates alone; a raster only for the first).
   V-Carve's end mills pocket the flat bottom (needs a flat depth); the V-bit then carves the
@@ -459,7 +465,25 @@ say "not implemented yet".
   - Draw Freehand: the whole drag path, smoothed into Béziers within a tolerance.
   - Create Vector Texture: wavy lines at an angle over the selected closed vectors or the
     job, max spacing with variation, wavelength, amplitude, noise and a seed; on the
-    current layer, or (Place Vectors on Layer) on the layer named, made if needed.
+    current layer, or (Place Vectors on Layer) on the layer named, made if needed. Cut Craft
+    adds decorative fills as other styles (Floral, Baroque, Western leaf, Frost, Snowflakes, Fractal,
+    Stones, Ripples, Hammered, Bandanna) with a pattern size, a smallest gap kept between every line
+    and the edge, and New variation; the fill follows the form live once applied (see SPEC,
+    Create Vector Texture: decorative fills).
+  - Embellish: folk-swirl ornament designed for the selected closed vectors rather than cut
+    out of a pattern, read from each shape's distance to its edge: a border band and bead
+    row follow the outline; a shape with n-fold mirror symmetry (a regular polygon, a star,
+    hanging-chain sides) is designed one wedge at a time and mirrored into the rest (corner
+    stems and leaf fans, side sunbursts, a centre rosette, the biggest scrolls that fit);
+    any other shape gets a vine down its middle with curls at its ends and scrolls
+    branching off it, leaf fans in its points and flowers where it is roomiest. Where (Fill
+    / Border / Both), Refinement, Number of objects, Scroll size and Tightness (smallest gap
+    3 to 0.75 mm) are sliders; it makes grouped vectors, a 3D component of Height, or both,
+    with stippled ground if asked, and follows its settings live (one undo).
+    The border can instead be a pattern run round the edge with a whole number of
+    repeats so it closes on itself: Rope (twist angle), Chain (face and edge links), Twist
+    (two plaited strands), Braid (three) or Bead and reel, with Border width, Repeat size,
+    Inset from the edge and optional rails; the ornament inside keeps clear of it.
   - Trim Objects (Edit Objects): the selected vectors are cut where they cross the closed
     vector picked last (with its group) and the pieces outside it, or inside it, cleared;
     the rest are refitted as curves if asked. The boundary stays.
@@ -517,11 +541,16 @@ say "not implemented yet".
   - Not built from these tools' Aspire forms: see each one's section in `re/SPEC.md`.
   - Trace Bitmap: black / white tracing of the chosen bitmap with threshold, trace colour,
     corner fit, noise filter and grouping (dialog 347); or in Colors mode, a colour picture
-    (imported pictures keep their colours) cut down to 2 to 16 colours, numbered from the
-    darkest, the ones listed (or all but the lightest) traced each onto a layer named after
-    it, the palette given in the status. With the form open, a box dragged over the picture
-    is the part traced (drawn dashed) and a click on the picture lets it go; in Colors mode
-    a click picks the colour under it (again to let go). No colour swatches in the form.
+    (imported pictures keep their colours) shown as up to 48 swatches, grouped by colour
+    similarity and by hand (Merge / Separate), each group ticked to trace (to start: all but
+    the background and edge blends) onto a layer named after it. The settings sit in a trace
+    window beside a live preview (Before and after, Result only, Outlines over picture; zoom
+    and pan; Live updates or Update preview; Picture type presets; Reset). With the form
+    open, a box dragged over the picture is the part traced (drawn dashed) and a click on the
+    picture lets it go; in Colors mode a click ticks the colour under it (again to let go).
+    Trace type Outline or Centerline (one line down the middle of each stroke).
+  - Quick Trace: the chosen picture traced in one click with settings picked to suit it; the trace window has a Quick Trace button that fills in the same settings to preview and adjust
+    (its colours, or black and white split at Otsu's threshold).
 - Model ▸ Create Vector Boundary Around Selected Components: the silhouette as closed
   vectors (grouped when several), from the tracing core.
   - Join, Weld, Subtract, Overlap, Move, Rotate, Set Size, Mirror, Offset. Mirror flips about
@@ -698,6 +727,10 @@ say "not implemented yet".
     with the mouse, the per-section Smooth switch.
   - Turn and Spin: an open profile turned round the line between its ends, or spun round
     its left end, optionally scaled to an exact height, with name and combine mode.
+  - Create Decorative Relief (Cut Craft only): the Baroque or Western leaf scrolls of
+    Create Vector Texture raised as one component inside the selected closed vectors or the
+    job: rounded bands, raised eyes, lobed leaves over them, domed flowers; height, pattern
+    size, finishing bit (nothing finer than it), live New variation.
   - Create Texture Area: the chosen component tiled over the selected closed vectors or
     the job, with spacing, alternate shifts and a reflection per tile of each four; the
     tile is hidden. The result is an ordinary component (Aspire's stays re-editable).

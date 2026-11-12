@@ -2,17 +2,17 @@
 //! menus, the start page and the Design and Toolpaths pages.
 
 use super::{
-    APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_PANEL_WIDTHS,
-    DESIGN_TABS, Document, EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key,
-    KeyboardShortcut, LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers,
-    OpenForm, PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, SECTION_PICTURE_ROWS,
+    APP_NAME, Align, BUILT_INS, CONTRIBUTORS, Change, CutCraftApp, DESIGN_TABS, Document,
+    EXPORT_LEVEL, EntityId, History, Icons, Info, JOB_EXTENSION, Key, KeyboardShortcut,
+    LAYOUT_KEYS, LINKS, LIVE_FORMS, Layout, MODEL_IMPORTERS, Menus, Modifiers, OpenForm,
+    PLAYBACK_SPEED, Page, Pages, Point, RECENT_FILE_ICON, REMAKE_FORMS, SECTION_PICTURE_ROWS,
     SELECT_LEVEL, SPLASH_LOGO, SPLASH_SHARE, STARTUP_TASKS, SaveChecks, SaveForm, Screen, Session,
     Shown, TEMPLATE, THIRD_PARTY, TOOL_ICON_ROWS, TOP_BAR_TOGGLES, ToolDatabase, VECTOR_EXPORTERS,
     VECTOR_IMPORTERS, Value, View, WHATS_NEW, brush_dialog, commands, dialog_size, egui,
     file_dialog, file_name, files, form, form_settings_dialog, gui, job_dialog, menu_items,
-    message_dialog, on_the_desktop, rest_section, selector_section, shortcut, side_panel,
-    side_tabs, summary_table, template_dialog, texture_dialog, tool_list, tool_picker,
-    toolpath_template_dialog, view3d,
+    message_dialog, on_the_desktop, page_width, rest_section, selector_section, shortcut,
+    show_page, side_tabs, side_tabs_width, summary_table, template_dialog, texture_dialog,
+    tool_list, tool_picker, toolpath_template_dialog, view3d,
 };
 use crate::options::{CuttingChecks, IntersectionCheck};
 use cut_craft_bug_report::hint::HoverHint;
@@ -67,6 +67,9 @@ impl CutCraftApp {
             inspector_tab: 0,
             rail_group: None,
             rail_pinned: false,
+            page_rects: [None, None],
+            flyout_rect: None,
+            buttons_across: std::cell::Cell::new(0.0),
             ribbon_tab: 0,
             options_path: None,
             words_path: None,
@@ -81,6 +84,7 @@ impl CutCraftApp {
                 post: None,
                 add_side: false,
                 changes: files::ToolChanges::SeparateFiles,
+                job_sheet: false,
             },
             depth_estimate: None,
             busy: None,
@@ -95,6 +99,8 @@ impl CutCraftApp {
             tools: ToolDatabase::starter(),
             tools_path: None,
             tool_manager: None,
+            selecting_clearing: None,
+            deep_cut: None,
             shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
@@ -132,6 +138,7 @@ impl CutCraftApp {
             stl_result: None,
             layers_on_sheet: false,
             save_form: None,
+            machine_files: None,
             save_checks: None,
             before_preview: None,
             picked_nodes: Vec::new(),
@@ -160,6 +167,7 @@ impl CutCraftApp {
             solid_gpu: None,
             model_gpu: None,
             ghost_gpu: None,
+            trace_view: None,
             moved_3d: 0.0,
             pacer: crate::frame_rate::Pacer::default(),
             detail_3d: (crate::options::Detail::default(), false),
@@ -412,6 +420,15 @@ impl CutCraftApp {
                 self.machine_window = Some(cut_craft_machines::MachineManager::new(&self.machines));
             }
             "tool_changer" => self.tool_changer_window = true,
+            "machine_files" => match self.machines.active() {
+                Some(machine) => {
+                    let (name, send_to) = (machine.name.clone(), machine.send_to.clone());
+                    self.open_machine_files(&name, &send_to);
+                }
+                None => self
+                    .status
+                    .set_message("No machine yet: add one in Machine ▸ Machine Configuration"),
+            },
             "add_machine" => {
                 self.machine_window =
                     Some(cut_craft_machines::MachineManager::adding(&self.machines));
@@ -429,21 +446,8 @@ impl CutCraftApp {
                 self.post_window = Some(cut_craft_machines::PostManager::default());
             }
             "tool_database" => {
-                let mut manager = cut_craft_tool_database::Manager::new(&self.tools);
-                // the active machine's tool changer, its tools loaded with the tools
-                manager.changer = self
-                    .machines
-                    .active()
-                    .filter(|m| !m.slots.is_empty())
-                    .map(|m| cut_craft_tool_database::Changer {
-                        machine: m.name.clone(),
-                        slots: m.slots.clone(),
-                    });
-                // tools loaded before slots set their numbers show those numbers now
-                if let Some(changer) = &manager.changer {
-                    manager.draft.number_by_slots(&changer.slots);
-                }
-                self.tool_manager = Some(manager);
+                let manager = cut_craft_tool_database::Manager::new(&self.tools);
+                self.open_tool_manager(manager);
             }
             // the labels' setting is kept with the options, so they stay as left
             "show_keep_out_zone_labels" => {
@@ -1174,6 +1178,7 @@ impl CutCraftApp {
                     post: None,
                     add_side: self.doc.job.double_sided.is_some(),
                     changes: self.default_changes(),
+                    job_sheet: true,
                 });
             }
             _ => unreachable!("not a toolpath action: {id}"),
@@ -1201,45 +1206,141 @@ impl CutCraftApp {
         })
     }
 
-    /// Save Toolpaths' Save: the checks before cutting, a file name, then each file of the
-    /// form's plan through its post (and each tile, when the job is tiled).
+    /// Save Toolpaths' Save: the checks before cutting, a file name (the dialog opening in
+    /// the project's folder in the machine's G-code programs folder, when it has one), then
+    /// each file of the form's plan through its post (and each tile, when the job is tiled),
+    /// with the job sheet beside them when the form says so.
     pub(super) fn save_toolpaths(&mut self, form: &SaveForm) {
-        let post = match self.form_post(form) {
-            Ok(post) => post,
-            Err(e) => return self.status.set_message(&e),
+        let Some((post, told)) = self.ready_to_save(form) else {
+            return;
         };
-        let plan = match self.plan(form, &post) {
-            Ok(plan) => plan,
-            Err(e) => return self.status.set_message(&e),
-        };
-        let found = self.preflight(&plan, form.changes);
-        if let Some(refused) = Self::refused(&found) {
-            return self.status.set_message(&refused);
-        }
-        let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
-        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
-        if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
-            return self.status.set_message("Toolpaths not saved");
-        }
         let extension = post.extension.clone();
         let mut dialog = file_dialog().add_filter(&post.name, &[extension.as_str()]);
-        // a group saves under its own name, as Aspire's does
-        if form.mode == files::SaveMode::Selected
-            && let Some(group) = &self.selected_group
-        {
-            dialog = dialog.set_file_name(format!("{group}.{extension}"));
+        let named = cut_craft_machines::send::safe_name(&self.output_name(form), false);
+        dialog = dialog.set_file_name(format!("{named}.{extension}"));
+        let (key, name) = self.project();
+        let programs = self
+            .machines
+            .active_mut()
+            .and_then(|m| m.send_to.programs_folder(&key, &name));
+        if let Some(folder) = &programs {
+            dialog = dialog.set_directory(folder);
+            self.machines_changed("");
         }
         let Some(path) = dialog.save_file() else {
             return;
         };
+        let path = path.with_extension(&extension);
+        let result = self
+            .write_toolpath_files(form, &post, &path)
+            .and_then(|written| {
+                let done = Self::saved_message(&written, &path);
+                if form.job_sheet {
+                    let folder = path.parent().unwrap_or(std::path::Path::new("."));
+                    let outputs = (written.iter())
+                        .map(|p| (file_name(p), p.is_file()))
+                        .collect();
+                    let sheet = self.job_sheet_with(outputs, folder, &name)?;
+                    return Ok(format!("{done}, with the job sheet {sheet}"));
+                }
+                Ok(done)
+            });
+        self.status
+            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+    }
+
+    /// Save Toolpaths' post and the checks before cutting, asked about when they find
+    /// something (and so may say no): the post and what to add to the message saying what
+    /// was saved; `None` when not saving, the status bar saying why.
+    pub(super) fn ready_to_save(
+        &mut self,
+        form: &SaveForm,
+    ) -> Option<(cut_craft_post::Post, String)> {
+        let post = match self.form_post(form) {
+            Ok(post) => post,
+            Err(e) => {
+                self.status.set_message(&e);
+                return None;
+            }
+        };
+        let plan = match self.plan(form, &post) {
+            Ok(plan) => plan,
+            Err(e) => {
+                self.status.set_message(&e);
+                return None;
+            }
+        };
+        let found = self.preflight(&plan, form.changes);
+        if let Some(refused) = Self::refused(&found) {
+            self.status.set_message(&refused);
+            return None;
+        }
+        let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
+        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
+            self.status.set_message("Toolpaths not saved");
+            return None;
+        }
         let told = if problems.is_empty() || ask {
             String::new()
         } else {
             format!(" (check before cutting: {})", problems.join("; "))
         };
-        let result = self.write_toolpaths(form, &post, &path.with_extension(&extension));
-        self.status
-            .set_message(&result.map_or_else(|e| e, |done| format!("{done}{told}")));
+        Some((post, told))
+    }
+
+    /// The name the form's file is saved under (before its extension): a group's own name,
+    /// as Aspire's, the selected toolpath's when saving only it, else the project's.
+    pub(super) fn output_name(&self, form: &SaveForm) -> String {
+        let selected = (form.mode == files::SaveMode::Selected)
+            .then(|| {
+                self.selected_group.clone().or_else(|| {
+                    let id = self.selected_toolpath?;
+                    Some(self.doc.toolpaths.get(&id)?.name.clone())
+                })
+            })
+            .flatten();
+        selected.unwrap_or_else(|| self.project().1)
+    }
+
+    /// The project, as its folders for G-code are kept: by its file ("" before it is saved)
+    /// and named after it ("Untitled" before it is saved).
+    pub(super) fn project(&self) -> (String, String) {
+        self.session.path.as_deref().map_or_else(
+            || (String::new(), "Untitled".to_owned()),
+            |path| {
+                let kept = crate::clipart::network::kept(path);
+                let name = path
+                    .file_stem()
+                    .map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
+                (kept.display().to_string(), name)
+            },
+        )
+    }
+
+    /// The job sheet for the active sheet and side, its list of toolpath files `outputs`
+    /// (each with whether it is there), saved in `folder` as `<name> job sheet.html`; its
+    /// file name.
+    pub(super) fn job_sheet_with(
+        &mut self,
+        outputs: Vec<(String, bool)>,
+        folder: &std::path::Path,
+        name: &str,
+    ) -> Result<String, String> {
+        let mut setup = self.job_setup();
+        setup.outputs = outputs;
+        let html = fmt_create_job_sheet::sheet_for(&self.doc, &self.options.job_sheet, &setup)
+            .map_err(|e| format!("Toolpaths saved, but not the job sheet: {e}"))?;
+        let sheet =
+            cut_craft_machines::send::safe_file_name(&format!("{name} job sheet.html"), false);
+        let path = folder.join(&sheet);
+        cut_craft_core::file::write_atomic(&path, html.as_bytes()).map_err(|e| {
+            format!(
+                "Toolpaths saved, but not the job sheet: could not write {}: {e}",
+                path.display()
+            )
+        })?;
+        Ok(sheet)
     }
 
     /// Saves the form's plan through `post` at `path`, unless the checks before cutting
@@ -1372,12 +1473,39 @@ impl CutCraftApp {
 
     /// Writes the form's plan through `post` at `path`: each file, or each tile of each file
     /// when the job is tiled, and says what was saved.
+    #[cfg(test)]
     fn write_toolpaths(
         &self,
         form: &SaveForm,
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<String, String> {
+        Ok(Self::saved_message(
+            &self.write_toolpath_files(form, post, path)?,
+            path,
+        ))
+    }
+
+    /// What the status bar says once `written` are saved, beside `path`.
+    fn saved_message(written: &[std::path::PathBuf], path: &std::path::Path) -> String {
+        match written {
+            [one] => format!("Saved toolpaths to {}", one.display()),
+            _ => format!(
+                "Saved {} toolpath files beside {}",
+                written.len(),
+                path.display()
+            ),
+        }
+    }
+
+    /// Writes the form's plan through `post` at `path` (and beside it); the files written,
+    /// in the order they are run.
+    pub(super) fn write_toolpath_files(
+        &self,
+        form: &SaveForm,
+        post: &cut_craft_post::Post,
+        path: &std::path::Path,
+    ) -> Result<Vec<std::path::PathBuf>, String> {
         let plan = self.plan(form, post)?;
         // as Aspire's: a toolpath that cannot abide by the keep-out zones is not saved
         let crossing = self.not_kept_out(&plan);
@@ -1401,26 +1529,24 @@ impl CutCraftApp {
         let slots = self.slots();
         let per_tool = Self::split_for(form, post);
         let parts = files::save_files(post, &thinned, &plan, path, side, per_tool)?;
+        let mut written = vec![];
         for (path, part) in &parts {
-            match self.doc.tiling {
-                // one file per tile, each tile moved to the job's corner
-                Some(tiling) => {
-                    let tiles = tiling.tiles(self.doc.job.area());
-                    for (n, &tile) in tiles.iter().enumerate() {
-                        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-                        let extension = path.extension().unwrap_or_default().to_string_lossy();
-                        let named =
-                            path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
-                        files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
-                    }
+            // one file per tile, each tile moved to the job's corner
+            if let Some(tiling) = self.doc.tiling {
+                let tiles = tiling.tiles(self.doc.job.area());
+                for (n, &tile) in tiles.iter().enumerate() {
+                    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+                    let extension = path.extension().unwrap_or_default().to_string_lossy();
+                    let named = path.with_file_name(format!("{stem}_tile{}.{extension}", n + 1));
+                    files::save_through(post, &slots, &tiling.tiled(part, tile), &named, job)?;
+                    written.push(named);
                 }
-                None => files::save_through(post, &slots, part, path, job)?,
+            } else {
+                files::save_through(post, &slots, part, path, job)?;
+                written.push(path.clone());
             }
         }
-        Ok(match parts.len() {
-            1 => format!("Saved toolpaths to {}", parts[0].0.display()),
-            n => format!("Saved {n} toolpath files beside {}", path.display()),
-        })
+        Ok(written)
     }
 
     /// The post toolpaths are saved through: the active machine's default when it suits the
@@ -1610,6 +1736,26 @@ impl CutCraftApp {
                 MachineOutcome::ManagePosts => {
                     self.post_window = Some(cut_craft_machines::PostManager::default());
                 }
+                MachineOutcome::PickFolder(which) => {
+                    if let Some(folder) = file_dialog().pick_folder()
+                        && let Some(machine) =
+                            (self.machine_window.as_mut()).and_then(|w| w.draft.active_mut())
+                    {
+                        let kept = crate::clipart::network::kept(&folder).display().to_string();
+                        match which {
+                            cut_craft_machines::FolderFor::Programs => {
+                                machine.send_to.programs = kept;
+                            }
+                            cut_craft_machines::FolderFor::Machine => machine.send_to.folder = kept,
+                        }
+                    }
+                }
+                MachineOutcome::ManageFiles => {
+                    if let Some(machine) = draft.active() {
+                        let (name, send_to) = (machine.name.clone(), machine.send_to.clone());
+                        self.open_machine_files(&name, &send_to);
+                    }
+                }
             }
         }
         if let Some(outcome) = post {
@@ -1683,7 +1829,7 @@ impl CutCraftApp {
             form::fields(&cmd.schema()),
             cmd.initial_params(&self.doc),
         );
-        // Orientate 3D Model offers what Options ▸ Importing Models says; one kind alone
+        // Orientate 3D Model offers what Options ▸ Importing says; one kind alone
         // is the kind, with no choice shown
         if cmd.id() == "orientate_3d_model" {
             let offered = match self.options.import.model_types {
@@ -1730,6 +1876,7 @@ impl CutCraftApp {
                 model_whole: true,
                 beyond: None,
                 applied: None,
+                remade: None,
                 undo_from: self.history.undo_depth(),
                 way: crate::flyout::DragWay::AsIs,
             });
@@ -2397,6 +2544,9 @@ impl CutCraftApp {
             self.edit_in_background(id, toolpath, params);
             return Ok(());
         }
+        if REMAKE_FORMS.contains(&id) {
+            return self.remake(id, params);
+        }
         let before = self.entity_ids();
         let same = self.form.as_ref().and_then(|f| f.applied.as_ref()) == Some(params);
         match self.drawn_shape() {
@@ -2413,6 +2563,34 @@ impl CutCraftApp {
             form.applied = form.drawn.map(|_| params.clone());
         }
         Ok(())
+    }
+
+    /// A remaking form's Apply: its pieces made again with `params` in place of the ones it
+    /// last made, while that is still the last thing done (one undo); else a new one.
+    pub(super) fn remake(&mut self, id: &str, params: &Value) -> Result<(), String> {
+        if let Some(applied) = self.remade_last() {
+            if applied == *params {
+                return Ok(());
+            }
+            self.history.undo(&mut self.doc);
+        }
+        if let Some(form) = &mut self.form {
+            form.remade = None;
+        }
+        self.apply(id, params)?;
+        let after = (self.history.revision(), self.doc.selection.clone());
+        if let Some(form) = &mut self.form {
+            form.remade = Some((after.0, after.1, params.clone()));
+        }
+        Ok(())
+    }
+
+    /// The settings the open remaking form last made its pieces with, while nothing has been done or picked
+    /// since.
+    pub(super) fn remade_last(&self) -> Option<Value> {
+        let (revision, selection, applied) = self.form.as_ref()?.remade.as_ref()?;
+        (self.history.revision() == *revision && self.doc.selection == *selection)
+            .then(|| applied.clone())
     }
 
     /// Every vector and component, to tell what a command made.
@@ -2446,6 +2624,11 @@ impl CutCraftApp {
         }
         form.dirty = false;
         let dragged = form.dragged.take();
+        // a remaking form's pieces follow its settings once made, a drag only remaking it (one undo)
+        if self.remade_last().is_some() {
+            self.apply_live();
+            return;
+        }
         if self.drawn_shape().is_none() {
             return;
         }
@@ -2481,7 +2664,7 @@ impl CutCraftApp {
         const SIZES: [&str; 3] = ["x", "y", "z"];
         let Some(form) = &mut self.form else { return };
         let (id, mut params) = (form.id, form.params.clone());
-        let sized = params.get("size").is_some();
+        let sized = params["size"].is_object();
         if sized {
             let lock = params["size"]["lock_ratio"].as_bool().unwrap_or(false);
             for (i, key) in SIZES.iter().enumerate() {
@@ -3569,28 +3752,37 @@ impl CutCraftApp {
     pub(super) fn job_pages(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         let style = ctx.global_style();
-        let (row, margin) = (style.spacing.interact_size.y, style.spacing.item_spacing.y);
+        // from the window's room alone, before anything is drawn in it
+        let width = page_width(ui);
+        let margin = style.spacing.item_spacing.y;
         let strip = || egui::Frame::side_top_panel(&style).inner_margin(margin);
         let left_tabs = egui::Panel::left("design_tabs")
             .resizable(false)
-            .exact_size(row + 2.0 * margin)
+            .exact_size(side_tabs_width(&style))
             .frame(strip())
             .show(ui, |ui| self.design_tabs(ui))
             .response
             .rect;
         let right_tabs = egui::Panel::right("toolpath_tabs")
             .resizable(false)
-            .exact_size(row + 2.0 * margin)
+            .exact_size(side_tabs_width(&style))
             .frame(strip())
             .show(ui, |ui| self.toolpath_tabs(ui))
             .response
             .rect;
+        self.page_rects = [None, None];
+        self.flyout_rect = None;
         if self.pages.shown(Page::Design) == Shown::Docked {
-            side_panel(egui::Panel::left("design_panel"), ctx).show(ui, |ui| self.design_page(ui));
+            let rect = show_page(egui::Panel::left("design_panel"), width, ui, |ui| {
+                self.design_page(ui);
+            });
+            self.page_rects[0] = Some(rect);
         }
         if self.pages.shown(Page::Toolpaths) == Shown::Docked {
-            side_panel(egui::Panel::right("toolpaths_panel"), ctx)
-                .show(ui, |ui| self.toolpaths_page(ui));
+            let rect = show_page(egui::Panel::right("toolpaths_panel"), width, ui, |ui| {
+                self.toolpaths_page(ui);
+            });
+            self.page_rects[1] = Some(rect);
         }
         let room = ui.available_rect_before_wrap();
         // a click on the view puts a flown-out page away, unless its form is open
@@ -3604,7 +3796,8 @@ impl CutCraftApp {
             if self.pages.shown(page) != Shown::Flyout {
                 continue;
             }
-            let out = self.flyout(ctx, page, room);
+            let out = self.flyout(ctx, page, room, width);
+            self.flyout_rect = Some(out);
             let form_here = self.form.as_ref().is_some_and(|f| f.page == page);
             let on_view = |at: egui::Pos2| {
                 room.contains(at)
@@ -3731,19 +3924,21 @@ impl CutCraftApp {
         }
     }
 
-    /// An auto-hidden page flown out over the view from its side; returns where it is.
+    /// An auto-hidden page flown out over the view from its side, `outer` wide as a docked
+    /// page is; returns where it is.
     pub(super) fn flyout(
         &mut self,
         ctx: &egui::Context,
         page: Page,
         room: egui::Rect,
+        outer: f32,
     ) -> egui::Rect {
-        let width = DESIGN_PANEL_WIDTHS * ctx.global_style().spacing.interact_size.x;
         let frame = egui::Frame::side_top_panel(&ctx.global_style());
-        let height = room.height() - frame.inner_margin.sum().y - frame.outer_margin.sum().y;
+        let margins = frame.total_margin().sum();
+        let (width, height) = (outer - margins.x, room.height() - margins.y);
         let left = match page {
             Page::Design => room.left(),
-            Page::Toolpaths => room.right() - width - frame.inner_margin.sum().x,
+            Page::Toolpaths => room.right() - outer,
         };
         egui::Area::new(egui::Id::unique(("flyout", page)))
             .fixed_pos(egui::pos2(left, room.top()))
@@ -3752,9 +3947,14 @@ impl CutCraftApp {
                 frame.show(ui, |ui| {
                     ui.set_width(width);
                     ui.set_height(height);
+                    // laid out apart, so contents asking for more room never widen it
+                    let room =
+                        egui::Rect::from_min_size(ui.cursor().min, egui::vec2(width, height));
+                    let mut inside = ui.new_child(egui::UiBuilder::new().max_rect(room));
+                    inside.shrink_clip_rect(room);
                     match page {
-                        Page::Design => self.design_page(ui),
-                        Page::Toolpaths => self.toolpaths_page(ui),
+                        Page::Design => self.design_page(&mut inside),
+                        Page::Toolpaths => self.toolpaths_page(&mut inside),
                     }
                 });
             })
@@ -3834,14 +4034,7 @@ impl CutCraftApp {
             (true, _, true) => self.job_setup_cancel(),
             (false, true, _) => {
                 let (id, params) = (open.id, open.params.clone());
-                // a job that goes on in the background puts what goes wrong on the form
-                if let Some(open) = &mut self.form {
-                    open.error = None;
-                }
-                let result = self.apply_form(id, &params);
-                if let (Err(why), Some(open)) = (result, &mut self.form) {
-                    open.error = Some(why);
-                }
+                self.calculate_checked(id, &params);
             }
             (false, _, true) => {
                 let page = open.page;
@@ -4000,24 +4193,31 @@ impl CutCraftApp {
         };
         let units = form::units_chosen(&open.params).unwrap_or(self.doc.job.units);
         // the tool block, where the form has its tool: what was picked, and Edit…
-        let asked = std::cell::RefCell::new((None, false));
+        let asked = std::cell::Cell::new(None);
         // a tool in a list whose Edit… was clicked
         let edit_listed = std::cell::RefCell::new(None);
         let listed = std::cell::Cell::new(false);
         let tools = &self.tools;
         let layers: Vec<String> = self.doc.layers.iter().map(|l| l.name.clone()).collect();
+        let clearing_ask = std::cell::RefCell::new(None);
+        let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
+            if key == "clearance_tools" {
+                let (changed, ask) =
+                    super::clearing_section(ui, params, &slots, finishing_smallest);
+                listed.set(listed.get() | changed);
+                if ask.is_some() {
+                    *clearing_ask.borrow_mut() = ask;
+                }
+                return;
+            }
             if key != "tool" {
                 // a list of tools, each picked as the form's own tool is
                 ui.group(|ui| {
                     ui.set_width(ui.available_width());
-                    ui.strong(match key {
-                        "clearance_tools" => "Clearance Tools",
-                        _ => "Tools",
-                    });
-                    let largest_first = key == "clearance_tools";
+                    ui.strong("Tools");
                     let (changed, edit) =
-                        tool_list(ui, key, &mut params[key], tools, &slots, largest_first);
+                        tool_list(ui, key, &mut params[key], tools, &slots, false);
                     listed.set(listed.get() | changed);
                     if edit.is_some() {
                         *edit_listed.borrow_mut() = edit;
@@ -4028,12 +4228,10 @@ impl CutCraftApp {
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong("Tool");
-                *asked.borrow_mut() = tool_picker(ui, &params["tool"], params, tools, &slots);
+                asked.set(tool_picker(ui, &params["tool"], params, tools, &slots));
                 listed.set(listed.get() | super::passes::edit_passes(ui, params, units));
             });
-            // every toolpath that cuts with a tool can rest machine after the tools that cut
-            // before it (3D Finishing has its own, as `after`)
-            if params.get("after").is_none()
+            if super::shows_rest(params)
                 && let Some(edit) = rest_section(ui, params, tools, &slots)
             {
                 *edit_listed.borrow_mut() = Some(edit);
@@ -4047,6 +4245,7 @@ impl CutCraftApp {
                 .selection
                 .iter()
                 .any(|id| self.doc.vectors.get(id).is_some_and(|v| v.closed)),
+            units,
         };
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
@@ -4059,24 +4258,49 @@ impl CutCraftApp {
             group_end: Some(&group_end),
         };
         let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
-        open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
+        // Trace Bitmap's settings are in its trace window, beside the preview
+        if open.id != "trace_bitmap" {
+            open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
+        }
         open.dirty |= listed.get();
         let id = open.id;
-        let (chosen, edit_tool) = asked.into_inner();
         let edit_listed = edit_listed.into_inner();
         self.form_extras(ui, id);
-        if let Some(name) = chosen {
-            self.choose_tool(&name);
-        }
-        if edit_tool {
+        if let Some(ask) = asked.get() {
             let name = self
                 .form
                 .as_ref()
                 .and_then(|f| f.params["tool"]["name"].as_str().map(str::to_owned));
-            self.edit_tool(ui.ctx(), name);
+            match ask {
+                super::ToolAsk::Select => self.select_tool(name.as_deref().unwrap_or_default()),
+                super::ToolAsk::Edit => self.edit_tool(ui.ctx(), name),
+            }
         }
         if edit_listed.is_some() {
             self.edit_tool(ui.ctx(), edit_listed);
+        }
+        if let Some(ask) = clearing_ask.into_inner() {
+            self.clearing_asked(ui.ctx(), ask);
+        }
+    }
+
+    /// The Clearing section's Select… or Edit…: the Tool Database, to pick a clearing bit in
+    /// or change one.
+    fn clearing_asked(&mut self, ctx: &egui::Context, ask: super::ClearingAsk) {
+        match ask {
+            super::ClearingAsk::Select(at) => {
+                let current = match at {
+                    super::ClearingSlot::At(i) => self.form.as_ref().and_then(|form| {
+                        form.params["clearance_tools"][i]["name"]
+                            .as_str()
+                            .map(str::to_owned)
+                    }),
+                    super::ClearingSlot::New => None,
+                };
+                self.select_tool(&current.unwrap_or_default());
+                self.selecting_clearing = Some(at);
+            }
+            super::ClearingAsk::Edit(name) => self.edit_tool(ctx, Some(name)),
         }
     }
 
@@ -4148,7 +4372,11 @@ impl CutCraftApp {
             },
             "draw_text" => self.spelling(ui),
             "relief_from_photo" => self.depth_section(ui),
-            "profile_toolpath" => self.edit_tabs(ui),
+            "profile_toolpath" => {
+                self.edit_tabs(ui);
+                self.deep_cut_warning(ui.ctx());
+            }
+            "trace_bitmap" => self.trace_form(ui),
             "sculpt" => {
                 let (load, round) = ui
                     .horizontal(|ui| {
@@ -4370,6 +4598,45 @@ impl CutCraftApp {
         }
     }
 
+    /// The Tool Database window, `manager`, with the active machine's tool changer, its
+    /// tools loaded with the tools.
+    pub(super) fn open_tool_manager(&mut self, mut manager: cut_craft_tool_database::Manager) {
+        manager.changer = self
+            .machines
+            .active()
+            .filter(|m| !m.slots.is_empty())
+            .map(|m| cut_craft_tool_database::Changer {
+                machine: m.name.clone(),
+                slots: m.slots.clone(),
+            });
+        // tools loaded before slots set their numbers show those numbers now
+        if let Some(changer) = &manager.changer {
+            manager.draft.number_by_slots(&changer.slots);
+        }
+        self.tool_manager = Some(manager);
+    }
+
+    /// A toolpath form's Select…: the Tool Database as Select Tool, on `current`; its Select
+    /// gives the form the tool shown, with its own feeds, speeds and pass depth.
+    pub(super) fn select_tool(&mut self, current: &str) {
+        let manager = cut_craft_tool_database::Manager::selecting(&self.tools, current);
+        self.open_tool_manager(manager);
+        self.selecting_clearing = None;
+    }
+
+    /// Select Tool's Select: `name` as the clearing bit it was opened for, or else as the
+    /// open form's tool.
+    pub(super) fn selected_tool(&mut self, name: &str) {
+        match self.selecting_clearing.take() {
+            Some(at) => {
+                if let (Some(form), Some(tool)) = (&mut self.form, self.tools.pick(name)) {
+                    super::put_clearing(&mut form.params, at, &tool);
+                }
+            }
+            None => self.choose_tool(name),
+        }
+    }
+
     /// The Tool Database, opened on the open form's tool; saving it updates the form.
     pub(super) fn edit_tool(&mut self, ctx: &egui::Context, name: Option<String>) {
         self.invoke(ctx, "tool_database");
@@ -4390,6 +4657,20 @@ impl CutCraftApp {
             self.choose_tool(&name);
             if let Some(form) = &mut self.form {
                 form.dirty = true;
+            }
+        }
+        // clearing bits too, with what the database has for them now
+        if let Some(form) = &mut self.form
+            && let Some(list) = form
+                .params
+                .get_mut("clearance_tools")
+                .and_then(Value::as_array_mut)
+        {
+            for item in list {
+                let name = item["name"].as_str().unwrap_or_default().to_owned();
+                if let Some(tool) = self.tools.pick(&name) {
+                    *item = serde_json::to_value(tool).expect("tools serialize");
+                }
             }
         }
     }

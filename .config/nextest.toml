@@ -1,0 +1,8 @@
+# The help coverage check is its own suite: the ordinary run (CI's check jobs, the pre-commit
+# hook) leaves it out, and `cargo nextest run --profile help` runs only it, as the Help coverage
+# workflow does. See crates/app/src/app/help_coverage.rs.
+[profile.default]
+default-filter = "not test(=app::help_coverage::coverage::every_tool_has_help)"
+
+[profile.help]
+default-filter = "test(/^app::help_coverage::/)"

@@ -49,6 +49,7 @@ fmt-export-as-3d-clipart = { path = "../formats/export-as-3d-clipart" }
 fmt-import-crv3d = { path = "../formats/import-crv3d" }
 fmt-export-as-grayscale-bitmap = { path = "../formats/export-as-grayscale-bitmap" }
 # Commands: one line per crate in crates/commands, registered in src/commands.rs
+cmd-quick-trace = { path = "../commands/quick-trace" }
 cmd-import-toolpaths = { path = "../commands/import-toolpaths" }
 cmd-engrave-part-names = { path = "../commands/engrave-part-names" }
 cmd-name-part = { path = "../commands/name-part" }
@@ -105,6 +106,8 @@ cmd-vector-selector = { path = "../commands/vector-selector" }
 cmd-draw-curve = { path = "../commands/draw-curve" }
 cmd-draw-freehand = { path = "../commands/draw-freehand" }
 cmd-vector-texture = { path = "../commands/vector-texture" }
+cmd-decorative-relief = { path = "../commands/decorative-relief" }
+cmd-embellish = { path = "../commands/embellish" }
 cmd-interactive-vector-trim = { path = "../commands/interactive-vector-trim" }
 cmd-close-with-line = { path = "../commands/close-with-line" }
 cmd-reverse-direction = { path = "../commands/reverse-direction" }

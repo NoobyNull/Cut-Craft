@@ -4,7 +4,8 @@
 //! larger clearance tool can rough it first in levels, leaving an allowance, its own toolpath.
 
 use cut_craft_core::document::Document;
-use cut_craft_core::geometry::{Path, Point};
+use cut_craft_core::entry::Ways;
+use cut_craft_core::geometry::{Path, Point, winding};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::polygon::{self, Corners};
 use cut_craft_core::toolpath::{Move, Tool, ToolDatabase, ToolShape, cut_points, follow, made_by};
@@ -13,6 +14,31 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub struct MouldingToolpath;
+
+/// Which way the tool travels along the rails. The profile hangs outside a closed rail and on
+/// the right of an open one, so on an open rail climb runs back against the rail's direction.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CutDirection {
+    /// Clockwise round a closed rail: usually the cleaner finish, the usual choice on a CNC
+    #[default]
+    #[schemars(title = "Climb (clockwise)")]
+    Climb,
+    /// Anticlockwise round a closed rail, as you would push a hand router: gentler on a
+    /// light machine or a large form tool, sometimes rougher in the finish
+    #[schemars(title = "Conventional (anticlockwise)")]
+    Conventional,
+}
+
+/// Mouldings saved before the cut direction could be chosen went anticlockwise.
+fn conventional() -> CutDirection {
+    CutDirection::Conventional
+}
+
+/// Mouldings saved before then went back and forth along an open rail.
+fn both_ways() -> Ways {
+    Ways::Both
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[expect(clippy::struct_excessive_bools, reason = "one tick box per option")]
@@ -27,6 +53,27 @@ pub struct Params {
     pub boundary_offset: f64,
     /// Usually a ball nose; its stepover spaces the passes
     pub tool: Tool,
+    /// Which way the passes go round the rails: climb (clockwise) or conventional
+    /// (anticlockwise), for any bit, a custom form tool too
+    #[serde(default = "conventional")]
+    #[schemars(extend(
+        "x-group" = "Cut Direction",
+        "x-widget" = "named-icons",
+        "x-icon" = "toolpaths/cut_{}_outside.png"
+    ))]
+    pub cut_direction: CutDirection,
+    /// Every pass the cut direction's way, or each pass back the way the last came (quicker
+    /// along an open rail, but half the passes cut the other way)
+    #[serde(default = "both_ways")]
+    #[schemars(
+        title = "Passes",
+        extend(
+            "x-group" = "Cut Direction",
+            "x-widget" = "named-icons",
+            "x-icon" = "toolpaths/passes_{}.png"
+        )
+    )]
+    pub ways: Ways,
     /// Space the passes by the stepover along the profile's surface, so they come closer
     /// together where it is steep
     #[serde(default)]
@@ -64,6 +111,8 @@ impl Default for Params {
                 .into_iter()
                 .find(|t| t.shape == ToolShape::BallNose)
                 .expect("the starter tools include a ball nose"),
+            cut_direction: CutDirection::Climb,
+            ways: Ways::One,
             vary_stepover: false,
             clearance_tools: vec![],
             machining_allowance: 0.0,
@@ -188,6 +237,8 @@ impl Command for MouldingToolpath {
                 Corners::Round
             },
             safe: doc.job.clearance,
+            direction: p.cut_direction,
+            ways: p.ways,
         };
         let vectors: Vec<_> = std::iter::once(profile_id)
             .chain(ids.iter().copied())
@@ -333,10 +384,13 @@ struct Sweep<'a> {
     rails: &'a [&'a Path],
     corners: Corners,
     safe: f64,
+    direction: CutDirection,
+    ways: Ways,
 }
 
 impl Sweep<'_> {
-    /// A pass along every rail at each (distance across, height), in order.
+    /// A pass along every rail at each (distance across, height), in order, each going the
+    /// cut direction's way (or, both ways, every other one back).
     fn moves(&self, levels: &[(f64, f64)]) -> Vec<Move> {
         let mut moves = vec![];
         for rail in self.rails {
@@ -359,9 +413,18 @@ impl Sweep<'_> {
                 } else {
                     vec![shift_right(&cut_points(rail), h)]
                 };
+                // the passes taking turns go back the other way every other pass
+                let back = self.ways == Ways::Both && pass % 2 == 1;
+                let climb = self.direction == CutDirection::Climb;
                 for mut line in lines {
-                    // back and forth along an open rail
-                    if !rail.closed && pass % 2 == 1 {
+                    // as drawn, the profile hangs on the right of an open rail; climb runs
+                    // clockwise round a closed one, with the profile outside on its left
+                    let reverse = if rail.closed {
+                        (winding(&line) < 0.0) != climb
+                    } else {
+                        climb
+                    };
+                    if reverse != back {
                         line.reverse();
                     }
                     let cut: Vec<DVec3> = line.iter().map(|q| q.extend(z)).collect();
@@ -561,10 +624,150 @@ mod tests {
         );
     }
 
+    /// Where each pass along an open rail from x 0 to 100 starts, in order.
+    fn open_rail_starts(p: &Params) -> Vec<f64> {
+        let rail = Path::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
+        moulding(rail, p)
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Plunge)
+            .map(|m| m.to.x)
+            .collect()
+    }
+
+    /// The way round each pass of a toolpath goes: positive anticlockwise.
+    fn windings(t: &Toolpath) -> Vec<f64> {
+        let mut windings = vec![];
+        let mut pass: Vec<Point> = vec![];
+        let mut done = |pass: &mut Vec<Point>| {
+            if pass.len() > 2 {
+                windings.push(cut_craft_core::geometry::winding(pass));
+            }
+            pass.clear();
+        };
+        for m in &t.moves {
+            match m.kind {
+                MoveKind::Plunge => pass = vec![m.to.truncate()],
+                MoveKind::Cut => pass.push(m.to.truncate()),
+                MoveKind::Rapid => done(&mut pass),
+            }
+        }
+        done(&mut pass);
+        windings
+    }
+
+    #[test]
+    fn climb_goes_clockwise_round_a_closed_rail_and_conventional_anticlockwise() {
+        let anticlockwise = square(20.0, 20.0, 40.0);
+        let clockwise = anticlockwise.reversed();
+        for rail in [anticlockwise, clockwise] {
+            for (direction, sign) in [
+                (CutDirection::Climb, -1.0),
+                (CutDirection::Conventional, 1.0),
+            ] {
+                let p = Params {
+                    cut_direction: direction,
+                    ..end_mill()
+                };
+                let windings = windings(&moulding(rail.clone(), &p));
+                assert!(windings.len() > 2, "{windings:?}");
+                assert!(
+                    windings.iter().all(|w| w * sign > 0.0),
+                    "{direction:?}: {windings:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_clearance_tool_cuts_the_same_way_round() {
+        let p = Params {
+            tool: mill(2.0),
+            clearance_tools: vec![mill(4.0)],
+            cut_direction: CutDirection::Climb,
+            ..Params::default()
+        };
+        let mut doc = cut_craft_core::testing::document_with(vec![
+            square(20.0, 20.0, 40.0),
+            stepped_profile(),
+        ]);
+        doc.apply(&MouldingToolpath::run(&doc, &p).unwrap())
+            .unwrap();
+        assert_eq!(doc.toolpaths.len(), 2);
+        for t in doc.toolpaths.values() {
+            let windings = windings(t);
+            assert!(!windings.is_empty(), "{}", t.name);
+            assert!(
+                windings.iter().all(|&w| w < 0.0),
+                "{}: {windings:?}",
+                t.name
+            );
+        }
+    }
+
+    #[test]
+    fn along_an_open_rail_conventional_follows_it_and_climb_comes_back() {
+        // the profile hangs on the rail's right, as outside an anticlockwise closed rail
+        let single = |cut_direction| Params {
+            cut_direction,
+            ways: Ways::One,
+            ..end_mill()
+        };
+        let along = open_rail_starts(&single(CutDirection::Conventional));
+        assert!(
+            along.len() > 2 && along.iter().all(|&x| x == 0.0),
+            "{along:?}"
+        );
+        let back = open_rail_starts(&single(CutDirection::Climb));
+        assert!(
+            back.len() > 2 && back.iter().all(|&x| x == 100.0),
+            "{back:?}"
+        );
+    }
+
+    #[test]
+    fn both_directions_start_the_chosen_way_then_turn_back() {
+        let p = |cut_direction| Params {
+            cut_direction,
+            ways: Ways::Both,
+            ..end_mill()
+        };
+        let starts = open_rail_starts(&p(CutDirection::Conventional));
+        assert_eq!(starts[..3], [0.0, 100.0, 0.0]);
+        let starts = open_rail_starts(&p(CutDirection::Climb));
+        assert_eq!(starts[..3], [100.0, 0.0, 100.0]);
+    }
+
+    #[test]
+    fn a_new_moulding_climbs_in_one_direction_and_an_old_one_keeps_its_way() {
+        let new = Params::default();
+        assert_eq!(
+            (new.cut_direction, new.ways),
+            (CutDirection::Climb, Ways::One)
+        );
+        // saved before the choice: anticlockwise round a closed rail, back and forth along an open one
+        let mut saved = serde_json::to_value(&new).unwrap();
+        let fields = saved.as_object_mut().unwrap();
+        fields.remove("cut_direction");
+        fields.remove("ways");
+        let old: Params = serde_json::from_value(saved).unwrap();
+        assert_eq!(
+            (old.cut_direction, old.ways),
+            (CutDirection::Conventional, Ways::Both)
+        );
+    }
+
     #[test]
     fn passes_go_back_and_forth_along_an_open_rail() {
         let rail = Path::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
-        let t = moulding(rail, &end_mill());
+        let t = moulding(
+            rail,
+            &Params {
+                cut_direction: CutDirection::Conventional,
+                ways: Ways::Both,
+                ..end_mill()
+            },
+        );
         let starts: Vec<f64> = t
             .moves
             .iter()

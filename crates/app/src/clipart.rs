@@ -4,8 +4,8 @@
 //! Shift for more), added to the project with a double-click or by dragging, and a
 //! right-click menu adds, locates, tags or deletes the ones picked, or shows one's Properties.
 
-mod network;
-mod preview;
+pub(crate) mod network;
+pub(crate) mod preview;
 mod properties;
 mod tags;
 
@@ -29,12 +29,56 @@ const DRAWN: [&str; 1] = ["svg"];
 const BITMAPS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff"];
 /// Vectric's clipart, which is locked to Vectric's own software: counted, not shown.
 const LOCKED: [&str; 2] = ["3dclip", "v3m"];
-/// How often the folders are read again, for files added, moved or taken away meanwhile.
-const RELIST: Duration = Duration::from_secs(5);
+/// How often the folders are read again, for files added, moved or taken away meanwhile,
+/// unless Options ▸ Advanced says otherwise.
+pub const RELIST: Duration = Duration::from_secs(5);
 /// How often a network folder that couldn't be reached is tried again.
 const RETRY: Duration = Duration::from_secs(30);
-/// At most this many files are listed, so a folder as big as a whole drive can't swamp it.
-const MOST: usize = 100_000;
+/// At most this many files are listed, so a folder as big as a whole drive can't swamp it,
+/// unless Options ▸ Advanced says otherwise.
+pub const MOST: usize = 100_000;
+
+/// What Options ▸ Advanced sets for the Library, read wherever it is used; the app sets them
+/// when the options load or change.
+pub mod limits {
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    static RELIST: AtomicU64 = AtomicU64::new(super::RELIST.as_secs());
+    static MOST: AtomicUsize = AtomicUsize::new(super::MOST);
+    static UNUSED_DAYS: AtomicU64 = AtomicU64::new(super::preview::UNUSED_DAYS);
+    static KEEP: AtomicUsize = AtomicUsize::new(super::preview::KEEP);
+
+    /// Sets how often the folders are read again, the most files listed, how many days an
+    /// unused preview is kept, and how many previews stay on the graphics card; each at
+    /// least 1.
+    pub fn set(relist_seconds: u64, most: usize, unused_days: u64, keep: usize) {
+        RELIST.store(relist_seconds.max(1), Ordering::Relaxed);
+        MOST.store(most.max(1), Ordering::Relaxed);
+        UNUSED_DAYS.store(unused_days.max(1), Ordering::Relaxed);
+        KEEP.store(keep.max(1), Ordering::Relaxed);
+    }
+
+    /// How often the folders are read again.
+    pub fn relist() -> Duration {
+        Duration::from_secs(RELIST.load(Ordering::Relaxed))
+    }
+
+    /// The most files listed.
+    pub fn most() -> usize {
+        MOST.load(Ordering::Relaxed)
+    }
+
+    /// How long an unused preview is kept.
+    pub fn unused() -> Duration {
+        Duration::from_hours(24 * UNUSED_DAYS.load(Ordering::Relaxed))
+    }
+
+    /// How many previews stay on the graphics card.
+    pub fn keep() -> usize {
+        KEEP.load(Ordering::Relaxed)
+    }
+}
 /// The folder tree's height at most, in rows of the theme's interactive height.
 const TREE_ROWS: f32 = 10.0;
 
@@ -211,7 +255,7 @@ impl Clipart {
         if let Some(cache) = cache.clone() {
             let _ = std::thread::Builder::new()
                 .name("clipart preview pruning".into())
-                .spawn(move || preview::prune(&cache, preview::UNUSED));
+                .spawn(move || preview::prune(&cache, limits::unused()));
         }
         Self {
             previews: preview::Previews::new(cache.clone()),
@@ -313,8 +357,9 @@ impl Clipart {
             }
         }
         let stale = self.again
-            || (self.listing.as_ref())
-                .is_none_or(|(roots, at, _)| *roots != self.folders || at.elapsed() > RELIST);
+            || (self.listing.as_ref()).is_none_or(|(roots, at, _)| {
+                *roots != self.folders || at.elapsed() > limits::relist()
+            });
         if stale && self.reading.is_none() {
             self.again = false;
             let roots = self.folders.clone();
@@ -335,7 +380,7 @@ impl Clipart {
                 self.reading = Some(receive);
             }
         }
-        ctx.request_repaint_after(RELIST);
+        ctx.request_repaint_after(limits::relist());
     }
 
     /// Folders read: shown from now on.
@@ -516,7 +561,7 @@ fn read_all(roots: &[PathBuf], importable: &Importable, greys: &mut Greys) -> Li
     for root in &outermost(roots) {
         let mut waiting = vec![root.clone()];
         while let Some(folder) = waiting.pop() {
-            if all.entries.len() >= MOST {
+            if all.entries.len() >= limits::most() {
                 all.full = true;
                 break;
             }
@@ -941,8 +986,8 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) 
     if locked > 0 {
         ui.label(
             egui::RichText::new(format!(
-                "{locked} Vectric clipart file{} here can't be shown. Vectric locks .3dclip \
-                 and .v3m files to its own software. If you have Aspire, export them as STL \
+                "{locked} Vectric clipart file{} here can't be shown: .3dclip and .v3m \
+                 files only open in the program that made them. Export them from it as STL \
                  to use them here.",
                 if locked == 1 { "" } else { "s" },
             ))
@@ -950,8 +995,9 @@ fn filters(ui: &mut egui::Ui, clipart: &mut Clipart, locked: usize, full: bool) 
         );
     }
     if full {
+        let most = limits::most();
         ui.weak(format!(
-            "There are more than {MOST} files in your folders, so only the first {MOST} are \
+            "There are more than {most} files in your folders, so only the first {most} are \
              shown. Add smaller folders to see the rest."
         ));
     }
@@ -2045,6 +2091,25 @@ mod tests {
             None,
             "nothing in it: not in the tree"
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Listing stops at the most files Options ▸ Advanced allows, and says so.
+    #[test]
+    fn listing_stops_at_the_most_files_allowed() {
+        let dir = folder("most");
+        for sub in ["a", "b", "c"] {
+            std::fs::create_dir_all(dir.join(sub)).unwrap();
+            std::fs::write(dir.join(sub).join("part.stl"), "").unwrap();
+        }
+        let stl = importable(&["stl"]);
+        let read = read_all(std::slice::from_ref(&dir), &stl, &mut HashMap::new());
+        assert!(!read.full && read.entries.len() == 3);
+        limits::set(5, 1, 60, 400);
+        let read = read_all(std::slice::from_ref(&dir), &stl, &mut HashMap::new());
+        limits::set(5, MOST, 60, 400);
+        assert!(read.full, "stopped");
+        assert!(read.entries.len() < 3, "{}", read.entries.len());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

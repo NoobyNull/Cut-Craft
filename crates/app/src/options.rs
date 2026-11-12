@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Aspire's 3D View Settings: what the 3D view draws when Cut Craft starts.
+/// What the 3D view draws when Cut Craft starts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -41,18 +41,18 @@ pub struct View3d {
     #[schemars(title = "Anti-aliasing mode")]
     pub anti_aliasing: AntiAliasing,
     /// Draw the model coarser while the view turns or zooms, and at full detail once it is
-    /// still: smoother on a slow computer, blockier while moving (not one of Aspire's)
+    /// still: smoother on a slow computer, blockier while moving
     #[serde(default)]
     #[schemars(title = "Simplify the model while the view moves")]
     pub simplify_while_moving: bool,
     /// How finely the model is drawn once the view is still: higher shows more detail and
-    /// takes longer to draw after each change (not one of Aspire's)
+    /// takes longer to draw after each change
     #[serde(default)]
     #[schemars(title = "Detail when still")]
     pub still_detail: Detail,
     /// How finely the model is drawn while it or the view moves (turning the view, dragging
     /// a handle, playing a preview): lower keeps it smooth on a slower computer. Never finer
-    /// than the detail when still (not one of Aspire's)
+    /// than the detail when still
     #[serde(default)]
     #[schemars(
         title = "Detail while moving",
@@ -61,13 +61,12 @@ pub struct View3d {
     pub moving_detail: MovingDetail,
     /// While the view moves, draw the model as finely as this computer can keep smooth:
     /// coarser when frames come slowly, finer again when they come quickly, never finer
-    /// than the detail when still (not one of Aspire's)
+    /// than the detail when still
     #[serde(default = "yes")]
     #[schemars(title = "Adjust detail to keep the view smooth")]
     pub adjust_to_frame_rate: bool,
     /// How many pictures a second the 3D view aims for while it moves: higher is smoother
-    /// and coarser, lower sharper and choppier. 30 suits most; films run at 24 (not one of
-    /// Aspire's)
+    /// and coarser, lower sharper and choppier. 30 suits most; films run at 24
     #[serde(default = "target_fps")]
     #[schemars(
         title = "Smoothness to aim for",
@@ -76,27 +75,26 @@ pub struct View3d {
     )]
     pub target_fps: f64,
     /// Show the 3D view's detail and frames a second at the foot of the window, to see what
-    /// the setting above does (not one of Aspire's)
+    /// the setting above does
     #[serde(default)]
     #[schemars(title = "Show detail and frame rate in the status bar")]
     pub show_frame_rate: bool,
     /// How dragging turns the view: about the job's vertical with its up kept up, or any
-    /// way without stops (not one of Aspire's)
+    /// way without stops
     #[serde(default)]
     pub rotation: Rotation,
     /// How near the pointer must be to the model, in screen pixels, for a click to pick a
     /// point on it (drawing on the model, placing a fade's anchor). Larger is easier to hit,
-    /// smaller is more exact (not one of Aspire's)
+    /// smaller is more exact
     #[serde(default = "click_reach")]
     #[schemars(extend("x-unit" = "px"), range(min = 1, max = 20))]
     pub click_reach: f32,
     /// How wide the Perspective view sees, as a camera lens does: wider makes near things
-    /// look larger and far ones smaller, narrower looks flatter (not one of Aspire's)
+    /// look larger and far ones smaller, narrower looks flatter
     #[serde(default = "perspective_angle")]
     #[schemars(extend("x-unit" = "°"), range(min = 20, max = 90))]
     pub perspective_angle: f64,
     /// How long the view must be still before it is drawn at the detail when still again
-    /// (not one of Aspire's)
     #[serde(default = "settle_seconds")]
     #[schemars(
         title = "Wait before drawing full detail",
@@ -266,8 +264,7 @@ impl Rotation {
     }
 }
 
-/// A 3Dconnexion SpaceMouse turning the 3D view (Linux, through spacenavd; not one of
-/// Aspire's).
+/// A 3Dconnexion SpaceMouse turning the 3D view (Linux, through spacenavd).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -341,7 +338,7 @@ pub enum BackgroundStyle {
     Image,
 }
 
-/// Multisampling: Aspire offers 2x, 4x and 6x too.
+/// Multisampling: smooths the jagged edges of lines and the model in the 3D view.
 // ponytail: 4x is the only count every graphics card takes; others can stop the window opening
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -375,7 +372,7 @@ fn rgb(c: egui::Color32) -> [u8; 3] {
     [c.r(), c.g(), c.b()]
 }
 
-/// Aspire's Toolpath Settings.
+/// Toolpath settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -405,10 +402,10 @@ pub struct ToolpathSettings {
     pub tolerance_3d: f64,
     /// The same for V-carving, prism, inlay and chamfer toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "VCarve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "V-Carve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance_vcarve: f64,
     /// How fast a toolpath preview plays when it starts, in mm of tool travel a second; the
-    /// slider under the preview changes it while it plays (not one of Aspire's)
+    /// slider under the preview changes it while it plays
     #[serde(default = "preview_speed")]
     #[schemars(extend("x-unit" = "mm/s"), range(min = 5, max = 20000))]
     pub preview_speed: f64,
@@ -474,7 +471,7 @@ impl ToolpathSettings {
     }
 }
 
-/// Aspire's Confirmation Choices: what happens when something looks wrong.
+/// What happens when something looks wrong.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Confirmations {
     /// Crossing vectors chosen for a V-carve or pocket toolpath
@@ -489,13 +486,12 @@ pub struct Confirmations {
     #[serde(default)]
     #[schemars(title = "Sharp offset intersections check")]
     pub sharp_offset_intersections: IntersectionCheck,
-    /// Problems the checks before cutting find when saving toolpaths (not one of Aspire's)
+    /// Problems the checks before cutting find when saving toolpaths
     #[serde(default)]
     #[schemars(title = "Checks before cutting")]
     pub cutting_checks: CuttingChecks,
     /// The checks before cutting warn when a tool's taper or shape will leave more material
     /// than this on the model. Raise it if the warnings are about bits too small to matter
-    /// (not one of Aspire's)
     #[serde(default = "material_left")]
     #[schemars(
         title = "Warn when material left is over",
@@ -552,7 +548,7 @@ pub enum CuttingChecks {
     SaveAndTell,
 }
 
-/// Aspire's General Settings.
+/// General settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct General {
     /// How many files File ▸ Recent Files and the start page list
@@ -567,8 +563,8 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "File dialog default")]
     pub file_dialog_default: FileDialogDefault,
-    /// How the window is arranged: Aspire's pages and side tabs, a rail of tool groups with
-    /// an inspector, or a ribbon of tabs over the view
+    /// How the window is arranged: the Design and Toolpaths pages with side tabs, a rail of
+    /// tool groups with an inspector, or a ribbon of tabs over the view
     #[serde(default)]
     #[schemars(title = "Window layout")]
     pub layout: WindowLayout,
@@ -626,9 +622,16 @@ impl General {
     }
 }
 
-/// Importing 3D models: what Orientate 3D Model offers (not one of Aspire's).
+/// Importing pictures and 3D models: the size pictures come in at, and what Orientate 3D
+/// Model offers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Import {
+    /// How big an imported picture comes in: this many of its pixels make an inch. 96 suits
+    /// screenshots and web pictures; a scan or a photo for printing is usually 300. A picture
+    /// bigger than the material is still shrunk to fit
+    #[serde(default = "picture_pixels_per_inch")]
+    #[schemars(title = "Picture size (pixels per inch)", range(min = 10, max = 1200))]
+    pub picture_pixels_per_inch: f64,
     /// What an imported model is kept as: whole (its underside on the other side of a
     /// double-sided job, wrapped in a rotary one), its top seen from above, or the choice
     /// of both on the form
@@ -653,11 +656,20 @@ fn preview_faces() -> u32 {
     250_000
 }
 
+fn picture_pixels_per_inch() -> f64 {
+    cut_craft_core::import_settings::PIXELS_PER_INCH
+}
+
 fn out_of_bounds_percent() -> u8 {
     5
 }
 
 impl Import {
+    /// Hands these settings to the importers.
+    pub fn apply(&self) {
+        cut_craft_core::import_settings::set_pixels_per_inch(self.picture_pixels_per_inch);
+    }
+
     /// The red a model's parts past the material's edges are drawn in: see-through, as
     /// solid as Out-of-bounds opacity says (kept to 1 to 100 percent).
     pub fn out_of_bounds_colour(&self) -> egui::Color32 {
@@ -670,6 +682,7 @@ impl Import {
 impl Default for Import {
     fn default() -> Self {
         Self {
+            picture_pixels_per_inch: picture_pixels_per_inch(),
             model_types: ModelTypes::default(),
             preview_faces: preview_faces(),
             out_of_bounds_percent: out_of_bounds_percent(),
@@ -691,9 +704,9 @@ pub enum ModelTypes {
 
 /// Settings that change how hard Cut Craft works the computer, or how exactly it cuts: listed
 /// only once Show advanced settings is ticked, and put back to their defaults when the file
-/// was changed outside Cut Craft (not one of Aspire's).
+/// was changed outside Cut Craft.
 // ponytail: wayland_native moved here from General; one saved there before starts off again
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Advanced {
     /// On a Wayland desktop, open the window there directly rather than through `XWayland`;
     /// files cannot be dragged into it then (from the next start). Listed only on Wayland
@@ -706,6 +719,120 @@ pub struct Advanced {
     #[serde(default)]
     #[schemars(title = "Processor cores to use (0 = all)", range(min = 0, max = 256))]
     pub cores: u32,
+    /// How many points each stretch of a curved DXF spline becomes when it is imported. Fewer
+    /// gives flat-sided curves; more gives smoother curves but bigger, slower jobs
+    // left out of the file (and so the check) at its default, so options sealed before it
+    // existed still pass; every setting added here later wants the same
+    #[serde(
+        default = "dxf_spline_detail",
+        skip_serializing_if = "is_dxf_spline_detail"
+    )]
+    #[schemars(
+        title = "DXF curve detail (points per span)",
+        range(min = 4, max = 256)
+    )]
+    pub dxf_spline_detail: u32,
+    /// How often the Library reads its folders again to find files added, moved or deleted.
+    /// Sooner shows changes quicker, but keeps a network drive or a slow disk busy
+    #[serde(
+        default = "library_rescan_seconds",
+        skip_serializing_if = "is_library_rescan_seconds"
+    )]
+    #[schemars(
+        title = "Library: read the folders again every",
+        extend("x-unit" = "s"),
+        range(min = 1, max = 3600)
+    )]
+    pub library_rescan_seconds: u32,
+    /// The Library stops listing after this many files, so adding a whole drive can't stall
+    /// it. More lists bigger collections, but uses more memory and time on every read
+    #[serde(
+        default = "library_most_files",
+        skip_serializing_if = "is_library_most_files"
+    )]
+    #[schemars(
+        title = "Library: most files listed",
+        range(min = 1000, max = 10_000_000)
+    )]
+    pub library_most_files: u32,
+    /// Saved Library previews not used for this long are deleted when Cut Craft starts. Longer
+    /// keeps more of them on disk, so folders open faster (from the next start)
+    #[serde(
+        default = "preview_cache_days",
+        skip_serializing_if = "is_preview_cache_days"
+    )]
+    #[schemars(
+        title = "Library: keep unused previews for",
+        extend("x-unit" = "days"),
+        range(min = 1, max = 3650)
+    )]
+    pub preview_cache_days: u32,
+    /// How many Library previews are kept on the graphics card at once. More scrolls back
+    /// faster, but uses more video memory, which can run out on built-in graphics (from the
+    /// next start)
+    #[serde(
+        default = "previews_on_card",
+        skip_serializing_if = "is_previews_on_card"
+    )]
+    #[schemars(
+        title = "Library: previews kept on the graphics card",
+        range(min = 50, max = 5000)
+    )]
+    pub previews_on_card: u32,
+}
+
+/// The default of an Advanced setting, and whether a value is it: settings at their default
+/// are left out of the file, so the check written before they existed still matches.
+macro_rules! advanced_default {
+    ($default:ident, $is:ident, $value:expr) => {
+        fn $default() -> u32 {
+            $value
+        }
+
+        fn $is(value: &u32) -> bool {
+            *value == $default()
+        }
+    };
+}
+
+advanced_default!(
+    dxf_spline_detail,
+    is_dxf_spline_detail,
+    cut_craft_core::import_settings::SPLINE_SAMPLES
+);
+advanced_default!(
+    library_rescan_seconds,
+    is_library_rescan_seconds,
+    u32::try_from(crate::clipart::RELIST.as_secs()).expect("a few seconds")
+);
+advanced_default!(
+    library_most_files,
+    is_library_most_files,
+    u32::try_from(crate::clipart::MOST).expect("a count that fits")
+);
+advanced_default!(
+    preview_cache_days,
+    is_preview_cache_days,
+    u32::try_from(crate::clipart::preview::UNUSED_DAYS).expect("a count of days")
+);
+advanced_default!(
+    previews_on_card,
+    is_previews_on_card,
+    u32::try_from(crate::clipart::preview::KEEP).expect("a count that fits")
+);
+
+impl Default for Advanced {
+    fn default() -> Self {
+        Self {
+            wayland_native: false,
+            cores: 0,
+            dxf_spline_detail: dxf_spline_detail(),
+            library_rescan_seconds: library_rescan_seconds(),
+            library_most_files: library_most_files(),
+            preview_cache_days: preview_cache_days(),
+            previews_on_card: previews_on_card(),
+        }
+    }
 }
 
 impl Advanced {
@@ -717,23 +844,21 @@ impl Advanced {
     /// Hands these settings to the code they steer.
     pub fn apply(&self) {
         cut_craft_core::simulation::set_core_limit(usize::try_from(self.cores).unwrap_or(0));
+        cut_craft_core::import_settings::set_spline_samples(self.dxf_spline_detail);
+        let count = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
+        crate::clipart::limits::set(
+            u64::from(self.library_rescan_seconds.clamp(1, 3600)),
+            count(self.library_most_files.clamp(1000, 10_000_000)),
+            u64::from(self.preview_cache_days.clamp(1, 3650)),
+            count(self.previews_on_card.clamp(50, 5000)),
+        );
     }
 
     /// The check saved beside these settings: a keyed hash of them, so an edit made outside
     /// Cut Craft shows. The key ships in the app, so it stops a hand edit, not a determined
     /// one; that is all it is for.
     fn seal(&self) -> String {
-        use hmac::Mac;
-        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(SEAL_KEY).expect("any key fits");
-        mac.update(&serde_json::to_vec(self).expect("settings serialise"));
-        mac.finalize()
-            .into_bytes()
-            .iter()
-            .fold(String::new(), |mut hex, b| {
-                use std::fmt::Write as _;
-                let _ = write!(hex, "{b:02x}");
-                hex
-            })
+        seal_of(&serde_json::to_vec(self).expect("settings serialise"))
     }
 
     /// Whether `seal` is these settings' own. Options saved before the check have none: they
@@ -750,6 +875,21 @@ impl Advanced {
             }
         }
     }
+}
+
+/// The keyed hash of `bytes` that [`Advanced::seal`] saves, in hex.
+fn seal_of(bytes: &[u8]) -> String {
+    use hmac::Mac;
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(SEAL_KEY).expect("any key fits");
+    mac.update(bytes);
+    mac.finalize()
+        .into_bytes()
+        .iter()
+        .fold(String::new(), |mut hex, b| {
+            use std::fmt::Write as _;
+            let _ = write!(hex, "{b:02x}");
+            hex
+        })
 }
 
 /// The key of [`Advanced::seal`], and the options file's name for it.
@@ -794,7 +934,7 @@ impl Default for Updates {
     }
 }
 
-/// How Cut Craft looks (not one of Aspire's).
+/// How Cut Craft looks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Appearance {
     /// Light, dark, or the desktop's own
@@ -863,7 +1003,7 @@ fn grid_point_size() -> f32 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Theme {
-    /// Light, as Aspire is, whatever the desktop's theme
+    /// Light, whatever the desktop's theme
     Light,
     Dark,
     /// The desktop's own light or dark theme
@@ -900,7 +1040,7 @@ impl Theme {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowLayout {
-    /// Aspire's: Design page left, Toolpaths page right, side tabs
+    /// Design page left, Toolpaths page right, side tabs
     #[default]
     Classic,
     /// A rail of tool groups on the left opening a list of tools; an inspector on the right
@@ -937,7 +1077,7 @@ pub struct Options {
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
     #[serde(default)]
-    #[schemars(title = "Importing Models", extend("x-section" = true))]
+    #[schemars(title = "Importing", extend("x-section" = true))]
     pub import: Import,
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
@@ -1094,6 +1234,12 @@ impl Default for Options {
 }
 
 impl Options {
+    /// Hands the settings that code outside the app reads (cores, importing) to it.
+    pub fn apply(&self) {
+        self.advanced.apply();
+        self.import.apply();
+    }
+
     /// The options kept in the config folder; the defaults when there are none.
     pub fn load() -> Self {
         Self::load_checked().0
@@ -1287,7 +1433,7 @@ mod tests {
                 "Toolpath Settings",
                 "General Settings",
                 "Confirmation Choices",
-                "Importing Models",
+                "Importing",
                 "Appearance",
                 "SpaceMouse",
                 "Updates",
@@ -1386,6 +1532,88 @@ mod tests {
         assert_eq!(back.general.recent_file_list_size, 9);
         // taking the check away does not get round it
         file.as_object_mut().unwrap().remove(SEAL);
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced, Advanced::default());
+    }
+
+    #[test]
+    fn a_seal_made_before_dxf_curve_detail_still_passes_and_the_detail_is_sealed() {
+        // the seal an older Cut Craft wrote over { wayland_native, cores } alone
+        #[derive(Serialize)]
+        struct Before {
+            wayland_native: bool,
+            cores: u32,
+        }
+        let before = Before {
+            wayland_native: false,
+            cores: 2,
+        };
+        let seal = seal_of(&serde_json::to_vec(&before).unwrap());
+        let mut file = serde_json::to_value(Options::default()).unwrap();
+        file["advanced"] = serde_json::to_value(&before).unwrap();
+        file[SEAL] = seal.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(!tampered, "an upgrade is not an edit");
+        assert_eq!(back.advanced.cores, 2);
+        assert_eq!(back.advanced.dxf_spline_detail, 32);
+        // changed in Cut Craft it loads back; changed by hand it goes back to 32
+        let mut o = Options::default();
+        o.advanced.dxf_spline_detail = 64;
+        let (back, tampered) = Options::from_bytes(&saved(&o));
+        assert!(!tampered);
+        assert_eq!(back.advanced.dxf_spline_detail, 64);
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        file["advanced"]["dxf_spline_detail"] = 200.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced.dxf_spline_detail, 32);
+    }
+
+    #[test]
+    fn importing_settings_reach_the_importers() {
+        let mut o = Options::default();
+        o.import.picture_pixels_per_inch = 300.0;
+        o.advanced.dxf_spline_detail = 64;
+        o.apply();
+        assert_eq!(cut_craft_core::import_settings::pixels_per_inch(), 300.0);
+        assert_eq!(cut_craft_core::import_settings::spline_samples(), 64);
+        Options::default().apply();
+        assert_eq!(cut_craft_core::import_settings::pixels_per_inch(), 96.0);
+    }
+
+    #[test]
+    fn library_limits_reach_the_library_and_are_sealed() {
+        let mut o = Options::default();
+        o.advanced.library_rescan_seconds = 60;
+        o.advanced.library_most_files = 5000;
+        o.advanced.preview_cache_days = 7;
+        o.advanced.previews_on_card = 100;
+        o.apply();
+        assert_eq!(
+            crate::clipart::limits::relist(),
+            std::time::Duration::from_mins(1)
+        );
+        assert_eq!(crate::clipart::limits::most(), 5000);
+        assert_eq!(
+            crate::clipart::limits::unused(),
+            std::time::Duration::from_hours(24 * 7)
+        );
+        assert_eq!(crate::clipart::limits::keep(), 100);
+        // out of range in the file: kept to the range
+        o.advanced.library_most_files = 1;
+        o.apply();
+        assert_eq!(crate::clipart::limits::most(), 1000);
+        Options::default().apply();
+        assert_eq!(crate::clipart::limits::most(), crate::clipart::MOST);
+        // saved by Cut Craft they load back; edited by hand they go back to the defaults
+        let mut o = Options::default();
+        o.advanced.previews_on_card = 100;
+        let (back, tampered) = Options::from_bytes(&saved(&o));
+        assert!(!tampered);
+        assert_eq!(back.advanced.previews_on_card, 100);
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        file["advanced"]["library_rescan_seconds"] = 1.into();
         let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
         assert!(tampered);
         assert_eq!(back.advanced, Advanced::default());

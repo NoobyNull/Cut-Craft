@@ -64,12 +64,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Libraries for windows, input and graphics
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libxkbcommon-dev libwayland-dev libx11-dev \
+          # retries, and another mirror when one of Ubuntu's package servers is down
+          scripts/apt-install pkg-config libxkbcommon-dev libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev libvulkan-dev \
-            libxkbcommon-x11-0 libxcb-xkb1
+            libxkbcommon-x11-0 libxcb-xkb1 xvfb libegl1 mesa-vulkan-drivers
       - name: Build
         run: cargo build --release -p cut-craft
+      # it keeps running on a virtual screen, on Vulkan and on OpenGL alone
+      - name: Start the program
+        run: scripts/start-check target/release/cut-craft
       - name: Package the program
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
@@ -116,8 +119,7 @@ jobs:
           path: appimage-libs
       - name: Tools for the packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder librsvg2-bin
+          scripts/apt-install flatpak flatpak-builder librsvg2-bin
           # Ubuntu 24.04 stops the sandbox flatpak-builder runs in; let it for this build
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -151,7 +153,9 @@ jobs:
             exit 1
           fi
           # the bundled keyboard libraries load there, given only the X client library
-          bare ubuntu:22.04 bash -c "apt-get update -qq && apt-get install -y -qq libxcb1 >/dev/null \
+          bare ubuntu:22.04 bash -c "sed -i 's#security.ubuntu.com#archive.ubuntu.com#' /etc/apt/sources.list \
+            && apt-get -o Acquire::Retries=5 update -qq \
+            && apt-get -o Acquire::Retries=5 install -y -qq libxcb1 >/dev/null \
             && cd /tmp && /$image --appimage-extract >/dev/null \
             && ! LD_LIBRARY_PATH=squashfs-root/usr/lib ldd squashfs-root/usr/lib/*.so.* 2>&1 | grep 'not found'"
       - uses: actions/upload-artifact@v4
@@ -171,6 +175,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release -p cut-craft
+      # needs no Visual C++ runtime, and keeps running with its window set up
+      - name: Start the program
+        shell: pwsh
+        run: scripts/start-check.ps1 target/release/cut-craft.exe
       - name: Package the program
         shell: pwsh
         run: |

@@ -17,6 +17,7 @@ pub mod font;
 mod formats;
 pub mod geometry;
 pub mod handles;
+pub mod import_settings;
 pub mod keep_out;
 pub mod nodes;
 pub mod packed;

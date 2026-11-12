@@ -1,5 +1,5 @@
 //! Draw Text: the words as vectors in a TrueType or single-line font, grouped so they pick
-//! and move as one, as Aspire's text objects do. Ungroup is Convert Text to Curves.
+//! and move as one. Ungroup is Convert Text to Curves.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::font::{self, Align};
@@ -69,7 +69,7 @@ pub struct Params {
     /// Each line of text is a line of the block
     #[schemars(extend("x-widget" = "multiline"))]
     pub text: String,
-    /// Single-line fonts (Vectric `.vfont` files in Cut Craft's fonts folder) come first,
+    /// Single-line fonts (Vectric font `.vfont` files in Cut Craft's fonts folder) come first,
     /// then the system's TrueType fonts
     #[schemars(schema_with = "font_choices")]
     pub font: String,

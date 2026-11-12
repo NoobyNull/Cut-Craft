@@ -225,7 +225,7 @@ impl CutCraftApp {
     pub(super) fn load_options(&mut self) {
         let (options, tampered) = crate::options::Options::load_checked();
         self.options = options;
-        self.options.advanced.apply();
+        self.options.apply();
         self.playback_speed = self.options.toolpaths.preview_speed();
         if tampered {
             self.status.set_message(crate::options::TAMPERED);

@@ -110,6 +110,7 @@ pub fn registry() -> Registry {
     r.add_interactive::<cmd_cross_section::CrossSection>();
     r.add::<cmd_notes::Notes>();
     r.add::<cmd_texture_area::TextureArea>();
+    r.add::<cmd_decorative_relief::DecorativeRelief>();
     r.add::<cmd_array_copy::ArrayCopy>();
     r.add::<cmd_circular_copy::CircularCopy>();
     r.add::<cmd_copy_along_vectors::CopyAlongVectors>();
@@ -134,6 +135,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_close_with_line::CloseWithLine>();
     r.add_interactive::<cmd_interactive_vector_trim::InteractiveVectorTrim>();
     r.add::<cmd_vector_texture::VectorTexture>();
+    r.add::<cmd_embellish::Embellish>();
     r.add_interactive::<cmd_draw_freehand::DrawFreehand>();
     r.add::<cmd_draw_curve::DrawCurve>();
     r.add::<cmd_vector_selector::VectorSelector>();
@@ -186,6 +188,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_name_part::NamePart>();
     r.add::<cmd_engrave_part_names::EngravePartNames>();
     r.add::<cmd_import_toolpaths::ImportToolpaths>();
+    r.add::<cmd_quick_trace::QuickTrace>();
     // scripts/new-command adds new commands above this line
     r.add_exporter::<fmt_export_svg::ExportSvg>();
     r.add_exporter::<fmt_export_pdf::ExportPdf>();
@@ -241,5 +244,186 @@ mod tests {
                 "crates/formats/{name} is not registered in crates/app/src/commands.rs"
             );
         }
+    }
+
+    /// Words that name another company or its programs. Cut Craft's own text says what a
+    /// tool does in its own words; Vectric is thanked once, in Help ▸ About.
+    const OTHER_PROGRAMS: &[&str] = &["vectric", "vetric", "aspire", "v&co", "vcarve", "cut2d"];
+
+    /// Names of other programs' files, which people need to know to bring their work in.
+    const FILE_KINDS: &[&str] = &[
+        "vectric job",
+        "vectric font",
+        "vectric clipart",
+        "vectric tool database",
+        "vectric vector texture",
+    ];
+
+    /// The other programs `text` names, besides the file kinds it may name.
+    fn other_programs_named(text: &str) -> Vec<&'static str> {
+        let mut text = text.to_lowercase();
+        for kind in FILE_KINDS {
+            text = text.replace(kind, "");
+        }
+        OTHER_PROGRAMS
+            .iter()
+            .copied()
+            .filter(|word| text.contains(word))
+            .collect()
+    }
+
+    /// Every title and description in a form's schema.
+    fn schema_texts(schema: &serde_json::Value, out: &mut Vec<String>) {
+        match schema {
+            serde_json::Value::Object(map) => {
+                for (key, value) in map {
+                    match (key.as_str(), value) {
+                        ("title" | "description", serde_json::Value::String(text)) => {
+                            out.push(text.clone());
+                        }
+                        _ => schema_texts(value, out),
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    schema_texts(item, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn file_kinds_may_be_named_but_programs_may_not() {
+        assert_eq!(
+            other_programs_named("Import a Vectric job's vectors"),
+            [""; 0]
+        );
+        assert_eq!(other_programs_named("Aspire's Fit Vectors"), ["aspire"]);
+        assert_eq!(other_programs_named("as in VCarve Pro"), ["vcarve"]);
+        assert_eq!(other_programs_named("V-Carve / Engrave Toolpath"), [""; 0]);
+    }
+
+    /// Tooltips, the status bar, form fields and their help, and file kinds speak for
+    /// themselves, never "as in Aspire".
+    #[test]
+    fn tool_descriptions_do_not_name_other_programs() {
+        let registry = super::registry();
+        let mut found = Vec::new();
+        let mut check = |place: String, text: &str| {
+            let words = other_programs_named(text);
+            if !words.is_empty() {
+                found.push(format!("{place}: {words:?} in {text:?}"));
+            }
+        };
+        for command in registry.commands() {
+            let id = command.id();
+            check(format!("{id} name"), command.meta().label);
+            if let Some(about) = crate::gui::about(id) {
+                check(format!("{id} description"), about);
+            }
+            let mut texts = Vec::new();
+            schema_texts(&command.schema(), &mut texts);
+            for text in texts {
+                check(format!("{id} form"), &text);
+            }
+        }
+        for entry in registry.exporters() {
+            check(format!("{} file kind", entry.id), entry.format.label);
+        }
+        for entry in registry.importers() {
+            check(format!("{} file kind", entry.id), entry.format.label);
+        }
+        for (id, label, about) in crate::gui::BUILT_IN_ABOUTS {
+            check(format!("{id} name"), label);
+            check(format!("{id} description"), about);
+        }
+        let schemas = [
+            ("Options", schemars::schema_for!(crate::options::Options)),
+            (
+                "Job sheet",
+                schemars::schema_for!(fmt_create_job_sheet::Style),
+            ),
+            ("Part labels", schemars::schema_for!(fmt_part_labels::Style)),
+            (
+                "STL export",
+                schemars::schema_for!(fmt_export_as_stl::Settings),
+            ),
+            (
+                "Snapping",
+                schemars::schema_for!(cut_craft_core::snap::SnapOptions),
+            ),
+        ];
+        for (name, schema) in schemas {
+            let mut texts = Vec::new();
+            schema_texts(&serde_json::to_value(schema).unwrap(), &mut texts);
+            for text in texts {
+                check(format!("{name} form"), &text);
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    /// `word` stands alone in `line`: not part of an id such as `vcarve_engrave_toolpath`.
+    fn names_alone(line: &str, word: &str) -> bool {
+        let lower = line.to_lowercase();
+        let part = |c: char| c.is_alphanumeric() || c == '_';
+        lower.match_indices(word).any(|(at, _)| {
+            !lower[..at].chars().next_back().is_some_and(part)
+                && !lower[at + word.len()..].chars().next().is_some_and(part)
+        })
+    }
+
+    /// Hover hints, menus and messages written straight into the app's text: everything but
+    /// comments, the thanks in Help ▸ About, and the tests.
+    #[test]
+    fn hints_and_menus_do_not_name_other_programs() {
+        fn walk(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    walk(&path, files);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    files.push(path);
+                }
+            }
+        }
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        walk(&src, &mut files);
+        let mut found = Vec::new();
+        for file in files.iter().filter(|f| !f.ends_with("app/tests.rs")) {
+            let source = std::fs::read_to_string(file).unwrap();
+            // A file's own tests start at its `#[cfg(test)]`.
+            let source = source.split("#[cfg(test)]").next().unwrap_or_default();
+            for (n, line) in source.lines().enumerate() {
+                let code = line.trim_start();
+                let text = line.contains('"') || line.ends_with('\\');
+                if !text || code.starts_with("//") || code.starts_with("#[") {
+                    continue;
+                }
+                let thanks = [
+                    "Thank you to Vectric",
+                    "inspired by Vectric",
+                    "endorsed by Vectric",
+                ];
+                let thanks = thanks.iter().any(|t| line.contains(t))
+                    || line.contains("trademarks of their owners");
+                if thanks {
+                    continue;
+                }
+                let named: Vec<_> = OTHER_PROGRAMS
+                    .iter()
+                    .filter(|word| {
+                        names_alone(line, word) && !other_programs_named(line).is_empty()
+                    })
+                    .collect();
+                if !named.is_empty() {
+                    found.push(format!("{}:{}: {}", file.display(), n + 1, code));
+                }
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
     }
 }

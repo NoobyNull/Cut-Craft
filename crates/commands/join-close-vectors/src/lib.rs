@@ -1,6 +1,6 @@
-//! Join / Close Vectors (Aspire's help: Join / Close Vector with a Straight Line, with a
-//! Smooth Curve, Join/Close by Moving End Points). Two open vectors selected are joined into
-//! one at their closest ends; one is closed. A straight line bridges the gap, or a smooth
+//! Join / Close Vectors: open vectors joined end to end, or an open one closed, with a
+//! straight line, a smooth curve or by moving the end points together. Two open vectors
+//! selected are joined into one at their closest ends; one is closed. A straight line bridges the gap, or a smooth
 //! curve carrying on from each end, or the ends both move to the point halfway between.
 
 use cut_craft_core::document::Document;

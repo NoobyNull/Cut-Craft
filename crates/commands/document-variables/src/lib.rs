@@ -1,5 +1,5 @@
 //! Document Variables: named values kept with the job, used in number fields' sums as
-//! `{name}` (Aspire's help: Document Variables). A name starts with a letter and then has
+//! `{name}`. A name starts with a letter and then has
 //! letters, digits and underscores.
 
 use cut_craft_core::document::Document;

@@ -11,6 +11,7 @@ schemars.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 cut-craft-core = { workspace = true, features = ["testing"] }
 
 [lints]
