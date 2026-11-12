@@ -23,6 +23,11 @@ pub struct Outline {
     pub edge: Vec<[f64; 2]>,
     /// How far out the cutting part reaches: half the diameter, the shank for a tapered tool
     pub radius: f64,
+    /// How wide the flutes' body is, out from the axis: `radius`, but a thread mill's core
+    pub body: f64,
+    /// A thread mill's tooth standing out from its core: its lower corner, tip and upper
+    /// corner
+    pub tooth: Option<[[f64; 2]; 3]>,
     pub flute_top: f64,
     pub neck_top: f64,
     pub shank_radius: f64,
@@ -41,7 +46,16 @@ pub fn outline(tool: &Tool) -> Option<Outline> {
     }
     let radius = tool.reach();
     let height_at = |r: f64| tool.profile(r).unwrap_or(0.0).max(0.0);
-    let edge_top = height_at(radius);
+    // a thread mill's tooth stands out from a narrower core, which is what runs up to the
+    // shank
+    let tooth = (tool.shape == ToolShape::ThreadMill).then(|| {
+        let core = radius - tool.tooth_size.clamp(0.0, radius);
+        let half = tool.tooth_height() / 2.0;
+        let tip = tool.tooth_offset.max(half);
+        [[core, tip - half], [radius, tip], [core, tip + half]]
+    });
+    let body = tooth.map_or(radius, |t| t[0][0]);
+    let edge_top = tooth.map_or_else(|| height_at(radius), |t| t[2][1]);
     let flutes = tool.known_flute_length();
     let flute_top = flutes.unwrap_or(match tool.shape {
         // a V-bit cuts with its cone
@@ -49,28 +63,32 @@ pub fn outline(tool: &Tool) -> Option<Outline> {
         _ => edge_top.max(GUESS_FLUTES * tool.diameter),
     });
     let mut edge: Vec<[f64; 2]> = (0..=EDGE_STEPS)
-        .map(|i| radius * f64::from(i) / f64::from(EDGE_STEPS))
-        .map(|r| [r, height_at(r)])
+        .map(|i| body * f64::from(i) / f64::from(EDGE_STEPS))
+        .map(|r| [r, if tooth.is_some() { 0.0 } else { height_at(r) }])
         .take_while(|p| p[1] <= flute_top + 1e-9)
         .collect();
     // flutes shorter than the edge (a V-bit's cone) end where they stop, then out to the
     // side
     if edge
         .last()
-        .is_some_and(|p| p[1] < flute_top - 1e-9 || p[0] < radius)
+        .is_some_and(|p| p[1] < flute_top - 1e-9 || p[0] < body)
     {
         let out = edge.last().map_or(0.0, |p| p[0]);
         edge.push([out, flute_top]);
     }
-    if edge.last().is_some_and(|p| p[0] < radius) {
-        edge.push([radius, flute_top]);
+    if edge.last().is_some_and(|p| p[0] < body) {
+        edge.push([body, flute_top]);
+    }
+    if tooth.is_some() {
+        // the core's flat bottom is two points, not a row of them
+        edge.dedup_by(|b, a| a[1] == b[1] && b[1] == 0.0 && b[0] < body);
     }
     let neck_top = flute_top + tool.neck_length.max(0.0);
     let shank_set = tool.shank_diameter.is_finite() && tool.shank_diameter > 0.0;
     let shank_radius = if shank_set {
         tool.shank_diameter / 2.0
     } else {
-        radius
+        body
     };
     let shank_known = tool.shank_length.is_finite() && tool.shank_length > 0.0;
     let shank = if shank_known {
@@ -81,6 +99,8 @@ pub fn outline(tool: &Tool) -> Option<Outline> {
     Some(Outline {
         edge,
         radius,
+        body,
+        tooth,
         flute_top,
         neck_top,
         shank_radius,
@@ -187,9 +207,19 @@ fn paint(ui: &egui::Ui, view: &View, shape: &Outline) {
         }
     }
     painter.add(flutes);
+    // a thread mill's tooth, each side
+    for sign in [1.0, -1.0] {
+        if let Some(tooth) = shape.tooth {
+            painter.add(egui::Shape::convex_polygon(
+                tooth.iter().map(|p| at(sign * p[0], p[1])).collect(),
+                flute_fill,
+                egui::Stroke::new(1.5, ui.visuals().text_color()),
+            ));
+        }
+    }
     let body_fill = faint.gamma_multiply(0.35);
     for (half, from, to) in [
-        (shape.radius, shape.flute_top, shape.neck_top),
+        (shape.body, shape.flute_top, shape.neck_top),
         (shape.shank_radius, shape.neck_top, shape.top),
     ] {
         painter.rect_filled(
@@ -213,8 +243,8 @@ fn paint(ui: &egui::Ui, view: &View, shape: &Outline) {
         );
         draw(
             vec![
-                at(sign * shape.radius, shape.flute_top),
-                at(sign * shape.radius, shape.neck_top),
+                at(sign * shape.body, shape.flute_top),
+                at(sign * shape.body, shape.neck_top),
                 at(sign * shape.shank_radius, shape.neck_top),
             ],
             false,
@@ -236,8 +266,8 @@ fn paint(ui: &egui::Ui, view: &View, shape: &Outline) {
     );
     // where the flutes stop
     let flute_line = vec![
-        at(-shape.radius, shape.flute_top),
-        at(shape.radius, shape.flute_top),
+        at(-shape.body, shape.flute_top),
+        at(shape.body, shape.flute_top),
     ];
     if shape.guessed_flutes {
         draw(flute_line, true);
@@ -404,8 +434,15 @@ fn on_left(
 fn left_sizes(ui: &mut egui::Ui, view: &View, shape: &Outline, tool: &mut Tool) -> bool {
     let mut changed = false;
     if matches!(tool.shape, ToolShape::VBit | ToolShape::ThreadMill) {
-        let height = shape.edge.last().map_or(0.0, |p| p[1]) / 2.0;
-        let pointing = view.at(-shape.radius / 2.0, height);
+        // a V-bit's cone halfway up, a thread mill's tooth at its tip
+        let (out, height) = match shape.tooth {
+            Some(t) => (t[1][0], t[1][1]),
+            None => (
+                shape.radius / 2.0,
+                shape.edge.last().map_or(0.0, |p| p[1]) / 2.0,
+            ),
+        };
+        let pointing = view.at(-out, height);
         let caption = if tool.shape == ToolShape::VBit {
             "Included angle"
         } else {
@@ -561,6 +598,50 @@ mod tests {
         let mid = o.edge[o.edge.len() / 2];
         assert!(mid[1] > 0.0 && mid[1] < 3.0, "{mid:?}");
         assert_eq!(o.edge.last(), Some(&[3.0, 10.0]));
+    }
+
+    #[test]
+    fn a_thread_mill_is_a_narrow_core_with_its_tooth_standing_out() {
+        let t = Tool {
+            shape: ToolShape::ThreadMill,
+            angle: 60.0,
+            tooth_size: 1.0,
+            tooth_offset: 2.0,
+            flute_length: 15.0,
+            ..end_mill(10.0)
+        };
+        let o = outline(&t).unwrap();
+        assert_eq!(o.radius, 5.0, "the diameter is tip to tip");
+        assert_eq!(o.body, 4.0, "the core is the tooth size in from the tip");
+        assert_eq!(o.edge, vec![[0.0, 0.0], [4.0, 0.0], [4.0, 15.0]]);
+        let half = 30f64.to_radians().tan();
+        let tooth = o.tooth.unwrap();
+        assert_eq!(tooth[1], [5.0, 2.0], "its tip at the offset");
+        assert!((tooth[0][1] - (2.0 - half)).abs() < 1e-12 && tooth[0][0] == 4.0);
+        assert!((tooth[2][1] - (2.0 + half)).abs() < 1e-12 && tooth[2][0] == 4.0);
+    }
+
+    #[test]
+    fn a_form_tool_is_drawn_from_its_profile() {
+        let t = Tool {
+            shape: ToolShape::FormTool,
+            form: vec![[0.0, 0.0], [4.0, 0.0], [8.0, 4.0], [12.7, 9.0]],
+            flute_length: 12.0,
+            ..end_mill(25.4)
+        };
+        let o = outline(&t).unwrap();
+        assert_eq!((o.radius, o.body, o.tooth), (12.7, 12.7, None));
+        // the edge follows the profile: flat, then up to 9 at the outside
+        assert!(
+            o.edge
+                .iter()
+                .any(|p| (p[0] - 6.0).abs() < 0.2 && (p[1] - 2.0).abs() < 0.3)
+        );
+        assert!(
+            o.edge
+                .iter()
+                .any(|p| (p[0] - 12.7).abs() < 1e-9 && (p[1] - 9.0).abs() < 1e-9)
+        );
     }
 
     #[test]
