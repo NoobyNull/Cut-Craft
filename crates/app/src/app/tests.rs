@@ -113,7 +113,10 @@ fn about_states_cut_craft_s_own_licence() {
     let licence = super::actions::LICENCE_SUMMARY;
     assert!(licence.contains("not open source"), "{licence}");
     assert!(licence.contains("noncommercial"), "{licence}");
-    assert!(licence.contains("No one may sell"), "{licence}");
+    assert!(
+        licence.contains("PolyForm Noncommercial License 1.0.0"),
+        "{licence}"
+    );
 }
 
 /// FNV-1a, so the test needs no hashing crate.
@@ -144,14 +147,14 @@ fn licence_file_keeps_the_polyform_text_word_for_word() {
 const POLYFORM_FNV1A: u64 = 0xcf71_f592_48dd_cd09;
 
 #[test]
-fn licence_file_forbids_selling_the_software_and_says_it_is_not_open_source() {
-    let licence = include_str!("../../../../LICENSE");
+fn licence_file_is_plain_polyform_noncommercial_with_the_credit_line() {
+    let licence = include_str!("../../../../LICENSE").replace('\r', "");
     let ours = &licence[..licence.find("# PolyForm").unwrap()];
-    assert!(ours.contains("not open source"), "{ours}");
-    assert!(ours.contains("## No Sale of the Software"), "{ours}");
-    assert!(ours.contains("Required Notice: Copyright"), "{ours}");
-    // the extra terms win over PolyForm's where they differ
-    assert!(ours.contains("the Additional Terms apply"), "{ours}");
+    // nothing but the credit line goes above the PolyForm text: no extra terms
+    assert_eq!(
+        ours.trim(),
+        "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)"
+    );
 }
 
 #[test]

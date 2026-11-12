@@ -4887,9 +4887,9 @@ fn about(ui: &mut egui::Ui) {
 
 /// The About window's plain summary of Cut Craft's own license (the top of LICENSE).
 pub(super) const LICENCE_SUMMARY: &str = "Cut Craft is source-available, not open source. \
-You may use, change and share it free of charge for noncommercial purposes. Small makers \
-(under US$1,000 total gross revenue in the last twelve months) may also use it to make things \
-they sell. No one may sell Cut Craft or charge for it in any form. The LICENSE file is what applies.";
+It is licensed under the PolyForm Noncommercial License 1.0.0: you may use, change and share it \
+free of charge for noncommercial purposes only, not for any commercial purpose such as making \
+things to sell. The LICENSE file is what applies.";
 
 /// The About window's thanks to the program that inspired Cut Craft (ACKNOWLEDGEMENTS.md in full).
 pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. Cut Craft was inspired by Vectric Aspire, \
