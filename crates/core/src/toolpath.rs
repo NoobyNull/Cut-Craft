@@ -5,7 +5,7 @@ use crate::component::placed_model;
 use crate::document::{Document, EntityId};
 use crate::geometry::{Path, Point};
 use crate::simulation::Material;
-use crate::{Command, CommandError, polygon};
+use crate::{Command, CommandError};
 use glam::DVec3;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -458,7 +458,7 @@ impl Tool {
     /// with the axis on the left (the leftmost point) and the tip at the lowest point. Its
     /// diameter is twice the profile's width. False when the path has no width.
     pub fn set_form(&mut self, path: &crate::geometry::Path) -> bool {
-        let pts = path.flatten(crate::polygon::TOLERANCE);
+        let pts = path.flatten(crate::accuracy::curve());
         let left = pts.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
         let low = pts.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
         let mut form: Vec<[f64; 2]> = pts.iter().map(|p| [p.x - left, p.y - low]).collect();
@@ -1188,7 +1188,7 @@ pub fn made_by<C: Command>(
 /// The points to cut along: the path flattened to the polygon tolerance, without repeating
 /// the start at the end of a closed path.
 pub fn cut_points(path: &Path) -> Vec<Point> {
-    let mut points = path.flatten(polygon::TOLERANCE);
+    let mut points = path.flatten(crate::accuracy::curve());
     if path.closed && points.len() > 1 && points.first() == points.last() {
         points.pop();
     }

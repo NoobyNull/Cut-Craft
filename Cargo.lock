@@ -1171,6 +1171,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-join-open-ends"
+version = "0.6.3"
+dependencies = [
+ "cmd-join-close-vectors",
+ "cut-craft-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-join-vectors"
 version = "0.6.3"
 dependencies = [
@@ -2236,6 +2247,7 @@ dependencies = [
  "cmd-interactive-vector-trim",
  "cmd-job-setup",
  "cmd-join-close-vectors",
+ "cmd-join-open-ends",
  "cmd-join-vectors",
  "cmd-keep-out-zones",
  "cmd-keyhole-toolpath",

@@ -146,5 +146,12 @@ Grouped, with the reason.
    (60, from the next start) and previews on the graphics card (400, from the next start)
    are now Advanced settings.)
 8. CAM accuracy (Advanced): curve accuracy, 3D accuracy, rest threshold, nesting limits.
+   (Done: Advanced ▸ *Curve accuracy for toolpaths* 10 µm (also the post's arc fitting),
+   *3D roughing accuracy* 10 µm, *3D finishing accuracy* 2 µm (warned: raising it can gouge),
+   *Rest machining threshold* 50 µm, *Nesting: most sheets added* 50 and *most filler parts*
+   2000, handed to the toolpath code through `cut_craft_core::accuracy`. Shown in whole
+   micrometres so inch users don't see 0.0000787 in. `toolpath::HALVINGS` stays a constant.
+   Drawing on screen keeps `polygon::TOLERANCE`. Toolpaths already made keep the accuracy
+   they were made with until recalculated.)
 9. Gadgets (Advanced): Lua limits.
 10. Tool form fields: sculpt brush feel, merged grid rows, PDF line width.

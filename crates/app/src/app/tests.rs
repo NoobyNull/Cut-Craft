@@ -1322,6 +1322,16 @@ impl Harness {
             .unwrap_or_else(|| panic!("{text}"))
     }
 
+    /// Every text the last frame drew.
+    fn texts(&self) -> Vec<String> {
+        (self.shapes.iter())
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The middle of `text` where the last frame drew it.
     fn text_at(&self, text: &str) -> Option<Pos2> {
         self.shapes.iter().find_map(|clipped| match &clipped.shape {
@@ -2539,23 +2549,110 @@ fn the_tool_database_window_keeps_edits_only_on_ok() {
     assert_eq!(h.app.tools.tools.len(), count - 1, "Cancel drops the edits");
 }
 
+/// Picks `name` in the open Select Tool window and clicks its Select.
+fn select_in_tool_database(h: &mut Harness, name: &str) {
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    assert!(manager.selecting, "the Tool Database opens to pick in");
+    let at = manager
+        .draft
+        .tools
+        .iter()
+        .position(|t| t.name == name)
+        .unwrap();
+    manager.pick = Some(cut_craft_tool_database::Pick::Tool(at));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let select = *h.texts_at("Select").last().expect("Select, in place of OK");
+    h.click(select, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.app.tool_manager.is_none(), "closed");
+}
+
 #[test]
-fn rest_machining_takes_its_tools_from_the_database() {
+fn three_d_finishing_picks_its_tools_in_the_tool_database() {
     let mut h = Harness::new();
     h.app.invoke(&h.ctx, "3d_finishing_toolpath");
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
     h.frame(vec![]);
-    // the list's last menu adds a tool, as the form's own tool is picked
-    let add = *h.texts_at("Add a tool…").last().expect("an Add menu");
+    let first = h.app.form.as_ref().unwrap().params["tools"][0]["name"].clone();
+    // no drop-down of tools: each has Select… and Edit…, and Add a tool… opens the database
+    assert!(h.text_at("Select…").is_some(), "the first tool's Select…");
+    let add = h.text_at("Add a tool…").expect("an Add button");
     h.click(add, Modifiers::NONE);
-    h.frame(vec![]);
-    let ball = *h.texts_at("6 mm Ball Nose").last().expect("in the menu");
-    h.click(ball, Modifiers::NONE);
-    h.frame(vec![]);
+    select_in_tool_database(&mut h, "6 mm Ball Nose");
     let form = h.app.form.as_ref().unwrap();
-    // after the ball nose the form starts with
+    assert_eq!(form.params["tools"][0]["name"], first, "kept");
+    assert_eq!(
+        form.params["tools"][1]["name"], "6 mm Ball Nose",
+        "added after it"
+    );
+    let ball = h.app.tools.get("6 mm Ball Nose").unwrap();
+    assert_eq!(
+        form.params["tools"][1]["feed_rate"],
+        serde_json::json!(ball.feed_rate),
+        "its own feeds and speeds come with it"
+    );
+    // the first tool's Select… puts another in its place
+    let select = *h.texts_at("Select…").first().unwrap();
+    h.click(select, Modifiers::NONE);
+    select_in_tool_database(&mut h, "3 mm End Mill");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["tools"][0]["name"], "3 mm End Mill");
     assert_eq!(form.params["tools"][1]["name"], "6 mm Ball Nose");
+    assert_eq!(form.params["tools"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn rest_machining_picks_its_earlier_tools_in_the_tool_database() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    // what Rest Machining's Add a tool… asks for: Select Tool, for its list
+    h.app
+        .ask_listed(&h.ctx, ToolList::Rest, ListAsk::Select(ListSlot::New));
+    select_in_tool_database(&mut h, "6 mm End Mill");
+    let form = h.app.form.as_ref().unwrap();
+    assert_eq!(form.params["rest"]["after"][0]["name"], "6 mm End Mill");
+    assert_eq!(
+        form.params["tool"]["name"], "3 mm End Mill",
+        "the form's own tool is left as it was"
+    );
+    // and its Select… replaces that one
+    h.app
+        .ask_listed(&h.ctx, ToolList::Rest, ListAsk::Select(ListSlot::At(0)));
+    select_in_tool_database(&mut h, "6 mm Ball Nose");
+    let after = &h.app.form.as_ref().unwrap().params["rest"]["after"];
+    assert_eq!(after.as_array().unwrap().len(), 1);
+    assert_eq!(after[0]["name"], "6 mm Ball Nose");
+}
+
+#[test]
+fn the_tool_changer_window_loads_a_holder_with_select_tool() {
+    let mut h = Harness::new();
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().set_slot_count(3);
+    h.app.invoke(&h.ctx, "tool_changer");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // each holder: its tool, then Select… to pick one in the Tool Database
+    let selects = h.texts_at("Select…");
+    assert_eq!(selects.len(), 3, "a Select… per holder");
+    h.click(selects[1], Modifiers::NONE);
+    select_in_tool_database(&mut h, "6 mm Ball Nose");
+    let machine = h.app.machines.active().unwrap();
+    assert_eq!(machine.slots[1].as_deref(), Some("6 mm Ball Nose"));
+    assert_eq!(
+        h.app.tools.get("6 mm Ball Nose").unwrap().number,
+        2,
+        "loaded in holder 2, it is tool 2"
+    );
+    assert!(h.app.form.is_none(), "no form was touched");
 }
 
 #[test]
@@ -4210,6 +4307,169 @@ fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
         h.app.playback.is_none() && h.app.simulation.is_some(),
         "kept as far as it went"
     );
+}
+
+/// A profile toolpath around a 40 mm square, previewed playing.
+fn playing_preview() -> Harness {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.display.animate_preview = true;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    assert!(h.app.playing && h.app.playback.is_some(), "it plays");
+    h.frame(vec![]);
+    h
+}
+
+#[test]
+fn escape_stops_a_playing_preview_keeping_what_is_cut_and_leaves_the_form_open() {
+    let mut h = playing_preview();
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.frame(vec![]);
+    h.frame(vec![key(Key::Escape)]);
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "stopped, kept as far as it went"
+    );
+    assert!(
+        h.app.form.is_some(),
+        "the one Escape only stopped the preview"
+    );
+    h.frame(vec![key(Key::Escape)]);
+    assert!(h.app.form.is_none(), "the next closes the form as ever");
+}
+
+#[test]
+fn a_preview_can_be_stopped_from_the_2d_view_too() {
+    let mut h = playing_preview();
+    h.app.view = View::TwoD;
+    h.frame(vec![]);
+    let along = h.app.playback.as_ref().unwrap().at();
+    h.frame(vec![]);
+    assert!(
+        h.app.playback.as_ref().unwrap().at() > along,
+        "it plays on in the 2D view"
+    );
+    h.click(
+        h.text_at("Stop").expect("Stop over the 2D view"),
+        Modifiers::NONE,
+    );
+    assert!(h.app.playback.is_none() && h.app.simulation.is_some());
+}
+
+#[test]
+fn a_playing_preview_says_how_long_it_has_left() {
+    let mut h = playing_preview();
+    h.app.playback_speed = 1.0;
+    h.frame(vec![]);
+    let note = |h: &Harness| {
+        h.texts()
+            .into_iter()
+            .find(|t| t.starts_with("Machine time left"))
+            .expect("the time the machine takes")
+    };
+    assert!(!note(&h).contains(" at ×"), "{}", note(&h));
+    h.app.playback_speed = 10.0;
+    h.frame(vec![]);
+    assert!(note(&h).contains(" at ×10"), "{}", note(&h));
+}
+
+#[test]
+fn a_preview_plays_as_long_as_the_toolpath_summary_says_the_machine_takes() {
+    let h = playing_preview();
+    let toolpath = h.app.doc.toolpaths.values().next().unwrap();
+    let summary = toolpath.machining_minutes(h.app.summary.rapid) * 60.0;
+    let length = h.app.playback.as_ref().unwrap().length();
+    assert!(
+        (length - summary).abs() < 1e-6,
+        "{length} s, the summary {summary} s"
+    );
+}
+
+#[test]
+fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "stopped"
+    );
+    assert!(h.text_at("Progress").is_some(), "the slider is still there");
+    assert!(h.text_at("Close up").is_some(), "and the fine one");
+    // the slider dragged back: playing it again from there, paused
+    let progress = h.text_at("Progress").unwrap();
+    let from = progress + egui::vec2(200.0, 0.0);
+    h.drag(from, from - egui::vec2(100.0, 0.0));
+    assert!(
+        h.app.playback.is_some() && !h.app.playing,
+        "scrubbing again"
+    );
+    h.app.invoke(&h.ctx, "reset_preview");
+    h.frame(vec![]);
+    assert!(h.text_at("Progress").is_none(), "gone with the preview");
+}
+
+#[test]
+fn the_preview_controls_stay_once_it_has_played_to_the_end() {
+    let mut h = playing_preview();
+    h.app.playback_speed = 1000.0;
+    for _ in 0..600 {
+        if h.app.playback.is_none() {
+            break;
+        }
+        h.frame(vec![]);
+    }
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "played through"
+    );
+    h.frame(vec![]);
+    assert!(h.text_at("Progress").is_some(), "still there to scrub back");
+    h.click(
+        h.text_at("Close").expect("Close hides them"),
+        Modifiers::NONE,
+    );
+    assert!(h.text_at("Progress").is_none() && h.app.simulation.is_some());
+}
+
+#[test]
+fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
+    let mut h = playing_preview();
+    // a step a frame, as a toolpath of millions of moves would go
+    h.app.playback_budget = std::time::Duration::ZERO;
+    h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+    let from = h.app.playback.as_ref().unwrap().at();
+    h.click(h.text_at("Run to Retract").unwrap(), Modifiers::NONE);
+    let goal = h.app.playback_goal.expect("on its way there");
+    let at = h.app.playback.as_ref().unwrap().at();
+    assert!(at > from && at < goal, "part way: {from} to {at} of {goal}");
+    assert!(
+        h.texts().iter().any(|t| t.contains("Esc")),
+        "says how to stop it"
+    );
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(h.app.playback.is_none() && h.app.playback_goal.is_none());
+}
+
+#[test]
+fn escape_cancels_a_slow_job() {
+    let mut h = Harness::new();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let (_go, wait) = std::sync::mpsc::channel::<()>();
+    h.app.in_background(
+        "Previewing Slow Toolpath",
+        move || {
+            wait.recv().ok();
+        },
+        |app, ()| app.status.set_message("used"),
+    );
+    h.frame(vec![]);
+    h.frame(vec![key(Key::Escape)]);
+    h.frame(vec![]);
+    assert!(h.app.busy.is_none(), "cancelled");
 }
 
 #[test]
@@ -7328,6 +7588,64 @@ fn with_create_fillets_open_a_click_rounds_a_corner_and_a_click_on_the_fillet_ta
     h.frame(vec![]);
     h.click(h.at(mid, mid), Modifiers::NONE);
     assert_eq!(shape(&h), (4, 0), "the sharp corner is back");
+}
+
+#[test]
+fn with_join_open_ends_open_two_clicks_on_ends_join_the_vectors() {
+    let mut h = Harness::new();
+    let line = |a: (f64, f64), b: (f64, f64)| {
+        Path::polyline(&[Point::new(a.0, a.1), Point::new(b.0, b.1)], false)
+    };
+    let paths = vec![
+        line((10.0, 10.0), (40.0, 10.0)),
+        line((45.0, 10.0), (80.0, 10.0)),
+    ];
+    let change = Change::swap(&h.app.doc, [], paths);
+    h.app.doc.apply(&change).unwrap();
+    h.app.invoke(&h.ctx, "join_open_ends");
+    assert!(h.app.joining_ends());
+    h.frame(vec![]);
+    // a click away from any end picks nothing
+    h.click(h.at(25.0, 10.0), Modifiers::NONE);
+    assert!(h.app.join_ends_first().is_none());
+    h.frame(vec![]);
+    h.click(h.at(40.0, 10.0), Modifiers::NONE);
+    assert!(h.app.join_ends_first().is_some(), "the first end is picked");
+    h.frame(vec![]);
+    h.click(h.at(45.0, 10.0), Modifiers::NONE);
+    assert_eq!(h.app.doc.vectors.len(), 1, "joined into one");
+    assert!(h.app.join_ends_first().is_none(), "ready for the next pair");
+    assert!(h.app.joining_ends(), "the tool stays open");
+    // its two ends clicked, the one vector closes
+    h.frame(vec![]);
+    h.click(h.at(10.0, 10.0), Modifiers::NONE);
+    h.frame(vec![]);
+    h.click(h.at(80.0, 10.0), Modifiers::NONE);
+    assert!(h.app.doc.vectors.values().next().unwrap().closed);
+}
+
+#[test]
+fn escape_lets_a_picked_open_end_go_and_keeps_join_open_ends_open() {
+    let mut h = Harness::new();
+    let path = Path::polyline(&[Point::new(10.0, 10.0), Point::new(40.0, 10.0)], false);
+    let change = Change::swap(&h.app.doc, [], vec![path]);
+    h.app.doc.apply(&change).unwrap();
+    h.app.invoke(&h.ctx, "join_open_ends");
+    h.frame(vec![]);
+    h.click(h.at(40.0, 10.0), Modifiers::NONE);
+    assert!(h.app.join_ends_first().is_some());
+    h.frame(vec![key(Key::Escape)]);
+    assert!(h.app.join_ends_first().is_none(), "the end let go");
+    assert!(h.app.joining_ends(), "the tool still open");
+}
+
+#[test]
+fn show_open_vector_ends_is_a_view_menu_switch() {
+    let mut h = Harness::new();
+    assert!(!h.app.display.open_ends, "off to start with");
+    h.app.invoke(&h.ctx, "show_open_vector_ends");
+    assert!(h.app.display.open_ends);
+    assert_eq!(h.app.display.checked("show_open_vector_ends"), Some(true));
 }
 
 #[test]
@@ -10621,4 +10939,71 @@ fn a_decorative_relief_follows_its_settings_as_one_component() {
     assert_eq!(h.app.history.undo_depth(), undo_depth);
     h.app.invoke(&h.ctx, "undo");
     assert!(h.app.doc.components.is_empty());
+}
+
+/// Matthew's 3D finishing toolpath (6.8 million tiny cuts) crashed the app as it was shown:
+/// a line for each cut was more than the graphics card's 2 GB buffer takes. A frame showing
+/// a toolpath that dense stays small.
+#[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "small counts"
+)]
+fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() {
+    use cut_craft_core::glam::DVec3;
+    use cut_craft_core::toolpath::{Move, MoveKind};
+    let mut h = Harness::new();
+    h.app.display.previews_2d = true;
+    let (width, height) = (h.app.doc.job.width, h.app.doc.job.height);
+    let (rows, step) = (400_usize, 0.02);
+    let along = (width / step) as usize;
+    let mut moves = Vec::with_capacity(rows * along);
+    for row in 0..rows {
+        let across = height * row as f64 / rows as f64;
+        for step_along in 0..along {
+            let at = if row % 2 == 0 {
+                step_along
+            } else {
+                along - 1 - step_along
+            };
+            // over a bumpy model, as a finishing pass is
+            let x = at as f64 * step;
+            let depth = -1.0 - (x * 0.7).sin() * (across * 0.3).cos();
+            moves.push(Move {
+                kind: MoveKind::Cut,
+                to: DVec3::new(x, across, depth),
+            });
+        }
+    }
+    assert!(moves.len() > 2_000_000, "{} cuts", moves.len());
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(cut_craft_core::toolpath::Toolpath {
+        name: "3D Finishing".into(),
+        strategy: "3d_finishing_toolpath".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![],
+        moves,
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+    });
+    h.app.record(Ok(c.finish()), "made");
+    h.frame(vec![]);
+    let shapes = std::mem::take(&mut h.shapes);
+    let vertices: usize = h
+        .ctx
+        .tessellate(shapes, 1.0)
+        .iter()
+        .map(|p| match &p.primitive {
+            egui::epaint::Primitive::Mesh(mesh) => mesh.vertices.len(),
+            egui::epaint::Primitive::Callback(_) => 0,
+        })
+        .sum();
+    // egui's vertices are 20 bytes: 100 MB at most, the card's limit is 2 GB
+    assert!(vertices < 5_000_000, "{vertices} vertices");
 }

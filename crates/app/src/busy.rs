@@ -135,8 +135,15 @@ impl<A: 'static> Busy<A> {
             ui.add_space(ui.spacing().item_spacing.y);
             cancel = ui
                 .button("Cancel")
-                .on_hover_text("Stop it: nothing in the job changes")
+                .on_hover_text("Stop it (Esc): nothing in the job changes")
                 .clicked();
+        });
+        // Escape is Cancel, as in any other window
+        cancel |= ctx.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut::new(
+                egui::Modifiers::NONE,
+                egui::Key::Escape,
+            ))
         });
         ctx.request_repaint_after(Duration::from_millis(100));
         cancel
@@ -165,14 +172,20 @@ pub fn time_line(elapsed: Duration, fraction: Option<f64>) -> String {
     }
 }
 
-/// A time as a person reads it: "8 s", "2 min 5 s".
-fn seconds(s: f64) -> String {
+/// A time as a person reads it: "8 s", "2 min 5 s", "3 h 20 min".
+pub fn seconds(s: f64) -> String {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "a short time, rounded to whole seconds"
+        reason = "a time, rounded to whole seconds"
     )]
     let s = s.max(0.0).round() as u64;
+    if s >= 3600 {
+        return match (s / 3600, s % 3600 / 60) {
+            (h, 0) => format!("{h} h"),
+            (h, m) => format!("{h} h {m} min"),
+        };
+    }
     match (s / 60, s % 60) {
         (0, s) => format!("{s} s"),
         (m, 0) => format!("{m} min"),
@@ -184,6 +197,14 @@ fn seconds(s: f64) -> String {
 mod tests {
     use super::*;
     use cut_craft_core::progress;
+
+    #[test]
+    fn times_read_as_a_person_says_them() {
+        assert_eq!(seconds(8.2), "8 s");
+        assert_eq!(seconds(125.0), "2 min 5 s");
+        assert_eq!(seconds(12_000.0), "3 h 20 min");
+        assert_eq!(seconds(7200.0), "2 h");
+    }
 
     #[derive(Default)]
     struct State {

@@ -68,6 +68,7 @@ cmd-convert-span = { path = "../commands/convert-span" }
 cmd-vector-boundary = { path = "../commands/vector-boundary" }
 cmd-convert-text-to-curves = { path = "../commands/convert-text-to-curves" }
 cmd-join-close-vectors = { path = "../commands/join-close-vectors" }
+cmd-join-open-ends = { path = "../commands/join-open-ends" }
 cmd-celtic-weave = { path = "../commands/celtic-weave" }
 cmd-wrapped-spiral-layout = { path = "../commands/wrapped-spiral-layout" }
 cmd-wrapped-fluting-layout = { path = "../commands/wrapped-fluting-layout" }

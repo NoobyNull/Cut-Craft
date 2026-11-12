@@ -184,3 +184,34 @@ fn inside_counts_holes_out() {
     assert!(!inside(&rings, Point::new(50.0, 50.0)), "in the hole");
     assert!(!inside(&rings, Point::new(150.0, 50.0)));
 }
+
+#[test]
+fn a_path_ending_where_it_starts_is_closed_on_import() {
+    // drawn round and back to its start, but never marked closed (no Z in an SVG)
+    let around = Path::polyline(
+        &[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 0.0005)],
+        false,
+    );
+    let closed = around.closed_where_ends_meet();
+    assert!(closed.closed);
+    assert_eq!(closed.segments.len(), 3, "no extra line back");
+    assert_eq!(
+        closed.segments.last().unwrap().end(),
+        p(0.0, 0.0),
+        "ends exactly at its start"
+    );
+    // a gap wider than the tolerance stays open, and so does a line
+    let gap = Path::polyline(
+        &[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 0.01)],
+        false,
+    );
+    assert!(!gap.closed_where_ends_meet().closed);
+    assert!(
+        !Path::polyline(&[p(0.0, 0.0), p(10.0, 0.0)], false)
+            .closed_where_ends_meet()
+            .closed
+    );
+    // one going out and straight back along itself encloses nothing: stays open
+    let back = Path::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(0.0, 0.0)], false);
+    assert!(!back.closed_where_ends_meet().closed);
+}
