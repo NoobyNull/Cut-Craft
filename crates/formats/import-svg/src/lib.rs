@@ -66,7 +66,7 @@ fn subpaths(data: &skia::Path, to_mm: impl Fn(skia::Point) -> Point) -> Vec<Path
     let mut current: Option<Path> = None;
     let flush = |current: &mut Option<Path>, done: &mut Vec<Path>| {
         if let Some(p) = current.take().filter(|p| !p.segments.is_empty()) {
-            done.push(p);
+            done.push(p.closed_where_ends_meet());
         }
     };
     for segment in data.segments() {
@@ -179,6 +179,21 @@ mod tests {
         );
         assert_eq!(doc.selection.len(), 1);
         assert!(doc.vectors.values().next().unwrap().closed);
+    }
+
+    #[test]
+    fn a_path_that_ends_where_it_starts_is_closed_without_a_z() {
+        // as Vectric exports them: back to the first point with L, no Z
+        let doc = import(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M 10,10 L 40,10 L 40,40 L 10,10" stroke="black"/><path d="M 50,10 L 80,10 L 80,40" stroke="black"/></svg>"#,
+        );
+        let mut closed: Vec<bool> = doc.vectors.values().map(|p| p.closed).collect();
+        closed.sort_unstable();
+        assert_eq!(
+            closed,
+            [false, true],
+            "the triangle closed, the open line not"
+        );
     }
 
     #[test]

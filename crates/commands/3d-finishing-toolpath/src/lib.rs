@@ -6,7 +6,7 @@
 use cut_craft_core::component::{MachiningBoundary, machining_boundary, placed_model};
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Point;
-use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::polygon;
 use cut_craft_core::progress;
 use cut_craft_core::simulation::rest_areas;
 use cut_craft_core::toolpath::{
@@ -219,7 +219,7 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
                     points.push(points[0]);
                     points
                 }));
-                rings = polygon::offset_regions(&rings, -step, Corners::Round);
+                rings = polygon::offset_regions_again(&rings, -step);
             }
             lines
         }

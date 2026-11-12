@@ -208,3 +208,51 @@ fn mitred_corners_go_out_to_a_point_no_further_than_the_reach() {
         polygon::offset_regions_mitred(&polygon::regions(&[square(0.0, 0.0, 10.0)]), 1.0, 2.0);
     assert!(close(total_area(&squared), 144.0, 1e-3));
 }
+
+#[test]
+fn stepping_regions_again_and_again_keeps_the_rings_light_and_true() {
+    // a hole's rounded corners came back with twice the points every step (each point of
+    // the last ring got its own little round corner), so 30 steps took minutes
+    let regions = polygon::regions(&[square(0.0, 0.0, 40.0), square(15.0, 15.0, 10.0)]);
+    let mut rings = regions.clone();
+    for _ in 0..20 {
+        rings = polygon::offset_regions_again(&rings, -0.25);
+    }
+    let points: usize = rings.iter().map(|r| r.segments.len()).sum();
+    assert!(points < 400, "{points} points");
+    // the same as shrinking by the whole 5 mm at once
+    let once = polygon::offset_regions(&regions, -5.0, Corners::Round);
+    let mut areas: Vec<f64> = rings.iter().map(polygon::area).collect();
+    let mut expected: Vec<f64> = once.iter().map(polygon::area).collect();
+    areas.sort_by(f64::total_cmp);
+    expected.sort_by(f64::total_cmp);
+    assert_eq!(areas.len(), expected.len());
+    for (a, e) in areas.iter().zip(&expected) {
+        assert!(close(*a, *e, 0.5), "{areas:?} vs {expected:?}");
+    }
+}
+
+#[test]
+fn offsetting_again_and_again_keeps_an_inside_corner_light() {
+    // an L's inside corner rounds off more each step in; it doubled its points each time
+    let p = Point::new;
+    let l = Path::polyline(
+        &[
+            p(0.0, 0.0),
+            p(100.0, 0.0),
+            p(100.0, 40.0),
+            p(40.0, 40.0),
+            p(40.0, 100.0),
+            p(0.0, 100.0),
+        ],
+        true,
+    );
+    let mut rings = vec![l.clone()];
+    for _ in 0..30 {
+        rings = polygon::offset_again(&rings, -0.5);
+    }
+    let points: usize = rings.iter().map(|r| r.segments.len()).sum();
+    assert!(points < 400, "{points} points");
+    let once = polygon::offset(&[l], -15.0, Corners::Round);
+    assert!(close(total_area(&rings), total_area(&once), 0.5));
+}

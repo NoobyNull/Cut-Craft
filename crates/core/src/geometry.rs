@@ -106,6 +106,9 @@ impl Segment {
     }
 }
 
+/// How near (mm) an open path's two ends must be for it to count as ending where it starts.
+pub const ENDS_MEET: f64 = 0.001;
+
 /// A connected run of segments. A closed path's last segment ends back at `start`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Path {
@@ -229,6 +232,37 @@ impl Path {
             from = s.end();
         }
         points
+    }
+
+    /// Closed when it isn't but ends within [`ENDS_MEET`] of its start and encloses
+    /// something, its last span then ending exactly at its start. Imported shapes are often
+    /// drawn back to their first point without being marked closed (an SVG path with no Z, a
+    /// DXF polyline without its closed flag); left open, Select Closed Vectors, Pocket and
+    /// V-Carve passed them over.
+    #[must_use]
+    pub fn closed_where_ends_meet(mut self) -> Self {
+        let Some(last) = self.segments.last_mut() else {
+            return self;
+        };
+        if self.closed || last.end().distance(self.start) > ENDS_MEET {
+            return self;
+        }
+        let points = self.flatten(ENDS_MEET);
+        let n = points.len();
+        let twice_area: f64 = (0..n)
+            .map(|i| points[i].perp_dot(points[(i + 1) % n]))
+            .sum();
+        if twice_area.abs() <= ENDS_MEET * ENDS_MEET {
+            return self;
+        }
+        let start = self.start;
+        if let Some(Segment::Line { to } | Segment::Arc { to, .. } | Segment::Cubic { to, .. }) =
+            self.segments.last_mut()
+        {
+            *to = start;
+        }
+        self.closed = true;
+        self
     }
 
     /// The same path walked from its end back to its start.

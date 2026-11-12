@@ -341,7 +341,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
 fn rings_in(mut ring: Vec<Path>, step: f64) -> Vec<Path> {
     let mut rings = vec![];
     while !ring.is_empty() {
-        let next = polygon::offset(&ring, -step, Corners::Round);
+        let next = polygon::offset_again(&ring, -step);
         rings.extend(ring);
         ring = next;
     }
@@ -365,12 +365,12 @@ fn trochoidal(edge: &[Path], p: &Params) -> Vec<Path> {
             out.push(Path::polyline(&points, false));
         }
         last = band;
-        band = polygon::offset(&last, -(2.0 * radius + step), Corners::Round);
+        band = polygon::offset_again(&last, -(2.0 * radius + step));
     }
     // the last band cleared to a loop and a tool radius inside it; rings for the rest
     let mut ring = polygon::offset(&last, -(radius + step), Corners::Round);
     while !ring.is_empty() {
-        let next = polygon::offset(&ring, -step, Corners::Round);
+        let next = polygon::offset_again(&ring, -step);
         out.extend(ring);
         ring = next;
     }

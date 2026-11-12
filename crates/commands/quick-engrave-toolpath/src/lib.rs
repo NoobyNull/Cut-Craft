@@ -3,7 +3,7 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
-use cut_craft_core::polygon::{self, Corners};
+use cut_craft_core::polygon;
 use cut_craft_core::toolpath::{Move, Tool, contour_moves, cut_points, hatch_lines, made_by};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive};
 use schemars::JsonSchema;
@@ -130,14 +130,11 @@ impl Command for QuickEngraveToolpath {
             once.extend(match p.fill_pattern {
                 FillPattern::Offset => {
                     let mut rings = vec![];
-                    let mut by = p.stepover;
-                    loop {
-                        let ring = polygon::offset_regions(&regions, -by, Corners::Round);
-                        if ring.is_empty() {
-                            break;
-                        }
+                    let mut ring = polygon::offset_regions_again(&regions, -p.stepover);
+                    while !ring.is_empty() {
+                        let next = polygon::offset_regions_again(&ring, -p.stepover);
                         rings.extend(ring);
-                        by += p.stepover;
+                        ring = next;
                     }
                     outline(&rings)
                 }

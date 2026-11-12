@@ -28,7 +28,7 @@ impl Importer for ImportDxf {
         let paths: Vec<Path> = drawing
             .entities()
             .filter_map(|e| path(&e.specific))
-            .map(|p| p.transformed(&to_mm))
+            .map(|p| p.transformed(&to_mm).closed_where_ends_meet())
             .collect();
         if paths.is_empty() {
             return Err(CommandError::Failed(
@@ -335,6 +335,24 @@ mod tests {
             "{:?}",
             paths[0].bounds()
         );
+    }
+
+    #[test]
+    fn a_polyline_that_ends_where_it_starts_is_closed_without_the_flag() {
+        let around = LwPolyline {
+            vertices: vec![
+                vertex(0.0, 0.0, 0.0),
+                vertex(10.0, 0.0, 0.0),
+                vertex(10.0, 10.0, 0.0),
+                vertex(0.0, 0.0, 0.0),
+            ],
+            ..LwPolyline::default()
+        };
+        let paths = import(&dxf(
+            Units::Millimeters,
+            vec![EntityType::LwPolyline(around)],
+        ));
+        assert!(paths[0].closed);
     }
 
     #[test]
