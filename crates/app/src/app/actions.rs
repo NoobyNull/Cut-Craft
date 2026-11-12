@@ -4185,6 +4185,20 @@ impl CutCraftApp {
                 ui.label(step);
             });
         }
+        // what a toolpath (or the Vector Selector) will be made from, and what it leaves out
+        if open.id.ends_with("_toolpath") || open.id == "vector_selector" {
+            let count = self.doc.selected_vector_count();
+            if let Some(text) = count.text() {
+                ui.weak(text)
+                    .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
+            if closed_only_toolpath(open.id, &open.params)
+                && let Some(left_out) = count.left_out(open.label)
+            {
+                ui.colored_label(ui.visuals().warn_fg_color, left_out)
+                    .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
+        }
     }
 
     /// The open form filling `ui`: its settings scroll, while what went wrong and the
@@ -5304,3 +5318,26 @@ fn suggestion_note(s: &cmd_pocket_toolpath::Suggestion, finishing: &str) -> Stri
         minutes(s.alone)
     )
 }
+
+/// Whether toolpath `id` with `params` cuts only the closed vectors selected, leaving the
+/// open ones out: the area toolpaths, and Profile inside or outside (on the line cuts open
+/// ones too).
+pub(super) fn closed_only_toolpath(id: &str, params: &Value) -> bool {
+    match id {
+        "profile_toolpath" => params["side"].as_str() != Some("on"),
+        _ => CLOSED_ONLY_TOOLPATHS.contains(&id),
+    }
+}
+
+/// The toolpaths that take only closed vectors from the selection.
+const CLOSED_ONLY_TOOLPATHS: [&str; 9] = [
+    "chamfer_toolpath",
+    "drill_bank_toolpath",
+    "drilling_toolpath",
+    "inlay_toolpath",
+    "pocket_toolpath",
+    "prism_toolpath",
+    "sketch_carving_toolpath",
+    "vcarve_engrave_toolpath",
+    "vcarve_inlay_toolpath",
+];

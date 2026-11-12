@@ -11218,3 +11218,57 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
     });
     assert!(said, "how much quicker, on the form");
 }
+
+#[test]
+fn the_status_bar_and_a_pocket_form_count_the_selected_vectors() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.rectangle(40.0, 10.0, 20.0, 10.0);
+    let line = serde_json::json!({ "points": [
+        { "x": 10.0, "y": 40.0 }, { "x": 60.0, "y": 40.0 }
+    ], "closed": false });
+    h.app.apply("draw_polyline", &line).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.frame(vec![]);
+    let count = "3 vectors selected: 2 closed, 1 open";
+    let at = h.text_at(count).expect("the status bar counts them");
+    assert!(at.y > 700.0, "in the status bar: {at:?}");
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    // the Toolpaths page flies out unseen on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let on_form = h
+        .shapes
+        .iter()
+        .filter(
+            |clipped| matches!(&clipped.shape, egui::Shape::Text(t) if t.galley.text() == count),
+        )
+        .count();
+    assert_eq!(on_form, 2, "on the form too, as well as the status bar");
+    assert!(
+        h.text_at("1 open vector will be left out: Pocket Toolpath only cuts closed shapes, and it is not closed")
+            .is_some(),
+        "the form says what Pocket will leave out"
+    );
+}
+
+#[test]
+fn an_on_the_line_profile_leaves_no_open_vector_out() {
+    assert!(actions::closed_only_toolpath(
+        "pocket_toolpath",
+        &serde_json::json!({})
+    ));
+    assert!(actions::closed_only_toolpath(
+        "profile_toolpath",
+        &serde_json::json!({ "side": "outside" })
+    ));
+    assert!(!actions::closed_only_toolpath(
+        "profile_toolpath",
+        &serde_json::json!({ "side": "on" })
+    ));
+    assert!(!actions::closed_only_toolpath(
+        "quick_engrave_toolpath",
+        &serde_json::json!({})
+    ));
+}

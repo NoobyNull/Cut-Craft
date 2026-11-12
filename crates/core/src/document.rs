@@ -958,6 +958,21 @@ impl Document {
             .is_some_and(|l| l.visible && !l.locked)
     }
 
+    /// How many of the selected vectors are closed and how many open.
+    pub fn selected_vector_count(&self) -> VectorCount {
+        let closed = self
+            .selection
+            .iter()
+            .filter(|id| self.vectors.get(id).is_some_and(|p| p.closed))
+            .count();
+        let open = self
+            .selection
+            .iter()
+            .filter(|id| self.vectors.get(id).is_some_and(|p| !p.closed))
+            .count();
+        VectorCount { closed, open }
+    }
+
     /// The selected vectors that pass `keep`, as ids and paths in matching order.
     pub fn selected_paths(&self, keep: impl Fn(&Path) -> bool) -> (Vec<EntityId>, Vec<Path>) {
         self.selection
@@ -1132,6 +1147,100 @@ impl Document {
             .find(|name| !groups.contains(name))
             .expect("one more name than groups")
     }
+}
+
+/// How many selected vectors are closed (they enclose an area to pocket or carve) and how
+/// many open (a line with two loose ends).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VectorCount {
+    pub closed: usize,
+    pub open: usize,
+}
+
+impl VectorCount {
+    pub fn total(self) -> usize {
+        self.closed + self.open
+    }
+
+    /// "42 vectors selected: 40 closed, 2 open", or `None` with none selected.
+    pub fn text(self) -> Option<String> {
+        let n = self.total();
+        let what = match (self.closed, self.open) {
+            (0, 0) => return None,
+            (_, 0) if n == 1 => "closed".to_owned(),
+            (0, _) if n == 1 => "open".to_owned(),
+            (_, 0) => "all closed".to_owned(),
+            (0, _) => "all open".to_owned(),
+            (closed, open) => format!("{closed} closed, {open} open"),
+        };
+        Some(format!("{n} vector{} selected: {what}", plural(n)))
+    }
+
+    /// For a tool that only works on closed vectors: what it will leave out, if anything.
+    pub fn left_out(self, tool: &str) -> Option<String> {
+        (self.open > 0).then(|| {
+            let (n, s) = (self.open, plural(self.open));
+            let they = if n == 1 { "it is" } else { "they are" };
+            format!(
+                "{n} open vector{s} will be left out: {tool} only cuts closed shapes, and \
+                 {they} not closed"
+            )
+        })
+    }
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 { "" } else { "s" }
+}
+
+#[cfg(test)]
+#[test]
+fn the_selection_count_says_how_many_are_closed_and_open() {
+    let count = |closed, open| VectorCount { closed, open };
+    assert_eq!(count(0, 0).text(), None);
+    assert_eq!(count(1, 0).text().unwrap(), "1 vector selected: closed");
+    assert_eq!(count(0, 1).text().unwrap(), "1 vector selected: open");
+    assert_eq!(
+        count(5, 0).text().unwrap(),
+        "5 vectors selected: all closed"
+    );
+    assert_eq!(count(0, 3).text().unwrap(), "3 vectors selected: all open");
+    assert_eq!(
+        count(40, 2).text().unwrap(),
+        "42 vectors selected: 40 closed, 2 open"
+    );
+    assert_eq!(count(4, 0).left_out("Pocket"), None);
+    assert_eq!(
+        count(4, 1).left_out("Pocket").unwrap(),
+        "1 open vector will be left out: Pocket only cuts closed shapes, and it is not closed"
+    );
+    assert!(
+        count(4, 2)
+            .left_out("V-Carve")
+            .unwrap()
+            .starts_with("2 open vectors")
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn the_selection_count_counts_the_selected_vectors_only() {
+    use crate::testing::{document_with, square};
+    let line = Path::polyline(&[Point::new(0.0, 0.0), Point::new(9.0, 0.0)], false);
+    let mut doc = document_with(vec![square(0.0, 0.0, 5.0), square(9.0, 0.0, 5.0), line]);
+    assert_eq!(
+        doc.selected_vector_count().total(),
+        3,
+        "new vectors come selected"
+    );
+    doc.selection.clear();
+    assert_eq!(doc.selected_vector_count(), VectorCount::default());
+    let ids: Vec<EntityId> = doc.vectors.keys().copied().collect();
+    doc.selection = ids[1..].iter().copied().collect();
+    assert_eq!(
+        doc.selected_vector_count(),
+        VectorCount { closed: 1, open: 1 }
+    );
 }
 
 #[cfg(test)]
