@@ -1,4 +1,4 @@
-- Embellish (Design ▸ Create): folk-swirl ornament designed to fit any closed shape you pick
-- Sliders for detail, number of pieces, scroll size and spacing, with New variation for another design
-- Borders round the edge: rope, chain, twist, braid or bead and reel
-- Makes grouped vectors on their own layer, a 3D carving, or both, and updates live as you change it
+- Shorter toolpath forms: pick every bit with Select Tool, Tabs in their own window, a preview you can stop and scrub
+- Send to Machine: save toolpaths straight to the CNC's card or WebDAV folder, a folder per project
+- Trace Bitmap trace window with live preview, Centerline and Quick Trace; decorative fills and relief
+- Pockets clear round islands, V-Carve is much faster, and every toolpath checks the bit can reach
