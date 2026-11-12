@@ -1489,7 +1489,7 @@ impl CutCraftApp {
             .map(|t| (t.name.clone(), t.number))
             .collect();
         let mut open = true;
-        let mut changed = false;
+        let (mut changed, mut select) = (false, None);
         egui::Window::new("Tool Changer")
             .id(egui::Id::unique("tool_changer"))
             .collapsible(false)
@@ -1501,11 +1501,21 @@ impl CutCraftApp {
                     return;
                 };
                 ui.strong(&machine.name);
-                changed = cut_craft_machines::tool_changer(ui, machine, Some(&tools));
+                (changed, select) = cut_craft_machines::tool_changer(ui, machine, Some(&tools));
             });
         self.tool_changer_window = open;
         if changed {
             self.tool_changer_changed();
+        }
+        // a holder's Select…: Select Tool, on the tool in it; its Select loads the holder
+        if let Some(slot) = select {
+            let current = self
+                .machines
+                .active()
+                .and_then(|m| m.slots.get(slot - 1).cloned().flatten())
+                .unwrap_or_default();
+            self.select_tool(&current);
+            self.picking = Some(super::PickFor::Holder(slot));
         }
     }
 

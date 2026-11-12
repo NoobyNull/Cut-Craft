@@ -357,15 +357,17 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
 const MOST_SLOTS: usize = 99;
 
 /// Automatic Tool Changer: how many slots, and what is loaded in them. Given the tool
-/// database's tools (name and tool number), each slot picks its tool and Load by Tool Number
-/// puts each numbered tool in its holder; else the slots are only listed. Whether anything
-/// changed.
+/// database's tools (name and tool number), each slot's Select… asks for its tool to be picked
+/// in the Tool Database, × empties it, and Load by Tool Number puts each numbered tool in its
+/// holder; else the slots are only listed. Whether anything changed, and the holder (from 1)
+/// whose Select… was clicked.
 pub fn tool_changer(
     ui: &mut egui::Ui,
     machine: &mut Machine,
     tools: Option<&[(String, u32)]>,
-) -> bool {
+) -> (bool, Option<usize>) {
     let before = machine.slots.clone();
+    let mut select = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
         ui.strong("Automatic Tool Changer");
@@ -412,61 +414,41 @@ pub fn tool_changer(
             for (name, number) in tools {
                 let slot = usize::try_from(*number).unwrap_or(0);
                 if (1..=machine.slots.len()).contains(&slot) {
-                    load(machine, name, slot);
+                    machine.load_tool(name, slot);
                 }
             }
         }
         egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::Grid::new("atc_slots").num_columns(2).show(ui, |ui| {
+            egui::Grid::new("atc_slots").num_columns(3).show(ui, |ui| {
                 for i in 0..machine.slots.len() {
                     ui.label(format!("T{}", i + 1));
-                    let shown = machine.slots[i].clone().unwrap_or_else(|| "(empty)".into());
-                    let mut picked = None;
-                    egui::ComboBox::from_id_salt(("atc_slot", i))
-                        .selected_text(shown)
-                        .width(ui.available_width().max(ui.spacing().interact_size.x * 4.0))
-                        .show_ui(ui, |ui| {
-                            if ui
-                                .selectable_label(machine.slots[i].is_none(), "(empty)")
+                    match &machine.slots[i] {
+                        Some(name) => ui.label(name),
+                        None => ui.weak("(empty)"),
+                    };
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button("Select…")
+                            .on_hover_hint("Pick the tool for this holder in the Tool Database")
+                            .clicked()
+                        {
+                            select = Some(i + 1);
+                        }
+                        if machine.slots[i].is_some()
+                            && ui
+                                .small_button("×")
+                                .on_hover_hint("Empty this holder")
                                 .clicked()
-                            {
-                                picked = Some(None);
-                            }
-                            for (name, number) in tools {
-                                let label = if *number > 0 {
-                                    format!("{name}  (T{number})")
-                                } else {
-                                    name.clone()
-                                };
-                                let here = machine.slots[i].as_deref() == Some(name.as_str());
-                                if ui.selectable_label(here, label).clicked() {
-                                    picked = Some(Some(name.clone()));
-                                }
-                            }
-                        });
-                    match picked {
-                        Some(Some(name)) => load(machine, &name, i + 1),
-                        Some(None) => machine.slots[i] = None,
-                        None => {}
-                    }
+                        {
+                            machine.slots[i] = None;
+                        }
+                    });
                     ui.end_row();
                 }
             });
         });
     });
-    machine.slots != before
-}
-
-/// Loads `tool` into holder `slot` (from 1), taking it out of any other holder.
-fn load(machine: &mut Machine, tool: &str, slot: usize) {
-    for s in &mut machine.slots {
-        if s.as_deref() == Some(tool) {
-            *s = None;
-        }
-    }
-    if let Some(s) = machine.slots.get_mut(slot - 1) {
-        *s = Some(tool.to_owned());
-    }
+    (machine.slots != before, select)
 }
 
 /// Keep-Out Zones: rectangles of the bed no toolpath of any job may pass over, such as
