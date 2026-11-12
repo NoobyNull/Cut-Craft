@@ -20,6 +20,7 @@ pub mod geometry;
 pub mod handles;
 pub mod import_settings;
 pub mod keep_out;
+pub mod medial;
 pub mod nodes;
 pub mod packed;
 pub mod params;
