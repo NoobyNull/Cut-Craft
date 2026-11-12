@@ -22,16 +22,22 @@ pub enum Spacing {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// The toolpaths to copy (none: the visible ones)
     pub sources: Vec<EntityId>,
+    /// How many copies up the job, counting the first
     #[schemars(range(min = 1))]
     pub rows: u32,
+    /// How many copies across the job, counting the first
     #[schemars(range(min = 1))]
     pub columns: u32,
+    /// How the X and Y distances are measured
     pub spacing: Spacing,
+    /// The distance between copies across the job
     #[schemars(extend("x-unit" = "mm"))]
     pub x: f64,
+    /// The distance between copies up the job
     #[schemars(extend("x-unit" = "mm"))]
     pub y: f64,
     /// Set on each array toolpath made: the one source it copies

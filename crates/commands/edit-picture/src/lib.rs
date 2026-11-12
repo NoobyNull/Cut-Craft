@@ -1,6 +1,6 @@
 //! Edit Picture: a picture's contrast, brightness and gamma, inverted if asked, and a border
 //! that fades its edges to white. Pictures are kept in grey,
-//! so Aspire's Grayscale has nothing to do here.
+//! so there is no separate Grayscale step.
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::{Document, EntityId};

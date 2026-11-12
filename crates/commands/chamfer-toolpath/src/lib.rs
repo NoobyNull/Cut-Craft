@@ -45,6 +45,7 @@ pub enum CutDirection {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface where the top of the chamfer is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -62,8 +63,10 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Chamfer"))]
     pub overcut: f64,
+    /// Which side of the vectors the chamfer goes
     #[schemars(extend("x-group" = "Chamfer"))]
     pub side: Side,
+    /// Which way the chamfer slopes from the vector
     #[schemars(extend("x-group" = "Chamfer"))]
     pub slope: Slope,
     #[schemars(extend(
@@ -71,6 +74,7 @@ pub struct Params {
         "x-widget" = "named-icons",
         "x-icon" = "toolpaths/cut_{}_outside.png"
     ))]
+    /// Which way round the shapes the tool travels
     pub cut_direction: CutDirection,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]

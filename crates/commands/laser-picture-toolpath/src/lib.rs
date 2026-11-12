@@ -26,14 +26,17 @@ pub enum Strategy {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Of the laser's maximum, where the picture is black
     #[schemars(extend("x-unit" = "%"), range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Laser"))]
     pub power: f64,
+    /// Times the picture is burned, for a darker mark
     #[schemars(range(min = 1))]
     #[schemars(extend("x-group" = "Laser"))]
     pub passes: u32,
+    /// The pattern of lines the picture is burned in
     #[schemars(extend("x-group" = "Picture"))]
     pub strategy: Strategy,
     /// Full power or off, spread to give the tones, for materials that only burn or don't
@@ -43,6 +46,7 @@ pub struct Params {
     #[schemars(range(min = 1, max = 30))]
     #[schemars(extend("x-group" = "Picture"))]
     pub line_spacing: f64,
+    /// The angle of the lines: 0° along X, 90° along Y
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Picture"))]
     pub line_angle: f64,

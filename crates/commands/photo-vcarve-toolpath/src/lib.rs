@@ -29,6 +29,7 @@ pub enum Strategy {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface where the carving is (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -42,6 +43,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Strategy"))]
     pub stepover_retract: f64,
+    /// The pattern of lines the picture is carved in
     #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,
     /// Between lines, as a percentage of the groove width at the max depth (100: grooves meet)
@@ -52,7 +54,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "°"))]
     #[schemars(extend("x-group" = "Strategy"))]
     pub line_angle: f64,
-    /// A V-bit
+    /// The V-bit that carves the picture
     pub tool: Tool,
     /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
     /// model's surface, going no lower than the bottom of the material

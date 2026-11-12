@@ -34,7 +34,9 @@ pub enum Boundary {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
+    /// Where the sketch lines come from
     #[schemars(extend("x-group" = "Sketch"))]
     pub source: Source,
     /// Below the material surface where carving starts
@@ -45,6 +47,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     pub cut_depth: f64,
+    /// How far the sketch lines reach
     #[schemars(extend("x-group" = "Boundary"))]
     pub boundary: Boundary,
     /// Moves the boundary out by this much

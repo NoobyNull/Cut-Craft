@@ -26,6 +26,7 @@ pub enum Layout {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Tiling {
+    /// Separate tiles, or one strip fed through the machine
     #[schemars(extend("x-widget" = "row"))]
     pub layout: Layout,
     /// Tile width (along X)

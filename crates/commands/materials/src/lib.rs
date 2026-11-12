@@ -1,7 +1,7 @@
 //! Toolpaths ▸ Materials: a library of materials to show the job in. Picking one sets the
 //! material's colour in the 3D view (Job Setup's Material Settings colour), and the 3D view
-//! draws a wood's grain over it; Custom is a solid colour of one's own. As Aspire's Material
-//! Appearance, it also sets how the preview colours the areas the toolpaths cut.
+//! draws a wood's grain over it; Custom is a solid colour of one's own. It also sets how the
+//! preview colours the areas the toolpaths cut.
 
 use cut_craft_core::document::{Document, Job, MachinedArea};
 use cut_craft_core::{Change, Command, CommandError, Meta};
@@ -16,25 +16,38 @@ pub enum Material {
     /// A solid colour of one's own
     #[default]
     Custom,
+    /// A pale softwood with a strong grain
     Pine,
+    /// A pale, fine-grained hardwood
     Maple,
+    /// Layered birch sheet, pale with a light grain
     #[schemars(title = "Birch Plywood")]
     BirchPlywood,
+    /// A mid-brown hardwood with an open grain
     Oak,
+    /// A reddish softwood, often used outdoors
     Cedar,
+    /// A reddish-brown fine-grained hardwood
     Cherry,
+    /// A deep red-brown hardwood
     Mahogany,
+    /// A dark brown hardwood
     Walnut,
+    /// Medium-density fibreboard: even, with no grain
     #[schemars(title = "MDF")]
     Mdf,
     /// High-density urethane sign foam
     #[schemars(title = "HDU Foam")]
     HduFoam,
+    /// White high-density polyethylene plastic
     #[schemars(title = "HDPE (White)")]
     HdpeWhite,
+    /// Black acrylic (Perspex) sheet
     #[schemars(title = "Acrylic (Black)")]
     AcrylicBlack,
+    /// Aluminium plate, shown in plain grey
     Aluminium,
+    /// Brass plate, shown in gold
     Brass,
 }
 
@@ -97,6 +110,7 @@ pub struct Params {
     #[schemars(title = "Machined Area Color", extend("x-widget" = "drop-down"))]
     #[serde(default)]
     pub machined_area: MachinedArea,
+    /// The one colour all cut areas are shown in
     #[schemars(
         title = "Fill color",
         extend("x-kind" = "colour"),

@@ -108,6 +108,7 @@ pub struct Params {
     #[serde(default)]
     #[schemars(skip)]
     pub through: bool,
+    /// The bit that cuts round the shapes; Select… picks one from your tools
     pub tool: Tool,
     /// Outside to cut a part out, Inside to cut a hole, On the Line to follow the line itself
     #[schemars(
@@ -201,6 +202,7 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Project toolpath onto 3D Model")]
     pub project_onto_model: bool,
+    /// What the toolpath is called in the toolpath list
     pub name: String,
 }
 
