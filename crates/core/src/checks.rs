@@ -39,9 +39,10 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
         .filter(|m| m.kind != MoveKind::Rapid)
         .map(|m| -m.to.z)
         .fold(0.0, f64::max);
-    if let Some(deep) = too_deep(name, tool, deepest) {
+    let thickness = doc.job.thickness;
+    if let Some(deep) = too_deep(name, tool, deepest, thickness) {
         found.push(deep);
-    } else if tool.known_flute_length().is_none() && deepest > 0.0 {
+    } else if reach::flutes(tool, thickness).is_none() && deepest > 0.0 {
         found.push(format!(
             "{name} cuts {deepest:.1} mm deep; {} has no flute length set, so whether it \
              reaches is not checked: set it in the Tool Database",
@@ -194,7 +195,20 @@ mod tests {
             found[0].contains("25.0 mm deep") && found[0].contains("22.0 mm"),
             "{found:?}"
         );
-        let unknown = problems(&doc, &toolpath(Tool::default(), "pocket", 5.0));
+        // no flute length (the starter bits): taken as half the material
+        let mut doc = doc;
+        doc.job.thickness = 20.0;
+        let starter = || toolpath(Tool::default(), "pocket", 5.0);
+        assert_eq!(problems(&doc, &starter()), Vec::<String>::new());
+        let deep = Toolpath {
+            moves: toolpath(Tool::default(), "pocket", 12.0).moves,
+            ..starter()
+        };
+        let found = problems(&doc, &deep);
+        assert!(found[0].contains("half the material, 10.0 mm"), "{found:?}");
+        // and with no thickness either, it can't be checked
+        doc.job.thickness = 0.0;
+        let unknown = problems(&doc, &starter());
         assert!(unknown[0].contains("no flute length"), "{unknown:?}");
     }
 

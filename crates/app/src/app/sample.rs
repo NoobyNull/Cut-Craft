@@ -90,6 +90,9 @@ impl CutCraftApp {
                 "side": "outside",
                 "tabs": "flat",
                 "tab": { "spacing": "constant_number", "number": TABS },
+                // a typical 6 mm end mill's flutes, so it reaches right through: a starter
+                // bit with none set is taken to reach only half the material
+                "tool": { "flute_length": 22.0 },
             }),
         )?;
         self.apply("profile_toolpath", &profile)

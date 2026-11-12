@@ -224,33 +224,81 @@ pub fn missed_sentence(name: &str, tool: &Tool, missed: &Missed, fix: Fix) -> St
     )
 }
 
-/// Whether cutting `depth` mm deep is beyond `tool`'s flutes, as one sentence that says what
-/// to do about it; `None` when it reaches, or the flute length is not set.
-pub fn too_deep(name: &str, tool: &Tool, depth: f64) -> Option<String> {
-    let flutes = tool.known_flute_length()?;
-    (depth > flutes + 1e-6).then(|| {
-        format!(
-            "{name} cuts {depth:.1} mm deep, but the flutes of {} are only {flutes:.1} mm long: \
-             pick a bit with longer flutes, or cut less deep",
-            tool.name
-        )
+/// How far down a bit's flutes reach, mm.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Flutes {
+    pub length: f64,
+    /// Not the bit's own Flute Length (it has none set): taken as half the material.
+    pub assumed: bool,
+}
+
+/// How far down `tool`'s flutes reach: its Flute Length, or with none set (as on the starter
+/// bits), half the material's `thickness`, so the check still answers. `None` with neither.
+pub fn flutes(tool: &Tool, thickness: f64) -> Option<Flutes> {
+    match tool.known_flute_length() {
+        Some(length) => Some(Flutes {
+            length,
+            assumed: false,
+        }),
+        None => (thickness > 0.0).then(|| Flutes {
+            length: thickness / 2.0,
+            assumed: true,
+        }),
+    }
+}
+
+/// Whether cutting `depth` mm deep is beyond `tool`'s flutes ([`flutes`], in material
+/// `thickness` mm thick), as one sentence that says what to do about it; `None` when it
+/// reaches, or nothing says how long its flutes are.
+pub fn too_deep(name: &str, tool: &Tool, depth: f64, thickness: f64) -> Option<String> {
+    let flutes = flutes(tool, thickness)?;
+    let length = flutes.length;
+    (depth > length + 1e-6).then(|| {
+        if flutes.assumed {
+            format!(
+                "{name} cuts {depth:.1} mm deep, but {} has no Flute Length set, so it is taken \
+                 to reach half the material, {length:.1} mm: set its real Flute Length in the \
+                 Tool Database, pick a bit with longer flutes, or cut less deep",
+                tool.name
+            )
+        } else {
+            format!(
+                "{name} cuts {depth:.1} mm deep, but the flutes of {} are only {length:.1} mm \
+                 long: pick a bit with longer flutes, or cut less deep",
+                tool.name
+            )
+        }
     })
 }
 
 /// The bit's reach as one short line for its toolpath form: what it can't reach, or that it
-/// reaches everything; nothing before a bit is picked. `depth` is how deep the form cuts, and `missed` the spots it is too
-/// wide for, when the form's shapes are known. `None` when there is nothing to say yet.
-pub fn form_line(tool: &Tool, depth: Option<f64>, missed: Option<&Missed>) -> Option<Line> {
+/// reaches everything; nothing before a bit is picked. `depth` is how deep the form cuts, in
+/// material `thickness` mm thick, and `missed` the spots it is too wide for, when the form's
+/// shapes are known. `None` when there is nothing to say yet.
+pub fn form_line(
+    tool: &Tool,
+    depth: Option<f64>,
+    thickness: f64,
+    missed: Option<&Missed>,
+) -> Option<Line> {
     if tool.name.is_empty() || tool.diameter <= 0.0 {
         return None;
     }
+    let flutes = flutes(tool, thickness);
+    let assumed = flutes.is_some_and(|f| f.assumed);
     let mut problems = vec![];
-    if let (Some(depth), Some(flutes)) = (depth, tool.known_flute_length())
-        && depth > flutes + 1e-6
+    if let (Some(depth), Some(flutes)) = (depth, flutes)
+        && depth > flutes.length + 1e-6
     {
-        problems.push(format!(
-            "too deep: the cut is {depth:.1} mm, its flutes {flutes:.1} mm"
-        ));
+        let length = flutes.length;
+        problems.push(if assumed {
+            format!(
+                "too deep: the cut is {depth:.1} mm, its flutes taken as {length:.1} mm (half \
+                 the material; set its real Flute Length in the Tool Database)"
+            )
+        } else {
+            format!("too deep: the cut is {depth:.1} mm, its flutes {length:.1} mm")
+        });
     }
     if let Some(m) = missed.filter(|m| m.any()) {
         let spots = if m.spots == 1 {
@@ -269,17 +317,25 @@ pub fn form_line(tool: &Tool, depth: Option<f64>, missed: Option<&Missed>) -> Op
             problems.join("; ")
         )));
     }
-    if depth.is_some() && tool.known_flute_length().is_none() {
-        let fits = if missed.is_some() {
-            "Fits every spot, but depth"
-        } else {
-            "Depth"
-        };
-        return Some(Line::Unknown(format!(
-            "{fits} not checked: set this bit's Flute Length in the Tool Database"
-        )));
+    match (depth, flutes) {
+        (Some(_), None) => {
+            let fits = if missed.is_some() {
+                "Fits every spot, but depth"
+            } else {
+                "Depth"
+            };
+            Some(Line::Unknown(format!(
+                "{fits} not checked: set this bit's Flute Length in the Tool Database"
+            )))
+        }
+        (Some(_), Some(f)) if f.assumed => Some(Line::Reaches(format!(
+            "Reaches everything, taking its flutes as half the material ({:.1} mm): set its \
+             real Flute Length in the Tool Database",
+            f.length
+        ))),
+        _ => (depth.is_some() || missed.is_some())
+            .then(|| Line::Reaches("Reaches everything".into())),
     }
-    (depth.is_some() || missed.is_some()).then(|| Line::Reaches("Reaches everything".into()))
 }
 
 /// A form's reach line, and how it looks.
@@ -407,8 +463,8 @@ mod tests {
     #[test]
     fn too_deep_names_the_depth_the_flutes_and_the_fix() {
         let tool = end_mill(6.0);
-        assert_eq!(too_deep("Pocket 1", &tool, 20.0), None);
-        let said = too_deep("Pocket 1", &tool, 25.0).unwrap();
+        assert_eq!(too_deep("Pocket 1", &tool, 20.0, 18.0), None);
+        let said = too_deep("Pocket 1", &tool, 25.0, 18.0).unwrap();
         assert!(said.contains("25.0 mm deep"), "{said}");
         assert!(said.contains("only 20.0 mm"), "{said}");
         assert!(said.contains("longer flutes"), "{said}");
@@ -416,7 +472,16 @@ mod tests {
             flute_length: 0.0,
             ..tool
         };
-        assert_eq!(too_deep("Pocket 1", &unknown, 25.0), None);
+        assert_eq!(
+            too_deep("Pocket 1", &unknown, 25.0, 0.0),
+            None,
+            "no thickness either"
+        );
+        // no flute length: taken as half the material
+        assert_eq!(too_deep("Pocket 1", &unknown, 9.0, 18.0), None);
+        let said = too_deep("Pocket 1", &unknown, 9.5, 18.0).unwrap();
+        assert!(said.contains("half the material, 9.0 mm"), "{said}");
+        assert!(said.contains("set its real Flute Length"), "{said}");
     }
 
     #[test]
@@ -455,10 +520,10 @@ mod tests {
         let tool = end_mill(6.0);
         let none = Missed::default();
         assert_eq!(
-            form_line(&tool, Some(10.0), Some(&none)),
+            form_line(&tool, Some(10.0), 18.0, Some(&none)),
             Some(Line::Reaches("Reaches everything".into()))
         );
-        let deep = form_line(&tool, Some(25.0), None).unwrap();
+        let deep = form_line(&tool, Some(25.0), 18.0, None).unwrap();
         assert!(matches!(deep, Line::Short(_)), "{deep:?}");
         assert!(deep.text().contains("too deep"), "{deep:?}");
         let m = Missed {
@@ -466,13 +531,13 @@ mod tests {
             area: 50.0,
             most: 0.0,
         };
-        let wide = form_line(&tool, Some(10.0), Some(&m)).unwrap();
+        let wide = form_line(&tool, Some(10.0), 18.0, Some(&m)).unwrap();
         assert!(wide.text().contains("too wide for 2 spots"), "{wide:?}");
         let unknown = Tool {
             flute_length: 0.0,
             ..tool.clone()
         };
-        let unchecked = form_line(&unknown, Some(10.0), Some(&none)).unwrap();
+        let unchecked = form_line(&unknown, Some(10.0), 0.0, Some(&none)).unwrap();
         assert!(matches!(unchecked, Line::Unknown(_)), "{unchecked:?}");
         assert!(
             unchecked.text().starts_with("Fits every spot"),
@@ -482,8 +547,22 @@ mod tests {
             name: String::new(),
             ..Tool::default()
         };
-        assert_eq!(form_line(&unpicked, Some(10.0), None), None, "no bit");
-        assert_eq!(form_line(&tool, None, None), None, "nothing known yet");
+        assert_eq!(form_line(&unpicked, Some(10.0), 18.0, None), None, "no bit");
+        assert_eq!(
+            form_line(&tool, None, 18.0, None),
+            None,
+            "nothing known yet"
+        );
+        // a starter bit, no flute length: taken as half the 18 mm material
+        let fine = form_line(&unknown, Some(9.0), 18.0, Some(&none)).unwrap();
+        assert!(matches!(fine, Line::Reaches(_)), "{fine:?}");
+        assert!(
+            fine.text().contains("half the material (9.0 mm)"),
+            "{fine:?}"
+        );
+        let deep = form_line(&unknown, Some(12.0), 18.0, None).unwrap();
+        assert!(matches!(deep, Line::Short(_)), "{deep:?}");
+        assert!(deep.text().contains("taken as 9.0 mm"), "{deep:?}");
     }
 
     #[test]

@@ -10669,7 +10669,7 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     );
     assert!(h.text_at(line.text()).is_some(), "shown: {line:?}");
     assert!(line.text().contains("too wide for 1 spot"), "{line:?}");
-    // a wider shape fits; the starter bit has no flute length, so depth is not checked
+    // a wider shape fits
     h.app.form = None;
     h.rectangle(30.0, 10.0, 40.0, 50.0);
     h.click(h.at(70.0, 35.0), Modifiers::NONE);
@@ -10677,7 +10677,12 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
     h.app.choose_tool("3 mm End Mill");
     h.frame(vec![]);
     let line = h.app.form_reach().expect("a reach line");
-    assert!(line.text().starts_with("Fits every spot"), "{line:?}");
+    // the starter bit has no flute length: taken as half the material
+    assert!(
+        matches!(line, cut_craft_core::reach::Line::Reaches(_)),
+        "{line:?}"
+    );
+    assert!(line.text().contains("half the material"), "{line:?}");
 }
 
 #[test]

@@ -70,6 +70,11 @@ impl super::CutCraftApp {
             }
             None => None,
         };
-        reach::form_line(&tool, depth(&form.params), missed.as_ref())
+        reach::form_line(
+            &tool,
+            depth(&form.params),
+            self.doc.job.thickness,
+            missed.as_ref(),
+        )
     }
 }
