@@ -2384,6 +2384,7 @@ dependencies = [
  "image",
  "log",
  "serde_json",
+ "ureq",
 ]
 
 [[package]]
@@ -2417,6 +2418,7 @@ dependencies = [
  "fontdb",
  "glam",
  "i_overlay",
+ "log",
  "md-5",
  "schemars",
  "serde",

@@ -5947,20 +5947,131 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
 #[test]
 fn a_crash_last_time_opens_its_report_with_the_crash_log() {
     let mut h = Harness::new();
-    h.app.reporter.report_crash(
-        "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\n\
-         index out of bounds\n\nBacktrace:\n..."
-            .into(),
-    );
+    h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
+    // no crash-report service yet: the report opens with the log ticked
+    h.app.reporter.crash_service = None;
+    let ctx = h.ctx.clone();
+    h.app.offer_crash(&ctx, CRASH.into());
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.app.reporter.is_open(), "Report a Bug opens by itself");
     assert!(
-        h.text_at("Crash: panicked at crates/app/src/view3d.rs:9:9: index out of bounds")
-            .is_some(),
-        "titled with the panic"
+        h.text_at("Crash: index out of bounds").is_some(),
+        "titled in words, not with the source path"
     );
-    assert!(h.text_at("Send the log").is_some());
+    assert!(h.text_at("The crash log").is_some());
+    assert!(
+        h.text_at("May Cut Craft send these with your report?")
+            .is_some()
+    );
+}
+
+const CRASH: &str = "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\n\
+                     index out of bounds\n\nBacktrace:\n...";
+
+#[test]
+fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "a post that can fail, as the real one"
+    )]
+    fn accepted(url: &str, body: &str) -> Result<(), String> {
+        assert_eq!(url, "https://crash.example/v1/crash");
+        assert!(
+            body.contains("\"title\":\"Crash: index out of bounds\""),
+            "{body}"
+        );
+        Ok(())
+    }
+    fn refused(_: &str, _: &str) -> Result<(), String> {
+        Err("the service is down".into())
+    }
+    for (post, sent) in [
+        (accepted as fn(&str, &str) -> Result<(), String>, true),
+        (refused, false),
+    ] {
+        let mut h = Harness::new();
+        h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
+        h.app.reporter.crash_service = Some("https://crash.example/v1/crash".into());
+        h.app.reporter.post = post;
+        let ctx = h.ctx.clone();
+        h.app.offer_crash(&ctx, CRASH.into());
+        assert!(
+            h.app.options.bug_reports.install_id.is_some(),
+            "numbered once"
+        );
+        for _ in 0..200 {
+            h.frame(vec![]);
+            if h.app.status.message.contains("crash report was sent") || h.app.reporter.is_open() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        h.frame(vec![]);
+        assert_eq!(
+            h.app.status.message.contains("crash report was sent"),
+            sent,
+            "{}",
+            h.app.status.message
+        );
+        assert_eq!(
+            h.app.reporter.is_open(),
+            !sent,
+            "not sent: the form instead"
+        );
+    }
+}
+
+#[test]
+fn a_crash_is_not_offered_when_crash_logs_are_not_to_be_sent() {
+    let mut h = Harness::new();
+    h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::DontSend;
+    let ctx = h.ctx.clone();
+    h.app.offer_crash(&ctx, CRASH.into());
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(!h.app.reporter.is_open(), "no report");
+    assert!(
+        h.app
+            .status
+            .message
+            .starts_with("Cut Craft closed with an error last time."),
+        "{}",
+        h.app.status.message
+    );
+}
+
+#[test]
+fn the_log_says_what_a_command_made() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 30.0);
+    let vector = *h.app.doc.vectors.keys().next().unwrap();
+    let step = cut_craft_core::toolpath::Move {
+        kind: cut_craft_core::toolpath::MoveKind::Cut,
+        to: cut_craft_core::glam::DVec3::ZERO,
+    };
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(cut_craft_core::toolpath::Toolpath {
+        name: "Profile 1".into(),
+        strategy: "test".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![vector],
+        moves: vec![step; 3],
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+    });
+    assert_eq!(
+        super::background::summary(&c.finish()),
+        "done, changed 1 toolpath, 3 moves"
+    );
+    assert_eq!(
+        super::background::summary(&Change::default()),
+        "done, nothing changed"
+    );
 }
 
 #[test]
