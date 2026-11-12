@@ -402,7 +402,7 @@ pub struct ToolpathSettings {
     pub tolerance_3d: f64,
     /// The same for V-carving, prism, inlay and chamfer toolpaths
     #[serde(default = "tolerance")]
-    #[schemars(title = "V-Carve toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0))]
     pub tolerance_vcarve: f64,
     /// How many times faster than the machine a toolpath preview plays when it starts: 1
     /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the

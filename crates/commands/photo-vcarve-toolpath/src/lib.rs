@@ -1,5 +1,5 @@
-//! Photo V-Carve Toolpath: a V-bit etches a picture as grooves, deeper (so wider) where it
-//! is darker, along parallel lines across it or along the selected vectors.
+//! Photo V-Carve Toolpath (V-bit carved photo): a V-bit etches a picture as grooves, deeper (so
+//! wider) where it is darker, along parallel lines across it or along the selected vectors.
 
 use cut_craft_core::bitmap::Bitmap;
 use cut_craft_core::document::Document;
