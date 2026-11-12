@@ -218,6 +218,82 @@ pub(super) fn command_change(
     let cmd = registry
         .get(id)
         .expect("only registered commands are applied");
+    let label = cmd.meta().label;
+    log::info!("{label}: settings {}", settings_line(params));
+    let change = command_change_of(cmd, doc, params);
+    match &change {
+        Ok(change) => log::info!("{label}: {}", summary(change)),
+        Err(why) => log::warn!("{label} failed: {why}"),
+    }
+    change
+}
+
+/// The most of a command's settings the log keeps.
+const SETTINGS_CHARS: usize = 400;
+
+/// A command's settings as one line for the log, cut short when long.
+fn settings_line(params: &Value) -> String {
+    let line = params.to_string();
+    if line.chars().count() <= SETTINGS_CHARS {
+        return line;
+    }
+    let mut short: String = line.chars().take(SETTINGS_CHARS).collect();
+    short.push('…');
+    short
+}
+
+/// What a command made, for the log: how many of each kind of thing it added, changed or
+/// removed, and how many moves its toolpaths have.
+pub(super) fn summary(change: &Change) -> String {
+    use cut_craft_core::Edit;
+    let (mut vectors, mut toolpaths, mut components, mut bitmaps, mut moves) = (0, 0, 0, 0, 0);
+    for edit in &change.edits {
+        match edit {
+            Edit::Add { .. } | Edit::Remove { .. } | Edit::Replace { .. } => vectors += 1,
+            Edit::AddToolpath { toolpath, .. }
+            | Edit::ReplaceToolpath {
+                after: toolpath, ..
+            } => {
+                toolpaths += 1;
+                moves += toolpath.moves.len();
+            }
+            Edit::RemoveToolpath { .. } => toolpaths += 1,
+            Edit::AddComponent { .. }
+            | Edit::RemoveComponent { .. }
+            | Edit::ReplaceComponent { .. } => components += 1,
+            Edit::AddBitmap { .. } | Edit::RemoveBitmap { .. } | Edit::ReplaceBitmap { .. } => {
+                bitmaps += 1;
+            }
+            _ => {}
+        }
+    }
+    let mut said: Vec<String> = [
+        (vectors, "vector"),
+        (toolpaths, "toolpath"),
+        (components, "component"),
+        (bitmaps, "bitmap"),
+    ]
+    .iter()
+    .filter(|(n, _)| *n > 0)
+    .map(|(n, what)| format!("{n} {what}{}", if *n == 1 { "" } else { "s" }))
+    .collect();
+    if moves > 0 {
+        said.push(format!("{moves} moves"));
+    }
+    if change.edits.is_empty() {
+        "done, nothing changed".to_owned()
+    } else if said.is_empty() {
+        format!("done, {} other changes", change.edits.len())
+    } else {
+        format!("done, changed {}", said.join(", "))
+    }
+}
+
+fn command_change_of(
+    cmd: &dyn cut_craft_core::DynCommand,
+    doc: &Document,
+    params: &Value,
+) -> Result<Change, String> {
     let change = match cut_craft_core::selector::Selector::of(params) {
         Some(selector) => {
             let mut sources = doc.clone();

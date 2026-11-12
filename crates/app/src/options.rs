@@ -911,6 +911,11 @@ advanced_default!(
     u32::try_from(cut_craft_core::accuracy::NEST_FILLERS).expect("a small count")
 );
 
+/// A count from the options file as a `usize`.
+fn count(n: u32) -> usize {
+    usize::try_from(n).unwrap_or(usize::MAX)
+}
+
 /// `mm` in whole micrometres, as the accuracy settings show it.
 #[expect(
     clippy::cast_possible_truncation,
@@ -951,22 +956,33 @@ impl Advanced {
     pub fn apply(&self) {
         cut_craft_core::simulation::set_core_limit(usize::try_from(self.cores).unwrap_or(0));
         cut_craft_core::import_settings::set_spline_samples(self.dxf_spline_detail);
-        let count = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
-        crate::clipart::limits::set(
+        let (relist, most, unused_days, keep) = self.library_limits();
+        crate::clipart::limits::set(relist, most, unused_days, keep);
+        cut_craft_core::accuracy::set(self.accuracy());
+    }
+
+    /// The Library's rescan seconds, most files, days an unused preview is kept and previews
+    /// on the graphics card, each kept to its range.
+    pub fn library_limits(&self) -> (u64, usize, u64, usize) {
+        (
             u64::from(self.library_rescan_seconds.clamp(1, 3600)),
             count(self.library_most_files.clamp(1000, 10_000_000)),
             u64::from(self.preview_cache_days.clamp(1, 3650)),
             count(self.previews_on_card.clamp(50, 5000)),
-        );
+        )
+    }
+
+    /// How exactly toolpaths are worked out, in mm, each kept to its range.
+    pub fn accuracy(&self) -> cut_craft_core::accuracy::Accuracy {
         let mm = |um: u32| f64::from(um) / 1000.0;
-        cut_craft_core::accuracy::set(cut_craft_core::accuracy::Accuracy {
+        cut_craft_core::accuracy::kept_to_ranges(cut_craft_core::accuracy::Accuracy {
             curve: mm(self.curve_accuracy),
             roughing_3d: mm(self.roughing_3d_accuracy),
             finishing_3d: mm(self.finishing_3d_accuracy),
             rest: mm(self.rest_threshold),
             nest_sheets: count(self.nest_most_sheets),
             nest_fillers: count(self.nest_most_fillers),
-        });
+        })
     }
 
     /// The check saved beside these settings: a keyed hash of them, so an edit made outside
@@ -1047,6 +1063,40 @@ impl Default for Updates {
             skipped_version: None,
         }
     }
+}
+
+/// Bug reports, and what happens after Cut Craft closes because of an error.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct BugReports {
+    /// If Cut Craft closes because of an error, it keeps a crash log saying what it was
+    /// doing. The next time it starts it can open a bug report with that log, for you to
+    /// read and send. Your user name and home folder are left out of it, and nothing is sent
+    /// until you press Submit.
+    #[serde(default)]
+    #[schemars(title = "If Cut Craft crashes")]
+    pub crash_logs: CrashLogs,
+    /// A random number for this install, made when a crash report is first sent, so the
+    /// crash-report service can tell one install from another. Nothing about the person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub install_id: Option<String>,
+}
+
+/// Whether a crash's log is offered as a bug report at the next start.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CrashLogs {
+    /// Send the crash log to Cut Craft's crash-report service by itself (home folders and
+    /// your user name left out). Where that can't be done, open a bug report with it ticked
+    #[schemars(title = "Send the crash log")]
+    Send,
+    /// Open a bug report, and ask each time whether the crash log goes with it
+    #[default]
+    #[schemars(title = "Ask me each time")]
+    Ask,
+    /// Don't open a report: the crash log is kept in Cut Craft's settings folder
+    #[schemars(title = "Don't send crash logs")]
+    DontSend,
 }
 
 /// How Cut Craft looks.
@@ -1204,6 +1254,9 @@ pub struct Options {
     #[schemars(title = "Updates", extend("x-section" = true))]
     pub updates: Updates,
     #[serde(default)]
+    #[schemars(title = "Bug Reports", extend("x-section" = true))]
+    pub bug_reports: BugReports,
+    #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub advanced: Advanced,
     /// Snapping Options (F4): what the pointer snaps to, nudge distances and rotate snap
@@ -1339,6 +1392,7 @@ impl Default for Options {
             advanced: Advanced::default(),
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
+            bug_reports: BugReports::default(),
             default_job: None,
             first_run_done: false,
             favourites: Favourites::default(),
@@ -1552,6 +1606,7 @@ mod tests {
                 "Appearance",
                 "SpaceMouse",
                 "Updates",
+                "Bug Reports",
                 "Advanced"
             ]
         );
@@ -1686,15 +1741,15 @@ mod tests {
     }
 
     #[test]
-    fn importing_settings_reach_the_importers() {
-        let mut o = Options::default();
-        o.import.picture_pixels_per_inch = 300.0;
-        o.advanced.dxf_spline_detail = 64;
-        o.apply();
-        assert_eq!(cut_craft_core::import_settings::pixels_per_inch(), 300.0);
-        assert_eq!(cut_craft_core::import_settings::spline_samples(), 64);
-        Options::default().apply();
-        assert_eq!(cut_craft_core::import_settings::pixels_per_inch(), 96.0);
+    fn importing_settings_default_to_what_the_importers_used() {
+        // what apply hands the importers; checked without calling it, since import tests
+        // running beside this one read what it sets
+        use cut_craft_core::import_settings::{self, PIXELS_PER_INCH, SPLINE_SAMPLES};
+        let o = Options::default();
+        assert_eq!(o.import.picture_pixels_per_inch, PIXELS_PER_INCH);
+        assert_eq!(o.advanced.dxf_spline_detail, SPLINE_SAMPLES);
+        assert_eq!(import_settings::pixels_per_inch(), PIXELS_PER_INCH);
+        assert_eq!(import_settings::spline_samples(), SPLINE_SAMPLES);
     }
 
     #[test]
@@ -1704,23 +1759,16 @@ mod tests {
         o.advanced.library_most_files = 5000;
         o.advanced.preview_cache_days = 7;
         o.advanced.previews_on_card = 100;
-        o.apply();
-        assert_eq!(
-            crate::clipart::limits::relist(),
-            std::time::Duration::from_mins(1)
-        );
-        assert_eq!(crate::clipart::limits::most(), 5000);
-        assert_eq!(
-            crate::clipart::limits::unused(),
-            std::time::Duration::from_hours(24 * 7)
-        );
-        assert_eq!(crate::clipart::limits::keep(), 100);
+        // what apply hands the Library, checked without setting it: Library tests beside
+        // this one read it
+        assert_eq!(o.advanced.library_limits(), (60, 5000, 7, 100));
         // out of range in the file: kept to the range
         o.advanced.library_most_files = 1;
-        o.apply();
-        assert_eq!(crate::clipart::limits::most(), 1000);
-        Options::default().apply();
-        assert_eq!(crate::clipart::limits::most(), crate::clipart::MOST);
+        assert_eq!(o.advanced.library_limits().1, 1000);
+        assert_eq!(
+            Advanced::default().library_limits(),
+            (5, crate::clipart::MOST, 60, 400)
+        );
         // saved by Cut Craft they load back; edited by hand they go back to the defaults
         let mut o = Options::default();
         o.advanced.previews_on_card = 100;
@@ -1752,9 +1800,10 @@ mod tests {
         o.advanced.rest_threshold = 100;
         o.advanced.nest_most_sheets = 200;
         o.advanced.nest_most_fillers = 10;
-        o.apply();
+        // what apply hands the toolpaths, checked without setting it: toolpath tests beside
+        // this one read it
         assert_eq!(
-            accuracy::get(),
+            o.advanced.accuracy(),
             Accuracy {
                 curve: 0.05,
                 roughing_3d: 0.02,
@@ -1764,8 +1813,12 @@ mod tests {
                 nest_fillers: 10,
             }
         );
-        Options::default().apply();
-        assert_eq!(accuracy::get(), Accuracy::default());
+        assert_eq!(Advanced::default().accuracy(), Accuracy::default());
+        assert_eq!(
+            accuracy::get(),
+            Accuracy::default(),
+            "nothing here changed it"
+        );
         // a gouging finish set by hand goes back to the safe default
         let mut file: serde_json::Value =
             serde_json::from_slice(&saved(&Options::default())).unwrap();

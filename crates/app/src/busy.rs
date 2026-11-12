@@ -57,8 +57,19 @@ impl<A: 'static> Busy<A> {
                 let _done = Done(flag, wake);
                 tracked.track(work)
             });
+        // logged as started now and as finished or failed once its answer is used; a crash
+        // meanwhile names it and the step it was on
+        let at = progress.clone();
+        let doing = cut_craft_bug_report::logs::doing_with(what, move || at.stage());
         let finish: Box<dyn FnOnce(&mut A)> = if let Ok(handle) = spawned {
-            Box::new(move |state| then(state, handle.join().map_err(|panic| failed(&*panic))))
+            Box::new(move |state| {
+                let answer = handle.join().map_err(|panic| failed(&*panic));
+                match &answer {
+                    Ok(_) => doing.finished(""),
+                    Err(why) => doing.failed(why),
+                }
+                then(state, answer);
+            })
         } else {
             // no thread to be had (the system is out of them): the job cannot run
             done.store(true, Ordering::Release);

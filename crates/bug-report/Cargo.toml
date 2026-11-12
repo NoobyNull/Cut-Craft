@@ -12,6 +12,8 @@ eframe.workspace = true
 image.workspace = true
 log = "0.4"
 serde_json.workspace = true
+# crash logs to the crash-report service over HTTPS, as the updater reaches GitHub
+ureq = { version = "3", features = ["platform-verifier"] }
 
 [lints]
 workspace = true

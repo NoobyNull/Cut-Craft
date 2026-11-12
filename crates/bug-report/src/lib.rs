@@ -3,6 +3,10 @@
 //! line that draws each, and the exact widget clicked), the app's state, the log, a screenshot
 //! of the window and any pictures added. After a crash the next start offers its crash log.
 //!
+//! Reports are public, so nothing personal goes without asking: the screenshot and the log
+//! are each sent only when ticked, the form shows exactly what each says, and the log and
+//! state have the person's home folder and user name taken out ([`privacy::scrub`]).
+//!
 //! Code marks what it draws with [`mark`]; the app calls [`Reporter::frame`] once a frame,
 //! after drawing. Issues are made through the GitHub CLI (`gh`, already signed in); a report
 //! that cannot be sent is kept on disk instead.
@@ -10,6 +14,8 @@
 mod github;
 pub mod hint;
 pub mod logs;
+pub mod privacy;
+pub mod relay;
 mod spot;
 
 use eframe::egui;
@@ -28,8 +34,11 @@ const THUMBNAIL_SHARE: f32 = 0.5;
 const TEXT_ROWS: usize = 6;
 /// Lines of the log shown in the form before it scrolls.
 const LOG_ROWS: f32 = 8.0;
-/// The most of a crash's panic message a report's title takes.
-const CRASH_TITLE_CHARS: usize = 100;
+/// How faint the screenshot shows while it is not to be sent.
+const UNSENT_ALPHA: u8 = 90;
+/// What the form says about who sees a report.
+pub const PUBLIC_NOTE: &str = "Reports are public on GitHub, so anyone can read them. Tick only \
+    what you are happy to share.";
 
 /// A named part of the window and the source line that drew it.
 #[derive(Clone, Debug, PartialEq)]
@@ -228,12 +237,15 @@ struct Draft {
     /// The widget clicked, from the accessibility tree.
     widget: Option<String>,
     state: String,
+    /// The log, or the crash log, as it would be sent: scrubbed already.
     log: String,
     send_log: bool,
     screenshot: Option<Arc<egui::ColorImage>>,
     send_screenshot: bool,
     pictures: Vec<PathBuf>,
     error: Option<String>,
+    /// A report of the last run's crash, its log the crash log.
+    crash: bool,
 }
 
 impl Draft {
@@ -286,8 +298,16 @@ pub struct Reporter {
     spotted: Option<String>,
     /// Whether the plugin that finds it is in.
     spotting: bool,
-    /// A crash log the last run left, to offer as a report.
-    crash: Option<String>,
+    /// A crash log the last run left, to offer as a report, and whether its log starts
+    /// ticked (the person said yes to sending crash logs).
+    crash: Option<(String, bool)>,
+    /// Cut Craft's crash-report service (its `/v1/crash` address), once there is one: a
+    /// crash's log goes there by itself for people who said yes.
+    pub crash_service: Option<String>,
+    /// How a crash's log is posted to the service (replaced in tests).
+    pub post: fn(&str, &str) -> Result<(), String>,
+    /// A crash log on its way to the service, and how that went.
+    crash_sending: Option<(String, mpsc::Receiver<Result<(), String>>)>,
 }
 
 /// What the app gives a report: its state, and a picker for pictures to add.
@@ -311,12 +331,54 @@ impl Reporter {
             spotted: None,
             spotting: false,
             crash: None,
+            crash_service: None,
+            post: relay::post_https,
+            crash_sending: None,
         }
     }
 
-    /// Offers `crash` (what the last run's panic left) as a report, from the next frame.
-    pub fn report_crash(&mut self, crash: String) {
-        self.crash = Some(crash);
+    /// Sends `crash` (the last run's crash log) to the crash-report service on a thread of
+    /// its own, as install `install`, for someone who said yes to sending crash logs. With
+    /// no service, or should it fail, the report form opens with the log ticked instead.
+    pub fn send_crash(&mut self, ctx: &egui::Context, crash: String, install: &str) {
+        let Some(url) = self.crash_service.clone() else {
+            self.report_crash(crash, true);
+            return;
+        };
+        let (tx, rx) = mpsc::channel();
+        let (post, text, install, ctx) =
+            (self.post, crash.clone(), install.to_owned(), ctx.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(relay::send(&url, &text, &install, &post));
+            ctx.request_repaint();
+        });
+        self.crash_sending = Some((crash, rx));
+    }
+
+    /// A crash log sent to the service: thanks; one that could not go opens the form.
+    fn crash_sent(&mut self) -> Option<String> {
+        let (_, rx) = self.crash_sending.as_ref()?;
+        let result = rx.try_recv().ok()?;
+        let (crash, _) = self.crash_sending.take()?;
+        match result {
+            Ok(()) => Some(
+                "Cut Craft closed with an error last time. Its crash report was sent: thank \
+                 you, it helps fix Cut Craft."
+                    .into(),
+            ),
+            Err(why) => {
+                log::warn!("{why}");
+                self.crash = Some((crash, true));
+                None
+            }
+        }
+    }
+
+    /// Offers `crash` (what the last run's panic left) as a report, from the next frame; its
+    /// log ticked to send when `send_log` (the person agreed to send crash logs), else
+    /// left for them to tick.
+    pub fn report_crash(&mut self, crash: String, send_log: bool) {
+        self.crash = Some((crash, send_log));
     }
 
     /// Whether the report form is open.
@@ -334,8 +396,9 @@ impl Reporter {
         if let Some(found) = ctx.data_mut(|d| d.remove_temp::<Option<String>>(spot::id())) {
             self.spotted = found;
         }
-        if let Some(crash) = self.crash.take() {
-            self.open_crash(crash, host);
+        let thanks = self.crash_sent();
+        if let Some((crash, send_log)) = self.crash.take() {
+            self.open_crash(&crash, send_log, host);
         }
         let (regions, claimed, asked) =
             with_frame(ctx, |f| (f.regions.clone(), f.claimed, f.asked));
@@ -362,56 +425,47 @@ impl Reporter {
             self.open(host);
         }
         self.form(ctx, host);
-        self.sent(ctx)
+        self.sent(ctx).or(thanks)
     }
 
     fn open(&mut self, host: &Host) {
         let (at, regions) = self.clicked.clone().unwrap_or_default();
         self.menu = false;
-        let log = logs::recent();
+        // asked each time: neither goes unless ticked
         self.draft = Some(Draft {
             title: String::new(),
             text: String::new(),
             at,
             regions,
             widget: self.spotted.clone(),
-            state: (host.state)(),
-            send_log: !log.is_empty(),
-            log,
+            state: privacy::scrub(&(host.state)()),
+            log: privacy::scrub(&logs::recent()),
+            send_log: false,
             screenshot: self.screenshot.clone(),
-            send_screenshot: self.screenshot.is_some(),
+            send_screenshot: false,
             pictures: vec![],
             error: None,
+            crash: false,
         });
     }
 
-    /// The form for a crash: titled with its panic, the crash log to send.
-    fn open_crash(&mut self, crash: String, host: &Host) {
-        let panic = crash
-            .split_once("crashed: ")
-            .map_or(crash.as_str(), |(_, rest)| rest);
-        let panic = panic.split("\n\n").next().unwrap_or_default();
-        let title: String = panic
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .chars()
-            .take(CRASH_TITLE_CHARS)
-            .collect();
+    /// The form for a crash: titled in plain words, the crash log to send when allowed.
+    fn open_crash(&mut self, crash: &str, send_log: bool, host: &Host) {
         self.draft = Some(Draft {
-            title: format!("Crash: {title}"),
+            title: privacy::crash_title(crash),
             text: "Cut Craft closed with an error the last time it ran.\n\nWhat were you doing?\n"
                 .into(),
             at: egui::Pos2::ZERO,
             regions: vec![],
             widget: None,
-            state: (host.state)(),
-            log: crash,
-            send_log: true,
+            state: privacy::scrub(&(host.state)()),
+            log: privacy::scrub(crash),
+            send_log,
             screenshot: None,
             send_screenshot: false,
             pictures: vec![],
             error: None,
+            crash: true,
         });
     }
 
@@ -461,35 +515,7 @@ impl Reporter {
                     .desired_rows(TEXT_ROWS)
                     .desired_width(f32::INFINITY),
             );
-            ui.collapsing("Where (sent with the report)", |ui| {
-                if let Some(widget) = &draft.widget {
-                    ui.label(format!("Clicked: {widget}"));
-                }
-                if draft.regions.is_empty() {
-                    ui.weak("No named part of the window here");
-                }
-                for r in &draft.regions {
-                    ui.label(format!("{} — {}:{}", r.name, r.at.file(), r.at.line()));
-                }
-                ui.weak(&draft.state);
-            });
-            log_section(ui, draft);
-            if let Some(image) = &draft.screenshot {
-                ui.checkbox(
-                    &mut draft.send_screenshot,
-                    "Send a screenshot of the window",
-                );
-                if draft.send_screenshot {
-                    let texture = ui.ctx().load_texture(
-                        "bug_report_screenshot",
-                        Arc::clone(image),
-                        egui::TextureOptions::LINEAR,
-                    );
-                    let shown = ui.available_width() * THUMBNAIL_SHARE;
-                    let size = texture.size_vec2() * (shown / texture.size_vec2().x);
-                    ui.image((texture.id(), size));
-                }
-            }
+            what_is_sent(ui, draft);
             ui.horizontal(|ui| {
                 if ui.button("Add Pictures…").clicked() {
                     draft.pictures.extend((host.pick_pictures)());
@@ -587,20 +613,66 @@ impl Reporter {
     }
 }
 
-/// The report form's log: whether to send it, and what it says.
-fn log_section(ui: &mut egui::Ui, draft: &mut Draft) {
-    if draft.log.is_empty() {
-        return;
+/// The form's question: may the screenshot and the log go too? Each starts unticked
+/// (a crash's log ticked when crash logs were allowed), each shows exactly what it is, and
+/// what always goes is shown as well.
+fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
+    ui.separator();
+    ui.strong("May Cut Craft send these with your report?");
+    ui.weak(PUBLIC_NOTE);
+    if let Some(image) = &draft.screenshot {
+        ui.checkbox(
+            &mut draft.send_screenshot,
+            "A picture of the Cut Craft window",
+        );
+        ui.weak("It shows your design as it is on screen.");
+        let texture = ui.ctx().load_texture(
+            "bug_report_screenshot",
+            Arc::clone(image),
+            egui::TextureOptions::LINEAR,
+        );
+        let shown = ui.available_width() * THUMBNAIL_SHARE;
+        let size = texture.size_vec2() * (shown / texture.size_vec2().x);
+        let tint = if draft.send_screenshot {
+            egui::Color32::WHITE
+        } else {
+            // not ticked: shown faded, so it reads as left out
+            egui::Color32::from_white_alpha(UNSENT_ALPHA)
+        };
+        ui.add(egui::Image::new((texture.id(), size)).tint(tint));
     }
-    ui.checkbox(&mut draft.send_log, "Send the log");
-    if draft.send_log {
-        ui.collapsing("Log", |ui| {
+    if !draft.log.is_empty() {
+        let label = if draft.crash {
+            "The crash log"
+        } else {
+            "Cut Craft's log"
+        };
+        ui.checkbox(&mut draft.send_log, label);
+        ui.weak(
+            "What Cut Craft was doing: the tools used, what each did and how it ended. Your \
+             user name and home folder are left out.",
+        );
+        ui.collapsing("See the log", |ui| {
             egui::ScrollArea::vertical()
                 .max_height(ui.text_style_height(&egui::TextStyle::Monospace) * LOG_ROWS)
                 .stick_to_bottom(true)
                 .show(ui, |ui| ui.monospace(&draft.log));
         });
     }
+    ui.collapsing("Always sent: the version and where you clicked", |ui| {
+        ui.weak("No designs or files: only these lines.");
+        if let Some(widget) = &draft.widget {
+            ui.label(format!("Clicked: {widget}"));
+        }
+        if draft.regions.is_empty() && !draft.crash {
+            ui.weak("No named part of the window here");
+        }
+        for r in &draft.regions {
+            ui.label(format!("{} — {}:{}", r.name, r.at.file(), r.at.line()));
+        }
+        ui.monospace(&draft.state);
+    });
+    ui.separator();
 }
 
 #[cfg(test)]
@@ -737,6 +809,52 @@ mod tests {
         assert!(texts.iter().any(|t| t == "Mine"), "{texts:?}");
         let reports = texts.iter().filter(|t| *t == "Report a Bug Here…").count();
         assert_eq!(reports, 1, "{texts:?}");
+    }
+
+    #[test]
+    fn nothing_personal_goes_unless_ticked() {
+        let mut reporter = Reporter::new("me/app", None);
+        reporter.screenshot = Some(Arc::new(egui::ColorImage::filled(
+            [2, 1],
+            egui::Color32::RED,
+        )));
+        let host = Host {
+            state: &|| "Status: Opened /home/sam/Jobs/sign.ccjob".into(),
+            pick_pictures: &Vec::new,
+        };
+        reporter.open(&host);
+        let draft = reporter.draft.as_mut().unwrap();
+        draft.log = "Saved /home/sam/a.nc".into();
+        let report = draft.report();
+        assert!(
+            report.screenshot.is_none(),
+            "the screenshot waits to be ticked"
+        );
+        assert!(report.log.is_empty(), "the log waits to be ticked");
+        assert_eq!(report.state, "Status: Opened ~/Jobs/sign.ccjob");
+        draft.send_screenshot = true;
+        draft.send_log = true;
+        let report = draft.report();
+        assert!(report.screenshot.is_some());
+        assert_ne!(report.log, "");
+    }
+
+    #[test]
+    fn a_crash_is_titled_plainly_and_its_log_ticked_only_when_allowed() {
+        let host = Host {
+            state: &|| "state".into(),
+            pick_pictures: &Vec::new,
+        };
+        let crash = "Cut Craft 0.6.3 on linux crashed: panicked at src/a.rs:1:1:\nboom\n\n\
+                     Backtrace:\n  at /home/sam/src/a.rs\n";
+        for allowed in [true, false] {
+            let mut reporter = Reporter::new("me/app", None);
+            reporter.open_crash(crash, allowed, &host);
+            let draft = reporter.draft.as_ref().unwrap();
+            assert_eq!(draft.title, "Crash: boom");
+            assert_eq!(draft.send_log, allowed);
+            assert!(draft.log.contains("at ~/src/a.rs"), "{}", draft.log);
+        }
     }
 
     #[test]

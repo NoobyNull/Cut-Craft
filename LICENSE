@@ -1,25 +1,4 @@
-Cut Craft is source-available software. It is free to use for any noncommercial purpose, and
-free for small makers to use commercially, under the PolyForm Noncommercial License 1.0.0 below
-together with the Small Maker Permission that follows these notices.
-
 Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)
-
-These terms cover Cut Craft's own source code and assets. Third-party libraries, fonts, icons,
-models and clipart used by Cut Craft keep their own licenses. Bundled icons, models and clipart
-are credited in the application under Help > Third Party Licenses; each library's license is in
-its own source package (see Cargo.lock for the full list).
-
-## Small Maker Permission
-
-In addition to the rights granted by the PolyForm Noncommercial License 1.0.0, the licensor
-grants any individual or organization whose total gross revenue in the previous twelve months
-was less than US$1,000 (one thousand United States dollars) permission to use the software for
-any purpose, including commercial purposes such as making and selling goods with it. All other
-terms of the license, including the Notices section, still apply. Revenue of an organization
-includes the revenue of its affiliates. Anyone at or above that amount may use the software
-only for noncommercial purposes as the license defines them.
-
----
 
 # PolyForm Noncommercial License 1.0.0
 

@@ -171,8 +171,19 @@ impl Command for FinishingToolpath3d {
     }
 }
 
-/// The toolpath for `tool`, cutting only what `p.after` left.
+/// The toolpath for `tool`, cutting only what `p.after` left, as exactly as Options ▸
+/// Advanced says.
 fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandError> {
+    finish_within(doc, tool, p, cut_craft_core::accuracy::get().finishing_3d)
+}
+
+/// [`finish`] with moves split wherever they would pass more than `gouge` mm under the model.
+fn finish_within(
+    doc: &Document,
+    tool: &Tool,
+    p: &Params,
+    gouge: f64,
+) -> Result<Toolpath, CommandError> {
     ensure_positive("tool diameter", tool.diameter)?;
     let stepover = tool.finishing_stepover();
     if !(stepover > 0.0 && stepover <= 1.0) {
@@ -226,8 +237,6 @@ fn finish(doc: &Document, tool: &Tool, p: &Params) -> Result<Toolpath, CommandEr
     };
     // at each point as low as the tool goes without touching the model
     let peaks = surface.peaks();
-    // how far a straight move may pass under where the tool should be before it is split
-    let gouge = cut_craft_core::accuracy::get().finishing_3d;
     let drop = Drop {
         grid: &surface,
         tool,
@@ -330,21 +339,25 @@ mod tests {
     }
 
     #[test]
-    fn the_finishing_accuracy_set_in_options_is_used() {
-        use cut_craft_core::accuracy::{self, Accuracy};
+    fn a_coarser_finishing_accuracy_splits_fewer_moves() {
+        use cut_craft_core::accuracy;
         let doc = domed();
         let params = Params {
             tools: vec![ball("6 mm Ball Nose")],
             ..Params::default()
         };
-        let fine = finish(&doc, &params).moves.len();
-        // a coarser accuracy splits fewer moves to keep off the model
-        accuracy::set(Accuracy {
-            finishing_3d: 0.02,
-            ..Accuracy::default()
-        });
-        let coarse = finish(&doc, &params).moves.len();
-        accuracy::set(Accuracy::default());
+        let tool = &params.tools[0];
+        // the default is the fixed value it replaces
+        assert_eq!(accuracy::get().finishing_3d, 0.002);
+        let moves = |gouge| {
+            super::finish_within(&doc, tool, &params, gouge)
+                .unwrap()
+                .moves
+                .len()
+        };
+        // a coarser accuracy splits fewer moves to keep off the model; worked out without
+        // changing the setting, which other tests in this process read
+        let (fine, coarse) = (moves(0.002), moves(0.02));
         assert!(
             coarse < fine,
             "{coarse} moves at 0.02 mm, {fine} at 0.002 mm"

@@ -1,9 +1,11 @@
-//! First-time setup: three questions asked on the first run (which machine, millimetres or
-//! inches, the material usually cut) that add the machine, set the job new files start with
-//! and put the starter tools in those units first. Cut Craft's own: Aspire has none (see
+//! First-time setup: four questions asked on the first run (which machine, millimetres or
+//! inches, the material usually cut, and whether crash logs may be sent) that add the
+//! machine, set the job new files start with, put the starter tools in those units first and
+//! keep the crash-log answer in Options ▸ Bug Reports. Cut Craft's own: Aspire has none (see
 //! `re/SPEC.md`, First-time setup). Help ▸ Run First-Time Setup Again asks them again.
 
 use super::CutCraftApp;
+use crate::options::CrashLogs;
 use cut_craft_core::document::{Job, Units};
 use cut_craft_core::toolpath::ToolDatabase;
 use cut_craft_machines::{Controller, Machine, Machines};
@@ -20,6 +22,10 @@ const BED_INCH: [f64; 2] = [24.0 * MM_PER_INCH, 16.0 * MM_PER_INCH];
 /// The starter tool groups, by units.
 const METRIC_TOOLS: &str = "Metric Tools";
 const IMPERIAL_TOOLS: &str = "Imperial Tools";
+/// What first-time setup says about crash reports.
+pub(super) const CRASH_LOGS_NOTE: &str = "A crash report says what Cut Craft was doing when it \
+    closed. You see it before it is sent, and your user name and folders are left out. Change \
+    this any time in Edit ▸ Options ▸ Bug Reports.";
 /// What a machine not in the list is called.
 const MY_MACHINE: &str = "My Machine";
 
@@ -52,6 +58,8 @@ pub(super) struct Setup {
     pub inches: bool,
     /// The material usually cut: width, length and thickness, mm.
     pub sheet: [f64; 3],
+    /// Whether a crash's log may be offered to send (`Ask` until answered).
+    pub crash_logs: CrashLogs,
 }
 
 impl Setup {
@@ -64,6 +72,7 @@ impl Setup {
             controller: Controller::default(),
             inches: false,
             sheet: [BED_MM[0], BED_MM[1], THICKNESS_MM],
+            crash_logs: CrashLogs::Ask,
         }
     }
 
@@ -263,7 +272,7 @@ impl CutCraftApp {
     fn first_run_questions(ui: &mut egui::Ui, setup: &mut Setup) -> Option<Finish> {
         ui.heading("Welcome to Cut Craft");
         ui.label(
-            "Three quick questions so your first job matches your machine. You can change \
+            "A few quick questions so your first job matches your machine. You can change \
              any of this later.",
         );
         ui.add_space(ui.spacing().item_spacing.y);
@@ -298,6 +307,14 @@ impl CutCraftApp {
                 ui.end_row();
             });
         ui.weak("New jobs start this size. Each job can be changed in Job Setup.");
+        ui.add_space(ui.spacing().item_spacing.y);
+        ui.strong("4. If Cut Craft crashes, may it send a crash report to help fix it?");
+        ui.horizontal_wrapped(|ui| {
+            ui.radio_value(&mut setup.crash_logs, CrashLogs::Send, "Yes");
+            ui.radio_value(&mut setup.crash_logs, CrashLogs::Ask, "Ask me each time");
+            ui.radio_value(&mut setup.crash_logs, CrashLogs::DontSend, "No");
+        });
+        ui.weak(CRASH_LOGS_NOTE);
         ui.separator();
         let mut finish = None;
         ui.horizontal(|ui| {
@@ -423,6 +440,7 @@ impl CutCraftApp {
             self.tools_changed("Starter tools in your units shown first");
         }
         self.options.default_job = Some(job);
+        self.options.bug_reports.crash_logs = setup.crash_logs;
         self.options.first_run_done = true;
         self.save_options();
         let units = if setup.inches { "in" } else { "mm" };
@@ -460,7 +478,7 @@ impl CutCraftApp {
         self.options.first_run_done = true;
         self.save_options();
         self.status.set_message(
-            "Setup skipped. Help ▸ Run First-Time Setup Again asks the three questions again.",
+            "Setup skipped. Help ▸ Run First-Time Setup Again asks the questions again.",
         );
     }
 }

@@ -6,7 +6,8 @@
 //! so its files appear there like any others; the licences feed Help ▸ Credits.
 //!
 //! Only licences that let people sell what they make are allowed (CC0, public domain,
-//! CC BY), so nothing in a pack can stop a user selling a carving. Non-commercial and
+//! CC BY), so nothing in a pack can stop a user selling a carving (Cut Craft's own LICENSE
+//! still decides who may use the program commercially). Non-commercial and
 //! no-derivatives licences are refused when the pack is read.
 
 use serde::{Deserialize, Serialize};

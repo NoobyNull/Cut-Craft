@@ -66,23 +66,31 @@ fn kept(value: f64, [lo, hi]: [f64; 2], default: f64) -> f64 {
     }
 }
 
-/// Sets them all, each kept to its range.
+/// `a` with each value kept to its range.
+pub fn kept_to_ranges(a: Accuracy) -> Accuracy {
+    let ([s0, s1], [f0, f1]) = (NEST_SHEETS_RANGE, NEST_FILLERS_RANGE);
+    Accuracy {
+        curve: kept(a.curve, CURVE_RANGE, CURVE),
+        roughing_3d: kept(a.roughing_3d, ROUGHING_3D_RANGE, ROUGHING_3D),
+        finishing_3d: kept(a.finishing_3d, FINISHING_3D_RANGE, FINISHING_3D),
+        rest: kept(a.rest, REST_RANGE, REST),
+        nest_sheets: a.nest_sheets.clamp(s0, s1),
+        nest_fillers: a.nest_fillers.clamp(f0, f1),
+    }
+}
+
+/// Sets them all, each kept to its range. Only the app calls this, when Options loads or
+/// changes; tests check [`kept_to_ranges`] instead, since toolpath tests running beside them
+/// in the same process read these.
 pub fn set(a: Accuracy) {
+    let a = kept_to_ranges(a);
     let store = |cell: &AtomicU64, v: f64| cell.store(v.to_bits(), Ordering::Relaxed);
-    store(&CURVE_NOW, kept(a.curve, CURVE_RANGE, CURVE));
-    store(
-        &ROUGHING_NOW,
-        kept(a.roughing_3d, ROUGHING_3D_RANGE, ROUGHING_3D),
-    );
-    store(
-        &FINISHING_NOW,
-        kept(a.finishing_3d, FINISHING_3D_RANGE, FINISHING_3D),
-    );
-    store(&REST_NOW, kept(a.rest, REST_RANGE, REST));
-    let [lo, hi] = NEST_SHEETS_RANGE;
-    SHEETS_NOW.store(a.nest_sheets.clamp(lo, hi), Ordering::Relaxed);
-    let [lo, hi] = NEST_FILLERS_RANGE;
-    FILLERS_NOW.store(a.nest_fillers.clamp(lo, hi), Ordering::Relaxed);
+    store(&CURVE_NOW, a.curve);
+    store(&ROUGHING_NOW, a.roughing_3d);
+    store(&FINISHING_NOW, a.finishing_3d);
+    store(&REST_NOW, a.rest);
+    SHEETS_NOW.store(a.nest_sheets, Ordering::Relaxed);
+    FILLERS_NOW.store(a.nest_fillers, Ordering::Relaxed);
 }
 
 /// What is set now.
@@ -109,7 +117,8 @@ mod tests {
 
     #[test]
     fn values_are_kept_to_their_ranges() {
-        set(Accuracy {
+        assert_eq!(get(), Accuracy::default(), "the fixed values they replace");
+        let kept = kept_to_ranges(Accuracy {
             curve: 5.0,
             roughing_3d: 0.0,
             finishing_3d: f64::NAN,
@@ -118,7 +127,7 @@ mod tests {
             nest_fillers: 1_000_000,
         });
         assert_eq!(
-            get(),
+            kept,
             Accuracy {
                 curve: 0.1,
                 roughing_3d: 0.001,
@@ -128,7 +137,6 @@ mod tests {
                 nest_fillers: 100_000,
             }
         );
-        set(Accuracy::default());
-        assert_eq!(get(), Accuracy::default());
+        assert_eq!(kept_to_ranges(Accuracy::default()), Accuracy::default());
     }
 }

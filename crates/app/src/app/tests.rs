@@ -104,6 +104,60 @@ fn about_thanks_vectric_and_says_cut_craft_is_independent() {
 }
 
 #[test]
+fn about_states_cut_craft_s_own_licence() {
+    let mut h = Harness::new();
+    h.app.info = Some(Info::About);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("License").is_some());
+    let licence = super::actions::LICENCE_SUMMARY;
+    assert!(licence.contains("not open source"), "{licence}");
+    assert!(licence.contains("noncommercial"), "{licence}");
+    assert!(
+        licence.contains("PolyForm Noncommercial License 1.0.0"),
+        "{licence}"
+    );
+}
+
+/// FNV-1a, so the test needs no hashing crate.
+fn fnv1a(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+#[test]
+fn licence_file_keeps_the_polyform_text_word_for_word() {
+    let licence = include_str!("../../../../LICENSE");
+    let start = licence
+        .find("# PolyForm Noncommercial License 1.0.0")
+        .expect("the PolyForm text is in LICENSE");
+    // a Windows checkout may turn line ends into CR LF
+    let polyform = licence[start..].replace('\r', "");
+    // the official text, from github.com/polyformproject/polyform-licenses at tag 1.0.0:
+    // Cut Craft's own terms go above it, never into it
+    assert_eq!(polyform.len(), 4_563, "the PolyForm text was changed");
+    assert_eq!(
+        fnv1a(&polyform),
+        POLYFORM_FNV1A,
+        "the PolyForm text was changed"
+    );
+}
+
+const POLYFORM_FNV1A: u64 = 0xcf71_f592_48dd_cd09;
+
+#[test]
+fn licence_file_is_plain_polyform_noncommercial_with_the_credit_line() {
+    let licence = include_str!("../../../../LICENSE").replace('\r', "");
+    let ours = &licence[..licence.find("# PolyForm").unwrap()];
+    // nothing but the credit line goes above the PolyForm text: no extra terms
+    assert_eq!(
+        ours.trim(),
+        "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)"
+    );
+}
+
+#[test]
 fn importing_models_offers_what_the_options_say() {
     use crate::options::ModelTypes;
     let mut h = Harness::new();
@@ -969,6 +1023,70 @@ fn relief_from_photo_follows_its_settings_as_one_relief() {
     h.frame(vec![]);
     assert_eq!(h.app.doc.components.len(), 1, "made again in place");
     assert!(top(&h) > before + 5.0, "{before} -> {}", top(&h));
+}
+
+/// Relief from Photo with Only What the Bit Can Carve ticked: the form draws its note on
+/// the job's resolution, and the relief is still one relief made again in place.
+#[test]
+fn relief_from_photo_carves_only_what_the_bit_can() {
+    use cut_craft_core::bitmap::Bitmap;
+    use cut_craft_core::geometry::{Point, Rect};
+    let mut h = Harness::new();
+    let mut c = Change::builder(&h.app.doc);
+    // white all over, with one black column: a groove 1 mm wide
+    c.add_bitmap(Bitmap {
+        name: "map".into(),
+        columns: 40,
+        rows: 4,
+        grey: (0..160)
+            .map(|i| if i % 40 == 20 { 0 } else { 255 })
+            .collect(),
+        rect: Rect::new(Point::new(0.0, 0.0), Point::new(40.0, 4.0)),
+        depth: Vec::new(),
+        rgb: Vec::new(),
+    });
+    h.app.record(Ok(c.finish()), "added");
+    h.app.invoke(&h.ctx, "relief_from_photo");
+    h.frame(vec![]);
+    let form = h.app.form.as_mut().unwrap();
+    for (key, value) in [
+        ("depth_from", "picture".into()),
+        ("max_height", 10.0.into()),
+        ("lift", 0.0.into()),
+        ("background_cut_off", 0.0.into()),
+        ("depth_cut_off", 0.0.into()),
+        ("fine_detail", 0.0.into()),
+        ("smoothness", 0.into()),
+    ] {
+        let value: serde_json::Value = value;
+        form.params[key] = value;
+    }
+    let params = form.params.clone();
+    h.app.apply_form("relief_from_photo", &params).unwrap();
+    let lowest = |h: &Harness| {
+        let k = h.app.doc.components.values().next().unwrap();
+        k.height_range().unwrap().0
+    };
+    let as_drawn = lowest(&h);
+    // ticked before a bit is picked: the form says to Select… one
+    let form = h.app.form.as_mut().unwrap();
+    form.params["only_what_the_bit_can_carve"] = true.into();
+    let params = form.params.clone();
+    let refused = h.app.apply_form("relief_from_photo", &params).unwrap_err();
+    assert!(refused.contains("Select…"), "{refused}");
+    // the bit comes from the Tool Database, as on a toolpath form; no passes or rest there
+    h.frame(vec![]);
+    assert!(h.text_at("Select…").is_some(), "the form's tool");
+    assert!(h.text_at("Edit Passes…").is_none());
+    h.app.choose_tool("6 mm Ball Nose");
+    h.app.form.as_mut().unwrap().dirty = true;
+    h.frame(vec![]);
+    assert_eq!(h.app.doc.components.len(), 1, "made again in place");
+    assert!(
+        lowest(&h) > as_drawn + 2.0,
+        "the groove fills in: {as_drawn} -> {}",
+        lowest(&h)
+    );
 }
 
 /// Estimate Depth with a stand-in add-on (a shell script that answers with a fixed depth
@@ -5947,20 +6065,131 @@ fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
 #[test]
 fn a_crash_last_time_opens_its_report_with_the_crash_log() {
     let mut h = Harness::new();
-    h.app.reporter.report_crash(
-        "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\n\
-         index out of bounds\n\nBacktrace:\n..."
-            .into(),
-    );
+    h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
+    // no crash-report service yet: the report opens with the log ticked
+    h.app.reporter.crash_service = None;
+    let ctx = h.ctx.clone();
+    h.app.offer_crash(&ctx, CRASH.into());
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.app.reporter.is_open(), "Report a Bug opens by itself");
     assert!(
-        h.text_at("Crash: panicked at crates/app/src/view3d.rs:9:9: index out of bounds")
-            .is_some(),
-        "titled with the panic"
+        h.text_at("Crash: index out of bounds").is_some(),
+        "titled in words, not with the source path"
     );
-    assert!(h.text_at("Send the log").is_some());
+    assert!(h.text_at("The crash log").is_some());
+    assert!(
+        h.text_at("May Cut Craft send these with your report?")
+            .is_some()
+    );
+}
+
+const CRASH: &str = "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\n\
+                     index out of bounds\n\nBacktrace:\n...";
+
+#[test]
+fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "a post that can fail, as the real one"
+    )]
+    fn accepted(url: &str, body: &str) -> Result<(), String> {
+        assert_eq!(url, "https://crash.example/v1/crash");
+        assert!(
+            body.contains("\"title\":\"Crash: index out of bounds\""),
+            "{body}"
+        );
+        Ok(())
+    }
+    fn refused(_: &str, _: &str) -> Result<(), String> {
+        Err("the service is down".into())
+    }
+    for (post, sent) in [
+        (accepted as fn(&str, &str) -> Result<(), String>, true),
+        (refused, false),
+    ] {
+        let mut h = Harness::new();
+        h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
+        h.app.reporter.crash_service = Some("https://crash.example/v1/crash".into());
+        h.app.reporter.post = post;
+        let ctx = h.ctx.clone();
+        h.app.offer_crash(&ctx, CRASH.into());
+        assert!(
+            h.app.options.bug_reports.install_id.is_some(),
+            "numbered once"
+        );
+        for _ in 0..200 {
+            h.frame(vec![]);
+            if h.app.status.message.contains("crash report was sent") || h.app.reporter.is_open() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        h.frame(vec![]);
+        assert_eq!(
+            h.app.status.message.contains("crash report was sent"),
+            sent,
+            "{}",
+            h.app.status.message
+        );
+        assert_eq!(
+            h.app.reporter.is_open(),
+            !sent,
+            "not sent: the form instead"
+        );
+    }
+}
+
+#[test]
+fn a_crash_is_not_offered_when_crash_logs_are_not_to_be_sent() {
+    let mut h = Harness::new();
+    h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::DontSend;
+    let ctx = h.ctx.clone();
+    h.app.offer_crash(&ctx, CRASH.into());
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(!h.app.reporter.is_open(), "no report");
+    assert!(
+        h.app
+            .status
+            .message
+            .starts_with("Cut Craft closed with an error last time."),
+        "{}",
+        h.app.status.message
+    );
+}
+
+#[test]
+fn the_log_says_what_a_command_made() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 30.0);
+    let vector = *h.app.doc.vectors.keys().next().unwrap();
+    let step = cut_craft_core::toolpath::Move {
+        kind: cut_craft_core::toolpath::MoveKind::Cut,
+        to: cut_craft_core::glam::DVec3::ZERO,
+    };
+    let mut c = Change::builder(&h.app.doc);
+    c.add_toolpath(cut_craft_core::toolpath::Toolpath {
+        name: "Profile 1".into(),
+        strategy: "test".into(),
+        params: serde_json::Value::Null,
+        tool: Tool::default(),
+        vectors: vec![vector],
+        moves: vec![step; 3],
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+    });
+    assert_eq!(
+        super::background::summary(&c.finish()),
+        "done, changed 1 toolpath, 3 moves"
+    );
+    assert_eq!(
+        super::background::summary(&Change::default()),
+        "done, nothing changed"
+    );
 }
 
 #[test]
@@ -10406,6 +10635,35 @@ fn the_tabs_read_in_one_line_on_the_form() {
             .unwrap()
             .ends_with("5 placed by hand")
     );
+}
+
+#[test]
+fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
+    let mut h = Harness::new();
+    // a slot 2 mm wide: a 3 mm bit can't get into it at all
+    h.rectangle(10.0, 10.0, 2.0, 50.0);
+    h.click(h.at(10.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let line = h.app.form_reach().expect("a reach line under the tool");
+    assert!(
+        matches!(line, cut_craft_core::reach::Line::Short(_)),
+        "{line:?}"
+    );
+    assert!(h.text_at(line.text()).is_some(), "shown: {line:?}");
+    assert!(line.text().contains("too wide for 1 spot"), "{line:?}");
+    // a wider shape fits; the starter bit has no flute length, so depth is not checked
+    h.app.form = None;
+    h.rectangle(30.0, 10.0, 40.0, 50.0);
+    h.click(h.at(70.0, 35.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.app.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    let line = h.app.form_reach().expect("a reach line");
+    assert!(line.text().starts_with("Fits every spot"), "{line:?}");
 }
 
 #[test]

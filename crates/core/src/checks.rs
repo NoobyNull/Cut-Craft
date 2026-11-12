@@ -3,13 +3,18 @@
 
 use crate::component::placed_model;
 use crate::document::Document;
-use crate::toolpath::{MoveKind, Tool, Toolpath};
+use crate::geometry::Path;
+use crate::reach::{self, Fix, Side, too_deep};
+use crate::toolpath::{MoveKind, Toolpath};
 
 /// The 3D Finishing strategy, whose toolpaths follow the model.
 const FINISHING: &str = "3d_finishing_toolpath";
 
 /// The Profile strategy, whose cut right through the material lets a part come free.
 const PROFILE: &str = "profile_toolpath";
+
+/// The Pocket strategy, which clears inside its shapes.
+const POCKET: &str = "pocket_toolpath";
 
 /// How close to the material's bottom a cut must reach to count as right through, mm.
 const THROUGH: f64 = 1e-3;
@@ -34,49 +39,76 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
         .filter(|m| m.kind != MoveKind::Rapid)
         .map(|m| -m.to.z)
         .fold(0.0, f64::max);
-    if tool.flute_length > 0.0 && deepest > tool.flute_length + 1e-6 {
-        found.push(format!(
-            "{name} cuts {deepest:.1} mm deep, but the flutes of {} are only {:.1} mm long",
-            tool.name, tool.flute_length
-        ));
-    } else if tool.flute_length <= 0.0 && deepest > 0.0 {
+    if let Some(deep) = too_deep(name, tool, deepest) {
+        found.push(deep);
+    } else if tool.known_flute_length().is_none() && deepest > 0.0 {
         found.push(format!(
             "{name} cuts {deepest:.1} mm deep; {} has no flute length set, so whether it \
-             reaches is not checked",
+             reaches is not checked: set it in the Tool Database",
             tool.name
         ));
     }
     if let Some(loose) = comes_loose(doc, toolpath, deepest) {
         found.push(loose);
     }
-    if toolpath.strategy == FINISHING
-        && tool.reach() > tool.diameter / 2.0
-        && let Ok(model) = placed_model(doc, tool)
-    {
-        // what the taper holds the tip off, over what the same tip alone would leave
-        let tip_alone = Tool {
-            taper: 0.0,
-            ..tool.clone()
-        };
-        let (tapered, alone) = (model.left_by(tool), model.left_by(&tip_alone));
-        let (cells, most) = tapered
-            .heights
-            .iter()
-            .zip(&alone.heights)
-            .map(|(t, a)| t - a)
-            .filter(|&d| d > left)
-            .fold((0_u32, 0.0_f64), |(n, most), d| (n + 1, most.max(d)));
-        if cells > 0 {
-            let area = f64::from(cells) * model.cell * model.cell;
-            found.push(format!(
-                "{name}: the taper of {} keeps it off {:.1} cm² of the model, where it is too \
-                 steep or narrow, and leaves up to {most:.1} mm there",
-                tool.name,
-                area / 100.0
-            ));
-        }
+    if let Some(missed) = missed_spots(doc, toolpath, left) {
+        found.push(missed);
     }
     found
+}
+
+/// The spots `toolpath`'s bit is too wide to get into, as a sentence; `None` when it gets
+/// in everywhere, when a later toolpath cuts after it with a smaller bit (rest machining,
+/// a pocket's clearing bits), or for a toolpath this is not checked for.
+fn missed_spots(doc: &Document, toolpath: &Toolpath, left: f64) -> Option<String> {
+    let (params, tool) = (&toolpath.params, &toolpath.tool);
+    if finished_after(doc, toolpath) {
+        return None;
+    }
+    let shapes = || -> Vec<Path> {
+        toolpath
+            .vectors
+            .iter()
+            .filter_map(|id| doc.vectors.get(id))
+            .filter(|v| v.closed)
+            .cloned()
+            .collect()
+    };
+    let (missed, fix) = match toolpath.strategy.as_str() {
+        POCKET => (reach::flat(&shapes(), tool, Side::Inside), Fix::Pocket),
+        PROFILE => {
+            let side = match params["side"].as_str() {
+                Some("inside") => Side::Inside,
+                Some("outside") | None => Side::Outside,
+                _ => return None,
+            };
+            (reach::flat(&shapes(), tool, side), Fix::Profile)
+        }
+        FINISHING => {
+            let model = placed_model(doc, tool).ok()?;
+            (reach::surface(&model, tool, left), Fix::Finish)
+        }
+        _ => return None,
+    };
+    missed
+        .any()
+        .then(|| reach::missed_sentence(&toolpath.name, tool, &missed, fix))
+}
+
+/// Whether another toolpath of `doc` cuts after `toolpath`'s tool, to get what it left:
+/// rest machining after it, or a pocket finished with a smaller bit after it cleared.
+fn finished_after(doc: &Document, toolpath: &Toolpath) -> bool {
+    let same = |t: &serde_json::Value| {
+        t["name"].as_str() == Some(toolpath.tool.name.as_str())
+            && t["diameter"]
+                .as_f64()
+                .is_some_and(|d| (d - toolpath.tool.diameter).abs() < 1e-9)
+    };
+    doc.toolpaths.values().any(|other| {
+        let after = |v: &serde_json::Value| v.as_array().is_some_and(|a| a.iter().any(same));
+        other.vectors == toolpath.vectors
+            && (after(&other.params["after"]) || after(&other.params["rest"]["after"]))
+    })
 }
 
 /// A profile that cuts right through the material round a closed shape, with no tabs: what
@@ -117,7 +149,7 @@ pub fn held_by_tabs(params: &serde_json::Value) -> bool {
 mod tests {
     use super::*;
     use crate::testing::domed;
-    use crate::toolpath::{Move, ToolShape};
+    use crate::toolpath::{Move, Tool, ToolShape};
     use glam::DVec3;
 
     fn toolpath(tool: Tool, strategy: &str, depth: f64) -> Toolpath {
@@ -189,7 +221,8 @@ mod tests {
         };
         let found = problems(&doc, &toolpath(tapered, FINISHING, 8.0));
         assert_eq!(found.len(), 1, "{found:?}");
-        assert!(found[0].contains("too steep"), "{found:?}");
+        assert!(found[0].contains("can't reach"), "{found:?}");
+        assert!(found[0].contains("tip and taper"), "{found:?}");
         // a taper narrow enough for the dome's 90° foot still leaves nothing extra on its top
         assert!(!found[0].contains("0.0 cm²"), "{found:?}");
         // told to mention only more material than the taper leaves, nothing is found
@@ -263,5 +296,104 @@ mod tests {
             ..profile(&[1], "outside", "none", 20.0)
         };
         assert!(!loose(&problems(&doc, &pocket)));
+    }
+
+    /// A pocket (or profile) of the sample document's first square, cut with `tool`.
+    fn pocket(tool: Tool, strategy: &str, params: serde_json::Value) -> Toolpath {
+        Toolpath {
+            name: "Pocket 1".into(),
+            params,
+            vectors: vec![crate::document::EntityId(1)],
+            ..toolpath(tool, strategy, 5.0)
+        }
+    }
+
+    /// [`pocket`] on vector `id`.
+    fn pocket_of(
+        id: crate::document::EntityId,
+        tool: Tool,
+        strategy: &str,
+        params: serde_json::Value,
+    ) -> Toolpath {
+        Toolpath {
+            vectors: vec![id],
+            ..pocket(tool, strategy, params)
+        }
+    }
+
+    #[test]
+    fn a_bit_too_wide_for_a_spot_is_flagged_on_pockets_and_profiles() {
+        // a 40 mm square with a 4 mm wide channel going up out of it
+        let spur = crate::geometry::Path::polyline(
+            &[
+                crate::geometry::Point::new(18.0, 39.0),
+                crate::geometry::Point::new(22.0, 39.0),
+                crate::geometry::Point::new(22.0, 60.0),
+                crate::geometry::Point::new(18.0, 60.0),
+            ],
+            true,
+        );
+        let joined =
+            crate::polygon::union(&[crate::testing::square(0.0, 0.0, 40.0), spur]).remove(0);
+        let mut doc = crate::testing::document_with(vec![joined]);
+        let first = *doc.vectors.keys().next().unwrap();
+        let bit = |d: f64| Tool {
+            name: format!("{d} mm End Mill"),
+            diameter: d,
+            flute_length: 20.0,
+            ..Tool::default()
+        };
+        let found = problems(
+            &doc,
+            &pocket_of(first, bit(6.0), POCKET, serde_json::Value::Null),
+        );
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].starts_with("Pocket 1: 6 mm End Mill can't reach 1 spot"),
+            "{found:?}"
+        );
+        assert!(
+            found[0].contains("Clear with bigger bits first"),
+            "{found:?}"
+        );
+        assert_eq!(
+            problems(
+                &doc,
+                &pocket_of(first, bit(3.0), POCKET, serde_json::Value::Null)
+            ),
+            Vec::<String>::new()
+        );
+        // a profile inside the same shape misses it too; outside, nothing is missed
+        let inside = pocket_of(
+            first,
+            bit(6.0),
+            PROFILE,
+            serde_json::json!({ "side": "inside" }),
+        );
+        assert_eq!(problems(&doc, &inside).len(), 1);
+        let outside = pocket_of(
+            first,
+            bit(6.0),
+            PROFILE,
+            serde_json::json!({ "side": "outside" }),
+        );
+        assert_eq!(problems(&doc, &outside), Vec::<String>::new());
+        // a smaller bit cutting after it (a pocket's clearing bits) gets what it left
+        let finish = pocket_of(
+            first,
+            bit(3.0),
+            POCKET,
+            serde_json::json!({ "rest": { "after": [bit(6.0)] } }),
+        );
+        let mut c = crate::Change::builder(&doc);
+        c.add_toolpath(finish);
+        doc.apply(&c.finish()).unwrap();
+        assert_eq!(
+            problems(
+                &doc,
+                &pocket_of(first, bit(6.0), POCKET, serde_json::Value::Null)
+            ),
+            Vec::<String>::new()
+        );
     }
 }
