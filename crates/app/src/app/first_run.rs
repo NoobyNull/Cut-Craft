@@ -24,8 +24,8 @@ const METRIC_TOOLS: &str = "Metric Tools";
 const IMPERIAL_TOOLS: &str = "Imperial Tools";
 /// What first-time setup says about crash reports.
 pub(super) const CRASH_LOGS_NOTE: &str = "A crash report says what Cut Craft was doing when it \
-    closed. You see it before it is sent, and your user name and folders are left out. Change \
-    this any time in Edit ▸ Options ▸ Bug Reports.";
+    closed. Your user name, folders and file names are left out of it. Change this any time in \
+    Edit ▸ Options ▸ Bug Reports.";
 /// What a machine not in the list is called.
 const MY_MACHINE: &str = "My Machine";
 
