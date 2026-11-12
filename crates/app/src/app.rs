@@ -368,10 +368,13 @@ const BUILT_INS: [&str; 102] = [
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
 const BUG_REPO: &str = "NoobyNull/Cut-Craft";
-/// Cut Craft's crash-report service, where the crash logs of people who said yes go (its
-/// `/v1/crash` address). None until the service is running: crash logs then open Report a
-/// Bug with the log ticked instead.
-const CRASH_SERVICE: Option<&str> = None;
+/// Cut Craft's crash-report service, where the crash logs of people who said yes go: a
+/// Cloudflare Worker that groups them by cause for the maintainer and clears them out once
+/// dealt with (`services/crash-reports`).
+const CRASH_SERVICE: &str = "https://cutcraft-crash-reports.mattyax.workers.dev/v1/crash";
+/// Points crash reports elsewhere, such as the service run locally for a test
+/// (`http://localhost:8787/v1/crash`), never the live one.
+const CRASH_SERVICE_VARIABLE: &str = "CUTCRAFT_CRASH_URL";
 /// The Help windows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Info {

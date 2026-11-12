@@ -115,7 +115,12 @@ impl CutCraftApp {
                     super::BUG_REPO,
                     files::config_dir().map(|d| d.join("bug-reports")),
                 );
-                reporter.crash_service = super::CRASH_SERVICE.map(str::to_owned);
+                // tests never reach the live service: each names its own stand-in
+                reporter.crash_service = (!cfg!(test)).then(|| {
+                    std::env::var(super::CRASH_SERVICE_VARIABLE)
+                        .unwrap_or_else(|_| super::CRASH_SERVICE.to_owned())
+                });
+                reporter.retry_dir = files::config_dir();
                 reporter
             },
             updates: crate::update::Updates::default(),

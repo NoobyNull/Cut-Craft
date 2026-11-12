@@ -6089,11 +6089,13 @@ const CRASH: &str = "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/sr
 
 #[test]
 fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
+    use cut_craft_bug_report::relay::Failure;
+    type Post = fn(&str, &str) -> Result<(), Failure>;
     #[expect(
         clippy::unnecessary_wraps,
         reason = "a post that can fail, as the real one"
     )]
-    fn accepted(url: &str, body: &str) -> Result<(), String> {
+    fn accepted(url: &str, body: &str) -> Result<(), Failure> {
         assert_eq!(url, "https://crash.example/v1/crash");
         assert!(
             body.contains("\"title\":\"Crash: index out of bounds\""),
@@ -6101,17 +6103,27 @@ fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
         );
         Ok(())
     }
-    fn refused(_: &str, _: &str) -> Result<(), String> {
-        Err("the service is down".into())
+    fn refused(_: &str, _: &str) -> Result<(), Failure> {
+        Err(Failure::of_status(400))
     }
-    for (post, sent) in [
-        (accepted as fn(&str, &str) -> Result<(), String>, true),
-        (refused, false),
-    ] {
+    fn down(_: &str, _: &str) -> Result<(), Failure> {
+        Err(Failure::of_status(503))
+    }
+    // what the status bar says, whether the form opens, and whether the log is kept to try
+    // again at the next start
+    let cases: [(Post, &str, bool, bool); 3] = [
+        (accepted, "crash report was sent", false, false),
+        (refused, "", true, false),
+        (down, "will try again the next time it starts", false, true),
+    ];
+    for (post, said, form, retried) in cases {
         let mut h = Harness::new();
+        let dir = std::env::temp_dir().join(format!("cut-craft-retry-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
         h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
         h.app.reporter.crash_service = Some("https://crash.example/v1/crash".into());
         h.app.reporter.post = post;
+        h.app.reporter.retry_dir = Some(dir.clone());
         let ctx = h.ctx.clone();
         h.app.offer_crash(&ctx, CRASH.into());
         assert!(
@@ -6120,23 +6132,25 @@ fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
         );
         for _ in 0..200 {
             h.frame(vec![]);
-            if h.app.status.message.contains("crash report was sent") || h.app.reporter.is_open() {
+            if h.app.status.message.contains("crash report") || h.app.reporter.is_open() {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         h.frame(vec![]);
-        assert_eq!(
-            h.app.status.message.contains("crash report was sent"),
-            sent,
+        assert!(
+            h.app.status.message.contains(said),
             "{}",
             h.app.status.message
         );
+        assert_eq!(h.app.reporter.is_open(), form, "{said}");
+        let kept = cut_craft_bug_report::logs::take_crash(&dir);
         assert_eq!(
-            h.app.reporter.is_open(),
-            !sent,
-            "not sent: the form instead"
+            kept.is_some(),
+            retried,
+            "only a report that may go later is kept for the next start"
         );
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
 
