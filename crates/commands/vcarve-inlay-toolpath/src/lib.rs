@@ -1,6 +1,6 @@
-//! V-Carve Inlay Toolpath: two V-carvings that fit together. The pocket carves the selected
-//! shapes; the plug carves round mirrored copies of them, so that turned over it drops into
-//! the pocket leaving the glue gap under it.
+//! V-Carve Inlay Toolpath (V-bit carved inlay): two V-carvings that fit together. The pocket carves
+//! the selected shapes; the plug carves round mirrored copies of them, so that turned over it drops
+//! into the pocket leaving the glue gap under it.
 
 use cmd_vcarve_engrave_toolpath::{VcarveEngraveToolpath, carve};
 use cut_craft_core::document::Document;
