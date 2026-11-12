@@ -22,7 +22,9 @@ pub enum Direction {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The toolpath to move in the list
     pub toolpath: EntityId,
+    /// Which way it moves in the toolpath list
     pub direction: Direction,
 }
 

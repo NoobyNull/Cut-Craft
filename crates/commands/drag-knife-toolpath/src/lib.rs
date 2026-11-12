@@ -14,6 +14,7 @@ pub struct DragKnifeToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// From the knife's pivot to its tip (from the maker)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

@@ -35,13 +35,16 @@ pub enum Method {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
+    /// The shape of the stock before it is rounded
     #[schemars(extend("x-group" = "Blank"))]
     pub blank: Blank,
     /// Side of a square blank or diameter of a round one
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Blank"))]
     pub blank_size: f64,
+    /// The pattern the tool follows round the cylinder
     #[schemars(extend("x-group" = "Rounding"))]
     pub method: Method,
     /// Left on the finished cylinder

@@ -70,17 +70,20 @@ pub enum ProfilePass {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
     pub depth: f64,
+    /// The bit that cuts the walls and finishes the pocket; Select… picks one from your tools
     pub tool: Tool,
     /// Bigger tools that clear the pocket first, largest first: each makes a toolpath of its
     /// own and each tool after it cuts only what the ones before it left (rest machining)
     #[serde(default)]
     #[schemars(title = "Clearance Tools")]
     pub clearance_tools: Vec<Tool>,
+    /// The pattern that clears the inside of the pocket
     #[serde(default)]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub strategy: Strategy,
@@ -101,6 +104,7 @@ pub struct Params {
     )]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub raster_angle: f64,
+    /// Whether a pass round the edge cleans up the wall, and when
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"strategy": "raster"}))]
     #[schemars(extend("x-group" = "Clear Pocket"))]
@@ -133,6 +137,7 @@ pub struct Params {
         "x-group" = "Ramp Plunge Moves",
         "x-enable-when" = {"ramp_plunge_moves": "true"}
     ))]
+    /// How far along the cut each zig zag ramp runs
     pub ramp_distance: f64,
     /// Drop the finished toolpath onto the 3D model: its depth below the material surface
     /// becomes depth below the model's surface, going no lower than the bottom of the material

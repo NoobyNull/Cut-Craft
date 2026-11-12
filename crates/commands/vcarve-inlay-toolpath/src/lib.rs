@@ -26,6 +26,7 @@ pub enum PlugBoundary {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Deepest the pocket goes (narrow parts stop short of it)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -39,6 +40,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Inlay"))]
     pub surface_clearance: f64,
+    /// How far round the shapes the plug's surface is cleared
     #[schemars(extend("x-group" = "Boundary"))]
     pub plug_boundary: PlugBoundary,
     /// Extra material cut away round the plug

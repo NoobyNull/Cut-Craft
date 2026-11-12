@@ -34,6 +34,7 @@ pub enum RampType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// Below the material surface where the flute begins (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -43,8 +44,10 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
     pub flute_depth: f64,
+    /// Where along each vector the flute goes down and comes up
     #[schemars(extend("x-group" = "Flute Type"))]
     pub flute_type: FluteType,
+    /// The shape of the slope down into the flute
     #[schemars(extend("x-group" = "Ramp"))]
     pub ramp_type: RampType,
     /// Size the ramps as a percentage of the longest they can be, instead of a length
@@ -58,6 +61,7 @@ pub struct Params {
     #[schemars(range(min = 0, max = 100))]
     #[schemars(extend("x-group" = "Ramp"))]
     pub ramp_percent: f64,
+    /// The bit that cuts the flutes, usually a ball nose or V-bit
     pub tool: Tool,
     /// After calculating, drop the toolpath onto the 3D model: its depths are then below the
     /// model's surface, going no lower than the bottom of the material

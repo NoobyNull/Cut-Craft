@@ -30,6 +30,7 @@ pub enum Strategy {
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// What the toolpath is called in the toolpath list
     pub name: String,
     /// In the order they run, a toolpath each: the first finishes all it can, each later one
     /// only what the tools before it left (rest machining). A ball nose follows curves best;
@@ -55,10 +56,12 @@ pub struct Params {
     #[schemars(title = "Level", extend("x-show-when" = {"machining_boundary": "selected_level"}))]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub boundary_level: String,
+    /// Grows the boundary outward by this much (negative shrinks it)
     #[serde(default)]
     #[schemars(title = "Boundary Offset", extend("x-unit" = "mm"))]
     #[schemars(extend("x-group" = "Machining Limit Boundary"))]
     pub machining_boundary_offset: f64,
+    /// The pattern the tool follows over the model
     #[serde(default)]
     #[schemars(extend("x-group" = "Strategy"))]
     pub strategy: Strategy,

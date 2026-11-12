@@ -10,6 +10,7 @@ pub struct DuplicateToolpath;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The toolpath to make a copy of
     pub toolpath: EntityId,
 }
 
