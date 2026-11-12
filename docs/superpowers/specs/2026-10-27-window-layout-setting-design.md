@@ -1,6 +1,6 @@
 # Window layout setting
 
-Cut Craft's window is laid out as Aspire's: a Design page of icon grids on the left, a
+Cut Craft's Classic window layout is a Design page of icon grids on the left, a
 Toolpaths page on the right, side tabs for the rest. Matthew asked for a modern layout, then
 for the choice to be the user's. This spec adds one setting with three layouts. Classic stays
 the default, so nothing changes for anyone who does not pick another.
@@ -25,7 +25,7 @@ the default, so nothing changes for anyone who does not pick another.
 - **The inspector**: a right panel. While a tool's form is open it shows that form with its
   Apply / Close buttons, whichever page the tool belongs to. Otherwise it shows the browser.
 - **The browser**: the Sheets, Layers, Components, Clipart and Toolpath List panels that exist
-  today, under a row of tabs instead of Aspire's vertical side tabs.
+  today, under a row of tabs instead of the Classic layout's vertical side tabs.
 
 ## Classic
 
@@ -85,4 +85,4 @@ browser are not drawn; the tool search is the one addition.
 
 A selection-properties tab, the view toolbar as pills over the view, drawn group icons of
 their own, remembering the flyout and inspector widths beyond what egui keeps, and the
-Modeling tab Aspire has (its groups stay in Design's list, as today).
+Modeling tab the Classic layout has (its groups stay in Design's list, as today).

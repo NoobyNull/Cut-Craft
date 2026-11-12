@@ -1,10 +1,10 @@
 # Cut Craft roadmap
 
-Where Cut Craft stands against Aspire 12, what is still to do, and what is causing trouble.
+Where Cut Craft stands against the reference program, what is still to do, and what is causing trouble.
 Updated **2026-11-01**, at version **0.4.2** (tag `v0.4.2`, commit `ec83b2b`).
 
-Behaviour comes from the clean-room spec (`re/SPEC.md`: Vectric's public documentation and
-hands-on use of the Aspire trial). The tool-by-tool list is
+Behaviour comes from the clean-room spec (`re/SPEC.md`: the maker's public documentation and
+hands-on use of the trial). The tool-by-tool list is
 `docs/tool-inventory.md`. How commands are built is
 `docs/superpowers/specs/2026-10-23-command-architecture-design.md`. The training-course
 check is `docs/courses.md` (made by `scripts/courses-report.py`).
@@ -53,7 +53,7 @@ Things that exist but do not behave as they should.
 
 ## 4. Missing: still to build
 
-### From Aspire's menus (greyed in Cut Craft)
+### Menu items greyed in Cut Craft
 
 | Item | Note | Size |
 |---|---|---|
@@ -63,7 +63,7 @@ Things that exist but do not behave as they should.
 | View ▸ Draw Keep-Out Zones in 3D View | the zones drawn over the 3D view | S |
 | View ▸ Use Shadow Shading | shadows in the 3D view | M |
 | Window ▸ Tile Horizontal / Vertical, Cascade | the 2D and 3D views side by side exists (split); these three do not | S |
-| Toolpaths ▸ Import Toolpaths | Aspire's PhotoVCarve / Machinist / Cut3D toolpath files; format unknown | ? |
+| Toolpaths ▸ Import Toolpaths | other programs' toolpath files; format unknown | ? |
 | Machine ▸ Update Post Processor Database | a vendor service; out of scope unless decided otherwise | — |
 
 ### Inside tools that exist
@@ -95,8 +95,8 @@ has the checklists.
 
 ## 6. Guessed behaviour
 
-Marked `[inf]` / `[unk]` in `re/SPEC.md`; each needs a black-box comparison with Aspire
-under Wine (`~/.wine-aspire`) before it can be called exact.
+Marked `[inf]` / `[unk]` in `re/SPEC.md`; each needs a black-box comparison with the reference program
+under Wine before it can be called exact.
 
 - Fluting's Smooth curve; prism, photo V-carve and texture geometry; sketch-line contrast
   rule; Emboss's split into shape and detail; Trace Bitmap's Corner Fit scale.
@@ -110,7 +110,7 @@ under Wine (`~/.wine-aspire`) before it can be called exact.
 
 1. **Gadgets:** leave them out, or design a Cut Craft scripting interface?
 2. **Import Toolpaths:** worth reading the file formats (from files the trial saves), or leave out?
-3. **Segment 3D Model handles:** build Aspire's 3D plane handles and drag-and-drop tree, or
+3. **Segment 3D Model handles:** build 3D plane handles and drag-and-drop tree, or
    keep the form lists?
 
 Settled since 2026-10-24: system and single-line fonts both; double-sided jobs and sheets
@@ -118,11 +118,11 @@ built; machine configuration built; no laser features.
 
 ## 8. Out of scope unless decided otherwise
 
-- **Gadgets:** Aspire runs Lua scripts against its own API (the rotary layouts and Celtic
+- **Gadgets:** the reference program runs Lua scripts against its own API (the rotary layouts and Celtic
   Weave are built as tools instead).
 - **Vendor services:** Search for Machine Online, Update Post-Processor Database,
   licensing, the clipart shop.
-- **Vectric file formats:** `.crv3d`, `.v3m`, `.3dclip` (encrypted); Cut Craft uses `.ccjob`
+- **The reference program's file formats:** `.crv3d`, `.v3m`, `.3dclip` (encrypted); Cut Craft uses `.ccjob`
   and `.ccclip`.
 - **Lasers.**
 
