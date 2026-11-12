@@ -1,5 +1,6 @@
-// The private dashboard. The page itself holds no data: it asks for the admin token and then
-// reads everything from /admin/api/*, so anyone who finds the address sees only a sign-in box.
+// The private dashboard. The page itself holds no data: it asks for a security key (or, until
+// the first key is registered, the admin token) and then reads everything from /admin/api/*,
+// so anyone who finds the address sees only a sign-in box.
 // Logs are untrusted text from users' machines, so they are only ever set with textContent.
 
 export const PAGE = `<!doctype html>
@@ -97,6 +98,12 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
 .note { font-size: 13px; color: var(--ink-2); background: var(--code-bg); border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
 .empty { color: var(--ink-3); padding: 18px 0; text-align: center; }
 [hidden] { display: none !important; }
+.keys { margin-bottom: 14px; }
+.keys.warn { border-color: var(--accent); }
+.keylist { list-style: none; margin: 0 0 10px; padding: 0; }
+.keylist li { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.keylist li span { margin-right: auto; }
+.keys input[type=text] { flex: 1 1 220px; }
 </style>
 </head>
 <body>
@@ -117,16 +124,32 @@ tbody tr.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accen
 <main>
   <section class="card signin" id="signin">
     <h2>Sign in</h2>
-    <p>Paste the admin token you set with <code>wrangler secret put ADMIN_TOKEN</code>.</p>
-    <input type="password" id="token" autocomplete="current-password" aria-label="Admin token">
-    <div class="row">
-      <label class="small"><input type="checkbox" id="remember"> Remember on this computer</label>
-      <button class="primary" id="go" style="margin-left:auto">Sign in</button>
+    <div id="key-signin" hidden>
+      <p>Insert your security key, click the button, then touch the key.</p>
+      <button class="primary" id="key-go">Sign in with security key</button>
+    </div>
+    <div id="token-signin" hidden>
+      <p>No security key is registered yet. Paste the admin token once, then add your keys.
+        After that, only the keys sign in.</p>
+      <input type="password" id="token" autocomplete="off" aria-label="Admin token">
+      <div class="row">
+        <button class="primary" id="go" style="margin-left:auto">Sign in</button>
+      </div>
     </div>
     <div class="error small" id="signin-error" role="alert"></div>
   </section>
 
   <section id="dash" hidden>
+    <div class="card keys" id="keys">
+      <h3>Security keys</h3>
+      <p class="small" id="keys-note"></p>
+      <ul class="keylist" id="keylist"></ul>
+      <div class="row">
+        <input type="text" id="key-name" maxlength="60" placeholder="Name, e.g. YubiKey on keyring" aria-label="Key name">
+        <button id="key-add">Add a security key</button>
+      </div>
+      <div class="error small" id="keys-error" role="alert"></div>
+    </div>
     <div class="tiles">
       <div class="card tile"><div class="label">Reports</div><div class="value" id="t-total">–</div><div class="sub" id="t-total-sub"></div></div>
       <div class="card tile"><div class="label">Crashes needing a look</div><div class="value" id="t-open">–</div><div class="sub" id="t-open-sub"></div></div>
@@ -166,18 +189,30 @@ let token = null;
 let selected = null;
 let lastSummary = null;
 
+// The admin token is only for adding the first key, so it is kept for this tab at most.
 function stored() {
-  try { return sessionStorage.getItem(KEY) || localStorage.getItem(KEY); } catch { return null; }
+  try { return sessionStorage.getItem(KEY); } catch { return null; }
 }
-function store(t, remember) {
-  try {
-    sessionStorage.setItem(KEY, t);
-    if (remember) localStorage.setItem(KEY, t); else localStorage.removeItem(KEY);
-  } catch { /* storage blocked: stay signed in for this page only */ }
+function store(t) {
+  try { sessionStorage.setItem(KEY, t); } catch { /* storage blocked: this page only */ }
 }
 function forgetToken() {
   try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch {}
 }
+
+// WebAuthn sends bytes; the server speaks base64url.
+const toB64 = (buf) => {
+  let s = '';
+  for (const b of new Uint8Array(buf)) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+const fromB64 = (str) => {
+  const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+};
+const keyProblem = (e) => e && e.name === 'NotAllowedError'
+  ? 'The key was not used (cancelled or timed out). Try again.'
+  : (e && e.name === 'InvalidStateError' ? 'That key is already registered.' : (e && e.message) || 'Something went wrong.');
 
 function el(tag, props = {}, ...kids) {
   const e = document.createElement(tag);
@@ -194,9 +229,14 @@ function el(tag, props = {}, ...kids) {
 async function api(path, opts = {}) {
   const r = await fetch(path, {
     ...opts,
-    headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+    headers: token
+      ? { authorization: 'Bearer ' + token, 'content-type': 'application/json' }
+      : { 'content-type': 'application/json' },
   });
-  if (r.status === 401) { signOut('That token was not accepted.'); throw new Error('signed out'); }
+  if (r.status === 401) {
+    signOut(token ? 'That token was not accepted.' : 'Please sign in again.');
+    throw new Error('signed out');
+  }
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.error || ('Request failed (' + r.status + ')'));
   return body;
@@ -434,29 +474,142 @@ function signedIn() {
   $('dash').hidden = false;
   $('controls').hidden = false;
   load();
+  loadKeys();
 }
-function signOut(msg) {
+async function signOut(msg) {
   token = null;
   forgetToken();
   $('dash').hidden = true;
   $('controls').hidden = true;
   $('signin').hidden = false;
   $('signin-error').textContent = msg || '';
+  await showSignin();
+}
+async function showSignin() {
+  let keys = 0;
+  try { keys = (await (await fetch('/auth/status')).json()).keys; } catch {}
+  $('key-signin').hidden = !keys;
+  $('token-signin').hidden = Boolean(keys);
+}
+
+async function keySignin() {
+  $('signin-error').textContent = '';
+  $('key-go').disabled = true;
+  try {
+    const opts = await (await fetch('/auth/options', { method: 'POST' })).json();
+    if (opts.error) throw new Error(opts.error);
+    const cred = await navigator.credentials.get({ publicKey: {
+      challenge: fromB64(opts.challenge),
+      rpId: opts.rpId,
+      allowCredentials: opts.allow.map((id) => ({ type: 'public-key', id: fromB64(id) })),
+      userVerification: 'preferred',
+      timeout: opts.timeout,
+    } });
+    const r = await fetch('/auth/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: cred.id,
+        clientDataJSON: toB64(cred.response.clientDataJSON),
+        authenticatorData: toB64(cred.response.authenticatorData),
+        signature: toB64(cred.response.signature),
+      }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || 'Sign-in failed.');
+    signedIn();
+  } catch (e) {
+    $('signin-error').textContent = keyProblem(e);
+  } finally {
+    $('key-go').disabled = false;
+  }
+}
+
+function renderKeys(keys) {
+  const list = $('keylist');
+  list.replaceChildren(...keys.map((k) => el('li', {},
+    el('span', { text: k.name }),
+    el('span', { class: 'small muted', text: 'added ' + when(k.created_at) + (k.last_used_at ? ', last used ' + ago(k.last_used_at) : ', not used yet') }),
+    el('button', { class: 'danger', text: 'Remove', onclick: () => removeKey(k, keys.length) }),
+  )));
+  $('keys').classList.toggle('warn', keys.length < 2);
+  $('keys-note').textContent = keys.length === 0
+    ? 'You signed in with the admin token. Add your security keys now: once one is added, only keys can sign in.'
+    : keys.length === 1
+      ? 'Only one key is registered. Add a second as a backup, so losing one does not lock you out.'
+      : 'Any of these keys can sign in.';
+}
+async function loadKeys() {
+  try { renderKeys((await api('/admin/api/keys')).keys); } catch (e) {
+    if (e.message !== 'signed out') $('keys-error').textContent = e.message;
+  }
+}
+async function addKey() {
+  $('keys-error').textContent = '';
+  $('key-add').disabled = true;
+  try {
+    const opts = await api('/admin/api/keys/options', { method: 'POST' });
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: fromB64(opts.challenge),
+      rp: opts.rp,
+      user: { id: fromB64(opts.user.id), name: opts.user.name, displayName: opts.user.displayName },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+      authenticatorSelection: { residentKey: 'discouraged', userVerification: 'preferred' },
+      excludeCredentials: opts.exclude.map((id) => ({ type: 'public-key', id: fromB64(id) })),
+      attestation: 'none',
+      timeout: opts.timeout,
+    } });
+    const out = await api('/admin/api/keys', { method: 'POST', body: JSON.stringify({
+      name: $('key-name').value,
+      clientDataJSON: toB64(cred.response.clientDataJSON),
+      attestationObject: toB64(cred.response.attestationObject),
+    }) });
+    // the first key comes with a session, so the token is not needed any more
+    token = null;
+    forgetToken();
+    $('key-name').value = '';
+    renderKeys(out.keys);
+  } catch (e) {
+    if (e.message !== 'signed out') $('keys-error').textContent = keyProblem(e);
+  } finally {
+    $('key-add').disabled = false;
+  }
+}
+async function removeKey(k, count) {
+  const warn = count === 1
+    ? 'Remove "' + k.name + '"? It is the only key, so the admin token will sign in again.'
+    : 'Remove "' + k.name + '"? It will no longer sign in.';
+  if (!confirm(warn)) return;
+  try {
+    renderKeys((await api('/admin/api/keys/' + encodeURIComponent(k.id), { method: 'DELETE' })).keys);
+  } catch (e) {
+    if (e.message !== 'signed out') $('keys-error').textContent = e.message;
+  }
 }
 
 $('go').addEventListener('click', () => {
   const t = $('token').value.trim();
   if (!t) { $('signin-error').textContent = 'Paste the token first.'; return; }
   token = t;
-  store(t, $('remember').checked);
+  store(t);
   $('token').value = '';
   signedIn();
 });
 $('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('go').click(); });
-$('signout').addEventListener('click', () => signOut());
+$('key-go').addEventListener('click', keySignin);
+$('key-add').addEventListener('click', addKey);
+$('signout').addEventListener('click', async () => {
+  try { await fetch('/auth/logout', { method: 'POST' }); } catch {}
+  signOut();
+});
 $('refresh').addEventListener('click', load);
 $('range').addEventListener('change', load);
 
-token = stored();
-if (token) signedIn();
+(async () => {
+  token = stored();
+  let status = { keys: 0, signedIn: false };
+  try { status = await (await fetch('/auth/status')).json(); } catch {}
+  if (status.signedIn || (token && !status.keys)) signedIn();
+  else { if (token) forgetToken(); token = null; signOut(); }
+})();
 })();`;

@@ -172,6 +172,8 @@ export async function cleanup(db, { retainDays, statsDays }, now = new Date()) {
     db.prepare('DELETE FROM seen WHERE signature IN (SELECT signature FROM crashes WHERE last_seen < ?)')
       .bind(daysBefore(now, retainDays)),
     db.prepare('DELETE FROM daily WHERE day < ?').bind(dayOf(daysBefore(now, statsDays))),
+    db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now.toISOString()),
+    db.prepare('DELETE FROM challenges WHERE expires_at <= ?').bind(now.toISOString()),
   ]);
   const n = (i) => results?.[i]?.meta?.changes ?? 0;
   await db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_cleanup', ?)").bind(now.toISOString()).run();

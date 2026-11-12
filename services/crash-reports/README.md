@@ -15,8 +15,11 @@ owners agreed to send them, groups them by crash, and shows the maintainer a pri
   once, kept in D1). No IP addresses are stored.
 - **Limits.** One report per install per hour; `DAILY_LIMIT` (2000) reports a day across
   everyone; a log over 64 KB or a body over 72 KB is refused.
-- **Private dashboard.** `GET /` is a sign-in page with no data in it. Everything shown comes from
-  `/admin/api/*`, which needs the admin token. Search engines are told not to index it.
+- **Private dashboard, signed in with security keys.** `GET /` is a sign-in page with no data in
+  it. Everything shown comes from `/admin/api/*`, which needs a signed-in session. You sign in by
+  touching a registered security key (WebAuthn, e.g. a YubiKey). The admin token only signs in
+  until the first key is registered; it is how that first key gets added. Search engines are told
+  not to index it.
 
 ## What CutCraft sends
 
@@ -50,9 +53,25 @@ npx wrangler deploy
 ```
 
 `wrangler deploy` prints the address, e.g. `https://cutcraft-crash-reports.<you>.workers.dev`.
-CutCraft sends to `<address>/v1/crash`; open `<address>/` and paste the token to see the dashboard.
+CutCraft sends to `<address>/v1/crash`. Open `<address>/`, paste the token, and add your security
+keys (at least two, so one is a backup). From then on only the keys sign in.
+
+When a new version adds tables, run the `schema.sql` line again before deploying: it only creates
+what is missing.
 
 To change how long logs are kept, edit `RETAIN_DAYS` in `wrangler.toml` and deploy again.
+
+## Security keys
+
+- Sign-in uses WebAuthn with ES256 (every FIDO2 key, YubiKeys included), checked with Web Crypto
+  only; no dependency. The key must be touched; its PIN is used if set. Keys are bound to this
+  Worker's address, so a key registered on `*.workers.dev` will not work on a custom domain.
+- A sign-in lasts 12 hours, in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie; only its hash is
+  stored. Changes are refused unless they come from the dashboard page itself.
+- A key whose use counter goes backwards is refused, as a sign it was copied.
+- **Lost every key?** Clear them with wrangler (needs your Cloudflare login); the token then signs in
+  again so you can add new ones:
+  `npx wrangler d1 execute cutcraft-crash-reports --remote --command "DELETE FROM passkeys; DELETE FROM sessions"`
 
 Optional extra lock: put the dashboard behind Cloudflare Access (Zero Trust ▸ Access ▸
 Applications, path `/` and `/admin/*`, allow only your email). Leave `/v1/crash` outside it, or
@@ -69,10 +88,13 @@ CutCraft can't send.
     issue's address and **Save issue link and delete logs**;
   - **Reopen**, or **Forget this crash completely** (counts too).
 
-The admin API, all needing `Authorization: Bearer <ADMIN_TOKEN>`:
+The admin API, all needing a signed-in session (or `Authorization: Bearer <ADMIN_TOKEN>` while no
+security key is registered):
 `GET /admin/api/summary?days=30`, `GET /admin/api/crashes/<signature>`,
 `POST /admin/api/crashes/<signature>/handled` `{note?}`, `POST …/issue` `{url}`, `POST …/reopen`,
-`DELETE /admin/api/crashes/<signature>`, `DELETE /admin/api/samples/<id>`, `POST /admin/api/cleanup`.
+`DELETE /admin/api/crashes/<signature>`, `DELETE /admin/api/samples/<id>`, `POST /admin/api/cleanup`,
+`GET /admin/api/keys`, `POST /admin/api/keys/options`, `POST /admin/api/keys`, `DELETE /admin/api/keys/<id>`.
+Sign-in: `GET /auth/status`, `POST /auth/options`, `POST /auth/verify`, `POST /auth/logout`.
 
 ## Running and testing locally
 
