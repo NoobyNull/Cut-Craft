@@ -128,6 +128,8 @@ pub fn report_steps(done: usize, total: usize) {
 pub fn stage(text: &str) {
     if let Some(span) = current() {
         span.progress.set_stage(text);
+        // in the log too, so a crash's log shows the step a long job was on
+        log::info!("Step: {text}");
     }
 }
 

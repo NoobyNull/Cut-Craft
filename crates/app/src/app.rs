@@ -368,6 +368,10 @@ const BUILT_INS: [&str; 102] = [
 ];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
 const BUG_REPO: &str = "NoobyNull/Cut-Craft";
+/// Cut Craft's crash-report service, where the crash logs of people who said yes go (its
+/// `/v1/crash` address). None until the service is running: crash logs then open Report a
+/// Bug with the log ticked instead.
+const CRASH_SERVICE: Option<&str> = None;
 /// The Help windows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Info {
@@ -2542,7 +2546,7 @@ pub fn run(title: &str, shots: Option<std::path::PathBuf>) {
             if let Some(crash) =
                 files::config_dir().and_then(|d| cut_craft_bug_report::logs::take_crash(&d))
             {
-                app.reporter.report_crash(crash);
+                app.offer_crash(&cc.egui_ctx, crash);
             }
             app.space_mouse = Some(crate::spacemouse::listen(cc.egui_ctx.clone()));
             app.check_for_updates_at_startup(&cc.egui_ctx);

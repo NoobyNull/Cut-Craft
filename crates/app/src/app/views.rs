@@ -16,6 +16,9 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
 use cut_craft_core::snap::Snap;
 
+/// Where a crash log is kept when the person chose not to send crash logs.
+const LAST_CRASH: &str = "last-crash.log";
+
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.
 const ROTATE_OUT: f64 = 2.5;
 
@@ -197,6 +200,38 @@ impl CutCraftApp {
                 file_name(path)
             )),
             _ => self.import_file(path),
+        }
+    }
+
+    /// A crash last time: sent to the crash-report service or offered as a report, as the
+    /// person chose (first-time setup, or Edit ▸ Options ▸ Bug Reports), or, if they said no, kept as `last-crash.log` beside
+    /// the settings with a word in the status bar.
+    pub(super) fn offer_crash(&mut self, ctx: &egui::Context, crash: String) {
+        use crate::options::CrashLogs;
+        match self.options.bug_reports.crash_logs {
+            CrashLogs::DontSend => {
+                let kept = files::config_dir()
+                    .map(|d| d.join(LAST_CRASH))
+                    .filter(|path| std::fs::write(path, &crash).is_ok());
+                let where_ = kept.map_or_else(String::new, |p| {
+                    format!(" Its crash log is kept in {}.", p.display())
+                });
+                self.status.set_message(&format!(
+                    "Cut Craft closed with an error last time.{where_} To send crash reports, \
+                     change Edit ▸ Options ▸ Bug Reports."
+                ));
+            }
+            CrashLogs::Send => {
+                let install = self
+                    .options
+                    .bug_reports
+                    .install_id
+                    .get_or_insert_with(cut_craft_bug_report::relay::new_install_id)
+                    .clone();
+                self.save_options();
+                self.reporter.send_crash(ctx, crash, &install);
+            }
+            CrashLogs::Ask => self.reporter.report_crash(crash, false),
         }
     }
 

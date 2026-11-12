@@ -110,10 +110,14 @@ impl CutCraftApp {
                 .collect(),
             unsigned_gadgets_allowed: std::collections::HashSet::new(),
             unsigned_gadget_ok: ask_to_run_unsigned,
-            reporter: cut_craft_bug_report::Reporter::new(
-                super::BUG_REPO,
-                files::config_dir().map(|d| d.join("bug-reports")),
-            ),
+            reporter: {
+                let mut reporter = cut_craft_bug_report::Reporter::new(
+                    super::BUG_REPO,
+                    files::config_dir().map(|d| d.join("bug-reports")),
+                );
+                reporter.crash_service = super::CRASH_SERVICE.map(str::to_owned);
+                reporter
+            },
             updates: crate::update::Updates::default(),
             restart_after_close: None,
             clipboard: vec![],
@@ -294,6 +298,8 @@ impl CutCraftApp {
     /// the command registry.
     #[expect(clippy::too_many_lines, reason = "the one dispatch of every action")]
     pub(super) fn invoke(&mut self, ctx: &egui::Context, id: &str) {
+        // the log says which tool was used, so a crash's log shows what led up to it
+        cut_craft_bug_report::logs::step(&format!("Tool: {} ({id})", self.tool_label(id)));
         self.show_subtab_of(id);
         // Delete with a snap mark picked lets that point go, rather than deleting vectors
         if id == "delete" && self.release_picked_snap() {

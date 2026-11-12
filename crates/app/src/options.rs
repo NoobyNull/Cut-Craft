@@ -1065,6 +1065,40 @@ impl Default for Updates {
     }
 }
 
+/// Bug reports, and what happens after Cut Craft closes because of an error.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct BugReports {
+    /// If Cut Craft closes because of an error, it keeps a crash log saying what it was
+    /// doing. The next time it starts it can open a bug report with that log, for you to
+    /// read and send. Your user name and home folder are left out of it, and nothing is sent
+    /// until you press Submit.
+    #[serde(default)]
+    #[schemars(title = "If Cut Craft crashes")]
+    pub crash_logs: CrashLogs,
+    /// A random number for this install, made when a crash report is first sent, so the
+    /// crash-report service can tell one install from another. Nothing about the person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub install_id: Option<String>,
+}
+
+/// Whether a crash's log is offered as a bug report at the next start.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CrashLogs {
+    /// Send the crash log to Cut Craft's crash-report service by itself (home folders and
+    /// your user name left out). Where that can't be done, open a bug report with it ticked
+    #[schemars(title = "Send the crash log")]
+    Send,
+    /// Open a bug report, and ask each time whether the crash log goes with it
+    #[default]
+    #[schemars(title = "Ask me each time")]
+    Ask,
+    /// Don't open a report: the crash log is kept in Cut Craft's settings folder
+    #[schemars(title = "Don't send crash logs")]
+    DontSend,
+}
+
 /// How Cut Craft looks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Appearance {
@@ -1220,6 +1254,9 @@ pub struct Options {
     #[schemars(title = "Updates", extend("x-section" = true))]
     pub updates: Updates,
     #[serde(default)]
+    #[schemars(title = "Bug Reports", extend("x-section" = true))]
+    pub bug_reports: BugReports,
+    #[serde(default)]
     #[schemars(extend("x-section" = true))]
     pub advanced: Advanced,
     /// Snapping Options (F4): what the pointer snaps to, nudge distances and rotate snap
@@ -1355,6 +1392,7 @@ impl Default for Options {
             advanced: Advanced::default(),
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
+            bug_reports: BugReports::default(),
             default_job: None,
             first_run_done: false,
             favourites: Favourites::default(),
@@ -1568,6 +1606,7 @@ mod tests {
                 "Appearance",
                 "SpaceMouse",
                 "Updates",
+                "Bug Reports",
                 "Advanced"
             ]
         );
