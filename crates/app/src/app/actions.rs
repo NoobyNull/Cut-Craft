@@ -179,6 +179,8 @@ impl CutCraftApp {
             playback: None,
             playing: false,
             playback_goal: None,
+            kept_playback: None,
+            close_up: None,
             playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
             collapsed_levels: std::collections::HashSet::new(),
@@ -576,6 +578,7 @@ impl CutCraftApp {
             "undo_last_preview" => {
                 if let Some(before) = self.before_preview.take() {
                     self.simulation = before.0;
+                    self.kept_playback = None;
                     (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
                     self.status.set_message("Undid the last preview");
                 }
@@ -589,6 +592,7 @@ impl CutCraftApp {
                     self.surface_gpu,
                 ) = (None, None, None, None);
                 (self.playback, self.playing, self.playback_goal) = (None, false, None);
+                self.kept_playback = None;
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {

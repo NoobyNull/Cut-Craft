@@ -4239,6 +4239,52 @@ fn a_preview_plays_as_long_as_the_toolpath_summary_says_the_machine_takes() {
 }
 
 #[test]
+fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "stopped"
+    );
+    assert!(h.text_at("Progress").is_some(), "the slider is still there");
+    assert!(h.text_at("Close up").is_some(), "and the fine one");
+    // the slider dragged back: playing it again from there, paused
+    let progress = h.text_at("Progress").unwrap();
+    let from = progress + egui::vec2(200.0, 0.0);
+    h.drag(from, from - egui::vec2(100.0, 0.0));
+    assert!(
+        h.app.playback.is_some() && !h.app.playing,
+        "scrubbing again"
+    );
+    h.app.invoke(&h.ctx, "reset_preview");
+    h.frame(vec![]);
+    assert!(h.text_at("Progress").is_none(), "gone with the preview");
+}
+
+#[test]
+fn the_preview_controls_stay_once_it_has_played_to_the_end() {
+    let mut h = playing_preview();
+    h.app.playback_speed = 1000.0;
+    for _ in 0..600 {
+        if h.app.playback.is_none() {
+            break;
+        }
+        h.frame(vec![]);
+    }
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "played through"
+    );
+    h.frame(vec![]);
+    assert!(h.text_at("Progress").is_some(), "still there to scrub back");
+    h.click(
+        h.text_at("Close").expect("Close hides them"),
+        Modifiers::NONE,
+    );
+    assert!(h.text_at("Progress").is_none() && h.app.simulation.is_some());
+}
+
+#[test]
 fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
     let mut h = playing_preview();
     // a step a frame, as a toolpath of millions of moves would go

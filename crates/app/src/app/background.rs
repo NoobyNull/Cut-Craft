@@ -192,6 +192,7 @@ impl CutCraftApp {
             },
             move |app, material| {
                 app.simulation = Some(material);
+                app.kept_playback = None;
                 (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
                 if app.display.auto_open_3d {
                     app.view = super::View::ThreeD;

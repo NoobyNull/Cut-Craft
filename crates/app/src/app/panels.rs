@@ -1035,6 +1035,7 @@ impl CutCraftApp {
             },
             move |app, playback| {
                 app.playback = Some(playback);
+                app.kept_playback = None;
                 app.simulation = None;
                 (
                     app.playing,
@@ -1078,11 +1079,13 @@ impl CutCraftApp {
         }
     }
 
-    /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path).
+    /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path), and
+    /// the playback, so its controls stay to scrub it again.
     pub(super) fn finish_playback(&mut self) {
         self.playback_goal = None;
         if let Some(playback) = self.playback.take() {
             self.simulation = Some(playback.material().clone());
+            self.kept_playback = Some(playback);
             (
                 self.playing,
                 self.simulation_coarse,
@@ -1113,31 +1116,36 @@ impl CutCraftApp {
     }
 
     /// Aspire's Preview Control while a preview plays: Run / Pause, Single Step, Run to
-    /// Retract and Stop, the tool's place along the path (drag to scrub), the speed and how
-    /// long is left at it. Over both views, so Stop is always to hand; Esc stops it too.
+    /// Retract and Stop, the speed, the tool's place along the whole path and close up
+    /// (drag to scrub), and how long is left. Over both views, so Stop is always to hand; Esc
+    /// stops it too. Once stopped or played through they stay, to scrub it again, with
+    /// Close in place of Stop, till another preview or Reset Preview.
     pub(super) fn playback_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath playback bar");
-        let Some(playback) = self.playback.as_ref() else {
+        let kept = self.playback.is_none();
+        let Some(playback) = self.playback.as_ref().or(self.kept_playback.as_ref()) else {
             return;
         };
-        let mut stop = false;
-        let mut goal = None;
+        let (at, length) = (playback.at(), playback.length());
+        let (mut stop, mut run, mut goal) = (false, false, None);
         ui.horizontal(|ui| {
-            let run = if self.playing { "Pause" } else { "Run" };
-            if ui.button(run).clicked() {
-                self.playing = !self.playing;
-                self.playback_goal = None;
-            }
+            let label = if self.playing { "Pause" } else { "Run" };
+            run = ui.button(label).clicked();
             if ui.button("Single Step").clicked() {
                 goal = Some(playback.next_step());
             }
             if ui.button("Run to Retract").clicked() {
                 goal = Some(playback.next_retract());
             }
-            stop |= ui
-                .button("Stop")
-                .on_hover_hint("Stop the preview here, keeping what is cut so far (Esc)")
-                .clicked();
+            stop = if kept {
+                ui.button("Close")
+                    .on_hover_hint("Hide these controls: the preview stays as it is")
+                    .clicked()
+            } else {
+                ui.button("Stop")
+                    .on_hover_hint("Stop the preview here, keeping what is cut so far (Esc)")
+                    .clicked()
+            };
             ui.add(
                 egui::Slider::new(&mut self.playback_speed, PLAYBACK_SPEEDS)
                     .logarithmic(true)
@@ -1150,51 +1158,110 @@ impl CutCraftApp {
                  rate, rapids at the Toolpath Summary's rapid rate. ×10 plays ten times faster",
             );
         });
-        // the progress across the view: drag it to move the tool on through the toolpaths, or
-        // back
-        ui.horizontal(|ui| {
-            ui.label("Progress");
-            let mut at = self.playback_goal.unwrap_or_else(|| playback.at());
-            let length = playback.length();
-            let percent = move |d: f64| {
-                if length > 0.0 {
-                    d / length * 100.0
-                } else {
-                    100.0
-                }
-            };
-            ui.spacing_mut().slider_width =
-                ui.available_width() - ui.spacing().interact_size.x * 2.0;
-            if ui
-                .add(
-                    egui::Slider::new(&mut at, 0.0..=length)
-                        .custom_formatter(move |d, _| format!("{:.0}%", percent(d)))
-                        .custom_parser(move |text| {
-                            let p: f64 = text.trim().trim_end_matches('%').trim().parse().ok()?;
-                            Some(p / 100.0 * length)
-                        }),
-                )
-                .on_hover_hint("Where the tool is along the toolpaths: drag to move it on or back")
-                .changed()
-            {
-                goal = Some(at);
-            }
-        });
+        if let Some(to) = self.scrub_sliders(ui, self.playback_goal.unwrap_or(at), length) {
+            goal = Some(to);
+        }
         ui.weak(playback_note(
-            playback.at(),
-            playback.length(),
+            at,
+            length,
             self.playback_goal,
             self.playing,
+            kept,
             self.playback_speed,
         ));
+        if (run || goal.is_some()) && kept {
+            self.resume_playback();
+        }
+        if run {
+            let playback = self.playback.as_mut().expect("resumed");
+            // Run at the end plays it again from the start
+            if !self.playing && playback.finished() {
+                playback.seek(0.0);
+            }
+            self.playing = !self.playing;
+            self.playback_goal = None;
+        }
         if let Some(goal) = goal {
             // sent somewhere: it pauses there, cut a frame's worth at a time
             (self.playing, self.playback_goal) = (false, Some(goal));
         }
-        if stop {
+        if stop && kept {
+            self.kept_playback = None;
+        } else if stop {
             self.finish_playback();
         }
         ui.separator();
+    }
+
+    /// The preview's Progress (the whole path) and Close up (the minutes either side of the
+    /// tool, kept where it was while dragged) sliders at `shown` of `length` seconds: where
+    /// the tool is sent, if either was dragged.
+    fn scrub_sliders(&mut self, ui: &mut egui::Ui, shown: f64, length: f64) -> Option<f64> {
+        let mut sent = None;
+        // the whole path: drag it to move the tool on through the toolpaths, or back
+        let percent = move |d: f64| {
+            if length > 0.0 {
+                d / length * 100.0
+            } else {
+                100.0
+            }
+        };
+        let row = |ui: &mut egui::Ui, label: &str, slider: egui::Slider<'_>, hint: &str| {
+            ui.horizontal(|ui| {
+                ui.label(label);
+                ui.spacing_mut().slider_width =
+                    ui.available_width() - ui.spacing().interact_size.x * 2.5;
+                ui.add(slider).on_hover_hint(hint)
+            })
+            .inner
+        };
+        let mut whole = shown;
+        if row(
+            ui,
+            "Progress",
+            egui::Slider::new(&mut whole, 0.0..=length)
+                .custom_formatter(move |d, _| format!("{:.1}%", percent(d)))
+                .custom_parser(move |text| {
+                    let p: f64 = text.trim().trim_end_matches('%').trim().parse().ok()?;
+                    Some(p / 100.0 * length)
+                }),
+            "Where the tool is along the toolpaths: drag to move it on or back",
+        )
+        .changed()
+        {
+            sent = Some(whole);
+        }
+        // close up: the minutes either side of the tool, kept where it was while dragged
+        let centre = self.close_up.unwrap_or(shown);
+        let (from, to) = (
+            (centre - CLOSE_UP).max(0.0),
+            (centre + CLOSE_UP).min(length),
+        );
+        let mut near = shown.clamp(from, to);
+        let close = row(
+            ui,
+            "Close up",
+            egui::Slider::new(&mut near, from..=to)
+                .custom_formatter(|d, _| super::hms(d / 60.0))
+                .custom_parser(|_| None),
+            "The few minutes of machine time either side of the tool: drag to go back and \
+             forth over one spot",
+        );
+        self.close_up = (close.is_pointer_button_down_on() || close.dragged()).then_some(centre);
+        if close.changed() {
+            sent = Some(near);
+        }
+        sent
+    }
+
+    /// A stopped preview's playback taken up again, to play or scrub it: what it shows is
+    /// its material again.
+    fn resume_playback(&mut self) {
+        if let Some(playback) = self.kept_playback.take() {
+            self.playback = Some(playback);
+            self.simulation = None;
+            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        }
     }
 
     /// Aspire's arrows over the tree: the picked component up or down its level, as
@@ -2621,6 +2688,10 @@ impl CutCraftApp {
         let before = self.simulation.clone();
         let removed = self.simulation.as_mut().map_or(0, |m| m.remove_piece(p));
         if removed > 0 {
+            // scrubbing would put the piece back
+            self.kept_playback = None;
+        }
+        if removed > 0 {
             self.before_preview = Some(super::BeforePreview(before));
             (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
             self.status.set_message("Removed the piece cut free");
@@ -3996,7 +4067,14 @@ fn step_heading(ui: &mut egui::Ui, n: u8, text: &str) {
 
 /// The line under a preview's controls: where the tool is being sent and how far it has
 /// got, else how long the rest takes at this speed, with how to stop.
-fn playback_note(at: f64, length: f64, goal: Option<f64>, playing: bool, speed: f64) -> String {
+fn playback_note(
+    at: f64,
+    length: f64,
+    goal: Option<f64>,
+    playing: bool,
+    kept: bool,
+    speed: f64,
+) -> String {
     let percent = |d: f64| {
         if length > 0.0 {
             d / length * 100.0
@@ -4027,9 +4105,20 @@ fn playback_note(at: f64, length: f64, goal: Option<f64>, playing: bool, speed: 
                 crate::busy::seconds(left)
             )
         }
+        None if kept && at >= length => {
+            "Played through. Drag Progress or Close up to look back over it; Run plays it again"
+                .to_owned()
+        }
+        None if kept => format!(
+            "Stopped at {:.0}%. Drag Progress or Close up to look again; Run goes on",
+            percent(at)
+        ),
         None => "Paused. Run goes on; Stop (Esc) keeps what is cut".to_owned(),
     }
 }
+
+/// How far either side of the tool the Close up slider reaches, seconds of machine time.
+const CLOSE_UP: f64 = 120.0;
 
 /// A speed multiplier as the slider shows it: 0.25, 0.5, 2, 10, 250.
 fn times(x: f64) -> String {

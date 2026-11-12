@@ -1207,6 +1207,11 @@ struct CutCraftApp {
     /// Where the tool is being moved to (Single Step, Run to Retract, the Progress slider),
     /// cut a little each frame until it gets there, or Stop.
     playback_goal: Option<f64>,
+    /// A preview stopped or played to its end, kept so its controls stay to scrub it back
+    /// and forth, till another preview or Reset Preview.
+    kept_playback: Option<cut_craft_core::playback::Playback>,
+    /// Where the Close up slider is centred, held while it is dragged so it stays put.
+    close_up: Option<f64>,
     /// How long a frame may spend cutting a playing preview; the rest waits for the next
     /// frame, so a long toolpath plays slower instead of freezing the window.
     playback_budget: std::time::Duration,
