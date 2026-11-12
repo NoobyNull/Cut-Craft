@@ -839,6 +839,41 @@ pub struct Advanced {
     )]
     #[schemars(title = "Nesting: most filler parts", range(min = 1, max = 100_000))]
     pub nest_most_fillers: u32,
+    /// How much work a gadget may do, in millions of Lua steps, before it is stopped as
+    /// stuck. Higher lets big gadgets finish; a gadget caught in a loop then freezes Cut Craft
+    /// for longer before it is stopped
+    #[serde(
+        default = "gadget_million_instructions",
+        skip_serializing_if = "is_gadget_million_instructions"
+    )]
+    #[schemars(
+        title = "Gadgets: most work (million steps)",
+        range(min = 10, max = 5000)
+    )]
+    pub gadget_million_instructions: u32,
+    /// How much memory a gadget may use before it is stopped. Higher lets big gadgets finish,
+    /// but a runaway one can take that much from the computer
+    #[serde(
+        default = "gadget_memory_mb",
+        skip_serializing_if = "is_gadget_memory_mb"
+    )]
+    #[schemars(
+        title = "Gadgets: most memory",
+        extend("x-unit" = "MB"),
+        range(min = 8, max = 1024)
+    )]
+    pub gadget_memory_mb: u32,
+    /// How many commands one gadget run may do. Higher lets a gadget make more shapes in one
+    /// go, but each one adds to the job's memory and to the time Undo takes
+    #[serde(
+        default = "gadget_most_commands",
+        skip_serializing_if = "is_gadget_most_commands"
+    )]
+    #[schemars(
+        title = "Gadgets: most commands in one run",
+        range(min = 100, max = 1_000_000)
+    )]
+    pub gadget_most_commands: u32,
 }
 
 /// The default of an Advanced setting, and whether a value is it: settings at their default
@@ -911,6 +946,23 @@ advanced_default!(
     u32::try_from(cut_craft_core::accuracy::NEST_FILLERS).expect("a small count")
 );
 
+advanced_default!(
+    gadget_million_instructions,
+    is_gadget_million_instructions,
+    u32::try_from(cut_craft_scripting::Limits::default().instructions / 1_000_000)
+        .expect("a count of millions")
+);
+advanced_default!(
+    gadget_memory_mb,
+    is_gadget_memory_mb,
+    u32::try_from(cut_craft_scripting::Limits::default().memory >> 20).expect("a count of MB")
+);
+advanced_default!(
+    gadget_most_commands,
+    is_gadget_most_commands,
+    u32::try_from(cut_craft_scripting::Limits::default().commands).expect("a small count")
+);
+
 /// A count from the options file as a `usize`.
 fn count(n: u32) -> usize {
     usize::try_from(n).unwrap_or(usize::MAX)
@@ -942,6 +994,9 @@ impl Default for Advanced {
             rest_threshold: rest_threshold(),
             nest_most_sheets: nest_most_sheets(),
             nest_most_fillers: nest_most_fillers(),
+            gadget_million_instructions: gadget_million_instructions(),
+            gadget_memory_mb: gadget_memory_mb(),
+            gadget_most_commands: gadget_most_commands(),
         }
     }
 }
@@ -959,6 +1014,16 @@ impl Advanced {
         let (relist, most, unused_days, keep) = self.library_limits();
         crate::clipart::limits::set(relist, most, unused_days, keep);
         cut_craft_core::accuracy::set(self.accuracy());
+        cut_craft_scripting::set_gadget_limits(self.gadget_limits());
+    }
+
+    /// What a gadget may do before it is stopped, each kept to its range.
+    pub fn gadget_limits(&self) -> cut_craft_scripting::Limits {
+        cut_craft_scripting::kept_to_ranges(cut_craft_scripting::Limits {
+            instructions: u64::from(self.gadget_million_instructions) * 1_000_000,
+            memory: count(self.gadget_memory_mb) << 20,
+            commands: count(self.gadget_most_commands),
+        })
     }
 
     /// The Library's rescan seconds, most files, days an unused preview is kept and previews
@@ -1777,6 +1842,44 @@ mod tests {
         assert_eq!(back.advanced.previews_on_card, 100);
         let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
         file["advanced"]["library_rescan_seconds"] = 1.into();
+        let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
+        assert!(tampered);
+        assert_eq!(back.advanced, Advanced::default());
+    }
+
+    #[test]
+    fn gadget_limits_reach_gadgets_and_are_sealed() {
+        use cut_craft_scripting::Limits;
+        assert_eq!(
+            Advanced::default().gadget_limits(),
+            Limits::default(),
+            "the fixed values they replace"
+        );
+        let mut o = Options::default();
+        o.advanced.gadget_million_instructions = 1000;
+        o.advanced.gadget_memory_mb = 256;
+        o.advanced.gadget_most_commands = 50_000;
+        // what apply hands gadgets, checked without setting it: gadget tests beside this one
+        // read it
+        assert_eq!(
+            o.advanced.gadget_limits(),
+            Limits {
+                instructions: 1_000_000_000,
+                memory: 256 << 20,
+                commands: 50_000,
+            }
+        );
+        // out of range in the file: kept to the range
+        o.advanced.gadget_memory_mb = 1;
+        assert_eq!(o.advanced.gadget_limits().memory, 8 << 20);
+        // saved by Cut Craft they load back; edited by hand they go back to the defaults
+        let mut o = Options::default();
+        o.advanced.gadget_most_commands = 50_000;
+        let (back, tampered) = Options::from_bytes(&saved(&o));
+        assert!(!tampered);
+        assert_eq!(back.advanced.gadget_most_commands, 50_000);
+        let mut file: serde_json::Value = serde_json::from_slice(&saved(&o)).unwrap();
+        file["advanced"]["gadget_memory_mb"] = 1024.into();
         let (back, tampered) = Options::from_bytes(&serde_json::to_vec(&file).unwrap());
         assert!(tampered);
         assert_eq!(back.advanced, Advanced::default());
