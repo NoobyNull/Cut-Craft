@@ -67,9 +67,12 @@ jobs:
           # retries, and another mirror when one of Ubuntu's package servers is down
           scripts/apt-install pkg-config libxkbcommon-dev libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev libvulkan-dev \
-            libxkbcommon-x11-0 libxcb-xkb1
+            libxkbcommon-x11-0 libxcb-xkb1 xvfb libegl1 mesa-vulkan-drivers
       - name: Build
         run: cargo build --release -p cut-craft
+      # it keeps running on a virtual screen, on Vulkan and on OpenGL alone
+      - name: Start the program
+        run: scripts/start-check target/release/cut-craft
       - name: Package the program
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
@@ -172,6 +175,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release -p cut-craft
+      # needs no Visual C++ runtime, and keeps running with its window set up
+      - name: Start the program
+        shell: pwsh
+        run: scripts/start-check.ps1 target/release/cut-craft.exe
       - name: Package the program
         shell: pwsh
         run: |

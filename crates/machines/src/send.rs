@@ -3,8 +3,8 @@
 //! computer already sees: a network share the machine serves (a wireless controller's SD card),
 //! or its SD card or USB stick plugged in here. Each project keeps its files in a folder of
 //! its own there, named from the project's name in a way the machine's card can hold.
-// ponytail: a WebDAV address (FluidNC serves its SD card at http://<host>/sd/) is the next
-// kind of place; `Store` is what it will answer to
+//! Or the machine's web address, for a controller that serves its card over WebDAV
+//! (`crate::webdav`).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -80,9 +80,16 @@ impl SendTo {
         Some(dir)
     }
 
-    /// The place to send to, while there is one.
-    pub fn store(&self) -> Option<Folder> {
-        self.is_set().then(|| Folder::new(self.folder.trim()))
+    /// The place to send to, while there is one: a web address (WebDAV), else a folder.
+    pub fn store(&self) -> Option<Box<dyn Store>> {
+        let place = self.folder.trim();
+        if !self.is_set() {
+            None
+        } else if crate::webdav::is_address(place) {
+            Some(Box::new(crate::webdav::WebDav::new(place)))
+        } else {
+            Some(Box::new(Folder::new(place)))
+        }
     }
 }
 
@@ -157,6 +164,12 @@ pub struct Item {
 
 /// What a place to send to does: the folder parts in `at` are inside it, from its top.
 pub trait Store {
+    /// Where it is, as the user gave it (a folder, or a web address).
+    fn place(&self) -> String;
+    /// Why nothing may be changed there now (the machine is running a job), when it can tell.
+    fn busy(&self) -> Option<String> {
+        None
+    }
     /// What is in folder `at`, folders first, each lot by name.
     fn list(&self, at: &[String]) -> Result<Vec<Item>, String>;
     /// Writes `bytes` as `name` in folder `at`, making the folder when it is not there.
@@ -251,6 +264,10 @@ pub fn explain(what: &str, path: &Path, error: &std::io::Error) -> String {
 }
 
 impl Store for Folder {
+    fn place(&self) -> String {
+        self.root.display().to_string()
+    }
+
     fn list(&self, at: &[String]) -> Result<Vec<Item>, String> {
         let dir = self.dir(at)?;
         let entries = std::fs::read_dir(&dir).map_err(|e| explain("Not listed", &dir, &e))?;
@@ -384,7 +401,12 @@ mod tests {
             folder: " /media/sd ".into(),
             ..SendTo::default()
         };
-        assert_eq!(to.store().unwrap().root(), Path::new("/media/sd"));
+        assert_eq!(to.store().unwrap().place(), "/media/sd");
+        let fluidnc = SendTo {
+            folder: "http://fluidnc.local/sd".into(),
+            ..SendTo::default()
+        };
+        assert_eq!(fluidnc.store().unwrap().place(), "http://fluidnc.local/sd/");
     }
 
     #[test]

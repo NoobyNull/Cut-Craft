@@ -1,2 +1,2 @@
 # a product name, not code
-doc-valid-idents = ["SpaceMouse", "CutCraft", "SQLite", ".."]
+doc-valid-idents = ["SpaceMouse", "CutCraft", "SQLite", "WebDAV", "WiFi", "FluidNC", ".."]

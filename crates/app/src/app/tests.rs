@@ -8777,13 +8777,78 @@ fn send_to_machine_puts_the_files_and_job_sheet_in_the_projects_own_folder() {
 }
 
 #[test]
+fn nothing_is_sent_while_the_machine_runs_a_job() {
+    use cut_craft_machines::send::{Folder, Item, Store};
+    /// A card on a machine that is cutting.
+    struct Cutting(Folder);
+    impl Store for Cutting {
+        fn place(&self) -> String {
+            self.0.place()
+        }
+        fn busy(&self) -> Option<String> {
+            Some("The machine is running a job".into())
+        }
+        fn list(&self, at: &[String]) -> Result<Vec<Item>, String> {
+            self.0.list(at)
+        }
+        fn upload(&self, at: &[String], name: &str, bytes: &[u8]) -> Result<(), String> {
+            self.0.upload(at, name, bytes)
+        }
+        fn exists(&self, at: &[String], name: &str) -> Result<bool, String> {
+            self.0.exists(at, name)
+        }
+        fn rename(&self, at: &[String], from: &str, to: &str) -> Result<(), String> {
+            self.0.rename(at, from, to)
+        }
+        fn delete(&self, at: &[String], name: &str) -> Result<(), String> {
+            self.0.delete(at, name)
+        }
+        fn make_folder(&self, at: &[String], name: &str) -> Result<(), String> {
+            self.0.make_folder(at, name)
+        }
+    }
+    let mut h = Harness::new();
+    two_tools(&mut h);
+    let card = std::env::temp_dir().join(format!("cut-craft-cutting-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&card);
+    std::fs::create_dir_all(card.join("Sign")).unwrap();
+    h.app.machines.add();
+    h.app.machines.active_mut().unwrap().send_to.folder = card.display().to_string();
+    let form = SaveForm {
+        mode: crate::files::SaveMode::VisibleToOneFile,
+        group: false,
+        post: None,
+        add_side: false,
+        changes: crate::files::ToolChanges::ToolChanger,
+        job_sheet: false,
+    };
+    let post = h.app.form_post(&form).unwrap();
+    let store = Cutting(Folder::new(&card));
+    let never = |_: &[String]| panic!("not asked");
+    let refused = h.app.send_to(&form, &post, &store, &never).unwrap_err();
+    assert!(
+        refused.starts_with("Not sent: The machine is running a job"),
+        "{refused}"
+    );
+    let mut files =
+        super::send::MachineFiles::new("Router", Box::new(Cutting(Folder::new(&card))), false);
+    files.delete("Sign");
+    assert!(card.join("Sign").is_dir(), "kept");
+    assert_eq!(
+        files.message,
+        Err("The machine is running a job".to_owned())
+    );
+    let _ = std::fs::remove_dir_all(card);
+}
+
+#[test]
 fn machine_files_uploads_renames_makes_folders_and_deletes_only_on_the_second_ask() {
     let card = std::env::temp_dir().join(format!("cut-craft-files-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&card);
     std::fs::create_dir_all(card.join("Sign")).unwrap();
     let local = card.with_extension("local.nc");
     std::fs::write(&local, "G0 X0").unwrap();
-    let store = cut_craft_machines::send::Folder::new(&card);
+    let store = Box::new(cut_craft_machines::send::Folder::new(&card));
     let mut files = super::send::MachineFiles::new("Router", store, false);
     files.open_folder("Sign");
     files.upload(std::slice::from_ref(&local));

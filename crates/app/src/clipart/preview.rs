@@ -108,9 +108,9 @@ pub fn preview_at(
     Ok(image)
 }
 
-/// How long a cached preview is kept unused: one of a file deleted, moved or changed since
-/// is never used again.
-pub const UNUSED: std::time::Duration = std::time::Duration::from_hours(1440);
+/// How many days a cached preview is kept unused unless Options ▸ Advanced says otherwise:
+/// one of a file deleted, moved or changed since is never used again.
+pub const UNUSED_DAYS: u64 = 60;
 
 /// Deletes the previews in `cache` unused for longer than `unused`.
 pub fn prune(cache: &Path, unused: std::time::Duration) {
@@ -440,8 +440,9 @@ pub enum Preview<'a> {
     Failed(&'a str),
 }
 
-/// Pictures kept on the graphics card at most; ones scrolled past come back from the cache.
-const KEEP: usize = 400;
+/// Pictures kept on the graphics card at most unless Options ▸ Advanced says otherwise; ones
+/// scrolled past come back from the cache.
+pub const KEEP: usize = 400;
 
 impl Default for Previews {
     fn default() -> Self {
@@ -453,7 +454,7 @@ impl Previews {
     /// Tiles' previews, [`SIZE`] pixels across.
     pub fn new(cache: Option<PathBuf>) -> Self {
         let threads = cut_craft_core::simulation::cores().saturating_sub(1).max(1);
-        Self::sized(cache, SIZE, KEEP, threads)
+        Self::sized(cache, SIZE, super::limits::keep(), threads)
     }
 
     /// Previews `size` pixels across, at most `keep` of them on the graphics card, made by
@@ -1014,14 +1015,14 @@ mod tests {
         preview(&stl, None, Some(&cache)).unwrap();
         let old = cache.join("0123456789abcdef.png");
         std::fs::write(&old, "").unwrap();
-        let long_ago = std::time::SystemTime::now() - 2 * UNUSED;
+        let long_ago = std::time::SystemTime::now() - crate::clipart::limits::unused() * 2;
         for f in std::fs::read_dir(&cache).unwrap().flatten() {
             let file = std::fs::File::options().write(true).open(f.path()).unwrap();
             file.set_modified(long_ago).unwrap();
         }
         // the model's preview is used again, the other isn't
         preview(&stl, None, Some(&cache)).unwrap();
-        prune(&cache, UNUSED);
+        prune(&cache, crate::clipart::limits::unused());
         let left: Vec<_> = std::fs::read_dir(&cache).unwrap().flatten().collect();
         assert_eq!(left.len(), 1);
         assert!(!old.exists());
