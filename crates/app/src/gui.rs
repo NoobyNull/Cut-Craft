@@ -646,6 +646,8 @@ pub fn about(id: &str) -> Option<&'static str> {
                 .find(|(i, _, _)| *i == id)
                 .map(|(_, _, about)| *about)
         })
+        .or_else(|| crate::flyout::variant(id).map(|v| v.hint))
+        .or_else(|| crate::hints::hint(id))
 }
 
 /// What command `id` does at length (its crate's first paragraph, the lead `Name:` that only
@@ -2243,6 +2245,23 @@ impl MenuSystem {
 #[cfg(test)]
 mod tests {
     use super::MenuItem;
+
+    #[test]
+    fn tools_without_a_crate_still_say_what_they_do() {
+        // a flyout's variant of a drawing tool, and an icon opening another tool's form
+        for id in [
+            "draw_circle_from_edge",
+            "draw_rectangle_from_center",
+            "create_shape_round",
+            "create_shape_angled",
+            "create_shape_smooth",
+            "create_shape_flat",
+            "edit_text",
+        ] {
+            let about = super::about(id).unwrap_or_default();
+            assert!(about.split_whitespace().count() > 6, "{id}: {about:?}");
+        }
+    }
 
     #[test]
     fn status_text_goes_on_one_line() {

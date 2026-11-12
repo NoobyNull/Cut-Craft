@@ -1,4 +1,5 @@
-//! Draw Ellipse.
+//! Draw Ellipse: an oval, dragged from its centre out to a corner of the box it fits, or typed
+//! as a centre, width and height. It is a closed vector.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::geometry::Path;
@@ -13,8 +14,10 @@ pub struct DrawEllipse;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
     pub center: Xy,
+    /// How wide the ellipse is from side to side
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub width: f64,
+    /// How tall the ellipse is from bottom to top
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     pub height: f64,
 }

@@ -28,9 +28,6 @@ array_copy_toolpath | setting without help: Rows
 array_copy_toolpath | setting without help: Spacing
 array_copy_toolpath | setting without help: X
 array_copy_toolpath | setting without help: Y
-auto_layout_text | option without help: Text alignment = Center
-auto_layout_text | option without help: Text alignment = Left
-auto_layout_text | option without help: Text alignment = Right
 auto_open_3d_view | no tooltip
 auto_wrapping_view | no tooltip
 bake_components | short help page intro
@@ -42,13 +39,6 @@ bitmap_properties | setting without help: Y
 bottom_to_top | no tooltip
 bottom_to_top | no help page intro
 cascade_windows | no tooltip
-celtic_weave | setting without help: Cell size
-celtic_weave | setting without help: Cuts ▸ Column
-celtic_weave | setting without help: Cuts ▸ Cut
-celtic_weave | setting without help: Cuts ▸ Row
-celtic_weave | setting without help: Rows
-celtic_weave | option without help: Cuts ▸ Cut = Cut Horizontal
-celtic_weave | option without help: Cuts ▸ Cut = Cut Vertical
 center | short help page intro
 center_horizontally | short help page intro
 center_horizontally_in_material | short help page intro
@@ -64,8 +54,6 @@ circular_copy | setting without help: Angle mode
 circular_copy | setting without help: Y
 close | no tooltip
 close_extend_vector | setting without help: Method
-close_with_line | setting without help: At ▸ X
-close_with_line | setting without help: At ▸ Y
 close_with_line | setting without help: Reach
 close_with_line | setting without help: Vector
 color_shaded_view | no tooltip
@@ -81,18 +69,10 @@ component_levels | no tooltip
 component_levels | no help page intro
 component_properties | setting without help: Component
 component_properties | setting without help: Fade ▸ Fade
-component_properties | setting without help: Fade ▸ From ▸ X
-component_properties | setting without help: Fade ▸ From ▸ Y
 component_properties | setting without help: Fade ▸ Percent
-component_properties | setting without help: Fade ▸ To ▸ X
-component_properties | setting without help: Fade ▸ To ▸ Y
 component_properties | setting without help: Name
 component_properties | setting without help: Tilt ▸ Angle
-component_properties | setting without help: Tilt ▸ Pivot ▸ X
-component_properties | setting without help: Tilt ▸ Pivot ▸ Y
 component_properties | setting without help: Tilt ▸ Tilt
-component_properties | setting without help: Tilt ▸ Toward ▸ X
-component_properties | setting without help: Tilt ▸ Toward ▸ Y
 component_properties | option without help: Appearance = Same as Parent
 component_properties | option without help: Appearance = Solid Color
 convert_text_to_curves | short help page intro
@@ -104,24 +84,8 @@ create_component_from_bitmap | setting without help: Name
 create_component_from_toolpath_preview | no tooltip
 create_component_from_visible_model | short help page intro
 create_fillets | setting without help: Kind
-create_shape | setting without help: Name
-create_shape | setting without help: Profile
-create_shape_angled | no tooltip
-create_shape_angled | no help page intro
-create_shape_flat | no tooltip
-create_shape_flat | no help page intro
-create_shape_round | no tooltip
-create_shape_round | no help page intro
-create_shape_smooth | no tooltip
-create_shape_smooth | no help page intro
 crop_bitmap | short help page intro
-cross_section | setting without help: From ▸ X
-cross_section | setting without help: From ▸ Y
-cross_section | setting without help: To ▸ X
-cross_section | setting without help: To ▸ Y
 cut | no tooltip
-cut_vector | setting without help: At ▸ X
-cut_vector | setting without help: At ▸ Y
 cut_vector | setting without help: Reach
 cut_vector | setting without help: Vector
 delete | short tooltip
@@ -139,93 +103,23 @@ delete_items | option without help: Which = Delete All
 delete_items | option without help: Which = Delete Invisible
 delete_items | option without help: Which = Delete This
 delete_items | option without help: Which = Delete Visible
-delete_point | setting without help: At ▸ X
-delete_point | setting without help: At ▸ Y
 delete_point | setting without help: Reach
 delete_point | setting without help: Vector
 delete_toolpath | short tooltip
 delete_toolpath | short help page intro
 delete_toolpath | setting without help: Toolpath
-dimensions | setting without help: Decimal places
-dimensions | setting without help: Font
-dimensions | setting without help: From ▸ X
-dimensions | setting without help: From ▸ Y
-dimensions | setting without help: Kind
-dimensions | setting without help: Text height
-dimensions | setting without help: To ▸ X
-dimensions | setting without help: To ▸ Y
-dimensions | option without help: Kind = Horizontal Dimension
-dimensions | option without help: Kind = Vertical Dimension
-distort_object | setting without help: Corners ▸ Bottom left ▸ X
-distort_object | setting without help: Corners ▸ Bottom left ▸ Y
-distort_object | setting without help: Corners ▸ Bottom right ▸ X
-distort_object | setting without help: Corners ▸ Bottom right ▸ Y
-distort_object | setting without help: Corners ▸ Top left ▸ X
-distort_object | setting without help: Corners ▸ Top left ▸ Y
-distort_object | setting without help: Corners ▸ Top right ▸ X
-distort_object | setting without help: Corners ▸ Top right ▸ Y
 document_variables | setting without help: Variables ▸ Name
 document_variables | setting without help: Variables ▸ Value
 drag_knife_toolpath | setting without help: Name
 draw_2d_previews | no tooltip
-draw_arc | setting without help: Center ▸ X
-draw_arc | setting without help: Center ▸ Y
-draw_arc | setting without help: End angle
-draw_arc | setting without help: Radius
-draw_circle | short tooltip
-draw_circle | short help page intro
-draw_circle | setting without help: Center Point ▸ X
-draw_circle | setting without help: Center Point ▸ Y
-draw_circle | setting without help: Radius
-draw_circle_from_edge | no tooltip
-draw_circle_from_edge | no help page intro
-draw_curve | setting without help: Points
-draw_curve | setting without help: Points ▸ X
-draw_curve | setting without help: Points ▸ Y
-draw_ellipse | short tooltip
-draw_ellipse | short help page intro
-draw_ellipse | setting without help: Center ▸ X
-draw_ellipse | setting without help: Center ▸ Y
-draw_ellipse | setting without help: Height
-draw_ellipse | setting without help: Width
 draw_join_moves | no tooltip
 draw_keep_out_zones_in_3d_view | no tooltip
 draw_material_block | no tooltip
 draw_modeling_plane | no tooltip
 draw_origin | no tooltip
 draw_plunge_moves | no tooltip
-draw_polygon | setting without help: Center Point ▸ X
-draw_polygon | setting without help: Center Point ▸ Y
-draw_polygon | setting without help: Rotation
-draw_polygon | setting without help: Sides
-draw_polyline | setting without help: Points
-draw_polyline | setting without help: Points ▸ X
-draw_polyline | setting without help: Points ▸ Y
 draw_rapid_moves | no tooltip
-draw_rectangle | short help page intro
-draw_rectangle | setting without help: Height (Y)
-draw_rectangle | setting without help: Radius
-draw_rectangle | setting without help: Width (X)
-draw_rectangle | setting without help: X
-draw_rectangle | setting without help: Y
-draw_rectangle | option without help: Corner Type = Square
-draw_rectangle_from_center | no tooltip
-draw_rectangle_from_center | no help page intro
 draw_retract_moves | no tooltip
-draw_star | setting without help: Center Point ▸ X
-draw_star | setting without help: Center Point ▸ Y
-draw_star | setting without help: Points
-draw_star | setting without help: Rotation
-draw_text | setting without help: Anchor point ▸ X
-draw_text | setting without help: Anchor point ▸ Y
-draw_text | setting without help: Bounding box dimensions ▸ X
-draw_text | setting without help: Bounding box dimensions ▸ Y
-draw_text | setting without help: Mode
-draw_text | option without help: Horizontal stretch = No horizontal stretch
-draw_text | option without help: Text alignment = Center
-draw_text | option without help: Text alignment = Left
-draw_text | option without help: Text alignment = Right
-draw_text | option without help: Vertical stretch = No vertical stretch
 draw_vectors_in_3d_view | no tooltip
 drill_bank_toolpath | setting without help: Name
 drilling_toolpath | setting without help: Name
@@ -236,10 +130,6 @@ edit_picture | setting without help: Border ▸ Add Border
 edit_picture | setting without help: Border ▸ Shape
 edit_picture | option without help: Border ▸ Shape = Oval Border
 edit_picture | option without help: Border ▸ Shape = Rectangular Border
-edit_text | no tooltip
-edit_text | no help page intro
-embellish | setting without help: Name
-embellish | option without help: Make = Both
 engrave_part_names | option without help: Engrave = Name only
 engrave_part_names | option without help: Engrave = Number only
 exit | no tooltip
@@ -282,14 +172,10 @@ increment_and_save | no tooltip
 inlay_toolpath | setting without help: Inlay type
 inlay_toolpath | setting without help: Name
 insert_level | setting without help: Name
-insert_point | setting without help: At ▸ X
-insert_point | setting without help: At ▸ Y
 insert_point | setting without help: Reach
 insert_point | setting without help: Vector
 install_offline_package | no tooltip
 install_post_processor | no tooltip
-interactive_vector_trim | setting without help: At ▸ X
-interactive_vector_trim | setting without help: At ▸ Y
 interface_layout | no tooltip
 interface_layout | no help page intro
 job_setup | setting without help: Home / Start Position ▸ X
@@ -367,8 +253,6 @@ light_follows_viewer | no tooltip
 lock_all_existing_guides | no tooltip
 machine_configuration | no tooltip
 make_2d_previews_solid | no tooltip
-make_start_point | setting without help: At ▸ X
-make_start_point | setting without help: At ▸ Y
 make_start_point | setting without help: Reach
 make_start_point | setting without help: Vector
 material_setup | setting without help: Home / Start Position ▸ X
@@ -410,16 +294,8 @@ move | option without help: Anchor = Right
 move | option without help: Anchor = Top
 move | option without help: Anchor = Top left
 move | option without help: Anchor = Top right
-move_node | setting without help: From ▸ At ▸ X
-move_node | setting without help: From ▸ At ▸ Y
 move_node | setting without help: From ▸ Reach
 move_node | setting without help: From ▸ Vector
-move_node | setting without help: To ▸ X
-move_node | setting without help: To ▸ Y
-move_nodes | setting without help: By ▸ X
-move_nodes | setting without help: By ▸ Y
-move_nodes | setting without help: Nodes ▸ At ▸ X
-move_nodes | setting without help: Nodes ▸ At ▸ Y
 move_nodes | setting without help: Nodes ▸ Reach
 move_nodes | setting without help: Nodes ▸ Vector
 move_to_layer | short help page intro
@@ -454,8 +330,6 @@ orientate_3d_model | setting without help: Interactive Rotation ▸ X
 orientate_3d_model | setting without help: Interactive Rotation ▸ Y
 orientate_3d_model | setting without help: Interactive Rotation ▸ Z
 orientate_3d_model | setting without help: Position relative to Modeling Plane ▸ Discard data below zero plane
-orientate_3d_model | setting without help: Position relative to Modeling Plane ▸ Position ▸ X
-orientate_3d_model | setting without help: Position relative to Modeling Plane ▸ Position ▸ Y
 orientate_3d_model | option without help: Initial Orientation ▸ Face up = Back
 orientate_3d_model | option without help: Initial Orientation ▸ Face up = Bottom
 orientate_3d_model | option without help: Initial Orientation ▸ Face up = Front
@@ -547,8 +421,6 @@ reorder_toolpath | setting without help: Toolpath
 replace_below | setting without help: Replace value with
 reset_inside_selected_vectors | short help page intro
 reset_outside_selected_vectors | short help page intro
-reverse_direction | setting without help: At ▸ X
-reverse_direction | setting without help: At ▸ Y
 reverse_direction | setting without help: Reach
 reverse_direction | setting without help: Vector
 right_to_left | no tooltip
@@ -630,39 +502,19 @@ sketch_carving_toolpath | setting without help: Source
 slice | setting without help: Model slicing
 slice | setting without help: Number of slices
 slice | setting without help: Slice thickness
-smooth_point | setting without help: At ▸ X
-smooth_point | setting without help: At ▸ Y
 smooth_point | setting without help: Reach
 smooth_point | setting without help: Vector
 snap_options | no tooltip
-span_to_arc | setting without help: At ▸ X
-span_to_arc | setting without help: At ▸ Y
 span_to_arc | setting without help: Reach
 span_to_arc | setting without help: Vector
-span_to_bezier | setting without help: At ▸ X
-span_to_bezier | setting without help: At ▸ Y
 span_to_bezier | setting without help: Reach
 span_to_bezier | setting without help: Vector
-span_to_line | setting without help: At ▸ X
-span_to_line | setting without help: At ▸ Y
 span_to_line | setting without help: Reach
 span_to_line | setting without help: Vector
 split | short help page intro
 subtract_vectors | short tooltip
 subtract_vectors | short help page intro
 swap_sides | short help page intro
-text_on_a_curve | setting without help: Letters
-text_on_a_curve | setting without help: Text alignment
-text_on_a_curve | setting without help: Text position
-text_on_a_curve | setting without help: Text size
-text_on_a_curve | option without help: Letters = Keep vertical
-text_on_a_curve | option without help: Text alignment = Left
-text_on_a_curve | option without help: Text alignment = Middle
-text_on_a_curve | option without help: Text alignment = Right
-text_on_a_curve | option without help: Text position = Above curve
-text_on_a_curve | option without help: Text position = Below curve
-text_on_a_curve | option without help: Text position = On curve
-text_on_a_curve | option without help: Text size = Maintain text size
 texture_area | setting without help: Name
 texture_area | option without help: Reflection = Both
 texture_area | option without help: Reflection = Horizontal
@@ -763,12 +615,6 @@ vector_selector | option without help: Circles = Select all circles
 vector_selector | option without help: Closed kind = All closed vectors
 vector_selector | option without help: Closed kind = Only circles
 vector_selector | option without help: Select vectors on = All visible layers
-vector_texture | setting without help: Amplitude
-vector_texture | setting without help: Max. spacing
-vector_texture | setting without help: Name
-vector_texture | setting without help: Wavelength
-vector_unwrapper | setting without help: Point ▸ X
-vector_unwrapper | setting without help: Point ▸ Y
 weld_vectors | short tooltip
 weld_vectors | short help page intro
 wrapped_fluting_layout | setting without help: Number of flutes

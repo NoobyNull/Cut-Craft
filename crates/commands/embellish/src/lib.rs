@@ -105,7 +105,7 @@ pub enum Make {
     /// A 3D component, each piece rounded over, for 3D roughing and finishing
     #[schemars(title = "3D carving")]
     Carving,
-    /// Both
+    /// The outlines and the 3D component together
     #[default]
     Both,
 }
@@ -164,6 +164,7 @@ pub struct Params {
     /// Another seed gives another design with the same settings
     #[schemars(title = "Design", extend("x-widget" = "seed"))]
     pub seed: u32,
+    /// Names the new layer the ornament's vectors go on, and its 3D component
     pub name: String,
     pub combine: Combine,
 }

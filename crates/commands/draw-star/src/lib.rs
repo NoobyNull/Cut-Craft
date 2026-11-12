@@ -19,9 +19,10 @@ pub struct Params {
     /// Centre to the notch between points
     #[schemars(extend("x-unit" = "mm", "x-icon" = "drawing_forms/star_inner_radius.png"), range(min = 0))]
     pub inner_radius: f64,
+    /// How many points the star has
     #[schemars(range(min = 3, max = 100))]
     pub points: u32,
-    /// Counter-clockwise
+    /// Turns the star counter-clockwise by this angle; at 0 a point faces straight up
     #[schemars(extend("x-unit" = "deg"))]
     pub rotation: f64,
 }

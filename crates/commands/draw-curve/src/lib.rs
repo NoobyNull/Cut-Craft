@@ -12,6 +12,8 @@ pub struct DrawCurve;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
+    /// The points the curve passes through, in order: click them in the 2D view, or type them
+    /// here
     pub points: Vec<Xy>,
     /// Join the last point back to the first, smoothly
     pub closed: bool,
