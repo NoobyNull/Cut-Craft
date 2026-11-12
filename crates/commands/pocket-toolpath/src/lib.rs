@@ -406,6 +406,150 @@ fn raster(edge: &[Path], step: f64, angle: f64) -> Vec<Path> {
         .collect()
 }
 
+/// A bit Suggest may pick for clearing, and whether it is loaded in the tool changer.
+#[derive(Clone, Debug)]
+pub struct Candidate {
+    pub tool: Tool,
+    pub loaded: bool,
+}
+
+/// What a tool change costs, minutes: by hand, or by the tool changer.
+#[derive(Clone, Copy, Debug)]
+pub struct Changes {
+    pub by_hand: f64,
+    pub by_changer: f64,
+}
+
+/// Suggest's answer: the clearing bits that finish the pocket soonest (none when the
+/// finishing bit alone is quickest), how long that takes, and how long the finishing bit
+/// takes alone, minutes (cutting at `rapid` and changing bits included).
+#[derive(Clone, Debug)]
+pub struct Suggestion {
+    pub clearing: Vec<Tool>,
+    pub minutes: f64,
+    pub alone: f64,
+}
+
+/// The most clearing bits of different sizes Suggest weighs (one at a time and in pairs).
+const SUGGEST_SIZES: usize = 6;
+
+/// Within this share of each other two plans count as equally quick: then the one with
+/// more bits already in the tool changer wins, then the one with fewer bits.
+const SAME_TIME: f64 = 0.03;
+
+/// The quickest way to `p`'s pocket finished by its own tool: alone, after one bigger bit
+/// from `candidates`, or after two. Bigger end mills only, one of each size (a loaded one
+/// first); each plan is calculated as Calculate would make it and timed at `rapid`, with
+/// `changes` for each bit change (the finishing bit's own `finishing_loaded`).
+pub fn suggest(
+    doc: &Document,
+    p: &Params,
+    candidates: &[Candidate],
+    finishing_loaded: bool,
+    rapid: f64,
+    changes: Changes,
+) -> Result<Suggestion, CommandError> {
+    use cut_craft_core::toolpath::ToolShape;
+    let usable = |t: &Tool| {
+        t.shape == ToolShape::EndMill
+            && t.diameter > p.tool.diameter + 1e-6
+            && t.pass_depth > 0.0
+            && t.stepover > 0.0
+            && t.stepover <= 1.0
+            && t.feed_rate > 0.0
+    };
+    // one of each size, a loaded one before one changed by hand
+    let mut sizes: Vec<&Candidate> = vec![];
+    for c in candidates.iter().filter(|c| usable(&c.tool)) {
+        match sizes
+            .iter_mut()
+            .find(|k| (k.tool.diameter - c.tool.diameter).abs() < 1e-6)
+        {
+            Some(kept) if c.loaded && !kept.loaded => *kept = c,
+            Some(_) => {}
+            None => sizes.push(c),
+        }
+    }
+    sizes.sort_by(|a, b| b.tool.diameter.total_cmp(&a.tool.diameter));
+    // too many: an even spread of sizes, biggest and smallest kept
+    if sizes.len() > SUGGEST_SIZES {
+        let last = sizes.len() - 1;
+        sizes = (0..SUGGEST_SIZES)
+            .map(|i| sizes[i * last / (SUGGEST_SIZES - 1)])
+            .collect();
+    }
+    let mut plans: Vec<Vec<&Candidate>> = vec![vec![]];
+    for (i, a) in sizes.iter().enumerate() {
+        plans.push(vec![a]);
+        for b in &sizes[i + 1..] {
+            plans.push(vec![a, b]);
+        }
+    }
+    let rapid = rapid.max(1.0);
+    let time = |plan: &[&Candidate]| -> Option<f64> {
+        let tried = Params {
+            clearance_tools: plan.iter().map(|c| c.tool.clone()).collect(),
+            ..p.clone()
+        };
+        let change = PocketToolpath::run(doc, &tried).ok()?;
+        let cutting: f64 = change
+            .edits
+            .iter()
+            .filter_map(|e| match e {
+                cut_craft_core::Edit::AddToolpath { toolpath, .. } => {
+                    Some(toolpath.machining_minutes(rapid))
+                }
+                _ => None,
+            })
+            .sum();
+        // a change to each bit after the first: the ones after the first clearing bit,
+        // then the finishing bit
+        let incoming = plan
+            .iter()
+            .skip(1)
+            .map(|c| c.loaded)
+            .chain((!plan.is_empty()).then_some(finishing_loaded));
+        let changing: f64 = incoming
+            .map(|loaded| {
+                if loaded && plan.iter().all(|c| c.loaded) && finishing_loaded {
+                    changes.by_changer
+                } else {
+                    changes.by_hand
+                }
+            })
+            .sum();
+        Some(cutting + changing)
+    };
+    let alone = time(&[]).ok_or_else(|| {
+        // the finishing bit alone fails: say why, as Calculate would
+        PocketToolpath::run(doc, p)
+            .err()
+            .unwrap_or_else(|| CommandError::Failed("the pocket could not be timed".into()))
+    })?;
+    let mut best = (Vec::<&Candidate>::new(), alone);
+    for plan in plans.iter().skip(1) {
+        let Some(minutes) = time(plan) else { continue };
+        let loaded = |plan: &[&Candidate]| plan.iter().filter(|c| c.loaded).count();
+        let better = if minutes < best.1 * (1.0 - SAME_TIME) {
+            true
+        } else if minutes <= best.1 * (1.0 + SAME_TIME) {
+            (loaded(plan), std::cmp::Reverse(plan.len()))
+                > (loaded(&best.0), std::cmp::Reverse(best.0.len()))
+                && !best.0.is_empty()
+        } else {
+            false
+        };
+        if better {
+            best = (plan.clone(), minutes);
+        }
+    }
+    Ok(Suggestion {
+        clearing: best.0.iter().map(|c| c.tool.clone()).collect(),
+        minutes: best.1,
+        alone,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -913,6 +1057,124 @@ mod tests {
                 .collect();
             let turn = cut_craft_core::geometry::winding(&ring);
             assert_eq!(turn > 0.0, anticlockwise, "{direction:?}");
+        }
+    }
+
+    mod suggesting {
+        use super::*;
+        use cut_craft_core::testing::document_with;
+
+        fn mill(d: f64) -> Tool {
+            Tool {
+                name: format!("{d} mm End Mill"),
+                diameter: d,
+                feed_rate: 1000.0 + 100.0 * d,
+                ..Tool::default()
+            }
+        }
+
+        fn by_hand(tool: Tool) -> Candidate {
+            Candidate {
+                tool,
+                loaded: false,
+            }
+        }
+
+        const CHANGES: Changes = Changes {
+            by_hand: 2.0,
+            by_changer: 0.25,
+        };
+
+        fn big_pocket() -> (Document, Params) {
+            let doc = document_with(vec![square(100.0, 100.0, 120.0)]);
+            let p = Params {
+                tool: mill(2.0),
+                depth: 6.0,
+                ..Params::default()
+            };
+            (doc, p)
+        }
+
+        #[test]
+        fn a_big_pocket_is_quicker_cleared_with_a_bigger_bit_first() {
+            let (doc, p) = big_pocket();
+            let s = suggest(
+                &doc,
+                &p,
+                &[by_hand(mill(12.0)), by_hand(mill(6.0))],
+                false,
+                5000.0,
+                CHANGES,
+            )
+            .unwrap();
+            assert!(!s.clearing.is_empty(), "clears first");
+            assert!(
+                s.minutes < s.alone / 2.0,
+                "{} vs {} alone",
+                s.minutes,
+                s.alone
+            );
+            assert!(
+                s.clearing.windows(2).all(|w| w[0].diameter > w[1].diameter),
+                "biggest first"
+            );
+        }
+
+        #[test]
+        fn smaller_bits_and_v_bits_are_never_suggested() {
+            let (doc, p) = big_pocket();
+            let v = Tool {
+                name: "V".into(),
+                shape: cut_craft_core::toolpath::ToolShape::VBit,
+                diameter: 12.0,
+                ..Tool::default()
+            };
+            let s = suggest(
+                &doc,
+                &p,
+                &[by_hand(mill(1.0)), by_hand(v)],
+                false,
+                5000.0,
+                CHANGES,
+            )
+            .unwrap();
+            assert!(s.clearing.is_empty(), "{:?}", s.clearing);
+            assert!((s.minutes - s.alone).abs() < 1e-9);
+        }
+
+        #[test]
+        fn a_small_pocket_is_quickest_with_the_finishing_bit_alone() {
+            // the 12 mm bit barely fits: a bit change costs more than it saves
+            let doc = document_with(vec![square(100.0, 100.0, 14.0)]);
+            let p = Params {
+                tool: mill(6.0),
+                depth: 3.0,
+                ..Params::default()
+            };
+            let s = suggest(&doc, &p, &[by_hand(mill(12.0))], false, 5000.0, CHANGES).unwrap();
+            assert!(s.clearing.is_empty(), "{:?}", s.clearing);
+        }
+
+        #[test]
+        fn of_two_bits_the_same_size_the_one_in_the_tool_changer_is_picked() {
+            let (doc, p) = big_pocket();
+            let loaded = Candidate {
+                tool: Tool {
+                    name: "12 mm in holder 3".into(),
+                    ..mill(12.0)
+                },
+                loaded: true,
+            };
+            let s = suggest(
+                &doc,
+                &p,
+                &[by_hand(mill(12.0)), loaded],
+                true,
+                5000.0,
+                CHANGES,
+            )
+            .unwrap();
+            assert_eq!(s.clearing[0].name, "12 mm in holder 3");
         }
     }
 }

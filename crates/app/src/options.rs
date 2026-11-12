@@ -421,6 +421,24 @@ pub struct ToolpathSettings {
     #[serde(default)]
     #[schemars(title = "Clip toolpaths at keep-out zones")]
     pub clip_at_keep_out_zones: bool,
+    /// How long changing a bit by hand takes, for Suggest's times on Pocket's clearing bits
+    #[serde(default = "change_by_hand")]
+    #[schemars(title = "Bit change by hand", extend("x-unit" = "min"), range(min = 0))]
+    pub change_by_hand: f64,
+    /// How long the tool changer takes to change a bit, the same way
+    #[serde(default = "change_by_changer")]
+    #[schemars(title = "Bit change by tool changer", extend("x-unit" = "min"), range(min = 0))]
+    pub change_by_changer: f64,
+}
+
+/// Two minutes to stop, change a bit by hand and zero it again.
+fn change_by_hand() -> f64 {
+    2.0
+}
+
+/// A quarter of a minute for a tool changer.
+fn change_by_changer() -> f64 {
+    0.25
 }
 
 fn preview_speed() -> f64 {
@@ -1371,6 +1389,8 @@ impl Default for Options {
                 preview_multiplier: preview_speed(),
                 keep_out_labels: d.keep_out_labels,
                 clip_at_keep_out_zones: false,
+                change_by_hand: change_by_hand(),
+                change_by_changer: change_by_changer(),
             },
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)
@@ -1925,6 +1945,13 @@ mod tests {
     }
 
     #[test]
+    fn a_bit_change_takes_two_minutes_by_hand_and_a_quarter_by_tool_changer() {
+        let o = Options::default();
+        assert!((o.toolpaths.change_by_hand - 2.0).abs() < 1e-9);
+        assert!((o.toolpaths.change_by_changer - 0.25).abs() < 1e-9);
+    }
+
+    #[test]
     fn keep_out_labels_show_and_clipping_is_off_until_turned_on() {
         let o = Options::default();
         assert!(o.toolpaths.keep_out_labels);
@@ -1937,6 +1964,8 @@ mod tests {
         let fields = saved.as_object_mut().unwrap();
         fields.remove("keep_out_labels");
         fields.remove("clip_at_keep_out_zones");
+        fields.remove("change_by_hand");
+        fields.remove("change_by_changer");
         let older: ToolpathSettings = serde_json::from_value(saved).unwrap();
         assert_eq!(older, o.toolpaths);
     }
