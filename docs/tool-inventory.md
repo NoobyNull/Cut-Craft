@@ -530,6 +530,10 @@ say "not implemented yet".
     or distance with force even spacing; align, reverse, copies on a new layer).
   - Close / Extend Vector (a closing line, a smooth curve, both ends moved to a common
     point, or the end lines run on until they meet; max gap).
+  - Join Open Ends (Cut Craft's own): a circle on each open end; click one end, then the
+    end to join it to, by Straight Line, Extend to Meet (both ends run on to a corner) or
+    Arc (two arcs carrying on smoothly from each end); both ends of one vector close it.
+    View ▸ Show Open Vector Ends puts the circles on at any time.
   - Vector Validator (overlaps, intersections within and between vectors, zero-length spans,
     and optionally open vectors; selects them or fixes the spans).
   - Dimensions: length, vertical and horizontal, dragged between two points, with offset,

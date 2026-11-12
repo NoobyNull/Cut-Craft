@@ -66,6 +66,7 @@ pub const FLYOUTS: &[Flyout] = &[
         "Join and Close",
         &[
             "join_vectors",
+            "join_open_ends",
             "join_straight_line",
             "join_smooth_curve",
             "join_move_end_points",

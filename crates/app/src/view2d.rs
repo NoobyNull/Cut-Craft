@@ -127,6 +127,9 @@ pub fn ruler_ticks(lo: f64, hi: f64, step: f64) -> Vec<f64> {
 /// A node handle's edge, as a share of the theme's interactive row height.
 // ponytail: fixed share until a preferences dialog sizes handles
 pub const NODE_HANDLE_SHARE: f32 = 0.35;
+/// How big the circle on an open vector's end is (its radius), as a share of a row: big
+/// enough to see and click, smaller than a node handle's box.
+pub const OPEN_END_SHARE: f32 = 0.25;
 
 /// What the pointer did on the canvas this frame.
 #[derive(Clone, Copy, Debug)]
@@ -705,6 +708,15 @@ impl Canvas {
         self.paint_guides_and_zones(&painter, ui, doc, display, (dash, gap));
         self.paint_outlines(&painter, doc, selected, (dash, gap));
         self.paint_toolpaths(&painter, ui, doc, highlighted, display);
+        if display.open_ends {
+            // a circle on each open end, in the warning colour: where a shape has a gap
+            let radius = ui.spacing().interact_size.y * OPEN_END_SHARE;
+            let ring = Stroke::new(2.0 * datum.width, visuals.warn_fg_color);
+            for end in cmd_join_open_ends::open_ends(doc) {
+                let at = t.to_screen(end.point);
+                painter.circle(at, radius, visuals.extreme_bg_color, ring);
+            }
+        }
 
         match overlay {
             Overlay::None => {}

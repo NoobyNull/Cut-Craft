@@ -3364,6 +3364,14 @@ impl CutCraftApp {
         {
             self.cancel_drag_3d();
         }
+        // Escape with an open end picked lets the end go, keeping Join Open Ends open
+        if self.join_ends_first().is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_shortcut(&escape))
+        {
+            self.join_ends_forget();
+            self.status.set_message("End let go");
+        }
         // Escape in a field being typed in only leaves the field
         if !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| {

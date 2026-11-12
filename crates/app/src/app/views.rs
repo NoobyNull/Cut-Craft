@@ -24,7 +24,7 @@ const ROTATE_OUT: f64 = 2.5;
 const SELECTION_HANDLE_SHARE: f32 = 0.55;
 
 /// What the 2D view's clicks go to besides selecting: the selection's handles (when nothing
-/// else takes them), tracing a bitmap, filleting corners, placing tabs.
+/// else takes them), tracing a bitmap, filleting corners, placing tabs, joining open ends.
 #[derive(Clone, Copy, Default)]
 #[expect(clippy::struct_excessive_bools, reason = "the view's modes, one each")]
 pub(super) struct Modes {
@@ -32,6 +32,7 @@ pub(super) struct Modes {
     tracing: bool,
     filleting: bool,
     placing_tabs: bool,
+    joining_ends: bool,
 }
 
 /// What an empty sheet says in its middle, and the status bar's step for it.
@@ -1145,12 +1146,17 @@ impl CutCraftApp {
 
     /// The 2D view's drawing, and the snap grid's points while snapping to it.
     fn paint_2d(&self, ui: &egui::Ui, canvas: &view2d::Canvas, overlay: &view2d::Overlay) {
+        // Join Open Ends marks the ends it joins, whether or not the view shows them
+        let display = crate::display::Display {
+            open_ends: self.display.open_ends || self.joining_ends(),
+            ..self.display
+        };
         canvas.paint(
             ui,
             &self.doc,
             overlay,
             self.selected_toolpath,
-            &self.display,
+            &display,
             (self.job_epoch, self.history.revision()),
         );
         if self.options.snapping.snap_to_grid {
@@ -1190,6 +1196,7 @@ impl CutCraftApp {
             tracing,
             filleting,
             placing_tabs,
+            joining_ends,
         } = modes;
         let overlay = match (gesture, self.view_tool, self.drawing_tool()) {
             // Trace Bitmap: a box dragged over the picture is the part traced
@@ -1205,6 +1212,10 @@ impl CutCraftApp {
             }
             (None | Some(Gesture::Click { .. }), None, None) if placing_tabs => {
                 self.tab_overlay(reach)
+            }
+            // Join Open Ends: the end picked first, and the join a click would make
+            (None | Some(Gesture::Click { .. }), None, None) if joining_ends => {
+                self.join_ends_overlay(canvas.cursor(), reach)
             }
             (_, Some(ViewTool::NodeEdit), _) => self.node_overlay(gesture, reach),
             (Some(Gesture::Dragging(drag)), Some(ViewTool::Measure), _) => {
@@ -1324,6 +1335,7 @@ impl CutCraftApp {
             tracing,
             filleting,
             placing_tabs,
+            joining_ends,
         } = modes;
         match (gesture, self.view_tool, self.drawing_tool()) {
             (Some(Gesture::Dropped { drag, .. }), Some(ViewTool::ZoomBox), _) => {
@@ -1361,6 +1373,9 @@ impl CutCraftApp {
             }
             (Some(Gesture::Click { at, .. }), None, None) if placing_tabs => {
                 self.place_tab(at, reach);
+            }
+            (Some(Gesture::Click { at, .. }), None, None) if joining_ends => {
+                self.join_ends_click(at, reach);
             }
             (Some(Gesture::Click { at, shift }), None, None) => {
                 self.click_select(at, shift, canvas.pick_tolerance(ui));
@@ -1887,6 +1902,15 @@ impl CutCraftApp {
                     .into(),
             );
         }
+        if modes.joining_ends {
+            return Some(if self.join_ends_first().is_some() {
+                "Join Open Ends: now click the end to join it to (the same vector's other end \
+                 closes it); Escape or a click on the first end lets it go"
+                    .into()
+            } else {
+                "Join Open Ends: click the end of an open vector (each has a circle on it)".into()
+            });
+        }
         // a form whose tool wants a selection it has not got says what to select
         if let Some(form) = &self.form
             && self.doc.selection.is_empty()
@@ -1972,18 +1996,21 @@ impl CutCraftApp {
     pub(super) fn modes(&self) -> Modes {
         let placing_tabs = self.placing_tabs();
         let filleting = self.filleting();
+        let joining_ends = self.joining_ends();
         let tracing = self.tracing();
         // the selection's box and handles, whenever nothing else uses the view's clicks
         let handled = self.view_tool.is_none()
             && self.drawing_tool().is_none()
             && !tracing
             && !filleting
+            && !joining_ends
             && !placing_tabs;
         Modes {
             handled,
             tracing,
             filleting,
             placing_tabs,
+            joining_ends,
         }
     }
 
@@ -2362,6 +2389,90 @@ impl CutCraftApp {
         let params = serde_json::to_value(params).expect("fillet settings serialise");
         if let Err(e) = self.apply("create_fillets", &params) {
             self.status.set_message(&e);
+        }
+    }
+
+    /// Whether Join Open Ends is open: clicks pick open ends, two at a time, to join.
+    pub(super) fn joining_ends(&self) -> bool {
+        self.form.as_ref().is_some_and(|f| f.id == "join_open_ends")
+    }
+
+    /// Join Open Ends' first end, once one is picked.
+    pub(super) fn join_ends_first(&self) -> Option<Point> {
+        let form = self.form.as_ref().filter(|_| self.joining_ends())?;
+        serde_json::from_value(form.params["first"].clone()).ok()
+    }
+
+    /// Join Open Ends' settings with its first end picked, aimed at `second`.
+    fn join_ends_params(&self, second: Point, reach: f64) -> Option<cmd_join_open_ends::Params> {
+        let form = self.form.as_ref().filter(|_| self.joining_ends())?;
+        let mut params: cmd_join_open_ends::Params =
+            serde_json::from_value(form.params.clone()).ok()?;
+        params.second = Some(second);
+        params.within = reach;
+        Some(params)
+    }
+
+    /// The first end picked, ringed, and the vector a click at `at` would make.
+    fn join_ends_overlay(&self, at: Option<Point>, reach: f64) -> Overlay {
+        let Some(first) = self.join_ends_first() else {
+            return Overlay::None;
+        };
+        let mut paths = vec![Path::circle(first, reach)];
+        if let Some(at) = at
+            && let Some(params) = self.join_ends_params(at, reach)
+            && let Ok((_, _, joined)) = cmd_join_open_ends::joined(&self.doc, &params)
+        {
+            paths.push(joined);
+        }
+        Overlay::Preview(paths)
+    }
+
+    /// A click with Join Open Ends open: the first end picked, or the second, which joins
+    /// the two. A click on the first end again lets it go.
+    pub(super) fn join_ends_click(&mut self, at: Point, reach: f64) {
+        let first = self.join_ends_first();
+        let Some(end) = cmd_join_open_ends::end_near(&self.doc, at, reach) else {
+            self.status.set_message(
+                "No open end there: click one of the circles at the ends of open vectors",
+            );
+            return;
+        };
+        let Some(first) = first else {
+            if let Some(form) = self.form.as_mut() {
+                form.params["first"] = serde_json::json!(end.point);
+            }
+            self.status
+                .set_message("End picked: now click the end to join it to");
+            return;
+        };
+        let same = cmd_join_open_ends::end_near(&self.doc, first, reach)
+            .is_some_and(|f| (f.id, f.at_start) == (end.id, end.at_start))
+            && cmd_join_open_ends::open_ends(&self.doc)
+                .iter()
+                .filter(|e| e.point.distance(at) <= reach)
+                .count()
+                == 1;
+        if same {
+            self.join_ends_forget();
+            self.status.set_message("End let go");
+            return;
+        }
+        let Some(params) = self.join_ends_params(at, reach) else {
+            return;
+        };
+        let params = serde_json::to_value(params).expect("join settings serialise");
+        match self.apply("join_open_ends", &params) {
+            Ok(()) => self.join_ends_forget(),
+            Err(e) => self.status.set_message(&e),
+        }
+    }
+
+    /// Join Open Ends with no end picked.
+    pub(super) fn join_ends_forget(&mut self) {
+        if let Some(form) = self.form.as_mut().filter(|f| f.id == "join_open_ends") {
+            form.params["first"] = serde_json::Value::Null;
+            form.params["second"] = serde_json::Value::Null;
         }
     }
 
