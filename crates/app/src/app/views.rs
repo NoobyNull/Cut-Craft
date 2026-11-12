@@ -54,6 +54,8 @@ impl CutCraftApp {
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
+        // a playing preview cut on a frame's worth
+        self.advance_playback(ctx);
         // a slow job's progress, over everything else
         self.busy_window(ctx);
         self.dropped_files(ctx);
@@ -336,6 +338,8 @@ impl CutCraftApp {
         egui::CentralPanel::default().show(ui, |ui| {
             self.top_bar(ui);
             ui.separator();
+            // a preview playing: its controls over whichever view shows, Stop always to hand
+            self.playback_bar(ui);
             if let Some(split) = self.split {
                 let whole = ui.available_rect_before_wrap();
                 let (first, second) = match split {
@@ -3148,7 +3152,7 @@ impl CutCraftApp {
                 }
             }
             self.recent.truncate(options.recent_count());
-            if options.toolpaths.preview_speed != self.options.toolpaths.preview_speed {
+            if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
                 self.playback_speed = options.toolpaths.preview_speed();
             }
             options.apply();

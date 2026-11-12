@@ -1258,6 +1258,16 @@ impl Harness {
             .unwrap_or_else(|| panic!("{text}"))
     }
 
+    /// Every text the last frame drew.
+    fn texts(&self) -> Vec<String> {
+        (self.shapes.iter())
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The middle of `text` where the last frame drew it.
     fn text_at(&self, text: &str) -> Option<Pos2> {
         self.shapes.iter().find_map(|clipped| match &clipped.shape {
@@ -4146,6 +4156,169 @@ fn a_preview_plays_pauses_scrubs_and_keeps_what_is_cut() {
         h.app.playback.is_none() && h.app.simulation.is_some(),
         "kept as far as it went"
     );
+}
+
+/// A profile toolpath around a 40 mm square, previewed playing.
+fn playing_preview() -> Harness {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    let params = h.app.form.as_ref().unwrap().params.clone();
+    h.app.apply("profile_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.app.display.animate_preview = true;
+    h.app.invoke(&h.ctx, "preview_all_toolpaths");
+    assert!(h.app.playing && h.app.playback.is_some(), "it plays");
+    h.frame(vec![]);
+    h
+}
+
+#[test]
+fn escape_stops_a_playing_preview_keeping_what_is_cut_and_leaves_the_form_open() {
+    let mut h = playing_preview();
+    h.app.invoke(&h.ctx, "profile_toolpath");
+    h.frame(vec![]);
+    h.frame(vec![key(Key::Escape)]);
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "stopped, kept as far as it went"
+    );
+    assert!(
+        h.app.form.is_some(),
+        "the one Escape only stopped the preview"
+    );
+    h.frame(vec![key(Key::Escape)]);
+    assert!(h.app.form.is_none(), "the next closes the form as ever");
+}
+
+#[test]
+fn a_preview_can_be_stopped_from_the_2d_view_too() {
+    let mut h = playing_preview();
+    h.app.view = View::TwoD;
+    h.frame(vec![]);
+    let along = h.app.playback.as_ref().unwrap().at();
+    h.frame(vec![]);
+    assert!(
+        h.app.playback.as_ref().unwrap().at() > along,
+        "it plays on in the 2D view"
+    );
+    h.click(
+        h.text_at("Stop").expect("Stop over the 2D view"),
+        Modifiers::NONE,
+    );
+    assert!(h.app.playback.is_none() && h.app.simulation.is_some());
+}
+
+#[test]
+fn a_playing_preview_says_how_long_it_has_left() {
+    let mut h = playing_preview();
+    h.app.playback_speed = 1.0;
+    h.frame(vec![]);
+    let note = |h: &Harness| {
+        h.texts()
+            .into_iter()
+            .find(|t| t.starts_with("Machine time left"))
+            .expect("the time the machine takes")
+    };
+    assert!(!note(&h).contains(" at ×"), "{}", note(&h));
+    h.app.playback_speed = 10.0;
+    h.frame(vec![]);
+    assert!(note(&h).contains(" at ×10"), "{}", note(&h));
+}
+
+#[test]
+fn a_preview_plays_as_long_as_the_toolpath_summary_says_the_machine_takes() {
+    let h = playing_preview();
+    let toolpath = h.app.doc.toolpaths.values().next().unwrap();
+    let summary = toolpath.machining_minutes(h.app.summary.rapid) * 60.0;
+    let length = h.app.playback.as_ref().unwrap().length();
+    assert!(
+        (length - summary).abs() < 1e-6,
+        "{length} s, the summary {summary} s"
+    );
+}
+
+#[test]
+fn the_preview_controls_stay_after_stop_to_scrub_back_until_reset() {
+    let mut h = playing_preview();
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "stopped"
+    );
+    assert!(h.text_at("Progress").is_some(), "the slider is still there");
+    assert!(h.text_at("Close up").is_some(), "and the fine one");
+    // the slider dragged back: playing it again from there, paused
+    let progress = h.text_at("Progress").unwrap();
+    let from = progress + egui::vec2(200.0, 0.0);
+    h.drag(from, from - egui::vec2(100.0, 0.0));
+    assert!(
+        h.app.playback.is_some() && !h.app.playing,
+        "scrubbing again"
+    );
+    h.app.invoke(&h.ctx, "reset_preview");
+    h.frame(vec![]);
+    assert!(h.text_at("Progress").is_none(), "gone with the preview");
+}
+
+#[test]
+fn the_preview_controls_stay_once_it_has_played_to_the_end() {
+    let mut h = playing_preview();
+    h.app.playback_speed = 1000.0;
+    for _ in 0..600 {
+        if h.app.playback.is_none() {
+            break;
+        }
+        h.frame(vec![]);
+    }
+    assert!(
+        h.app.playback.is_none() && h.app.simulation.is_some(),
+        "played through"
+    );
+    h.frame(vec![]);
+    assert!(h.text_at("Progress").is_some(), "still there to scrub back");
+    h.click(
+        h.text_at("Close").expect("Close hides them"),
+        Modifiers::NONE,
+    );
+    assert!(h.text_at("Progress").is_none() && h.app.simulation.is_some());
+}
+
+#[test]
+fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
+    let mut h = playing_preview();
+    // a step a frame, as a toolpath of millions of moves would go
+    h.app.playback_budget = std::time::Duration::ZERO;
+    h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+    let from = h.app.playback.as_ref().unwrap().at();
+    h.click(h.text_at("Run to Retract").unwrap(), Modifiers::NONE);
+    let goal = h.app.playback_goal.expect("on its way there");
+    let at = h.app.playback.as_ref().unwrap().at();
+    assert!(at > from && at < goal, "part way: {from} to {at} of {goal}");
+    assert!(
+        h.texts().iter().any(|t| t.contains("Esc")),
+        "says how to stop it"
+    );
+    h.click(h.text_at("Stop").unwrap(), Modifiers::NONE);
+    assert!(h.app.playback.is_none() && h.app.playback_goal.is_none());
+}
+
+#[test]
+fn escape_cancels_a_slow_job() {
+    let mut h = Harness::new();
+    h.app.wait_before_showing = std::time::Duration::ZERO;
+    let (_go, wait) = std::sync::mpsc::channel::<()>();
+    h.app.in_background(
+        "Previewing Slow Toolpath",
+        move || {
+            wait.recv().ok();
+        },
+        |app, ()| app.status.set_message("used"),
+    );
+    h.frame(vec![]);
+    h.frame(vec![key(Key::Escape)]);
+    h.frame(vec![]);
+    assert!(h.app.busy.is_none(), "cancelled");
 }
 
 #[test]
