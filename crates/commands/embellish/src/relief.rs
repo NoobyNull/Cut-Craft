@@ -47,21 +47,29 @@ fn cells_round(
 }
 
 /// Raises `items` on `grid` (whose heights start at 0 inside, NaN outside), the tallest
-/// piece standing `height` mm.
-pub fn raise(grid: &mut Grid, items: &[Item], height: f64) {
-    let tallest = items
-        .iter()
-        .filter_map(|it| match it {
-            Item::Shape { h, sink: false, .. } => Some(*h),
-            _ => None,
-        })
-        .fold(0.0, f64::max);
-    if tallest <= 0.0 {
+/// piece standing `up` mm; the pieces marked in `sunk` are hollowed in instead, the deepest
+/// going `down` mm.
+pub fn raise(grid: &mut Grid, items: &[Item], sunk: &[bool], up: f64, down: f64) {
+    let tallest = |hollow: bool| {
+        items
+            .iter()
+            .zip(sunk)
+            .filter_map(|(it, &s)| match it {
+                Item::Shape { h, sink: false, .. } if s == hollow => Some(*h),
+                _ => None,
+            })
+            .fold(0.0, f64::max)
+    };
+    let (high, deep) = (tallest(false), tallest(true));
+    let rise = if high > 0.0 { up / high } else { 0.0 };
+    let fall = if deep > 0.0 { down / deep } else { 0.0 };
+    if rise <= 0.0 && fall <= 0.0 {
         return;
     }
-    let scale = height / tallest;
+    // the ground's stipple goes in as deep as the pieces' scale says
+    let punch = if rise > 0.0 { rise } else { fall };
     let cell = grid.cell;
-    for it in items {
+    for (it, &hollow) in items.iter().zip(sunk) {
         match it {
             Item::Shape {
                 rings,
@@ -92,7 +100,13 @@ pub fn raise(grid: &mut Grid, items: &[Item], height: f64) {
                         most = most.max(*v);
                     }
                 }
-                let top = h * scale;
+                let top = h * if *sink {
+                    punch
+                } else if hollow {
+                    fall
+                } else {
+                    rise
+                };
                 for j in 0..bh {
                     for i in 0..bw {
                         let d = f[j * bw + i];
@@ -118,7 +132,11 @@ pub fn raise(grid: &mut Grid, items: &[Item], height: f64) {
                         if cur.is_nan() {
                             continue;
                         }
-                        grid.heights[o] = if *sink { cur.min(-v) } else { cur.max(v) };
+                        grid.heights[o] = if *sink || hollow {
+                            cur.min(-v)
+                        } else {
+                            cur.max(v)
+                        };
                     }
                 }
             }
@@ -197,7 +215,13 @@ mod tests {
     #[test]
     fn a_bead_rises_to_the_height_in_its_middle_and_falls_to_its_edge() {
         let mut g = grid(Point::ZERO, 0.25, 80, 80, |_| true);
-        raise(&mut g, &[sh(circ(Point::new(10.0, 10.0), 5.0), 1.0)], 4.0);
+        raise(
+            &mut g,
+            &[sh(circ(Point::new(10.0, 10.0), 5.0), 1.0)],
+            &[false],
+            4.0,
+            2.0,
+        );
         let at = |x: f64, y: f64| g.heights[(y / 0.25) as usize * 80 + (x / 0.25) as usize];
         assert!((at(10.0, 10.0) - 4.0).abs() < 0.2, "{}", at(10.0, 10.0));
         assert!(at(14.9, 10.0) < 2.0);
@@ -205,9 +229,30 @@ mod tests {
     }
 
     #[test]
+    fn a_sunk_bead_is_hollowed_to_the_depth_beside_a_raised_one() {
+        let mut g = grid(Point::ZERO, 0.25, 160, 80, |_| true);
+        let beads = [
+            sh(circ(Point::new(10.0, 10.0), 5.0), 1.0),
+            sh(circ(Point::new(30.0, 10.0), 5.0), 1.0),
+        ];
+        raise(&mut g, &beads, &[false, true], 4.0, 1.5);
+        let at = |x: f64, y: f64| g.heights[(y / 0.25) as usize * 160 + (x / 0.25) as usize];
+        assert!((at(10.0, 10.0) - 4.0).abs() < 0.2, "{}", at(10.0, 10.0));
+        assert!((at(30.0, 10.0) + 1.5).abs() < 0.1, "{}", at(30.0, 10.0));
+        assert!(at(34.9, 10.0) > -0.8 && at(34.9, 10.0) < 0.0);
+        assert_eq!(at(20.0, 10.0), 0.0, "the ground between stays put");
+    }
+
+    #[test]
     fn outside_the_shape_stays_empty() {
         let mut g = grid(Point::ZERO, 0.5, 40, 40, |p| p.x < 10.0);
-        raise(&mut g, &[sh(circ(Point::new(10.0, 10.0), 5.0), 1.0)], 4.0);
+        raise(
+            &mut g,
+            &[sh(circ(Point::new(10.0, 10.0), 5.0), 1.0)],
+            &[false],
+            4.0,
+            2.0,
+        );
         assert!(g.heights[20 * 40 + 30].is_nan());
         assert!(g.heights[20 * 40 + 19] > 0.0);
     }
