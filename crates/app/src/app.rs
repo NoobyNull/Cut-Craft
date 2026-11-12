@@ -600,11 +600,9 @@ pub const EXPORT_LEVEL: &str = "export_level_clipart:";
 const LINE_SCALE: f32 = 1.5;
 /// Easy-to-read UI fonts, the first installed used; egui's own stay behind for symbols.
 const UI_FONTS: [&str; 5] = ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
-/// A playing preview's speed to start with, in mm of tool travel a second, until Options says
-/// otherwise, and the slider's range.
-/// A preview plays at the machine's own speed to begin with: each move at its tool's feed or
-/// plunge rate, rapids at the Toolpath Summary's rapid rate.
-pub(crate) const PLAYBACK_SPEED: f64 = 1.0;
+/// A preview starts at ten times the machine's own speed (×1: each move at its tool's feed
+/// or plunge rate, rapids at the Toolpath Summary's rapid rate).
+pub(crate) const PLAYBACK_SPEED: f64 = 10.0;
 /// A frame's time for cutting a playing preview: the window still answers at once.
 const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30);
 /// How many times faster than the machine a preview can play: a long finishing toolpath
