@@ -11489,3 +11489,25 @@ fn the_recalculate_question_counts_the_toolpaths() {
     assert!(actions::recalculate_question(1).starts_with("1 toolpath is now out of date"));
     assert!(actions::recalculate_question(3).starts_with("3 toolpaths are now out of date"));
 }
+
+#[test]
+fn suggest_takes_bits_from_my_tools_only() {
+    let mut h = Harness::new();
+    let mut catalogue = h.app.tools.get("12 mm End Mill").unwrap().clone();
+    catalogue.name = "Vendor 16 mm End Mill".into();
+    catalogue.diameter = 16.0;
+    catalogue.group = "Vendor/End Mills".into();
+    h.app.tools.tools.push(catalogue);
+    h.app.tools.catalogues = vec!["Vendor".into()];
+    let names: Vec<String> = h
+        .app
+        .suggest_candidates()
+        .into_iter()
+        .map(|c| c.tool.name)
+        .collect();
+    assert!(names.iter().any(|n| n == "12 mm End Mill"), "{names:?}");
+    assert!(
+        !names.iter().any(|n| n.starts_with("Vendor")),
+        "a read-only catalogue's bit is not suggested: {names:?}"
+    );
+}
