@@ -1049,7 +1049,10 @@ fn fallback_marks(
                 Pos2::new(c.x + h, c.y + h * 0.75),
                 Pos2::new(c.x - h, c.y + h * 0.75),
             ];
-            if f.used == EntryMode::Plunge {
+            if f.used == EntryMode::Plunge && toolpath.strategy == "vcarve_engrave_toolpath" {
+                // usual for a V-carve: marked, but not as a warning
+                Shape::closed_line(corners, Stroke::new(1.5, visuals.weak_text_color()))
+            } else if f.used == EntryMode::Plunge {
                 Shape::convex_polygon(corners, visuals.error_fg_color, Stroke::NONE)
             } else {
                 Shape::closed_line(corners, Stroke::new(1.5, visuals.warn_fg_color))

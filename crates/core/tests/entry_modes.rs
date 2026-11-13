@@ -340,6 +340,20 @@ fn checks_before_cutting_say_where_an_entry_went_down_another_way() {
         wanted: EntryMode::Helix,
         used,
     };
+    let carve = |fallbacks| Toolpath {
+        name: "V-Carve 1".into(),
+        strategy: "vcarve_engrave_toolpath".into(),
+        params: serde_json::json!({}),
+        tool: Tool::default(),
+        vectors: vec![],
+        moves: vec![],
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+        fallbacks,
+    };
     let toolpath = |fallbacks| Toolpath {
         name: "Pocket 1".into(),
         strategy: "pocket_toolpath".into(),
@@ -395,6 +409,21 @@ fn checks_before_cutting_say_where_an_entry_went_down_another_way() {
         !ramped.iter().any(|p| p.contains("another way than")),
         "{ramped:?}"
     );
+    // a V-carve groove too short for its zig-zag plunges: listed, but not a warning
+    let short = Fallback {
+        wanted: EntryMode::ZigZag,
+        ..fallback(EntryMode::Plunge)
+    };
+    let carved = problems(&doc, &carve(vec![short]));
+    let said = carved
+        .iter()
+        .find(|p| p.contains("straight down"))
+        .unwrap_or_else(|| panic!("{carved:?}"));
+    assert!(
+        said.contains("too short for its zig-zag") && said.contains("nothing to fix"),
+        "{said}"
+    );
+    assert!(!said.contains("hard on the bit"), "{said}");
 }
 
 #[test]

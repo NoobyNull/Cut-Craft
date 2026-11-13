@@ -3,6 +3,7 @@
 //! lines and a profile pass round the edge; or, trochoidal, with the tool circling in small
 //! loops as it moves on, so it never cuts with more than a sliver of its edge.
 
+use cut_craft_core::adaptive::{self, Clearing, Piece};
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{
     Direction, Entry, EntrySettings, Loops, Motion, Ramp, Ramping, Room, Ways, path_moves, trochoid,
@@ -27,6 +28,9 @@ pub enum Strategy {
     Offset,
     /// Straight lines across, at the raster angle
     Raster,
+    /// Keeps the bit taking a thin, steady bite everywhere, never cutting full width in
+    /// a corner: gentler on the bit and machine, so it can go a full pass deep with confidence
+    Adaptive,
 }
 
 /// Which way an offset pocket's rings step. Turning the cut direction's way, rings stepping
@@ -274,6 +278,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 loops.clone_from(&rings); // too narrow for loops: rings
             }
         }
+        let plan = adaptive_plan(p, &edge);
         let safe = doc.job.clearance;
         let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other
@@ -313,6 +318,9 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             let cut_way = |paths: &[Path], back: bool| cut(paths, z, above, back);
             let cut = |paths: &[Path]| cut_way(paths, back);
             match (p.motion, p.strategy) {
+                (_, Strategy::Adaptive) => {
+                    moves.extend(adaptive_pass(&plan, &edge, p, (z, above), safe, &entry));
+                }
                 (Motion::Trochoidal, _) => {
                     moves.extend(cut(&loops));
                     moves.extend(cut(&edge));
@@ -427,6 +435,164 @@ fn nearest_vertex(points: &[Point], at: Point) -> Option<(usize, f64)> {
         .map(|p| p.distance(at))
         .enumerate()
         .min_by(|a, b| a.1.total_cmp(&b.1))
+}
+
+/// The adaptive clearing of the pocket whose tool centre keeps inside `edge`, the same at
+/// every depth; empty unless `p` clears adaptively.
+fn adaptive_plan(p: &Params, edge: &[Path]) -> Vec<Piece> {
+    if p.strategy != Strategy::Adaptive {
+        return vec![];
+    }
+    adaptive::clear(&Clearing {
+        region: edge,
+        cleared: &[],
+        radius: p.tool.diameter / 2.0,
+        bite: adaptive_bite(&p.tool),
+        climb: p.direction == Direction::Climb,
+    })
+}
+
+/// One pass depth of an adaptive pocket: `plan` cleared at depth `z` coming down from
+/// `above`, then once round the wall, `edge`.
+fn adaptive_pass(
+    plan: &[Piece],
+    edge: &[Path],
+    p: &Params,
+    (z, above): (f64, f64),
+    safe: f64,
+    entry: &Entry,
+) -> Vec<Move> {
+    let mut moves = adaptive_moves(plan, z, above, safe, entry);
+    let from = moves.last().map(|m| m.to);
+    let rings: Vec<Vec<Point>> = edge.iter().map(|r| oriented(p.direction, r)).collect();
+    moves.extend(walls(&rings, from, z, safe, entry));
+    moves
+}
+
+/// How wide a bite adaptive clearing takes with `tool`: its clearing stepover, but no more
+/// than a quarter of its diameter, so it stays a light cut at full pass depth.
+fn adaptive_bite(tool: &Tool) -> f64 {
+    tool.stepover.min(ADAPTIVE_MOST_BITE) * tool.diameter
+}
+
+/// The widest bite adaptive clearing takes, as a share of the bit's diameter.
+const ADAPTIVE_MOST_BITE: f64 = 0.25;
+
+/// The moves that clear `plan` at depth `z`, coming down from `above`: each area entered
+/// once (the way `entry` says, on the first stretch of cutting), then at depth throughout,
+/// lifting only where the plan jumps. Ends at depth where the last cut ended.
+fn adaptive_moves(plan: &[Piece], z: f64, above: f64, safe: f64, entry: &Entry) -> Vec<Move> {
+    let mut moves: Vec<Move> = vec![];
+    let mut entering = None;
+    let at_z = |p: Point| p.extend(z);
+    for piece in plan {
+        match piece {
+            Piece::Enter(p) => entering = Some(*p),
+            Piece::Cut(points) if entering.is_some() => {
+                entering = None;
+                let mut down = path_moves(points, false, &[z], above, safe, entry);
+                // the clearing carries on from where this ends, at depth
+                while down.last().is_some_and(|m| m.kind == MoveKind::Rapid) {
+                    down.pop();
+                }
+                moves.extend(down);
+            }
+            Piece::Cut(points) | Piece::Link(points) => {
+                moves.extend(points.iter().skip(1).map(|&p| Move {
+                    kind: MoveKind::Cut,
+                    to: at_z(p),
+                }));
+            }
+            Piece::Jump(p) => {
+                if let Some(last) = moves.last().map(|m| m.to) {
+                    moves.push(Move {
+                        kind: MoveKind::Rapid,
+                        to: last.truncate().extend(safe),
+                    });
+                }
+                // down into space already cleared at this depth
+                moves.push(Move {
+                    kind: MoveKind::Rapid,
+                    to: p.extend(safe),
+                });
+                moves.push(Move {
+                    kind: MoveKind::Rapid,
+                    to: p.extend(above),
+                });
+                moves.push(Move {
+                    kind: MoveKind::Plunge,
+                    to: at_z(*p),
+                });
+            }
+        }
+    }
+    moves
+}
+
+/// One pass round each of the pocket's `rings` (turned the way they cut) at depth `z`, for a
+/// clean wall after adaptive clearing: from the tool's place `from` (at depth, in the cleared
+/// pocket) across to the nearest corner of each ring where the way is clear, else up and
+/// over. Ends lifted to `safe`.
+fn walls(
+    rings: &[Vec<Point>],
+    from: Option<cut_craft_core::glam::DVec3>,
+    z: f64,
+    safe: f64,
+    entry: &Entry,
+) -> Vec<Move> {
+    let mut moves = vec![];
+    let mut at = from;
+    for ring in rings {
+        let Some(here) = at else {
+            // not down yet: the ring's own entry
+            moves.extend(path_moves(ring, true, &[z], z, safe, entry));
+            at = moves.last().map(|m| m.to);
+            continue;
+        };
+        let Some((k, _)) = nearest_vertex(ring, here.truncate()) else {
+            continue;
+        };
+        let mut ring = ring.clone();
+        ring.rotate_left(k);
+        let start = ring[0];
+        let down = (here.z - z).abs() < 1e-9;
+        let across = entry
+            .room
+            .as_ref()
+            .is_none_or(|r| r.holds(here.truncate(), start));
+        if !(down && across) {
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: here.truncate().extend(safe),
+            });
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: start.extend(safe),
+            });
+            // the pocket is cleared to this depth: straight down into it
+        }
+        let kind = if down && across {
+            MoveKind::Cut
+        } else {
+            MoveKind::Plunge
+        };
+        moves.push(Move {
+            kind,
+            to: start.extend(z),
+        });
+        moves.extend(ring.iter().skip(1).chain([&start]).map(|&p| Move {
+            kind: MoveKind::Cut,
+            to: p.extend(z),
+        }));
+        at = Some(start.extend(z));
+    }
+    if let Some(last) = moves.last().map(|m| m.to) {
+        moves.push(Move {
+            kind: MoveKind::Rapid,
+            to: last.truncate().extend(safe),
+        });
+    }
+    moves
 }
 
 /// Rings `step` apart from `ring` in, worked from the middle outwards.
@@ -722,6 +888,7 @@ mod tests {
             (Strategy::Offset, Motion::Straight),
             (Strategy::Raster, Motion::Straight),
             (Strategy::Offset, Motion::Trochoidal),
+            (Strategy::Adaptive, Motion::Straight),
         ] {
             let tp = ring_pocket(&Params {
                 strategy,
@@ -790,6 +957,119 @@ mod tests {
                 "{at:?}"
             );
         }
+    }
+
+    /// The length of the cutting moves (cuts and plunges) in `tp`.
+    fn cut_length(tp: &Toolpath) -> f64 {
+        tp.moves
+            .windows(2)
+            .filter(|w| w[1].kind != MoveKind::Rapid)
+            .map(|w| w[0].to.distance(w[1].to))
+            .sum()
+    }
+
+    #[test]
+    fn adaptive_clears_the_whole_pocket_and_stays_inside_it() {
+        let p = Params {
+            strategy: Strategy::Adaptive,
+            depth: 6.0,
+            ..Params::default()
+        };
+        let tp = pocket(40.0, &p).unwrap();
+        let r = Tool::default().diameter / 2.0;
+        let b = cut_bounds(&tp);
+        assert!(
+            b.min.x >= r - 0.02 && b.max.x <= 40.0 - r + 0.02,
+            "inside the walls: {b:?}"
+        );
+        assert!(b.min.y >= r - 0.02 && b.max.y <= 40.0 - r + 0.02, "{b:?}");
+        for i in 0..=20 {
+            for j in 0..=20 {
+                let at = Point::new(
+                    r + (40.0 - 2.0 * r) * f64::from(i) / 20.0,
+                    r + (40.0 - 2.0 * r) * f64::from(j) / 20.0,
+                );
+                let gap = nearest_cut(&tp, at);
+                assert!(gap <= r + 0.05, "{at:?} is {gap} mm from the nearest cut");
+            }
+        }
+        // the wall gets its own pass: cuts run along it, a radius in, at the bottom
+        let along_wall = tp
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut && (m.to.z + 6.0).abs() < 1e-9)
+            .filter(|m| (m.to.x - r).abs() < 0.02)
+            .count();
+        assert!(along_wall >= 2, "no wall pass at the bottom");
+    }
+
+    #[test]
+    fn adaptive_goes_down_once_per_area_per_pass() {
+        let p = Params {
+            strategy: Strategy::Adaptive,
+            depth: 6.0,
+            ..Params::default()
+        };
+        let tp = pocket(40.0, &p).unwrap();
+        // each time the tool comes down from the clearance height into uncut material: once
+        // per pass depth (the wall pass and any jumps go down into space already cleared)
+        let entries = tp
+            .moves
+            .windows(2)
+            .filter(|w| w[0].kind == MoveKind::Rapid && w[1].kind == MoveKind::Plunge)
+            .count();
+        let lifts = tp
+            .moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Rapid && w[1].to.z > w[0].to.z)
+            .count();
+        assert!(entries >= 2, "{entries} entries for two passes");
+        assert!(lifts <= 6, "it lifts {lifts} times");
+    }
+
+    #[test]
+    fn adaptive_cuts_less_than_trochoidal_loops() {
+        let adaptive = pocket(
+            40.0,
+            &Params {
+                strategy: Strategy::Adaptive,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let loops = pocket(
+            40.0,
+            &Params {
+                motion: Motion::Trochoidal,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let (a, l) = (cut_length(&adaptive), cut_length(&loops));
+        assert!(a < l, "adaptive {a:.0} mm, loops {l:.0} mm");
+    }
+
+    #[test]
+    fn adaptive_is_saved_by_name() {
+        let p = Params {
+            strategy: Strategy::Adaptive,
+            ..Params::default()
+        };
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["strategy"], "adaptive");
+        let back: Params = serde_json::from_value(json).unwrap();
+        assert_eq!(back.strategy, Strategy::Adaptive);
+    }
+
+    #[test]
+    fn adaptive_takes_at_most_a_quarter_of_the_bit() {
+        let mut tool = Tool {
+            stepover: 0.4,
+            ..Tool::default()
+        };
+        assert!((adaptive_bite(&tool) - 0.25 * tool.diameter).abs() < 1e-12);
+        tool.stepover = 0.1;
+        assert!((adaptive_bite(&tool) - 0.1 * tool.diameter).abs() < 1e-12);
     }
 
     #[test]
