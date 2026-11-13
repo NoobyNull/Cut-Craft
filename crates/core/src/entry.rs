@@ -225,9 +225,9 @@ impl Default for Ramping {
 pub enum EntryMode {
     /// Straight down, as a drill does: quickest, but hardest on the bit, and only for bits
     /// that cut at their centre
+    #[default]
     Plunge,
     /// Down in circles, like a corkscrew: the gentlest way into a pocket or hole
-    #[default]
     Helix,
     /// Back and forth along the start of the cut, a little lower each time
     ZigZag,
@@ -278,8 +278,9 @@ pub struct EntrySettings {
 impl Default for EntrySettings {
     fn default() -> Self {
         // ponytail: our own defaults, gentle for wood with a hobby machine
+        // straight down unless asked otherwise (Matthew's rule)
         Self {
-            mode: EntryMode::Helix,
+            mode: EntryMode::Plunge,
             helix_diameter: 75.0,
             helix_angle: 3.0,
             zigzag_angle: 10.0,

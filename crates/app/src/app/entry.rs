@@ -317,7 +317,10 @@ mod tests {
 
     #[test]
     fn the_summary_says_the_sizes_in_the_job_s_units() {
-        let helix = EntrySettings::default();
+        let helix = EntrySettings {
+            mode: EntryMode::Helix,
+            ..EntrySettings::default()
+        };
         assert_eq!(
             summary(&helix, 6.35, 3.0, Units::Mm),
             "Helix 4.8 mm across at 3°, smaller where there is less room"

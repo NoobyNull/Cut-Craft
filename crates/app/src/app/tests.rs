@@ -4617,16 +4617,24 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     assert!(drawn("Rest Machining") && drawn("Add a tool…"));
     let mut params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("pocket_toolpath", &params).unwrap();
-    let whole = h.app.doc.toolpaths.values().last().unwrap().moves.len();
+    // how far it cuts: a pocket links its rings at depth, so moves alone undercount it
+    let cut_length = |t: &cut_craft_core::toolpath::Toolpath| -> f64 {
+        t.moves
+            .windows(2)
+            .filter(|w| w[1].kind == cut_craft_core::toolpath::MoveKind::Cut)
+            .map(|w| w[0].to.distance(w[1].to))
+            .sum()
+    };
+    let whole = cut_length(h.app.doc.toolpaths.values().last().unwrap());
     let mut big = h.app.form.as_ref().unwrap().params["tool"].clone();
     big["diameter"] = Value::from(params["tool"]["diameter"].as_f64().unwrap() * 4.0);
     params["rest"] = serde_json::json!({ "after": [big], "minimum_detail": 0.0, "overlap": 0.0 });
     h.app.apply("pocket_toolpath", &params).unwrap();
     let rest = h.app.doc.toolpaths.values().last().unwrap();
     assert!(
-        rest.moves.len() < whole,
-        "{} of {whole} moves",
-        rest.moves.len()
+        cut_length(rest) < whole,
+        "{} of {whole} mm cut",
+        cut_length(rest)
     );
     assert!(
         cut_craft_core::rest::Rest::of(&rest.params).is_some(),

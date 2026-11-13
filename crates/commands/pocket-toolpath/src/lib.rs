@@ -957,13 +957,32 @@ mod tests {
             .fold(0.0, f64::max)
     }
 
+    /// The default settings going down in a helix.
+    fn helix() -> Params {
+        Params {
+            entry: Some(EntrySettings {
+                mode: EntryMode::Helix,
+                ..EntrySettings::default()
+            }),
+            ..Params::default()
+        }
+    }
+
+    #[test]
+    fn a_new_pocket_goes_straight_down_until_asked_otherwise() {
+        assert_eq!(
+            Params::default().entry.map(|e| e.mode),
+            Some(EntryMode::Plunge)
+        );
+    }
+
     #[test]
     fn a_pocket_helixes_down_once_a_level_and_links_its_rings_at_depth() {
         let tp = pocket(
             40.0,
             &Params {
                 depth: 6.0,
-                ..Params::default()
+                ..helix()
             },
         )
         .unwrap();
@@ -980,7 +999,7 @@ mod tests {
     fn each_area_of_a_pocket_is_entered_on_its_own() {
         let tp = made_toolpath::<PocketToolpath>(
             vec![square(0.0, 0.0, 30.0), square(50.0, 0.0, 30.0)],
-            &Params::default(),
+            &helix(),
         )
         .unwrap();
         assert_eq!(entries(&tp), 2);
@@ -990,7 +1009,7 @@ mod tests {
     #[test]
     fn a_pocket_too_small_for_a_helix_says_where_it_went_down_another_way() {
         // a 7 mm square for a 6.35 mm bit: no room to go round
-        let tp = pocket(7.0, &Params::default()).unwrap();
+        let tp = pocket(7.0, &helix()).unwrap();
         assert_ne!(tp.fallbacks, vec![]);
         assert!(tp.fallbacks.iter().all(|f| f.wanted == EntryMode::Helix));
     }
