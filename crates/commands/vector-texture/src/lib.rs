@@ -200,7 +200,7 @@ impl Command for VectorTexture {
     }
 }
 
-/// Aspire's Vector Texture: rows of wavy lines across `area`, kept inside `rings` (or the
+/// The Vector Texture: rows of wavy lines across `area`, kept inside `rings` (or the
 /// area's rectangle when there are none).
 #[expect(
     clippy::cast_possible_truncation,

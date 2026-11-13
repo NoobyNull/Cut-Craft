@@ -210,7 +210,7 @@ impl Command for MouldingToolpath {
                 "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
             ));
         }
-        // the profile is the open vector picked last, as in Aspire
+        // the profile is the open vector picked last
         let mut ids: Vec<_> = doc.selection.iter().copied().collect();
         let Some(at) = ids.iter().rposition(|id| !doc.vectors[id].closed) else {
             return Err(CommandError::Failed(
@@ -225,8 +225,8 @@ impl Command for MouldingToolpath {
         }
         let section = cross_section(&doc.vectors[&profile_id]);
         let rails: Vec<&Path> = ids.iter().map(|id| &doc.vectors[id]).collect();
-        // ponytail: a profile taller than the material is cut off at its bottom; Aspire asks
-        // for the material or profile to be changed
+        // ponytail: a profile taller than the material is cut off at its bottom; asking
+        // for the material or profile to be changed would be clearer
         let floor = -doc.job.thickness;
         let reach = p.boundary_offset.max(0.0);
         let span = (section[0].0 - reach, section[section.len() - 1].0 + reach);
@@ -429,7 +429,7 @@ impl Sweep<'_> {
                         line.reverse();
                     }
                     let cut: Vec<DVec3> = line.iter().map(|q| q.extend(z)).collect();
-                    // ponytail: lifts to the safe height between passes; Aspire lifts a stepover
+                    // ponytail: lifts to the safe height between passes; lifting only a stepover would be quicker
                     moves.extend(follow(&cut, self.safe));
                 }
             }

@@ -59,7 +59,7 @@ pub struct Order {
 
 impl Default for Order {
     fn default() -> Self {
-        // ponytail: Aspire's defaults are not known; trying them all costs little
+        // ponytail: our own defaults; trying them all costs little
         Self {
             vector_selection_order: true,
             left_to_right: true,
@@ -88,10 +88,10 @@ pub enum StartAt {
 
 /// How far out a sharp corner may go, in tool radii, before it is squared off: corners down to
 /// about 29° come to a point.
-// ponytail: Aspire's limit is not known
+// ponytail: the limit is not known
 pub const MITRE_REACH: f64 = 4.0;
 
-// Laid out as Aspire's 2D Profile form: cutting depths, the tool, how the vectors are
+// Laid out as the 2D Profile form: cutting depths, the tool, how the vectors are
 // machined, tabs, then a tab each for ramps, leads, order, start points and corners.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
@@ -273,7 +273,7 @@ impl Command for ProfileToolpath {
         let radius = p.tool.diameter / 2.0 + p.allowance;
         // a vector inside another is a hole in it (an "O"), so offsetting the regions cuts
         // each on its proper side
-        // ponytail: overlapping vectors go even-odd too, their overlap a hole; Aspire's way
+        // ponytail: overlapping vectors go even-odd too, their overlap a hole; the way
         // with overlaps is not known
         let offset = |by: f64| {
             let regions = polygon::regions(&paths);

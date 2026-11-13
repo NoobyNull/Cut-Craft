@@ -1,7 +1,7 @@
 //! Can the bit reach everything? One check every toolpath shares, so the form, Calculate and
 //! Save Toolpaths all say the same thing the same way: whether the cut is deeper than the
 //! bit's flutes, and whether there are spots the bit is too wide to get into. Each message
-//! says what is missed and what to do about it. Aspire makes none of these checks.
+//! says what is missed and what to do about it.
 
 use crate::geometry::Path;
 use crate::polygon::{self, Corners};

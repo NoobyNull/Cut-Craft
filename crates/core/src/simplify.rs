@@ -1,4 +1,4 @@
-//! Toolpath tolerance (Aspire's Options ▸ Toolpath Settings): cutting points that lie within
+//! Toolpath tolerance (Options ▸ Toolpath Settings): cutting points that lie within
 //! the tolerance of the straight move past them are dropped, so the G-code is shorter.
 
 use crate::toolpath::{Move, MoveKind, Toolpath};

@@ -305,7 +305,7 @@ impl Canvas {
         self.response.drag_stopped_by(PointerButton::Primary)
     }
 
-    /// Rulers along the top and left, in the job's units, as Aspire's 2D view has.
+    /// Rulers along the top and left, in the job's units.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -715,7 +715,7 @@ impl Canvas {
         let normal = Stroke::new(datum.width, visuals.text_color());
         let selected = visuals.selection.stroke;
         for (id, path) in doc.vectors.iter().filter(|(id, _)| doc.shown(**id)) {
-            // as in Aspire: selected vectors dashed, selected groups solid
+            // selected vectors dashed, selected groups solid
             if doc.selection.contains(id) && doc.vector_groups.contains_key(id) {
                 painter.add(Shape::line(screen(path), selected));
             } else if doc.selection.contains(id) {

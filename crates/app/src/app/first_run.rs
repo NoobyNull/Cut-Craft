@@ -1,7 +1,7 @@
 //! First-time setup: four questions asked on the first run (which machine, millimetres or
 //! inches, the material usually cut, and whether crash logs may be sent) that add the
 //! machine, set the job new files start with, put the starter tools in those units first and
-//! keep the crash-log answer in Options ▸ Bug Reports. Cut Craft's own: Aspire has none (see
+//! keep the crash-log answer in Options ▸ Bug Reports. Cut Craft's own (see
 //! `re/SPEC.md`, First-time setup). Help ▸ Run First-Time Setup Again asks them again.
 
 use super::CutCraftApp;

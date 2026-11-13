@@ -1,5 +1,5 @@
 //! The post library: Cut Craft's own posts, provided and not edited, and the user's custom
-//! posts, each a `.pp` file in a folder of their own (Aspire's `My_PostP`). Posts are known
+//! posts, each a `.pp` file in a folder of their own (`My_PostP`). Posts are known
 //! by their `POST_NAME`, as machines name them.
 
 use cut_craft_post::{BUILT_IN, Post};
@@ -40,7 +40,7 @@ impl Library {
         Self { custom_dir }
     }
 
-    /// The custom posts by name, then Cut Craft's own, as Aspire lists them.
+    /// The custom posts by name, then Cut Craft's own.
     pub fn entries(&self) -> Vec<Entry> {
         let mut custom: Vec<Entry> = self
             .custom_dir
@@ -185,7 +185,7 @@ impl Library {
             } else {
                 format!(" Custom {n}")
             };
-            // before the file type Aspire's names end with, as `(*.nc)`
+            // before the file type the names end with, as `(*.nc)`
             match entry.name.rfind(" (*.") {
                 Some(at) => format!("{}{mark}{}", &entry.name[..at], &entry.name[at..]),
                 None => format!("{}{mark}", entry.name),

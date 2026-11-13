@@ -1,9 +1,9 @@
-//! Tool Database name formats (Aspire's Tool Database ▸ Name Format): a tool's name made
+//! Tool Database name formats (Tool Database ▸ Name Format): a tool's name made
 //! from a template of `{Variable}` or `{Variable|Modifier}`, so `{Tool Type} {Diameter|F}`
 //! names a 1/8 inch end mill "End Mill 1/8". Modifiers: `U` and `L` upper and lower case a
 //! word, `0.00` pads and rounds a number (zeros before the point pad it, after it the
 //! decimals), and `F` writes inches as a fraction. A variable that has no value here stays
-//! as written, as Aspire's does.
+//! as written.
 
 use crate::document::Units;
 use crate::toolpath::{Tool, ToolShape};
@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn variables_and_modifiers_fill_in_as_aspire_s_do() {
+    fn variables_and_modifiers_fill_in() {
         let t = eighth_inch_end_mill();
         let e = |f: &str| expand(f, &t, "Oak", "");
         assert_eq!(e("{Tool Type} {Diameter|F}"), "End Mill 1/8");

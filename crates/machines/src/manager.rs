@@ -1,4 +1,4 @@
-//! The Machine menu's windows, laid out as Aspire's: Machine Configuration Management (the
+//! The Machine menu's windows: Machine Configuration Management (the
 //! machines, each one's details and associated posts; kept on Apply or OK) and Post-Processor
 //! Management (the post library: view, customise, edit, install, delete).
 
@@ -71,7 +71,7 @@ fn view(entry: &Entry) -> Option<(String, String)> {
     Some((title, Library::text(entry).ok()?))
 }
 
-/// The post's change log, as Aspire's Post-Processor Change Log.
+/// The post's change log (Post-Processor Change Log).
 fn change_log(entry: &Entry) -> Option<(String, String)> {
     let log = Library::change_log(&Library::text(entry).ok()?);
     let text = if log.is_empty() {
@@ -220,7 +220,7 @@ impl MachineManager {
                 self.draft.delete();
                 self.picked = None;
             }
-            // ponytail: machine packages come from Vectric's online service, which Cut Craft
+            // ponytail: machine packages come from a vendor's online service, which Cut Craft
             // has none of; machines are made by hand
             icon_button(
                 ui,
@@ -879,7 +879,7 @@ fn posts_section(
     asked
 }
 
-/// Apply on its own line, then OK and Cancel, as Aspire's form has them.
+/// Apply on its own line, then OK and Cancel.
 fn buttons(ui: &mut egui::Ui, can_keep: bool) -> Option<MachineOutcome> {
     let mut outcome = None;
     // in a row of its own: a right-to-left layout on its own takes all the height left, and
@@ -1118,7 +1118,7 @@ impl PostManager {
                 ui.colored_label(ui.visuals().error_fg_color, "⚠")
                     .on_hover_hint(why);
             }
-            // Aspire's Inspect icon at the row's end, and the same menu on a right-click
+            // The Inspect icon at the row's end, and the same menu on a right-click
             let button = ui.menu_button("Inspect ▾", |ui| self.inspect(ui, library, entry));
             if let Some(Some(a)) = button.inner {
                 asked = Some(a);

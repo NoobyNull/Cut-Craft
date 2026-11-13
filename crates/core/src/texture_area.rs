@@ -140,7 +140,7 @@ pub fn tiled(
 }
 
 /// `area` (a texture area component) tiled again over its own box, its tiles the same size,
-/// as Aspire's texture areas keep their tiles when resized. None when it is no texture area
+/// as the texture areas keep their tiles when resized. None when it is no texture area
 /// or its seed is gone; the result keeps its name, combine, level, group and visibility.
 #[must_use]
 pub fn retiled(

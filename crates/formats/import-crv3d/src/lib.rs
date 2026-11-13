@@ -220,7 +220,7 @@ fn contour_at(b: &[u8], mut o: usize, scale: f64) -> Option<Path> {
 mod tests {
     use super::*;
 
-    /// Reads the sample saved from Aspire when it is there (it is gitignored).
+    /// Reads a sample `.crv3d` job when it is there (it is gitignored).
     #[test]
     fn the_shapes_sample_imports_onto_its_layers() {
         let path = concat!(

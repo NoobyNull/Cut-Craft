@@ -2185,7 +2185,7 @@ fn the_component_menu_acts_on_the_component_clicked() {
             .icon
             .as_deref(),
         Some("modeling/combine_add.png"),
-        "Aspire's combine icons"
+        "the combine icons"
     );
     h.choose(menu, &["Combine Mode", "Subtract"]);
     assert_eq!(component(&h.app).combine, Combine::Subtract);
@@ -3342,7 +3342,7 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.app.handles_3d.is_empty(), "not until Transform mode");
-    // a double-click on the selected component enters it, as Aspire's second click does
+    // a double-click on the selected component enters it
     let fit = h.app.fit_3d.unwrap();
     let surface = h.app.surface_3d().unwrap().into_owned();
     let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
@@ -4039,7 +4039,7 @@ fn zoom_box_zoom_to_selection_and_zoom_to_job() {
 }
 
 #[test]
-fn the_side_tabs_are_aspire_12s_with_drawing_and_modeling_on_design() {
+fn the_side_tabs_put_drawing_and_modeling_on_design() {
     assert_eq!(
         DESIGN_TABS,
         ["Design", "Sheets", "Layers", "Components", "Library"]
@@ -4677,7 +4677,7 @@ fn a_tool_from_a_flown_out_page_hides_it_unless_it_opens_a_form() {
 }
 
 #[test]
-fn a_tools_form_takes_the_place_of_the_page_as_in_aspire() {
+fn a_tools_form_takes_the_place_of_the_page() {
     let mut h = Harness::new();
     h.app.pages.set_pinned(Page::Design, true);
     h.app.pages.set_pinned(Page::Toolpaths, true);
@@ -10937,7 +10937,7 @@ fn an_older_pocket_with_a_rest_list_still_shows_it() {
 
 /// Tools that were only in a menu get a button too (Matthew, 2026-11-10): the left page's
 /// for what changes the shape to cut, the right page's for how it is cut and sent to the
-/// machine, each where Aspire's help puts its icon. Buttons already there stay put.
+/// machine, each where the help puts its icon. Buttons already there stay put.
 #[test]
 fn menu_only_tools_have_a_button_on_their_side() {
     let h = Harness::new();

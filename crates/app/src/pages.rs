@@ -1,5 +1,5 @@
 //! The two tool pages, Design (left) and Toolpaths (right): pinned pages stay docked open,
-//! unpinned ones hide to a side tab and fly out over the view one at a time, as Aspire's do.
+//! unpinned ones hide to a side tab and fly out over the view one at a time.
 
 /// One of the two tool pages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -28,7 +28,7 @@ pub struct Pages {
 }
 
 impl Default for Pages {
-    /// Aspire starts in its design layout.
+    /// Starts in the design layout.
     fn default() -> Self {
         Self::design_layout()
     }

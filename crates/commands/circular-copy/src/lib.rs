@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn the_selection_centre_is_the_default_and_the_job_centre_is_offered() {
-        // around its own middle the copies only turn in place, as in Aspire
+        // around its own middle the copies only turn in place
         let p = Params {
             items: 4,
             ..Params::default()

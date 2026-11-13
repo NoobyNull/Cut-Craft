@@ -400,13 +400,13 @@ mod tests {
             s.suggest("Carvs")
         );
         assert_eq!(
-            s.misspelled("Carve woood, !!name!! Vectricky wood"),
-            ["woood", "Vectricky"]
+            s.misspelled("Carve woood, !!name!! Woodcrafty wood"),
+            ["woood", "Woodcrafty"]
         );
-        s.add_word("Vectricky");
-        assert_eq!(s.misspelled("Vectricky woood"), ["woood"]);
-        s.remove_word("vectricky");
-        assert!(!s.correct("Vectricky"));
+        s.add_word("Woodcrafty");
+        assert_eq!(s.misspelled("Woodcrafty woood"), ["woood"]);
+        s.remove_word("woodcrafty");
+        assert!(!s.correct("Woodcrafty"));
         assert_eq!(
             replace_word("woood and woood's woood", "woood", "wood"),
             "wood and wood's wood"

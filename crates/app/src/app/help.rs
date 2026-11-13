@@ -1,4 +1,4 @@
-//! Help Contents (Aspire's F1 help): Markdown pages, the app's own and ones made from the
+//! Help Contents (F1 help): Markdown pages, the app's own and ones made from the
 //! tools' doc comments, linked to each other with `help:` links.
 
 use super::{CutCraftApp, Info, Page, dialog_size, egui, form, gui};

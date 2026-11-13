@@ -43,7 +43,7 @@ impl Command for DuplicateComponent {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let mut copy = existing(&doc.components, p.component, "component")?.clone();
-        // ponytail: Aspire's copy name is not documented [inf]
+        // ponytail: the copy name is not documented [inf]
         copy.name = format!("{} copy", copy.name);
         let mut c = Change::builder(doc);
         c.add_component(copy);

@@ -117,7 +117,7 @@ pub enum ToolChanges {
     Pause,
 }
 
-/// How Save Toolpaths splits the toolpaths into files (Aspire's Save Toolpaths form).
+/// How Save Toolpaths splits the toolpaths into files (Save Toolpaths form).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SaveMode {
     /// The toolpath picked in the list, alone.
@@ -131,7 +131,7 @@ pub enum SaveMode {
 
 /// The toolpaths each file holds, in list order: the selected toolpath (or the toolpaths of
 /// the selected group, as one file); every shown one; or each shown one alone, where `group`
-/// puts toolpaths in a row that use the same tool in one file (Aspire's Group Where Possible).
+/// puts toolpaths in a row that use the same tool in one file (Group Where Possible).
 pub fn save_plan(
     doc: &Document,
     mode: SaveMode,

@@ -1,4 +1,4 @@
-//! Keyboard shortcuts written the way Aspire's menus show them: `Ctrl+A`, `Del`, `F9`.
+//! Keyboard shortcuts written the way the menus show them: `Ctrl+A`, `Del`, `F9`.
 
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 
@@ -46,7 +46,7 @@ mod tests {
     }
 
     #[test]
-    fn aspire_key_names() {
+    fn short_key_names() {
         assert_eq!(parse("Del"), Some(sc(Modifiers::NONE, Key::Delete)));
         assert_eq!(parse("PgUp"), Some(sc(Modifiers::NONE, Key::PageUp)));
     }

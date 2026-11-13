@@ -31,7 +31,7 @@ impl Default for Params {
 }
 
 /// How far the broad shape's blur reaches, as a share of the component's longer side.
-// ponytail: our own split of shape and detail [inf]; Aspire's method is not described
+// ponytail: our own split of shape and detail [inf]
 const BROAD: f64 = 0.05;
 
 impl Command for Emboss {

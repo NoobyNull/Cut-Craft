@@ -55,7 +55,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             slicing: Slicing::SliceThickness,
-            // ponytail: Aspire offers the material thickness here [inf]
+            // ponytail: could offer the material thickness here [inf]
             slice_thickness: 20.0,
             from_top: true,
             number_of_slices: 2,

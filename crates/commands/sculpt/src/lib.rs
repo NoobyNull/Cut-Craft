@@ -45,7 +45,7 @@ pub enum Mode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[expect(clippy::struct_excessive_bools, reason = "Aspire's tick boxes")]
+#[expect(clippy::struct_excessive_bools, reason = "the tick boxes")]
 pub struct Params {
     pub tool: Tool,
     /// How wide the brush is
@@ -91,7 +91,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             tool: Tool::Smooth,
-            // ponytail: starting values [inf]; Aspire sizes its sliders from the job
+            // ponytail: starting values [inf]; the sliders could be sized from the job
             diameter: 10.0,
             strength: 20.0,
             smoothness: 50.0,
@@ -108,11 +108,11 @@ impl Default for Params {
 }
 
 /// Dabs along a stroke, this fraction of the brush diameter apart.
-// ponytail: an eighth of the diameter [inf]; Aspire's dab spacing is not described
+// ponytail: an eighth of the diameter [inf]
 const DAB_SPACING: f64 = 0.125;
 /// Deposit and Remove change a dab's centre by this fraction of the diameter at full
 /// strength.
-// ponytail: [inf]; Aspire gives no rate for its strength slider
+// ponytail: our own rate for the strength slider [inf]
 const DEPOSIT_RATE: f64 = 0.05;
 
 impl Params {
@@ -273,7 +273,7 @@ fn sculpted(k: &Component, p: &Params) -> Component {
 }
 
 /// How deep a custom brush presses at full strength, as a share of its diameter.
-// ponytail: a fifth [inf]; Aspire does not give its custom brush's depth
+// ponytail: a fifth [inf]; our own custom brush depth
 const BRUSH_DEPTH: f64 = 0.2;
 
 /// A custom brush: a saved component, its heights taken as 0 (its lowest) to 1 (its highest).

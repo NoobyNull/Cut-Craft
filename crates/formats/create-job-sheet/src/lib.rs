@@ -1,4 +1,4 @@
-//! Create Job Sheet: an HTML page for the machine operator, in Aspire's five sections: the
+//! Create Job Sheet: an HTML page for the machine operator, in the five sections: the
 //! job layout, the job notes, the material setup, the toolpaths summary and each toolpath.
 //! The Job Setup Sheet Editor's [`Style`] sets its title, logo, header and footer colours and
 //! which sections it has. A job of several sheets gets a page for each sheet with toolpaths,

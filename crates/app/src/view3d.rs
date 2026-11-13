@@ -254,7 +254,7 @@ impl Framing {
     }
 }
 
-/// What a drag in the 3D view does, from the buttons held (Aspire's mouse controls).
+/// What a drag in the 3D view does, from the buttons held (mouse controls).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DragMode {
     Rotate,
@@ -1456,7 +1456,7 @@ pub fn pick(
 }
 
 /// The view cube in a corner of the 3D view: a cube turned with the view whose faces, edges
-/// and corners each turn the view to look from there (Aspire's View Controller).
+/// and corners each turn the view to look from there (View Controller).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewCube {
     /// Where its middle shows.
@@ -2343,7 +2343,7 @@ mod tests {
     }
 
     #[test]
-    fn mouse_buttons_pick_rotate_or_pan_as_in_aspire() {
+    fn mouse_buttons_pick_rotate_or_pan() {
         assert_eq!(
             drag_mode([true, false, false], false),
             Some(DragMode::Rotate)

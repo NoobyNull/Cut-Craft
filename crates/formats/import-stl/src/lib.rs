@@ -29,8 +29,8 @@ impl Importer for ImportStl {
                 "the model has no area seen from above. Export it again from the program that made it".into(),
             ));
         }
-        // ponytail: native size, centred, shrunk to fit; Aspire asks in its Orientate 3D
-        // Model step (size, position, depth below top), add that form when it is needed
+        // ponytail: native size, centred, shrunk to fit; an Orientate 3D
+        // Model step (size, position, depth below top) would ask, add that form when it is needed
         let area = doc.job.area();
         let room = area.size();
         let scale = (room.x / size.x).min(room.y / size.y).min(1.0);

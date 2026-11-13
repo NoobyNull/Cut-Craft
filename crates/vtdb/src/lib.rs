@@ -1,4 +1,4 @@
-//! Vectric `.vtdb` tool databases (Aspire / `VCarve` 12.5): a SQLite file of tool geometries,
+//! Vectric `.vtdb` tool databases: a SQLite file of tool geometries,
 //! cutting data per machine and material, and a tool tree. Vendors publish these (Amana,
 //! IDC Woodcraft, CIC), so Cut Craft reads them into its own tool database.
 //!
@@ -6,7 +6,7 @@
 //! `tool_geometry.tool_type` 0 ball nose, 1 end mill, 2 radiused end mill, 3 V-bit,
 //! 4 engraving (angle + flat), 5 tapered ball nose, 6 drill, 8 form tool, 9 diamond drag;
 //! `units` / `length_units` 0 mm, 1 inches; `rate_units` 1 mm/min, 2 m/min, 4 in/min, taken as
-//! the place in Aspire's rate list (mm/sec, mm/min, m/min, in/sec, in/min, ft/min); a `tooth_size`
+//! the place in the rate list (mm/sec, mm/min, m/min, in/sec, in/min, ft/min); a `tooth_size`
 //! makes a thread mill (none seen); each geometry has a placeholder entry with no material
 //! and no feed, and one with data for the file's one material and machine. All [inf].
 
@@ -189,7 +189,7 @@ fn length(units: i64) -> f64 {
     if units == 1 { INCH } else { 1.0 }
 }
 
-/// The file's rate units, numbered in the order of Aspire's list.
+/// The file's rate units, numbered in the order of the list.
 fn rate_units(units: i64) -> RateUnits {
     usize::try_from(units)
         .ok()
@@ -278,7 +278,7 @@ impl Row {
         })
     }
 
-    /// The vendor's name with Aspire's `{...}` fields filled in.
+    /// The vendor's name with the `{...}` fields filled in.
     fn name(&self) -> String {
         let kind = match self.tool_type {
             0 => "Ball Nose",
@@ -349,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn names_fill_in_aspires_fields() {
+    fn names_fill_in_their_fields() {
         let t = end_mill().tool().unwrap();
         assert_eq!(t.name, "End Mill (0.25in) DOWN CUT");
         assert_eq!(t.shape, ToolShape::EndMill);

@@ -96,7 +96,7 @@ const LENGTHS: &[&str] = &[
     "ArcMidYI",
     "Radius",
 ];
-/// Numbers Aspire prints to three places when a post gives no `VAR` format; the rest print
+/// Numbers printed to three places when a post gives no `VAR` format; the rest print
 /// whole (`re/SPEC.md`, the vocabulary table).
 const THREE_PLACES: &[&str] = &[
     "X",
@@ -486,7 +486,7 @@ impl Post {
             }
             if let Some(name) = line.strip_prefix("begin ") {
                 let name = match name.trim() {
-                    // Vectric's help names the block both ways
+                    // the format's documentation names the block both ways
                     "DRILL_BANK_FINAL_ACTION" => "FINAL_DRILL_BANK_ACTION",
                     name => name,
                 }
@@ -758,7 +758,7 @@ impl Post {
     }
 
     /// How this post drives a drill bank: by pattern (`true`: one block choosing every drill
-    /// at once) or drill by drill (`false`), as Vectric's help says the blocks choose; why
+    /// at once) or drill by drill (`false`), as the format's documentation says the blocks choose; why
     /// it cannot when it cannot.
     fn bank_mode(&self) -> Result<bool, String> {
         let has = |name: &str| self.blocks.contains_key(name);
@@ -976,7 +976,7 @@ fn z_origin(job: &Job) -> &'static str {
     }
 }
 
-/// Aspire's own wording is not known (`re/SPEC.md`); these are ours.
+/// The own wording is not known (`re/SPEC.md`); these are ours.
 fn xy_origin(datum: Datum) -> &'static str {
     match datum {
         Datum::BottomLeft => "Bottom Left Corner",
@@ -1020,7 +1020,7 @@ impl Values {
             ("ArcMidXI", mid.x - from.x),
             ("ArcMidYI", mid.y - from.y),
             ("Radius", from.truncate().distance(arc.centre)),
-            // ponytail: radians anticlockwise; Aspire's sign is not known (re/SPEC.md)
+            // ponytail: radians anticlockwise (re/SPEC.md)
             ("Angle", arc.sweep),
         ] {
             self.numbers.insert(label, value);
@@ -2100,7 +2100,7 @@ begin FOOTER
     }
 
     #[test]
-    fn variables_without_a_var_line_print_in_aspires_default_formats() {
+    fn variables_without_a_var_line_print_in_default_formats() {
         let post = "POST_NAME = \"Bare\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\nLINE_ENDING = \"[13][10]\"\nbegin HEADER\n\"[S] M3 [XLENGTH]\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\nbegin FEED_MOVE\n\"G1 [X] [Y] [Z] [F]\"\n";
         let lines = render(post, vec![toolpath("P", "T")]);
         assert_eq!(

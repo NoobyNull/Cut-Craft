@@ -1,4 +1,4 @@
-//! Drawing vectors in the 3D view, as Aspire 12 does: the 2D view's drawing tools, with the
+//! Drawing vectors in the 3D view: the 2D view's drawing tools, with the
 //! pointer taken to where it meets the model (or the material's top plane off it).
 
 use super::views::Modes;
