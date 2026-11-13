@@ -156,6 +156,12 @@ GLYPHS = {
     "L": [[(0, 0), (0, 1), (1, 1)]],
     "1": [[(0.2, 0.2), (0.6, 0), (0.6, 1)], [(0.2, 1), (1, 1)]],
     "P": [[(0, 1), (0, 0), (0.7, 0), (1, 0.15), (1, 0.4), (0.7, 0.55), (0, 0.55)]],
+    "W": [[(0, 0), (0.25, 1), (0.5, 0.35), (0.75, 1), (1, 0)]],
+    "H": [[(0, 0), (0, 1)], [(1, 0), (1, 1)], [(0, 0.5), (1, 0.5)]],
+    "G": [[(1, 0.15), (0.7, 0), (0.3, 0), (0, 0.3), (0, 0.7), (0.3, 1), (0.7, 1), (1, 0.75), (1, 0.5), (0.55, 0.5)]],
+    "i": [[(0.5, 0.42), (0.5, 1)], [(0.5, 0.12), (0.5, 0.16)]],
+    "a": [[(0.15, 0.45), (0.4, 0.38), (0.8, 0.42), (0.85, 0.6), (0.85, 1)],
+          [(0.85, 0.65), (0.3, 0.65), (0.1, 0.8), (0.3, 1), (0.85, 0.9)]],
     "O": [[(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3), (0.3, 0)]],
 }
 
@@ -164,7 +170,7 @@ def text(s, x, y, h, c=INK, w=SW, gap=0.35):
     """`s` in the stroke font, `h` tall with its top left at (x, y)."""
     out, cx = [], x
     for ch in s:
-        wd = h * 0.62
+        wd = h * (0.2 if ch == "i" else 0.62)
         for stroke_ in GLYPHS[ch]:
             out.append(pl([(cx + px * wd, y + py * h) for px, py in stroke_], c, w))
         cx += wd + h * gap
@@ -941,8 +947,12 @@ def dim_right(y0, y1, label, x=97, reach=X1 - 12):
             + line(reach, y1, x + 2, y1, ACC, 2, GUIDE) + text(label, x + 3, (y0 + y1) / 2 - 3, 6, ACC, 2))
 
 
+def text_width(s, h, gap=0.35):
+    return sum(h * (0.2 if ch == "i" else 0.62) for ch in s) + (len(s) - 1) * h * gap
+
+
 def dim_left(y0, y1, label, x=18, reach=X0 + 10):
-    w = len(label) * 6 * 0.62 + (len(label) - 1) * 6 * 0.35
+    w = text_width(label, 6)
     return (darrow(x, y0, x, y1, ACC, 2, 4) + line(x - 2, y0, reach, y0, ACC, 2, GUIDE)
             + line(x - 2, y1, reach, y1, ACC, 2, GUIDE) + text(label, x - 4 - w, (y0 + y1) / 2 - 3, 6, ACC, 2))
 
@@ -1050,6 +1060,58 @@ DIAGRAMS[dg + "drag_knife_corners.svg"] = lambda: [
     path("M80,48 L96,16 L108,48", INK, 2.5), line(96, 16, 99.6, 8.8, ACC, 2.5), circ(99.6, 8.8, 1.8, ACC, 2),
     line(96, 16, 98.4, 22.4, ACC, 2.5), text("L", 102, 4, 6, ACC, 2),
     path("M92.4,23.2 A8,8 0 0 0 99,23.4", ACC, 2), text("A2", 76, 24, 6, ACC, 2)]
+
+
+def dim_across(x0, x1, y, label, below=False):
+    """A width from x0 to x1 at height y, its letter above it (or below)."""
+    w = text_width(label, 6)
+    ty = y + 3 if below else y - 9
+    return darrow(x0, y, x1, y, ACC, 2, 4) + text(label, (x0 + x1) / 2 - w / 2, ty, 6, ACC, 2)
+
+
+def guide_up(x, y0, y1):
+    return line(x, y0, x, y1, ACC, 2, GUIDE)
+
+
+# Chamfer: across W, the slope from vertical A, and the V-bit's point run past the bevel by O
+DIAGRAMS[dg + "chamfer_shape.svg"] = lambda: [
+    pl([(X0, BOT), (X0, 20), (40, 20), (64, 44), (64, BOT)], WOODD, 2, WOOD, closed=True),
+    rect(64, 0, 8, 30, 1, INK, 2, "#d2d7df"), path("M50,30 H86 L68,48 Z", INK, 2, "#b4bcc8"),
+    guide_up(40, 8, 20), guide_up(64, 8, 30), dim_across(40, 64, 10, "W"),
+    line(64, 44, 64, 32, ACC, 2, GUIDE), path("M64,35 A9,9 0 0 0 57.6,37.6", ACC, 2), text("A", 50, 36, 6, ACC, 2),
+    dim_right(44, 48, "O", x=99, reach=66)]
+# Keyhole from above: the entry hole Dia, the slot L long and Dia2 wide on the surface
+DIAGRAMS[dg + "keyhole_shape.svg"] = lambda: [
+    rect(X0, 6, X1 - X0, 44, 0, WOODD, 2, WOOD),
+    path("M38,20 A8,8 0 1 1 38,36 A8,8 0 0 1 38,20 Z", INK, 2.5, "#ffffff"),
+    path("M44,24.5 H70 A3.5,3.5 0 0 1 70,31.5 H44", INK, 2.5, "#ffffff"),
+    darrow(38, 21, 38, 35, ACC, 2, 3.5), text("Dia", 24, 12, 6, ACC, 2), line(32, 18, 37, 22, ACC, 1.5),
+    guide_up(38, 37, 46), guide_up(73.5, 33, 46), dim_across(38, 73.5, 44, "L", below=False),
+    darrow(82, 24.5, 82, 31.5, ACC, 2, 3), line(72, 24.5, 84, 24.5, ACC, 2, GUIDE), line(72, 31.5, 84, 31.5, ACC, 2, GUIDE),
+    text("Dia2", 86, 25, 6, ACC, 2)]
+# Thread in a hole, in section: the thread's diameter Dia across, its pitch P between ridges
+DIAGRAMS[dg + "thread_shape.svg"] = lambda: [
+    section([(X0, 16), (40, 16)] + [p for i in range(4) for p in ((40, 18 + i * 8), (34, 22 + i * 8))] + [(40, 50), (72, 50)]
+            + [p for i in range(3, -1, -1) for p in ((78, 22 + i * 8), (72, 18 + i * 8))] + [(72, 16), (X1, 16)]),
+    guide_up(34, 8, 22), guide_up(78, 8, 22), dim_across(34, 78, 10, "Dia"),
+    dim_right(22, 30, "P", reach=79)]
+# A stepped inlay in section: its shelf H below the start, W out from the shape, and the
+# allowance O between the insert and its cavity
+DIAGRAMS[dg + "inlay_steps.svg"] = lambda: [
+    pl([(30, 14), (82, 14), (82, 26), (72, 26), (72, 46), (40, 46), (40, 26), (30, 26)], WOODD, 2, WOOD, closed=True),
+    pl([(27, 11), (85, 11), (85, 29), (75, 29), (75, 49), (37, 49), (37, 29), (27, 29)], ACC, 2, "none", closed=True, dash=GUIDE),
+    dim_left(14, 26, "H", reach=30), guide_up(72, 7, 26), guide_up(82, 7, 14), dim_across(72, 82, 9, "W"),
+    darrow(82, 20, 85, 20, ACC, 2, 2), text("O", 89, 17, 6, ACC, 2)]
+# V-Carve Inlay: the plug turned over into its pocket, its point G above the pocket's floor and
+# its board G2 above the surface, the space left for glue
+DIAGRAMS[dg + "vcarve_inlay_fit.svg"] = lambda: [
+    section([(X0, 28), (40, 28), (50, 46), (62, 46), (72, 28), (X1, 28)]),
+    pl([(30, 6), (82, 6), (82, 20), (75, 20), (63, 40), (49, 40), (37, 20), (30, 20)], INK, 2, "#e2bd83", closed=True),
+    dim_right(40, 46, "G", reach=62), dim_left(20, 28, "G2", reach=36)]
+# Fluting's ramps: the slope down into the flute over L at each end
+DIAGRAMS[dg + "fluting_ramp.svg"] = lambda: [
+    section([(X0, 16), (30, 16), (50, 34), (62, 34), (82, 16), (X1, 16)]),
+    guide_up(30, 8, 16), guide_up(50, 8, 34), dim_across(30, 50, 10, "L")]
 
 
 def render_diagram(name):

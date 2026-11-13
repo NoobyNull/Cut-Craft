@@ -46,14 +46,17 @@ pub struct Params {
     /// Stepped insert: how far down from the start depth the step is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Steps"))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/inlay_steps.png"))]
     pub step_depth: f64,
     /// Stepped insert: how far out from the shape the shelf reaches
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Steps"))]
+    #[schemars(extend("x-dim" = "W"))]
     pub step_width: f64,
     /// Makes an insert this much smaller, or a cavity this much bigger, so they fit
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Steps"))]
+    #[schemars(extend("x-dim" = "O"))]
     pub allowance: f64,
     /// The same tool for both halves
     pub tool: Tool,

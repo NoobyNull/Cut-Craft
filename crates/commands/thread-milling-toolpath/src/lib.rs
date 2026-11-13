@@ -191,10 +191,12 @@ pub struct Params {
     /// Between the ridges of the thread
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Thread"), extend("x-show-when" = {"pitch_preset": "custom"}))]
+    #[schemars(extend("x-dim" = "P", "x-diagram" = "diagrams/thread_shape.png"))]
     pub pitch: f64,
     /// The thread's major (largest) diameter
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Thread"))]
+    #[schemars(extend("x-dim" = "Dia"))]
     pub diameter: f64,
     /// Cuts the thread this much deeper so it turns freely
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
