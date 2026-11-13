@@ -30,6 +30,13 @@ fn saves_for(cells: usize) -> usize {
     (SAVES_MEMORY / each.max(1)).clamp(1, MOST_SAVES)
 }
 
+/// Where each playback's revisions come from, so no two playbacks ever share one.
+static REVISIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_revision() -> u64 {
+    REVISIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// The material as cut at the end of a step.
 struct Save {
     /// Which stretch of [`Playback::save_every`] it is in (one save each).
@@ -53,6 +60,8 @@ pub struct Playback {
     saves: Vec<Save>,
     /// How far apart the saves are, seconds.
     save_every: f64,
+    /// Changes whenever the material does, so what is drawn of it can be kept till then.
+    revision: u64,
 }
 
 impl Playback {
@@ -110,6 +119,7 @@ impl Playback {
             at: 0.0,
             saves: vec![],
             save_every,
+            revision: next_revision(),
         }
     }
 
@@ -127,6 +137,13 @@ impl Playback {
     pub fn set_other_side(&mut self, other: Option<std::sync::Arc<Material>>) {
         self.start.other_side.clone_from(&other);
         self.material.other_side = other;
+        self.revision = next_revision();
+    }
+
+    /// Which state of the material this is: another number once anything about it changes,
+    /// and never one another playback has had.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// The material as cut so far.
@@ -184,6 +201,9 @@ impl Playback {
     /// start before it stops. Each call cuts at least one step, so calls in turn get there.
     pub fn seek_until(&mut self, d: f64, mut out_of_time: impl FnMut() -> bool) -> bool {
         let d = d.clamp(0.0, self.length());
+        if d != self.at {
+            self.revision = next_revision();
+        }
         // from the last save before `d`, when it is ahead or the tool goes back; else back
         // to the start
         let save = (self.saves.iter())
@@ -440,6 +460,22 @@ mod tests {
             saves_for(10_000 * 10_000) <= 2,
             "a huge grid gets few saves"
         );
+    }
+
+    #[test]
+    fn the_revision_changes_only_when_the_material_does() {
+        let (start, toolpath) = line();
+        let mut p = Playback::new(start.clone(), &[&toolpath], 60.0);
+        let other = Playback::new(start, &[&toolpath], 60.0);
+        assert_ne!(p.revision(), other.revision(), "no two playbacks share one");
+        let first = p.revision();
+        p.seek(47.0);
+        let cut = p.revision();
+        assert_ne!(cut, first, "cut further");
+        p.seek(47.0);
+        assert_eq!(p.revision(), cut, "nothing moved");
+        p.seek(20.0);
+        assert_ne!(p.revision(), cut, "back again");
     }
 
     #[test]
