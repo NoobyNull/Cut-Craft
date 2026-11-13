@@ -134,7 +134,7 @@ impl Changer {
 pub fn picture_path(tool: &Tool) -> &'static str {
     match tool.shape {
         ToolShape::BallNose if tapered_ball(tool) => "tool_database/tapered_ball_nose.png",
-        ToolShape::EndMill => "tool_database/end_mill.png",
+        ToolShape::EndMill | ToolShape::SurfacingBit => "tool_database/end_mill.png",
         ToolShape::BallNose => "tool_database/ball_nose.png",
         ToolShape::VBit => "tool_database/v_bit.png",
         ToolShape::RadiusedEndMill => "tool_database/radiused_end_mill.png",
@@ -146,7 +146,7 @@ pub fn picture_path(tool: &Tool) -> &'static str {
 
 /// The Tool Type list: each type's trade name with what woodworkers call it, so either
 /// one finds it.
-const SHAPES: [(ToolShape, &str); 6] = [
+const SHAPES: [(ToolShape, &str); 7] = [
     (ToolShape::EndMill, "End Mill (flat / straight bit)"),
     (ToolShape::BallNose, "Ball Nose (core box)"),
     (ToolShape::VBit, "V-Bit (engraving / chamfer)"),
@@ -156,6 +156,10 @@ const SHAPES: [(ToolShape, &str); 6] = [
     ),
     (ToolShape::ThreadMill, "Thread Mill (cuts screw threads)"),
     (ToolShape::FormTool, "Form Tool (custom profile)"),
+    (
+        ToolShape::SurfacingBit,
+        "Surfacing Bit (spoilboard bit / fly cutter)",
+    ),
 ];
 const TAPERED_BALL: &str = "Tapered Ball Nose (cone ball nose)";
 

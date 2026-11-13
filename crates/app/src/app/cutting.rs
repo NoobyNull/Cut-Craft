@@ -316,7 +316,7 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
 }
 
 /// A row of radio buttons for `params[key]`.
-fn choose(
+pub(super) fn choose(
     ui: &mut egui::Ui,
     params: &mut Value,
     key: &str,

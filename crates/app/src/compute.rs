@@ -182,14 +182,14 @@ fn params(grid: &Material, tool: &Tool, count: usize, centres: bool) -> Vec<u8> 
     };
     let half_angle_slope = (tool.angle.to_radians() / 2.0).tan();
     let shape = match tool.shape {
-        ToolShape::EndMill => 0,
+        ToolShape::EndMill | ToolShape::SurfacingBit => 0,
         ToolShape::BallNose => 1,
         ToolShape::VBit => 2,
         ToolShape::RadiusedEndMill => 3,
         ToolShape::ThreadMill => 4,
         ToolShape::FormTool => unreachable!("a form tool's profile runs on the CPU"),
     };
-    let flat_end = tool.shape == ToolShape::EndMill && tool.reach() <= radius;
+    let flat_end = tool.shape.is_flat() && tool.reach() <= radius;
     let mut bytes = Vec::with_capacity(PARAMS_BYTES);
     let words = |bytes: &mut Vec<u8>, values: &[u32]| {
         for v in values {

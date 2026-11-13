@@ -622,3 +622,18 @@ fn putting_a_catalogue_tool_back_adds_it_to_my_tools() {
         "My Tools' Amana is not the catalogue"
     );
 }
+
+#[test]
+fn the_starter_tools_have_a_surfacing_bit_that_cuts_flat_and_steps_over_wide() {
+    let db = ToolDatabase::starter();
+    let bit = db.get("1 in Surfacing Bit").unwrap();
+    assert_eq!(bit.shape, ToolShape::SurfacingBit);
+    assert!(bit.shape.is_flat());
+    assert_eq!(bit.group, "Imperial Tools/Surfacing Bits");
+    assert!(bit.stepover >= 0.7);
+    assert_eq!(
+        bit.profile(bit.diameter / 2.0 - 0.1),
+        Some(0.0),
+        "flat to its edge"
+    );
+}

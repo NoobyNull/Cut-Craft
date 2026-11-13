@@ -20,6 +20,7 @@ mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod send;
+mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
@@ -1840,6 +1841,9 @@ fn tool_picker(
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));
             ui.label(tool_line(tool, passes, units));
+            if surfacing::wants_surfacing_bit(top, tool) {
+                ui.weak(surfacing::NOT_A_SURFACING_BIT);
+            }
             if tools.get(current).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -2128,6 +2132,7 @@ fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::
         }
         ToolShape::ThreadMill => format!("{across} thread mill"),
         ToolShape::FormTool => format!("{across} form tool"),
+        ToolShape::SurfacingBit => format!("{across} surfacing bit"),
     };
     let pass = length(tool.pass_depth);
     let line = format!("{line}, {pass} a pass");

@@ -773,6 +773,7 @@ I[tp + "fluting_toolpath.svg"] = lambda: [material(4, 6, 40, 36)] + [path(f"M{x}
 I[tp + "chamfer_toolpath.svg"] = lambda: [path("M4,40 V20 L14,10 H44 V40 Z", WOODD, 2.5, WOOD), line(4, 20, 14, 10, TP, 4), bit("v_bit", 22, 0, 14, 3.5)]
 I[tp + "rounding_toolpath.svg"] = lambda: [path("M4,40 V22 A12,12 0 0 1 16,10 H44 V40 Z", WOODD, 2.5, WOOD), path("M4,22 A12,12 0 0 1 16,10", TP, 4)]
 I[tp + "keyhole_toolpath.svg"] = lambda: [material(4, 6, 40, 36), path("M17,20 A7,7 0 1 1 31,20 A7,7 0 1 1 17,20 Z", TP, 2.5, TPL), path("M21,26 L19,38 H29 L27,26", TP, 2.5, TPL)]
+I[tp + "surfacing_toolpath.svg"] = lambda: [material(8, 22, 32, 20), path("M2,26 H46 V32 H2 V38 H46", TP, 2.5), rect(21, 2, 6, 9, 1, INK, 2.5), rect(13, 11, 22, 6, 2, ACC, 2.5)]
 I[tp + "moulding_toolpath.svg"] = lambda: [path("M4,40 C14,40 18,28 24,28 C30,28 34,10 44,10", INK, 2.5), path("M4,40 C14,40 18,28 24,28 C30,28 34,10 44,10", TP, 2.5, dash="3 4"),
                                            path("M6,12 V22 Q10,22 10,18 Q14,18 14,12 Z", INK, 2, MODEL)]
 I[tp + "prism_carving.svg"] = lambda: [path("M4,40 L14,12 H34 L44,40 Z", WOODD, 2.5, WOOD), line(14, 12, 24, 26, TP, 2.5), line(34, 12, 24, 26, TP, 2.5), line(4, 40, 24, 26, TP, 2.5), line(44, 40, 24, 26, TP, 2.5)]

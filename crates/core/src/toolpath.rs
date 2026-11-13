@@ -32,6 +32,17 @@ pub enum ToolShape {
     /// router bit's shape)
     #[schemars(title = "Form Tool")]
     FormTool,
+    /// A wide, flat bit for flattening a spoilboard or a slab (a spoilboard bit or fly
+    /// cutter): cuts like an end mill, but only sideways, never plunging into the material
+    #[schemars(title = "Surfacing Bit")]
+    SurfacingBit,
+}
+
+impl ToolShape {
+    /// Flat bottomed: an end mill or a surfacing bit, which cut the same shape.
+    pub fn is_flat(self) -> bool {
+        matches!(self, Self::EndMill | Self::SurfacingBit)
+    }
 }
 
 /// The units a tool's feed and plunge rates are shown in. Rates are kept
@@ -304,6 +315,7 @@ impl Tool {
             ToolShape::RadiusedEndMill => "Radiused End Mills",
             ToolShape::ThreadMill => "Thread Mills",
             ToolShape::FormTool => "Form Tools",
+            ToolShape::SurfacingBit => "Surfacing Bits",
         };
         format!("{maker}/{kind}")
     }
@@ -509,7 +521,7 @@ impl Tool {
             }
         }
         Some(match self.shape {
-            ToolShape::EndMill => 0.0,
+            ToolShape::EndMill | ToolShape::SurfacingBit => 0.0,
             ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
             ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
             ToolShape::RadiusedEndMill => {
@@ -567,6 +579,26 @@ impl Default for Tool {
             tooth_size: default_tooth_size(),
             tooth_offset: default_tooth_offset(),
             form: vec![],
+        }
+    }
+}
+
+impl Tool {
+    /// A 1 inch surfacing bit (spoilboard bit): what the Surfacing Toolpath starts with, and
+    /// a starter tool.
+    pub fn surfacing_bit() -> Self {
+        Self {
+            name: "1 in Surfacing Bit".into(),
+            shape: ToolShape::SurfacingBit,
+            diameter: 25.4,
+            pass_depth: 1.0,
+            stepover: 0.75,
+            feed_rate: 3000.0,
+            plunge_rate: 500.0,
+            spindle_speed: 16000.0,
+            flutes: 2,
+            flute_length: 12.7,
+            ..Self::default()
         }
     }
 }
@@ -667,6 +699,8 @@ impl ToolDatabase {
                     (0.1, 0.1),
                 )
             },
+            // flattens the spoilboard: wide, and stepping over most of its width
+            Tool::surfacing_bit(),
         ];
         for tool in &mut tools {
             let set = if tool.name.contains(" in ") {
@@ -862,6 +896,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::RadiusedEndMill => "Radiused End Mills",
         ToolShape::ThreadMill => "Thread Mills",
         ToolShape::FormTool => "Form Tools",
+        ToolShape::SurfacingBit => "Surfacing Bits",
     }
 }
 
