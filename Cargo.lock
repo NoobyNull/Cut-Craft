@@ -1763,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-surfacing-toolpath"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "cut-craft-core",
  "schemars",
