@@ -10937,6 +10937,28 @@ fn the_pocket_form_says_when_the_bit_cannot_reach_everything() {
 }
 
 #[test]
+fn the_drag_knife_form_says_a_knife_needs_no_flute_length() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.click(h.at(50.0, 30.0), Modifiers::NONE);
+    h.app.invoke(&h.ctx, "drag_knife_toolpath");
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // no "Depth not checked: set this bit's Flute Length", and no end mill or pass
+    assert_eq!(h.app.form_reach(), None);
+    assert!(h.text_at(super::KNIFE_LINE).is_some());
+    assert!(h.text_at("0.5 mm end mill, 3 mm a pass").is_none());
+    let params = &h.app.form.as_ref().unwrap().params;
+    assert_eq!(
+        params["pressure"].as_f64(),
+        Some(50.0),
+        "a share of the spring travel, not a material depth"
+    );
+    assert!(params.get("cut_depth").is_none());
+}
+
+#[test]
 fn the_profile_form_keeps_tab_and_tool_settings_in_their_windows() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);

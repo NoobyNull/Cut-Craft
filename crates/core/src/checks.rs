@@ -3,6 +3,7 @@
 
 use crate::component::placed_model;
 use crate::document::Document;
+use crate::drag_knife;
 use crate::geometry::Path;
 use crate::reach::{self, Fix, Side, too_deep};
 use crate::toolpath::{MoveKind, Toolpath};
@@ -40,7 +41,11 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
         .map(|m| -m.to.z)
         .fold(0.0, f64::max);
     let units = doc.job.units;
-    if let Some(deep) = too_deep(name, tool, deepest, units) {
+    // a drag knife has no flutes: it cuts its set depth below the surface it rides on,
+    // which must be flat
+    if toolpath.strategy == drag_knife::STRATEGY {
+        found.extend(drag_knife::misplaced(doc, toolpath));
+    } else if let Some(deep) = too_deep(name, tool, deepest, units) {
         found.push(deep);
     } else if tool.cutting_length().is_none() && deepest > 0.0 {
         found.push(format!(
@@ -304,6 +309,22 @@ mod tests {
         );
         let unknown = problems(&doc, &toolpath(Tool::default(), "pocket", 5.0));
         assert!(unknown[0].contains("no flute length"), "{unknown:?}");
+    }
+
+    #[test]
+    fn a_drag_knife_has_no_flutes_to_check_its_depth_against() {
+        let doc = crate::document::Document::default();
+        let knife = |tool: Tool| toolpath(tool, crate::drag_knife::STRATEGY, 3.0);
+        // no flute length set, or a short one: neither matters to a knife
+        assert_eq!(
+            problems(&doc, &knife(Tool::default())),
+            Vec::<String>::new()
+        );
+        let short = Tool {
+            flute_length: 1.0,
+            ..Tool::default()
+        };
+        assert_eq!(problems(&doc, &knife(short)), Vec::<String>::new());
     }
 
     #[test]

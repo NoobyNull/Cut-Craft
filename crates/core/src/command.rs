@@ -402,6 +402,7 @@ impl Registry {
             ))
         })?;
         let mut sources = doc.clone();
+        sources.remaking = Some(id);
         let settings = params.unwrap_or(&toolpath.params);
         // a toolpath with a Vector Selector takes whatever vectors pass it now
         if let Some(selector) = crate::selector::Selector::of(settings) {

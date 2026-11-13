@@ -49,9 +49,14 @@ pub(super) fn show(ui: &mut egui::Ui, line: &Line) {
 }
 
 impl super::CutCraftApp {
-    /// The open form's reach line: `None` for a form without a tool, or before one is picked.
+    /// The open form's reach line: `None` for a form without a tool, before one is picked,
+    /// or for a drag knife.
     pub(super) fn form_reach(&mut self) -> Option<Line> {
         let form = self.form.as_ref()?;
+        // a drag knife has no flutes and is never too wide: nothing to check
+        if form.id == cut_craft_core::drag_knife::STRATEGY {
+            return None;
+        }
         let tool: Tool = serde_json::from_value(form.params.get("tool")?.clone()).ok()?;
         let missed = match side(form.id, &form.params) {
             Some(side) => {
