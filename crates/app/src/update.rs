@@ -78,6 +78,11 @@ impl Updates {
         }
     }
 
+    /// Whether the startup check runs for this copy (not when a package manager updates it).
+    pub fn checks_at_startup(&self) -> bool {
+        self.install.checks_at_startup()
+    }
+
     fn busy(&self) -> bool {
         matches!(self.phase, Phase::Checking | Phase::Working(_))
     }
@@ -455,6 +460,16 @@ mod tests {
             },
             ready: Ok(()),
         }
+    }
+
+    #[test]
+    fn a_package_managers_copy_does_not_check_at_startup() {
+        let packaged = Updates::new(
+            Install::Packaged { why: "apt".into() },
+            Version::new(0, 6, 5),
+        );
+        assert!(!packaged.checks_at_startup());
+        assert!(updates().checks_at_startup());
     }
 
     #[test]

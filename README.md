@@ -187,6 +187,8 @@ These pictures are made by the app itself and can be made again at any time (see
 | macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed, so the first time, right-click it and choose **Open**. |
 | Linux (x86-64), AppImage | Download `CutCraft-…-x86_64.AppImage`, make it executable (`chmod +x`) and run it. One file, nothing to install; it needs FUSE 2 (`libfuse2`), which most desktops have. |
 | Linux (x86-64), Flatpak | Download `cut-craft-…-x86_64.flatpak` and install it with `flatpak install --user cut-craft-…-x86_64.flatpak` (Flathub's freedesktop runtime comes with it). Inside its sandbox Report a Bug can't reach `gh`, so reports are kept on disk. |
+| Linux (x86-64), Ubuntu, Debian, Mint | Download `cut-craft_…_amd64.deb` and open it, or run `sudo apt install ./cut-craft_…_amd64.deb`. Your package manager looks after it, so Help ▸ Check for Updates tells you about new versions but doesn't replace it. |
+| Linux (x86-64), Fedora, openSUSE | Download `cut-craft-…-1.x86_64.rpm` and run `sudo dnf install ./cut-craft-…-1.x86_64.rpm` (openSUSE: `sudo zypper install`). Updated the same way as the .deb. |
 | Linux (x86-64), archive | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft`. Or [build from source](#building-from-source); `scripts/install-launcher` adds it to the desktop's application menu. |
 | Windows (x86-64) | Download `cut-craft-…-windows-x86_64.zip`, unpack it and run `cut-craft.exe`. It isn't signed, so SmartScreen may ask first: **More info ▸ Run anyway**. Not tested much yet. |
 
@@ -303,7 +305,9 @@ when it is unset.
 - **macOS:** `scripts/macos-dmg` builds for Apple Silicon and Intel, joins them into one
   `Cut Craft.app` and packs it in a DMG. It runs on any Mac too.
 - **Linux:** a release build on Ubuntu 22.04, packed as a `.tar.gz`, and by
-  `scripts/linux-packages` as an AppImage and a Flatpak bundle (`packaging/linux`).
+  `scripts/linux-packages` as an AppImage and a Flatpak bundle (`packaging/linux`), and by
+  `scripts/linux-distro-packages` as a `.deb` and an `.rpm`. Publishing them to an apt and a
+  dnf repository and to the AUR is described in `packaging/README.md`.
 - **Windows:** a release build, packed as a `.zip`.
 
 It runs when the workflow or the packaging changes on a pushed branch, from the Actions tab,

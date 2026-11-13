@@ -1,0 +1,85 @@
+# The AUR package cut-craft-bin (packaging/aur/cut-craft-bin): once Builds has published a
+# release, points the PKGBUILD at it (scripts/aur-update checks the download is signed by
+# Cut Craft's release key), writes .SRCINFO and pushes both to the AUR.
+#
+# Off until the repository variable PUBLISH_AUR is "true", and needs the secret AUR_SSH_KEY:
+# the private half of the SSH key on the AUR account that maintains cut-craft-bin. The copy
+# of the PKGBUILD in this repository is not bumped (main takes changes only by pull request);
+# scripts/aur-update rewrites pkgver and the checksums each time, so it needn't be.
+name: AUR
+
+on:
+  workflow_run:
+    workflows: [Builds]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to publish to the AUR (e.g. v0.6.6)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aur
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # a release's Builds run is on its v* tag; a macOS build GitHub cancelled fails the run
+    # but not the release, so only a cancelled run is passed over
+    if: >-
+      vars.PUBLISH_AUR == 'true' && (github.event_name == 'workflow_dispatch'
+      || (startsWith(github.event.workflow_run.head_branch, 'v')
+          && github.event.workflow_run.conclusion != 'cancelled'))
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+    steps:
+      - name: Tools
+        run: pacman -Syu --noconfirm --needed git openssh minisign python namcap
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Point the PKGBUILD at the release
+        run: scripts/aur-update "$TAG"
+      # makepkg won't run as root; the build checks the checksums and the signature again
+      - name: Build it and write .SRCINFO
+        working-directory: packaging/aur/cut-craft-bin
+        run: |
+          useradd -m builder
+          chown -R builder .
+          pacman -S --noconfirm --needed $(source PKGBUILD; echo "${depends[@]}" "${makedepends[@]}")
+          su builder -c 'makepkg --noconfirm && makepkg --printsrcinfo > .SRCINFO'
+          namcap PKGBUILD
+      - name: Push to the AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          if [[ -z $AUR_SSH_KEY ]]; then
+            echo "::error::The AUR_SSH_KEY secret is not set; nothing was pushed."
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          # the AUR's published host key (https://aur.archlinux.org, "SSH fingerprints")
+          ssh-keyscan -t ed25519 aur.archlinux.org > ~/.ssh/known_hosts 2>/dev/null
+          if ! ssh-keygen -lf ~/.ssh/known_hosts | grep -q 'SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4'; then
+            echo "::error::aur.archlinux.org's host key is not the one the AUR publishes."
+            exit 1
+          fi
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes"
+          git clone ssh://aur@aur.archlinux.org/cut-craft-bin.git aur
+          cp packaging/aur/cut-craft-bin/PKGBUILD packaging/aur/cut-craft-bin/.SRCINFO aur/
+          cd aur
+          git config user.name "Cut Craft releases"
+          git config user.email "6624403+NoobyNull@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "The AUR already has ${TAG}."
+            exit 0
+          fi
+          git commit -m "Update to ${TAG#v}"
+          git push origin HEAD:master
