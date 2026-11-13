@@ -1087,11 +1087,26 @@ impl CutCraftApp {
                 .then(|| playback.at() + self.playback_speed * dt)
         });
         if let Some(goal) = goal {
-            let until = std::time::Instant::now() + self.playback_budget;
+            let budget = if self.playback_goal.is_some() {
+                super::jump_budget(self.playback_budget)
+            } else {
+                self.playback_budget
+            };
+            let until = std::time::Instant::now() + budget;
             if playback.seek_until(goal, || std::time::Instant::now() >= until) {
                 self.playback_goal = None;
             }
             ctx.request_repaint();
+        }
+        // the view shows where it has stopped at once; on the way, every so often
+        let (revision, now) = (playback.revision(), std::time::Instant::now());
+        let settled = self.playback_goal.is_none() && !self.playing;
+        match self.playback_shown {
+            Some((shown, _)) if shown == revision => {}
+            Some((_, when)) if !settled && now < when + self.playback_redraw => {
+                ctx.request_repaint_after(when + self.playback_redraw - now);
+            }
+            _ => self.playback_shown = Some((revision, now)),
         }
         if playback.finished() {
             self.finish_playback();
@@ -1101,7 +1116,7 @@ impl CutCraftApp {
     /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path), and
     /// the playback, so its controls stay to scrub it again.
     pub(super) fn finish_playback(&mut self) {
-        self.playback_goal = None;
+        (self.playback_goal, self.playback_shown) = (None, None);
         (self.playback_view, self.playback_gpu) = (None, None);
         if let Some(playback) = self.playback.take() {
             self.simulation = Some(playback.material().clone());
@@ -1147,6 +1162,10 @@ impl CutCraftApp {
             return;
         };
         let (at, length) = (playback.at(), playback.length());
+        let guessed_shank = playback
+            .tool()
+            .filter(|(_, tool)| !(tool.shank_diameter > 0.0))
+            .map(|(_, tool)| tool.name.clone());
         let (mut stop, mut run, mut goal) = (false, false, None);
         ui.horizontal(|ui| {
             let label = if self.playing { "Pause" } else { "Run" };
@@ -1189,6 +1208,12 @@ impl CutCraftApp {
             kept,
             self.playback_speed,
         ));
+        if let Some(name) = guessed_shank {
+            ui.weak(format!(
+                "⚠ {name} has no shank diameter set, so its shank is drawn from a guess: set it \
+                 in the Tool Database"
+            ));
+        }
         if (run || goal.is_some()) && kept {
             self.resume_playback();
         }
@@ -1470,8 +1495,8 @@ impl CutCraftApp {
     fn playback_surface(&mut self) -> Option<Material> {
         let playback = self.playback.as_ref()?;
         let key = (
-            playback.revision(),
-            self.moving_cells(),
+            self.shown_revision(playback),
+            self.options.view_3d.still_cells(),
             self.history.revision(),
         );
         if let Some((kept, surface)) = &self.playback_view
@@ -1484,6 +1509,12 @@ impl CutCraftApp {
         self.playback_view = Some((key, surface.clone()));
         self.playback_builds += 1;
         Some(surface)
+    }
+
+    /// The playback's revision the 3D view is to show (`playback_shown`).
+    fn shown_revision(&self, playback: &cut_craft_core::playback::Playback) -> u64 {
+        self.playback_shown
+            .map_or_else(|| playback.revision(), |(shown, _)| shown)
     }
 
     /// What the 3D view shows, at Options' detail while moving: the toolpath preview if
@@ -1668,6 +1699,23 @@ impl CutCraftApp {
         if ui.selectable_label(perspective, "Perspective").clicked() {
             self.framing.perspective = !perspective;
         }
+        let vectors = self.display.vectors_3d;
+        if ui
+            .selectable_label(vectors, "Vectors")
+            .on_hover_text(
+                "Show or hide the vectors drawn over the model (View ▸ Draw Vectors in 3D View)",
+            )
+            .clicked()
+        {
+            self.show_vectors_3d(!vectors);
+        }
+    }
+
+    /// Shows or hides the vectors over the 3D view, kept with the options for next time.
+    pub(super) fn show_vectors_3d(&mut self, on: bool) {
+        self.display.vectors_3d = on;
+        self.options.view_3d.draw_vectors = on;
+        self.save_options();
     }
 
     /// The preview or model as a block, with the 3D mouse controls: left- or right-drag
@@ -1980,8 +2028,8 @@ impl CutCraftApp {
         if let Some(playback) = &self.playback {
             self.solid_gpu = None;
             let key = (
-                playback.revision(),
-                self.moving_cells(),
+                self.shown_revision(playback),
+                self.options.view_3d.still_cells(),
                 self.history.revision(),
                 wrap,
                 sides,

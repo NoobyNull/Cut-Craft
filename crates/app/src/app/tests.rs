@@ -4550,6 +4550,72 @@ fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
 }
 
 #[test]
+fn a_playing_preview_is_drawn_at_full_detail_and_redrawn_a_few_times_a_second() {
+    let mut h = playing_preview();
+    h.app.options.view_3d.adjust_to_frame_rate = false;
+    // a test's frames are slow: the redraws are kept well apart to see them kept
+    h.app.playback_redraw = std::time::Duration::from_secs(3600);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let ((_, cells, _), _) = h.app.playback_view.as_ref().expect("drawn");
+    assert_eq!(
+        *cells,
+        h.app.options.view_3d.still_cells(),
+        "as sharp as when still, not the moving detail"
+    );
+    // frames straight after one another: the cut so far is kept, not made again each one
+    let built = h.app.playback_builds;
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert!(
+        h.app.playback_builds <= built + 1,
+        "{built} then {}",
+        h.app.playback_builds
+    );
+    // once it gets where it was sent, that is drawn at once
+    h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+    h.click(h.text_at("Single Step").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    let shown = h.app.playback_view.as_ref().unwrap().0.0;
+    assert_eq!(shown, h.app.playback.as_ref().unwrap().revision());
+}
+
+#[test]
+fn a_bit_with_no_shank_set_is_flagged_while_its_preview_plays() {
+    let flagged = |shank: f64| {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+        for t in h.app.doc.toolpaths.values_mut() {
+            t.tool.shank_diameter = shank;
+        }
+        h.app.display.animate_preview = true;
+        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        h.frame(vec![]);
+        h.frame(vec![]);
+        h.texts()
+            .iter()
+            .any(|t| t.contains("no shank diameter set"))
+    };
+    assert!(flagged(0.0), "not set: said so");
+    assert!(!flagged(6.35), "set: nothing to say");
+}
+
+#[test]
+fn a_jump_gets_more_time_each_frame_than_playing_does() {
+    let h = playing_preview();
+    assert!(super::jump_budget(h.app.playback_budget) > h.app.playback_budget);
+    assert_eq!(
+        super::jump_budget(std::time::Duration::ZERO),
+        std::time::Duration::ZERO
+    );
+}
+
+#[test]
 fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
     let mut h = playing_preview();
     // a step a frame, as a toolpath of millions of moves would go
@@ -5705,6 +5771,25 @@ fn the_3d_view_turns_to_perspective_and_tilts_underneath() {
     assert!(h.app.orbit.towards_viewer().z < 0.0, "from underneath");
     h.click(button, Modifiers::NONE);
     assert!(!h.app.framing.perspective, "back to orthographic");
+}
+
+#[test]
+fn the_3d_views_vectors_button_hides_and_shows_them_and_is_remembered() {
+    let mut h = shape_in_3d();
+    assert!(h.app.display.vectors_3d, "shown to start with");
+    let button = h
+        .text_at("Vectors")
+        .expect("a Vectors button on the 3D view");
+    h.click(button, Modifiers::NONE);
+    assert!(!h.app.display.vectors_3d, "hidden");
+    assert!(!h.app.options.view_3d.draw_vectors, "kept with the options");
+    let mut d = crate::display::Display::default();
+    h.app.options.apply_to(&mut d);
+    assert!(!d.vectors_3d, "hidden again next time");
+    // the View menu's item is the same switch, and is kept too
+    let ctx = h.ctx.clone();
+    h.app.invoke(&ctx, "draw_vectors_in_3d_view");
+    assert!(h.app.display.vectors_3d && h.app.options.view_3d.draw_vectors);
 }
 
 #[test]

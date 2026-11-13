@@ -465,6 +465,24 @@ impl Tool {
                 radius * a.cos() + (height - radius * (1.0 - a.sin())).max(0.0) * a.tan()
             }
             (Some(a), _) => radius + height.max(0.0) * a.tan(),
+            // a point or a rounded tip is narrow near the bottom: only so much of it can touch
+            // a cut this shallow, which keeps a shallow V-carve or finishing pass quick to play
+            (None, ToolShape::VBit) => {
+                let half = (self.angle.to_radians() / 2.0).tan();
+                if half > 0.0 && half.is_finite() {
+                    height.max(0.0) * half
+                } else {
+                    radius
+                }
+            }
+            (None, ToolShape::BallNose) if height < radius => {
+                (height.max(0.0) * (2.0 * radius - height.max(0.0))).sqrt()
+            }
+            (None, ToolShape::RadiusedEndMill) => {
+                let tip = self.tip_radius.clamp(0.0, radius);
+                let h = height.clamp(0.0, tip);
+                radius - tip + (h * (2.0 * tip - h)).sqrt()
+            }
             (None, _) => radius,
         };
         r.min(self.reach())
@@ -1126,6 +1144,46 @@ fn machining_time_allowing_for_acceleration_stops_at_corners_and_runs_through_st
     assert!(
         (minutes * 60.0 - 2.0 * (1.0_f64 / 10.0).sqrt()).abs() < 1e-9,
         "{minutes}"
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn nothing_beyond_the_reach_below_a_height_is_that_low() {
+    for shape in [
+        ToolShape::EndMill,
+        ToolShape::BallNose,
+        ToolShape::VBit,
+        ToolShape::RadiusedEndMill,
+    ] {
+        let tool = Tool {
+            shape,
+            diameter: 12.0,
+            angle: 60.0,
+            tip_radius: 2.0,
+            ..Tool::default()
+        };
+        for height in [0.0, 0.1, 0.5, 1.5, 3.0, 6.0, 20.0] {
+            let reach = tool.reach_below(height);
+            assert!(reach <= tool.reach() + 1e-12, "{shape:?} {height}");
+            // just past it the tool's edge is above `height`, or past the tool altogether
+            for out in [1e-6, 0.01, 0.5, 3.0] {
+                if let Some(edge) = tool.profile(reach + out) {
+                    assert!(edge > height - 1e-9, "{shape:?} {height} {out}: {edge}");
+                }
+            }
+        }
+    }
+    let v = Tool {
+        shape: ToolShape::VBit,
+        diameter: 12.0,
+        angle: 60.0,
+        ..Tool::default()
+    };
+    assert!(
+        v.reach_below(1.0) < 1.0,
+        "a shallow V-carve touches little: {}",
+        v.reach_below(1.0)
     );
 }
 
