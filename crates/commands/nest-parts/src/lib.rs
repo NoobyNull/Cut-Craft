@@ -868,12 +868,7 @@ mod tests {
     /// `doc` with a layer `name` holding the vectors `ids`.
     fn on_layer(doc: &mut Document, name: &str, ids: &[EntityId]) {
         let id = LayerId(u32::try_from(doc.layers.len()).unwrap() + 1);
-        doc.layers.push(Layer {
-            id,
-            name: name.into(),
-            visible: true,
-            locked: false,
-        });
+        doc.layers.push(Layer::new(id, name));
         for v in ids {
             doc.vector_layers.insert(*v, id);
         }

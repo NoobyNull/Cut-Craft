@@ -1591,6 +1591,7 @@ fn summary_table(
         material: cut_craft_core::calc::Values::default(),
         tool: None,
         group_end: None,
+        materials: None,
     };
     if crate::form::show(ui, &fields, &mut values, &look) {
         summary.rapid = values["rapid_rate"]

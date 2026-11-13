@@ -894,6 +894,26 @@ impl ToolDatabase {
         self.get(name).map(|t| t.for_material(&self.material))
     }
 
+    /// As [`Self::pick`], cutting `material` (the active material when empty) with what
+    /// the bit has for it: its own feeds, else its class's range placed by the material's
+    /// hardness in `library`.
+    pub fn pick_in(
+        &self,
+        name: &str,
+        material: &str,
+        library: &crate::material_library::MaterialLibrary,
+    ) -> Option<Tool> {
+        if self.joined_copy(name).is_some() {
+            return self.pick(name);
+        }
+        let material = if material.is_empty() {
+            self.material.as_str()
+        } else {
+            material
+        };
+        self.get(name).map(|t| t.for_material_in(material, library))
+    }
+
     /// The copy `name` was, when it is a copy joined into a bit and no tool has the name now.
     fn joined_copy(&self, name: &str) -> Option<&crate::tool_copies::JoinedCopy> {
         let copy = self.joined.get(name)?;

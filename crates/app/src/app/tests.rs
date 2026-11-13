@@ -2321,6 +2321,39 @@ fn a_tool_chosen_for_a_toolpath_cuts_with_the_active_material() {
     );
 }
 
+#[test]
+fn a_tool_chosen_for_a_toolpath_cuts_the_hardest_material_its_vectors_are_on() {
+    let mut h = Harness::new();
+    let mut tool = h.app.tools.get("3 mm End Mill").unwrap().clone();
+    for (material, feed_rate) in [("Pine", 1500.0), ("Hard Maple", 700.0)] {
+        tool.set_cutting(cut_craft_core::toolpath::CuttingData {
+            material: material.into(),
+            feed_rate,
+            ..tool.cutting("")
+        });
+    }
+    h.app.tools.put(tool);
+    h.app.tools.material = "Oak".into();
+    // Job Setup names the job's material: it wins over the active material
+    h.app.doc.sheets[0].material = "Pine".into();
+    let feed = |h: &mut Harness| {
+        h.app.invoke(&h.ctx, "pocket_toolpath");
+        h.app.choose_tool("3 mm End Mill");
+        h.app.form.as_ref().unwrap().params["tool"]["feed_rate"].clone()
+    };
+    assert_eq!(feed(&mut h), 1500.0);
+    // one selected vector on a layer of maple: the harder material's feeds
+    h.rectangle(0.0, 0.0, 20.0, 20.0);
+    let id = *h.app.doc.vectors.keys().next_back().unwrap();
+    let maple = cut_craft_core::document::LayerId(9);
+    let mut layer = cut_craft_core::document::Layer::new(maple, "Maple");
+    layer.material = "Hard Maple".into();
+    h.app.doc.layers.push(layer);
+    h.app.doc.vector_layers.insert(id, maple);
+    h.app.doc.selection = [id].into();
+    assert_eq!(feed(&mut h), 700.0);
+}
+
 /// A 20 × 10 mm, 5 mm high pyramid as an ASCII STL, in a file of its own.
 fn pyramid_stl(name: &str) -> std::path::PathBuf {
     use std::fmt::Write as _;

@@ -33,6 +33,10 @@ pub struct Layer {
     pub visible: bool,
     /// Locked layers are drawn but cannot be picked or edited.
     pub locked: bool,
+    /// The material its vectors are cut from, from the Materials Library; empty for the
+    /// job's (added with the Materials Library)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
 }
 
 impl Layer {
@@ -42,6 +46,7 @@ impl Layer {
             name: name.to_owned(),
             visible: true,
             locked: false,
+            material: String::new(),
         }
     }
 }
@@ -59,6 +64,10 @@ pub struct Sheet {
     /// document's own.
     #[serde(default, skip_serializing_if = "SheetObjects::is_empty")]
     pub objects: SheetObjects,
+    /// The material the sheet is, from the Materials Library (Job Setup's Material); empty
+    /// when not named (added with the Materials Library)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
 }
 
 /// A sheet's vectors (each with its layer and group), components, pictures and toolpaths,
@@ -123,6 +132,7 @@ impl Sheet {
             job,
             visible: true,
             objects: SheetObjects::default(),
+            material: String::new(),
         }
     }
 }

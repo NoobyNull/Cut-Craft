@@ -214,6 +214,44 @@ impl Tool {
     }
 }
 
+impl crate::document::Document {
+    /// The active sheet's material, as Job Setup names it; empty when not named.
+    pub fn job_material(&self) -> &str {
+        self.sheets
+            .get(self.active_sheet)
+            .map_or("", |s| s.material.as_str())
+    }
+
+    /// The material a toolpath over the vectors `ids` cuts with: the hardest of their
+    /// layers' materials, a layer naming none being the job's material. Where neither is
+    /// named it counts as the hardest class, the safe side. Empty when nothing is named
+    /// anywhere, so jobs made before materials keep cutting with the active material.
+    pub fn cutting_material(
+        &self,
+        ids: impl IntoIterator<Item = crate::document::EntityId>,
+        library: &MaterialLibrary,
+    ) -> String {
+        let job = self.job_material();
+        let on: Vec<&str> = ids
+            .into_iter()
+            .map(|id| {
+                let layer = self
+                    .layer(self.layer_of(id))
+                    .map_or("", |l| l.material.as_str());
+                if layer.is_empty() { job } else { layer }
+            })
+            .collect();
+        if on.iter().all(|n| n.is_empty()) {
+            return job.to_owned();
+        }
+        let unnamed = MaterialClass::HARDEST.name();
+        let names = on
+            .into_iter()
+            .map(|n| if n.is_empty() { unnamed } else { n });
+        library.hardest(names).unwrap_or_default().to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -305,5 +343,67 @@ mod tests {
     fn the_library_saves_and_loads() {
         let lib = MaterialLibrary::starter();
         assert_eq!(MaterialLibrary::from_json(&lib.to_json()).unwrap(), lib);
+    }
+
+    #[test]
+    fn a_toolpath_cuts_with_the_hardest_material_its_vectors_are_on() {
+        let lib = MaterialLibrary::starter();
+        let mut doc = crate::testing::two_layers();
+        let ids: Vec<_> = doc.vectors.keys().copied().collect();
+        // nothing named: as before materials, the active material
+        assert_eq!(doc.cutting_material(ids.clone(), &lib), "");
+        // the job's material
+        doc.sheets[0].material = "Pine".into();
+        assert_eq!(doc.cutting_material(ids.clone(), &lib), "Pine");
+        // one vector on a layer of maple: the harder wins
+        let second = doc.layers[1].id;
+        doc.vector_layers.insert(ids[0], second);
+        doc.layers[1].material = "Hard Maple".into();
+        assert_eq!(doc.cutting_material(ids.clone(), &lib), "Hard Maple");
+        // only the pine ones
+        assert_eq!(doc.cutting_material(ids[1..].to_vec(), &lib), "Pine");
+        // the job's material not named: the rest count as the hardest class
+        doc.sheets[0].material.clear();
+        assert_eq!(
+            doc.cutting_material(ids.clone(), &lib),
+            MaterialClass::HARDEST.name()
+        );
+        assert_eq!(doc.cutting_material([ids[0]], &lib), "Hard Maple");
+    }
+
+    #[test]
+    fn a_bit_is_picked_for_the_material_named_else_the_active_one() {
+        let lib = MaterialLibrary::starter();
+        let mut db = crate::toolpath::ToolDatabase::default();
+        let mut bit = Tool {
+            name: "Bit".into(),
+            feed_rate: 999.0,
+            ..Tool::default()
+        };
+        let base = bit.cutting("");
+        let data = |material: &str, feed_rate| CuttingData {
+            material: material.into(),
+            feed_rate,
+            ..base.clone()
+        };
+        bit.class_feeds.push(ClassFeeds {
+            class: MaterialClass::Hardwoods,
+            softest: data("", 3000.0),
+            hardest: data("", 1000.0),
+        });
+        bit.set_cutting(data("MDF", 2500.0));
+        db.tools.push(bit);
+        let feed = |db: &crate::toolpath::ToolDatabase, m: &str| {
+            db.pick_in("Bit", m, &lib).unwrap().feed_rate
+        };
+        assert_eq!(feed(&db, "MDF"), 2500.0);
+        let ironwood = feed(&db, "Ironwood");
+        assert!(
+            (ironwood - 1000.0).abs() < 1e-9,
+            "the hardest of the class: {ironwood}"
+        );
+        assert_eq!(feed(&db, ""), 999.0, "no material anywhere: the bit's own");
+        db.material = "MDF".into();
+        assert_eq!(feed(&db, ""), 2500.0, "else the active material");
     }
 }
