@@ -573,6 +573,7 @@ fn toolpath_groups() -> Vec<ToolGroup> {
                 "texture_toolpath",
                 "photo_vcarve_toolpath",
                 "sketch_carving_toolpath",
+                "surfacing_toolpath",
             ],
         ),
         group(

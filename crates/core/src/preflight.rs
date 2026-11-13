@@ -192,7 +192,12 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
         .map(|m| -m.to.z)
         .fold(0.0, f64::max);
     let below = deepest - doc.job.thickness;
-    if doc.job.thickness > 0.0 && below > SPOILBOARD {
+    if flattens_spoilboard(toolpath) {
+        found.push(Finding::warning(format!(
+            "{name} flattens the spoilboard, not the material: take everything off the bed, \
+             zero X and Y at the spoilboard's front-left corner and Z on top of it"
+        )));
+    } else if doc.job.thickness > 0.0 && below > SPOILBOARD {
         found.push(Finding::warning(format!(
             "{name} cuts {} below the material, into the spoilboard. Check the material \
              thickness in Job Setup and the toolpath's cut depth",
@@ -204,6 +209,12 @@ fn settings(doc: &Document, toolpath: &Toolpath, limits: &Limits, found: &mut Ve
             .into_iter()
             .map(Finding::warning),
     );
+}
+
+/// Whether `toolpath` is a Surfacing Toolpath flattening the spoilboard: it cuts below the
+/// material on purpose, with the material off the bed.
+fn flattens_spoilboard(toolpath: &Toolpath) -> bool {
+    toolpath.strategy == "surfacing_toolpath" && toolpath.params["area"] == "spoilboard"
 }
 
 /// Whether one toolpath's speeds suit the machine and its tool is in the tool changer.
@@ -378,8 +389,8 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     for (n, toolpath) in (1..).zip(toolpaths) {
         // what this toolpath cuts is marked as its own
         material.cutting = n;
-        // a laser burns rather than cuts away
-        if !toolpath.power.is_empty() {
+        // a laser burns rather than cuts away; the spoilboard is flattened with nothing on it
+        if !toolpath.power.is_empty() || flattens_spoilboard(toolpath) {
             continue;
         }
         let tool = &toolpath.tool;
@@ -795,6 +806,26 @@ mod tests {
             messages(&found, Severity::Warning)
                 .iter()
                 .any(|m| m.contains("3.0 mm below the material")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn flattening_the_spoilboard_is_a_reminder_not_a_cut_too_deep() {
+        // zeroed on the bed, a skim off the spoilboard is under the 20 mm material
+        let mut skim = slot("Surfacing", 50.0, 20.0, 180.0, 20.25);
+        skim.strategy = "surfacing_toolpath".into();
+        skim.params = serde_json::json!({"area": "spoilboard"});
+        let found = check(&job(), &[&skim], &Limits::default());
+        let warnings = messages(&found, Severity::Warning);
+        assert!(
+            !warnings.iter().any(|m| m.contains("below the material")),
+            "{found:?}"
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|m| m.contains("Surfacing flattens the spoilboard")),
             "{found:?}"
         );
     }

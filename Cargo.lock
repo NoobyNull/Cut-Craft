@@ -1762,6 +1762,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-surfacing-toolpath"
+version = "0.6.5"
+dependencies = [
+ "cut-craft-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cmd-swap-sides"
 version = "0.6.6"
 dependencies = [
@@ -2312,6 +2322,7 @@ dependencies = [
  "cmd-space-vertically",
  "cmd-split",
  "cmd-subtract-vectors",
+ "cmd-surfacing-toolpath",
  "cmd-swap-sides",
  "cmd-text-on-a-curve",
  "cmd-texture-area",

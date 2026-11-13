@@ -649,7 +649,7 @@ fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
     };
     Some(match tool.shape {
         // z is linear in t, so a flat end (untapered) is lowest at one end of the covered span
-        ToolShape::EndMill if tool.reach() <= tool.diameter / 2.0 => {
+        ToolShape::EndMill | ToolShape::SurfacingBit if tool.reach() <= tool.diameter / 2.0 => {
             a.lerp(b, t0).z.min(a.lerp(b, t1).z)
         }
         // a level move is lowest where it passes closest

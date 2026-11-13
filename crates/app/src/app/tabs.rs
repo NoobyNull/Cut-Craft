@@ -25,6 +25,8 @@ pub(super) struct Stock {
     pub closed: bool,
     /// The job's units, for the lengths in the Tabs summary.
     pub units: Units,
+    /// The active machine's bed size, mm (0 when not known), for flattening the spoilboard.
+    pub bed: [f64; 2],
 }
 
 /// How close to the material's bottom a cut must reach to count as right through, mm.
@@ -150,7 +152,8 @@ pub(super) fn group_end(
         }
     }
     changed |= super::cutting::group_end(ui, group, params, stock.units);
-    changed | super::entry::group_end(ui, group, params, stock.units)
+    changed |= super::entry::group_end(ui, group, params, stock.units);
+    changed | super::surfacing::group_end(ui, group, params, stock)
 }
 
 impl CutCraftApp {
