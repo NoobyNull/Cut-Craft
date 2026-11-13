@@ -712,7 +712,7 @@ mod tests {
         clippy::cast_sign_loss,
         clippy::many_single_char_names
     )]
-    fn simulate(region: &[Path], pieces: &[Piece]) -> (f64, f64, f64) {
+    fn simulate(region: &[Path], pieces: &[Piece], bite: f64) -> (f64, f64, f64) {
         let cell = 0.08;
         let reach = polygon::offset_regions(region, R, Corners::Round);
         let rings: Vec<Vec<Point>> = reach.iter().map(cut_points).collect();
@@ -751,7 +751,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        let target = engagement_for(BITE, R);
+        let target = engagement_for(bite, R);
         let (mut worst, mut worst_link) = (0.0_f64, 0.0_f64);
         for (run, is_cut) in runs(pieces) {
             for n in under(run[0]) {
@@ -788,7 +788,7 @@ mod tests {
                         worst_link = worst_link.max(link_took);
                     } else if enters.iter().all(|c| c.distance(p) > 1.5 * R) {
                         // overloaded: the edge deep in material and the cut wide too
-                        let load = if width > 1.2 * BITE { e } else { e.min(target) };
+                        let load = if width > 1.2 * bite { e } else { e.min(target) };
                         worst = worst.max(load);
                     }
                 }
@@ -813,9 +813,13 @@ mod tests {
     }
 
     fn check(name: &str, region: &[Path], pieces: &[Piece]) {
+        check_bite(name, region, pieces, BITE);
+    }
+
+    fn check_bite(name: &str, region: &[Path], pieces: &[Piece], bite: f64) {
         assert!(!pieces.is_empty(), "{name}: nothing cut");
-        let (worst, worst_link, left) = simulate(region, pieces);
-        let target = engagement_for(BITE, R);
+        let (worst, worst_link, left) = simulate(region, pieces, bite);
+        let target = engagement_for(bite, R);
         assert!(
             worst <= target + 12.0,
             "{name}: a bite of {worst}° (target {target}°)"
@@ -826,7 +830,7 @@ mod tests {
         );
         // what is left (in corners the bite can't reach) is thinner than a bite: the wall's
         // own pass takes it
-        assert!(left <= BITE, "{name}: material {left} mm thick left");
+        assert!(left <= bite, "{name}: material {left} mm thick left");
         // never outside where the centre may go
         let rings: Vec<Vec<Point>> = polygon::offset_regions(region, 0.01, Corners::Round)
             .iter()
@@ -847,7 +851,7 @@ mod tests {
             Piece::Enter(p(5.0, 20.0)),
             Piece::Cut(vec![p(5.0, 20.0), p(35.0, 20.0)]),
         ];
-        let (worst, _, left) = simulate(&region, &slot);
+        let (worst, _, left) = simulate(&region, &slot, BITE);
         assert!(worst > 100.0, "a slot reads as {worst}°");
         assert!(left > 5.0, "{left} mm left");
     }
@@ -856,6 +860,17 @@ mod tests {
     fn a_square_pocket_is_cleared_with_the_bite_held() {
         let region = centre_region(&[square(0.0, 0.0, 40.0)]);
         check("square", &region, &clear(&clearing(&region)));
+    }
+
+    #[test]
+    fn a_wider_bite_is_held_too() {
+        // a quarter of the bit: what Pocket takes with a usual 40 % stepover
+        let region = centre_region(&[square(0.0, 0.0, 40.0)]);
+        let c = Clearing {
+            bite: 1.5,
+            ..clearing(&region)
+        };
+        check_bite("quarter", &region, &clear(&c), 1.5);
     }
 
     #[test]
