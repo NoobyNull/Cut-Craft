@@ -445,6 +445,7 @@ pub fn toolpath_template(doc: &Document, ids: &[cut_craft_core::document::Entity
             vectors: vec![],
             power: vec![],
             drill_bank: None,
+            fallbacks: vec![],
             ..t.clone()
         })
         .collect();
@@ -664,6 +665,7 @@ mod tests {
                 stale: false,
                 group: None,
                 drill_bank: None,
+                fallbacks: vec![],
             })
         });
         doc.apply(&c.finish()).unwrap();

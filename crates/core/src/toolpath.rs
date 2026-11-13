@@ -914,6 +914,10 @@ pub struct Toolpath {
     /// (added with drill banks).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drill_bank: Option<crate::drill_bank::BankToolpath>,
+    /// Where its entries went down another way than its settings asked, there being no
+    /// room there (added with entry modes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fallbacks: Vec<crate::entry::Fallback>,
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
@@ -1081,6 +1085,7 @@ fn machining_time_allowing_for_acceleration_stops_at_corners_and_runs_through_st
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     };
     // one 500 mm cut at 1000 mm/min (16.67 mm/s): 30 s flat out; with 10 mm/s² the machine
     // spends 1.67 s speeding up and the same slowing down, 13.9 mm each
@@ -1157,6 +1162,7 @@ fn machining_time_is_each_move_at_its_rate() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     };
     // 10 mm plunge at 100, 500 mm cut at 1000, 10 mm rapid at 5000
     assert!((tp.machining_minutes(5000.0) - (0.1 + 0.5 + 0.002)).abs() < 1e-12);
@@ -1254,6 +1260,7 @@ pub fn made_by<C: Command>(
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     }
 }
 

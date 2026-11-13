@@ -2,8 +2,8 @@
 
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{
-    Direction, Entry, Lead, Leads, Loops, Motion, Ramp, Ramping, TabSettings, TabSpacing, Tabs,
-    Ways, directed_moves, trochoid,
+    Direction, Entry, EntrySettings, Fallbacks, Lead, Leads, Loops, Motion, Ramp, Ramping, Room,
+    TabSettings, TabSpacing, Tabs, Ways, directed_moves, trochoid,
 };
 use cut_craft_core::geometry::{
     Path, Point, Rect, inside, polyline_closest, polyline_distance, winding,
@@ -156,20 +156,20 @@ pub struct Params {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub tab_points: Vec<Point>,
-    /// How the tool goes down into each pass (ramps run at the plunge rate)
+    /// How toolpaths made before entry modes went down into each pass, kept for them: with
+    /// `entry` unset they go down as they did. The form sets `entry` instead
     #[serde(default)]
-    #[schemars(title = "Add ramps to toolpath", extend("x-tab" = "Ramp"))]
+    #[schemars(skip)]
     pub ramp: Ramp,
     #[serde(default)]
-    #[schemars(
-        title = "Specify Ramp",
-        extend(
-            "x-section" = true,
-            "x-tab" = "Ramp",
-            "x-enable-when" = {"ramp": ["smooth", "zig_zag"]}
-        )
-    )]
+    #[schemars(skip)]
     pub ramping: Ramping,
+    /// How the tool goes down into the material (helix, zig-zag, ramp or straight down), set
+    /// in the Entry window; each place it goes down fits it to the room there. Unset on
+    /// toolpaths made before entry modes, which keep their ramp
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub entry: Option<EntrySettings>,
     /// How the tool comes onto each path, from the waste side; a ramp then runs along the
     /// lead in, and there is no spiral
     #[serde(default)]
@@ -225,6 +225,7 @@ impl Default for Params {
             allowance: 0.0,
             ramp: Ramp::None,
             ramping: Ramping::default(),
+            entry: Some(EntrySettings::default()),
             lead: Lead::None,
             leads: Leads::default(),
             tabs: Tabs::None,
@@ -294,7 +295,11 @@ impl Command for ProfileToolpath {
         let depths = p.tool.pass_depths(depth);
         let tab = p.tab.sized(p.tool.pass_depth, depth);
         let entry = Entry {
-            ramp: p.ramp,
+            ramp: if p.entry.is_some() {
+                Ramp::None
+            } else {
+                p.ramp
+            },
             ramping: p.ramping,
             lead: p.lead,
             leads: p.leads,
@@ -304,8 +309,17 @@ impl Command for ProfileToolpath {
             tab_top: -depth + tab.thickness,
             tool_diameter: p.tool.diameter,
             placed: vec![],
+            enter: p.entry,
+            room: None,
+            fallbacks: Fallbacks::default(),
         };
         let lines = ordered(cuts(&centre_line, &paths, p), &paths, p);
+        // a helix goes in the waste: inside a hole's centre line, or outside every part's
+        let parts: Vec<Vec<Point>> = lines
+            .iter()
+            .filter(|c| c.closed)
+            .map(|c| c.points.clone())
+            .collect();
         // each clicked tab goes on the path nearest it
         let nearest = |at: Point| {
             (0..lines.len()).min_by(|&a, &b| {
@@ -341,9 +355,15 @@ impl Command for ProfileToolpath {
                     .filter(|&(_, &owner)| owner == Some(i))
                     .map(|(&t, _)| t)
                     .collect();
+                let room = match (cut.closed && p.side != Side::On, cut.waste_inside) {
+                    (false, _) => None,
+                    (true, true) => Some(Room::inside(vec![cut.points.clone()])),
+                    (true, false) => Some(Room::outside(parts.clone())),
+                };
                 let entry = Entry {
                     side,
                     placed,
+                    room,
                     ..entry.clone()
                 };
                 let safe = doc.job.clearance;
@@ -358,14 +378,14 @@ impl Command for ProfileToolpath {
         if p.project_onto_model {
             moves = project_onto_model(doc, &p.tool, &moves)?;
         }
+        let mut toolpath = made_by::<Self>(p, p.name.clone(), p.tool.clone(), ids, moves);
+        toolpath.fallbacks = entry
+            .fallbacks
+            .lock()
+            .map(|f| f.clone())
+            .unwrap_or_default();
         let mut c = Change::builder(doc);
-        c.add_toolpath(made_by::<Self>(
-            p,
-            p.name.clone(),
-            p.tool.clone(),
-            ids,
-            moves,
-        ));
+        c.add_toolpath(toolpath);
         Ok(c.finish())
     }
 }
@@ -675,15 +695,23 @@ mod tests {
     use cut_craft_core::testing::{cut_bounds, made_toolpath, square};
     use cut_craft_core::toolpath::{MoveKind, Toolpath};
 
+    /// The default settings going straight down, so the cut itself is what is tested.
+    fn plain() -> Params {
+        Params {
+            entry: Some(EntrySettings {
+                mode: cut_craft_core::entry::EntryMode::Plunge,
+                ..EntrySettings::default()
+            }),
+            ..Params::default()
+        }
+    }
+
     cut_craft_core::contract_tests!(ProfileToolpath);
 
     fn profile(side: Side, square_side: f64) -> Result<Toolpath, String> {
         made_toolpath::<ProfileToolpath>(
             vec![square(0.0, 0.0, square_side)],
-            &Params {
-                side,
-                ..Params::default()
-            },
+            &Params { side, ..plain() },
         )
     }
 
@@ -726,7 +754,7 @@ mod tests {
     fn cut_right_through_goes_to_the_bottom_of_the_material_whatever_its_thickness() {
         let through = Params {
             through: true,
-            ..Params::default()
+            ..plain()
         };
         let deepest = |thickness: f64| {
             let mut doc = Document::default();
@@ -803,7 +831,7 @@ mod tests {
                         length: 2.0,
                         ..Leads::default()
                     },
-                    ..Params::default()
+                    ..plain()
                 },
             )
             .unwrap();
@@ -827,7 +855,8 @@ mod tests {
             &Params {
                 tabs: Tabs::Flat,
                 ramp: Ramp::Smooth,
-                ..Params::default()
+                entry: None,
+                ..plain()
             },
         )
         .unwrap();
@@ -864,7 +893,7 @@ mod tests {
         let p = Params {
             depth: 6.0,
             motion: Motion::Trochoidal,
-            ..Params::default()
+            ..plain()
         };
         let tp = made_toolpath::<ProfileToolpath>(vec![square(0.0, 0.0, 40.0)], &p).unwrap();
         let r = p.tool.diameter / 2.0;
@@ -894,7 +923,7 @@ mod tests {
         let p = Params {
             depth: 9.0,
             ways: Ways::Both,
-            ..Params::default()
+            ..plain()
         };
         let tp = made_toolpath::<ProfileToolpath>(vec![square(0.0, 0.0, 40.0)], &p).unwrap();
         let turning = |z: f64| -> f64 {
@@ -933,7 +962,7 @@ mod tests {
                 &Params {
                     side,
                     direction,
-                    ..Params::default()
+                    ..plain()
                 },
             )
             .unwrap();
@@ -947,7 +976,7 @@ mod tests {
             vec![square(0.0, 0.0, 10.0)],
             &Params {
                 allowance: 1.0,
-                ..Params::default()
+                ..plain()
             },
         )
         .unwrap();
@@ -970,7 +999,7 @@ mod tests {
                 },
                 // on the vector's bottom edge, 10 mm in
                 tab_points: vec![Point::new(10.0, 0.0)],
-                ..Params::default()
+                ..plain()
             },
         )
         .unwrap();
@@ -997,7 +1026,7 @@ mod tests {
                     spacing: TabSpacing::Placed,
                     ..TabSettings::default()
                 },
-                ..Params::default()
+                ..plain()
             },
         );
         assert!(none.unwrap_err().contains("Click"));
@@ -1031,7 +1060,7 @@ mod tests {
                 tool,
                 tabs: Tabs::Flat,
                 tab,
-                ..Params::default()
+                ..plain()
             },
         )
         .unwrap();
@@ -1136,13 +1165,7 @@ mod tests {
             (Side::Outside, (13.0, 17.0), (-3.0, 33.0)),
             (Side::Inside, (7.0, 23.0), (3.0, 27.0)),
         ] {
-            let tp = profiled(
-                o_shape(),
-                &Params {
-                    side,
-                    ..Params::default()
-                },
-            );
+            let tp = profiled(o_shape(), &Params { side, ..plain() });
             let cuts = cuts(&tp);
             assert_eq!(cuts.len(), 2, "{side:?}");
             let (a, b) = (box_of(&cuts[0]), box_of(&cuts[1]));
@@ -1163,13 +1186,7 @@ mod tests {
 
     /// The middle x (or y, `across` false) of each path cut, in order, with these orderings.
     fn cut_order(paths: Vec<Path>, order: Order, across: bool) -> Vec<f64> {
-        let tp = profiled(
-            paths,
-            &Params {
-                order,
-                ..Params::default()
-            },
-        );
+        let tp = profiled(paths, &Params { order, ..plain() });
         cuts(&tp)
             .iter()
             .map(|c| {
@@ -1242,7 +1259,7 @@ mod tests {
             parts,
             &Params {
                 order: grid,
-                ..Params::default()
+                ..plain()
             },
         );
         let middles: Vec<(f64, f64)> = cuts(&tp)
@@ -1278,13 +1295,7 @@ mod tests {
             let mut paths = o_shape();
             // a separate part off to the left, selected last
             paths.push(square(-40.0, 0.0, 10.0));
-            let tp = profiled(
-                paths,
-                &Params {
-                    order,
-                    ..Params::default()
-                },
-            );
+            let tp = profiled(paths, &Params { order, ..plain() });
             let boxes: Vec<Rect> = cuts(&tp).iter().map(|c| box_of(c)).collect();
             let hole = boxes.iter().position(|b| b.min.x > 10.0).unwrap();
             let ring = boxes
@@ -1301,7 +1312,7 @@ mod tests {
             &Params {
                 start_at,
                 start_near,
-                ..Params::default()
+                ..plain()
             },
         );
         cuts(&tp)[0][0]
@@ -1341,7 +1352,7 @@ mod tests {
         // the next part starts on its corner nearest the first's start, not its own start
         let tp = profiled(
             vec![square(20.0, 20.0, 10.0), square(60.0, 20.0, 10.0)],
-            &Params::default(),
+            &plain(),
         );
         let cuts = cuts(&tp);
         let (first, second) = (cuts[0][0], cuts[1][0]);
@@ -1373,7 +1384,7 @@ mod tests {
     fn sharp_corners_follow_the_vectors_angle_out_to_a_point_within_the_limit() {
         let sharp = Params {
             sharp_corners: true,
-            ..Params::default()
+            ..plain()
         };
         let tp = profiled(vec![square(0.0, 0.0, 10.0)], &sharp);
         let points: Vec<Point> = cuts(&tp).concat();
@@ -1410,7 +1421,7 @@ mod tests {
             side: Side::On,
             depth: 1.0,
             project_onto_model: true,
-            ..Params::default()
+            ..plain()
         };
         doc.apply(&ProfileToolpath::run(&doc, &p).unwrap()).unwrap();
         let tp = doc.toolpaths.values().next().unwrap();

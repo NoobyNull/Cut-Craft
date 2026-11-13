@@ -218,6 +218,207 @@ impl Default for Ramping {
     }
 }
 
+/// How the tool goes down into the material where a cut starts: set for each toolpath, and
+/// fitted to the room at every place it goes down.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryMode {
+    /// Straight down, as a drill does: quickest, but hardest on the bit, and only for bits
+    /// that cut at their centre
+    Plunge,
+    /// Down in circles, like a corkscrew: the gentlest way into a pocket or hole
+    #[default]
+    Helix,
+    /// Back and forth along the start of the cut, a little lower each time
+    ZigZag,
+    /// Down along the cut in one straight slope
+    Ramp,
+}
+
+impl EntryMode {
+    /// Its name in a sentence.
+    pub fn said(self) -> &'static str {
+        match self {
+            Self::Plunge => "straight plunge",
+            Self::Helix => "helix",
+            Self::ZigZag => "zig-zag",
+            Self::Ramp => "ramp",
+        }
+    }
+}
+
+/// A toolpath's entry: the way it goes down and how big and steep. Each place it goes down
+/// takes the mode asked for where it fits, and where it does not, the next that does, never
+/// steeper than asked: a helix shrinks (more turns), then gives way to a zig-zag along the
+/// cut, a zig-zag or ramp takes shorter legs (more of them), and a straight plunge is the
+/// last resort.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct EntrySettings {
+    pub mode: EntryMode,
+    /// Across the circle the bit's centre goes round, as a share of the bit's diameter: 75%
+    /// on a 1/4" bit is 4.8 mm. Smaller where the room is smaller
+    #[schemars(extend("x-unit" = "%"), range(min = 10, max = 400))]
+    pub helix_diameter: f64,
+    /// How steeply the helix goes down, from level: 2° to 5° suits wood
+    #[schemars(extend("x-unit" = "°"), range(min = 0.1, max = 45))]
+    pub helix_angle: f64,
+    /// How steeply each zig-zag leg goes down, from level
+    #[schemars(extend("x-unit" = "°"), range(min = 0.1, max = 45))]
+    pub zigzag_angle: f64,
+    /// How many legs (there and back is two) to go down a pass in; more where the cut is too
+    /// short for legs this long. An odd number is made even, so the tool ends where it began
+    #[schemars(range(min = 1, max = 100))]
+    pub zigzag_passes: u32,
+    /// How far along the cut the ramp takes to go down a pass
+    #[schemars(extend("x-unit" = "mm"), range(min = 0.1))]
+    pub ramp_distance: f64,
+}
+
+impl Default for EntrySettings {
+    fn default() -> Self {
+        // ponytail: our own defaults, gentle for wood with a hobby machine
+        Self {
+            mode: EntryMode::Helix,
+            helix_diameter: 75.0,
+            helix_angle: 3.0,
+            zigzag_angle: 10.0,
+            zigzag_passes: 4,
+            ramp_distance: 25.0,
+        }
+    }
+}
+
+impl EntrySettings {
+    /// The nearest entry to a toolpath's older ramp settings, for one taking passes
+    /// `pass_depth` deep (a zig-zag's slope was its pass depth over its distance there and
+    /// back).
+    pub fn from_old(ramp: Ramp, ramping: Ramping, pass_depth: f64) -> Self {
+        let by_angle = ramping.by == RampBy::Angle && ramping.angle > 0.0;
+        let distance = if by_angle && pass_depth > 0.0 {
+            pass_depth / ramping.angle.to_radians().tan()
+        } else {
+            ramping.distance
+        };
+        let mode = match ramp {
+            Ramp::None => EntryMode::Plunge,
+            Ramp::Smooth | Ramp::Spiral => EntryMode::Ramp,
+            Ramp::ZigZag => EntryMode::ZigZag,
+        };
+        let zigzag_angle = if by_angle {
+            ramping.angle
+        } else {
+            (pass_depth / 2.0).atan2(distance.max(1e-9)).to_degrees()
+        };
+        Self {
+            mode,
+            zigzag_angle,
+            zigzag_passes: 2,
+            ramp_distance: distance.max(0.1),
+            ..Self::default()
+        }
+    }
+}
+
+/// Where the bit's centre may go when entering: inside the rings (a pocket's, or a hole's
+/// own path), or outside them (round parts cut out). A helix must keep inside it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Room {
+    /// Closed rings; one inside another is a hole (even-odd).
+    pub rings: Vec<Vec<Point>>,
+    /// Whether the room is inside the rings, or outside them.
+    pub inside: bool,
+}
+
+impl Room {
+    pub fn inside(rings: Vec<Vec<Point>>) -> Self {
+        Self {
+            rings,
+            inside: true,
+        }
+    }
+
+    pub fn outside(rings: Vec<Vec<Point>>) -> Self {
+        Self {
+            rings,
+            inside: false,
+        }
+    }
+
+    /// How far `p` is from the room's edge, or None when it is not in the room.
+    fn clearance(&self, p: Point) -> Option<f64> {
+        if crate::geometry::inside(&self.rings, p) != self.inside {
+            return None;
+        }
+        let mut near = f64::INFINITY;
+        for ring in &self.rings {
+            for (i, &a) in ring.iter().enumerate() {
+                let b = ring[(i + 1) % ring.len()];
+                near = near.min(segment_gap(p, a, b));
+            }
+        }
+        Some(near)
+    }
+
+    /// Whether a circle `radius` round `centre` is in the room.
+    pub fn fits(&self, centre: Point, radius: f64) -> bool {
+        self.clearance(centre).is_some_and(|c| c >= radius - 1e-9)
+    }
+
+    /// Whether the straight line from `a` to `b` stays in the room.
+    pub fn holds(&self, a: Point, b: Point) -> bool {
+        (0..=8).all(|i| {
+            let p = a.lerp(b, f64::from(i) / 8.0);
+            self.clearance(p).is_some_and(|c| c >= -1e-6) || p.distance(b) < 1e-6
+        })
+    }
+}
+
+/// How far `p` is from the segment `a` to `b`.
+fn segment_gap(p: Point, a: Point, b: Point) -> f64 {
+    let span = b - a;
+    let t = if span.length_squared() > 0.0 {
+        ((p - a).dot(span) / span.length_squared()).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    p.distance(a + span * t)
+}
+
+/// How far a zig-zag or ramp may run along `track` from `from`: round a closed one, to the
+/// end of an open one.
+fn room_along(track: &Line, from: f64) -> f64 {
+    if track.closed {
+        track.length
+    } else {
+        track.length - from
+    }
+}
+
+/// A place a toolpath went down another way than its entry asked, there being no room for
+/// it: shown in the preview and in Checks before cutting.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Fallback {
+    /// Where the tool went down.
+    pub at: Point,
+    pub wanted: EntryMode,
+    pub used: EntryMode,
+}
+
+/// The fallbacks of a toolpath being made, gathered from every path it cuts.
+pub type Fallbacks = std::sync::Arc<std::sync::Mutex<Vec<Fallback>>>;
+
+/// The least a helix's centre goes round, as a share of the bit's diameter: any smaller is
+/// as good as a plunge.
+const SMALLEST_HELIX: f64 = 0.2;
+
+/// The shortest zig-zag leg, as a share of the bit's diameter, and in mm.
+const SHORTEST_LEG: f64 = 0.25;
+const SHORTEST_LEG_MM: f64 = 0.1;
+
+/// The points round a helix's turn.
+const PER_TURN: u32 = 32;
+
 /// How the tool comes onto the path.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -405,6 +606,13 @@ pub struct Entry {
     pub tool_diameter: f64,
     /// Where this path's tabs go when they are placed by clicking: each moves onto the path.
     pub placed: Vec<Point>,
+    /// The toolpath's entry, in place of `ramp` and `ramping` (toolpaths made before entries
+    /// have none, and ramp as they did).
+    pub enter: Option<EntrySettings>,
+    /// Where a helix may go; without it, no helix fits.
+    pub room: Option<Room>,
+    /// Where an entry went down another way than asked, added to as the moves are made.
+    pub fallbacks: Fallbacks,
 }
 
 /// Points along one path by distance.
@@ -584,7 +792,7 @@ pub fn path_moves(
         entry,
     };
     let leads = entry.lead != Lead::None && entry.leads.length > 0.0;
-    let spiral = entry.ramp == Ramp::Spiral && closed && !leads;
+    let spiral = entry.ramp == Ramp::Spiral && entry.enter.is_none() && closed && !leads;
     let mut from = 0.0; // where on a closed path the next pass starts
     let mut above = top;
     for (pass, &z) in depths.iter().enumerate() {
@@ -597,7 +805,10 @@ pub fn path_moves(
             out.along(0.0, line.length, z, Some(above), MoveKind::Cut);
         } else {
             if pass == 0 || !closed {
-                let to = if entry.ramp == Ramp::None { z } else { above };
+                let straight = entry
+                    .enter
+                    .map_or(entry.ramp == Ramp::None, |e| e.mode == EntryMode::Plunge);
+                let to = if straight { z } else { above };
                 out.rapid_down(line.point(from), safe_z, to, MoveKind::Plunge);
             }
             let start = out.ramp_down(from, above, z);
@@ -653,6 +864,9 @@ impl Out<'_> {
     /// along the path the tool is at the bottom.
     fn ramp_down(&mut self, from: f64, above: f64, z: f64) -> f64 {
         let (line, ramping) = (self.line, self.entry.ramping);
+        if let Some(settings) = self.entry.enter {
+            return self.enter(line, from, above, z, settings);
+        }
         let drop = above - z;
         let slope = ramping.angle.to_radians().tan();
         let by_angle = ramping.by == RampBy::Angle && slope > 0.0;
@@ -724,6 +938,241 @@ impl Out<'_> {
             }
         }
         from
+    }
+
+    /// Down from `above` to `z` where `track` is at `from`, by `settings`, fitted to the room
+    /// there; a fallback is noted where the mode asked for has no room. Returns where along
+    /// `track` the tool is at the bottom.
+    fn enter(
+        &mut self,
+        track: &Line,
+        from: f64,
+        above: f64,
+        z: f64,
+        settings: EntrySettings,
+    ) -> f64 {
+        let drop = above - z;
+        if drop <= 0.0 {
+            return from;
+        }
+        let wanted = settings.mode;
+        let at = track.point(from);
+        let (used, end) = match wanted {
+            EntryMode::Plunge => {
+                if self.moves.last().is_none_or(|m| m.to.z > z) {
+                    self.push(MoveKind::Plunge, at, z);
+                }
+                (EntryMode::Plunge, from)
+            }
+            EntryMode::Helix => {
+                if self.helix(track, from, above, z, settings) {
+                    (EntryMode::Helix, from)
+                } else {
+                    self.zig_zag(track, from, above, z, settings.helix_angle, 2)
+                }
+            }
+            EntryMode::ZigZag => self.zig_zag(
+                track,
+                from,
+                above,
+                z,
+                settings.zigzag_angle,
+                settings.zigzag_passes,
+            ),
+            EntryMode::Ramp => {
+                let distance = settings.ramp_distance.max(1e-6);
+                if room_along(track, from) + 1e-9 >= distance {
+                    (EntryMode::Ramp, self.slope(track, from, distance, above, z))
+                } else {
+                    let angle = drop.atan2(distance).to_degrees();
+                    self.zig_zag(track, from, above, z, angle, 2)
+                }
+            }
+        };
+        if used != wanted {
+            self.entry
+                .fallbacks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(Fallback { at, wanted, used });
+        }
+        end
+    }
+
+    /// Down along `track` from `from` over `distance` in one slope; on a closed track the
+    /// cut goes on from the bottom, on an open one the tool comes back to `from` at depth.
+    fn slope(&mut self, track: &Line, from: f64, distance: f64, above: f64, z: f64) -> f64 {
+        self.descend_on(track, &track.stations(from, from + distance), above, z);
+        if track.closed {
+            return from + distance;
+        }
+        for s in track.stations(from + distance, from).into_iter().skip(1) {
+            self.push(MoveKind::Cut, track.point(s), z);
+        }
+        from
+    }
+
+    /// Down back and forth along `track` from `from`, in `passes` legs (made even, so it ends
+    /// where it began) no steeper than `angle`°: shorter legs, and more, where the track is
+    /// short. Straight down where there is no room for a leg.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a small positive count"
+    )]
+    fn zig_zag(
+        &mut self,
+        track: &Line,
+        from: f64,
+        above: f64,
+        z: f64,
+        angle: f64,
+        passes: u32,
+    ) -> (EntryMode, f64) {
+        let drop = above - z;
+        let slope = angle.clamp(0.1, 89.0).to_radians().tan();
+        let room = room_along(track, from);
+        let shortest = (SHORTEST_LEG * self.entry.tool_diameter).max(SHORTEST_LEG_MM);
+        if room < shortest {
+            self.push(MoveKind::Plunge, track.point(from), z);
+            return (EntryMode::Plunge, from);
+        }
+        let even = |n: usize| n.max(2) + n % 2;
+        let mut legs = even(passes.max(1) as usize);
+        let mut leg = drop / (legs as f64 * slope);
+        if leg > room {
+            leg = room;
+            legs = even((drop / (leg * slope) - 1e-9).ceil() as usize);
+        }
+        let mut stations = vec![];
+        for i in 0..legs {
+            let (out, back) = if i % 2 == 0 {
+                (from, from + leg)
+            } else {
+                (from + leg, from)
+            };
+            let leg = track.stations(out, back);
+            stations.extend(if i == 0 { &leg[..] } else { &leg[1..] });
+        }
+        self.descend_on(track, &stations, above, z);
+        (EntryMode::ZigZag, from)
+    }
+
+    /// Down in a helix beside where `track` is at `from`, in the room there: as big as asked,
+    /// or as big as fits, no steeper than asked; then once round flat at the bottom, and
+    /// onto the track. False, with nothing done, where even a small one does not fit.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a small positive count"
+    )]
+    fn helix(
+        &mut self,
+        track: &Line,
+        from: f64,
+        above: f64,
+        z: f64,
+        settings: EntrySettings,
+    ) -> bool {
+        let Some(room) = self.entry.room.as_ref() else {
+            return false;
+        };
+        let bit = self.entry.tool_diameter;
+        if bit <= 0.0 {
+            return false;
+        }
+        let wanted = bit * settings.helix_diameter / 200.0;
+        let least = (bit * SMALLEST_HELIX / 2.0).min(wanted);
+        if wanted <= 0.0 {
+            return false;
+        }
+        let p = track.point(from);
+        let ahead = track.tangent(from);
+        let before = if from > 1e-6 {
+            from - 1e-6
+        } else if track.closed {
+            track.length - 1e-6
+        } else {
+            from
+        };
+        let behind = track.tangent(before);
+        let square = (behind.perp() + ahead.perp()).normalize_or(ahead.perp());
+        let sides: &[f64] = match self.entry.side {
+            s if s > 0.0 => &[1.0],
+            s if s < 0.0 => &[-1.0],
+            _ => &[1.0, -1.0],
+        };
+        // the centre of a helix `r` round that fits, out from the track on a side
+        let place = |r: f64| {
+            sides.iter().find_map(|&side| {
+                [1.0, 1.1, 1.25, 1.5, 2.0, 3.0].iter().find_map(|&k| {
+                    let centre = p + square * side * r * k;
+                    let start = centre + (p - centre).normalize_or_zero() * r;
+                    (room.fits(centre, r) && room.holds(start, p)).then_some(centre)
+                })
+            })
+        };
+        let (radius, centre) = if let Some(c) = place(wanted) {
+            (wanted, c)
+        } else {
+            let Some(mut fit) = place(least).map(|c| (least, c)) else {
+                return false;
+            };
+            let (mut lo, mut hi) = (least, wanted);
+            for _ in 0..24 {
+                let mid = f64::midpoint(lo, hi);
+                if let Some(c) = place(mid) {
+                    fit = (mid, c);
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            fit
+        };
+        let start = centre + (p - centre).normalize_or(square) * radius;
+        let a0 = (start - centre).to_angle();
+        // round the way the cut goes on
+        let turn = if (start - centre).perp().dot(ahead) >= 0.0 {
+            1.0
+        } else {
+            -1.0
+        };
+        let drop = above - z;
+        let slope = settings.helix_angle.clamp(0.1, 89.0).to_radians().tan();
+        let round = std::f64::consts::TAU * radius;
+        let turns = (drop / (round * slope) - 1e-9).ceil().max(1.0) as u32;
+        let per_turn = PER_TURN.max((round / 1.0).ceil() as u32);
+        let on = |k: u32| {
+            let a = a0 + turn * std::f64::consts::TAU * f64::from(k) / f64::from(per_turn);
+            centre + Point::from_angle(a) * radius
+        };
+        if start.distance(p) > 1e-9 {
+            self.push(MoveKind::Cut, start, above);
+        }
+        let steps = turns * per_turn;
+        for k in 1..=steps {
+            let depth = above - drop * f64::from(k) / f64::from(steps);
+            self.push(MoveKind::Plunge, on(k), depth);
+        }
+        for k in 1..=per_turn {
+            self.push(MoveKind::Cut, on(k), z);
+        }
+        if start.distance(p) > 1e-9 {
+            self.push(MoveKind::Cut, p, z);
+        }
+        true
+    }
+
+    /// Down from `above` to `z` steadily over `track` through `stations`.
+    fn descend_on(&mut self, track: &Line, stations: &[f64], above: f64, z: f64) {
+        let total: f64 = stations.windows(2).map(|w| (w[1] - w[0]).abs()).sum();
+        let mut gone = 0.0;
+        for w in stations.windows(2) {
+            gone += (w[1] - w[0]).abs();
+            let depth = above + (z - above) * gone / total.max(1e-12);
+            self.push(MoveKind::Plunge, track.point(w[1]), depth);
+        }
     }
 
     /// Down from `above` to `z` steadily over the path through `stations`.
@@ -809,21 +1258,31 @@ impl Out<'_> {
         let (line, leads, side) = (self.line, self.entry.leads, self.entry.side);
         let lead_in = lead(self.entry, line.point(0.0), line.tangent(0.0), side, false);
         let ramping = self.entry.ramp != Ramp::None && above > z;
-        self.rapid_down(
-            lead_in[0],
-            safe_z,
-            if ramping { above } else { z },
-            MoveKind::Plunge,
-        );
-        let total: f64 = lead_in.windows(2).map(|w| w[0].distance(w[1])).sum();
-        let mut gone = 0.0;
-        for w in lead_in.windows(2) {
-            gone += w[0].distance(w[1]);
-            if ramping {
-                let depth = above + (z - above) * gone / total;
-                self.push(MoveKind::Plunge, w[1], depth);
-            } else {
-                self.push(MoveKind::Cut, w[1], z);
+        if let Some(settings) = self.entry.enter {
+            // down where the lead starts, then along it at depth
+            let track = Line::new(&lead_in, false);
+            self.rapid_down(lead_in[0], safe_z, above.max(z), MoveKind::Plunge);
+            self.enter(&track, 0.0, above, z, settings);
+            for &p in &lead_in[1..] {
+                self.push(MoveKind::Cut, p, z);
+            }
+        } else {
+            self.rapid_down(
+                lead_in[0],
+                safe_z,
+                if ramping { above } else { z },
+                MoveKind::Plunge,
+            );
+            let total: f64 = lead_in.windows(2).map(|w| w[0].distance(w[1])).sum();
+            let mut gone = 0.0;
+            for w in lead_in.windows(2) {
+                gone += w[0].distance(w[1]);
+                if ramping {
+                    let depth = above + (z - above) * gone / total;
+                    self.push(MoveKind::Plunge, w[1], depth);
+                } else {
+                    self.push(MoveKind::Cut, w[1], z);
+                }
             }
         }
         let end = if line.closed {

@@ -6332,6 +6332,7 @@ fn the_log_says_what_a_command_made() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     assert_eq!(
         super::background::summary(&c.finish()),
@@ -6898,6 +6899,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.simulation = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
@@ -9936,6 +9938,7 @@ fn moving_what_a_toolpath_was_made_from_says_it_is_out_of_date() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);
@@ -11326,6 +11329,7 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);
