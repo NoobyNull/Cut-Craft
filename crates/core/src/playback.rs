@@ -223,27 +223,19 @@ impl Playback {
             self.at = 0.0;
         }
         if let (Some((i, ti)), Some((j, tj))) = (self.locate(self.at), self.locate(d)) {
-            let mut k = i;
-            while k <= j {
-                let (a, b) = (if k == i { ti } else { 0.0 }, if k == j { tj } else { 1.0 });
+            let mut step = i;
+            while step <= j {
+                let begin = if step == i { ti } else { 0.0 };
+                let end = if step == j { tj } else { 1.0 };
                 // whole steps go together, a batch across the cores; part of one on its own
-                let last = if a <= 0.0 && b >= 1.0 {
-                    self.batch_from(k, if tj >= 1.0 { j } else { j.saturating_sub(1) })
+                let last = if begin <= 0.0 && end >= 1.0 {
+                    self.batch_from(step, if tj >= 1.0 { j } else { j.saturating_sub(1) })
                 } else {
-                    k
+                    step
                 };
-                if b > a || last > k {
-                    let tool = self.steps[k].tool;
-                    let moves: Vec<(DVec3, DVec3)> = (k..=last)
-                        .map(|m| {
-                            let s = &self.steps[m];
-                            let (a, b) = if m == k { (a, b) } else { (0.0, 1.0) };
-                            (s.from.lerp(s.to, a), s.from.lerp(s.to, b))
-                        })
-                        .collect();
-                    self.material.cutting = self.marks[tool];
-                    self.material.sweep_each(&moves, &self.tools[tool]);
-                    if last > k || b >= 1.0 {
+                if end > begin || last > step {
+                    self.cut_steps(step, last, (begin, end));
+                    if last > step || end >= 1.0 {
                         self.save_at(last);
                     }
                     if last < j && out_of_time() {
@@ -251,11 +243,26 @@ impl Playback {
                         return false;
                     }
                 }
-                k = last + 1;
+                step = last + 1;
             }
         }
         self.at = d;
         true
+    }
+
+    /// Cuts steps `first` to `last` (one tool's), the first only over `part` of it (from,
+    /// to: 0 to 1), the rest whole.
+    fn cut_steps(&mut self, first: usize, last: usize, part: (f64, f64)) {
+        let tool = self.steps[first].tool;
+        let moves: Vec<(DVec3, DVec3)> = (first..=last)
+            .map(|m| {
+                let s = &self.steps[m];
+                let (from, to) = if m == first { part } else { (0.0, 1.0) };
+                (s.from.lerp(s.to, from), s.from.lerp(s.to, to))
+            })
+            .collect();
+        self.material.cutting = self.marks[tool];
+        self.material.sweep_each(&moves, &self.tools[tool]);
     }
 
     /// The last of the whole steps from `k` (to `most` at the furthest) cut in one batch:
@@ -505,8 +512,14 @@ mod tests {
             d = stepped.next_step().min(stepped.length() * 0.7);
             stepped.seek(d);
         }
-        assert!(jumped.material().heights == stepped.material().heights);
-        assert!(jumped.material().cut_by == stepped.material().cut_by);
+        assert!(
+            jumped.material().heights == stepped.material().heights,
+            "the same cut"
+        );
+        assert!(
+            jumped.material().cut_by == stepped.material().cut_by,
+            "the same cells marked"
+        );
         assert!(jumped.material().cut_by.contains(&3));
     }
 

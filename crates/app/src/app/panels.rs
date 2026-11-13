@@ -1164,7 +1164,7 @@ impl CutCraftApp {
         let (at, length) = (playback.at(), playback.length());
         let guessed_shank = playback
             .tool()
-            .filter(|(_, tool)| !(tool.shank_diameter > 0.0))
+            .filter(|(_, tool)| tool.shank_diameter.is_nan() || tool.shank_diameter <= 0.0)
             .map(|(_, tool)| tool.name.clone());
         let (mut stop, mut run, mut goal) = (false, false, None);
         ui.horizontal(|ui| {
