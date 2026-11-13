@@ -19,7 +19,10 @@ struct Step {
 
 /// The most saves of the material a playback keeps, so going back starts near where it
 /// is going instead of from the start.
-const MOST_SAVES: usize = 20;
+const MOST_SAVES: usize = 40;
+/// The most whole steps cut together, across the cores: few enough that one batch fits in
+/// a frame's time, so a long jump can stop between them.
+const BATCH: usize = 512;
 /// The memory the saves may take in all, bytes.
 const SAVES_MEMORY: usize = 400 << 20;
 
@@ -220,29 +223,73 @@ impl Playback {
             self.at = 0.0;
         }
         if let (Some((i, ti)), Some((j, tj))) = (self.locate(self.at), self.locate(d)) {
-            for k in i..=j {
-                let s = &self.steps[k];
-                let (a, b) = (if k == i { ti } else { 0.0 }, if k == j { tj } else { 1.0 });
-                if b <= a {
-                    continue;
+            let mut step = i;
+            while step <= j {
+                let begin = if step == i { ti } else { 0.0 };
+                let end = if step == j { tj } else { 1.0 };
+                // whole steps go together, a batch across the cores; part of one on its own
+                let last = if begin <= 0.0 && end >= 1.0 {
+                    self.batch_from(step, if tj >= 1.0 { j } else { j.saturating_sub(1) })
+                } else {
+                    step
+                };
+                if end > begin || last > step {
+                    self.cut_steps(step, last, (begin, end));
+                    if last > step || end >= 1.0 {
+                        self.save_at(last);
+                    }
+                    if last < j && out_of_time() {
+                        self.at = self.ends[last];
+                        return false;
+                    }
                 }
-                self.material.cutting = self.marks[s.tool];
-                self.material.sweep(
-                    s.from.lerp(s.to, a),
-                    s.from.lerp(s.to, b),
-                    &self.tools[s.tool],
-                );
-                if b >= 1.0 {
-                    self.save_at(k);
-                }
-                if k < j && out_of_time() {
-                    self.at = self.ends[k];
-                    return false;
-                }
+                step = last + 1;
             }
         }
         self.at = d;
         true
+    }
+
+    /// Cuts steps `first` to `last` (one tool's), the first only over `part` of it (from,
+    /// to: 0 to 1), the rest whole.
+    fn cut_steps(&mut self, first: usize, last: usize, part: (f64, f64)) {
+        let tool = self.steps[first].tool;
+        let moves: Vec<(DVec3, DVec3)> = (first..=last)
+            .map(|m| {
+                let s = &self.steps[m];
+                let (from, to) = if m == first { part } else { (0.0, 1.0) };
+                (s.from.lerp(s.to, from), s.from.lerp(s.to, to))
+            })
+            .collect();
+        self.material.cutting = self.marks[tool];
+        self.material.sweep_each(&moves, &self.tools[tool]);
+    }
+
+    /// The last of the whole steps from `k` (to `most` at the furthest) cut in one batch:
+    /// the same tool, no more than [`BATCH`] of them, and ending once the time passes
+    /// into another stretch between saves, so the save there is made.
+    fn batch_from(&self, k: usize, most: usize) -> usize {
+        if most <= k {
+            return k;
+        }
+        let begin = if k == 0 { 0.0 } else { self.ends[k - 1] };
+        let slot = |t: f64| {
+            if self.save_every > 0.0 {
+                (t / self.save_every).floor()
+            } else {
+                0.0
+            }
+        };
+        let (tool, first) = (self.steps[k].tool, slot(begin));
+        let mut last = k;
+        while last < most
+            && last - k + 1 < BATCH
+            && slot(self.ends[last]) <= first
+            && self.steps[last + 1].tool == tool
+        {
+            last += 1;
+        }
+        last
     }
 
     /// The material saved at the end of step `k` when no save has been made in its stretch
@@ -449,6 +496,32 @@ mod tests {
             p.material().heights == straight.material().heights,
             "the same cut as played straight there"
         );
+    }
+
+    #[test]
+    fn a_jump_cuts_in_batches_the_same_as_a_step_at_a_time() {
+        let (start, toolpath) = zigzag();
+        let mut jumped = Playback::new(start.clone(), &[&toolpath], 60.0).marked(&[3]);
+        let mut calls = 0;
+        while !jumped.seek_until(jumped.length() * 0.7, || false) {
+            calls += 1;
+        }
+        assert_eq!(calls, 0, "there in one go given the time");
+        let mut stepped = Playback::new(start, &[&toolpath], 60.0).marked(&[3]);
+        let mut d = 0.0;
+        while d < stepped.length() * 0.7 {
+            d = stepped.next_step().min(stepped.length() * 0.7);
+            stepped.seek(d);
+        }
+        assert!(
+            jumped.material().heights == stepped.material().heights,
+            "the same cut"
+        );
+        assert!(
+            jumped.material().cut_by == stepped.material().cut_by,
+            "the same cells marked"
+        );
+        assert!(jumped.material().cut_by.contains(&3));
     }
 
     #[test]

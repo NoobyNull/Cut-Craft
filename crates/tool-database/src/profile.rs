@@ -39,6 +39,20 @@ pub struct Outline {
     pub guessed_shank_diameter: bool,
 }
 
+/// A shank to draw when none is set: a V-bit's 1/4" (most are on one, whatever their
+/// cone), else as wide as the flutes up to 1/2" (wider bits are on a 1/2" shank), never
+/// wider than the flutes.
+fn guess_shank_radius(tool: &Tool, body: f64) -> f64 {
+    const QUARTER: f64 = 25.4 / 8.0;
+    const HALF: f64 = 25.4 / 4.0;
+    let most = if tool.shape == ToolShape::VBit {
+        QUARTER
+    } else {
+        HALF
+    };
+    body.min(most)
+}
+
 /// The outline of `tool`; `None` with no diameter. Nothing here is written to the tool:
 /// unset sizes are only drawn (dashed), never kept, so no check trusts a guess.
 pub fn outline(tool: &Tool) -> Option<Outline> {
@@ -89,7 +103,7 @@ pub fn outline(tool: &Tool) -> Option<Outline> {
     let shank_radius = if shank_set {
         tool.shank_diameter / 2.0
     } else {
-        body
+        guess_shank_radius(tool, body)
     };
     let shank_known = tool.shank_length.is_finite() && tool.shank_length > 0.0;
     let shank = if shank_known {
@@ -544,6 +558,31 @@ mod tests {
             (22.0, 25.0, 55.0, 3.175)
         );
         assert!(!o.guessed_flutes && !o.guessed_shank && !o.guessed_shank_diameter);
+    }
+
+    #[test]
+    fn a_wide_bit_with_no_shank_set_is_drawn_on_a_common_shank_not_its_own_width() {
+        let v = Tool {
+            shape: ToolShape::VBit,
+            diameter: 19.05,
+            angle: 90.0,
+            ..Tool::default()
+        };
+        let o = outline(&v).unwrap();
+        assert!(o.guessed_shank_diameter, "marked as a guess");
+        assert!(
+            (o.shank_radius - 3.175).abs() < 1e-9,
+            "a 1/4\" shank: {}",
+            o.shank_radius
+        );
+        let wide = outline(&end_mill(25.0)).unwrap();
+        assert!(
+            (wide.shank_radius - 6.35).abs() < 1e-9,
+            "a 1/2\" shank: {}",
+            wide.shank_radius
+        );
+        let small = outline(&end_mill(3.0)).unwrap();
+        assert_eq!(small.shank_radius, 1.5, "a small end mill is its own width");
     }
 
     #[test]

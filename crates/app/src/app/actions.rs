@@ -196,6 +196,8 @@ impl CutCraftApp {
             playback_view: None,
             playback_gpu: None,
             playback_builds: 0,
+            playback_shown: None,
+            playback_redraw: super::PLAYBACK_REDRAW,
             playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
             collapsed_levels: std::collections::HashSet::new(),
@@ -475,6 +477,10 @@ impl CutCraftApp {
                 self.display.toggle(id);
                 self.options.toolpaths.keep_out_labels = self.display.keep_out_labels;
                 self.save_options();
+                ctx.request_repaint();
+            }
+            "draw_vectors_in_3d_view" => {
+                self.show_vectors_3d(!self.display.vectors_3d);
                 ctx.request_repaint();
             }
             id if self.display.toggle(id) => ctx.request_repaint(),

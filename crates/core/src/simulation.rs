@@ -430,6 +430,55 @@ impl Material {
         (self.heights, self.cut_by) = (heights, cut_by);
     }
 
+    /// [`Self::sweep`] along each of `moves` (from `.0` to `.1`), a band of rows per core
+    /// when there are many: the same cut, and the same cells marked, as one at a time.
+    pub fn sweep_each(&mut self, moves: &[(DVec3, DVec3)], tool: &Tool) {
+        /// Fewer moves than this are cut on this thread: starting others costs more.
+        const FEW: usize = 64;
+        let (lo, hi) = moves
+            .iter()
+            .filter(|(a, b)| a.z < 0.0 || b.z < 0.0)
+            .map(|&(a, b)| self.swept(a, b, tool.reach_below(-a.z.min(b.z))).1)
+            .fold((usize::MAX, 0), |(lo, hi), rows| {
+                (lo.min(rows.start), hi.max(rows.end))
+            });
+        if lo >= hi {
+            return;
+        }
+        let columns = self.columns;
+        let threads = if moves.len() < FEW {
+            1
+        } else {
+            cores().min(hi - lo)
+        };
+        let band = (hi - lo).div_ceil(threads.max(1));
+        let mut heights = std::mem::take(&mut self.heights);
+        let mut cut_by = std::mem::take(&mut self.cut_by);
+        let bands = heights[lo * columns..hi * columns]
+            .chunks_mut(band * columns)
+            .zip(cut_by[lo * columns..hi * columns].chunks_mut(band * columns))
+            .enumerate();
+        let me = &*self;
+        let cut = |i: usize, h: &mut [f64], c: &mut [u32]| {
+            for &(a, b) in moves {
+                me.sweep_band(a, b, tool, lo + i * band, h, Some(c));
+            }
+        };
+        if threads <= 1 {
+            for (i, (h, c)) in bands {
+                cut(i, h, c);
+            }
+        } else {
+            std::thread::scope(|scope| {
+                for (i, (h, c)) in bands {
+                    let cut = &cut;
+                    scope.spawn(move || cut(i, h, c));
+                }
+            });
+        }
+        (self.heights, self.cut_by) = (heights, cut_by);
+    }
+
     /// [`Self::sweep`] over `band`, the grid's rows from `first`, marking the cells it
     /// lowers in `cut_by` (the same rows) when given.
     pub(crate) fn sweep_band(
