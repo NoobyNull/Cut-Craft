@@ -997,6 +997,13 @@ struct CutCraftApp {
     /// The Design sub-tab shown as a section to unfold next frame: a tool on it was picked
     /// from a menu, a shortcut or Find Tool.
     design_unfold: Option<&'static str>,
+    /// The Toolpaths page's open sub-tab (see [`gui::TOOLPATH_SUBTABS`]).
+    toolpath_subtab: usize,
+    /// The Toolpaths sub-tab shown as a section to unfold next frame, as `design_unfold`.
+    toolpath_unfold: Option<&'static str>,
+    /// How many toolpaths the job had when the Toolpaths page last looked: one more opens
+    /// the List sub-tab, so a toolpath just made is seen there.
+    toolpaths_seen: usize,
     /// Each tool's first step, once asked for (see [`guide::first_step`]).
     first_steps: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     view: View,
@@ -1150,8 +1157,6 @@ struct CutCraftApp {
     guide_props: Option<GuideProps>,
     /// Machine ▸ Tool Changer…: the active machine's holders loaded from the tools.
     tool_changer_window: bool,
-    /// The Toolpath List's height as its divider was last dragged; None for half the page.
-    list_height: Option<f32>,
     /// Measure / Inspect's last result, shown in its form while the tool is on.
     measure_rows: Vec<(String, String)>,
     /// Save Toolpaths' form, while it is open.

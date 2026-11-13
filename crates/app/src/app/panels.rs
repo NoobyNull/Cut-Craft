@@ -3429,11 +3429,17 @@ impl CutCraftApp {
         }
     }
 
-    /// The Toolpaths page: strategies, any form opened from them, and the toolpath list.
+    /// The Toolpaths page: the job and its tools, then the sub-tabs Make, List, Preview and
+    /// Save, as the Design page has its own; or any form opened from them.
     pub(super) fn toolpaths_page(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpaths page");
         self.page_header(ui, Page::Toolpaths, "Toolpaths");
-        let groups = self.toolbar.toolpath_groups.clone();
+        // a toolpath just made shows in the list, where it can be checked and previewed
+        let count = self.doc.toolpaths.len();
+        if count > self.toolpaths_seen {
+            self.open_subtab(Page::Toolpaths, TOOLPATH_LIST_TAB);
+        }
+        self.toolpaths_seen = count;
         if self
             .form
             .as_ref()
@@ -3442,40 +3448,59 @@ impl CutCraftApp {
             self.form_panel(ui);
             return;
         }
-        // the toolpath list in its own bottom half, so it never scrolls away;
-        // the strip over it drags it taller or shorter
-        let row = ui.spacing().interact_size.y;
-        let room = ui.available_height();
-        let strip = ui.spacing().item_spacing.y * 2.0;
-        let list = self
-            .list_height
-            .unwrap_or(room / 2.0)
-            .clamp(row * 3.0, (room - row * 3.0).max(row * 3.0));
-        let width = ui.available_width();
-        ui.allocate_ui(egui::vec2(width, room - list - strip), |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, |ui| {
-                    step_heading(ui, 1, "Make a toolpath: pick how to cut");
+        egui::ScrollArea::vertical()
+            .id_salt("toolpaths page")
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                if self.options.favourites.of(Page::Toolpaths).1 {
+                    // favourites name every tool, whatever sub-tab it is on
+                    let groups = self.toolbar.toolpath_groups.clone();
                     self.tools_or_favourites(ui, &groups, Page::Toolpaths);
-                    // the hovered tool's guidance under the icons, scrolling with them
                     self.tip_contents(ui);
-                });
-        });
-        let (rect, divider) = ui.allocate_exact_size(egui::vec2(width, strip), egui::Sense::drag());
-        if divider.dragged() {
-            self.list_height = Some(list - divider.drag_delta().y);
-        }
-        if divider.hovered() || divider.dragged() {
-            ui.set_cursor_icon(egui::CursorIcon::ResizeVertical);
-        }
-        let line = if divider.hovered() || divider.dragged() {
-            ui.visuals().widgets.active.bg_stroke
-        } else {
-            ui.visuals().widgets.noninteractive.bg_stroke
+                } else {
+                    cut_craft_bug_report::mark(ui, "Toolpaths sub-tabs");
+                    self.subtabs(ui, Page::Toolpaths);
+                }
+            });
+    }
+
+    /// What Toolpaths sub-tab `i` shows: Make's strategies with the hovered one's tip, the
+    /// toolpath list, the previews, or the Save button and the paperwork.
+    pub(super) fn toolpath_subtab(&mut self, ui: &mut egui::Ui, i: usize) {
+        let Some(tab) = gui::TOOLPATH_SUBTABS.get(i) else {
+            return;
         };
-        ui.painter().hline(rect.x_range(), rect.center().y, line);
-        self.toolpath_list(ui, true);
+        let groups = self.toolbar.toolpath_subtab_groups(i);
+        let (save, rest): (Vec<_>, Vec<_>) = groups
+            .into_iter()
+            .partition(|g| g.tools.contains(&"save_toolpaths"));
+        match tab.name {
+            "Make" => {
+                step_heading(ui, 1, "Make a toolpath: pick how to cut");
+                self.tool_groups(ui, &rest, Page::Toolpaths);
+                // the hovered tool's guidance under the icons, scrolling with them
+                self.tip_contents(ui);
+            }
+            "List" => {
+                self.toolpath_list_body(ui, Some(false), "toolpath list rows");
+                ui.add_space(ui.spacing().item_spacing.y);
+                self.tool_groups(ui, &rest, Page::Toolpaths);
+            }
+            "Preview" => {
+                self.preview_buttons(ui, true, true);
+                ui.add_space(ui.spacing().item_spacing.y);
+                self.tool_groups(ui, &rest, Page::Toolpaths);
+                // which ones a preview shows: the ticks and the selection, at hand
+                self.toolpath_list_body(ui, None, "toolpath preview rows");
+            }
+            "Save" => {
+                if !save.is_empty() {
+                    self.save_button(ui, true);
+                }
+                self.tool_groups(ui, &rest, Page::Toolpaths);
+            }
+            _ => self.tool_groups(ui, &rest, Page::Toolpaths),
+        }
     }
 
     /// The Toolpath List: its buttons, then each toolpath, the selected one highlighted and
@@ -3485,7 +3510,8 @@ impl CutCraftApp {
     fn toolpath_order_arrows(&mut self, ui: &mut egui::Ui) {
         let mut moved = None;
         let mut new_group = false;
-        ui.horizontal(|ui| {
+        let mut delete = false;
+        ui.horizontal_wrapped(|ui| {
             use cmd_reorder_toolpath::{Direction, neighbour};
             for (direction, arrow, tip) in [
                 (Direction::Up, "Move Up", "Move Toolpath Up (cut it sooner)"),
@@ -3506,11 +3532,19 @@ impl CutCraftApp {
                     moved = Some(direction);
                 }
             }
+            let can_delete = self.selected_toolpath.is_some() && self.available("delete_toolpath");
+            delete = ui
+                .add_enabled(can_delete, egui::Button::new("Delete"))
+                .on_hover_hint("Delete Toolpath: take the selected toolpath out of the job")
+                .clicked();
             new_group = ui
                 .button("New Group")
                 .on_hover_hint("Create Empty Group: toolpaths made while it is picked join it")
                 .clicked();
         });
+        if delete {
+            self.invoke(ui.ctx(), "delete_toolpath");
+        }
         if new_group {
             let params = serde_json::json!({
                 "toolpaths": [],
@@ -3603,16 +3637,34 @@ impl CutCraftApp {
     /// scrolls away: preview them, then save them for the machine. `steps` numbers those as
     /// the Toolpaths page numbers making one.
     pub(super) fn toolpath_list(&mut self, ui: &mut egui::Ui, steps: bool) {
-        cut_craft_bug_report::mark(ui, "Toolpath list");
         egui::Panel::bottom("toolpath_next_steps").show(ui, |ui| {
             self.preview_and_save(ui, steps);
         });
-        ui.strong("Toolpath List");
-        self.toolpath_list_buttons(ui);
+        self.toolpath_list_body(ui, Some(true), "toolpath rows");
+    }
+
+    /// The toolpath list itself: with `controls` its heading, buttons (the template ones
+    /// too when `Some(true)`) and order arrows over the rows, else the rows alone under a
+    /// small heading. `salt` keeps each list's scrolling apart when two show at once.
+    pub(super) fn toolpath_list_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        controls: Option<bool>,
+        salt: &str,
+    ) {
+        cut_craft_bug_report::mark(ui, "Toolpath list");
+        if let Some(templates) = controls {
+            ui.strong("Toolpath List");
+            self.toolpath_list_buttons(ui, templates);
+        } else {
+            ui.strong("Toolpaths: tick the ones to show");
+        }
         if self.doc.toolpaths.is_empty() {
             ui.weak("No toolpaths yet: each one you make is listed here");
         }
-        self.toolpath_order_arrows(ui);
+        if controls.is_some() {
+            self.toolpath_order_arrows(ui);
+        }
         let mut chosen = None;
         let mut shown = None;
         let mut edit = None;
@@ -3621,49 +3673,53 @@ impl CutCraftApp {
         let mut group_picked = None;
         // each toolpath's colour in the preview, when the machined areas take them
         let swatches = self.doc.job.machined_area == MachinedArea::ToolpathColor;
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for (id, group) in &rows {
-                let Some(id) = *id else {
-                    let (picked, action) = self.group_row(ui, group);
-                    if let Some(on) = picked {
-                        group_picked = Some((group.clone(), on));
+        let row = ui.spacing().interact_size.y;
+        egui::ScrollArea::vertical()
+            .id_salt(salt)
+            .max_height(row * LIST_ROWS)
+            .show(ui, |ui| {
+                for (id, group) in &rows {
+                    let Some(id) = *id else {
+                        let (picked, action) = self.group_row(ui, group);
+                        if let Some(on) = picked {
+                            group_picked = Some((group.clone(), on));
+                        }
+                        if action.is_some() {
+                            chosen = action;
+                        }
+                        continue;
+                    };
+                    let toolpath = &self.doc.toolpaths[&id];
+                    let selected = self.selected_toolpath == Some(id);
+                    let swatch = swatches.then_some((places[&id], self.doc.job.colour));
+                    let (label, ticked, rgb) =
+                        toolpath_row(ui, toolpath, selected, swatch, !group.is_empty());
+                    if let Some(visible) = ticked {
+                        shown = Some((id, visible));
                     }
-                    if action.is_some() {
-                        chosen = action;
+                    if let Some(rgb) = rgb {
+                        coloured = Some((id, rgb));
                     }
-                    continue;
-                };
-                let toolpath = &self.doc.toolpaths[&id];
-                let selected = self.selected_toolpath == Some(id);
-                let swatch = swatches.then_some((places[&id], self.doc.job.colour));
-                let (label, ticked, rgb) =
-                    toolpath_row(ui, toolpath, selected, swatch, !group.is_empty());
-                if let Some(visible) = ticked {
-                    shown = Some((id, visible));
+                    if label.clicked() {
+                        self.selected_toolpath = if selected { None } else { Some(id) };
+                        self.selected_group = None;
+                    }
+                    // a double-click opens the toolpath's form
+                    if label.double_clicked() {
+                        edit = Some(id);
+                    }
+                    // The toolpath menu acts on the row right-clicked, so it selects it
+                    if label.secondary_clicked() {
+                        self.selected_toolpath = Some(id);
+                        self.selected_group = None;
+                    }
+                    if let Some(action) =
+                        self.popup(&label, || gui::toolpath_menu(&self.doc, id, toolpath))
+                    {
+                        chosen = Some(action);
+                    }
                 }
-                if let Some(rgb) = rgb {
-                    coloured = Some((id, rgb));
-                }
-                if label.clicked() {
-                    self.selected_toolpath = if selected { None } else { Some(id) };
-                    self.selected_group = None;
-                }
-                // a double-click opens the toolpath's form
-                if label.double_clicked() {
-                    edit = Some(id);
-                }
-                // The toolpath menu acts on the row right-clicked, so it selects it
-                if label.secondary_clicked() {
-                    self.selected_toolpath = Some(id);
-                    self.selected_group = None;
-                }
-                if let Some(action) =
-                    self.popup(&label, || gui::toolpath_menu(&self.doc, id, toolpath))
-                {
-                    chosen = Some(action);
-                }
-            }
-        });
+            });
         if let Some((group, on)) = group_picked {
             self.selected_group = on.then_some(group);
             self.selected_toolpath = None;
@@ -3690,47 +3746,77 @@ impl CutCraftApp {
     /// recalculating in More…, then one wide Save Toolpaths button, the step that ends every
     /// job. `steps` numbers them 2 and 3.
     fn preview_and_save(&mut self, ui: &mut egui::Ui, steps: bool) {
-        let mut chosen = None;
-        let heading = |ui: &mut egui::Ui, n: u8, text: &str| {
-            if steps {
-                step_heading(ui, n, text);
-            } else {
-                ui.strong(text);
-            }
-        };
         ui.add_space(ui.spacing().item_spacing.y);
-        heading(ui, 2, "Preview: watch it cut");
+        self.preview_buttons(ui, steps, false);
+        ui.add_space(ui.spacing().item_spacing.y);
+        self.save_button(ui, steps);
+        ui.add_space(ui.spacing().item_spacing.y);
+    }
+
+    /// Preview All and Reset Preview (Recalculate All first while any is out of date), then
+    /// the other previews and recalculating: in a More… menu, or with `spread` as buttons of
+    /// their own under a heading, so nothing hides on the Preview sub-tab. `steps` numbers
+    /// the heading 2.
+    fn preview_buttons(&mut self, ui: &mut egui::Ui, steps: bool, spread: bool) {
+        let mut chosen = None;
+        if steps {
+            step_heading(ui, 2, "Preview: watch it cut");
+        } else {
+            ui.strong("Preview: watch it cut");
+        }
         let stale = self.doc.toolpaths.values().any(|t| t.stale);
+        let button = |ui: &mut egui::Ui, id: &'static str| {
+            ui.add_enabled(self.available(id), egui::Button::new(self.tool_label(id)))
+                .on_hover_hint(gui::about(id).unwrap_or_default())
+                .clicked()
+                .then_some(id)
+        };
+        // out of date ones are called out in the list; their fix is at hand
+        let more = MORE_LIST_ACTIONS
+            .into_iter()
+            .filter(|&id| !stale || id != "recalculate_all_toolpaths");
         ui.horizontal_wrapped(|ui| {
             let mut shown = vec!["preview_all_toolpaths", "reset_preview"];
-            // out of date ones are called out in the list; their fix is at hand
             if stale {
                 shown.insert(0, "recalculate_all_toolpaths");
             }
             for id in shown {
-                if ui
-                    .add_enabled(self.available(id), egui::Button::new(self.tool_label(id)))
-                    .on_hover_hint(gui::about(id).unwrap_or_default())
-                    .clicked()
-                {
-                    chosen = Some(id);
-                }
+                chosen = button(ui, id).or(chosen);
             }
-            ui.menu_button("More…", |ui| {
-                for id in MORE_LIST_ACTIONS {
-                    if (!stale || id != "recalculate_all_toolpaths")
-                        && ui
-                            .add_enabled(self.available(id), egui::Button::new(self.tool_label(id)))
-                            .clicked()
-                    {
-                        chosen = Some(id);
-                        ui.close();
+            if !spread {
+                ui.menu_button("More…", |ui| {
+                    for id in more.clone() {
+                        if let Some(id) = button(ui, id) {
+                            chosen = Some(id);
+                            ui.close();
+                        }
                     }
+                });
+            }
+        });
+        if spread {
+            ui.add_space(ui.spacing().item_spacing.y);
+            ui.strong("More Previews");
+            ui.horizontal_wrapped(|ui| {
+                // deleting is the list's job, beside its other row buttons
+                for id in more.filter(|&id| id != "delete_toolpath") {
+                    chosen = button(ui, id).or(chosen);
                 }
             });
-        });
-        ui.add_space(ui.spacing().item_spacing.y);
-        heading(ui, 3, "Save: the file your machine runs");
+        }
+        if let Some(id) = chosen {
+            self.invoke(ui.ctx(), id);
+        }
+    }
+
+    /// One wide Save Toolpaths button, the step that ends every job, with what it waits for
+    /// when there is nothing to save. `steps` numbers its heading 3.
+    fn save_button(&mut self, ui: &mut egui::Ui, steps: bool) {
+        if steps {
+            step_heading(ui, 3, "Save: the file your machine runs");
+        } else {
+            ui.strong("Save: the file your machine runs");
+        }
         let ready = self.available("save_toolpaths");
         let row = ui.spacing().interact_size.y;
         let label = egui::RichText::new(SAVE_FOR_MACHINE).strong();
@@ -3749,12 +3835,9 @@ impl CutCraftApp {
             ui.weak(SAVE_NEEDS);
         }
         if save.clicked() {
-            chosen = Some("save_toolpaths");
+            self.invoke(ui.ctx(), "save_toolpaths");
         }
         ui.add_space(ui.spacing().item_spacing.y);
-        if let Some(id) = chosen {
-            self.invoke(ui.ctx(), id);
-        }
     }
 
     /// One fixed-height row: the hint (or last message) on the left, cut short with … when
@@ -4163,6 +4246,12 @@ pub(super) const SAVE_FOR_MACHINE: &str = "Save Toolpaths for the Machine…";
 
 /// Under it while there is nothing to save.
 pub(super) const SAVE_NEEDS: &str = "Make a toolpath first, then save it here";
+
+/// The Toolpaths sub-tab the toolpath list is on, in [`gui::TOOLPATH_SUBTABS`].
+const TOOLPATH_LIST_TAB: usize = 1;
+
+/// How many rows the toolpath list shows before it scrolls.
+const LIST_ROWS: f32 = 14.0;
 
 /// The toolpath list's actions in its More… menu (Recalculate All only while none is out of
 /// date, when it is a button of its own).

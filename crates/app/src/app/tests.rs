@@ -308,10 +308,10 @@ fn the_ribbon_layout_shows_a_tabs_groups() {
     for name in ["Design", "Model", "Toolpaths", "Create Vectors", "Sheets"] {
         assert!(h.text_at(name).is_some(), "{name}");
     }
-    assert!(h.text_at("Toolpath Operations").is_none());
+    assert!(h.text_at("Cut Out and Clear").is_none());
     h.app.ribbon_tab = 2;
     h.frame(vec![]);
-    assert!(h.text_at("Toolpath Operations").is_some());
+    assert!(h.text_at("Cut Out and Clear").is_some());
     h.app.invoke(&h.ctx, "pocket_toolpath");
     h.frame(vec![]);
     assert!(
@@ -4856,18 +4856,18 @@ fn a_tools_form_takes_the_place_of_the_page() {
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
     assert!(h.text_at("Create Vectors").is_some());
-    assert!(h.text_at("Toolpath List").is_some());
+    assert!(h.text_at("Job and Tools").is_some());
     h.app.invoke(&h.ctx, "draw_circle");
     h.frame(vec![]);
     assert!(h.text_at("Create Vectors").is_none(), "design tools hidden");
-    assert!(h.text_at("Toolpath List").is_some(), "the other page stays");
+    assert!(h.text_at("Job and Tools").is_some(), "the other page stays");
     h.app.invoke(&h.ctx, "profile_toolpath");
     h.frame(vec![]);
     assert!(
         h.text_at("Create Vectors").is_some(),
         "back once its form went"
     );
-    assert!(h.text_at("Toolpath List").is_none(), "toolpath page hidden");
+    assert!(h.text_at("Job and Tools").is_none(), "toolpath page hidden");
 }
 
 #[test]
@@ -8568,32 +8568,33 @@ fn tools_loaded_in_the_tool_changer_window_take_their_slot_numbers() {
 }
 
 #[test]
-fn the_toolpath_lists_divider_stays_where_it_is_dragged() {
+fn the_toolpath_list_can_show_as_a_section_beside_make() {
     let mut h = Harness::new();
     h.app.doc = cut_craft_core::testing::three_toolpaths();
     h.app.screen = Screen::Job;
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
+    h.app.toolpath_subtab = 0;
     h.frame(vec![]);
-    let before = h.text_at("Toolpath List").expect("the list's heading");
-    // the divider, a little over the heading, dragged up 150
-    let from = before - egui::vec2(0.0, 12.0);
-    h.frame(vec![Event::PointerMoved(from)]);
-    h.press(from, true, Modifiers::NONE);
-    for k in 1..=10_u8 {
-        h.frame(vec![Event::PointerMoved(
-            from - egui::vec2(0.0, 15.0 * f32::from(k)),
-        )]);
-    }
-    h.press(from - egui::vec2(0.0, 150.0), false, Modifiers::NONE);
-    for _ in 0..4 {
-        h.frame(vec![]);
-    }
-    let after = h.text_at("Toolpath List").unwrap();
+    assert!(h.text_at("Cut Out and Clear").is_some(), "Make is open");
     assert!(
-        (after.y - (before.y - 150.0)).abs() < 4.0,
-        "dragged up it stays: {before:?} then {after:?}"
+        h.text_at("Toolpath List").is_none(),
+        "the list is a tab of its own"
     );
+    h.app.invoke(
+        &h.ctx,
+        &format!("{}List:section", gui::TOOLPATH_SUBTAB_PLACE),
+    );
+    assert_eq!(h.app.options.toolpath_sections, ["List"]);
+    assert!(
+        h.app.options.design_sections.is_empty(),
+        "the other page's own"
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let make = h.text_at("Cut Out and Clear").expect("Make still open");
+    let list = h.text_at("Toolpath List").expect("the list's section");
+    assert!(make.y < list.y, "the section under the open tab");
 }
 
 #[test]
@@ -10432,31 +10433,78 @@ fn scroll_above_foot(h: &mut Harness, over: Pos2, text: &str) -> Pos2 {
 }
 
 #[test]
-fn the_toolpath_list_ends_in_preview_then_a_labelled_save_button() {
+fn the_toolpaths_page_has_make_list_preview_and_save_tabs() {
     use super::panels::{SAVE_FOR_MACHINE, SAVE_NEEDS};
     let mut h = Harness::new();
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
     h.frame(vec![]);
+    let tab = |name: &str| {
+        gui::TOOLPATH_SUBTABS
+            .iter()
+            .position(|t| t.name == name)
+            .unwrap()
+    };
+    // Make opens first, the job and its tools over every tab
+    assert!(h.text_at("Job and Tools").is_some());
     assert!(h.text_at("Make a toolpath: pick how to cut").is_some());
+    for group in ["Cut Out and Clear", "Holes", "3D Toolpaths", "Laser"] {
+        assert!(h.text_at(group).is_some(), "{group} on Make");
+    }
+    assert!(
+        h.text_at(SAVE_FOR_MACHINE).is_none(),
+        "saving has its own tab"
+    );
+    // Save: the big button, and what it waits for
+    h.click(h.text_at("Save").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.toolpath_subtab, tab("Save"));
     assert!(h.text_at(SAVE_FOR_MACHINE).is_some());
     assert!(h.text_at(SAVE_NEEDS).is_some(), "says what to do first");
+    assert!(h.text_at("Paperwork for the Job").is_some());
     h.click(h.text_at(SAVE_FOR_MACHINE).unwrap(), Modifiers::NONE);
     assert!(h.app.save_form.is_none(), "nothing to save yet");
+    // a toolpath just made shows in the list
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
+    assert_eq!(h.app.toolpath_subtab, tab("Make"), "its tool's tab");
     let params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("profile_toolpath", &params).unwrap();
     h.app.form = None;
     h.frame(vec![]);
     h.frame(vec![]);
+    assert_eq!(h.app.toolpath_subtab, tab("List"));
+    assert!(h.text_at("Toolpath List").is_some());
+    assert!(h.text_at("Reuse Toolpaths").is_some());
+    // Preview: every preview a button of its own, none in a More… menu
+    h.app.toolpath_subtab = tab("Preview");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Preview: watch it cut").is_some());
+    assert!(h.text_at("Undo Last Preview").is_some());
+    assert!(h.text_at("More…").is_none());
+    // and Save is ready
+    h.app.toolpath_subtab = tab("Save");
+    h.frame(vec![]);
+    h.frame(vec![]);
     assert!(h.text_at(SAVE_NEEDS).is_none());
-    let y = |h: &Harness, text: &str| h.text_at(text).unwrap_or_else(|| panic!("{text}")).y;
-    assert!(y(&h, "Toolpath List") < y(&h, "Preview: watch it cut"));
-    assert!(y(&h, "Preview: watch it cut") < y(&h, SAVE_FOR_MACHINE));
     h.click(h.text_at(SAVE_FOR_MACHINE).unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     assert!(h.app.save_form.is_some(), "the same Save Toolpaths form");
+}
+
+#[test]
+fn the_list_tab_calls_out_a_toolpath_out_of_date() {
+    let mut h = Harness::new();
+    h.app.doc = cut_craft_core::testing::three_toolpaths();
+    h.app.screen = Screen::Job;
+    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.frame(vec![]);
+    assert!(h.text_at("List").is_some());
+    assert!(h.text_at("List ⚠").is_none());
+    h.app.doc.toolpaths.values_mut().next().unwrap().stale = true;
+    h.frame(vec![]);
+    assert!(h.text_at("List ⚠").is_some());
 }
 
 #[test]
@@ -11258,19 +11306,20 @@ fn the_buttons_already_there_keep_their_places() {
             "component_levels",
         ],
     );
+    // the Toolpaths page was regrouped on purpose (Matthew, 2026-11-13); its new groups
+    // keep their places from here on
     starts(
-        "Toolpath Templates",
-        &["array_copy_toolpath", "merged_toolpath"],
-    );
-    starts(
-        "Output",
+        "Job and Tools",
         &[
-            "save_toolpaths",
-            "toolpath_summary",
+            "material_setup",
+            "materials",
             "tool_database",
             "keep_out_zones",
-            "toolpath_tiling",
         ],
+    );
+    starts(
+        "Reuse Toolpaths",
+        &["array_copy_toolpath", "merged_toolpath"],
     );
 }
 

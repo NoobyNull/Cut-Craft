@@ -88,81 +88,143 @@ pub const DESIGN_SUBTABS: &[SubTab] = &[
     },
 ];
 
-/// The Design sub-tabs in the tab row and those shown as sections of their own under it, by
-/// index in [`DESIGN_SUBTABS`], each in that order. `sections` names the sub-tabs moved out
-/// of the row (Options' `design_sections`); names that are no sub-tab are ignored.
-pub fn subtab_layout(sections: &[String]) -> (Vec<usize>, Vec<usize>) {
-    (0..DESIGN_SUBTABS.len()).partition(|&i| !sections.iter().any(|s| s == DESIGN_SUBTABS[i].name))
+/// The Toolpaths page's sub-tabs, in order, the same way as the Design page's: making a
+/// toolpath, the list of those made, previewing them and saving them for the machine each
+/// get the page's whole height, rather than the list taking half of it and pushing the
+/// last tool groups off the bottom (`re/SPEC.md`, Toolpaths sub-tabs).
+pub const TOOLPATH_SUBTABS: &[SubTab] = &[
+    SubTab {
+        name: "Make",
+        hint: "Pick how to cut: each button makes a toolpath from the vectors or model you \
+               selected",
+        groups: &[
+            "Cut Out and Clear",
+            "Holes",
+            "Carve and Engrave",
+            "Edges and Inlays",
+            "3D Toolpaths",
+            "Laser",
+            "From a Template",
+        ],
+    },
+    SubTab {
+        name: "List",
+        hint: "Every toolpath in the job, in the order they cut: pick, reorder, group, edit, \
+               copy or save them as a template",
+        groups: &["Reuse Toolpaths"],
+    },
+    SubTab {
+        name: "Preview",
+        hint: "Watch the toolpaths cut the material, and check them before saving",
+        groups: &["Check"],
+    },
+    SubTab {
+        name: "Save",
+        hint: "Write the file your machine runs, and the sheets and labels that go with it",
+        groups: &["Save for the Machine", "Paperwork for the Job", "Big Jobs"],
+    },
+];
+
+/// The groups the Toolpaths page shows over its sub-tabs whichever is open: the material
+/// and the bits, wanted at any stage.
+pub const TOOLPATH_ALWAYS_SHOWN: &[&str] = &["Job and Tools"];
+
+/// Moving a Toolpaths sub-tab between the tab row and a section of its own, as
+/// [`SUBTAB_PLACE`] does for the Design page's.
+pub const TOOLPATH_SUBTAB_PLACE: &str = "toolpath_subtab_place:";
+
+/// A page's sub-tabs, the groups shown over them, and the action that moves one between the
+/// tab row and a section of its own: the Design and Toolpaths pages follow the same rules.
+#[derive(Clone, Copy, Debug)]
+pub struct SubTabSet {
+    pub tabs: &'static [SubTab],
+    pub always: &'static [&'static str],
+    pub place: &'static str,
 }
 
-/// The sub-tab the row shows open: `open` while it is in the row, else the row's first; none
-/// when every sub-tab is a section.
-pub fn open_subtab(open: usize, sections: &[String]) -> Option<usize> {
-    let (row, _) = subtab_layout(sections);
-    row.contains(&open).then_some(open).or(row.first().copied())
+/// The Design page's sub-tabs.
+pub const DESIGN: SubTabSet = SubTabSet {
+    tabs: DESIGN_SUBTABS,
+    always: ALWAYS_SHOWN,
+    place: SUBTAB_PLACE,
+};
+
+/// The Toolpaths page's sub-tabs.
+pub const TOOLPATHS: SubTabSet = SubTabSet {
+    tabs: TOOLPATH_SUBTABS,
+    always: TOOLPATH_ALWAYS_SHOWN,
+    place: TOOLPATH_SUBTAB_PLACE,
+};
+
+impl SubTabSet {
+    /// The sub-tabs in the tab row and those shown as sections of their own under it, by
+    /// index in `tabs`, each in that order. `sections` names the sub-tabs moved out of the
+    /// row (kept in the options); names that are no sub-tab are ignored.
+    pub fn layout(&self, sections: &[String]) -> (Vec<usize>, Vec<usize>) {
+        (0..self.tabs.len()).partition(|&i| !sections.iter().any(|s| s == self.tabs[i].name))
+    }
+
+    /// The sub-tab the row shows open: `open` while it is in the row, else the row's first;
+    /// none when every sub-tab is a section.
+    pub fn open(&self, open: usize, sections: &[String]) -> Option<usize> {
+        let (row, _) = self.layout(sections);
+        row.contains(&open).then_some(open).or(row.first().copied())
+    }
+
+    /// A sub-tab's right-click menu, on its tab in the row or its section's heading.
+    pub fn menu(&self, name: &str, sections: &[String]) -> Vec<MenuItem> {
+        let place = self.place;
+        let in_section = sections.iter().any(|s| s == name);
+        let (row, apart) = self.layout(sections);
+        let mut menu = vec![if in_section {
+            MenuItem::with_action("Put Back in the Tab Row", &format!("{place}{name}:row"))
+        } else {
+            MenuItem::with_action("Show as Its Own Section", &format!("{place}{name}:section"))
+        }];
+        menu.push(MenuItem::separator());
+        menu.push(MenuItem {
+            is_checked: apart.is_empty(),
+            ..MenuItem::with_action("All Tabs in One Row", &format!("{place}*:row"))
+        });
+        menu.push(MenuItem {
+            is_checked: row.is_empty(),
+            ..MenuItem::with_action("Every Tab as Its Own Section", &format!("{place}*:section"))
+        });
+        menu
+    }
+
+    /// `sections` after a move action of this set, kept in `tabs` order; `None` for an
+    /// action that is not one.
+    pub fn placed(&self, sections: &[String], action: &str) -> Option<Vec<String>> {
+        let (name, place) = action.strip_prefix(self.place)?.rsplit_once(':')?;
+        let apart = match place {
+            "section" => true,
+            "row" => false,
+            _ => return None,
+        };
+        if name != "*" && !self.tabs.iter().any(|t| t.name == name) {
+            return None;
+        }
+        Some(
+            self.tabs
+                .iter()
+                .map(|t| t.name)
+                .filter(|&t| {
+                    if name == "*" || t == name {
+                        apart
+                    } else {
+                        sections.iter().any(|s| s == t)
+                    }
+                })
+                .map(str::to_owned)
+                .collect(),
+        )
+    }
 }
 
 /// Moving a Design sub-tab between the tab row and a section of its own: then the sub-tab's
 /// name and `section` or `row`, or `*` and either for every sub-tab.
 pub const SUBTAB_PLACE: &str = "subtab_place:";
-
-/// A Design sub-tab's right-click menu, on its tab in the row or its section's heading.
-pub fn subtab_menu(name: &str, sections: &[String]) -> Vec<MenuItem> {
-    let in_section = sections.iter().any(|s| s == name);
-    let (row, apart) = subtab_layout(sections);
-    let mut menu = vec![if in_section {
-        MenuItem::with_action(
-            "Put Back in the Tab Row",
-            &format!("{SUBTAB_PLACE}{name}:row"),
-        )
-    } else {
-        MenuItem::with_action(
-            "Show as Its Own Section",
-            &format!("{SUBTAB_PLACE}{name}:section"),
-        )
-    }];
-    menu.push(MenuItem::separator());
-    menu.push(MenuItem {
-        is_checked: apart.is_empty(),
-        ..MenuItem::with_action("All Tabs in One Row", &format!("{SUBTAB_PLACE}*:row"))
-    });
-    menu.push(MenuItem {
-        is_checked: row.is_empty(),
-        ..MenuItem::with_action(
-            "Every Tab as Its Own Section",
-            &format!("{SUBTAB_PLACE}*:section"),
-        )
-    });
-    menu
-}
-
-/// `sections` after a [`SUBTAB_PLACE`] action, kept in [`DESIGN_SUBTABS`] order; `None` for
-/// an action that is not one.
-pub fn placed(sections: &[String], action: &str) -> Option<Vec<String>> {
-    let (name, place) = action.strip_prefix(SUBTAB_PLACE)?.rsplit_once(':')?;
-    let apart = match place {
-        "section" => true,
-        "row" => false,
-        _ => return None,
-    };
-    if name != "*" && !DESIGN_SUBTABS.iter().any(|t| t.name == name) {
-        return None;
-    }
-    Some(
-        DESIGN_SUBTABS
-            .iter()
-            .map(|t| t.name)
-            .filter(|&t| {
-                if name == "*" || t == name {
-                    apart
-                } else {
-                    sections.iter().any(|s| s == t)
-                }
-            })
-            .map(str::to_owned)
-            .collect(),
-    )
-}
 
 /// Names and descriptions of the built-in tools on the Import sub-tab, which have no
 /// command crate to give them: the names run words together ("Import Vectors Bitmap")
@@ -330,17 +392,44 @@ impl Toolbar {
     /// tool on two sub-tabs (Distort Object is under Transform Objects and Shape Editing)
     /// stays on `open` when it is there, else is found on the first.
     pub fn subtab_of(&self, id: &str, open: usize) -> Option<usize> {
-        let all = self.all_design_groups();
-        let on = |t: &SubTab| {
-            t.groups
-                .iter()
-                .any(|name| all.iter().any(|g| g.name == *name && g.tools.contains(&id)))
-        };
-        if DESIGN_SUBTABS.get(open).is_some_and(on) {
-            return Some(open);
-        }
-        DESIGN_SUBTABS.iter().position(on)
+        subtab_of_in(DESIGN_SUBTABS, &self.all_design_groups(), id, open)
     }
+
+    /// The Toolpaths page's groups called `names`, in that order.
+    pub fn toolpath_named(&self, names: &[&str]) -> Vec<ToolGroup> {
+        names
+            .iter()
+            .filter_map(|name| {
+                self.toolpath_groups
+                    .iter()
+                    .find(|g| g.name == *name)
+                    .copied()
+            })
+            .collect()
+    }
+
+    /// Toolpaths sub-tab `tab`'s own groups; none for a tab out of range.
+    pub fn toolpath_subtab_groups(&self, tab: usize) -> Vec<ToolGroup> {
+        self.toolpath_named(TOOLPATH_SUBTABS.get(tab).map_or(&[][..], |t| t.groups))
+    }
+
+    /// The Toolpaths sub-tab `id` is on, if any, as [`Self::subtab_of`].
+    pub fn toolpath_subtab_of(&self, id: &str, open: usize) -> Option<usize> {
+        subtab_of_in(TOOLPATH_SUBTABS, &self.toolpath_groups, id, open)
+    }
+}
+
+/// The sub-tab of `tabs` whose groups (found in `all`) hold `id`: `open` when it is one.
+fn subtab_of_in(tabs: &[SubTab], all: &[ToolGroup], id: &str, open: usize) -> Option<usize> {
+    let on = |t: &SubTab| {
+        t.groups
+            .iter()
+            .any(|name| all.iter().any(|g| g.name == *name && g.tools.contains(&id)))
+    };
+    if tabs.get(open).is_some_and(on) {
+        return Some(open);
+    }
+    tabs.iter().position(on)
 }
 
 /// The Drawing tab. Group names and which tool sits in which group follow the help
@@ -551,29 +640,54 @@ fn modeling_groups() -> Vec<ToolGroup> {
 /// The Toolpaths panel, laid out the same way.
 fn toolpath_groups() -> Vec<ToolGroup> {
     vec![
-        group("Material", &["material_setup", "materials"]),
+        // over the sub-tabs: what every toolpath is cut from and with
         group(
-            "Toolpath Operations",
+            "Job and Tools",
+            &[
+                "material_setup",
+                "materials",
+                "tool_database",
+                "keep_out_zones",
+            ],
+        ),
+        // Make: grouped by what the cut is for, in a beginner's words
+        group(
+            "Cut Out and Clear",
             &[
                 "profile_toolpath",
                 "pocket_toolpath",
+                "surfacing_toolpath",
+                "drag_knife_toolpath",
+            ],
+        ),
+        group(
+            "Holes",
+            &[
                 "drilling_toolpath",
                 "drill_bank_toolpath",
-                "quick_engrave_toolpath",
-                "vcarve_engrave_toolpath",
-                "vcarve_inlay_toolpath",
-                "inlay_toolpath",
-                "chamfer_toolpath",
-                "fluting_toolpath",
-                "prism_toolpath",
                 "thread_milling_toolpath",
                 "keyhole_toolpath",
-                "drag_knife_toolpath",
-                "moulding_toolpath",
-                "texture_toolpath",
+            ],
+        ),
+        group(
+            "Carve and Engrave",
+            &[
+                "quick_engrave_toolpath",
+                "vcarve_engrave_toolpath",
+                "fluting_toolpath",
+                "prism_toolpath",
                 "photo_vcarve_toolpath",
                 "sketch_carving_toolpath",
-                "surfacing_toolpath",
+                "texture_toolpath",
+            ],
+        ),
+        group(
+            "Edges and Inlays",
+            &[
+                "chamfer_toolpath",
+                "moulding_toolpath",
+                "vcarve_inlay_toolpath",
+                "inlay_toolpath",
             ],
         ),
         group(
@@ -588,32 +702,31 @@ fn toolpath_groups() -> Vec<ToolGroup> {
             "Laser",
             &["laser_cut_fill_toolpath", "laser_picture_toolpath"],
         ),
+        group("From a Template", &["load_template"]),
+        // List: what is done with toolpaths already made
         group(
-            "Toolpath Templates",
+            "Reuse Toolpaths",
             &[
                 "array_copy_toolpath",
                 "merged_toolpath",
-                // The Toolpath Templates icons, which were only in the Toolpaths menu
-                "load_template",
                 "save_selected_toolpath_as_template",
                 "save_all_visible_toolpaths_as_template",
             ],
         ),
+        // Preview
+        group("Check", &["toolpath_summary"]),
+        // Save: the Save tab draws this one as its big button
+        group("Save for the Machine", &["save_toolpaths"]),
         group(
-            "Output",
+            "Paperwork for the Job",
             &[
-                "save_toolpaths",
-                "toolpath_summary",
-                "tool_database",
-                "keep_out_zones",
-                "toolpath_tiling",
-                // what goes to the machine with the G-code: the sheet, labels and list
                 "create_job_sheet",
                 "print_job_sheet",
                 "part_labels",
                 "cut_list",
             ],
         ),
+        group("Big Jobs", &["toolpath_tiling"]),
     ]
 }
 
@@ -2320,6 +2433,154 @@ mod tests {
     }
 
     #[test]
+    fn every_toolpath_group_is_on_exactly_one_sub_tab_or_always_shown() {
+        let toolbar = super::Toolbar::new();
+        let placed: Vec<&str> = super::TOOLPATH_ALWAYS_SHOWN
+            .iter()
+            .chain(super::TOOLPATH_SUBTABS.iter().flat_map(|t| t.groups.iter()))
+            .copied()
+            .collect();
+        for group in &toolbar.toolpath_groups {
+            let n = placed.iter().filter(|p| **p == group.name).count();
+            assert_eq!(n, 1, "{} is placed {n} times", group.name);
+        }
+        for name in &placed {
+            assert!(
+                toolbar.toolpath_groups.iter().any(|g| g.name == *name),
+                "{name} is no group"
+            );
+        }
+        let names: Vec<&str> = super::TOOLPATH_SUBTABS.iter().map(|t| t.name).collect();
+        assert_eq!(
+            names,
+            ["Make", "List", "Preview", "Save"],
+            "in the order a job goes"
+        );
+    }
+
+    /// Regrouping the Toolpaths page (Matthew, 2026-11-13) lost no tool and put none twice.
+    #[test]
+    fn the_toolpaths_page_keeps_every_tool_it_had() {
+        let before = [
+            "material_setup",
+            "materials",
+            "profile_toolpath",
+            "pocket_toolpath",
+            "drilling_toolpath",
+            "drill_bank_toolpath",
+            "quick_engrave_toolpath",
+            "vcarve_engrave_toolpath",
+            "vcarve_inlay_toolpath",
+            "inlay_toolpath",
+            "chamfer_toolpath",
+            "fluting_toolpath",
+            "prism_toolpath",
+            "thread_milling_toolpath",
+            "keyhole_toolpath",
+            "drag_knife_toolpath",
+            "moulding_toolpath",
+            "texture_toolpath",
+            "photo_vcarve_toolpath",
+            "sketch_carving_toolpath",
+            "surfacing_toolpath",
+            "3d_roughing_toolpath",
+            "3d_finishing_toolpath",
+            "rounding_toolpath",
+            "laser_cut_fill_toolpath",
+            "laser_picture_toolpath",
+            "array_copy_toolpath",
+            "merged_toolpath",
+            "load_template",
+            "save_selected_toolpath_as_template",
+            "save_all_visible_toolpaths_as_template",
+            "save_toolpaths",
+            "toolpath_summary",
+            "tool_database",
+            "keep_out_zones",
+            "toolpath_tiling",
+            "create_job_sheet",
+            "print_job_sheet",
+            "part_labels",
+            "cut_list",
+        ];
+        let mut now: Vec<&str> = super::toolpath_groups()
+            .iter()
+            .flat_map(|g| g.tools.iter().copied())
+            .collect();
+        let count = now.len();
+        now.sort_unstable();
+        now.dedup();
+        assert_eq!(now.len(), count, "no tool twice");
+        let mut before = before.to_vec();
+        before.sort_unstable();
+        assert_eq!(now, before);
+    }
+
+    #[test]
+    fn a_toolpath_tool_is_found_on_its_sub_tab() {
+        let toolbar = super::Toolbar::new();
+        let tab = |name: &str| super::TOOLPATH_SUBTABS.iter().position(|t| t.name == name);
+        assert_eq!(
+            toolbar.toolpath_subtab_of("profile_toolpath", 0),
+            tab("Make")
+        );
+        assert_eq!(
+            toolbar.toolpath_subtab_of("3d_roughing_toolpath", 3),
+            tab("Make")
+        );
+        assert_eq!(
+            toolbar.toolpath_subtab_of("merged_toolpath", 0),
+            tab("List")
+        );
+        assert_eq!(
+            toolbar.toolpath_subtab_of("toolpath_summary", 0),
+            tab("Preview")
+        );
+        assert_eq!(toolbar.toolpath_subtab_of("save_toolpaths", 0), tab("Save"));
+        assert_eq!(toolbar.toolpath_subtab_of("part_labels", 0), tab("Save"));
+        assert_eq!(
+            toolbar.toolpath_subtab_of("tool_database", 0),
+            None,
+            "always shown"
+        );
+        assert_eq!(toolbar.toolpath_subtab_of("draw_circle", 0), None);
+    }
+
+    #[test]
+    fn toolpath_sub_tabs_move_out_of_the_row_apart_from_the_design_pages() {
+        let none: Vec<String> = vec![];
+        let list = super::TOOLPATHS
+            .placed(
+                &none,
+                &format!("{}List:section", super::TOOLPATH_SUBTAB_PLACE),
+            )
+            .expect("a toolpaths action");
+        assert_eq!(list, ["List"]);
+        assert_eq!(super::TOOLPATHS.layout(&list), (vec![0, 2, 3], vec![1]));
+        assert_eq!(
+            super::TOOLPATHS.open(1, &list),
+            Some(0),
+            "List is not in the row"
+        );
+        // each page's actions are its own
+        assert!(
+            super::DESIGN
+                .placed(
+                    &none,
+                    &format!("{}List:section", super::TOOLPATH_SUBTAB_PLACE)
+                )
+                .is_none()
+        );
+        assert!(
+            super::TOOLPATHS
+                .placed(&none, &format!("{}Model:section", super::SUBTAB_PLACE))
+                .is_none()
+        );
+        let menu = super::TOOLPATHS.menu("Preview", &list);
+        assert!(menu[0].action.starts_with(super::TOOLPATH_SUBTAB_PLACE));
+    }
+
+    #[test]
     fn a_sub_tab_shows_its_own_groups_and_far_fewer_buttons() {
         let toolbar = super::Toolbar::new();
         let names = |tab: usize| -> Vec<&str> {
@@ -2399,33 +2660,44 @@ mod tests {
     fn sub_tabs_go_in_the_row_or_a_section_of_their_own() {
         let none: Vec<String> = vec![];
         let all = super::DESIGN_SUBTABS.len();
-        assert_eq!(super::subtab_layout(&none), ((0..all).collect(), vec![]));
+        assert_eq!(super::DESIGN.layout(&none), ((0..all).collect(), vec![]));
         let model = vec!["Model".to_owned(), "No such tab".to_owned()];
-        let (row, apart) = super::subtab_layout(&model);
+        let (row, apart) = super::DESIGN.layout(&model);
         assert_eq!(apart, [3]);
         assert_eq!(row.len(), all - 1);
         // the row shows its open tab, else its first; nothing when it is empty
-        assert_eq!(super::open_subtab(1, &model), Some(1));
-        assert_eq!(super::open_subtab(3, &model), Some(0));
-        let every = super::placed(&none, "subtab_place:*:section").unwrap();
-        assert_eq!(super::open_subtab(0, &every), None);
+        assert_eq!(super::DESIGN.open(1, &model), Some(1));
+        assert_eq!(super::DESIGN.open(3, &model), Some(0));
+        let every = super::DESIGN
+            .placed(&none, "subtab_place:*:section")
+            .unwrap();
+        assert_eq!(super::DESIGN.open(0, &every), None);
         assert_eq!(every.len(), all);
         // moved one at a time, kept in tab order
-        let one = super::placed(&none, "subtab_place:Import:section").unwrap();
-        let two = super::placed(&one, "subtab_place:Edit:section").unwrap();
+        let one = super::DESIGN
+            .placed(&none, "subtab_place:Import:section")
+            .unwrap();
+        let two = super::DESIGN
+            .placed(&one, "subtab_place:Edit:section")
+            .unwrap();
         assert_eq!(two, ["Edit", "Import"]);
         assert_eq!(
-            super::placed(&two, "subtab_place:Import:row").unwrap(),
+            super::DESIGN
+                .placed(&two, "subtab_place:Import:row")
+                .unwrap(),
             ["Edit"]
         );
-        assert_eq!(super::placed(&two, "subtab_place:*:row"), Some(vec![]));
-        assert_eq!(super::placed(&two, "subtab_place:Nothing:row"), None);
-        assert_eq!(super::placed(&two, "favourite:design:add:x"), None);
+        assert_eq!(
+            super::DESIGN.placed(&two, "subtab_place:*:row"),
+            Some(vec![])
+        );
+        assert_eq!(super::DESIGN.placed(&two, "subtab_place:Nothing:row"), None);
+        assert_eq!(super::DESIGN.placed(&two, "favourite:design:add:x"), None);
         // the menu offers the move that applies, and ticks the layout in use
-        let menu = super::subtab_menu("Edit", &two);
+        let menu = super::DESIGN.menu("Edit", &two);
         assert_eq!(menu[0].name, "Put Back in the Tab Row");
         assert_eq!(menu[0].action, "subtab_place:Edit:row");
-        let menu = super::subtab_menu("Create", &none);
+        let menu = super::DESIGN.menu("Create", &none);
         assert_eq!(menu[0].name, "Show as Its Own Section");
         let ticked: Vec<&str> = menu
             .iter()
@@ -2464,7 +2736,15 @@ mod menu_tests {
     fn every_strategy_in_the_toolpaths_tab_is_a_command() {
         let registry = crate::commands::registry();
         for group in super::toolpath_groups() {
-            if group.name == "Output" {
+            if [
+                "Job and Tools",
+                "Check",
+                "Save for the Machine",
+                "Paperwork for the Job",
+                "Big Jobs",
+            ]
+            .contains(&group.name)
+            {
                 continue; // app actions, not commands
             }
             // the templates' load and save are app actions beside the template commands
