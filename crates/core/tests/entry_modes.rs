@@ -448,6 +448,12 @@ fn surfacing_bits_fly_cutters_and_form_tools_cannot_plunge() {
         ..Tool::default()
     };
     assert!(form.cannot_plunge());
+    let surfacing = Tool {
+        name: "Wide bit".into(),
+        shape: ToolShape::SurfacingBit,
+        ..Tool::default()
+    };
+    assert!(surfacing.cannot_plunge());
 }
 
 #[test]
