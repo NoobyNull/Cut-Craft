@@ -42,7 +42,7 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
     let units = doc.job.units;
     if let Some(deep) = too_deep(name, tool, deepest, units) {
         found.push(deep);
-    } else if tool.known_flute_length().is_none() && deepest > 0.0 {
+    } else if tool.cutting_length().is_none() && deepest > 0.0 {
         found.push(format!(
             "{name} cuts {} deep; {} has no flute length set, so whether it reaches is not \
              checked: set it in the Tool Database",

@@ -7,7 +7,7 @@
 use crate::checks::{LEFT, problems_over};
 use crate::document::Document;
 use crate::simulation::Material;
-use crate::toolpath::{MoveKind, Toolpath};
+use crate::toolpath::{MoveKind, Tool, ToolShape, Toolpath};
 use glam::DVec3;
 
 /// How deep a rapid move may seem to go into the material before it is a crash, mm: the
@@ -35,6 +35,8 @@ const SPOILBOARD: f64 = 1.0;
 /// The simulation's cells across the job's longer side: about the smallest tool's radius,
 /// within these bounds.
 const FEWEST_CELLS: f64 = 100.0;
+/// How wide a V-bit's finest stroke is taken to be when sizing the cells, mm.
+const V_STROKE: f64 = 1.0;
 const MOST_CELLS: f64 = 800.0;
 
 /// Whether a finding stops the save.
@@ -93,6 +95,13 @@ pub struct Limits {
 /// Everything found checking `toolpaths`, cut in the order given, on `limits`' machine:
 /// errors first, then warnings, each in toolpath order.
 pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Finding> {
+    let told_apart = told_apart(toolpaths);
+    let toolpaths: Vec<&Toolpath> = told_apart
+        .iter()
+        .zip(toolpaths)
+        .map(|(renamed, &toolpath)| renamed.as_ref().unwrap_or(toolpath))
+        .collect();
+    let toolpaths = toolpaths.as_slice();
     let mut found = vec![];
     for toolpath in toolpaths {
         settings(doc, toolpath, limits, &mut found);
@@ -104,6 +113,35 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
     // stable: each severity keeps toolpath order
     found.sort_by_key(|f| std::cmp::Reverse(f.severity));
     found
+}
+
+/// Copies of the toolpaths whose name another one shares, named by which of them each is
+/// ("V-Carve (2nd of 2)"), so the findings say which one they mean; `None` for
+/// a name of its own.
+fn told_apart(toolpaths: &[&Toolpath]) -> Vec<Option<Toolpath>> {
+    let named = |name: &str| toolpaths.iter().filter(|t| t.name == name).count();
+    let ordinal = |n: usize| match (n % 10, n % 100) {
+        (1, k) if k != 11 => format!("{n}st"),
+        (2, k) if k != 12 => format!("{n}nd"),
+        (3, k) if k != 13 => format!("{n}rd"),
+        _ => format!("{n}th"),
+    };
+    toolpaths
+        .iter()
+        .enumerate()
+        .map(|(i, &toolpath)| {
+            let all = named(&toolpath.name);
+            (all > 1).then(|| {
+                let before = toolpaths[..i]
+                    .iter()
+                    .filter(|t| t.name == toolpath.name)
+                    .count();
+                let mut renamed = toolpath.clone();
+                renamed.name = format!("{} ({} of {all})", toolpath.name, ordinal(before + 1));
+                renamed
+            })
+        })
+        .collect()
 }
 
 /// What one toolpath's own settings will not cut with.
@@ -322,10 +360,15 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
         crate::document::Units::Mm => format!("{mm:.1}"),
         crate::document::Units::Inch => format!("{:.3}", mm / 25.4),
     };
+    // a V-bit's cut is as narrow as it is shallow, however wide the bit: its fine strokes
+    // need the finest cells
     let smallest = toolpaths
         .iter()
-        .map(|t| t.tool.diameter)
-        .filter(|&d| d > 0.0)
+        .filter(|t| t.tool.diameter > 0.0)
+        .map(|t| match t.tool.shape {
+            ToolShape::VBit => V_STROKE,
+            _ => t.tool.diameter,
+        })
         .fold(f64::INFINITY, f64::min);
     if !smallest.is_finite() || job.width <= 0.0 || job.height <= 0.0 {
         return;
@@ -340,6 +383,7 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
             continue;
         }
         let tool = &toolpath.tool;
+        let clear = clear_of(tool, material.cell);
         // the peaks only come down as the material is cut, so they stay safe to search by
         let peaks = material.peaks();
         let (mut crashes, mut worst): (usize, Option<(f64, DVec3)>) = (0, None);
@@ -348,7 +392,7 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
             let (a, b) = (pair[0].to, pair[1].to);
             match pair[1].kind {
                 MoveKind::Rapid => {
-                    let into = material.overcut_on(tool, a, b, &peaks);
+                    let into = material.overcut_near(tool, a, b, &peaks, clear);
                     if into > CRASH {
                         crashes += 1;
                         if worst.is_none_or(|(deepest, _)| into > deepest) {
@@ -359,8 +403,8 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
                 MoveKind::Cut => {
                     let length = a.distance(b);
                     cutting += length;
-                    let takes = material.overcut_on(tool, a, b, &peaks);
-                    if takes < -CLEAR || (takes <= CUTS && cut_before(&material, b, n)) {
+                    let takes = material.overcut_near(tool, a, b, &peaks, 2.0 * clear);
+                    if takes < -clear || (takes <= CUTS && cut_before(&material, b, n)) {
                         air += length;
                     }
                 }
@@ -399,6 +443,17 @@ fn simulate(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
             )));
         }
     }
+}
+
+/// How far clear of the material `tool`'s cut must seem, on cells `cell` wide, to be
+/// cutting air: [`CLEAR`], or more for a V-bit, whose sloping side can pass a cell's centre
+/// by half a cell's diagonal while its tip cuts a groove between the centres.
+fn clear_of(tool: &Tool, cell: f64) -> f64 {
+    let half = (tool.angle / 2.0).to_radians();
+    if tool.shape != ToolShape::VBit || half <= 0.0 || half >= std::f64::consts::FRAC_PI_2 {
+        return CLEAR;
+    }
+    CLEAR.max(cell * std::f64::consts::FRAC_1_SQRT_2 / half.tan())
 }
 
 /// Whether the cell at `at` was last cut by a toolpath before the `n`th.
@@ -532,6 +587,55 @@ mod tests {
         assert_eq!(warnings.len(), 1, "{found:?}");
         assert!(
             warnings[0].starts_with("Again cuts air for 100%"),
+            "{warnings:?}"
+        );
+    }
+
+    #[test]
+    fn fine_v_carving_on_a_big_job_is_not_air() {
+        // a 3/4 in V-bit carving grooves 1 mm deep, 2 mm wide, into fresh stock on a
+        // 1.2 m job: cells sized by the bit's width (9.5 mm) missed the thin grooves and
+        // called 97% of a fresh V-Carve air
+        let mut doc = job();
+        doc.job.width = 1200.0;
+        doc.job.height = 1200.0;
+        let mut carve = slot("V-Carve", 50.0, 20.0, 180.0, 1.0);
+        carve.tool = Tool {
+            name: "3/4 in V-Bit".into(),
+            shape: crate::toolpath::ToolShape::VBit,
+            diameter: 19.05,
+            angle: 90.0,
+            ..tool()
+        };
+        carve.moves.clear();
+        for k in 0..20 {
+            let y = 50.0 + 3.1 * f64::from(k);
+            carve.moves.extend([
+                mv(MoveKind::Rapid, 20.0, y, 5.0),
+                mv(MoveKind::Plunge, 20.0, y, -1.0),
+                mv(MoveKind::Cut, 180.0, y, -1.0),
+                mv(MoveKind::Rapid, 180.0, y, 5.0),
+            ]);
+        }
+        let found = check(&doc, &[&carve], &Limits::default());
+        assert!(
+            !messages(&found, Severity::Warning)
+                .iter()
+                .any(|m| m.contains("cuts air")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn toolpaths_with_the_same_name_are_told_apart() {
+        // calculating twice leaves two toolpaths of one name: which one cuts air?
+        let first = slot("V-Carve", 50.0, 20.0, 180.0, 3.0);
+        let again = slot("V-Carve", 50.0, 20.0, 180.0, 3.0);
+        let found = check(&job(), &[&first, &again], &Limits::default());
+        let warnings = messages(&found, Severity::Warning);
+        assert_eq!(warnings.len(), 1, "{found:?}");
+        assert!(
+            warnings[0].starts_with("V-Carve (2nd of 2) cuts air for 100%"),
             "{warnings:?}"
         );
     }
