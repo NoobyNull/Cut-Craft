@@ -1,3 +1,4 @@
+- New Surfacing Toolpath for flattening spoilboards, slabs and material
 - Entry modes for Profile and Pocket: helix, zig-zag, ramp or straight down, set in one Entry window
 - Checks before cutting: V-bits reach as deep as their V, and V-Carve no longer warns of cutting air by mistake
 - Preview jumps and scrubbing apply at once, and the carving stays sharp while it plays
