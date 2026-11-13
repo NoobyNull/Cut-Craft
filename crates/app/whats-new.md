@@ -2,4 +2,4 @@
 - Entry modes for Profile and Pocket: helix, zig-zag, ramp or straight down, set in one Entry window
 - Checks before cutting: V-bits reach as deep as their V, and V-Carve no longer warns of cutting air by mistake
 - Preview jumps and scrubbing apply at once, and the carving stays sharp while it plays
-- Post-processor windows fill their height instead of leaving blank space
+- DXF files without units come in at a sensible size, and post-processor windows fill their height
