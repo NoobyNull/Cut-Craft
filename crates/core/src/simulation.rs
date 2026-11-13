@@ -82,6 +82,10 @@ pub fn each<T: Sync, U: Send>(items: &[T], f: impl Fn(&T) -> U + Sync) -> Vec<U>
     out.into_iter().flatten().collect()
 }
 
+/// How far clear of the material [`Material::overcut`] measures exactly, mm: a fine V-bit
+/// cut on a big job has thousands of cells inside the bit's width that its tip is far above.
+pub const LOOKED: f64 = 5.0;
+
 /// The material seen from above: a grid of square cells, each holding the height of the
 /// surface over it (0 is the top of the material, `bottom` its underside).
 #[derive(Clone, Debug, PartialEq)]
@@ -461,13 +465,20 @@ impl Material {
     }
 
     /// How far below the surface the tool would cut going straight from `a` to `b`, at the
-    /// deepest cell centre it passes over; zero or less when it clears everything.
+    /// deepest cell centre it passes over; zero or less when it clears everything (how much
+    /// less only down to [`LOOKED`] below zero: past that, minus infinity).
     pub fn overcut(&self, tool: &Tool, a: DVec3, b: DVec3) -> f64 {
         self.overcut_on(tool, a, b, &self.peaks())
     }
 
     /// [`Self::overcut`] with this grid's [`Self::peaks`] worked out once.
     pub fn overcut_on(&self, tool: &Tool, a: DVec3, b: DVec3, peaks: &Tiles) -> f64 {
+        self.overcut_near(tool, a, b, peaks, LOOKED)
+    }
+
+    /// [`Self::overcut_on`] measuring exactly only down to `looked` below zero: a caller
+    /// that only asks whether a move is that far clear looks at far fewer cells.
+    pub fn overcut_near(&self, tool: &Tool, a: DVec3, b: DVec3, peaks: &Tiles, looked: f64) -> f64 {
         let mut worst = f64::NEG_INFINITY;
         let (low, from, to) = (a.z.min(b.z), a.truncate(), b.truncate());
         let dig = |columns: Range<usize>, rows: Range<usize>, worst: &mut f64| {
@@ -492,7 +503,11 @@ impl Material {
                 }
             }
         };
-        let near = (tool.diameter / 2.0).min(tool.reach());
+        // the material is nowhere above its top, 0: further out than the tool's side is
+        // `looked` above that, every cell is clear by more than that, and is not looked at
+        let near = (tool.diameter / 2.0)
+            .min(tool.reach())
+            .min(tool.reach_below(looked - low));
         let (columns, rows) = self.swept(a, b, near);
         dig(columns, rows, &mut worst);
         if tool.reach() > near {

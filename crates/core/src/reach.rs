@@ -7,7 +7,7 @@ use crate::document::Units;
 use crate::geometry::Path;
 use crate::polygon::{self, Corners};
 use crate::simulation::Material;
-use crate::toolpath::Tool;
+use crate::toolpath::{Tool, ToolShape};
 
 /// Which side of the shapes the bit cuts: inside (a pocket, a hole) or outside (a part).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -228,8 +228,17 @@ pub fn missed_sentence(name: &str, tool: &Tool, missed: &Missed, fix: Fix, units
 /// Whether cutting `depth` mm deep is beyond `tool`'s flutes, as one sentence in `units` that
 /// says what to do about it; `None` when it reaches, or the flute length is not set.
 pub fn too_deep(name: &str, tool: &Tool, depth: f64, units: Units) -> Option<String> {
-    let flutes = tool.known_flute_length()?;
+    let flutes = tool.cutting_length()?;
     (depth > flutes + 1e-6).then(|| {
+        if tool.shape == ToolShape::VBit {
+            return format!(
+                "{name} cuts {} deep, but the V of {} is only {} deep, so past that its \
+                 shank rubs the sides: pick a wider V-bit, or cut less deep",
+                units.length(depth, 1),
+                tool.name,
+                units.length(flutes, 1)
+            );
+        }
         format!(
             "{name} cuts {} deep, but the flutes of {} are only {} long: pick a bit with \
              longer flutes, or cut less deep",
@@ -253,11 +262,16 @@ pub fn form_line(
         return None;
     }
     let mut problems = vec![];
-    if let (Some(depth), Some(flutes)) = (depth, tool.known_flute_length())
+    if let (Some(depth), Some(flutes)) = (depth, tool.cutting_length())
         && depth > flutes + 1e-6
     {
+        let part = if tool.shape == ToolShape::VBit {
+            "the V"
+        } else {
+            "its flutes"
+        };
         problems.push(format!(
-            "too deep: the cut is {}, its flutes {}",
+            "too deep: the cut is {}, {part} {}",
             units.length(depth, 1),
             units.length(flutes, 1)
         ));
@@ -279,7 +293,7 @@ pub fn form_line(
             problems.join("; ")
         )));
     }
-    if depth.is_some() && tool.known_flute_length().is_none() {
+    if depth.is_some() && tool.cutting_length().is_none() {
         let fits = if missed.is_some() {
             "Fits every spot, but depth"
         } else {
@@ -431,6 +445,43 @@ mod tests {
         let said = too_deep("Pocket 1", &tool, 25.4, Units::Inch).unwrap();
         assert!(said.contains("1.000 in deep"), "{said}");
         assert!(said.contains("only 0.787 in long"), "{said}");
+    }
+
+    /// A 3/4 inch 90° V-bit with no flute length, as V-bits come.
+    fn v_bit() -> Tool {
+        Tool {
+            name: "3/4 in V-Bit".into(),
+            shape: ToolShape::VBit,
+            diameter: 19.05,
+            angle: 90.0,
+            flute_length: 0.0,
+            ..Tool::default()
+        }
+    }
+
+    #[test]
+    fn a_v_bit_reaches_as_deep_as_its_v_without_a_flute_length() {
+        // a V-bit has no flute length: the V itself is how deep it cuts, half its width
+        // over the tangent of half its angle, 9.525 mm here
+        let tool = v_bit();
+        assert!((tool.cutting_length().unwrap() - 9.525).abs() < 1e-9);
+        assert_eq!(too_deep("V-Carve", &tool, 2.1, Units::Mm), None);
+        let said = too_deep("V-Carve", &tool, 12.0, Units::Mm).unwrap();
+        assert!(said.contains("12.0 mm deep"), "{said}");
+        assert!(
+            said.contains("V of 3/4 in V-Bit is only 9.5 mm deep"),
+            "{said}"
+        );
+        assert!(!said.contains("flute"), "{said}");
+        // and the form never asks for a flute length
+        assert_eq!(
+            form_line(&tool, Some(2.1), None, Units::Mm),
+            Some(Line::Reaches("Reaches everything".into()))
+        );
+        let Some(Line::Short(short)) = form_line(&tool, Some(12.0), None, Units::Mm) else {
+            panic!("too deep is said");
+        };
+        assert!(short.contains("the V 9.5 mm"), "{short}");
     }
 
     #[test]

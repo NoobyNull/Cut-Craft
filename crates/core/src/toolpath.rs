@@ -292,6 +292,18 @@ impl Tool {
         (self.flute_length.is_finite() && self.flute_length > 0.0).then_some(self.flute_length)
     }
 
+    /// How deep the tool can cut, when that is known: a V-bit's V (half its width over the
+    /// tangent of half its angle; V-bits have no flute length, and past the V the shank
+    /// rubs), otherwise its [`Self::known_flute_length`].
+    pub fn cutting_length(&self) -> Option<f64> {
+        if self.shape == ToolShape::VBit {
+            let half = (self.angle / 2.0).to_radians();
+            return (self.diameter > 0.0 && half > 0.0 && half < std::f64::consts::FRAC_PI_2)
+                .then(|| self.diameter / 2.0 / half.tan());
+        }
+        self.known_flute_length()
+    }
+
     /// The My Tools group a tool copied in from a catalogue (or added) goes in: its maker,
     /// then its type, as `Amana/V-Bits` (`Generic/...` with no maker).
     pub fn own_group(&self) -> String {
@@ -465,6 +477,10 @@ impl Tool {
                 radius * a.cos() + (height - radius * (1.0 - a.sin())).max(0.0) * a.tan()
             }
             (Some(a), _) => radius + height.max(0.0) * a.tan(),
+            // a V-bit's cone widens to the full width only at the top of the V
+            (None, ToolShape::VBit) if self.angle > 0.0 && self.angle < 180.0 => {
+                (height.max(0.0) * (self.angle / 2.0).to_radians().tan()).min(radius)
+            }
             (None, _) => radius,
         };
         r.min(self.reach())
