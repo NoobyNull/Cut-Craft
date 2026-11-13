@@ -2205,8 +2205,10 @@ mod tests {
     }
 
     /// Every lettered field, with the picture shown above it (its group's, its own).
+    /// A field outside any group may be marked on a picture shown higher up the form, above
+    /// an earlier field outside a group (Set Size's H, under the W that shows the picture).
     fn lettered_fields<'a>(fields: &'a [Field], above: bool, out: &mut Vec<(&'a Field, bool)>) {
-        for f in fields {
+        for (i, f) in fields.iter().enumerate() {
             if f.dim.is_some() {
                 let pictured = above
                     || f.diagram.is_some()
@@ -2214,7 +2216,11 @@ mod tests {
                         fields
                             .iter()
                             .any(|o| o.group.as_ref() == Some(g) && o.diagram.is_some())
-                    });
+                    })
+                    || (f.group.is_none()
+                        && fields[..i]
+                            .iter()
+                            .any(|o| o.group.is_none() && o.diagram.is_some()));
                 out.push((f, pictured));
             }
             if let Kind::Group(inner) = &f.kind {

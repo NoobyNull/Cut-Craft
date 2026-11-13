@@ -43,6 +43,7 @@ pub struct Params {
     pub kind: Kind,
     /// Of the fillet, or of the cutter for dog-bones and T-bones
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "R", "x-diagram" = "diagrams/fillet_radius.png"))]
     pub radius: f64,
     /// Open vectors have no inside, so they get every corner
     pub corners: Corners,

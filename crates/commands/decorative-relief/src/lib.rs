@@ -24,6 +24,7 @@ pub struct Params {
     /// How high the carving stands at its highest point, above the material it sits on
     #[serde(default = "height")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_only.png"))]
     pub height: f64,
     /// How big a scroll is at its smallest: bigger makes fewer, bolder scrolls
     #[serde(default = "pattern_size")]

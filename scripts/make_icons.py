@@ -162,6 +162,8 @@ GLYPHS = {
     "i": [[(0.5, 0.42), (0.5, 1)], [(0.5, 0.12), (0.5, 0.16)]],
     "a": [[(0.15, 0.45), (0.4, 0.38), (0.8, 0.42), (0.85, 0.6), (0.85, 1)],
           [(0.85, 0.65), (0.3, 0.65), (0.1, 0.8), (0.3, 1), (0.85, 0.9)]],
+    "R": [[(0, 1), (0, 0), (0.7, 0), (1, 0.15), (1, 0.4), (0.7, 0.55), (0, 0.55)], [(0.45, 0.55), (1, 1)]],
+    "B": [[(0, 0), (0, 1), (0.75, 1), (1, 0.85), (1, 0.62), (0.75, 0.5), (0, 0.5)], [(0, 0), (0.7, 0), (0.92, 0.12), (0.92, 0.38), (0.7, 0.5)]],
     "O": [[(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3), (0.3, 0)]],
 }
 
@@ -1112,6 +1114,64 @@ DIAGRAMS[dg + "vcarve_inlay_fit.svg"] = lambda: [
 DIAGRAMS[dg + "fluting_ramp.svg"] = lambda: [
     section([(X0, 16), (30, 16), (50, 34), (62, 34), (82, 16), (X1, 16)]),
     guide_up(30, 8, 16), guide_up(50, 8, 34), dim_across(30, 50, 10, "L")]
+
+
+# ---- the Design page's pictures: the vector in the ink on a light sheet, the measurement in
+# the accent with its letter
+SHEET = "#eef1f5"
+
+
+def label(s, x, y):
+    return text(s, x, y, 6, ACC, 2)
+
+
+DIAGRAMS[dg + "ellipse_size.svg"] = lambda: [
+    ell(56, 33, 26, 13, INK, 2.5, SHEET), guide_up(30, 10, 30), guide_up(82, 10, 30), dim_across(30, 82, 12, "W"),
+    line(56, 20, 96, 20, ACC, 2, GUIDE), line(56, 46, 96, 46, ACC, 2, GUIDE), darrow(94, 20, 94, 46, ACC, 2, 4), label("H", 98, 30)]
+DIAGRAMS[dg + "size_wh.svg"] = lambda: [
+    rect(32, 20, 48, 28, 2, INK, 2.5, SHEET), guide_up(32, 10, 20), guide_up(80, 10, 20), dim_across(32, 80, 12, "W"),
+    line(80, 20, 96, 20, ACC, 2, GUIDE), line(80, 48, 96, 48, ACC, 2, GUIDE), darrow(94, 20, 94, 48, ACC, 2, 4), label("H", 98, 31)]
+DIAGRAMS[dg + "arc_radius.svg"] = lambda: [
+    path("M30,44 A26,26 0 0 1 82,44", INK, 2.5), dot(56, 44, 2.5, GREY), arrow(56, 44, 74.4, 25.6, ACC, 2, 5), label("R", 68, 36)]
+DIAGRAMS[dg + "text_height.svg"] = lambda: [
+    text("SALT", 32, 18, 20, INK, 2.5), line(26, 18, 104, 18, ACC, 2, GUIDE), line(26, 38, 104, 38, ACC, 2, GUIDE),
+    darrow(22, 18, 22, 38, ACC, 2, 4), label("H", 12, 25)]
+DIAGRAMS[dg + "fillet_radius.svg"] = lambda: [
+    path("M30,48 V22 A12,12 0 0 1 42,10 H86", INK, 2.5), path("M30,22 V10 H42", GREY, 2, dash="2 2"),
+    dot(42, 22, 2.5, GREY), arrow(42, 22, 33.5, 13.5, ACC, 2, 4), label("R", 46, 24)]
+DIAGRAMS[dg + "offset_distance.svg"] = lambda: [
+    rect(38, 18, 36, 24, 2, INK, 2.5, SHEET), rect(28, 8, 56, 44, 10, ACC, 2, "none", GUIDE),
+    darrow(74, 30, 84, 30, ACC, 2, 3), label("O", 88, 27)]
+DIAGRAMS[dg + "nest_gaps.svg"] = lambda: [
+    rect(10, 4, 92, 48, 1, GREY, 2, SHEET), rect(24, 14, 26, 28, 2, INK, 2.5, "none"), circ(70, 28, 13, INK, 2.5),
+    darrow(50, 22, 57, 22, ACC, 2, 2.5), label("G", 51, 12), darrow(10, 34, 24, 34, ACC, 2, 3), label("G2", 12, 40),
+    circ(53.5, 36, 3.5, ACC, 2), label("Dia", 46, 44)]
+DIAGRAMS[dg + "plate_layout.svg"] = lambda: [
+    rect(14, 4, 84, 48, 1, GREY, 2, SHEET),
+    *[rect(26 + c * 32, 14 + r * 18, 26, 12, 2, INK, 2.5, "none") for r in range(2) for c in range(2)],
+    darrow(39, 4, 39, 14, ACC, 2, 3), label("T", 42, 6), darrow(71, 44, 71, 52, ACC, 2, 2.5), label("B", 74, 45),
+    darrow(14, 20, 26, 20, ACC, 2, 3), label("L", 4, 17), darrow(84, 38, 98, 38, ACC, 2, 3), label("R", 101, 35),
+    darrow(52, 20, 58, 20, ACC, 2, 2), label("X", 52, 9), darrow(55, 26, 55, 32, ACC, 2, 2), label("Y", 59, 25)]
+DIAGRAMS[dg + "circular_angle.svg"] = lambda: [
+    dot(56, 28, 2.5, GREY), *[rect(56 + 19 * math.cos(math.radians(a)) - 4, 28 + 19 * math.sin(math.radians(a)) - 4, 8, 8, 1, INK, 2.5, SHEET)
+                               for a in (-90, -30, 30, 90, 150, 210)],
+    line(56, 28, 56, 9, ACC, 2, GUIDE), line(56, 28, 72.5, 18.5, ACC, 2, GUIDE),
+    path("M56,17 A11,11 0 0 1 65.5,22.5", ACC, 2), label("A", 66, 6)]
+DIAGRAMS[dg + "copy_circles.svg"] = lambda: [
+    path("M10,40 C30,10 60,50 102,22", INK, 2.5),
+    *[circ(x, y, 4, ACC, 2) for x, y in ((20, 27.5), (44, 30.5), (70, 33), (94, 25.5))],
+    darrow(20, 46, 44, 46, ACC, 2, 3), label("L", 30, 48), label("Dia", 63, 40)]
+DIAGRAMS[dg + "close_gap.svg"] = lambda: [
+    path("M12,44 L40,20", INK, 2.5), path("M60,20 L100,44", INK, 2.5), node(40, 20), node(60, 20),
+    line(40, 20, 60, 20, ACC, 2, GUIDE), darrow(40, 12, 60, 12, ACC, 2, 3), label("G", 48, 1)]
+DIAGRAMS[dg + "height_only.svg"] = lambda: [
+    line(14, 46, 98, 46, GREY, 2), path("M24,46 C30,18 82,18 88,46", INK, 2.5, MODEL),
+    line(56, 25, 98, 25, ACC, 2, GUIDE), darrow(96, 25, 96, 46, ACC, 2, 4), label("H", 100, 32)]
+DIAGRAMS[dg + "height_base.svg"] = lambda: [
+    rect(28, 38, 64, 10, 0, INK, 2.5, MODEL), path("M36,38 C42,12 78,12 84,38", INK, 2.5, MODEL),
+    line(56, 19, 98, 19, ACC, 2, GUIDE), line(92, 38, 98, 38, ACC, 2, GUIDE), line(92, 48, 98, 48, ACC, 2, GUIDE),
+    darrow(96, 19, 96, 38, ACC, 2, 4), label("H", 100, 25), darrow(20, 38, 20, 48, ACC, 2, 3), line(18, 38, 28, 38, ACC, 2, GUIDE),
+    line(18, 48, 28, 48, ACC, 2, GUIDE), label("H2", 4, 40)]
 
 
 def render_diagram(name):
