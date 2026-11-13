@@ -276,6 +276,24 @@ fn default_tip_radius() -> f64 {
 }
 
 impl Tool {
+    /// Whether the bit must never go straight down into the material: a surfacing,
+    /// spoilboard or fly cutter bit (known by its name, there being no shape for them), or a
+    /// form tool. Its entries ramp instead.
+    pub fn cannot_plunge(&self) -> bool {
+        let name = self.name.to_lowercase();
+        self.shape == ToolShape::FormTool
+            || [
+                "surfac",
+                "spoilboard",
+                "fly cut",
+                "flycut",
+                "planer",
+                "planing",
+            ]
+            .iter()
+            .any(|w| name.contains(w))
+    }
+
     /// The stepover finishing passes use: its own, else (0, a tool saved with one
     /// stepover) the clearing stepover.
     pub fn finishing_stepover(&self) -> f64 {
