@@ -1169,6 +1169,12 @@ struct CutCraftApp {
     rough_3d: Option<(RoughKey, Material)>,
     /// How many toolpaths were out of date last frame.
     stale_known: usize,
+    /// Toolpaths went out of date while a form was open: once it closes, ask whether to
+    /// recalculate them.
+    stale_while_form: bool,
+    /// The "recalculate all?" question showing: how many toolpaths are out of date, and
+    /// whether Don't ask again is ticked.
+    recalculate_ask: Option<(usize, bool)>,
     /// Counts the jobs opened or made: with the history's revision, which job and which
     /// change of it the 2D view draws (a new job's history starts its revisions again).
     job_epoch: u64,

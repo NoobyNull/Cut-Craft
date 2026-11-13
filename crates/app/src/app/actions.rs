@@ -170,6 +170,8 @@ impl CutCraftApp {
             height_applied_at: None,
             job_epoch: 0,
             stale_known: 0,
+            stale_while_form: false,
+            recalculate_ask: None,
             drawn_on: None,
             model_3d: None,
             gpu_3d: None,
@@ -1292,7 +1294,12 @@ impl CutCraftApp {
             return None;
         }
         let problems: Vec<String> = found.into_iter().map(|f| f.message).collect();
-        let ask = self.options.confirmations.cutting_checks == CuttingChecks::Ask;
+        // out-of-date toolpaths are always asked about, whatever Options say
+        let stale = plan
+            .iter()
+            .flatten()
+            .any(|id| self.doc.toolpaths.get(id).is_some_and(|t| t.stale));
+        let ask = stale || self.options.confirmations.cutting_checks == CuttingChecks::Ask;
         if !problems.is_empty() && ask && !Self::save_anyway(&problems) {
             self.status.set_message("Toolpaths not saved");
             return None;
@@ -2254,6 +2261,8 @@ impl CutCraftApp {
         if more == 0 || self.history.undo_depth() == 0 {
             return;
         }
+        // asked about once the edit is done (a form's, once it closes)
+        self.stale_while_form = true;
         let (count, it, its) = if more == 1 {
             ("1 toolpath is".to_owned(), "it", "its")
         } else {
@@ -2264,6 +2273,61 @@ impl CutCraftApp {
             "{message}. {count} now out of date (⚠ in the Toolpaths list): recalculate \
              {it}, and save {its} G-code again if you already have"
         ));
+    }
+
+    /// Once a form that left toolpaths out of date has closed: asks whether to recalculate
+    /// them all now. No just leaves them marked; Save Toolpaths still warns.
+    pub(super) fn ask_to_recalculate(&mut self, ctx: &egui::Context) {
+        let done = self.form.is_none() && self.drag_3d.is_none();
+        if done && std::mem::take(&mut self.stale_while_form) {
+            let stale = self.doc.toolpaths.values().filter(|t| t.stale).count();
+            let ask = self.options.confirmations.ask_to_recalculate;
+            self.recalculate_ask = (ask && stale > 0).then_some((stale, false));
+        }
+        // recalculated meanwhile (Plate Production remakes its own straight away)
+        let now = self.doc.toolpaths.values().filter(|t| t.stale).count();
+        if now == 0 {
+            self.recalculate_ask = None;
+        }
+        let Some((asked, mut silence)) = self.recalculate_ask else {
+            return;
+        };
+        let stale = asked.min(now);
+        let (mut yes, mut no) = (false, false);
+        egui::Modal::new(egui::Id::unique("recalculate_ask")).show(ctx, |ui| {
+            ui.set_max_width(ui.spacing().interact_size.x * 6.0);
+            ui.heading("Toolpaths out of date");
+            ui.label(recalculate_question(stale));
+            ui.checkbox(&mut silence, "Don't ask again").on_hover_hint(
+                "Stop this question (Options ▸ Confirmations turns it back on). Out-of-date \
+                 toolpaths are still marked ⚠, and saving them still asks first",
+            );
+            ui.separator();
+            ui.horizontal(|ui| {
+                yes = ui
+                    .button("Recalculate All")
+                    .on_hover_hint("Make every out-of-date toolpath again from its vectors now")
+                    .clicked();
+                no = ui
+                    .button("Not Now")
+                    .on_hover_hint(
+                        "Leave them marked ⚠ in the Toolpaths list; Recalculate All is there \
+                         when you want it",
+                    )
+                    .clicked();
+            });
+        });
+        self.recalculate_ask = Some((asked, silence));
+        if yes || no {
+            self.recalculate_ask = None;
+            if silence {
+                self.options.confirmations.ask_to_recalculate = false;
+                self.save_options();
+            }
+        }
+        if yes {
+            self.invoke(ctx, "recalculate_all_toolpaths");
+        }
     }
 
     /// A warning in the status bar about what was just made: the command's `notes`, and for
@@ -4172,6 +4236,20 @@ impl CutCraftApp {
                 ui.label(step);
             });
         }
+        // what a toolpath (or the Vector Selector) will be made from, and what it leaves out
+        if open.id.ends_with("_toolpath") || open.id == "vector_selector" {
+            let count = self.doc.selected_vector_count();
+            if let Some(text) = count.text() {
+                ui.weak(text)
+                    .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
+            if closed_only_toolpath(open.id, &open.params)
+                && let Some(left_out) = count.left_out(open.label)
+            {
+                ui.colored_label(ui.visuals().warn_fg_color, left_out)
+                    .on_hover_hint(super::panels::SELECTION_COUNT_HINT);
+            }
+        }
     }
 
     /// The open form filling `ui`: its settings scroll, while what went wrong and the
@@ -5289,5 +5367,41 @@ fn suggestion_note(s: &cmd_pocket_toolpath::Suggestion, finishing: &str) -> Stri
         names.join(", "),
         minutes(s.minutes),
         minutes(s.alone)
+    )
+}
+
+/// Whether toolpath `id` with `params` cuts only the closed vectors selected, leaving the
+/// open ones out: the area toolpaths, and Profile inside or outside (on the line cuts open
+/// ones too).
+pub(super) fn closed_only_toolpath(id: &str, params: &Value) -> bool {
+    match id {
+        "profile_toolpath" => params["side"].as_str() != Some("on"),
+        _ => CLOSED_ONLY_TOOLPATHS.contains(&id),
+    }
+}
+
+/// The toolpaths that take only closed vectors from the selection.
+const CLOSED_ONLY_TOOLPATHS: [&str; 9] = [
+    "chamfer_toolpath",
+    "drill_bank_toolpath",
+    "drilling_toolpath",
+    "inlay_toolpath",
+    "pocket_toolpath",
+    "prism_toolpath",
+    "sketch_carving_toolpath",
+    "vcarve_engrave_toolpath",
+    "vcarve_inlay_toolpath",
+];
+
+/// What the "recalculate all?" question says for `stale` toolpaths out of date.
+pub(super) fn recalculate_question(stale: usize) -> String {
+    let (count, them) = if stale == 1 {
+        ("1 toolpath is".to_owned(), "it")
+    } else {
+        (format!("{stale} toolpaths are"), "them")
+    };
+    format!(
+        "{count} now out of date: the vectors {them} cut have changed. Recalculate all \
+         toolpaths now, so the G-code you save matches the drawing?"
     )
 }

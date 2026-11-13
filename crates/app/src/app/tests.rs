@@ -6915,6 +6915,10 @@ fn a_toolpath_with_a_vector_selector_takes_the_vectors_on_its_layers_each_time()
     // a new rectangle on Cut joins it when the toolpath is recalculated
     h.app.form = None;
     h.rectangle(80.0, 10.0, 30.0, 30.0);
+    assert!(
+        h.app.doc.toolpaths[&id].stale,
+        "out of date once a new vector passes its selector"
+    );
     h.app.invoke(&h.ctx, "recalculate_all_toolpaths");
     assert_eq!(
         h.app.doc.toolpaths[&id].vectors.len(),
@@ -11258,4 +11262,135 @@ fn suggest_picks_clearing_bits_for_a_big_pocket_and_says_how_much_quicker() {
             if t.galley.text().contains("min with 3 mm End Mill alone"))
     });
     assert!(said, "how much quicker, on the form");
+}
+
+#[test]
+fn the_status_bar_and_a_pocket_form_count_the_selected_vectors() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.rectangle(40.0, 10.0, 20.0, 10.0);
+    let line = serde_json::json!({ "points": [
+        { "x": 10.0, "y": 40.0 }, { "x": 60.0, "y": 40.0 }
+    ], "closed": false });
+    h.app.apply("draw_polyline", &line).unwrap();
+    h.app.form = None;
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.frame(vec![]);
+    let count = "3 vectors selected: 2 closed, 1 open";
+    let at = h.text_at(count).expect("the status bar counts them");
+    assert!(at.y > 700.0, "in the status bar: {at:?}");
+    h.app.invoke(&h.ctx, "pocket_toolpath");
+    // the Toolpaths page flies out unseen on its first frame
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let on_form = h
+        .shapes
+        .iter()
+        .filter(
+            |clipped| matches!(&clipped.shape, egui::Shape::Text(t) if t.galley.text() == count),
+        )
+        .count();
+    assert_eq!(on_form, 2, "on the form too, as well as the status bar");
+    assert!(
+        h.text_at("1 open vector will be left out: Pocket Toolpath only cuts closed shapes, and it is not closed")
+            .is_some(),
+        "the form says what Pocket will leave out"
+    );
+}
+
+#[test]
+fn an_on_the_line_profile_leaves_no_open_vector_out() {
+    assert!(actions::closed_only_toolpath(
+        "pocket_toolpath",
+        &serde_json::json!({})
+    ));
+    assert!(actions::closed_only_toolpath(
+        "profile_toolpath",
+        &serde_json::json!({ "side": "outside" })
+    ));
+    assert!(!actions::closed_only_toolpath(
+        "profile_toolpath",
+        &serde_json::json!({ "side": "on" })
+    ));
+    assert!(!actions::closed_only_toolpath(
+        "quick_engrave_toolpath",
+        &serde_json::json!({})
+    ));
+}
+
+/// A job with a pocket toolpath made from its one rectangle, the form closed.
+fn pocketed() -> Harness {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 50.0, 50.0);
+    let params = h
+        .app
+        .registry
+        .get("pocket_toolpath")
+        .unwrap()
+        .initial_params(&h.app.doc);
+    h.app.apply("pocket_toolpath", &params).unwrap();
+    h.app.form = None;
+    h.frame(vec![]);
+    h
+}
+
+/// Moves the job's first vector, as dragging it would.
+fn move_first_vector(h: &mut Harness) {
+    let id = *h.app.doc.vectors.keys().next().unwrap();
+    let moved = h.app.doc.vectors[&id].transformed(
+        &cut_craft_core::glam::DAffine2::from_translation(Point::new(5.0, 0.0)),
+    );
+    let mut c = cut_craft_core::Change::builder(&h.app.doc);
+    c.replace(id, moved);
+    let change = c.finish();
+    h.app.history.apply(&mut h.app.doc, change).unwrap();
+}
+
+#[test]
+fn an_edit_that_leaves_toolpaths_out_of_date_asks_to_recalculate_them() {
+    let mut h = pocketed();
+    assert!(h.text_at("Toolpaths out of date").is_none());
+    move_first_vector(&mut h);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.text_at("Toolpaths out of date").is_some(), "asked");
+    let yes = h.text_at("Recalculate All").expect("the button");
+    h.click(yes, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(h.text_at("Toolpaths out of date").is_none(), "answered");
+    assert!(
+        h.app.doc.toolpaths.values().all(|t| !t.stale),
+        "recalculated"
+    );
+}
+
+#[test]
+fn dont_ask_again_stops_the_question_but_not_the_mark() {
+    let mut h = pocketed();
+    move_first_vector(&mut h);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let silence = h.text_at("Don't ask again").expect("the tick box");
+    h.click(silence, Modifiers::NONE);
+    let no = h.text_at("Not Now").expect("the button");
+    h.click(no, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!(!h.app.options.confirmations.ask_to_recalculate);
+    move_first_vector(&mut h);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at("Toolpaths out of date").is_none(),
+        "not asked again"
+    );
+    assert!(
+        h.app.doc.toolpaths.values().all(|t| t.stale),
+        "still marked out of date"
+    );
+}
+
+#[test]
+fn the_recalculate_question_counts_the_toolpaths() {
+    assert!(actions::recalculate_question(1).starts_with("1 toolpath is now out of date"));
+    assert!(actions::recalculate_question(3).starts_with("3 toolpaths are now out of date"));
 }

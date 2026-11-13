@@ -57,6 +57,8 @@ impl CutCraftApp {
         // the Depth add-on's answer, when it has one
         self.take_depth();
         self.draw_window(ui);
+        // a form closed having left toolpaths out of date: recalculate them all?
+        self.ask_to_recalculate(ctx);
         // a playing preview cut on a frame's worth
         self.advance_playback(ctx);
         // a slow job's progress, over everything else

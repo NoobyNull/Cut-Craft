@@ -608,6 +608,38 @@ impl Change {
             .collect()
     }
 
+    /// The toolpaths following a Vector Selector whose vectors this change alters: ones it
+    /// adds or takes away from what passes (a vector drawn on the layer, a line closed). A
+    /// template's toolpaths then show they want making again once its text is edited.
+    fn picks_again(&self, doc: &Document) -> Vec<EntityId> {
+        let following: Vec<(EntityId, crate::selector::Selector)> = doc
+            .toolpaths
+            .iter()
+            .filter_map(|(&id, t)| crate::selector::Selector::of(&t.params).map(|s| (id, s)))
+            .collect();
+        let only_toolpaths_or_selection = self.edits.iter().all(|e| {
+            matches!(
+                e,
+                Edit::Select { .. }
+                    | Edit::AddToolpath { .. }
+                    | Edit::RemoveToolpath { .. }
+                    | Edit::ReplaceToolpath { .. }
+            )
+        });
+        if following.is_empty() || only_toolpaths_or_selection {
+            return vec![];
+        }
+        let mut after = doc.clone();
+        if after.apply(self).is_err() {
+            return vec![];
+        }
+        following
+            .into_iter()
+            .filter(|(_, s)| s.picked(doc) != s.picked(&after))
+            .map(|(id, _)| id)
+            .collect()
+    }
+
     /// `self` with the toolpaths it leaves out of date marked stale: those made from a vector
     /// it changes or removes, and, when it changes the model, those that cut the model. The
     /// marks are edits of the change, so undoing it undoes them.
@@ -633,9 +665,11 @@ impl Change {
                 _ => {}
             }
         }
+        let picks_again = self.picks_again(doc);
         for (&id, toolpath) in &doc.toolpaths {
             let outdated = (model && toolpath.reads_model())
-                || toolpath.vectors.iter().any(|v| vectors.contains(v));
+                || toolpath.vectors.iter().any(|v| vectors.contains(v))
+                || picks_again.contains(&id);
             if outdated && !toolpath.stale && !made.contains(&id) {
                 let after = Toolpath {
                     stale: true,
