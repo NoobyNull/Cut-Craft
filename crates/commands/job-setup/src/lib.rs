@@ -405,6 +405,7 @@ mod tests {
             stale: false,
             group: None,
             drill_bank: None,
+            fallbacks: vec![],
         });
         let change = c.finish();
         doc.apply(&change).unwrap();

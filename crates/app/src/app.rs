@@ -6,6 +6,7 @@ mod background;
 mod cutting;
 mod depth;
 mod draw3d;
+mod entry;
 mod first_run;
 mod guide;
 mod help;

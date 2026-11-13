@@ -333,6 +333,7 @@ mod tests {
             stale: false,
             group: None,
             drill_bank: None,
+            fallbacks: vec![],
         };
         (Material::new(&job, 100), toolpath)
     }

@@ -532,6 +532,7 @@ mod tests {
             stale: false,
             group: None,
             drill_bank: None,
+            fallbacks: vec![],
         }
     }
 

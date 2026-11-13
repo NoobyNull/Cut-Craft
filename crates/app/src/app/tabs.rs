@@ -149,7 +149,8 @@ pub(super) fn group_end(
             ui.data_mut(|d| d.insert_temp(window_id(), true));
         }
     }
-    changed | super::cutting::group_end(ui, group, params, stock.units)
+    changed |= super::cutting::group_end(ui, group, params, stock.units);
+    changed | super::entry::group_end(ui, group, params, stock.units)
 }
 
 impl CutCraftApp {

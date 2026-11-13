@@ -31,6 +31,7 @@ fn toolpath(name: &str) -> Toolpath {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     }
 }
 

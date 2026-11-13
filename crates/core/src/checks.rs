@@ -56,6 +56,90 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
     if let Some(missed) = missed_spots(doc, toolpath, left) {
         found.push(missed);
     }
+    found.extend(fell_back(toolpath, units));
+    found
+}
+
+/// Where `toolpath` went down another way than its entry asked, there being no room: the
+/// straight plunges first (hard on the bit, and a bit that cannot cut at its centre cannot
+/// do them), then the rest, each with where.
+fn fell_back(toolpath: &Toolpath, units: crate::document::Units) -> Vec<String> {
+    use crate::entry::EntryMode;
+    let name = &toolpath.name;
+    let places = |which: &dyn Fn(&crate::entry::Fallback) -> bool| -> Vec<String> {
+        toolpath
+            .fallbacks
+            .iter()
+            .filter(|f| which(f))
+            .map(|f| {
+                format!(
+                    "X {} Y {}",
+                    units.length(f.at.x, 1),
+                    units.length(f.at.y, 1)
+                )
+            })
+            .collect()
+    };
+    let listed = |at: &[String]| {
+        let shown: Vec<&str> = at.iter().take(3).map(String::as_str).collect();
+        let more = at.len().saturating_sub(3);
+        let more = if more > 0 {
+            format!(" and {more} more")
+        } else {
+            String::new()
+        };
+        format!("{}{more}", shown.join("; "))
+    };
+    let wanted = toolpath
+        .fallbacks
+        .iter()
+        .find(|f| f.wanted != EntryMode::Plunge)
+        .map_or("entry", |f| f.wanted.said());
+    let mut found = vec![];
+    let plunged = places(&|f| f.used == EntryMode::Plunge);
+    if !plunged.is_empty() {
+        found.push(format!(
+            "{name} goes straight down into the material in {} {} ({}), there being no room \
+             there for its {wanted} or a zig-zag. That is hard on the bit, and a bit that \
+             does not cut at its centre cannot do it: use a smaller bit, or check the shape \
+             is meant to be that small",
+            plunged.len(),
+            if plunged.len() == 1 {
+                "place"
+            } else {
+                "places"
+            },
+            listed(&plunged)
+        ));
+    }
+    let kept_off = places(&|f| f.wanted == EntryMode::Plunge && f.used != EntryMode::Plunge);
+    if !kept_off.is_empty() {
+        found.push(format!(
+            "{name}: {} must not go straight down into the material (a surfacing bit, fly \
+             cutter or form tool), so it ramps in instead in {} {} ({}). Nothing to fix; \
+             set the ramp in the toolpath's Entry settings",
+            toolpath.tool.name,
+            kept_off.len(),
+            if kept_off.len() == 1 {
+                "place"
+            } else {
+                "places"
+            },
+            listed(&kept_off)
+        ));
+    }
+    let other = places(&|f| f.wanted != EntryMode::Plunge && f.used != EntryMode::Plunge);
+    if !other.is_empty() {
+        found.push(format!(
+            "{name} goes down another way than its {wanted} in {} {} ({}), there being too \
+             little room there: a zig-zag along the cut instead, no steeper. Nothing to fix \
+             unless you want the {wanted} there: use a smaller bit, or change the \
+             toolpath's Entry settings",
+            other.len(),
+            if other.len() == 1 { "place" } else { "places" },
+            listed(&other)
+        ));
+    }
     found
 }
 
@@ -175,6 +259,7 @@ mod tests {
             stale: false,
             group: None,
             drill_bank: None,
+            fallbacks: vec![],
         }
     }
 

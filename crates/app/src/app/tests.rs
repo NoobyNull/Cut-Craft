@@ -1989,7 +1989,9 @@ fn toolpaths_follow_their_vectors_when_recalculated() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    // straight down: a helix sits by the start point, which moves with the shape's place
+    params["entry"] = serde_json::json!({ "mode": "plunge" });
     h.app.apply("profile_toolpath", &params).unwrap();
     let before = cut_min_x(&h.app);
     let shift =
@@ -2074,7 +2076,9 @@ fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for _ in 0..2 {
         let params = h.app.registry.get("profile_toolpath").unwrap();
-        let params = params.initial_params(&h.app.doc);
+        let mut params = params.initial_params(&h.app.doc);
+        // straight down: a helix sits by the start point, which moves with the shape's place
+        params["entry"] = serde_json::json!({ "mode": "plunge" });
         h.app.apply("profile_toolpath", &params).unwrap();
     }
     let toolpath = |i: usize| {
@@ -4613,16 +4617,24 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     assert!(drawn("Rest Machining") && drawn("Add a tool…"));
     let mut params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("pocket_toolpath", &params).unwrap();
-    let whole = h.app.doc.toolpaths.values().last().unwrap().moves.len();
+    // how far it cuts: a pocket links its rings at depth, so moves alone undercount it
+    let cut_length = |t: &cut_craft_core::toolpath::Toolpath| -> f64 {
+        t.moves
+            .windows(2)
+            .filter(|w| w[1].kind == cut_craft_core::toolpath::MoveKind::Cut)
+            .map(|w| w[0].to.distance(w[1].to))
+            .sum()
+    };
+    let whole = cut_length(h.app.doc.toolpaths.values().last().unwrap());
     let mut big = h.app.form.as_ref().unwrap().params["tool"].clone();
     big["diameter"] = Value::from(params["tool"]["diameter"].as_f64().unwrap() * 4.0);
     params["rest"] = serde_json::json!({ "after": [big], "minimum_detail": 0.0, "overlap": 0.0 });
     h.app.apply("pocket_toolpath", &params).unwrap();
     let rest = h.app.doc.toolpaths.values().last().unwrap();
     assert!(
-        rest.moves.len() < whole,
-        "{} of {whole} moves",
-        rest.moves.len()
+        cut_length(rest) < whole,
+        "{} of {whole} mm cut",
+        cut_length(rest)
     );
     assert!(
         cut_craft_core::rest::Rest::of(&rest.params).is_some(),
@@ -6332,6 +6344,7 @@ fn the_log_says_what_a_command_made() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     assert_eq!(
         super::background::summary(&c.finish()),
@@ -6898,6 +6911,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.simulation = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
@@ -9936,6 +9950,7 @@ fn moving_what_a_toolpath_was_made_from_says_it_is_out_of_date() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);
@@ -11326,6 +11341,7 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);

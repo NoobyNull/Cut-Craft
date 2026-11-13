@@ -1751,6 +1751,7 @@ mod tests {
             stale: false,
             group: None,
             drill_bank: None,
+            fallbacks: vec![],
         };
         let mut doc = cut_craft_core::document::Document::default();
         doc.toolpaths.insert(
