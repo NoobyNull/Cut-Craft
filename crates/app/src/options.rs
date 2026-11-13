@@ -652,7 +652,7 @@ impl General {
 }
 
 /// Importing pictures and 3D models: the size pictures come in at, and what Orientate 3D
-/// Model offers.
+/// Model offers; and the line width of exported PDF, EPS and AI files.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Import {
     /// How big an imported picture comes in: this many of its pixels make an inch. 96 suits
@@ -679,6 +679,20 @@ pub struct Import {
     #[serde(default = "out_of_bounds_percent")]
     #[schemars(title = "Out-of-bounds opacity (%)", range(min = 1, max = 100))]
     pub out_of_bounds_percent: u8,
+    /// How thick the lines are in exported PDF, EPS and AI files, in points (a point is
+    /// 1/72 inch). Thicker shows better on paper; laser and vinyl cutter software often
+    /// wants a hairline, so set it thin for those
+    #[serde(default = "export_line_points")]
+    #[schemars(
+        title = "Exported PDF, EPS and AI line width",
+        extend("x-unit" = "pt"),
+        range(min = 0.05, max = 10)
+    )]
+    pub export_line_points: f64,
+}
+
+fn export_line_points() -> f64 {
+    fmt_export_pdf::LINE
 }
 
 fn preview_faces() -> u32 {
@@ -697,6 +711,7 @@ impl Import {
     /// Hands these settings to the importers.
     pub fn apply(&self) {
         cut_craft_core::import_settings::set_pixels_per_inch(self.picture_pixels_per_inch);
+        fmt_export_pdf::set_line_width(self.export_line_points);
     }
 
     /// The red a model's parts past the material's edges are drawn in: see-through, as
@@ -715,6 +730,7 @@ impl Default for Import {
             model_types: ModelTypes::default(),
             preview_faces: preview_faces(),
             out_of_bounds_percent: out_of_bounds_percent(),
+            export_line_points: export_line_points(),
         }
     }
 }
@@ -1335,7 +1351,7 @@ pub struct Options {
     #[schemars(title = "Confirmation Choices", extend("x-section" = true))]
     pub confirmations: Confirmations,
     #[serde(default)]
-    #[schemars(title = "Importing", extend("x-section" = true))]
+    #[schemars(title = "Importing and Exporting", extend("x-section" = true))]
     pub import: Import,
     #[serde(default)]
     #[schemars(extend("x-section" = true))]
@@ -1697,7 +1713,7 @@ mod tests {
                 "Toolpath Settings",
                 "General Settings",
                 "Confirmation Choices",
-                "Importing",
+                "Importing and Exporting",
                 "Appearance",
                 "SpaceMouse",
                 "Updates",
@@ -1845,6 +1861,9 @@ mod tests {
         assert_eq!(o.advanced.dxf_spline_detail, SPLINE_SAMPLES);
         assert_eq!(import_settings::pixels_per_inch(), PIXELS_PER_INCH);
         assert_eq!(import_settings::spline_samples(), SPLINE_SAMPLES);
+        assert!((o.import.export_line_points - fmt_export_pdf::LINE).abs() < 1e-12);
+        let old: Import = serde_json::from_str("{}").unwrap();
+        assert!((old.export_line_points - fmt_export_pdf::LINE).abs() < 1e-12);
     }
 
     #[test]
