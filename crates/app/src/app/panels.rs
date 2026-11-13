@@ -2410,7 +2410,7 @@ impl CutCraftApp {
                 let f = factor(-by.y, quarter.y);
                 p.shape_height = base.shape_height * f;
                 p.base_height = base.base_height * f;
-                format!("Total height {:.2} mm", *top * f)
+                format!("Total height {}", doc.job.units.length(*top * f, 2))
             }
             Handle3d::Height => {
                 p.shape_height = base.shape_height * factor(-by.y, quarter.y);
@@ -2419,7 +2419,7 @@ impl CutCraftApp {
             _ => {
                 let per_pixel = doc.job.thickness / f64::from(quarter.y);
                 p.base_height = base.base_height - f64::from(by.y) * per_pixel;
-                format!("Base height {:.2} mm", p.base_height)
+                format!("Base height {}", doc.job.units.length(p.base_height, 2))
             }
         };
         let params = serde_json::to_value(&p).expect("component properties serialize");

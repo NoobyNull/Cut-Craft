@@ -157,6 +157,51 @@ pub enum Units {
     Inch,
 }
 
+impl Units {
+    /// Millimetres in one of these units.
+    pub fn per(self) -> f64 {
+        match self {
+            Self::Mm => 1.0,
+            Self::Inch => 25.4,
+        }
+    }
+
+    /// The short name lengths are shown with: `mm` or `in`.
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Self::Mm => "mm",
+            Self::Inch => "in",
+        }
+    }
+
+    /// `mm` as these units show it, with its unit: `decimals` places in millimetres, two more
+    /// in inches (an inch being 25.4 times longer), so `12.7 mm` reads `0.500 in`, not
+    /// `12.7 in`.
+    pub fn length(self, mm: f64, decimals: usize) -> String {
+        match self {
+            Self::Mm => format!("{mm:.decimals$} mm"),
+            Self::Inch => format!("{:.*} in", decimals + 2, mm / 25.4),
+        }
+    }
+
+    /// An area of `mm2` square millimetres, as [`Units::length`] shows a length.
+    pub fn area(self, mm2: f64, decimals: usize) -> String {
+        match self {
+            Self::Mm => format!("{mm2:.decimals$} mm²"),
+            Self::Inch => format!("{:.*} in²", decimals + 2, mm2 / (25.4 * 25.4)),
+        }
+    }
+
+    /// A speed of `mm_per_min` (a feed rate), as [`Units::length`] shows a length but one
+    /// more place in inches.
+    pub fn feed(self, mm_per_min: f64, decimals: usize) -> String {
+        match self {
+            Self::Mm => format!("{mm_per_min:.decimals$} mm/min"),
+            Self::Inch => format!("{:.*} in/min", decimals + 1, mm_per_min / 25.4),
+        }
+    }
+}
+
 /// Where Z = 0 is.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
@@ -1241,6 +1286,20 @@ fn the_selection_count_counts_the_selected_vectors_only() {
         doc.selected_vector_count(),
         VectorCount { closed: 1, open: 1 }
     );
+}
+
+#[cfg(test)]
+#[test]
+fn measurements_read_in_the_units_chosen_never_relabelled() {
+    assert_eq!(Units::Mm.length(12.7, 1), "12.7 mm");
+    assert_eq!(Units::Inch.length(12.7, 1), "0.500 in");
+    assert_eq!(Units::Inch.length(15.0, 1), "0.591 in");
+    assert_eq!(Units::Inch.area(645.16, 1), "1.000 in²");
+    assert_eq!(Units::Mm.area(2.5, 1), "2.5 mm²");
+    assert_eq!(Units::Inch.feed(2540.0, 0), "100.0 in/min");
+    assert_eq!(Units::Mm.feed(2540.0, 0), "2540 mm/min");
+    assert_eq!((Units::Inch.per(), Units::Inch.suffix()), (25.4, "in"));
+    assert_eq!((Units::Mm.per(), Units::Mm.suffix()), (1.0, "mm"));
 }
 
 #[cfg(test)]

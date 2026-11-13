@@ -976,10 +976,10 @@ pub fn placed_model(doc: &Document, tool: &Tool) -> Result<Material, CommandErro
         .fold(f64::INFINITY, f64::min);
     if top - lowest > doc.job.thickness {
         return Err(CommandError::Failed(format!(
-            "the model is {:.1} mm tall but the material is only {:.1} mm thick. Set a thicker \
-             material in Job Setup, or make the model lower",
-            top - lowest,
-            doc.job.thickness
+            "the model is {} tall but the material is only {} thick. Set a thicker material in \
+             Job Setup, or make the model lower",
+            doc.job.units.length(top - lowest, 1),
+            doc.job.units.length(doc.job.thickness, 1)
         )));
     }
     let shift = doc.job.model_shift(lowest, top);

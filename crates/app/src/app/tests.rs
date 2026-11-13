@@ -3395,11 +3395,15 @@ fn the_3d_views_handles_scale_the_selected_component_and_open_its_settings() {
     h.drag(from, from - vec2(0.0, quarter));
     let base = dome(&h).shaping.base_height;
     assert!((base - h.app.doc.job.thickness).abs() < 0.5, "{base}");
-    // the total height handle scales shape and base together
+    let said = |h: &Harness| h.app.status.message.clone();
+    assert!(said(&h).starts_with("Base height") && said(&h).ends_with(" mm"));
+    // the total height handle scales shape and base together, said in an inch job's inches
+    h.app.doc.job.units = cut_craft_core::document::Units::Inch;
     h.frame(vec![]);
     let before = dome(&h);
     let from = at(&h, Handle3d::Total);
     h.drag(from, from - vec2(0.0, quarter));
+    assert!(said(&h).starts_with("Total height") && said(&h).ends_with(" in"));
     let after = dome(&h);
     assert!(
         (after.shaping.shape_height - 200.0).abs() < 5.0,
@@ -4576,8 +4580,15 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     let ctx = egui::Context::default();
     let mut section = serde_json::json!({});
     let out = headless(ctx.run_ui(RawInput::default(), |ui| {
-        egui::CentralPanel::default()
-            .show(ui, |ui| rest_section(ui, &mut section, &h.app.tools, &[]));
+        egui::CentralPanel::default().show(ui, |ui| {
+            rest_section(
+                ui,
+                &mut section,
+                &h.app.tools,
+                &[],
+                cut_craft_core::document::Units::Mm,
+            )
+        });
     }));
     let drawn = |text: &str| {
         out.shapes
@@ -4602,6 +4613,75 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
         cut_craft_core::rest::Rest::of(&rest.params).is_some(),
         "kept to recalculate"
     );
+}
+
+/// The text drawn by `draw`, alone in a window of its own.
+fn drawn_alone(draw: impl FnMut(&mut egui::Ui)) -> Vec<String> {
+    let ctx = egui::Context::default();
+    let mut draw = draw;
+    let out = headless(ctx.run_ui(RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| draw(ui));
+    }));
+    out.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `texts` show a number box holding `value` in `unit` (drawn as two pieces of text).
+fn shows_number(texts: &[String], value: &str, unit: &str) -> bool {
+    texts.windows(2).any(|w| w[0] == value && w[1] == unit)
+}
+
+#[test]
+fn rest_machining_sizes_show_in_inches_in_an_inch_job() {
+    use cut_craft_core::document::Units;
+    let h = Harness::new();
+    let tool = h.app.tools.tools.first().cloned().expect("a starter tool");
+    let mut section = serde_json::json!({
+        "rest": { "after": [tool], "minimum_detail": 2.54, "overlap": 12.7 }
+    });
+    let texts = drawn_alone(|ui| {
+        rest_section(ui, &mut section, &h.app.tools, &[], Units::Inch);
+    });
+    assert!(shows_number(&texts, "0.100", " in"), "{texts:?}");
+    assert!(shows_number(&texts, "0.500", " in"), "{texts:?}");
+    // the bit's line too, though the bit is kept in mm in the Tool Database
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "0.118 in end mill, 0.059 in a pass"),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn guide_positions_show_in_the_jobs_units() {
+    use cut_craft_core::document::{Guide, Units};
+    let mut h = Harness::new();
+    h.app.doc.guides.push(Guide::vertical(50.8));
+    h.app.doc.job.units = Units::Inch;
+    h.app.guide_props = Some(GuideProps {
+        index: 0,
+        position: 50.8,
+        angle: 90.0,
+        locked: false,
+        new_at: 25.4,
+        relative: true,
+        count: 1,
+    });
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let texts = h.texts();
+    assert!(shows_number(&texts, "2.000", " in"), "{texts:?}");
+    assert!(shows_number(&texts, "1.000", " in"), "{texts:?}");
+    h.app.doc.job.units = Units::Mm;
+    h.frame(vec![]);
+    let texts = h.texts();
+    assert!(shows_number(&texts, "50.8", " mm"), "{texts:?}");
 }
 
 #[test]
@@ -10636,18 +10716,19 @@ fn an_embellishment_follows_its_settings_in_place_and_one_undo_takes_it_away() {
 }
 
 #[test]
-fn a_form_tool_reads_in_one_line() {
+fn a_form_tool_reads_in_one_line_in_the_jobs_units() {
+    use cut_craft_core::document::Units;
     let tool = Tool {
         diameter: 6.35,
         pass_depth: 3.0,
         ..Tool::default()
     };
     assert_eq!(
-        tool_line(&tool, Some(2.0)),
+        tool_line(&tool, Some(2.0), Units::Mm),
         "6.35 mm end mill, 3 mm a pass, 2 passes"
     );
     assert_eq!(
-        tool_line(&tool, Some(1.0)),
+        tool_line(&tool, Some(1.0), Units::Mm),
         "6.35 mm end mill, 3 mm a pass, 1 pass"
     );
     let v = Tool {
@@ -10658,8 +10739,22 @@ fn a_form_tool_reads_in_one_line() {
         ..Tool::default()
     };
     assert_eq!(
-        tool_line(&v, None),
+        tool_line(&v, None, Units::Mm),
         "60° V-bit, 12.7 mm across, 2 mm a pass"
+    );
+    // a metric bit kept in mm in the Tool Database reads in inches in an inch job's toolpath
+    assert_eq!(
+        tool_line(&v, None, Units::Inch),
+        "60° V-bit, 0.5 in across, 0.079 in a pass"
+    );
+    // and an inch bit in a metric job's toolpath in mm
+    let inch_bit = Tool {
+        units: Units::Inch,
+        ..tool
+    };
+    assert_eq!(
+        tool_line(&inch_bit, None, Units::Mm),
+        "6.35 mm end mill, 3 mm a pass"
     );
     let slots = [None, Some("Badger".to_owned())];
     assert_eq!(held_name("Badger", &slots), "T2  Badger");

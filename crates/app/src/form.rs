@@ -154,6 +154,9 @@ pub enum Kind {
         steps: Vec<f64>,
         /// `x-widget: slider` (with a minimum and a maximum): a slider along the range.
         slider: bool,
+        /// `x-percent-when`: a length that is a percentage instead while another choice says
+        /// so (Set Size's Percent), shown as `%` and never converted then.
+        percent_when: Option<When>,
     },
     Bool,
     /// A pattern's seed (`x-widget: seed`): its number, and a New variation button that picks
@@ -397,6 +400,11 @@ fn grid(
                             picture: Some(t), ..
                         },
                     ) if t.replace("{}", "").contains('{') => params.clone(),
+                    // a length that turns into a percentage reads the tick beside it
+                    Kind::Number {
+                        percent_when: Some(w),
+                        ..
+                    } => serde_json::json!({ &w.key: params[&w.key] }),
                     _ => Value::Null,
                 };
                 changed |= ui
@@ -416,11 +424,30 @@ fn hover(label: egui::Response, help: Option<&String>) {
     }
 }
 
+/// A number box for a length kept in millimetres, shown and typed in `units` (`15 mm` reads
+/// `0.5906 in` in an inch job, never `15 in`), at least `min`. Written back only when typed or
+/// dragged, so switching units and back never changes it.
+pub fn length_edit(ui: &mut egui::Ui, mm: &mut f64, units: Units, min: f64) -> egui::Response {
+    let per = units.per();
+    let mut shown = *mm / per;
+    let response = ui.add(
+        Number::new(&mut shown)
+            .range(min / per..=f64::INFINITY)
+            .speed(0.1 / per)
+            .suffix(format!(" {}", units.suffix())),
+    );
+    if response.changed() {
+        *mm = shown * per;
+    }
+    response
+}
+
 /// How a stored unit shows in `units`: the factor to divide by and the unit to show.
 pub fn shown_in(unit: &str, units: Units) -> Option<(f64, &'static str)> {
     match (unit, units) {
         ("mm", Units::Inch) => Some((25.4, "in")),
         ("mm/min", Units::Inch) => Some((25.4, "in/min")),
+        ("µm", Units::Inch) => Some((25_400.0, "in")),
         _ => None,
     }
 }
@@ -468,18 +495,24 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             integer,
             steps,
             slider,
+            percent_when,
         } => {
             if !steps.is_empty() {
                 return pick_step(ui, steps, value);
             }
-            if let (true, Some(lo), Some(hi)) = (*slider, *min, *max) {
-                return slide(ui, lo..=hi, *integer, unit.as_deref(), value);
-            }
-            let (factor, unit) = match unit.as_deref().map(|u| (u, shown_in(u, look.units))) {
+            // a percentage while another choice says so, else the unit stored
+            let unit = match percent_when {
+                Some(when) if when.shown(around) => Some("%"),
+                _ => unit.as_deref(),
+            };
+            let (factor, unit) = match unit.map(|u| (u, shown_in(u, look.units))) {
                 Some((_, Some((factor, shown)))) => (factor, Some(shown.to_owned())),
                 Some((stored, None)) => (1.0, Some(stored.to_owned())),
                 None => (1.0, None),
             };
+            if let (true, Some(lo), Some(hi)) = (*slider, *min, *max) {
+                return slide(ui, lo..=hi, *integer, factor, unit.as_deref(), value);
+            }
             let mut n = value.as_f64().unwrap_or_default() / factor;
             // a sum typed in (calculation edit boxes) is worked out
             let material = look.material.clone();
@@ -492,13 +525,14 @@ fn edit(ui: &mut egui::Ui, kind: &Kind, value: &mut Value, around: &Value, look:
             if let Some(unit) = unit {
                 drag = drag.suffix(format!(" {unit}"));
             }
-            if *integer {
+            // a whole number of micrometres shows as a fraction of an inch
+            if *integer && factor == 1.0 {
                 drag = drag.fixed_decimals(0);
             }
             let changed = ui.add(drag).changed();
             if changed {
                 *value = if *integer {
-                    Value::from(round(n))
+                    Value::from(round(n * factor))
                 } else {
                     Value::from(n * factor)
                 };
@@ -916,20 +950,23 @@ fn slide(
     ui: &mut egui::Ui,
     range: std::ops::RangeInclusive<f64>,
     integer: bool,
+    factor: f64,
     unit: Option<&str>,
     value: &mut Value,
 ) -> bool {
-    let mut n = value.as_f64().unwrap_or_default();
-    // the slider's value is the number box beside it, with its up and down buttons
+    // a length slides in the units shown, `factor` millimetres each; its value is the
+    // number box beside it, with its up and down buttons
+    let mut n = value.as_f64().unwrap_or_default() / factor;
+    let shown = range.start() / factor..=range.end() / factor;
     let changed = ui
         .horizontal(|ui| {
-            let mut slider = egui::Slider::new(&mut n, range.clone()).show_value(false);
-            if integer {
+            let mut slider = egui::Slider::new(&mut n, shown.clone()).show_value(false);
+            if integer && factor == 1.0 {
                 slider = slider.integer();
             }
             let slid = ui.add(slider).changed();
-            let mut number = Number::new(&mut n).range(range);
-            if integer {
+            let mut number = Number::new(&mut n).range(shown);
+            if integer && factor == 1.0 {
                 number = number.fixed_decimals(0);
             }
             if let Some(unit) = unit {
@@ -940,9 +977,9 @@ fn slide(
         .inner;
     if changed {
         *value = if integer {
-            Value::from(round(n))
+            Value::from(round(n * factor))
         } else {
-            Value::from(n)
+            Value::from(n * factor)
         };
     }
     changed
@@ -1113,7 +1150,7 @@ fn kind(root: &Value, property: &Value) -> Kind {
             Kind::Seed
         }
         Some(t @ ("number" | "integer")) => Kind::Number {
-            unit: s["x-unit"].as_str().map(String::from),
+            unit: marked("x-unit").and_then(Value::as_str).map(String::from),
             min: s["minimum"].as_f64(),
             max: s["maximum"].as_f64(),
             integer: t == "integer",
@@ -1121,13 +1158,24 @@ fn kind(root: &Value, property: &Value) -> Kind {
                 .and_then(Value::as_array)
                 .map_or_default(|steps| steps.iter().filter_map(Value::as_f64).collect()),
             slider: marked("x-widget").and_then(Value::as_str) == Some("slider"),
+            percent_when: marked("x-percent-when").and_then(|rule| When::from_rule(rule, true)),
         },
         Some("boolean") => Kind::Bool,
         Some("string") => Kind::Text {
             multiline: marked("x-widget").and_then(Value::as_str) == Some("multiline"),
         },
         Some("object") => Kind::Group(object_fields(root, s)),
-        Some("array") => Kind::List(Box::new(kind(root, &s["items"]))),
+        Some("array") => {
+            let mut item = kind(root, &s["items"]);
+            // a list of lengths marks its unit on the list (Slice's thicknesses)
+            if let Kind::Number {
+                unit: unit @ None, ..
+            } = &mut item
+            {
+                *unit = marked("x-unit").and_then(Value::as_str).map(String::from);
+            }
+            Kind::List(Box::new(item))
+        }
         _ => Kind::Other,
     }
 }
@@ -1266,6 +1314,7 @@ mod tests {
                     integer: true,
                     steps: vec![],
                     slider: true,
+                    percent_when: None,
                 },
                 "{key}"
             );
@@ -1276,6 +1325,304 @@ mod tests {
             Kind::Number { slider: false, .. }
         ));
         assert_eq!(field(&f, "seed").kind, Kind::Seed);
+    }
+
+    #[test]
+    fn a_list_of_lengths_keeps_its_unit() {
+        // Slice's own list of thicknesses: each one a length, shown in inches in an inch job
+        let f = fields(&schema("slice"));
+        let Kind::List(item) = &field(&f, "thicknesses").kind else {
+            panic!("{:?}", field(&f, "thicknesses").kind);
+        };
+        assert!(
+            matches!(&**item, Kind::Number { unit: Some(u), .. } if u == "mm"),
+            "{item:?}"
+        );
+    }
+
+    #[test]
+    fn set_sizes_width_is_a_length_until_percent_is_ticked() {
+        let f = fields(&schema("set_size"));
+        for key in ["width", "height"] {
+            let Kind::Number {
+                unit, percent_when, ..
+            } = &field(&f, key).kind
+            else {
+                panic!("{key}");
+            };
+            assert_eq!(unit.as_deref(), Some("mm"), "{key}");
+            let when = percent_when.as_ref().expect("a percentage when ticked");
+            assert!(when.shown(&serde_json::json!({ "percent": true })));
+            assert!(!when.shown(&serde_json::json!({ "percent": false })));
+        }
+    }
+
+    #[test]
+    fn micrometres_show_in_inches_in_an_inch_job() {
+        assert_eq!(shown_in("µm", Units::Inch), Some((25_400.0, "in")));
+        assert_eq!(shown_in("µm", Units::Mm), None);
+    }
+
+    /// Every form the app draws from a schema: each command's, and the app's own dialogs'.
+    fn every_form() -> Vec<(String, Value)> {
+        let mut forms: Vec<(String, Value)> = registry()
+            .commands()
+            .map(|c| (c.id().to_owned(), c.schema()))
+            .collect();
+        for (name, schema) in [
+            ("Options", schemars::schema_for!(crate::options::Options)),
+            (
+                "Job sheet",
+                schemars::schema_for!(fmt_create_job_sheet::Style),
+            ),
+            ("Part labels", schemars::schema_for!(fmt_part_labels::Style)),
+            (
+                "STL export",
+                schemars::schema_for!(fmt_export_as_stl::Settings),
+            ),
+            (
+                "Snapping",
+                schemars::schema_for!(cut_craft_core::snap::SnapOptions),
+            ),
+        ] {
+            forms.push((name.to_owned(), serde_json::to_value(schema).unwrap()));
+        }
+        forms
+    }
+
+    /// Each number field in `fields` (inside groups and lists too) as its path and its kind.
+    fn numbers<'a>(prefix: &str, fields: &'a [Field], out: &mut Vec<(String, &'a Kind)>) {
+        for f in fields {
+            // the Tool Database's tools are drawn by their own block and keep their own units
+            if f.key == "tool" || TOOL_LISTS.contains(&f.key.as_str()) {
+                continue;
+            }
+            let path = format!("{prefix}{}", f.key);
+            let mut kind = &f.kind;
+            while let Kind::List(item) = kind {
+                kind = item;
+            }
+            match kind {
+                Kind::Number { .. } => out.push((path, kind)),
+                Kind::Group(inner) => numbers(&format!("{path}."), inner, out),
+                _ => {}
+            }
+        }
+    }
+
+    /// Units a number may be shown in that are not lengths, so never change with mm / inches.
+    const NOT_LENGTHS: [&str; 12] = [
+        "%",
+        "min",
+        "MB",
+        "°",
+        "deg",
+        "rpm",
+        "s",
+        "days",
+        "px",
+        "frames/s",
+        "×",
+        "kerf widths",
+    ];
+
+    /// Numbers with no unit that are not measurements: counts, ids, shares and strengths. A
+    /// new number that is none of these needs an `x-unit` (`mm` for a length), so it is
+    /// shown converted in an inch job, or a place here saying why not.
+    const UNITLESS: [&str; 63] = [
+        // counts
+        "sides",
+        "points",
+        "passes",
+        "rows",
+        "columns",
+        "copies",
+        "items",
+        "number_of_slices",
+        "lines",
+        "objects",
+        "rails",
+        "cuts",
+        "plates",
+        "flutes",
+        "strands",
+        "digits",
+        "decimal_places",
+        "start",
+        "step",
+        "count",
+        // which item: an id or a place in a list
+        "layer",
+        "toolpath",
+        "toolpaths",
+        "component",
+        "item",
+        "bitmap",
+        "group",
+        "vector",
+        "sheet",
+        "sources",
+        "column",
+        "row",
+        "active",
+        // shares of 1, strengths and settings with no unit
+        "smoothing",
+        "seed",
+        "background_cut_off",
+        "depth_cut_off",
+        "fine_detail",
+        "sharpen",
+        "smoothness",
+        "similarity",
+        "threshold",
+        "corner_fit",
+        "detail_smoothness",
+        "refinement",
+        "tightness",
+        "contrast",
+        "brightness",
+        "gamma",
+        // the app's own settings: counts, limits and sizes on screen
+        "recent_file_list_size",
+        "preview_faces",
+        "cores",
+        "dxf_spline_detail",
+        "library_most_files",
+        "previews_on_card",
+        "nest_most_sheets",
+        "nest_most_fillers",
+        "triangles",
+        "speed",
+        "grid_point_size",
+        "picture_pixels_per_inch",
+        "gadget_million_instructions",
+        "gadget_most_commands",
+    ];
+
+    /// Numbers with no unit that are measurements of something other than the job's
+    /// lengths, each with why it does not change with mm / inches.
+    const UNITLESS_BY_FORM: [(&str, &str, &str); 6] = [
+        (
+            "sketch_carving_toolpath",
+            "line_thickness",
+            "a strength, 0 to 100",
+        ),
+        (
+            "laser_picture_toolpath",
+            "line_spacing",
+            "in widths of the laser's kerf",
+        ),
+        (
+            "document_variables",
+            "variables.value",
+            "whatever the user's sums need",
+        ),
+        ("materials", "lithophane_light", "a share of the light"),
+        ("Options", "rapid_rate", "set with its own feed-rate units"),
+        ("Options", "scale_factor", "a multiplier"),
+    ];
+
+    #[test]
+    fn every_measurement_on_every_form_changes_with_the_units() {
+        let mut found = vec![];
+        for (form, schema) in every_form() {
+            let all = fields(&schema);
+            let mut listed = vec![];
+            numbers("", &all, &mut listed);
+            for (path, kind) in listed {
+                let Kind::Number { unit, .. } = kind else {
+                    unreachable!()
+                };
+                let last = path.rsplit('.').next().unwrap_or(&path);
+                match unit.as_deref() {
+                    // a length or a feed: shown converted in an inch job, not relabelled
+                    Some(unit) if !NOT_LENGTHS.contains(&unit) => {
+                        if shown_in(unit, Units::Inch).is_none() {
+                            found.push(format!("{form}: {path} in {unit} is not converted"));
+                        }
+                    }
+                    Some(_) => {}
+                    None if UNITLESS.contains(&last)
+                        || last.ends_with("_percent")
+                        || UNITLESS_BY_FORM
+                            .iter()
+                            .any(|(f, p, _)| *f == form && *p == path) => {}
+                    None => found.push(format!(
+                        "{form}: {path} has no unit: add `x-unit` (\"mm\" for a length) so \
+                         it shows in inches in an inch job, or list it as unitless"
+                    )),
+                }
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    /// The text a form shows, drawn in `units`.
+    fn drawn(fields: &[Field], params: &mut Value, units: Units) -> Vec<String> {
+        let ctx = egui::Context::default();
+        let picture = |_: &str| None;
+        let look = Look {
+            units,
+            picture: &picture,
+            material: cut_craft_core::calc::Values::default(),
+            tool: None,
+            group_end: None,
+        };
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| show(ui, fields, params, &look));
+            });
+        });
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn no_form_drawn_in_inches_shows_millimetres() {
+        let mut found = vec![];
+        for (form, schema) in every_form() {
+            let all = fields(&schema);
+            let mut params = registry().get(&form).map_or_else(
+                || Value::Object(serde_json::Map::new()),
+                cut_craft_core::DynCommand::default_params,
+            );
+            for text in drawn(&all, &mut params, Units::Inch) {
+                if text.contains(" mm") || text.contains("µm") {
+                    found.push(format!("{form}: {text:?}"));
+                }
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    #[test]
+    fn a_length_shows_divided_by_an_inch_and_set_size_shows_percent_as_is() {
+        let f = fields(&schema("set_size"));
+        let mut mm = serde_json::json!({ "width": 127.0, "height": 25.4, "percent": false });
+        // a number box draws its value and its unit as two pieces of text
+        let shows = |texts: &[String], value: &str, unit: &str| {
+            texts.windows(2).any(|w| w[0] == value && w[1] == unit)
+        };
+        let texts = drawn(&f, &mut mm, Units::Inch);
+        assert!(
+            shows(&texts, "5", " in") && shows(&texts, "1", " in"),
+            "{texts:?}"
+        );
+        let texts = drawn(&f, &mut mm, Units::Mm);
+        assert!(
+            shows(&texts, "127", " mm") && shows(&texts, "25.4", " mm"),
+            "{texts:?}"
+        );
+        let mut share = serde_json::json!({ "width": 50.0, "height": 50.0, "percent": true });
+        let texts = drawn(&f, &mut share, Units::Inch);
+        assert!(shows(&texts, "50", " %"), "{texts:?}");
+        assert!(!texts.iter().any(|t| t == " in"), "{texts:?}");
     }
 
     #[test]
@@ -1621,6 +1968,7 @@ mod tests {
                 integer: false,
                 steps: vec![],
                 slider: false,
+                percent_when: None,
             }
         );
         assert_eq!(
@@ -1661,6 +2009,7 @@ mod tests {
                 integer: true,
                 steps: vec![],
                 slider: false,
+                percent_when: None,
             }
         );
     }

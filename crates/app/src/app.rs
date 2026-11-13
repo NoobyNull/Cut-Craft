@@ -36,7 +36,6 @@ use crate::pages::{Page, Pages, Shown};
 use crate::view2d::{self, Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
 use cut_craft_bug_report::hint::HoverHint;
-use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{Document, EntityId, LayerId, Units};
 use cut_craft_core::file::{JOB_EXTENSION, OLD_JOB_EXTENSION};
 use cut_craft_core::geometry::{Path, Point, Rect};
@@ -1484,6 +1483,7 @@ fn summary_table(
                 integer: false,
                 steps: vec![],
                 slider: false,
+                percent_when: None,
             },
             section: false,
             icon: None,
@@ -1505,6 +1505,7 @@ fn summary_table(
                 integer: false,
                 steps: vec![],
                 slider: false,
+                percent_when: None,
             },
             section: false,
             icon: None,
@@ -1808,11 +1809,12 @@ enum ToolAsk {
 /// holders are too, and every setting) and Edit… to change it there. What was asked for.
 fn tool_picker(
     ui: &mut egui::Ui,
-    tool: &Value,
     top: &Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
+    units: cut_craft_core::document::Units,
 ) -> Option<ToolAsk> {
+    let tool = &top["tool"];
     let current = tool["name"].as_str().unwrap_or_default();
     let picked = serde_json::from_value::<Tool>(tool.clone())
         .ok()
@@ -1826,7 +1828,7 @@ fn tool_picker(
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));
-            ui.label(tool_line(tool, passes));
+            ui.label(tool_line(tool, passes, units));
             if tools.get(current).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -1923,6 +1925,7 @@ fn clearing_section(
     slots: &[Option<String>],
     finishing_smallest: bool,
     suggested: Option<&str>,
+    units: cut_craft_core::document::Units,
 ) -> (bool, Option<ListAsk>) {
     if !params["clearance_tools"].is_array() {
         params["clearance_tools"] = Value::Array(vec![]);
@@ -1983,7 +1986,7 @@ fn clearing_section(
         for (i, tool) in list.iter().enumerate() {
             match ui
                 .push_id(("clearing", i), |ui| {
-                    clearing_bit(ui, i, tool, slots, depth)
+                    clearing_bit(ui, i, tool, slots, depth, units)
                 })
                 .inner
             {
@@ -2033,11 +2036,12 @@ fn clearing_bit(
     tool: &Tool,
     slots: &[Option<String>],
     depth: Option<f64>,
+    units: cut_craft_core::document::Units,
 ) -> Option<BitAsk> {
     ui.strong(held_name(&tool.name, slots));
-    ui.label(tool_line(tool, None));
+    ui.label(tool_line(tool, None, units));
     // can this bit reach the depth? the same line the form's own Tool has
-    if let Some(line) = cut_craft_core::reach::form_line(tool, depth, None) {
+    if let Some(line) = cut_craft_core::reach::form_line(tool, depth, None, units) {
         reach::show(ui, &line);
     }
     ui.horizontal(|ui| {
@@ -2097,14 +2101,12 @@ fn held_name(name: &str, slots: &[Option<String>]) -> String {
 }
 
 /// A tool in one line for its form: how wide, its angle or tip if it has one, how deep a
-/// pass, and how many passes the cut takes (`passes`, when known). Lengths in the tool's
-/// own units.
-fn tool_line(tool: &Tool, passes: Option<f64>) -> String {
+/// pass, and how many passes the cut takes (`passes`, when known). Lengths in the job's
+/// `units`: a tool keeps its own units in the Tool Database, but a toolpath shows it in the
+/// job's.
+fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::Units) -> String {
     use cut_craft_core::toolpath::ToolShape;
-    let length = |mm: f64| match form::shown_in("mm", tool.units) {
-        Some((per, to)) => format!("{} {to}", trimmed(mm / per)),
-        None => format!("{} mm", trimmed(mm)),
-    };
+    let length = |mm: f64| format!("{} {}", trimmed(mm / units.per()), units.suffix());
     let across = length(tool.diameter);
     let line = match tool.shape {
         ToolShape::EndMill => format!("{across} end mill"),
@@ -2143,6 +2145,7 @@ fn tool_list(
     tools: &ToolDatabase,
     slots: &[Option<String>],
     empty: &str,
+    units: cut_craft_core::document::Units,
 ) -> (bool, Option<ListAsk>) {
     let mut items: Vec<Tool> = serde_json::from_value(list.clone()).unwrap_or_default();
     let (mut ask, mut remove) = (None, None);
@@ -2152,7 +2155,7 @@ fn tool_list(
     for (i, tool) in items.iter().enumerate() {
         ui.push_id((key, i), |ui| {
             ui.strong(held_name(&tool.name, slots));
-            ui.label(tool_line(tool, None));
+            ui.label(tool_line(tool, None, units));
             if tools.get(&tool.name).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -2209,6 +2212,7 @@ fn tools_section(
     params: &mut Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
+    units: cut_craft_core::document::Units,
 ) -> (bool, Option<ListAsk>) {
     ui.group(|ui| {
         ui.set_width(ui.available_width());
@@ -2220,6 +2224,7 @@ fn tools_section(
             tools,
             slots,
             "No tool picked yet: Add a tool… to pick one",
+            units,
         )
     })
     .inner
@@ -2336,6 +2341,7 @@ fn rest_section(
     params: &mut Value,
     tools: &ToolDatabase,
     slots: &[Option<String>],
+    units: cut_craft_core::document::Units,
 ) -> Option<ListAsk> {
     use cut_craft_core::rest::Rest;
     let mut rest: Rest = params
@@ -2356,6 +2362,7 @@ fn rest_section(
             tools,
             slots,
             "Off: add the bigger tools that cut before this one to cut only what they left",
+            units,
         );
         ask = asked;
         if changed && let Ok(list) = serde_json::from_value(after) {
@@ -2367,19 +2374,11 @@ fn rest_section(
                 .show(ui, |ui| {
                     ui.label("Minimum detail")
                         .on_hover_hint("Leave alone unmachined areas narrower than this");
-                    ui.add(
-                        Number::new(&mut rest.minimum_detail)
-                            .suffix(" mm")
-                            .range(0.0..=f64::INFINITY),
-                    );
+                    form::length_edit(ui, &mut rest.minimum_detail, units, 0.0);
                     ui.end_row();
                     ui.label("Overlap")
                         .on_hover_hint("Grow each unmachined area by this");
-                    ui.add(
-                        Number::new(&mut rest.overlap)
-                            .suffix(" mm")
-                            .range(0.0..=f64::INFINITY),
-                    );
+                    form::length_edit(ui, &mut rest.overlap, units, 0.0);
                     ui.end_row();
                 });
         }

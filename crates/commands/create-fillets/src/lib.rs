@@ -364,8 +364,12 @@ pub fn at_click(
                 CommandError::Failed("no fillet fits that corner. Try a smaller radius".into())
             })?;
             let radius = (planned.center - planned.through).length();
-            let note = (radius < p.radius - STRAIGHT)
-                .then(|| format!("the radius was cut to {radius:.2} mm, the largest that fits"));
+            let note = (radius < p.radius - STRAIGHT).then(|| {
+                format!(
+                    "the radius was cut to {}, the largest that fits",
+                    doc.job.units.length(radius, 2)
+                )
+            });
             Ok((id, rebuilt(&doc.vectors[&id], &[(seg, planned)]), note))
         }
         (_, Some((_, id, seg))) => {
