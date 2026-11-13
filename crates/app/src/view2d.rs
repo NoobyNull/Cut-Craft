@@ -575,6 +575,12 @@ impl Canvas {
             room = room.saturating_sub(cuts.used() + marks.len());
             painter.extend(cuts.finish().into_iter().map(|run| Shape::line(run, cut)));
             painter.extend(marks);
+            painter.extend(fallback_marks(
+                toolpath,
+                |p| t.to_screen(p),
+                marker * 2.5,
+                visuals,
+            ));
         }
     }
 
@@ -1020,6 +1026,36 @@ pub fn zone_label(painter: &egui::Painter, ui: &egui::Ui, corner: Pos2, text: &s
     let back = egui::Rect::from_min_size(at, galley.size()).expand(pad);
     painter.rect_filled(back, pad, visuals.panel_fill.gamma_multiply(0.85));
     painter.galley(at, galley, visuals.error_fg_color);
+}
+
+/// A triangle where each of `toolpath`'s entries went down another way than asked, `size`
+/// across: filled in the error colour where it went straight down, outlined in the warning
+/// colour where it zig-zagged instead. Always drawn: they are warnings.
+fn fallback_marks(
+    toolpath: &cut_craft_core::toolpath::Toolpath,
+    to_screen: impl Fn(Point) -> Pos2,
+    size: f32,
+    visuals: &egui::Visuals,
+) -> Vec<Shape> {
+    use cut_craft_core::entry::EntryMode;
+    toolpath
+        .fallbacks
+        .iter()
+        .map(|f| {
+            let c = to_screen(f.at);
+            let h = size / 2.0;
+            let corners = vec![
+                Pos2::new(c.x, c.y - h),
+                Pos2::new(c.x + h, c.y + h * 0.75),
+                Pos2::new(c.x - h, c.y + h * 0.75),
+            ];
+            if f.used == EntryMode::Plunge {
+                Shape::convex_polygon(corners, visuals.error_fg_color, Stroke::NONE)
+            } else {
+                Shape::closed_line(corners, Stroke::new(1.5, visuals.warn_fg_color))
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

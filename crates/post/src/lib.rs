@@ -863,14 +863,14 @@ impl Post {
         let mut steps = Vec::with_capacity(lines.len());
         for run in lines.chunk_by(|a, b| a.0 == b.0) {
             let kind = run[0].0;
-            if kind != MoveKind::Rapid {
+            if kind == MoveKind::Rapid {
+                steps.extend(run.iter().map(line));
+            } else {
                 let cuts: Vec<DVec3> = run.iter().map(|l| l.1).collect();
                 steps.extend(arcs::fit(at, &cuts, &limits).into_iter().map(|p| match p {
                     arcs::Piece::Line(to) => Step::Line(kind, to, 0.0),
                     arcs::Piece::Arc(arc) => Step::Arc(kind, arc),
                 }));
-            } else {
-                steps.extend(run.iter().map(line));
             }
             at = run[run.len() - 1].1;
         }

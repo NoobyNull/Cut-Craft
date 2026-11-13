@@ -89,7 +89,7 @@ fn a_helix_goes_down_in_circles_of_the_size_asked_at_the_angle_asked() {
         .map(|m| m.to.truncate())
         .collect();
     assert!(pts.len() > 16);
-    let centre = pts.iter().copied().sum::<Point>() / pts.len() as f64;
+    let centre = pts.iter().copied().sum::<Point>() / f64::from(u32::try_from(pts.len()).unwrap());
     for p in &pts {
         assert!(
             (p.distance(centre) - wanted).abs() < 0.05,
@@ -97,7 +97,7 @@ fn a_helix_goes_down_in_circles_of_the_size_asked_at_the_angle_asked() {
             p.distance(centre)
         );
     }
-    assert!(notes(&entry).is_empty());
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn a_helix_shrinks_to_fit_a_small_pocket_and_never_gets_steeper() {
     }
     // still a helix: it goes round, so it is far from straight down
     assert!(reach_from(&down, down[down.len() - 1].to.truncate()) > 0.5);
-    assert!(notes(&entry).is_empty(), "{:?}", notes(&entry));
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn a_zig_zag_goes_back_and_forth_the_passes_asked_at_the_angle_asked() {
     }
     // it ends where it began, at depth, to cut the line from its start
     assert!(down[down.len() - 1].to.truncate().distance(Point::ZERO) < 1e-9);
-    assert!(notes(&entry).is_empty());
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn a_zig_zag_with_too_little_room_takes_shorter_legs_and_more_of_them() {
     assert!(moves.iter().all(|m| m.to.x <= 5.0 + 1e-9));
     assert!((deepest(&moves) + 6.0).abs() < 1e-9);
     // still a zig-zag, only with more passes: not a fallback
-    assert!(notes(&entry).is_empty());
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn a_ramp_goes_down_the_depth_over_the_distance() {
     assert!(bottom.distance(Point::new(25.0, 0.0)) < 1e-9, "{bottom}");
     let angle = 6f64.atan2(25.0).to_degrees();
     assert!(steepest_below(&down, 0.0) <= angle + 1e-6);
-    assert!(notes(&entry).is_empty());
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn a_straight_plunge_asked_for_is_not_a_fallback() {
     let entry = entering(mode(EntryMode::Plunge), None);
     let moves = path_moves(&square, true, &[-3.0, -6.0], 0.0, SAFE, &entry);
     assert!((deepest(&moves) + 6.0).abs() < 1e-9);
-    assert!(notes(&entry).is_empty());
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn each_pass_of_a_profile_enters_again_from_the_depth_above() {
             "{p}"
         );
     }
-    assert!(notes(&entry).is_empty(), "{:?}", notes(&entry));
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]
@@ -305,7 +305,7 @@ fn an_outside_profile_helixes_outside_the_part() {
         assert!(!inside, "{p} is in the part");
     }
     assert!(steepest_below(&moves, 0.0) <= 3.0 + 1e-6);
-    assert!(notes(&entry).is_empty(), "{:?}", notes(&entry));
+    assert_eq!(notes(&entry), vec![]);
 }
 
 #[test]

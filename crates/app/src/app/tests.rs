@@ -1989,7 +1989,9 @@ fn toolpaths_follow_their_vectors_when_recalculated() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    // straight down: a helix sits by the start point, which moves with the shape's place
+    params["entry"] = serde_json::json!({ "mode": "plunge" });
     h.app.apply("profile_toolpath", &params).unwrap();
     let before = cut_min_x(&h.app);
     let shift =
@@ -2074,7 +2076,9 @@ fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for _ in 0..2 {
         let params = h.app.registry.get("profile_toolpath").unwrap();
-        let params = params.initial_params(&h.app.doc);
+        let mut params = params.initial_params(&h.app.doc);
+        // straight down: a helix sits by the start point, which moves with the shape's place
+        params["entry"] = serde_json::json!({ "mode": "plunge" });
         h.app.apply("profile_toolpath", &params).unwrap();
     }
     let toolpath = |i: usize| {

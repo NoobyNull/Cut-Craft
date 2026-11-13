@@ -294,25 +294,7 @@ impl Command for ProfileToolpath {
         }
         let depths = p.tool.pass_depths(depth);
         let tab = p.tab.sized(p.tool.pass_depth, depth);
-        let entry = Entry {
-            ramp: if p.entry.is_some() {
-                Ramp::None
-            } else {
-                p.ramp
-            },
-            ramping: p.ramping,
-            lead: p.lead,
-            leads: p.leads,
-            side: 1.0,
-            tabs: p.tabs,
-            tab,
-            tab_top: -depth + tab.thickness,
-            tool_diameter: p.tool.diameter,
-            placed: vec![],
-            enter: p.entry,
-            room: None,
-            fallbacks: Fallbacks::default(),
-        };
+        let entry = entry_for(p, depth, tab);
         let lines = ordered(cuts(&centre_line, &paths, p), &paths, p);
         // a helix goes in the waste: inside a hole's centre line, or outside every part's
         let parts: Vec<Vec<Point>> = lines
@@ -379,14 +361,34 @@ impl Command for ProfileToolpath {
             moves = project_onto_model(doc, &p.tool, &moves)?;
         }
         let mut toolpath = made_by::<Self>(p, p.name.clone(), p.tool.clone(), ids, moves);
-        toolpath.fallbacks = entry
-            .fallbacks
-            .lock()
-            .map(|f| f.clone())
-            .unwrap_or_default();
+        toolpath.fallbacks = entry.take_fallbacks();
         let mut c = Change::builder(doc);
         c.add_toolpath(toolpath);
         Ok(c.finish())
+    }
+}
+
+/// How `p` gets into and out of its paths, for a cut `depth` deep with tabs `tab`; the side,
+/// the room and the placed tabs are each path's own.
+fn entry_for(p: &Params, depth: f64, tab: TabSettings) -> Entry {
+    Entry {
+        ramp: if p.entry.is_some() {
+            Ramp::None
+        } else {
+            p.ramp
+        },
+        ramping: p.ramping,
+        lead: p.lead,
+        leads: p.leads,
+        side: 1.0,
+        tabs: p.tabs,
+        tab,
+        tab_top: -depth + tab.thickness,
+        tool_diameter: p.tool.diameter,
+        placed: vec![],
+        enter: p.entry,
+        room: None,
+        fallbacks: Fallbacks::default(),
     }
 }
 

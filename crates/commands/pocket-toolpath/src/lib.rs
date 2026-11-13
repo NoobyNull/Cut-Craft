@@ -275,21 +275,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             }
         }
         let safe = doc.job.clearance;
-        let entry = Entry {
-            ramp: if p.ramp_plunge_moves && p.entry.is_none() {
-                Ramp::ZigZag
-            } else {
-                Ramp::None
-            },
-            ramping: Ramping {
-                distance: p.ramp_distance,
-                ..Ramping::default()
-            },
-            enter: p.entry,
-            room: Some(Room::inside(edge.iter().map(cut_points).collect())),
-            tool_diameter: p.tool.diameter,
-            ..Entry::default()
-        };
+        let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other
         // way (Both directions' every other pass)
         let cut = |paths: &[Path], z: f64, above: f64, back: bool| -> Vec<Move> {
@@ -352,12 +338,27 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             moves = project_onto_model(doc, &p.tool, &moves)?;
         }
         let mut toolpath = made_by::<PocketToolpath>(p, p.name.clone(), p.tool.clone(), ids, moves);
-        toolpath.fallbacks = entry
-            .fallbacks
-            .lock()
-            .map(|f| f.clone())
-            .unwrap_or_default();
+        toolpath.fallbacks = entry.take_fallbacks();
         Ok(toolpath)
+    }
+}
+
+/// How `p` goes down into the pocket whose tool centre keeps inside `edge`.
+fn entry_for(p: &Params, edge: &[Path]) -> Entry {
+    Entry {
+        ramp: if p.ramp_plunge_moves && p.entry.is_none() {
+            Ramp::ZigZag
+        } else {
+            Ramp::None
+        },
+        ramping: Ramping {
+            distance: p.ramp_distance,
+            ..Ramping::default()
+        },
+        enter: p.entry,
+        room: Some(Room::inside(edge.iter().map(cut_points).collect())),
+        tool_diameter: p.tool.diameter,
+        ..Entry::default()
     }
 }
 
@@ -969,7 +970,7 @@ mod tests {
         // two passes of 3 mm: two entries, each a helix no steeper than 3°
         assert_eq!(entries(&tp), 2);
         assert!(steepest(&tp) <= 3.0 + 1e-6, "{}", steepest(&tp));
-        assert!(tp.fallbacks.is_empty(), "{:?}", tp.fallbacks);
+        assert_eq!(tp.fallbacks, vec![]);
         // and it still clears the pocket to the edge
         let b = cut_bounds(&tp);
         assert!(b.min.x < 3.1 && b.max.x > 36.9, "{b:?}");
@@ -990,7 +991,7 @@ mod tests {
     fn a_pocket_too_small_for_a_helix_says_where_it_went_down_another_way() {
         // a 7 mm square for a 6.35 mm bit: no room to go round
         let tp = pocket(7.0, &Params::default()).unwrap();
-        assert!(!tp.fallbacks.is_empty());
+        assert_ne!(tp.fallbacks, vec![]);
         assert!(tp.fallbacks.iter().all(|f| f.wanted == EntryMode::Helix));
     }
 

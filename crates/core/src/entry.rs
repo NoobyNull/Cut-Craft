@@ -615,6 +615,18 @@ pub struct Entry {
     pub fallbacks: Fallbacks,
 }
 
+impl Entry {
+    /// The fallbacks noted so far, taken out.
+    pub fn take_fallbacks(&self) -> Vec<Fallback> {
+        std::mem::take(
+            &mut *self
+                .fallbacks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+}
+
 /// Points along one path by distance.
 struct Line {
     points: Vec<Point>,
@@ -1037,12 +1049,12 @@ impl Out<'_> {
             self.push(MoveKind::Plunge, track.point(from), z);
             return (EntryMode::Plunge, from);
         }
-        let even = |n: usize| n.max(2) + n % 2;
-        let mut legs = even(passes.max(1) as usize);
-        let mut leg = drop / (legs as f64 * slope);
+        let even = |n: u32| n.max(2) + n % 2;
+        let mut legs = even(passes.max(1));
+        let mut leg = drop / (f64::from(legs) * slope);
         if leg > room {
             leg = room;
-            legs = even((drop / (leg * slope) - 1e-9).ceil() as usize);
+            legs = even((drop / (leg * slope) - 1e-9).ceil().min(1e6) as u32);
         }
         let mut stations = vec![];
         for i in 0..legs {
