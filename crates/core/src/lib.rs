@@ -1,6 +1,7 @@
 //! Document model, invertible changes, and the [`Command`] contract every command implements.
 
 pub mod accuracy;
+pub mod adaptive;
 pub mod bitmap;
 pub mod calc;
 mod change;
