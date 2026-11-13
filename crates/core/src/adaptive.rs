@@ -97,7 +97,11 @@ impl Grid {
         (q.x.round() as i64, q.y.round() as i64)
     }
 
-    #[expect(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
     fn index(&self, (i, j): (i64, i64)) -> Option<usize> {
         (i >= 0 && j >= 0 && i < self.nx as i64 && j < self.ny as i64)
             .then(|| j as usize * self.nx + i as usize)
@@ -129,7 +133,7 @@ impl Grid {
                 }
             }
             xs.sort_by(f64::total_cmp);
-            for pair in xs.chunks_exact(2) {
+            for pair in xs.as_chunks::<2>().0 {
                 let from = ((pair[0] - self.origin.x) / self.cell).ceil().max(0.0) as usize;
                 let to = ((pair[1] - self.origin.x) / self.cell).floor();
                 if to < 0.0 {
@@ -146,12 +150,16 @@ impl Grid {
 
     /// For each cell, the offset in cells to the nearest cell where `site` is set, or `None`
     /// when no cell is (two sweeps passing nearest offsets on: within a fraction of a cell).
-    #[expect(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
     fn nearest(&self, site: &[bool]) -> Vec<Option<(i32, i32)>> {
         let (nx, ny) = (self.nx as i64, self.ny as i64);
         let mut near: Vec<Option<(i32, i32)>> = site.iter().map(|&s| s.then_some((0, 0))).collect();
         let d2 = |o: (i32, i32)| i64::from(o.0).pow(2) + i64::from(o.1).pow(2);
-        let mut look = |near: &mut Vec<Option<(i32, i32)>>, i: i64, j: i64, di: i64, dj: i64| {
+        let look = |near: &mut Vec<Option<(i32, i32)>>, i: i64, j: i64, di: i64, dj: i64| {
             let (a, b) = (i + di, j + dj);
             if a < 0 || b < 0 || a >= nx || b >= ny {
                 return;
@@ -216,7 +224,7 @@ struct Work {
 }
 
 impl Work {
-    #[expect(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     fn new(c: &Clearing) -> Option<Self> {
         let rings = |paths: &[Path]| -> Vec<Vec<Point>> {
             paths
@@ -238,7 +246,11 @@ impl Work {
         }
         let size = max - min;
         let cell = (c.radius / 20.0).max((size.x * size.y / MOST_CELLS).sqrt());
-        let grid = Grid::new(min - Point::splat(2.0 * cell), max + Point::splat(2.0 * cell), cell);
+        let grid = Grid::new(
+            min - Point::splat(2.0 * cell),
+            max + Point::splat(2.0 * cell),
+            cell,
+        );
         // a cell short of the region's edge, so a centre in an allowed cell is in the region;
         // the material is what the bit reaches from there (the wall's own pass takes the rest)
         let allowed_region = polygon::offset_regions(c.region, -cell, Corners::Round);
@@ -382,19 +394,9 @@ impl Work {
 
     fn run(&mut self) {
         // ponytail: a cap on the work, should the clearing ever fail to make progress
-        #[cfg(not(test))]
         let most = self.grid.len() * 4;
-        #[cfg(test)]
-        let most = std::env::var("ADAPTIVE_ROUNDS")
-            .ok()
-            .and_then(|r| r.parse().ok())
-            .unwrap_or(self.grid.len() * 4);
         let mut at: Option<Point> = None;
-        for _round in 0..most {
-            #[cfg(test)]
-            if _round % 100 == 0 {
-                eprintln!("round {_round}, {} pieces", self.pieces.len());
-            }
+        for _ in 0..most {
             let start = match at.and_then(|p| self.next_from(p)) {
                 Some(start) => Some(start),
                 None => self.enter(),
@@ -504,11 +506,6 @@ impl Work {
             let tightest = (self.step / (0.5 * self.radius)).min(FRAC_PI_2);
             let turn = |n: usize| -tightest + (PI + tightest) * n as f64 / turns as f64;
             let Some(n) = (0..=turns).find(|&n| try_turn(self, turn(n)).0 <= self.target) else {
-                #[cfg(test)]
-                if std::env::var("ADAPTIVE_WHY").is_ok() {
-                    let loads: Vec<f64> = (0..=turns).map(|n| try_turn(self, turn(n)).0).collect();
-                    eprintln!("stuck at {at} after {} steps: {loads:?}", path.len());
-                }
                 break;
             };
             let a = if n == 0 {
@@ -538,10 +535,6 @@ impl Work {
             } else {
                 idle += 1;
                 if idle > most_idle {
-                    #[cfg(test)]
-                    if std::env::var("ADAPTIVE_WHY").is_ok() {
-                        eprintln!("idle at {at} after {} steps", path.len());
-                    }
                     break;
                 }
             }
@@ -556,7 +549,12 @@ impl Work {
     /// The next place to cut from after a cut ending at `at`: the nearest place, going
     /// through cleared space, where the bit fits with material in reach, and the move there
     /// at depth; with no way through, the nearest place at all and a jump to it.
-    #[expect(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::many_single_char_names
+    )]
     fn next_from(&mut self, at: Point) -> Option<(Point, Point)> {
         let near = self.grid.nearest(&self.material);
         let cell = self.grid.cell;
@@ -566,7 +564,7 @@ impl Work {
             .map(|k| self.allowed[k] && gap(k).is_none_or(|g| g >= fits))
             .collect();
         let enough = self.enough();
-        let mut place = |w: &mut Self, k: usize| -> bool {
+        let place = |w: &mut Self, k: usize| -> bool {
             if w.tried[k] || !gap(k).is_some_and(|g| g <= w.radius + w.bite) {
                 return false;
             }
@@ -593,7 +591,16 @@ impl Work {
                     return Some(cells);
                 }
                 let (i, j) = (k % nx, k / nx);
-                for (di, dj) in [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)] {
+                for (di, dj) in [
+                    (1, 0),
+                    (0, 1),
+                    (-1, 0),
+                    (0, -1),
+                    (1, 1),
+                    (-1, 1),
+                    (1, -1),
+                    (-1, -1),
+                ] {
                     let (a, b) = (i.wrapping_add_signed(di), j.wrapping_add_signed(dj));
                     if a < nx && b < ny {
                         let n = b * nx + a;
@@ -636,7 +643,10 @@ impl Work {
                 .map(|k| (k, self.grid.centre(k).distance_squared(at)))
                 .collect();
             spots.sort_by(|a, b| a.1.total_cmp(&b.1));
-            let k = spots.into_iter().map(|(k, _)| k).find(|&k| place(self, k))?;
+            let k = spots
+                .into_iter()
+                .map(|(k, _)| k)
+                .find(|&k| place(self, k))?;
             let to = self.grid.centre(k);
             (to, Piece::Jump(to))
         };
@@ -696,6 +706,12 @@ mod tests {
     /// the leading half of the edge) where the cut is wider than the bite, leaving out the
     /// spirals in from each entry; the most material one link takes (mm²); and how thick
     /// the material left within the bit's reach of `region` is.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::many_single_char_names
+    )]
     fn simulate(region: &[Path], pieces: &[Piece]) -> (f64, f64, f64) {
         let cell = 0.08;
         let reach = polygon::offset_regions(region, R, Corners::Round);
@@ -744,7 +760,7 @@ mod tests {
             // what a link takes, all told: it may graze, never cut
             let mut link_took = 0.0;
             // the material taken over the last few steps, for how wide the cut is
-            let mut recent: std::collections::VecDeque<(f64, f64)> = Default::default();
+            let mut recent = std::collections::VecDeque::<(f64, f64)>::default();
             for w in run.windows(2) {
                 let d = (w[1] - w[0]).normalize_or_zero();
                 let n = (w[0].distance(w[1]) / cell).ceil().max(1.0) as usize;
@@ -804,7 +820,10 @@ mod tests {
             worst <= target + 12.0,
             "{name}: a bite of {worst}° (target {target}°)"
         );
-        assert!(worst_link <= 0.5, "{name}: a link cuts {worst_link} mm² away");
+        assert!(
+            worst_link <= 0.5,
+            "{name}: a link cuts {worst_link} mm² away"
+        );
         // what is left (in corners the bite can't reach) is thinner than a bite: the wall's
         // own pass takes it
         assert!(left <= BITE, "{name}: material {left} mm thick left");
@@ -900,7 +919,10 @@ mod tests {
     #[test]
     fn a_slot_two_bits_wide() {
         let p = Point::new;
-        let slot = Path::polyline(&[p(0.0, 0.0), p(60.0, 0.0), p(60.0, 12.0), p(0.0, 12.0)], true);
+        let slot = Path::polyline(
+            &[p(0.0, 0.0), p(60.0, 0.0), p(60.0, 12.0), p(0.0, 12.0)],
+            true,
+        );
         let region = centre_region(&[slot]);
         check("slot", &region, &clear(&clearing(&region)));
     }
@@ -925,12 +947,12 @@ mod tests {
             cleared: &all,
             ..clearing(&region)
         };
-        assert!(clear(&c).is_empty());
+        assert_eq!(clear(&c), vec![]);
     }
 
     #[test]
     fn nothing_to_clear_when_the_bit_does_not_fit() {
-        assert!(clear(&clearing(&[])).is_empty());
+        assert_eq!(clear(&clearing(&[])), vec![]);
     }
 
     #[test]
@@ -938,28 +960,5 @@ mod tests {
         assert!((engagement_for(R, R) - 90.0).abs() < 1e-9);
         assert!((engagement_for(0.0, R)).abs() < 1e-9);
         assert!((engagement_for(2.0 * R, R) - 180.0).abs() < 1e-9);
-    }
-}
-
-#[cfg(test)]
-mod probe {
-    use super::*;
-    #[test]
-    #[ignore = "timing probe"]
-    fn probe() {
-        let region = polygon::offset_regions(
-            &polygon::regions(&[crate::testing::square(0.0, 0.0, 40.0)]),
-            -3.0,
-            Corners::Round,
-        );
-        let t = std::time::Instant::now();
-        let c = Clearing { region: &region, cleared: &[], radius: 3.0, bite: std::env::var("BITE").map_or(0.9, |b| b.parse().unwrap()), climb: true };
-        let pieces = clear(&c);
-        let cut: f64 = pieces.iter().map(|p| match p { Piece::Cut(v) => v.windows(2).map(|w| w[0].distance(w[1])).sum(), _ => 0.0 }).sum();
-        let n = |f: fn(&Piece) -> bool| pieces.iter().filter(|p| f(p)).count();
-        eprintln!("{:?} pieces {} cuts {} links {} jumps {} enters {} cut mm {cut:.0}", t.elapsed(), pieces.len(), n(|p| matches!(p, Piece::Cut(_))), n(|p| matches!(p, Piece::Link(_))), n(|p| matches!(p, Piece::Jump(_))), n(|p| matches!(p, Piece::Enter(_))));
-        let mut s = String::new();
-        for p in &pieces { match p { Piece::Enter(q) => s += &format!("E {} {}\n", q.x, q.y), Piece::Jump(q) => s += &format!("J {} {}\n", q.x, q.y), Piece::Cut(v) | Piece::Link(v) => { let k = if matches!(p, Piece::Cut(_)) {"C"} else {"L"}; for q in v { s += &format!("{k} {} {}\n", q.x, q.y); } s += "-\n"; } } }
-        std::fs::write(std::env::var("PROBE_OUT").unwrap(), s).unwrap();
     }
 }

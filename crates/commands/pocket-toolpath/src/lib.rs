@@ -278,17 +278,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 loops.clone_from(&rings); // too narrow for loops: rings
             }
         }
-        let plan = if p.strategy == Strategy::Adaptive {
-            adaptive::clear(&Clearing {
-                region: &edge,
-                cleared: &[],
-                radius: p.tool.diameter / 2.0,
-                bite: adaptive_bite(&p.tool),
-                climb: p.direction == Direction::Climb,
-            })
-        } else {
-            vec![]
-        };
+        let plan = adaptive_plan(p, &edge);
         let safe = doc.job.clearance;
         let entry = entry_for(p, &edge);
         // each path at depth `z`, entering from the level above; `back` runs it the other
@@ -329,12 +319,7 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             let cut = |paths: &[Path]| cut_way(paths, back);
             match (p.motion, p.strategy) {
                 (_, Strategy::Adaptive) => {
-                    let cleared = adaptive_moves(&plan, z, above, safe, &entry);
-                    let from = cleared.last().map(|m| m.to);
-                    let edges: Vec<Vec<Point>> =
-                        edge.iter().map(|r| oriented(p.direction, r)).collect();
-                    moves.extend(cleared);
-                    moves.extend(walls(&edges, from, z, safe, &entry));
+                    moves.extend(adaptive_pass(&plan, &edge, p, (z, above), safe, &entry));
                 }
                 (Motion::Trochoidal, _) => {
                     moves.extend(cut(&loops));
@@ -449,6 +434,38 @@ fn nearest_vertex(points: &[Point], at: Point) -> Option<(usize, f64)> {
         .map(|p| p.distance(at))
         .enumerate()
         .min_by(|a, b| a.1.total_cmp(&b.1))
+}
+
+/// The adaptive clearing of the pocket whose tool centre keeps inside `edge`, the same at
+/// every depth; empty unless `p` clears adaptively.
+fn adaptive_plan(p: &Params, edge: &[Path]) -> Vec<Piece> {
+    if p.strategy != Strategy::Adaptive {
+        return vec![];
+    }
+    adaptive::clear(&Clearing {
+        region: edge,
+        cleared: &[],
+        radius: p.tool.diameter / 2.0,
+        bite: adaptive_bite(&p.tool),
+        climb: p.direction == Direction::Climb,
+    })
+}
+
+/// One pass depth of an adaptive pocket: `plan` cleared at depth `z` coming down from
+/// `above`, then once round the wall, `edge`.
+fn adaptive_pass(
+    plan: &[Piece],
+    edge: &[Path],
+    p: &Params,
+    (z, above): (f64, f64),
+    safe: f64,
+    entry: &Entry,
+) -> Vec<Move> {
+    let mut moves = adaptive_moves(plan, z, above, safe, entry);
+    let from = moves.last().map(|m| m.to);
+    let rings: Vec<Vec<Point>> = edge.iter().map(|r| oriented(p.direction, r)).collect();
+    moves.extend(walls(&rings, from, z, safe, entry));
+    moves
 }
 
 /// How wide a bite adaptive clearing takes with `tool`: its clearing stepover, but no more
@@ -1045,8 +1062,10 @@ mod tests {
 
     #[test]
     fn adaptive_takes_at_most_a_quarter_of_the_bit() {
-        let mut tool = Tool::default();
-        tool.stepover = 0.4;
+        let mut tool = Tool {
+            stepover: 0.4,
+            ..Tool::default()
+        };
         assert!((adaptive_bite(&tool) - 0.25 * tool.diameter).abs() < 1e-12);
         tool.stepover = 0.1;
         assert!((adaptive_bite(&tool) - 0.1 * tool.diameter).abs() < 1e-12);
