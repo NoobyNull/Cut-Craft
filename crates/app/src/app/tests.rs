@@ -1989,7 +1989,9 @@ fn toolpaths_follow_their_vectors_when_recalculated() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     h.app.invoke(&h.ctx, "profile_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
+    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    // straight down: a helix sits by the start point, which moves with the shape's place
+    params["entry"] = serde_json::json!({ "mode": "plunge" });
     h.app.apply("profile_toolpath", &params).unwrap();
     let before = cut_min_x(&h.app);
     let shift =
@@ -2074,7 +2076,9 @@ fn the_toolpath_menu_acts_on_the_toolpath_clicked() {
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     for _ in 0..2 {
         let params = h.app.registry.get("profile_toolpath").unwrap();
-        let params = params.initial_params(&h.app.doc);
+        let mut params = params.initial_params(&h.app.doc);
+        // straight down: a helix sits by the start point, which moves with the shape's place
+        params["entry"] = serde_json::json!({ "mode": "plunge" });
         h.app.apply("profile_toolpath", &params).unwrap();
     }
     let toolpath = |i: usize| {
@@ -4550,6 +4554,72 @@ fn a_paused_preview_is_not_rebuilt_for_the_3d_view_every_frame() {
 }
 
 #[test]
+fn a_playing_preview_is_drawn_at_full_detail_and_redrawn_a_few_times_a_second() {
+    let mut h = playing_preview();
+    h.app.options.view_3d.adjust_to_frame_rate = false;
+    // a test's frames are slow: the redraws are kept well apart to see them kept
+    h.app.playback_redraw = std::time::Duration::from_secs(3600);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let ((_, cells, _), _) = h.app.playback_view.as_ref().expect("drawn");
+    assert_eq!(
+        *cells,
+        h.app.options.view_3d.still_cells(),
+        "as sharp as when still, not the moving detail"
+    );
+    // frames straight after one another: the cut so far is kept, not made again each one
+    let built = h.app.playback_builds;
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    assert!(
+        h.app.playback_builds <= built + 1,
+        "{built} then {}",
+        h.app.playback_builds
+    );
+    // once it gets where it was sent, that is drawn at once
+    h.click(h.text_at("Pause").unwrap(), Modifiers::NONE);
+    h.click(h.text_at("Single Step").unwrap(), Modifiers::NONE);
+    h.frame(vec![]);
+    let shown = h.app.playback_view.as_ref().unwrap().0.0;
+    assert_eq!(shown, h.app.playback.as_ref().unwrap().revision());
+}
+
+#[test]
+fn a_bit_with_no_shank_set_is_flagged_while_its_preview_plays() {
+    let flagged = |shank: f64| {
+        let mut h = Harness::new();
+        h.rectangle(10.0, 10.0, 50.0, 50.0);
+        h.app.invoke(&h.ctx, "profile_toolpath");
+        let params = h.app.form.as_ref().unwrap().params.clone();
+        h.app.apply("profile_toolpath", &params).unwrap();
+        h.app.form = None;
+        for t in h.app.doc.toolpaths.values_mut() {
+            t.tool.shank_diameter = shank;
+        }
+        h.app.display.animate_preview = true;
+        h.app.invoke(&h.ctx, "preview_all_toolpaths");
+        h.frame(vec![]);
+        h.frame(vec![]);
+        h.texts()
+            .iter()
+            .any(|t| t.contains("no shank diameter set"))
+    };
+    assert!(flagged(0.0), "not set: said so");
+    assert!(!flagged(6.35), "set: nothing to say");
+}
+
+#[test]
+fn a_jump_gets_more_time_each_frame_than_playing_does() {
+    let h = playing_preview();
+    assert!(super::jump_budget(h.app.playback_budget) > h.app.playback_budget);
+    assert_eq!(
+        super::jump_budget(std::time::Duration::ZERO),
+        std::time::Duration::ZERO
+    );
+}
+
+#[test]
 fn a_long_jump_is_cut_a_little_each_frame_and_stop_ends_it() {
     let mut h = playing_preview();
     // a step a frame, as a toolpath of millions of moves would go
@@ -4613,16 +4683,24 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     assert!(drawn("Rest Machining") && drawn("Add a tool…"));
     let mut params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("pocket_toolpath", &params).unwrap();
-    let whole = h.app.doc.toolpaths.values().last().unwrap().moves.len();
+    // how far it cuts: a pocket links its rings at depth, so moves alone undercount it
+    let cut_length = |t: &cut_craft_core::toolpath::Toolpath| -> f64 {
+        t.moves
+            .windows(2)
+            .filter(|w| w[1].kind == cut_craft_core::toolpath::MoveKind::Cut)
+            .map(|w| w[0].to.distance(w[1].to))
+            .sum()
+    };
+    let whole = cut_length(h.app.doc.toolpaths.values().last().unwrap());
     let mut big = h.app.form.as_ref().unwrap().params["tool"].clone();
     big["diameter"] = Value::from(params["tool"]["diameter"].as_f64().unwrap() * 4.0);
     params["rest"] = serde_json::json!({ "after": [big], "minimum_detail": 0.0, "overlap": 0.0 });
     h.app.apply("pocket_toolpath", &params).unwrap();
     let rest = h.app.doc.toolpaths.values().last().unwrap();
     assert!(
-        rest.moves.len() < whole,
-        "{} of {whole} moves",
-        rest.moves.len()
+        cut_length(rest) < whole,
+        "{} of {whole} mm cut",
+        cut_length(rest)
     );
     assert!(
         cut_craft_core::rest::Rest::of(&rest.params).is_some(),
@@ -5708,6 +5786,25 @@ fn the_3d_view_turns_to_perspective_and_tilts_underneath() {
 }
 
 #[test]
+fn the_3d_views_vectors_button_hides_and_shows_them_and_is_remembered() {
+    let mut h = shape_in_3d();
+    assert!(h.app.display.vectors_3d, "shown to start with");
+    let button = h
+        .text_at("Vectors")
+        .expect("a Vectors button on the 3D view");
+    h.click(button, Modifiers::NONE);
+    assert!(!h.app.display.vectors_3d, "hidden");
+    assert!(!h.app.options.view_3d.draw_vectors, "kept with the options");
+    let mut d = crate::display::Display::default();
+    h.app.options.apply_to(&mut d);
+    assert!(!d.vectors_3d, "hidden again next time");
+    // the View menu's item is the same switch, and is kept too
+    let ctx = h.ctx.clone();
+    h.app.invoke(&ctx, "draw_vectors_in_3d_view");
+    assert!(h.app.display.vectors_3d && h.app.options.view_3d.draw_vectors);
+}
+
+#[test]
 fn a_vector_behind_the_model_is_not_drawn_over_it() {
     // a tall block on the right half; an outline on the floor left of it
     use cut_craft_core::component::{Combine, Component};
@@ -6332,6 +6429,7 @@ fn the_log_says_what_a_command_made() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     assert_eq!(
         super::background::summary(&c.finish()),
@@ -6898,6 +6996,7 @@ fn a_double_click_on_the_preview_takes_away_the_piece_cut_free_under_it() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.simulation = Some(m);
     h.app.orbit = view3d::Orbit::TOP;
@@ -9936,6 +10035,7 @@ fn moving_what_a_toolpath_was_made_from_says_it_is_out_of_date() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);
@@ -11326,6 +11426,7 @@ fn a_toolpath_of_millions_of_cuts_is_drawn_in_a_frame_the_graphics_card_takes() 
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     });
     h.app.record(Ok(c.finish()), "made");
     h.frame(vec![]);

@@ -65,6 +65,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_toolpath_group::UngroupToolpaths>();
     r.add::<cmd_quick_engrave_toolpath::QuickEngraveToolpath>();
     r.add::<cmd_keyhole_toolpath::KeyholeToolpath>();
+    r.add::<cmd_surfacing_toolpath::SurfacingToolpath>();
     r.add::<cmd_drag_knife_toolpath::DragKnifeToolpath>();
     r.add::<cmd_chamfer_toolpath::ChamferToolpath>();
     r.add::<cmd_thread_milling_toolpath::ThreadMillingToolpath>();

@@ -15,6 +15,12 @@ takes to watch at the chosen speed. A finishing toolpath with a small bit can ta
 so speed it up, drag Progress on, or press Stop (or Esc) to keep what is cut so far. Once
 stopped or played to the end the controls stay, so you can scrub back over it, until
 another preview, Reset Preview, or Close. Going back starts from the nearest point saved
-while it played, so it is quick once played through. Turn off Animate Preview (the
+while it played, so it is quick once played through. A jump is cut across all the
+computer's cores, and the 3D view keeps its full detail while the preview plays (it is
+redrawn a few times a second; the tool moves smoothly in between). If a bit has no shank
+diameter set in the Tool Database, the preview draws a common one (1/4" for a V-bit, up
+to 1/2" for others) and says so under the controls. The Vectors button above the 3D view
+(or View ▸ Draw Vectors in 3D View) shows or hides the vectors over the model, and is
+remembered next time. Turn off Animate Preview (the
 Toolpaths menu, Toolpath Drawing) to cut the whole preview at once, with a progress window
 you can Cancel (or press Esc).

@@ -1,0 +1,95 @@
+# Cut Craft's apt and dnf repositories on GitHub Pages (https://noobynull.github.io/Cut-Craft/):
+# once Builds has published a release, takes the .deb and .rpm files of the newest few
+# releases, checks each is signed by Cut Craft's release key (minisign), signs them and the
+# repositories' indexes with the repository key (scripts/linux-repo) and publishes the site.
+# Nothing is kept in a branch: every run builds the whole site from the releases.
+#
+# Off until the repository variable PUBLISH_LINUX_REPOS is "true". Needs the secret
+# REPO_SIGNING_KEY (made by scripts/make-repo-key) and Settings > Pages > Source set to
+# "GitHub Actions".
+name: Linux repositories
+
+on:
+  workflow_run:
+    workflows: [Builds]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # how many releases the repositories offer (the newest is what apt and dnf install)
+  KEEP: 3
+
+jobs:
+  build:
+    # a release's Builds run is on its v* tag; a macOS build GitHub cancelled fails the run
+    # but not the release, so only a cancelled run is passed over
+    if: >-
+      vars.PUBLISH_LINUX_REPOS == 'true' && (github.event_name == 'workflow_dispatch'
+      || (startsWith(github.event.workflow_run.head_branch, 'v')
+          && github.event.workflow_run.conclusion != 'cancelled'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Tools
+        run: scripts/apt-install apt-utils createrepo-c rpm minisign gnupg
+      - name: The newest releases' packages, checked against the release key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p packages
+          key=$(sed -n 2p crates/updater/release-key.pub)
+          # releases/latest first: test builds ("nightly") are pre-releases and never offered
+          tags=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
+            --jq '[.[] | select(.draft | not) | select(.prerelease | not) | .tag_name] | .[]' \
+            | head -n "$KEEP")
+          for tag in $tags; do
+            gh release download "$tag" -R "$GITHUB_REPOSITORY" -D packages \
+              -p '*.deb' -p '*.deb.minisig' -p '*.rpm' -p '*.rpm.minisig' || true
+          done
+          for f in packages/*.deb packages/*.rpm; do
+            [[ -e $f ]] || continue
+            minisign -Vm "$f" -P "$key" >/dev/null
+          done
+          rm -f packages/*.minisig
+          if ! compgen -G 'packages/*.deb' >/dev/null || ! compgen -G 'packages/*.rpm' >/dev/null; then
+            echo "::error::No release has a .deb and an .rpm yet; nothing to publish."
+            exit 1
+          fi
+          ls -l packages
+      - name: Build the repositories
+        env:
+          REPO_SIGNING_KEY: ${{ secrets.REPO_SIGNING_KEY }}
+        run: |
+          if [[ -z $REPO_SIGNING_KEY ]]; then
+            echo "::error::The REPO_SIGNING_KEY secret is not set; run scripts/make-repo-key."
+            exit 1
+          fi
+          export GNUPGHOME=$(mktemp -d)
+          printf '%s\n' "$REPO_SIGNING_KEY" | gpg --batch --import
+          export REPO_KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          export BASE_URL="https://noobynull.github.io/Cut-Craft"
+          scripts/linux-repo packages site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

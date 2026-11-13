@@ -1,0 +1,123 @@
+#!/bin/bash
+# Packs the Linux program as a .deb (Debian, Ubuntu, Mint) and an .rpm (Fedora, openSUSE,
+# RHEL-likes), in dist/.
+#   scripts/linux-distro-packages [PROGRAM]  (default: target/release/cut-craft)
+# Both install the same files: the program in /usr/bin, the desktop entry and icon, the
+# licence, and /usr/lib/cut-craft/packaged-by, the note that tells the program its package
+# manager updates it (so Help > Check for Updates says how, and replaces nothing).
+# .github/workflows/builds.yml runs it on GitHub. Needs dpkg-deb, rpmbuild (package rpm)
+# and rsvg-convert. MAINTAINER sets the packages' maintainer.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+program=${1:-target/release/cut-craft}
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+maintainer=${MAINTAINER:-Cut Craft <6624403+NoobyNull@users.noreply.github.com>}
+home=https://github.com/NoobyNull/Cut-Craft
+summary="Design in 2D and 3D and make CNC router toolpaths"
+mkdir -p dist
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# the files both packages install, under ROOT; NOTE is how that package is updated
+stage() {
+    local root=$1 note=$2
+    install -Dm755 "$program" "$root/usr/bin/cut-craft"
+    install -Dm644 packaging/linux/family.yax.CutCraft.desktop \
+        "$root/usr/share/applications/family.yax.CutCraft.desktop"
+    install -Dm644 assets/cut-craft.svg \
+        "$root/usr/share/icons/hicolor/scalable/apps/family.yax.CutCraft.svg"
+    for size in 48 128 256; do
+        mkdir -p "$root/usr/share/icons/hicolor/${size}x${size}/apps"
+        rsvg-convert -w "$size" -h "$size" assets/cut-craft.svg \
+            -o "$root/usr/share/icons/hicolor/${size}x${size}/apps/family.yax.CutCraft.png"
+    done
+    mkdir -p "$root/usr/lib/cut-craft"
+    printf '%s\n' "$note" >"$root/usr/lib/cut-craft/packaged-by"
+    chmod 644 "$root/usr/lib/cut-craft/packaged-by"
+}
+
+# .deb
+deb=$work/deb
+stage "$deb" "This copy of Cut Craft came from its .deb package. With Cut Craft's apt \
+repository added, \`sudo apt update && sudo apt upgrade\` installs new versions; otherwise \
+download the new .deb from the release page and open it."
+install -Dm644 /dev/stdin "$deb/usr/share/doc/cut-craft/copyright" <<EOF
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Cut Craft
+Source: $home
+
+Files: *
+Copyright: Cut Craft contributors
+License: PolyForm-Noncommercial-1.0.0
+$(sed 's/^$/./; s/^/ /' LICENSE)
+EOF
+# Debian asks every package for a changelog; this one points at the release notes
+printf '%s\n' "cut-craft ($version) stable; urgency=medium" "" \
+    "  * Cut Craft $version: $home/releases/tag/v$version" "" \
+    " -- $maintainer  $(date -uR)" | gzip -9n >"$work/changelog.gz"
+install -Dm644 "$work/changelog.gz" "$deb/usr/share/doc/cut-craft/changelog.gz"
+mkdir -p "$deb/DEBIAN"
+cat >"$deb/DEBIAN/control" <<EOF
+Package: cut-craft
+Version: $version
+Architecture: amd64
+Maintainer: $maintainer
+Installed-Size: $(du -sk --exclude=DEBIAN "$deb" | cut -f1)
+Depends: libc6 (>= 2.35), libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libxcb-xkb1, libx11-6, libx11-xcb1, libxcursor1, libxi6, libxrandr2, libwayland-client0, libvulkan1
+Recommends: mesa-vulkan-drivers | vulkan-icd, libegl1
+Section: graphics
+Priority: optional
+Homepage: $home
+Description: $summary
+ Cut Craft is a CAD/CAM program for hobby CNC routers: draw or import a design,
+ model it in 3D, choose your bits and make toolpaths, then save G-code for
+ your machine. Free for noncommercial use (PolyForm Noncommercial 1.0.0).
+EOF
+dpkg-deb --root-owner-group -Zxz --build "$deb" "dist/cut-craft_${version}_amd64.deb"
+
+# .rpm: the library names rpm knows on every distribution (Fedora's and openSUSE's
+# package names differ), for the libraries the window loads while it opens
+rpmroot=$work/rpm
+stage "$rpmroot/root" "This copy of Cut Craft came from its .rpm package. With Cut Craft's \
+dnf repository added, \`sudo dnf upgrade\` installs new versions; otherwise download the new \
+.rpm from the release page and open it."
+install -Dm644 LICENSE "$rpmroot/root/usr/share/licenses/cut-craft/LICENSE"
+requires=""
+for lib in libxkbcommon.so.0 libxkbcommon-x11.so.0 libxcb-xkb.so.1 libX11.so.6 \
+    libX11-xcb.so.1 libXcursor.so.1 libXi.so.6 libXrandr.so.2 libwayland-client.so.0 \
+    libvulkan.so.1; do
+    requires+="Requires: ${lib}()(64bit)"$'\n'
+done
+cat >"$rpmroot/cut-craft.spec" <<EOF
+%global debug_package %{nil}
+%global __os_install_post %{nil}
+%global _build_id_links none
+Name: cut-craft
+Version: $version
+Release: 1
+Summary: $summary
+License: PolyForm-Noncommercial-1.0.0
+URL: $home
+Packager: $maintainer
+BuildArch: x86_64
+${requires}Recommends: mesa-vulkan-drivers
+
+%description
+Cut Craft is a CAD/CAM program for hobby CNC routers: draw or import a design,
+model it in 3D, choose your bits and make toolpaths, then save G-code for
+your machine. Free for noncommercial use (PolyForm Noncommercial 1.0.0).
+
+%install
+cp -a "$rpmroot/root/." %{buildroot}/
+
+%files
+%license /usr/share/licenses/cut-craft/LICENSE
+/usr/bin/cut-craft
+/usr/lib/cut-craft
+/usr/share/applications/family.yax.CutCraft.desktop
+/usr/share/icons/hicolor/*/apps/family.yax.CutCraft.*
+EOF
+rpmbuild -bb --quiet --define "_topdir $rpmroot/build" --define "_rpmdir $PWD/dist" \
+    --define "_build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" \
+    "$rpmroot/cut-craft.spec"
+ls -l "dist/cut-craft_${version}_amd64.deb" "dist/cut-craft-${version}-1.x86_64.rpm"

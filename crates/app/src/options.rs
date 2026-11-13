@@ -16,6 +16,10 @@ use std::path::PathBuf;
 pub struct View3d {
     pub draw_origin: bool,
     pub draw_material_block: bool,
+    /// The vectors drawn over the model (the 3D view's Vectors button)
+    #[serde(default = "yes")]
+    #[schemars(title = "Draw vectors in 3D view")]
+    pub draw_vectors: bool,
     #[schemars(title = "Use color shaded view")]
     pub color_shaded_view: bool,
     #[schemars(title = "Use shaded background")]
@@ -51,8 +55,8 @@ pub struct View3d {
     #[schemars(title = "Detail when still")]
     pub still_detail: Detail,
     /// How finely the model is drawn while it or the view moves (turning the view, dragging
-    /// a handle, playing a preview): lower keeps it smooth on a slower computer. Never finer
-    /// than the detail when still
+    /// a handle): lower keeps it smooth on a slower computer. Never finer than the detail
+    /// when still. A playing preview keeps the detail when still
     #[serde(default)]
     #[schemars(
         title = "Detail while moving",
@@ -1450,6 +1454,7 @@ impl Default for Options {
             view_3d: View3d {
                 draw_origin: d.origin,
                 draw_material_block: d.material_block,
+                draw_vectors: d.vectors_3d,
                 color_shaded_view: d.colour_shaded,
                 shaded_background: d.shaded_background,
                 light_follows_viewer: d.light_follows,
@@ -1585,6 +1590,7 @@ impl Options {
         let (v, t) = (&self.view_3d, &self.toolpaths);
         d.origin = v.draw_origin;
         d.material_block = v.draw_material_block;
+        d.vectors_3d = v.draw_vectors;
         d.colour_shaded = v.color_shaded_view;
         d.shaded_background = v.shaded_background;
         d.light_follows = v.light_follows_viewer;
@@ -1751,6 +1757,7 @@ mod tests {
             stale: false,
             group: None,
             drill_bank: None,
+            fallbacks: vec![],
         };
         let mut doc = cut_craft_core::document::Document::default();
         doc.toolpaths.insert(

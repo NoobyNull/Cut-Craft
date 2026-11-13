@@ -1,5 +1,5 @@
-- V-Carve carves down each shape's centre line, with Inside, On the Line and Outside
-- Every number box has up and down buttons, and every measurement shows in the job's units
-- The status bar counts what's selected, and edits that leave toolpaths out of date ask to recalculate them
-- Tool Database draws each bit in its own card; the preview shows the bit's real shape
-- Suggest clearing bits picks from My Tools; sculpt brush, grid rows and export line width are settings
+- New Surfacing Toolpath for flattening spoilboards, slabs and material
+- Entry modes for Profile and Pocket: helix, zig-zag, ramp or straight down, set in one Entry window
+- Checks before cutting: V-bits reach as deep as their V, and V-Carve no longer warns of cutting air by mistake
+- Preview jumps and scrubbing apply at once, and the carving stays sharp while it plays
+- DXF files without units come in at a sensible size, and post-processor windows fill their height

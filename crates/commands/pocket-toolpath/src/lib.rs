@@ -3,13 +3,16 @@
 //! lines and a profile pass round the edge; or, trochoidal, with the tool circling in small
 //! loops as it moves on, so it never cuts with more than a sliver of its edge.
 
+use cut_craft_core::adaptive::{self, Clearing, Piece};
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::{
-    Direction, Entry, Loops, Motion, Ramp, Ramping, Ways, path_moves, trochoid,
+    Direction, Entry, EntrySettings, Loops, Motion, Ramp, Ramping, Room, Ways, path_moves, trochoid,
 };
 use cut_craft_core::geometry::{Path, Point, winding};
 use cut_craft_core::polygon::{self, Corners};
-use cut_craft_core::toolpath::{Move, Tool, cut_points, hatch_lines, made_by, project_onto_model};
+use cut_craft_core::toolpath::{
+    Move, MoveKind, Tool, cut_points, hatch_lines, made_by, project_onto_model,
+};
 use cut_craft_core::{Change, Command, CommandError, Meta, ensure_positive, tool_does_not_fit};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -25,6 +28,9 @@ pub enum Strategy {
     Offset,
     /// Straight lines across, at the raster angle
     Raster,
+    /// Keeps the bit taking a thin, steady bite everywhere, never cutting full width in
+    /// a corner: gentler on the bit and machine, so it can go a full pass deep with confidence
+    Adaptive,
 }
 
 /// Which way an offset pocket's rings step. Turning the cut direction's way, rings stepping
@@ -127,18 +133,20 @@ pub struct Params {
     #[serde(default)]
     #[schemars(skip)]
     pub loops: Loops,
-    /// Zig zag down over the ramp distance instead of plunging straight down
+    /// How toolpaths made before entry modes went down: zig zag over the ramp distance
+    /// instead of straight down. Kept for them; with `entry` unset they go down as they did
     #[serde(default)]
-    #[schemars(extend("x-group" = "Ramp Plunge Moves"))]
+    #[schemars(skip)]
     pub ramp_plunge_moves: bool,
     #[serde(default = "ramp_distance")]
-    #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend(
-        "x-group" = "Ramp Plunge Moves",
-        "x-enable-when" = {"ramp_plunge_moves": "true"}
-    ))]
-    /// How far along the cut each zig zag ramp runs
+    #[schemars(skip)]
     pub ramp_distance: f64,
+    /// How the tool goes down into the material (helix, zig-zag, ramp or straight down), set
+    /// in the Entry window: once in each area of the pocket, fitted to the room there, then
+    /// each ring links on to the next at depth. Unset on toolpaths made before entry modes
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub entry: Option<EntrySettings>,
     /// Drop the finished toolpath onto the 3D model: its depth below the material surface
     /// becomes depth below the model's surface, going no lower than the bottom of the material
     #[serde(default)]
@@ -168,6 +176,7 @@ impl Default for Params {
             loops: Loops::default(),
             ramp_plunge_moves: false,
             ramp_distance: ramp_distance(),
+            entry: Some(EntrySettings::default()),
             project_onto_model: false,
         }
     }
@@ -269,36 +278,36 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 loops.clone_from(&rings); // too narrow for loops: rings
             }
         }
+        let plan = adaptive_plan(p, &edge);
         let safe = doc.job.clearance;
-        let entry = Entry {
-            ramp: if p.ramp_plunge_moves {
-                Ramp::ZigZag
-            } else {
-                Ramp::None
-            },
-            ramping: Ramping {
-                distance: p.ramp_distance,
-                ..Ramping::default()
-            },
-            ..Entry::default()
-        };
-        // each path at depth `z`, ramping down from the level above; `back` runs it the other
+        let entry = entry_for(p, &edge);
+        // each path at depth `z`, entering from the level above; `back` runs it the other
         // way (Both directions' every other pass)
         let cut = |paths: &[Path], z: f64, above: f64, back: bool| -> Vec<Move> {
-            paths
-                .iter()
-                .flat_map(|r| {
-                    let mut points = if r.closed {
-                        oriented(p.direction, r)
-                    } else {
-                        cut_points(r)
-                    };
-                    if back {
-                        points.reverse();
-                    }
-                    path_moves(&points, r.closed, &[z], above, safe, &entry)
-                })
-                .collect()
+            let way = |r: &Path| {
+                let mut points = if r.closed {
+                    oriented(p.direction, r)
+                } else {
+                    cut_points(r)
+                };
+                if back {
+                    points.reverse();
+                }
+                points
+            };
+            if p.entry.is_none() {
+                return paths
+                    .iter()
+                    .flat_map(|r| path_moves(&way(r), r.closed, &[z], above, safe, &entry))
+                    .collect();
+            }
+            linked(
+                paths.iter().map(|r| (way(r), r.closed)).collect(),
+                z,
+                above,
+                safe,
+                &entry,
+            )
         };
         // ponytail: each ring or line retracts between cuts; link them with a stepover move
         // to save time
@@ -309,6 +318,9 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
             let cut_way = |paths: &[Path], back: bool| cut(paths, z, above, back);
             let cut = |paths: &[Path]| cut_way(paths, back);
             match (p.motion, p.strategy) {
+                (_, Strategy::Adaptive) => {
+                    moves.extend(adaptive_pass(&plan, &edge, p, (z, above), safe, &entry));
+                }
                 (Motion::Trochoidal, _) => {
                     moves.extend(cut(&loops));
                     moves.extend(cut(&edge));
@@ -333,14 +345,254 @@ fn pocket(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         if p.project_onto_model {
             moves = project_onto_model(doc, &p.tool, &moves)?;
         }
-        Ok(made_by::<PocketToolpath>(
-            p,
-            p.name.clone(),
-            p.tool.clone(),
-            ids,
-            moves,
-        ))
+        let mut toolpath = made_by::<PocketToolpath>(p, p.name.clone(), p.tool.clone(), ids, moves);
+        toolpath.fallbacks = entry.take_fallbacks();
+        Ok(toolpath)
     }
+}
+
+/// How `p` goes down into the pocket whose tool centre keeps inside `edge`.
+fn entry_for(p: &Params, edge: &[Path]) -> Entry {
+    Entry {
+        ramp: if p.ramp_plunge_moves && p.entry.is_none() {
+            Ramp::ZigZag
+        } else {
+            Ramp::None
+        },
+        ramping: Ramping {
+            distance: p.ramp_distance,
+            ..Ramping::default()
+        },
+        enter: p.entry,
+        room: Some(Room::inside(edge.iter().map(cut_points).collect())),
+        tool_diameter: p.tool.diameter,
+        no_plunge: p.tool.cannot_plunge(),
+        ..Entry::default()
+    }
+}
+
+/// The rings and lines `paths` cut at `z`, entering from `above` only where the tool must go
+/// down into the material: a closed ring within a bit's width of where the last one ended,
+/// with a straight way across to it in the pocket, is cut next, linked to at depth, so each
+/// area of the pocket is entered once. The rest keep their order.
+fn linked(
+    mut paths: Vec<(Vec<Point>, bool)>,
+    z: f64,
+    above: f64,
+    safe: f64,
+    entry: &Entry,
+) -> Vec<Move> {
+    let reach = entry.tool_diameter;
+    let mut moves: Vec<Move> = vec![];
+    // where the tool is, at depth, after a closed ring
+    let mut down: Option<Point> = None;
+    while !paths.is_empty() {
+        let next = down.and_then(|at| {
+            paths.iter().enumerate().find_map(|(i, (points, closed))| {
+                let (k, gap) = nearest_vertex(points, at)?;
+                let near = *closed && gap <= reach + 1e-9;
+                let across = entry.room.as_ref().is_none_or(|r| r.holds(at, points[k]));
+                (near && across).then_some((i, k))
+            })
+        });
+        let Some((i, k)) = next else {
+            let (points, closed) = paths.remove(0);
+            moves.extend(path_moves(&points, closed, &[z], above, safe, entry));
+            down = closed.then(|| at_depth(&moves, z)).flatten();
+            continue;
+        };
+        let (mut points, closed) = paths.remove(i);
+        points.rotate_left(k);
+        // off with the lift after the last ring, across at depth, round without entering
+        if moves.last().is_some_and(|m| m.kind == MoveKind::Rapid) {
+            moves.pop();
+        }
+        moves.push(Move {
+            kind: MoveKind::Cut,
+            to: points[0].extend(z),
+        });
+        let ring = path_moves(&points, closed, &[z], z, safe, entry);
+        let first_cut = ring
+            .iter()
+            .position(|m| m.kind == MoveKind::Cut)
+            .unwrap_or(ring.len());
+        moves.extend_from_slice(&ring[first_cut..]);
+        down = at_depth(&moves, z);
+    }
+    moves
+}
+
+/// Where the tool was at depth `z` before it lifted at the end of `moves`.
+fn at_depth(moves: &[Move], z: f64) -> Option<Point> {
+    let last = moves.iter().rev().find(|m| m.kind != MoveKind::Rapid)?;
+    ((last.to.z - z).abs() < 1e-9).then(|| last.to.truncate())
+}
+
+/// The vertex of `points` nearest `at`, and how far it is.
+fn nearest_vertex(points: &[Point], at: Point) -> Option<(usize, f64)> {
+    points
+        .iter()
+        .map(|p| p.distance(at))
+        .enumerate()
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+}
+
+/// The adaptive clearing of the pocket whose tool centre keeps inside `edge`, the same at
+/// every depth; empty unless `p` clears adaptively.
+fn adaptive_plan(p: &Params, edge: &[Path]) -> Vec<Piece> {
+    if p.strategy != Strategy::Adaptive {
+        return vec![];
+    }
+    adaptive::clear(&Clearing {
+        region: edge,
+        cleared: &[],
+        radius: p.tool.diameter / 2.0,
+        bite: adaptive_bite(&p.tool),
+        climb: p.direction == Direction::Climb,
+    })
+}
+
+/// One pass depth of an adaptive pocket: `plan` cleared at depth `z` coming down from
+/// `above`, then once round the wall, `edge`.
+fn adaptive_pass(
+    plan: &[Piece],
+    edge: &[Path],
+    p: &Params,
+    (z, above): (f64, f64),
+    safe: f64,
+    entry: &Entry,
+) -> Vec<Move> {
+    let mut moves = adaptive_moves(plan, z, above, safe, entry);
+    let from = moves.last().map(|m| m.to);
+    let rings: Vec<Vec<Point>> = edge.iter().map(|r| oriented(p.direction, r)).collect();
+    moves.extend(walls(&rings, from, z, safe, entry));
+    moves
+}
+
+/// How wide a bite adaptive clearing takes with `tool`: its clearing stepover, but no more
+/// than a quarter of its diameter, so it stays a light cut at full pass depth.
+fn adaptive_bite(tool: &Tool) -> f64 {
+    tool.stepover.min(ADAPTIVE_MOST_BITE) * tool.diameter
+}
+
+/// The widest bite adaptive clearing takes, as a share of the bit's diameter.
+const ADAPTIVE_MOST_BITE: f64 = 0.25;
+
+/// The moves that clear `plan` at depth `z`, coming down from `above`: each area entered
+/// once (the way `entry` says, on the first stretch of cutting), then at depth throughout,
+/// lifting only where the plan jumps. Ends at depth where the last cut ended.
+fn adaptive_moves(plan: &[Piece], z: f64, above: f64, safe: f64, entry: &Entry) -> Vec<Move> {
+    let mut moves: Vec<Move> = vec![];
+    let mut entering = None;
+    let at_z = |p: Point| p.extend(z);
+    for piece in plan {
+        match piece {
+            Piece::Enter(p) => entering = Some(*p),
+            Piece::Cut(points) if entering.is_some() => {
+                entering = None;
+                let mut down = path_moves(points, false, &[z], above, safe, entry);
+                // the clearing carries on from where this ends, at depth
+                while down.last().is_some_and(|m| m.kind == MoveKind::Rapid) {
+                    down.pop();
+                }
+                moves.extend(down);
+            }
+            Piece::Cut(points) | Piece::Link(points) => {
+                moves.extend(points.iter().skip(1).map(|&p| Move {
+                    kind: MoveKind::Cut,
+                    to: at_z(p),
+                }));
+            }
+            Piece::Jump(p) => {
+                if let Some(last) = moves.last().map(|m| m.to) {
+                    moves.push(Move {
+                        kind: MoveKind::Rapid,
+                        to: last.truncate().extend(safe),
+                    });
+                }
+                // down into space already cleared at this depth
+                moves.push(Move {
+                    kind: MoveKind::Rapid,
+                    to: p.extend(safe),
+                });
+                moves.push(Move {
+                    kind: MoveKind::Rapid,
+                    to: p.extend(above),
+                });
+                moves.push(Move {
+                    kind: MoveKind::Plunge,
+                    to: at_z(*p),
+                });
+            }
+        }
+    }
+    moves
+}
+
+/// One pass round each of the pocket's `rings` (turned the way they cut) at depth `z`, for a
+/// clean wall after adaptive clearing: from the tool's place `from` (at depth, in the cleared
+/// pocket) across to the nearest corner of each ring where the way is clear, else up and
+/// over. Ends lifted to `safe`.
+fn walls(
+    rings: &[Vec<Point>],
+    from: Option<cut_craft_core::glam::DVec3>,
+    z: f64,
+    safe: f64,
+    entry: &Entry,
+) -> Vec<Move> {
+    let mut moves = vec![];
+    let mut at = from;
+    for ring in rings {
+        let Some(here) = at else {
+            // not down yet: the ring's own entry
+            moves.extend(path_moves(ring, true, &[z], z, safe, entry));
+            at = moves.last().map(|m| m.to);
+            continue;
+        };
+        let Some((k, _)) = nearest_vertex(ring, here.truncate()) else {
+            continue;
+        };
+        let mut ring = ring.clone();
+        ring.rotate_left(k);
+        let start = ring[0];
+        let down = (here.z - z).abs() < 1e-9;
+        let across = entry
+            .room
+            .as_ref()
+            .is_none_or(|r| r.holds(here.truncate(), start));
+        if !(down && across) {
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: here.truncate().extend(safe),
+            });
+            moves.push(Move {
+                kind: MoveKind::Rapid,
+                to: start.extend(safe),
+            });
+            // the pocket is cleared to this depth: straight down into it
+        }
+        let kind = if down && across {
+            MoveKind::Cut
+        } else {
+            MoveKind::Plunge
+        };
+        moves.push(Move {
+            kind,
+            to: start.extend(z),
+        });
+        moves.extend(ring.iter().skip(1).chain([&start]).map(|&p| Move {
+            kind: MoveKind::Cut,
+            to: p.extend(z),
+        }));
+        at = Some(start.extend(z));
+    }
+    if let Some(last) = moves.last().map(|m| m.to) {
+        moves.push(Move {
+            kind: MoveKind::Rapid,
+            to: last.truncate().extend(safe),
+        });
+    }
+    moves
 }
 
 /// Rings `step` apart from `ring` in, worked from the middle outwards.
@@ -558,9 +810,10 @@ pub fn suggest(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cut_craft_core::entry::EntryMode;
     use cut_craft_core::geometry::{Point, polyline_distance};
     use cut_craft_core::testing::{cut_bounds, made_toolpath, square};
-    use cut_craft_core::toolpath::{MoveKind, Toolpath};
+    use cut_craft_core::toolpath::Toolpath;
 
     cut_craft_core::contract_tests!(PocketToolpath);
 
@@ -635,6 +888,7 @@ mod tests {
             (Strategy::Offset, Motion::Straight),
             (Strategy::Raster, Motion::Straight),
             (Strategy::Offset, Motion::Trochoidal),
+            (Strategy::Adaptive, Motion::Straight),
         ] {
             let tp = ring_pocket(&Params {
                 strategy,
@@ -703,6 +957,119 @@ mod tests {
                 "{at:?}"
             );
         }
+    }
+
+    /// The length of the cutting moves (cuts and plunges) in `tp`.
+    fn cut_length(tp: &Toolpath) -> f64 {
+        tp.moves
+            .windows(2)
+            .filter(|w| w[1].kind != MoveKind::Rapid)
+            .map(|w| w[0].to.distance(w[1].to))
+            .sum()
+    }
+
+    #[test]
+    fn adaptive_clears_the_whole_pocket_and_stays_inside_it() {
+        let p = Params {
+            strategy: Strategy::Adaptive,
+            depth: 6.0,
+            ..Params::default()
+        };
+        let tp = pocket(40.0, &p).unwrap();
+        let r = Tool::default().diameter / 2.0;
+        let b = cut_bounds(&tp);
+        assert!(
+            b.min.x >= r - 0.02 && b.max.x <= 40.0 - r + 0.02,
+            "inside the walls: {b:?}"
+        );
+        assert!(b.min.y >= r - 0.02 && b.max.y <= 40.0 - r + 0.02, "{b:?}");
+        for i in 0..=20 {
+            for j in 0..=20 {
+                let at = Point::new(
+                    r + (40.0 - 2.0 * r) * f64::from(i) / 20.0,
+                    r + (40.0 - 2.0 * r) * f64::from(j) / 20.0,
+                );
+                let gap = nearest_cut(&tp, at);
+                assert!(gap <= r + 0.05, "{at:?} is {gap} mm from the nearest cut");
+            }
+        }
+        // the wall gets its own pass: cuts run along it, a radius in, at the bottom
+        let along_wall = tp
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Cut && (m.to.z + 6.0).abs() < 1e-9)
+            .filter(|m| (m.to.x - r).abs() < 0.02)
+            .count();
+        assert!(along_wall >= 2, "no wall pass at the bottom");
+    }
+
+    #[test]
+    fn adaptive_goes_down_once_per_area_per_pass() {
+        let p = Params {
+            strategy: Strategy::Adaptive,
+            depth: 6.0,
+            ..Params::default()
+        };
+        let tp = pocket(40.0, &p).unwrap();
+        // each time the tool comes down from the clearance height into uncut material: once
+        // per pass depth (the wall pass and any jumps go down into space already cleared)
+        let entries = tp
+            .moves
+            .windows(2)
+            .filter(|w| w[0].kind == MoveKind::Rapid && w[1].kind == MoveKind::Plunge)
+            .count();
+        let lifts = tp
+            .moves
+            .windows(2)
+            .filter(|w| w[1].kind == MoveKind::Rapid && w[1].to.z > w[0].to.z)
+            .count();
+        assert!(entries >= 2, "{entries} entries for two passes");
+        assert!(lifts <= 6, "it lifts {lifts} times");
+    }
+
+    #[test]
+    fn adaptive_cuts_less_than_trochoidal_loops() {
+        let adaptive = pocket(
+            40.0,
+            &Params {
+                strategy: Strategy::Adaptive,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let loops = pocket(
+            40.0,
+            &Params {
+                motion: Motion::Trochoidal,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let (a, l) = (cut_length(&adaptive), cut_length(&loops));
+        assert!(a < l, "adaptive {a:.0} mm, loops {l:.0} mm");
+    }
+
+    #[test]
+    fn adaptive_is_saved_by_name() {
+        let p = Params {
+            strategy: Strategy::Adaptive,
+            ..Params::default()
+        };
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["strategy"], "adaptive");
+        let back: Params = serde_json::from_value(json).unwrap();
+        assert_eq!(back.strategy, Strategy::Adaptive);
+    }
+
+    #[test]
+    fn adaptive_takes_at_most_a_quarter_of_the_bit() {
+        let mut tool = Tool {
+            stepover: 0.4,
+            ..Tool::default()
+        };
+        assert!((adaptive_bite(&tool) - 0.25 * tool.diameter).abs() < 1e-12);
+        tool.stepover = 0.1;
+        assert!((adaptive_bite(&tool) - 0.1 * tool.diameter).abs() < 1e-12);
     }
 
     #[test]
@@ -837,13 +1204,127 @@ mod tests {
         );
     }
 
+    /// The default settings going straight down.
+    fn plain() -> Params {
+        Params {
+            entry: Some(EntrySettings {
+                mode: EntryMode::Plunge,
+                ..EntrySettings::default()
+            }),
+            ..Params::default()
+        }
+    }
+
+    /// How many times the tool goes down from above the material into it.
+    fn entries(tp: &Toolpath) -> usize {
+        tp.moves
+            .windows(2)
+            .filter(|w| w[0].to.z >= 0.0 && w[1].to.z < -1e-9 && w[1].kind != MoveKind::Rapid)
+            .count()
+    }
+
+    /// The steepest any move goes down into the material, in degrees from level.
+    fn steepest(tp: &Toolpath) -> f64 {
+        tp.moves
+            .windows(2)
+            .filter(|w| w[1].kind != MoveKind::Rapid && w[1].to.z < w[0].to.z - 1e-9)
+            .filter(|w| w[1].to.z < -1e-9 && w[0].to.z < 1e-9)
+            .map(|w| {
+                let (a, b) = (w[0].to, w[1].to);
+                (a.z - b.z)
+                    .atan2(a.truncate().distance(b.truncate()))
+                    .to_degrees()
+            })
+            .fold(0.0, f64::max)
+    }
+
+    /// The default settings going down in a helix.
+    fn helix() -> Params {
+        Params {
+            entry: Some(EntrySettings {
+                mode: EntryMode::Helix,
+                ..EntrySettings::default()
+            }),
+            ..Params::default()
+        }
+    }
+
+    #[test]
+    fn a_surfacing_bit_never_goes_straight_down_into_the_material() {
+        let tp = pocket(
+            60.0,
+            &Params {
+                tool: Tool {
+                    name: "Spoilboard Surfacing Bit".into(),
+                    diameter: 25.4,
+                    ..Tool::default()
+                },
+                depth: 1.0,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let straight_in = tp.moves.windows(2).any(|w| {
+            let (a, b) = (w[0].to, w[1].to);
+            b.z < -1e-9 && b.z < a.z - 1e-9 && a.truncate().distance(b.truncate()) < 1e-9
+        });
+        assert!(!straight_in, "{:?}", tp.moves);
+        assert_ne!(tp.fallbacks, vec![], "and Checks before cutting says so");
+    }
+
+    #[test]
+    fn a_new_pocket_goes_straight_down_until_asked_otherwise() {
+        assert_eq!(
+            Params::default().entry.map(|e| e.mode),
+            Some(EntryMode::Plunge)
+        );
+    }
+
+    #[test]
+    fn a_pocket_helixes_down_once_a_level_and_links_its_rings_at_depth() {
+        let tp = pocket(
+            40.0,
+            &Params {
+                depth: 6.0,
+                ..helix()
+            },
+        )
+        .unwrap();
+        // two passes of 3 mm: two entries, each a helix no steeper than 3°
+        assert_eq!(entries(&tp), 2);
+        assert!(steepest(&tp) <= 3.0 + 1e-6, "{}", steepest(&tp));
+        assert_eq!(tp.fallbacks, vec![]);
+        // and it still clears the pocket to the edge
+        let b = cut_bounds(&tp);
+        assert!(b.min.x < 3.1 && b.max.x > 36.9, "{b:?}");
+    }
+
+    #[test]
+    fn each_area_of_a_pocket_is_entered_on_its_own() {
+        let tp = made_toolpath::<PocketToolpath>(
+            vec![square(0.0, 0.0, 30.0), square(50.0, 0.0, 30.0)],
+            &helix(),
+        )
+        .unwrap();
+        assert_eq!(entries(&tp), 2);
+        assert!(steepest(&tp) <= 3.0 + 1e-6);
+    }
+
+    #[test]
+    fn a_pocket_too_small_for_a_helix_says_where_it_went_down_another_way() {
+        // a 7 mm square for a 6.35 mm bit: no room to go round
+        let tp = pocket(7.0, &helix()).unwrap();
+        assert_ne!(tp.fallbacks, vec![]);
+        assert!(tp.fallbacks.iter().all(|f| f.wanted == EntryMode::Helix));
+    }
+
     #[test]
     fn clears_each_depth_before_going_deeper() {
         let tp = pocket(
             20.0,
             &Params {
                 depth: 6.0,
-                ..Params::default()
+                ..plain()
             },
         )
         .unwrap();
@@ -1005,6 +1486,7 @@ mod tests {
             depth: 6.0,
             ramp_plunge_moves: true,
             ramp_distance: 4.0,
+            entry: None,
             ..Params::default()
         };
         let tp = pocket(20.0, &p).unwrap();

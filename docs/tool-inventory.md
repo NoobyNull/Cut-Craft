@@ -351,6 +351,14 @@ say "not implemented yet".
   Sketch Carving, 3D Roughing, 3D Finishing (with rest machining), Rounding (rotary), Laser
   Cut / Fill and Laser Picture (need a post with LASER_SUPPORT), Array Copy, Merged. What
   each leaves out is in its `re/SPEC.md` section.
+- Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
+  flattens the whole material, the spoilboard (its size from the machine's bed) or the
+  inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits
+  and fly cutters). Rows along X or Y, or a spiral in; overhang past every edge; climb or
+  conventional, back and forth or one way (Cutting… window). Always goes down beside the
+  work and feeds in from the side; where the bed leaves no room, it ramps in at 2°.
+  Choosing the spoilboard shows a red warning, and Checks before cutting reminds you to clear
+  the bed instead of warning about cutting below the material.
 - Drill Bank (Aspire 12.5's Advanced Machining Module): Machine Configuration ▸ Drill Bank
   sets up a head of drills on an X and a Y arm (count, pitch, where the arms cross, each
   drill's controller number and diameter, the reference drill), with a picture of it. The

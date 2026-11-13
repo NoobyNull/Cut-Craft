@@ -1044,6 +1044,8 @@ pub const WHICH_SIDE: &str = cmd_profile_toolpath::SIDE_GROUP;
 /// them is, and Project onto 3D Model and the name last.
 pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
     let rank = |f: &Field| match f.key.as_str() {
+        // Surfacing's What to Flatten, then its depth: what is cut comes before how deep
+        _ if f.group.as_deref() == Some(cmd_surfacing_toolpath::AREA_GROUP) => 0,
         _ if f.group.as_deref() == Some(CUTTING_DEPTHS) => 0,
         // Profile's Outside / Inside / On, right under the depth where a beginner looks first
         _ if f.group.as_deref() == Some(WHICH_SIDE) => 1,
@@ -1669,6 +1671,7 @@ mod tests {
         );
     }
 
+    /// Surfacing's What to Flatten comes before its depth: what is cut, then how deep.
     #[test]
     fn every_toolpath_form_opens_with_its_depths_and_tool_and_ends_with_its_name() {
         let chamfer = fields(&schema("chamfer_toolpath"));
@@ -1688,7 +1691,12 @@ mod tests {
             let depths = f
                 .iter()
                 .take_while(|f| {
-                    [Some(CUTTING_DEPTHS), Some(WHICH_SIDE)].contains(&f.group.as_deref())
+                    [
+                        Some(cmd_surfacing_toolpath::AREA_GROUP),
+                        Some(CUTTING_DEPTHS),
+                        Some(WHICH_SIDE),
+                    ]
+                    .contains(&f.group.as_deref())
                 })
                 .count();
             assert_eq!(k.get(depths), Some(&"tool"), "{}: {k:?}", command.id());
@@ -1696,6 +1704,8 @@ mod tests {
                 assert_eq!(k.last(), Some(&"name"), "{}", command.id());
             }
         }
+        let surfacing = arrange(fields(&schema("surfacing_toolpath")));
+        assert_eq!(keys(&surfacing).first(), Some(&"area"));
     }
 
     #[test]

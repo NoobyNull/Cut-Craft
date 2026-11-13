@@ -44,6 +44,8 @@ struct Cutting {
     /// An offset pocket's ring order; a raster pocket's is `None`, as is a profile's
     rings: Option<String>,
     raster: bool,
+    /// An adaptive pocket: a steady bite, spiralling out, then once round the wall
+    adaptive: bool,
 }
 
 impl Cutting {
@@ -51,6 +53,7 @@ impl Cutting {
         let text = |key: &str| params[key].as_str().unwrap_or_default().to_owned();
         let pocket = params.get("rings").is_some();
         let raster = pocket && text("strategy") == "raster";
+        let adaptive = pocket && text("strategy") == "adaptive";
         Self {
             at: match (pocket, text("side").as_str()) {
                 (true, _) => At::Pocket,
@@ -60,10 +63,11 @@ impl Cutting {
             },
             climb: text("direction") != "conventional",
             both: text("ways") == "both",
-            trochoidal: text("motion") == "trochoidal",
+            trochoidal: text("motion") == "trochoidal" && !adaptive,
             loops: serde_json::from_value(params["loops"].clone()).unwrap_or_default(),
-            rings: (pocket && !raster).then(|| text("rings")),
+            rings: (pocket && !raster && !adaptive).then(|| text("rings")),
             raster,
+            adaptive,
         }
     }
 
@@ -85,6 +89,9 @@ impl Cutting {
             At::Inside => format!("Cuts round the inside of each shape, going {way}"),
             At::On => format!("Cuts along the line itself, going {way}"),
             At::Pocket if self.raster => "Clears the pocket in rows".to_owned(),
+            At::Pocket if self.adaptive => {
+                "Clears the pocket with a thin, steady bite, then once round the wall".to_owned()
+            }
             At::Pocket => format!("Clears the pocket in rings, going {way}"),
         }
     }
@@ -99,6 +106,20 @@ impl Cutting {
             At::On => "along the line",
             At::Pocket => "round the pocket",
         };
+        if self.adaptive {
+            return vec![
+                format!(
+                    "Spirals out from the roomiest spot, cutting {} all the way",
+                    cut(self.climb)
+                ),
+                "Turns tighter where the bite would grow, so corners are cut in thin slices"
+                    .to_owned(),
+                format!(
+                    "Then once round the wall, {}, for a clean edge",
+                    way(self.clockwise())
+                ),
+            ];
+        }
         let mut lines = vec![format!(
             "Pass 1: {}, {} {round}",
             cut(self.climb),
@@ -240,6 +261,8 @@ fn window(
 /// The choices, a row of radio buttons each, Rings for an offset pocket. A profile's side is
 /// on its form, under the cut depth, where it is seen first.
 fn choices(ui: &mut egui::Ui, params: &mut Value) {
+    // adaptive clearing steers its own way: only the direction is the user's
+    let adaptive = params["strategy"] == "adaptive";
     egui::Grid::new("cutting").num_columns(2).show(ui, |ui| {
         choose(
             ui,
@@ -255,6 +278,9 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
                 ("conventional", "Conventional", "The other way round"),
             ],
         );
+        if adaptive {
+            return;
+        }
         choose(
             ui,
             params,
@@ -316,7 +342,7 @@ fn choices(ui: &mut egui::Ui, params: &mut Value) {
 }
 
 /// A row of radio buttons for `params[key]`.
-fn choose(
+pub(super) fn choose(
     ui: &mut egui::Ui,
     params: &mut Value,
     key: &str,
@@ -386,7 +412,22 @@ fn combination(ui: &mut egui::Ui, c: &Cutting, side: f32) {
             }
         }
     };
-    if c.raster {
+    if c.adaptive {
+        // a spiral out from the middle, then round the edge
+        let turn = if cw { -1.0 } else { 1.0 };
+        let spiral: Vec<Pos2> = (0..=120u8)
+            .map(|k| {
+                let t = f32::from(k) / 120.0;
+                let a = turn * t * std::f32::consts::TAU * 3.0;
+                centre + half * 0.55 * t * vec2(a.cos(), a.sin())
+            })
+            .collect();
+        painter.add(egui::Shape::line(spiral.clone(), tool));
+        arrows(&spiral, tool, 2);
+        let pts = along(half * path, cw);
+        painter.add(egui::Shape::closed_line(pts.clone(), tool));
+        arrows(&pts, tool, 3);
+    } else if c.raster {
         // lines across, every other one back, then round the edge
         for k in 0..5u8 {
             let y = centre.y + half * (f32::from(k) - 2.0) * 0.22;
@@ -635,6 +676,21 @@ mod tests {
             loops_said(3.175, 1.27, 6.35, Units::Inch),
             "Loops 0.2500 in across, each 0.0500 in on; the cutter 0.2500 in"
         );
+    }
+
+    #[test]
+    fn an_adaptive_pocket_says_it_steers_itself_and_hides_rings_and_loops() {
+        let params = serde_json::json!({
+            "rings": "middle_out", "strategy": "adaptive", "direction": "climb",
+            "motion": "trochoidal", "ways": "both"
+        });
+        let cutting = Cutting::read(&params);
+        assert!(cutting.adaptive && !cutting.trochoidal && cutting.rings.is_none());
+        assert!(cutting.headline().contains("thin, steady bite"));
+        let lines = cutting.told();
+        assert!(lines[0].contains("climb"), "{lines:?}");
+        assert!(lines.iter().all(|l| !l.contains("Pass 2")), "{lines:?}");
+        assert!(lines[2].contains("anticlockwise"), "{lines:?}");
     }
 
     #[test]

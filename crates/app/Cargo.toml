@@ -169,6 +169,7 @@ cmd-thread-milling-toolpath = { path = "../commands/thread-milling-toolpath" }
 cmd-chamfer-toolpath = { path = "../commands/chamfer-toolpath" }
 cmd-drag-knife-toolpath = { path = "../commands/drag-knife-toolpath" }
 cmd-keyhole-toolpath = { path = "../commands/keyhole-toolpath" }
+cmd-surfacing-toolpath = { path = "../commands/surfacing-toolpath" }
 cmd-quick-engrave-toolpath = { path = "../commands/quick-engrave-toolpath" }
 cmd-texture-toolpath = { path = "../commands/texture-toolpath" }
 cmd-prism-toolpath = { path = "../commands/prism-toolpath" }

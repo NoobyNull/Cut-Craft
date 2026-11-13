@@ -1,0 +1,80 @@
+#!/bin/bash
+# Builds Cut Craft's apt and dnf repositories, a static site for GitHub Pages:
+#   scripts/linux-repo PACKAGES SITE
+# PACKAGES holds the .deb and .rpm files to offer (a few releases'); SITE is written fresh:
+#   SITE/apt/   dists/stable/{InRelease,Release,Release.gpg}, pool/main/*.deb
+#   SITE/rpm/   *.rpm (signed), repodata/ (repomd.xml signed), cut-craft.repo
+#   SITE/cut-craft.gpg, SITE/cut-craft.asc   the repositories' public key
+#   SITE/index.html                          how to add them
+# Signs with the GnuPG key REPO_KEY_ID (its secret key already imported, no passphrase).
+# BASE_URL is where SITE is served. Needs apt-ftparchive (apt-utils), createrepo_c, rpmsign
+# (rpm) and gpg. .github/workflows/linux-repo.yml runs it.
+set -euo pipefail
+packages=$1
+site=$2
+key=${REPO_KEY_ID:?REPO_KEY_ID names the signing key}
+base=${BASE_URL:-https://noobynull.github.io/Cut-Craft}
+rm -rf "$site"
+mkdir -p "$site/apt/pool/main" "$site/apt/dists/stable/main/binary-amd64" "$site/rpm"
+gpg --batch --export "$key" >"$site/cut-craft.gpg"
+gpg --batch --armor --export "$key" >"$site/cut-craft.asc"
+
+# apt: one suite, "stable", one component, "main"
+cp "$packages"/*.deb "$site/apt/pool/main/"
+(
+    cd "$site/apt"
+    apt-ftparchive packages pool >dists/stable/main/binary-amd64/Packages
+    gzip -9nk dists/stable/main/binary-amd64/Packages
+    apt-ftparchive \
+        -o APT::FTPArchive::Release::Origin="Cut Craft" \
+        -o APT::FTPArchive::Release::Label="Cut Craft" \
+        -o APT::FTPArchive::Release::Suite=stable \
+        -o APT::FTPArchive::Release::Codename=stable \
+        -o APT::FTPArchive::Release::Architectures=amd64 \
+        -o APT::FTPArchive::Release::Components=main \
+        release dists/stable >dists/stable/Release.tmp
+    mv dists/stable/Release.tmp dists/stable/Release
+    gpg --batch --yes --default-key "$key" --clearsign -o dists/stable/InRelease dists/stable/Release
+    gpg --batch --yes --default-key "$key" -abs -o dists/stable/Release.gpg dists/stable/Release
+)
+
+# dnf/zypper: each package signed, and the repository's index
+cp "$packages"/*.rpm "$site/rpm/"
+rpmsign --define "_gpg_name $key" --addsign "$site"/rpm/*.rpm >/dev/null
+createrepo_c -q "$site/rpm"
+gpg --batch --yes --default-key "$key" --armor --detach-sign "$site/rpm/repodata/repomd.xml"
+cat >"$site/rpm/cut-craft.repo" <<REPO
+[cut-craft]
+name=Cut Craft
+baseurl=$base/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=$base/cut-craft.asc
+REPO
+
+cat >"$site/index.html" <<HTML
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cut Craft packages</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
+pre{background:#f3f1ec;padding:.8rem;overflow-x:auto;border-radius:6px}</style></head>
+<body><h1>Cut Craft for Linux</h1>
+<p>Add Cut Craft's repository once; your system's updates then bring each new version.</p>
+<h2>Ubuntu, Debian, Mint</h2>
+<pre>curl -fsSL $base/cut-craft.gpg | sudo tee /usr/share/keyrings/cut-craft.gpg &gt;/dev/null
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cut-craft.gpg] $base/apt stable main" | sudo tee /etc/apt/sources.list.d/cut-craft.list
+sudo apt update &amp;&amp; sudo apt install cut-craft</pre>
+<h2>Fedora</h2>
+<pre>sudo curl -fsSLo /etc/yum.repos.d/cut-craft.repo $base/rpm/cut-craft.repo
+sudo dnf install cut-craft</pre>
+<h2>openSUSE</h2>
+<pre>sudo zypper addrepo $base/rpm/cut-craft.repo
+sudo zypper install cut-craft</pre>
+<h2>Arch, CachyOS, Manjaro</h2>
+<pre>paru -S cut-craft-bin    # or: yay -S cut-craft-bin</pre>
+<p>Cut Craft is free for noncommercial use under the PolyForm Noncommercial 1.0.0 licence.
+<a href="https://github.com/NoobyNull/Cut-Craft">Source and releases</a>.</p>
+</body></html>
+HTML
+echo "$site: $(ls "$site"/apt/pool/main | wc -l) .deb, $(ls "$site"/rpm/*.rpm | wc -l) .rpm"

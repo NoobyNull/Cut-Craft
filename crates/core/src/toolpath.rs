@@ -32,6 +32,17 @@ pub enum ToolShape {
     /// router bit's shape)
     #[schemars(title = "Form Tool")]
     FormTool,
+    /// A wide, flat bit for flattening a spoilboard or a slab (a spoilboard bit or fly
+    /// cutter): cuts like an end mill, but only sideways, never plunging into the material
+    #[schemars(title = "Surfacing Bit")]
+    SurfacingBit,
+}
+
+impl ToolShape {
+    /// Flat bottomed: an end mill or a surfacing bit, which cut the same shape.
+    pub fn is_flat(self) -> bool {
+        matches!(self, Self::EndMill | Self::SurfacingBit)
+    }
 }
 
 /// The units a tool's feed and plunge rates are shown in. Rates are kept
@@ -276,6 +287,24 @@ fn default_tip_radius() -> f64 {
 }
 
 impl Tool {
+    /// Whether the bit must never go straight down into the material: a surfacing,
+    /// spoilboard or fly cutter bit (known by its name, there being no shape for them), or a
+    /// form tool. Its entries ramp instead.
+    pub fn cannot_plunge(&self) -> bool {
+        let name = self.name.to_lowercase();
+        self.shape == ToolShape::FormTool
+            || [
+                "surfac",
+                "spoilboard",
+                "fly cut",
+                "flycut",
+                "planer",
+                "planing",
+            ]
+            .iter()
+            .any(|w| name.contains(w))
+    }
+
     /// The stepover finishing passes use: its own, else (0, a tool saved with one
     /// stepover) the clearing stepover.
     pub fn finishing_stepover(&self) -> f64 {
@@ -292,6 +321,18 @@ impl Tool {
         (self.flute_length.is_finite() && self.flute_length > 0.0).then_some(self.flute_length)
     }
 
+    /// How deep the tool can cut, when that is known: a V-bit's V (half its width over the
+    /// tangent of half its angle; V-bits have no flute length, and past the V the shank
+    /// rubs), otherwise its [`Self::known_flute_length`].
+    pub fn cutting_length(&self) -> Option<f64> {
+        if self.shape == ToolShape::VBit {
+            let half = (self.angle / 2.0).to_radians();
+            return (self.diameter > 0.0 && half > 0.0 && half < std::f64::consts::FRAC_PI_2)
+                .then(|| self.diameter / 2.0 / half.tan());
+        }
+        self.known_flute_length()
+    }
+
     /// The My Tools group a tool copied in from a catalogue (or added) goes in: its maker,
     /// then its type, as `Amana/V-Bits` (`Generic/...` with no maker).
     pub fn own_group(&self) -> String {
@@ -304,6 +345,7 @@ impl Tool {
             ToolShape::RadiusedEndMill => "Radiused End Mills",
             ToolShape::ThreadMill => "Thread Mills",
             ToolShape::FormTool => "Form Tools",
+            ToolShape::SurfacingBit => "Surfacing Bits",
         };
         format!("{maker}/{kind}")
     }
@@ -465,6 +507,18 @@ impl Tool {
                 radius * a.cos() + (height - radius * (1.0 - a.sin())).max(0.0) * a.tan()
             }
             (Some(a), _) => radius + height.max(0.0) * a.tan(),
+            // a V-bit's cone widens to the full width only at the top of the V
+            (None, ToolShape::VBit) if self.angle > 0.0 && self.angle < 180.0 => {
+                (height.max(0.0) * (self.angle / 2.0).to_radians().tan()).min(radius)
+            }
+            (None, ToolShape::BallNose) if height < radius => {
+                (height.max(0.0) * (2.0 * radius - height.max(0.0))).sqrt()
+            }
+            (None, ToolShape::RadiusedEndMill) => {
+                let tip = self.tip_radius.clamp(0.0, radius);
+                let h = height.clamp(0.0, tip);
+                radius - tip + (h * (2.0 * tip - h)).sqrt()
+            }
             (None, _) => radius,
         };
         r.min(self.reach())
@@ -509,7 +563,7 @@ impl Tool {
             }
         }
         Some(match self.shape {
-            ToolShape::EndMill => 0.0,
+            ToolShape::EndMill | ToolShape::SurfacingBit => 0.0,
             ToolShape::BallNose => radius - (radius * radius - r * r).max(0.0).sqrt(),
             ToolShape::VBit => r / (self.angle.to_radians() / 2.0).tan(),
             ToolShape::RadiusedEndMill => {
@@ -567,6 +621,26 @@ impl Default for Tool {
             tooth_size: default_tooth_size(),
             tooth_offset: default_tooth_offset(),
             form: vec![],
+        }
+    }
+}
+
+impl Tool {
+    /// A 1 inch surfacing bit (spoilboard bit): what the Surfacing Toolpath starts with, and
+    /// a starter tool.
+    pub fn surfacing_bit() -> Self {
+        Self {
+            name: "1 in Surfacing Bit".into(),
+            shape: ToolShape::SurfacingBit,
+            diameter: 25.4,
+            pass_depth: 1.0,
+            stepover: 0.75,
+            feed_rate: 3000.0,
+            plunge_rate: 500.0,
+            spindle_speed: 16000.0,
+            flutes: 2,
+            flute_length: 12.7,
+            ..Self::default()
         }
     }
 }
@@ -667,6 +741,8 @@ impl ToolDatabase {
                     (0.1, 0.1),
                 )
             },
+            // flattens the spoilboard: wide, and stepping over most of its width
+            Tool::surfacing_bit(),
         ];
         for tool in &mut tools {
             let set = if tool.name.contains(" in ") {
@@ -862,6 +938,7 @@ pub fn shape_group(shape: ToolShape) -> &'static str {
         ToolShape::RadiusedEndMill => "Radiused End Mills",
         ToolShape::ThreadMill => "Thread Mills",
         ToolShape::FormTool => "Form Tools",
+        ToolShape::SurfacingBit => "Surfacing Bits",
     }
 }
 
@@ -914,6 +991,10 @@ pub struct Toolpath {
     /// (added with drill banks).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drill_bank: Option<crate::drill_bank::BankToolpath>,
+    /// Where its entries went down another way than its settings asked, there being no
+    /// room there (added with entry modes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fallbacks: Vec<crate::entry::Fallback>,
 }
 
 /// The strategies that always cut the 3D model; others do when projected onto it.
@@ -1081,6 +1162,7 @@ fn machining_time_allowing_for_acceleration_stops_at_corners_and_runs_through_st
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     };
     // one 500 mm cut at 1000 mm/min (16.67 mm/s): 30 s flat out; with 10 mm/s² the machine
     // spends 1.67 s speeding up and the same slowing down, 13.9 mm each
@@ -1131,6 +1213,46 @@ fn machining_time_allowing_for_acceleration_stops_at_corners_and_runs_through_st
 
 #[cfg(test)]
 #[test]
+fn nothing_beyond_the_reach_below_a_height_is_that_low() {
+    for shape in [
+        ToolShape::EndMill,
+        ToolShape::BallNose,
+        ToolShape::VBit,
+        ToolShape::RadiusedEndMill,
+    ] {
+        let tool = Tool {
+            shape,
+            diameter: 12.0,
+            angle: 60.0,
+            tip_radius: 2.0,
+            ..Tool::default()
+        };
+        for height in [0.0, 0.1, 0.5, 1.5, 3.0, 6.0, 20.0] {
+            let reach = tool.reach_below(height);
+            assert!(reach <= tool.reach() + 1e-12, "{shape:?} {height}");
+            // just past it the tool's edge is above `height`, or past the tool altogether
+            for out in [1e-6, 0.01, 0.5, 3.0] {
+                if let Some(edge) = tool.profile(reach + out) {
+                    assert!(edge > height - 1e-9, "{shape:?} {height} {out}: {edge}");
+                }
+            }
+        }
+    }
+    let v = Tool {
+        shape: ToolShape::VBit,
+        diameter: 12.0,
+        angle: 60.0,
+        ..Tool::default()
+    };
+    assert!(
+        v.reach_below(1.0) < 1.0,
+        "a shallow V-carve touches little: {}",
+        v.reach_below(1.0)
+    );
+}
+
+#[cfg(test)]
+#[test]
 fn machining_time_is_each_move_at_its_rate() {
     let at = |kind, x, z| Move {
         kind,
@@ -1157,6 +1279,7 @@ fn machining_time_is_each_move_at_its_rate() {
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     };
     // 10 mm plunge at 100, 500 mm cut at 1000, 10 mm rapid at 5000
     assert!((tp.machining_minutes(5000.0) - (0.1 + 0.5 + 0.002)).abs() < 1e-12);
@@ -1254,6 +1377,7 @@ pub fn made_by<C: Command>(
         stale: false,
         group: None,
         drill_bank: None,
+        fallbacks: vec![],
     }
 }
 

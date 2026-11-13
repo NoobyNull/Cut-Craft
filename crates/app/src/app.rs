@@ -6,6 +6,7 @@ mod background;
 mod cutting;
 mod depth;
 mod draw3d;
+mod entry;
 mod first_run;
 mod guide;
 mod help;
@@ -20,6 +21,7 @@ mod sample;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod send;
+mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
@@ -610,6 +612,15 @@ pub(crate) const PLAYBACK_SPEED: f64 = 10.0;
 type PlaybackGpuKey = (u64, usize, u64, Option<view3d::Wrap>, bool);
 /// A frame's time for cutting a playing preview: the window still answers at once.
 const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30);
+/// How often a playing preview's 3D view is made again from the cut so far: at full detail
+/// that takes a while, so not every frame (the tool still moves every frame).
+const PLAYBACK_REDRAW: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// A frame's time for a jump (the Progress slider, Run to Retract): more than for playing,
+/// so it gets there within a second or so; the window answers less often meanwhile.
+fn jump_budget(budget: std::time::Duration) -> std::time::Duration {
+    budget * 4
+}
 /// How many times faster than the machine a preview can play: a long finishing toolpath
 /// takes hours at the machine's speed.
 const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=1000.0;
@@ -1252,6 +1263,11 @@ struct CutCraftApp {
     playback_gpu: Option<(PlaybackGpuKey, std::sync::Arc<view3d::gpu::Geometry>)>,
     /// How many times the playback's view has been made (for tests).
     playback_builds: usize,
+    /// The playback's revision the 3D view shows, and when it was taken: while it plays
+    /// it is taken again every [`PLAYBACK_REDRAW`], and at once when it stops somewhere.
+    playback_shown: Option<(u64, std::time::Instant)>,
+    /// How often that is, [`PLAYBACK_REDRAW`] (longer in tests, whose frames are slow).
+    playback_redraw: std::time::Duration,
     /// Where the Close up slider is centred, held while it is dragged so it stays put.
     close_up: Option<f64>,
     /// How long a frame may spend cutting a playing preview; the rest waits for the next
@@ -1840,6 +1856,9 @@ fn tool_picker(
                 .map(|depth| tool.pass_depths(depth).len() as f64);
             ui.strong(held_name(current, slots));
             ui.label(tool_line(tool, passes, units));
+            if surfacing::wants_surfacing_bit(top, tool) {
+                ui.weak(surfacing::NOT_A_SURFACING_BIT);
+            }
             if tools.get(current).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -2128,6 +2147,7 @@ fn tool_line(tool: &Tool, passes: Option<f64>, units: cut_craft_core::document::
         }
         ToolShape::ThreadMill => format!("{across} thread mill"),
         ToolShape::FormTool => format!("{across} form tool"),
+        ToolShape::SurfacingBit => format!("{across} surfacing bit"),
     };
     let pass = length(tool.pass_depth);
     let line = format!("{line}, {pass} a pass");

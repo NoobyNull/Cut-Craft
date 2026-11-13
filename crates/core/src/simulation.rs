@@ -82,6 +82,10 @@ pub fn each<T: Sync, U: Send>(items: &[T], f: impl Fn(&T) -> U + Sync) -> Vec<U>
     out.into_iter().flatten().collect()
 }
 
+/// How far clear of the material [`Material::overcut`] measures exactly, mm: a fine V-bit
+/// cut on a big job has thousands of cells inside the bit's width that its tip is far above.
+pub const LOOKED: f64 = 5.0;
+
 /// The material seen from above: a grid of square cells, each holding the height of the
 /// surface over it (0 is the top of the material, `bottom` its underside).
 #[derive(Clone, Debug, PartialEq)]
@@ -426,6 +430,55 @@ impl Material {
         (self.heights, self.cut_by) = (heights, cut_by);
     }
 
+    /// [`Self::sweep`] along each of `moves` (from `.0` to `.1`), a band of rows per core
+    /// when there are many: the same cut, and the same cells marked, as one at a time.
+    pub fn sweep_each(&mut self, moves: &[(DVec3, DVec3)], tool: &Tool) {
+        /// Fewer moves than this are cut on this thread: starting others costs more.
+        const FEW: usize = 64;
+        let (lo, hi) = moves
+            .iter()
+            .filter(|(a, b)| a.z < 0.0 || b.z < 0.0)
+            .map(|&(a, b)| self.swept(a, b, tool.reach_below(-a.z.min(b.z))).1)
+            .fold((usize::MAX, 0), |(lo, hi), rows| {
+                (lo.min(rows.start), hi.max(rows.end))
+            });
+        if lo >= hi {
+            return;
+        }
+        let columns = self.columns;
+        let threads = if moves.len() < FEW {
+            1
+        } else {
+            cores().min(hi - lo)
+        };
+        let band = (hi - lo).div_ceil(threads.max(1));
+        let mut heights = std::mem::take(&mut self.heights);
+        let mut cut_by = std::mem::take(&mut self.cut_by);
+        let bands = heights[lo * columns..hi * columns]
+            .chunks_mut(band * columns)
+            .zip(cut_by[lo * columns..hi * columns].chunks_mut(band * columns))
+            .enumerate();
+        let me = &*self;
+        let cut = |i: usize, h: &mut [f64], c: &mut [u32]| {
+            for &(a, b) in moves {
+                me.sweep_band(a, b, tool, lo + i * band, h, Some(c));
+            }
+        };
+        if threads <= 1 {
+            for (i, (h, c)) in bands {
+                cut(i, h, c);
+            }
+        } else {
+            std::thread::scope(|scope| {
+                for (i, (h, c)) in bands {
+                    let cut = &cut;
+                    scope.spawn(move || cut(i, h, c));
+                }
+            });
+        }
+        (self.heights, self.cut_by) = (heights, cut_by);
+    }
+
     /// [`Self::sweep`] over `band`, the grid's rows from `first`, marking the cells it
     /// lowers in `cut_by` (the same rows) when given.
     pub(crate) fn sweep_band(
@@ -461,13 +514,20 @@ impl Material {
     }
 
     /// How far below the surface the tool would cut going straight from `a` to `b`, at the
-    /// deepest cell centre it passes over; zero or less when it clears everything.
+    /// deepest cell centre it passes over; zero or less when it clears everything (how much
+    /// less only down to [`LOOKED`] below zero: past that, minus infinity).
     pub fn overcut(&self, tool: &Tool, a: DVec3, b: DVec3) -> f64 {
         self.overcut_on(tool, a, b, &self.peaks())
     }
 
     /// [`Self::overcut`] with this grid's [`Self::peaks`] worked out once.
     pub fn overcut_on(&self, tool: &Tool, a: DVec3, b: DVec3, peaks: &Tiles) -> f64 {
+        self.overcut_near(tool, a, b, peaks, LOOKED)
+    }
+
+    /// [`Self::overcut_on`] measuring exactly only down to `looked` below zero: a caller
+    /// that only asks whether a move is that far clear looks at far fewer cells.
+    pub fn overcut_near(&self, tool: &Tool, a: DVec3, b: DVec3, peaks: &Tiles, looked: f64) -> f64 {
         let mut worst = f64::NEG_INFINITY;
         let (low, from, to) = (a.z.min(b.z), a.truncate(), b.truncate());
         let dig = |columns: Range<usize>, rows: Range<usize>, worst: &mut f64| {
@@ -492,7 +552,11 @@ impl Material {
                 }
             }
         };
-        let near = (tool.diameter / 2.0).min(tool.reach());
+        // the material is nowhere above its top, 0: further out than the tool's side is
+        // `looked` above that, every cell is clear by more than that, and is not looked at
+        let near = (tool.diameter / 2.0)
+            .min(tool.reach())
+            .min(tool.reach_below(looked - low));
         let (columns, rows) = self.swept(a, b, near);
         dig(columns, rows, &mut worst);
         if tool.reach() > near {
@@ -585,7 +649,7 @@ fn lowest_edge(tool: &Tool, a: DVec3, b: DVec3, centre: Point) -> Option<f64> {
     };
     Some(match tool.shape {
         // z is linear in t, so a flat end (untapered) is lowest at one end of the covered span
-        ToolShape::EndMill if tool.reach() <= tool.diameter / 2.0 => {
+        ToolShape::EndMill | ToolShape::SurfacingBit if tool.reach() <= tool.diameter / 2.0 => {
             a.lerp(b, t0).z.min(a.lerp(b, t1).z)
         }
         // a level move is lowest where it passes closest

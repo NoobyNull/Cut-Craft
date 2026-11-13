@@ -196,6 +196,8 @@ impl CutCraftApp {
             playback_view: None,
             playback_gpu: None,
             playback_builds: 0,
+            playback_shown: None,
+            playback_redraw: super::PLAYBACK_REDRAW,
             playback_budget: super::PLAYBACK_BUDGET,
             playback_speed: PLAYBACK_SPEED,
             collapsed_levels: std::collections::HashSet::new(),
@@ -475,6 +477,10 @@ impl CutCraftApp {
                 self.display.toggle(id);
                 self.options.toolpaths.keep_out_labels = self.display.keep_out_labels;
                 self.save_options();
+                ctx.request_repaint();
+            }
+            "draw_vectors_in_3d_view" => {
+                self.show_vectors_3d(!self.display.vectors_3d);
                 ctx.request_repaint();
             }
             id if self.display.toggle(id) => ctx.request_repaint(),
@@ -4307,6 +4313,8 @@ impl CutCraftApp {
         let finishing_smallest = open.id != "vcarve_engrave_toolpath";
         // a form that only uses its tool's shape (Relief from Photo) has no passes to cut
         let cuts = open.id != "relief_from_photo";
+        // a surfacing toolpath flattens all it covers: no rest machining or vector selector
+        let extras = cuts && open.id != "surfacing_toolpath";
         let suggested = open.suggested.clone();
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
@@ -4342,17 +4350,18 @@ impl CutCraftApp {
                 }
                 listed.set(listed.get() | super::passes::edit_passes(ui, params, units));
             });
-            if cuts
+            if extras
                 && super::shows_rest(params)
                 && let Some(ask) = rest_section(ui, params, tools, &slots, units)
             {
                 *list_ask.borrow_mut() = Some((super::ToolList::Rest, ask));
             }
-            if cuts {
+            if extras {
                 selector_section(ui, params, &layers, units);
             }
         };
-        let stock = form_stock(&self.doc, units);
+        let bed = self.machines.active().map(|m| [m.width, m.height]);
+        let stock = form_stock(&self.doc, units, bed.unwrap_or_default());
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
             super::tabs::group_end(ui, group, params, stock)
         };
@@ -5343,6 +5352,7 @@ pub(super) const CLIP_HOW: &str = "Keep-out zones (red outlines, such as clamps)
 fn form_stock(
     doc: &cut_craft_core::document::Document,
     units: cut_craft_core::document::Units,
+    bed: [f64; 2],
 ) -> super::tabs::Stock {
     super::tabs::Stock {
         thickness: doc.job.thickness,
@@ -5351,6 +5361,7 @@ fn form_stock(
             .iter()
             .any(|id| doc.vectors.get(id).is_some_and(|v| v.closed)),
         units,
+        bed,
     }
 }
 

@@ -2,6 +2,7 @@
 //! further it is from their edges so its sides cut the edges exactly.
 
 use cut_craft_core::document::Document;
+use cut_craft_core::entry::{Entry, EntryMode, EntrySettings, Fallback, Fallbacks, path_moves};
 use cut_craft_core::geometry::{Path, Point, inside};
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::medial;
@@ -102,6 +103,12 @@ pub struct Params {
     /// are carved together, a pass depth at a time
     #[serde(default)]
     pub use_vector_selection_order: bool,
+    /// How the bit goes down into each shape (straight down, a zig-zag or a ramp along the
+    /// groove's own centre line, never below the depth its width sets; no helix), set in
+    /// the Entry window. Unset on toolpaths made before entry modes: straight down
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub entry: Option<EntrySettings>,
 }
 
 impl Default for Params {
@@ -123,6 +130,7 @@ impl Default for Params {
             project_onto_model: false,
             use_vector_start_points: false,
             use_vector_selection_order: false,
+            entry: Some(EntrySettings::default()),
         }
     }
 }
@@ -252,17 +260,19 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
         // dropped onto the model it is kept above the material's bottom there instead
         let bottom =
             (!p.project_onto_model && doc.job.thickness > 0.0).then_some(doc.job.thickness);
-        let mut moves = carve_above(&paths, p, doc.job.clearance, bottom);
+        let notes = Fallbacks::default();
+        let mut moves = carve_above(&paths, p, doc.job.clearance, bottom, &notes);
         if p.project_onto_model {
             moves = project_onto_model(doc, tool, &moves)?;
         }
-        Ok(made_by::<VcarveEngraveToolpath>(
-            p,
-            p.name.clone(),
-            tool.clone(),
-            ids,
-            moves,
-        ))
+        let mut toolpath =
+            made_by::<VcarveEngraveToolpath>(p, p.name.clone(), tool.clone(), ids, moves);
+        toolpath.fallbacks = std::mem::take(
+            &mut *notes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        Ok(toolpath)
     }
 }
 
@@ -325,31 +335,100 @@ fn clearing(
 /// With the vector selection order, each outline (and the vectors inside it) is carved
 /// completely before the next one selected.
 pub fn carve(paths: &[Path], p: &Params, safe: f64) -> Vec<Move> {
-    carve_above(paths, p, safe, None)
+    carve_above(paths, p, safe, None, &Fallbacks::default())
 }
 
 /// [`carve`] going no deeper than `bottom` below the material's top, when given.
-fn carve_above(paths: &[Path], p: &Params, safe: f64, bottom: Option<f64>) -> Vec<Move> {
+/// Where an entry goes down another way than asked, it is noted in `notes`.
+fn carve_above(
+    paths: &[Path],
+    p: &Params,
+    safe: f64,
+    bottom: Option<f64>,
+    notes: &Fallbacks,
+) -> Vec<Move> {
     if p.place == Place::OnTheLine {
-        return along_the_lines(paths, p, safe, bottom);
+        return along_the_lines(paths, p, safe, bottom, notes);
     }
     if !p.use_vector_selection_order {
-        return carve_together(paths, p, safe, bottom);
+        return carve_together(paths, p, safe, bottom, notes);
     }
     shapes(paths)
         .iter()
-        .flat_map(|shape| carve_together(shape, p, safe, bottom))
+        .flat_map(|shape| carve_together(shape, p, safe, bottom, notes))
         .collect()
+}
+
+/// `p`'s entry for a V-carve: no helix (a helix would carve outside the groove), so one
+/// asked for zig-zags.
+fn v_entry(p: &Params) -> Option<EntrySettings> {
+    p.entry.map(|e| match e.mode {
+        EntryMode::Helix => EntrySettings {
+            mode: EntryMode::ZigZag,
+            zigzag_angle: e.helix_angle,
+            ..e
+        },
+        _ => e,
+    })
 }
 
 /// The tip along each of `paths` (in their order), `p.depth` below the start depth (no
 /// deeper than `bottom`), a pass depth at a time.
-fn along_the_lines(paths: &[Path], p: &Params, safe: f64, bottom: Option<f64>) -> Vec<Move> {
+fn along_the_lines(
+    paths: &[Path],
+    p: &Params,
+    safe: f64,
+    bottom: Option<f64>,
+    notes: &Fallbacks,
+) -> Vec<Move> {
     let depth = (p.start_depth + p.depth).min(bottom.unwrap_or(f64::INFINITY));
     let depths = p.tool.pass_depths(depth);
+    let settings = v_entry(p).filter(|e| e.mode != EntryMode::Plunge);
+    // how long a leg the first pass's entry takes
+    let first = p.tool.pass_depth.min(p.depth).max(0.0);
+    let leg = settings.map_or(0.0, |e| {
+        if e.mode == EntryMode::Ramp {
+            e.ramp_distance
+        } else {
+            let slope = e.zigzag_angle.clamp(0.1, 89.0).to_radians().tan();
+            first / (f64::from(e.zigzag_passes.max(1)) * slope)
+        }
+    });
+    let entry = Entry {
+        enter: settings,
+        tool_diameter: p.tool.diameter,
+        fallbacks: notes.clone(),
+        ..Entry::default()
+    };
     paths
         .iter()
-        .flat_map(|path| contour_moves(&cut_points(path), path.closed, &depths, safe))
+        .flat_map(|path| {
+            let points = cut_points(path);
+            let length: f64 = points.windows(2).map(|w| w[0].distance(w[1])).sum::<f64>()
+                + if path.closed {
+                    points[points.len() - 1].distance(points[0])
+                } else {
+                    0.0
+                };
+            match settings {
+                Some(_) if leg <= length + 1e-9 => {
+                    path_moves(&points, path.closed, &depths, -p.start_depth, safe, &entry)
+                }
+                // straight down where the line is too short for the leg (Matthew's rule)
+                Some(e) => {
+                    notes
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push(Fallback {
+                            at: points[0],
+                            wanted: e.mode,
+                            used: EntryMode::Plunge,
+                        });
+                    contour_moves(&points, path.closed, &depths, safe)
+                }
+                None => contour_moves(&points, path.closed, &depths, safe),
+            }
+        })
         .collect()
 }
 
@@ -380,7 +459,13 @@ const CENTRE_SPACING: f64 = 0.05;
 /// than the flat depth allows), the pass's flat floor is cut with rings a stepover apart.
 /// Each pass only goes where the carving is deeper than the pass before it, so no pass
 /// cuts air, and no cut goes more than a pass depth below the one before.
-fn carve_together(paths: &[Path], p: &Params, safe: f64, bottom: Option<f64>) -> Vec<Move> {
+fn carve_together(
+    paths: &[Path],
+    p: &Params,
+    safe: f64,
+    bottom: Option<f64>,
+    notes: &Fallbacks,
+) -> Vec<Move> {
     let starts: Vec<Point> = if p.use_vector_start_points {
         paths.iter().map(|path| path.start).collect()
     } else {
@@ -443,7 +528,8 @@ fn carve_together(paths: &[Path], p: &Params, safe: f64, bottom: Option<f64>) ->
             from = last;
         }
         let ways = link::Links::new(&piece, &lines, |r| carving.depth_at(r));
-        moves.extend(run_moves(&runs, safe, |a, b| ways.between(a, b)));
+        let enter = |run: &Run| entered(run, -p.start_depth, v_entry(p), p.tool.diameter, notes);
+        moves.extend(run_moves(&runs, safe, |a, b| ways.between(a, b), enter));
     }
     moves
 }
@@ -735,6 +821,111 @@ fn nearest_first(mut runs: Vec<Run>, mut from: Point) -> Vec<Run> {
         .collect()
 }
 
+/// Down into `run` from `top` by `settings`, ending at its start, as deep as it starts:
+/// straight down, or back and forth along the run's own line (a ramp's leg the ramp
+/// distance long, a zig-zag's as its angle and passes make it), each point no lower than
+/// the groove there, so it never cuts wider than the shape's width sets. Legs go on until
+/// the slope is below the whole stretch they cover. A run too short for its leg (or for a
+/// leg a quarter of the bit, `bit`, long) goes straight down, as is usual for a V-carve,
+/// noted in `notes`.
+fn entered(
+    run: &Run,
+    top: f64,
+    settings: Option<EntrySettings>,
+    bit: f64,
+    notes: &Fallbacks,
+) -> Vec<Move> {
+    let start = run.points[0];
+    let plunge = vec![Move {
+        kind: MoveKind::Plunge,
+        to: start,
+    }];
+    let Some(settings) = settings else {
+        return plunge;
+    };
+    if settings.mode == EntryMode::Plunge || start.z >= top - 1e-9 {
+        return plunge;
+    }
+    let note = |used: EntryMode| {
+        notes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(Fallback {
+                at: start.truncate(),
+                wanted: settings.mode,
+                used,
+            });
+    };
+    // the run's line by distance along it
+    let mut line: Vec<DVec3> = run.points.clone();
+    if run.closed {
+        line.push(start);
+    }
+    let mut at = vec![0.0];
+    for w in line.windows(2) {
+        at.push(at[at.len() - 1] + w[0].truncate().distance(w[1].truncate()));
+    }
+    let length = at[at.len() - 1];
+    if length < (bit / 4.0).max(0.1) {
+        note(EntryMode::Plunge);
+        return plunge;
+    }
+    let point = |s: f64| {
+        let i = at.partition_point(|&a| a <= s).clamp(1, line.len() - 1);
+        let span = (at[i] - at[i - 1]).max(1e-12);
+        line[i - 1].lerp(line[i], ((s - at[i - 1]) / span).clamp(0.0, 1.0))
+    };
+    let drop = top - start.z;
+    let (leg, slope) = if settings.mode == EntryMode::Ramp {
+        let distance = settings.ramp_distance.max(0.1);
+        (distance, drop / distance)
+    } else {
+        let slope = settings.zigzag_angle.clamp(0.1, 89.0).to_radians().tan();
+        let passes = f64::from(settings.zigzag_passes.max(1));
+        (drop / (passes * slope), slope)
+    };
+    // a groove too short for the leg: straight down (Matthew's rule)
+    if leg > length + 1e-9 {
+        note(EntryMode::Plunge);
+        return plunge;
+    }
+    // the deepest the stretch the legs cover goes
+    let lowest = at
+        .iter()
+        .zip(&line)
+        .filter(|&(&a, _)| a <= leg)
+        .map(|(_, q)| q.z)
+        .fold(point(leg).z, f64::min);
+    let mut moves = vec![Move {
+        kind: MoveKind::Plunge,
+        to: start.truncate().extend(top),
+    }];
+    let (mut s, mut travelled) = (0.0_f64, 0.0_f64);
+    for i in 0..10_000 {
+        let to = if i % 2 == 0 { leg } else { 0.0 };
+        let (lo, hi) = (s.min(to), s.max(to));
+        let mut stations: Vec<f64> = at.iter().copied().filter(|&a| a > lo && a < hi).collect();
+        stations.push(to);
+        if to < s {
+            stations.sort_by(|a, b| b.total_cmp(a));
+        }
+        for station in stations {
+            travelled += (station - s).abs();
+            s = station;
+            let q = point(s);
+            let z = q.z.max(top - travelled * slope);
+            moves.push(Move {
+                kind: MoveKind::Plunge,
+                to: q.truncate().extend(z),
+            });
+        }
+        if i % 2 == 1 && top - travelled * slope <= lowest + 1e-9 {
+            break;
+        }
+    }
+    moves
+}
+
 /// The moves cutting `runs` in order: one running on from where the last ended continues
 /// without lifting, as does one `link` finds a way to (cutting through the points it
 /// gives); otherwise up to `safe`, across, and down.
@@ -742,6 +933,7 @@ fn run_moves(
     runs: &[Run],
     safe: f64,
     link: impl Fn(DVec3, DVec3) -> Option<Vec<DVec3>>,
+    enter: impl Fn(&Run) -> Vec<Move>,
 ) -> Vec<Move> {
     let mut moves: Vec<Move> = vec![];
     let mut at: Option<DVec3> = None;
@@ -768,10 +960,7 @@ fn run_moves(
                     kind: MoveKind::Rapid,
                     to: DVec3::new(start.x, start.y, safe),
                 });
-                moves.push(Move {
-                    kind: MoveKind::Plunge,
-                    to: start,
-                });
+                moves.extend(enter(run));
             }
         }
         let back = run.closed.then_some(start);
@@ -1207,6 +1396,99 @@ mod tests {
         // the widest circle in the C sits in a back corner, touching the notch's corner
         let widest = 18.0 - 164.0f64.mul_add(-1.0, 18.0 * 18.0).sqrt();
         assert!((deepest(&t) + widest).abs() < 0.02, "{}", deepest(&t));
+    }
+
+    fn with_entry(mode: EntryMode) -> Params {
+        let mut p = Params {
+            entry: Some(EntrySettings {
+                mode,
+                ..EntrySettings::default()
+            }),
+            ..Params::default()
+        };
+        p.tool.pass_depth = 1.0;
+        p
+    }
+
+    /// Times the bit comes down from above the material, and the steepest it then goes
+    /// down below the surface, in degrees from level.
+    fn entries_and_steepest(t: &Toolpath) -> (usize, f64) {
+        let entries = t
+            .moves
+            .windows(2)
+            .filter(|w| w[0].kind == MoveKind::Rapid && w[1].kind != MoveKind::Rapid)
+            .count();
+        let steepest = t
+            .moves
+            .windows(2)
+            // the entry's own moves: a groove may fall steeply where it narrows
+            .filter(|w| w[1].kind == MoveKind::Plunge && w[1].to.z < w[0].to.z - 1e-9)
+            .filter(|w| w[1].to.z < -1e-9)
+            .map(|w| {
+                let (a, b) = (w[0].to, w[1].to);
+                (a.z - b.z)
+                    .atan2(a.truncate().distance(b.truncate()))
+                    .to_degrees()
+            })
+            .fold(0.0, f64::max);
+        (entries, steepest)
+    }
+
+    #[test]
+    fn a_zig_zag_entry_slides_in_along_the_groove_still_once_a_shape() {
+        let apart = moved(&rectangle(10.0, 6.0), Point::new(50.0, 0.0));
+        let plain = carve(
+            vec![c_shape(), apart.clone()],
+            &with_entry(EntryMode::Plunge),
+        );
+        let zig = carve(vec![c_shape(), apart], &with_entry(EntryMode::ZigZag));
+        let (entries, steepest) = entries_and_steepest(&zig);
+        assert_eq!(entries, 2, "one way down a shape");
+        assert!(steepest <= 10.0 + 1e-6, "{steepest}");
+        // as deep as the shape's width sets, no deeper
+        assert!((deepest(&zig) - deepest(&plain)).abs() < 1e-9);
+        assert_eq!(zig.fallbacks, vec![]);
+    }
+
+    #[test]
+    fn a_ramp_entry_never_goes_below_the_groove_it_follows() {
+        let p = with_entry(EntryMode::Ramp);
+        let t = carve(vec![rectangle(10.0, 6.0)], &p);
+        let (_, steepest) = entries_and_steepest(&t);
+        assert!(steepest < 89.0, "never straight down: {steepest}");
+        let plain = carve(vec![rectangle(10.0, 6.0)], &with_entry(EntryMode::Plunge));
+        assert!((deepest(&t) - deepest(&plain)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_groove_too_short_for_the_ramp_is_entered_straight_down() {
+        let mut p = with_entry(EntryMode::Ramp);
+        p.entry = p.entry.map(|e| EntrySettings {
+            ramp_distance: 500.0,
+            ..e
+        });
+        p.place = Place::OnTheLine;
+        let t = carve(vec![rectangle(10.0, 6.0)], &p);
+        assert_eq!(t.fallbacks.len(), 1);
+        assert_eq!(t.fallbacks[0].used, EntryMode::Plunge);
+    }
+
+    #[test]
+    fn a_v_carve_starts_by_going_straight_down() {
+        assert_eq!(
+            Params::default().entry.map(|e| e.mode),
+            Some(EntryMode::Plunge)
+        );
+    }
+
+    #[test]
+    fn on_the_line_ramps_in_along_the_line() {
+        let mut p = with_entry(EntryMode::Ramp);
+        p.place = Place::OnTheLine;
+        let line = Path::polyline(&[Point::new(0.0, 0.0), Point::new(60.0, 0.0)], false);
+        let t = carve(vec![line], &p);
+        let (_, steepest) = entries_and_steepest(&t);
+        assert!(steepest < 89.0, "{steepest}");
     }
 
     #[test]

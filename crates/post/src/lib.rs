@@ -659,7 +659,7 @@ impl Post {
                 for step in self.steps(&part, &doc.job, at) {
                     let (kind, to) = match step {
                         Step::Line(kind, to, _) => (kind, to),
-                        Step::Arc(arc) => (MoveKind::Cut, arc.to),
+                        Step::Arc(kind, arc) => (kind, arc.to),
                     };
                     let from = std::mem::replace(&mut at, to);
                     let length = to.distance(from);
@@ -691,7 +691,7 @@ impl Post {
                         v.numbers.insert("F", rate);
                         v.numbers.insert("FI", rate / length);
                         let start = feeding.replace(rate) != Some(rate);
-                        if let Step::Arc(arc) = step {
+                        if let Step::Arc(_, arc) = step {
                             v.arc(from, &arc);
                             self.arc_block(&arc, from, start)
                         } else {
@@ -700,7 +700,8 @@ impl Post {
                     };
                     out.block(block, &v);
                     // a drill waits at the bottom of each peck when its toolpath asks
-                    if kind == MoveKind::Plunge && dwell(toolpath) > 0.0 {
+                    let line = matches!(step, Step::Line(..));
+                    if line && kind == MoveKind::Plunge && dwell(toolpath) > 0.0 {
                         v.numbers.insert("DWELL", dwell(toolpath));
                         out.block("DWELL_MOVE", &v);
                     }
@@ -858,17 +859,18 @@ impl Post {
         let Some(limits) = self.arc_limits(!toolpath.power.is_empty()) else {
             return lines.iter().map(line).collect();
         };
-        let cutting = |l: &(MoveKind, DVec3, f64)| l.0 == MoveKind::Cut;
+        // runs of cuts, and of plunges (a helix goes down in arcs at the plunge rate)
         let mut steps = Vec::with_capacity(lines.len());
-        for run in lines.chunk_by(|a, b| cutting(a) == cutting(b)) {
-            if cutting(&run[0]) {
+        for run in lines.chunk_by(|a, b| a.0 == b.0) {
+            let kind = run[0].0;
+            if kind == MoveKind::Rapid {
+                steps.extend(run.iter().map(line));
+            } else {
                 let cuts: Vec<DVec3> = run.iter().map(|l| l.1).collect();
                 steps.extend(arcs::fit(at, &cuts, &limits).into_iter().map(|p| match p {
-                    arcs::Piece::Line(to) => Step::Line(MoveKind::Cut, to, 0.0),
-                    arcs::Piece::Arc(arc) => Step::Arc(arc),
+                    arcs::Piece::Line(to) => Step::Line(kind, to, 0.0),
+                    arcs::Piece::Arc(arc) => Step::Arc(kind, arc),
                 }));
-            } else {
-                steps.extend(run.iter().map(line));
             }
             at = run[run.len() - 1].1;
         }
@@ -1033,7 +1035,8 @@ impl Values {
 #[derive(Clone, Copy)]
 enum Step {
     Line(MoveKind, DVec3, f64),
-    Arc(arcs::Arc),
+    /// An arc cut at the feed rate, or gone down at the plunge rate (a helix).
+    Arc(MoveKind, arcs::Arc),
 }
 
 /// What `toolpath` writes, in parts: all its moves, or for a drill bank toolpath each plunge
@@ -1071,6 +1074,7 @@ fn parts(toolpath: &Toolpath) -> Vec<(Option<&BankHit>, std::borrow::Cow<'_, Too
                 moves,
                 power: vec![],
                 drill_bank: None,
+                fallbacks: vec![],
                 params: serde_json::Value::Null,
                 vectors: vec![],
                 name: String::new(),
@@ -1428,6 +1432,7 @@ begin FOOTER
             ],
             visible: true,
             drill_bank: None,
+            fallbacks: vec![],
         }
     }
 
@@ -2030,6 +2035,44 @@ begin FOOTER
     }
 
     #[test]
+    fn a_helix_entry_goes_down_in_helical_arcs_at_the_plunge_rate() {
+        // an entry helix: a quarter turn of radius 10 down 2 mm, gone down at the plunge rate
+        let mut t = cutting(&[DVec3::new(10.0, 0.0, 0.0), DVec3::new(10.0, 0.0, -3.0)]);
+        let helix = (1..=30).map(|i| {
+            let turn = f64::from(i) / 30.0 * std::f64::consts::FRAC_PI_2;
+            mv(
+                MoveKind::Plunge,
+                10.0 * turn.cos(),
+                10.0 * turn.sin(),
+                -1.0 - 2.0 * f64::from(i) / 30.0,
+            )
+        });
+        t.moves = [
+            mv(MoveKind::Rapid, 10.0, 0.0, 5.0),
+            mv(MoveKind::Plunge, 10.0, 0.0, -1.0),
+        ]
+        .into_iter()
+        .chain(helix)
+        .chain([mv(MoveKind::Rapid, 0.0, 10.0, 5.0)])
+        .collect();
+        let plunge = t.tool.plunge_rate;
+        let lines = render(&arc_post(true), vec![t]);
+        let arc = lines
+            .iter()
+            .find(|l| l.starts_with("G3 X0.000 Y10.000 Z-3.000"))
+            .unwrap_or_else(|| panic!("{lines:#?}"));
+        assert!(arc.ends_with("(helix)"), "{arc}");
+        // the feed is set to the plunge rate before it, not the cutting feed
+        let at = lines.iter().position(|l| l == arc).unwrap();
+        let fed = lines[..at]
+            .iter()
+            .rev()
+            .find_map(|l| l.split_whitespace().find(|w| w.starts_with('F')))
+            .unwrap();
+        assert_eq!(fed, format!("F{plunge:.1}"), "{lines:#?}");
+    }
+
+    #[test]
     fn arcs_turning_clockwise_are_g2_with_the_centre_from_their_start() {
         // a half turn of radius 10 round 50, 50 from its right, clockwise
         let half: Vec<DVec3> = (0..=40)
@@ -2278,6 +2321,7 @@ begin FOOTER
             strategy: "drill_bank_toolpath".into(),
             moves,
             drill_bank: Some(BankToolpath { bank, hits }),
+            fallbacks: vec![],
             ..toolpath("Shelf Pins", "5 mm Drill")
         }
     }

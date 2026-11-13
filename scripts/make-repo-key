@@ -1,0 +1,22 @@
+#!/bin/bash
+# Makes the key that signs Cut Craft's apt and dnf repositories, and stores it as the
+# repository secret REPO_SIGNING_KEY (.github/workflows/linux-repo.yml signs with it).
+#   scripts/make-repo-key
+# Run once, on your own computer, signed in to GitHub with `gh auth login`. The key is
+# RSA 4096 (every apt, dnf and zypper can check it) with no passphrase, since only GitHub
+# Actions uses it; a copy is kept in ~/cut-craft-repo-key.asc: keep it safe and private,
+# because a new key means every user has to add the repository again.
+set -euo pipefail
+copy=~/cut-craft-repo-key.asc
+if [[ -e $copy ]]; then
+    echo "$copy already exists; this would replace the key users trust. Stopping." >&2
+    exit 1
+fi
+home=$(mktemp -d)
+trap 'rm -rf "$home"' EXIT
+export GNUPGHOME=$home
+gpg --batch --passphrase '' --quick-gen-key "Cut Craft packages" rsa4096 sign never
+fpr=$(gpg --list-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+(umask 077; gpg --batch --armor --export-secret-keys "$fpr" >"$copy")
+gh secret set REPO_SIGNING_KEY -R NoobyNull/Cut-Craft <"$copy"
+echo "Made key $fpr, stored as REPO_SIGNING_KEY; private copy in $copy."
