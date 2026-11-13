@@ -2,6 +2,7 @@
 //! down), in a line at the foot of its cut settings and a window to change it, so the form
 //! stays short.
 
+use crate::form;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
@@ -15,8 +16,15 @@ fn ours(group: &str, params: &Value) -> bool {
     match group {
         "Machine Vectors…" => params.get("side").is_some(),
         "Clear Pocket" => params.get("rings").is_some(),
+        // V-Carve's
+        form::CUTTING_DEPTHS => params.get("flat_depth").is_some(),
         _ => false,
     }
+}
+
+/// Whether a helix is offered: not on a V-Carve, where it would carve outside the groove.
+fn helix_offered(params: &Value) -> bool {
+    params.get("flat_depth").is_none()
 }
 
 /// The toolpath's entry: its own, or for a toolpath made before entry modes the nearest to
@@ -141,7 +149,13 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value, unit
             .resizable(false)
             .collapsible(false)
             .show(ui.ctx(), |ui| {
-                window(ui, &mut settings, diameter, pass_depth, units);
+                window(
+                    ui,
+                    &mut settings,
+                    (diameter, pass_depth),
+                    helix_offered(params),
+                    units,
+                );
             });
     }
     ui.data_mut(|d| d.insert_temp(id, open));
@@ -156,8 +170,8 @@ pub(super) fn group_end(ui: &mut egui::Ui, group: &str, params: &mut Value, unit
 fn window(
     ui: &mut egui::Ui,
     settings: &mut EntrySettings,
-    diameter: f64,
-    pass_depth: f64,
+    (diameter, pass_depth): (f64, f64),
+    helix: bool,
     units: Units,
 ) {
     ui.label("How the bit goes down into the material each time a cut starts:");
@@ -187,6 +201,9 @@ fn window(
     ];
     ui.horizontal(|ui| {
         for (mode, name, help) in ways {
+            if mode == EntryMode::Helix && !helix {
+                continue;
+            }
             ui.radio_value(&mut settings.mode, mode, name)
                 .on_hover_hint(help);
         }
@@ -199,12 +216,16 @@ fn window(
     settings.ramp_distance = settings.ramp_distance.max(0.1);
     if settings.mode != EntryMode::Plunge {
         ui.separator();
-        ui.weak(
+        ui.weak(if helix {
             "Each place the bit goes down fits this to the room it has, never steeper: a \
              helix gets smaller, then turns into a zig-zag along the cut; a zig-zag or ramp \
              takes shorter legs. Only where there is no room at all does it go straight \
-             down, and Checks before cutting says where.",
-        );
+             down, and Checks before cutting says where."
+        } else {
+            "It slides in along the groove's own centre line, never deeper than the groove's \
+             width sets. Where a groove is too short for it, it goes straight down there, as \
+             a V-carve usually does."
+        });
     }
 }
 

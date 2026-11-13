@@ -97,7 +97,20 @@ fn fell_back(toolpath: &Toolpath, units: crate::document::Units) -> Vec<String> 
         .map_or("entry", |f| f.wanted.said());
     let mut found = vec![];
     let plunged = places(&|f| f.used == EntryMode::Plunge);
-    if !plunged.is_empty() {
+    let vcarve = toolpath.strategy == "vcarve_engrave_toolpath";
+    if !plunged.is_empty() && vcarve {
+        found.push(format!(
+            "{name} goes straight down in {} {} ({}) where the groove is too short for its \
+             {wanted}. That is usual for a V-carve: nothing to fix",
+            plunged.len(),
+            if plunged.len() == 1 {
+                "place"
+            } else {
+                "places"
+            },
+            listed(&plunged)
+        ));
+    } else if !plunged.is_empty() {
         found.push(format!(
             "{name} goes straight down into the material in {} {} ({}), there being no room \
              there for its {wanted} or a zig-zag. That is hard on the bit, and a bit that \
