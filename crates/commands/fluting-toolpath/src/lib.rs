@@ -39,10 +39,12 @@ pub struct Params {
     /// Below the material surface where the flute begins (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_fluting.png"))]
     pub start_depth: f64,
     /// Below the start depth at the deepest point
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D"))]
     pub flute_depth: f64,
     /// Where along each vector the flute goes down and comes up
     #[schemars(extend("x-group" = "Flute Type"))]

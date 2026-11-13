@@ -1470,6 +1470,58 @@ fn acceleration_tick(
     .on_disabled_hover_text(&tip);
 }
 
+/// The Toolpath Summary's own settings: the rapid rate and the time scale factor.
+fn summary_fields() -> [crate::form::Field; 2] {
+    [
+        crate::form::Field {
+            key: "rapid_rate".into(),
+            label: "Rapid rate".into(),
+            help: Some("The machine's G0 speed".into()),
+            kind: crate::form::Kind::Number {
+                unit: None,
+                min: Some(0.001),
+                max: None,
+                integer: false,
+                steps: vec![],
+                slider: false,
+                percent_when: None,
+            },
+            section: false,
+            icon: None,
+            when: None,
+            enabled: None,
+            group: None,
+            tab: None,
+            dim: None,
+            diagram: None,
+        },
+        crate::form::Field {
+            key: "scale_factor".into(),
+            label: "Scale factor".into(),
+            help: Some(
+                "Multiplies every time, for a machine slower than its programmed feeds".into(),
+            ),
+            kind: crate::form::Kind::Number {
+                unit: None,
+                min: Some(0.1),
+                max: None,
+                integer: false,
+                steps: vec![],
+                slider: false,
+                percent_when: None,
+            },
+            section: false,
+            icon: None,
+            when: None,
+            enabled: None,
+            group: None,
+            tab: None,
+            dim: None,
+            diagram: None,
+        },
+    ]
+}
+
 fn summary_table(
     ui: &mut egui::Ui,
     rows: &[SummaryRow],
@@ -1498,50 +1550,7 @@ fn summary_table(
     ui.separator();
     ui.weak("Time estimates based on the tools' feed rates");
     let per = summary.units.mm_per_min();
-    let fields = [
-        crate::form::Field {
-            key: "rapid_rate".into(),
-            label: "Rapid rate".into(),
-            help: Some("The machine's G0 speed".into()),
-            kind: crate::form::Kind::Number {
-                unit: None,
-                min: Some(0.001),
-                max: None,
-                integer: false,
-                steps: vec![],
-                slider: false,
-                percent_when: None,
-            },
-            section: false,
-            icon: None,
-            when: None,
-            enabled: None,
-            group: None,
-            tab: None,
-        },
-        crate::form::Field {
-            key: "scale_factor".into(),
-            label: "Scale factor".into(),
-            help: Some(
-                "Multiplies every time, for a machine slower than its programmed feeds".into(),
-            ),
-            kind: crate::form::Kind::Number {
-                unit: None,
-                min: Some(0.1),
-                max: None,
-                integer: false,
-                steps: vec![],
-                slider: false,
-                percent_when: None,
-            },
-            section: false,
-            icon: None,
-            when: None,
-            enabled: None,
-            group: None,
-            tab: None,
-        },
-    ];
+    let fields = summary_fields();
     let mut values = serde_json::json!({
         "rapid_rate": summary.rapid / per,
         "scale_factor": summary.scale,

@@ -14,6 +14,14 @@ const CORNER_PICKER_ROWS: f32 = 3.0;
 /// The picture the face radio buttons sit round, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 const FACES_PICTURE_ROWS: f32 = 4.0;
+/// The tallest a measurements picture (`x-diagram`) is drawn, in rows of the theme's
+/// interactive height; narrower side pages draw it smaller.
+// ponytail: fixed ratio until a preferences dialog exists
+const DIAGRAM_ROWS: f32 = 7.0;
+/// A measurements picture's width over its height (`scripts/make_icons.py` draws them 112 x 56).
+const DIAGRAM_ASPECT: f32 = 2.0;
+/// The callout letters' colour: the pictures' orange accent (`scripts/make_icons.py`'s `ACC`).
+const DIM_COLOUR: egui::Color32 = egui::Color32::from_rgb(0xef, 0x8f, 0x2a);
 /// A field's own picture beside its label (small width / radius pictures), in rows
 /// of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
@@ -42,6 +50,12 @@ pub struct Field {
     /// `x-tab`: neighbouring fields with a tab show as a strip of tabs, a tab's fields under
     /// it (Ramp, Leads, Order, Start At, Corners).
     pub tab: Option<String>,
+    /// `x-dim`: the measurement's callout letter (`D`, `D2`, `W`, `Dia`), drawn on the picture
+    /// above it and in front of its name, so the two read together.
+    pub dim: Option<String>,
+    /// `x-diagram`: a picture of the measurements, shown once at the top of the field's group
+    /// (or above the field when it has none), each one marked with its [`Field::dim`] letter.
+    pub diagram: Option<String>,
 }
 
 /// When a field shows (`x-show-when` / `x-hide-when`: `{ "key": "value" or ["values"] }`),
@@ -245,6 +259,7 @@ fn show_within(
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(group);
+                diagram(ui, block, look);
                 let mut changed = plain(ui, block, params, look, top);
                 if let Some(end) = look.group_end {
                     changed |= end(ui, group, params);
@@ -253,11 +268,33 @@ fn show_within(
             })
             .inner
         } else {
+            diagram(ui, block, look);
             plain(ui, block, params, look, top)
         };
         rest = after;
     }
     changed
+}
+
+/// The measurements picture of the first of `fields` that has one (`x-diagram`), as wide as
+/// there is room for, up to [`DIAGRAM_ROWS`] tall, at [`DIAGRAM_ASPECT`].
+fn diagram(ui: &mut egui::Ui, fields: &[&Field], look: &Look) {
+    let Some(picture) = fields
+        .iter()
+        .find_map(|f| f.diagram.as_deref())
+        .and_then(|path| (look.picture)(path))
+    else {
+        return;
+    };
+    let tallest = ui.spacing().interact_size.y * DIAGRAM_ROWS;
+    let width = ui.available_width().min(tallest * DIAGRAM_ASPECT);
+    ui.add(picture.fit_to_exact_size(egui::vec2(width, width / DIAGRAM_ASPECT)));
+}
+
+/// A measurement's callout letter, as the picture above it marks it.
+fn dim_letter(ui: &mut egui::Ui, dim: &str) {
+    ui.label(egui::RichText::new(dim).strong().color(DIM_COLOUR))
+        .on_hover_hint(format!("Marked {dim} on the picture above"));
 }
 
 /// A strip of tabs over `fields`, the picked tab's fields under it; the pick is kept with
@@ -388,6 +425,9 @@ fn grid(
                         if let Some(picture) = picture {
                             let edge = ui.spacing().interact_size.y * FIELD_PICTURE_ROWS;
                             ui.add(picture.fit_to_exact_size(egui::vec2(edge, edge)));
+                        }
+                        if let Some(dim) = &f.dim {
+                            dim_letter(ui, dim);
                         }
                         hover(ui.label(&f.label), f.help.as_ref());
                     });
@@ -1039,6 +1079,10 @@ pub const CUTTING_DEPTHS: &str = "Cutting Depths";
 /// depths rather than lower down, under Machine Vectors.
 pub const WHICH_SIDE: &str = cmd_profile_toolpath::SIDE_GROUP;
 
+/// The Drag Knife's own settings (blade offset, tolerance angle): how the blade cuts, so they
+/// come right under its depths, as Profile's side does, not at the foot of the form.
+pub const KNIFE: &str = "Knife";
+
 /// A toolpath form's fields in the standard order: the cutting depths, the tool, then the rest
 /// as declared with each group's (and the tab strip's) fields gathered where the first of
 /// them is, and Project onto 3D Model and the name last.
@@ -1049,6 +1093,7 @@ pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
         _ if f.group.as_deref() == Some(CUTTING_DEPTHS) => 0,
         // Profile's Outside / Inside / On, right under the depth where a beginner looks first
         _ if f.group.as_deref() == Some(WHICH_SIDE) => 1,
+        _ if f.group.as_deref() == Some(KNIFE) => 1,
         "tool" => 2,
         "project_onto_model" => 4,
         "name" => 5,
@@ -1110,6 +1155,11 @@ fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
                 .and_then(|rule| When::from_rule(rule, true)),
             group: s["x-group"].as_str().map(String::from),
             tab: s["x-tab"].as_str().map(String::from),
+            dim: s["x-dim"].as_str().map(String::from),
+            diagram: s["x-diagram"]
+                .as_str()
+                .or_else(|| resolve(root, s)["x-diagram"].as_str())
+                .map(String::from),
         })
         .collect()
 }
@@ -1695,6 +1745,7 @@ mod tests {
                         Some(cmd_surfacing_toolpath::AREA_GROUP),
                         Some(CUTTING_DEPTHS),
                         Some(WHICH_SIDE),
+                        Some(KNIFE),
                     ]
                     .contains(&f.group.as_deref())
                 })
@@ -1706,6 +1757,15 @@ mod tests {
         }
         let surfacing = arrange(fields(&schema("surfacing_toolpath")));
         assert_eq!(keys(&surfacing).first(), Some(&"area"));
+    }
+
+    #[test]
+    fn the_drag_knifes_own_settings_come_right_after_its_depths() {
+        let knife = arrange(fields(&schema("drag_knife_toolpath")));
+        let k = keys(&knife);
+        let at = |key| k.iter().position(|x| *x == key).unwrap();
+        assert!(at("passes") < at("blade_offset"), "{k:?}");
+        assert!(at("tolerance_angle") < at("tool"), "{k:?}");
     }
 
     #[test]
@@ -2040,6 +2100,161 @@ mod tests {
     fn labels_are_sentence_case() {
         let f = fields(&schema("draw_star"));
         assert_eq!(field(&f, "outer_radius").label, "Outer radius");
+    }
+
+    /// A form drawn with every picture there, its text in order and the pictures asked for.
+    fn drawn_with_pictures(fields: &[Field], params: &mut Value) -> (Vec<String>, Vec<String>) {
+        let ctx = egui::Context::default();
+        let asked = std::cell::RefCell::new(vec![]);
+        let picture = |path: &str| {
+            asked.borrow_mut().push(path.to_owned());
+            Some(egui::Image::new(egui::include_image!(
+                "../../../assets/icons/drawing_forms/width.png"
+            )))
+        };
+        let look = Look {
+            units: Units::Mm,
+            picture: &picture,
+            material: cut_craft_core::calc::Values::default(),
+            tool: None,
+            group_end: None,
+        };
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| show(ui, fields, params, &look));
+        });
+        out.textures_delta.clear();
+        let texts = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect();
+        (texts, asked.into_inner())
+    }
+
+    fn lettered() -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "cut_depth": { "type": "number", "x-unit": "mm", "x-group": "Cutting Depths",
+                               "x-dim": "D", "x-diagram": "diagrams/test.png" },
+                "swivel_depth": { "type": "number", "x-unit": "mm", "x-group": "Cutting Depths",
+                                  "x-dim": "D2" },
+                "passes": { "type": "integer", "x-group": "Cutting Depths" }
+            }
+        })
+    }
+
+    #[test]
+    fn a_measurements_letter_is_read_from_its_schema() {
+        let f = fields(&lettered());
+        assert_eq!(field(&f, "cut_depth").dim.as_deref(), Some("D"));
+        assert_eq!(field(&f, "swivel_depth").dim.as_deref(), Some("D2"));
+        assert_eq!(field(&f, "passes").dim, None);
+        assert_eq!(
+            field(&f, "cut_depth").diagram.as_deref(),
+            Some("diagrams/test.png")
+        );
+    }
+
+    #[test]
+    fn a_groups_picture_shows_once_at_its_top_and_each_letter_before_its_name() {
+        let f = fields(&lettered());
+        let mut params = serde_json::json!({ "cut_depth": 3.0, "swivel_depth": 0.5, "passes": 1 });
+        let (texts, mut asked) = drawn_with_pictures(&f, &mut params);
+        // egui may lay a first frame out twice
+        asked.dedup();
+        assert_eq!(asked, ["diagrams/test.png"], "{texts:?}");
+        let at = |t: &str| texts.iter().position(|x| x == t);
+        let (d2, swivel) = (at("D2").unwrap(), at("Swivel depth").unwrap());
+        assert_eq!(
+            swivel,
+            d2 + 1,
+            "the letter sits right before its name: {texts:?}"
+        );
+        assert!(at("Cutting Depths").unwrap() < at("D").unwrap());
+    }
+
+    #[test]
+    fn every_toolpath_depth_has_a_letter_and_its_group_a_picture() {
+        let mut found = vec![];
+        for (form, schema) in every_form() {
+            let all = fields(&schema);
+            let depths: Vec<&Field> = all
+                .iter()
+                .filter(|f| f.group.as_deref() == Some(CUTTING_DEPTHS))
+                .collect();
+            if depths.is_empty() {
+                continue;
+            }
+            if !depths.iter().any(|f| f.diagram.is_some()) {
+                found.push(format!(
+                    "{form}: Cutting Depths has no picture (`x-diagram`)"
+                ));
+            }
+            for f in depths {
+                let length = matches!(&f.kind, Kind::Number { unit: Some(u), .. } if u == "mm");
+                if length && f.dim.is_none() {
+                    found.push(format!("{form}: {} has no letter (`x-dim`)", f.key));
+                }
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    /// Every lettered field, with the picture shown above it (its group's, its own).
+    fn lettered_fields<'a>(fields: &'a [Field], above: bool, out: &mut Vec<(&'a Field, bool)>) {
+        for f in fields {
+            if f.dim.is_some() {
+                let pictured = above
+                    || f.diagram.is_some()
+                    || f.group.as_ref().is_some_and(|g| {
+                        fields
+                            .iter()
+                            .any(|o| o.group.as_ref() == Some(g) && o.diagram.is_some())
+                    });
+                out.push((f, pictured));
+            }
+            if let Kind::Group(inner) = &f.kind {
+                lettered_fields(inner, above || f.diagram.is_some(), out);
+            }
+        }
+    }
+
+    /// Whether `a` and `b` are never shown together: one shows on the values the other hides on.
+    fn apart(a: &Field, b: &Field) -> bool {
+        matches!((&a.when, &b.when), (Some(x), Some(y))
+            if x.key == y.key && x.values == y.values && x.show != y.show)
+    }
+
+    #[test]
+    fn letters_are_unique_in_a_form_and_each_is_on_a_picture_above_it() {
+        let mut found = vec![];
+        for (form, schema) in every_form() {
+            let all = fields(&schema);
+            let mut listed = vec![];
+            lettered_fields(&all, false, &mut listed);
+            let mut seen = std::collections::BTreeMap::new();
+            for (f, pictured) in listed {
+                let dim = f.dim.as_deref().unwrap_or_default();
+                // two settings never shown together may share a letter (V-Carve's flat depth
+                // for Fill, its groove depth otherwise)
+                if let Some(other) = seen.insert(dim, f)
+                    && !apart(other, f)
+                {
+                    found.push(format!(
+                        "{form}: {dim} names both {} and {}",
+                        other.key, f.key
+                    ));
+                }
+                if !pictured {
+                    found.push(format!("{form}: {} has letter {dim} but no picture", f.key));
+                }
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
     #[test]

@@ -19,18 +19,22 @@ pub struct Params {
     /// From the knife's pivot to its tip (from the maker)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Knife"))]
+    #[schemars(extend("x-dim" = "O", "x-diagram" = "diagrams/drag_knife_corners.png"))]
     pub blade_offset: f64,
     /// Corners turning less than this are cut straight through, without a swivel
     #[schemars(extend("x-unit" = "°"), range(min = 0, max = 180))]
     #[schemars(extend("x-group" = "Knife"))]
+    #[schemars(extend("x-dim" = "A"))]
     pub tolerance_angle: f64,
     /// Final depth of the cut
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_drag_knife.png"))]
     pub cut_depth: f64,
     /// The blade lifts to this depth to swivel; less than the cut depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D2"))]
     pub swivel_depth: f64,
     /// Equal passes down to the cut depth
     #[schemars(range(min = 1))]

@@ -53,11 +53,13 @@ pub struct Params {
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_vcarve.png"))]
     pub start_depth: f64,
     /// Deepest the bit goes below the start depth; wider parts are cut flat there (0: as
     /// deep as it can)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths", "x-show-when" = {"place": "fill"}))]
+    #[schemars(extend("x-dim" = "D"))]
     pub flat_depth: f64,
     /// Fill carves the whole shape, as deep as its width needs; Inside, On the Line and
     /// Outside carve a V groove of the depth set
@@ -72,6 +74,7 @@ pub struct Params {
         extend("x-unit" = "mm", "x-group" = "Cutting Depths", "x-hide-when" = {"place": "fill"}),
         range(min = 0)
     )]
+    #[schemars(extend("x-dim" = "D"))]
     pub depth: f64,
     /// A V-bit; its stepover sets how close together the carving passes are
     pub tool: Tool,

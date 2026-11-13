@@ -50,6 +50,7 @@ pub struct Params {
     /// Below the material surface where the top of the chamfer is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_chamfer.png"))]
     pub start_depth: f64,
     /// Across the chamfer
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

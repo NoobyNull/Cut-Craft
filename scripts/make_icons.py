@@ -155,6 +155,8 @@ GLYPHS = {
     "S": [[(1, 0.12), (0.7, 0), (0.25, 0), (0, 0.22), (0.15, 0.45), (0.85, 0.55), (1, 0.78), (0.75, 1), (0.25, 1), (0, 0.88)]],
     "L": [[(0, 0), (0, 1), (1, 1)]],
     "1": [[(0.2, 0.2), (0.6, 0), (0.6, 1)], [(0.2, 1), (1, 1)]],
+    "P": [[(0, 1), (0, 0), (0.7, 0), (1, 0.15), (1, 0.4), (0.7, 0.55), (0, 0.55)]],
+    "O": [[(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3), (0.3, 0)]],
 }
 
 
@@ -916,6 +918,145 @@ I[vw + "pin.svg"] = lambda: [f'<g transform="rotate(40 24 26)">{"".join(push_pin
 I[vw + "pinned.svg"] = lambda: [f'<g transform="translate(0 6)">{"".join(push_pin(ACC, 32))}</g>', line(8, 38, 40, 38, INK, SW)]
 
 
+# ---- measurement pictures (x-diagram) ----------------------------------------------------
+# Wider than the icons (112 x 56) and drawn at the top of a form's section: the material in
+# section, the bit in the ink, and each measurement as an orange dimension with its callout
+# letter, the same letter the form shows in front of the setting's name (`x-dim`).
+# D is the depth cut to, D1 the start depth (an earlier pocket's floor), D2 another depth.
+DIAGRAMS = {}
+DW, DH = 112, 56
+TOP, BOT, X0, X1 = 12, 50, 22, 90   # the material's surface, underside and ends
+GUIDE = "2 2"
+
+
+def section(top):
+    """The material in section: `top` its upper edge left to right, then down and back."""
+    pts = [(X0, BOT), *top, (X1, BOT)]
+    return pl(pts, WOODD, 2, WOOD, closed=True)
+
+
+def dim_right(y0, y1, label, x=97, reach=X1 - 12):
+    """A depth from y0 to y1 on the right, its letter beside it, dashed guides from `reach`."""
+    return (darrow(x, y0, x, y1, ACC, 2, 4) + line(reach, y0, x + 2, y0, ACC, 2, GUIDE)
+            + line(reach, y1, x + 2, y1, ACC, 2, GUIDE) + text(label, x + 3, (y0 + y1) / 2 - 3, 6, ACC, 2))
+
+
+def dim_left(y0, y1, label, x=18, reach=X0 + 10):
+    w = len(label) * 6 * 0.62 + (len(label) - 1) * 6 * 0.35
+    return (darrow(x, y0, x, y1, ACC, 2, 4) + line(x - 2, y0, reach, y0, ACC, 2, GUIDE)
+            + line(x - 2, y1, reach, y1, ACC, 2, GUIDE) + text(label, x - 4 - w, (y0 + y1) / 2 - 3, 6, ACC, 2))
+
+
+def depth_picture(top, tool, depths):
+    """`depths`: (y0, y1, letter, side) for each measurement."""
+    els = [section(top), tool]
+    for y0, y1, label, side in depths:
+        els.append(dim_left(y0, y1, label) if side == "left" else dim_right(y0, y1, label))
+    return els
+
+
+SD = 21   # an earlier pocket's floor: the start depth
+
+
+def started(cut, x0=34, x1=78):
+    """The upper edge with an earlier pocket from x0 to x1 at the start depth, `cut` in it."""
+    return [(X0, TOP), (x0, TOP), (x0, SD), *cut, (x1, SD), (x1, TOP), (X1, TOP)]
+
+
+dg = "diagrams/"
+DIAGRAMS[dg + "depth_profile.svg"] = lambda: depth_picture(
+    [(X0, TOP), (52, TOP), (52, 40), (64, 40), (64, TOP), (X1, TOP)], bit("end_mill", 58, 2, 40, 5.5),
+    [(TOP, 40, "D", "right")])
+DIAGRAMS[dg + "depth_pocket.svg"] = lambda: depth_picture(
+    [(X0, TOP), (32, TOP), (32, 34), (80, 34), (80, TOP), (X1, TOP)], bit("end_mill", 44, 2, 34, 5.5),
+    [(TOP, 34, "D", "right")])
+DIAGRAMS[dg + "depth_drill.svg"] = lambda: depth_picture(
+    [(X0, TOP), (52, TOP), (52, 38), (57, 42), (62, 38), (62, TOP), (X1, TOP)],
+    path("M54,2 H60 V36 L57,40 L54,36 Z", INK, 2, "#b4bcc8") + line(54, 14, 60, 22, INK, 1.5) + line(54, 24, 60, 32, INK, 1.5),
+    [(TOP, 42, "D", "right")])
+DIAGRAMS[dg + "depth_engrave.svg"] = lambda: depth_picture(
+    [(X0, TOP), (54, TOP), (54, 22), (60, 22), (60, TOP), (X1, TOP)], bit("end_mill", 57, 0, 22, 3),
+    [(TOP, 22, "D", "right")])
+DIAGRAMS[dg + "depth_keyhole.svg"] = lambda: depth_picture(
+    [(X0, TOP), (52, TOP), (52, 30), (44, 30), (44, 40), (70, 40), (70, 30), (62, 30), (62, TOP), (X1, TOP)],
+    rect(54, 0, 6, 32, 1, INK, 2, "#d2d7df") + path("M47,30 H67 V40 H47 Z", INK, 2, "#b4bcc8"),
+    [(TOP, 40, "D", "right")])
+DIAGRAMS[dg + "depth_surfacing.svg"] = lambda: [
+    line(X0, TOP, X1, TOP, WOODD, 2, "3 2"), section([(X0, 21), (X1, 21)]),
+    rect(36, 0, 6, 12, 1, INK, 2, "#d2d7df"), path("M28,12 H50 V21 H28 Z", INK, 2, "#b4bcc8"),
+    dim_right(TOP, 21, "D", reach=X1)]
+DIAGRAMS[dg + "depth_texture.svg"] = lambda: depth_picture(
+    [(X0, TOP), (30, TOP), (36, 24), (44, TOP), (48, TOP), (53, 20), (58, TOP), (62, TOP), (68, 30), (76, TOP), (X1, TOP)],
+    bit("ball_nose", 68, 0, 30, 4.5), [(TOP, 30, "D", "right")])
+DIAGRAMS[dg + "depth_vcarve.svg"] = lambda: depth_picture(
+    started([(44, 21), (50, 36), (62, 36), (68, 21)]), bit("v_bit", 56, 0, 36, 7),
+    [(TOP, SD, "D1", "left"), (SD, 36, "D", "right")])
+DIAGRAMS[dg + "depth_vcarve_inlay.svg"] = lambda: depth_picture(
+    [(X0, TOP), (36, TOP), (44, 36), (68, 36), (76, TOP), (X1, TOP)], bit("v_bit", 56, 0, 36, 8),
+    [(TOP, 36, "D", "right")])
+DIAGRAMS[dg + "depth_prism.svg"] = lambda: depth_picture(
+    started([(40, 21), (56, 40), (72, 21)]), bit("v_bit", 56, 0, 40, 7),
+    [(TOP, SD, "D1", "left"), (SD, 40, "D", "right")])
+DIAGRAMS[dg + "depth_fluting.svg"] = lambda: depth_picture(
+    started([(42, 21), (52, 36), (64, 36), (74, 21)], 36, 80), bit("ball_nose", 58, 0, 36, 4.5),
+    [(TOP, SD, "D1", "left"), (SD, 36, "D", "right")])
+DIAGRAMS[dg + "depth_inlay.svg"] = lambda: depth_picture(
+    started([(44, 21), (44, 38), (68, 38), (68, 21)]), bit("end_mill", 52, 0, 38, 5),
+    [(TOP, SD, "D1", "left"), (SD, 38, "D", "right")])
+DIAGRAMS[dg + "depth_thread.svg"] = lambda: depth_picture(
+    started([(48, 21)] + [p for i in range(4) for p in ((48, 24 + i * 4), (45, 26 + i * 4))] + [(48, 40), (68, 40)]
+            + [p for i in range(3, -1, -1) for p in ((71, 26 + i * 4), (68, 24 + i * 4))] + [(68, 21)]),
+    rect(55, 0, 6, 32, 1, INK, 2, "#d2d7df") + path("M50,32 H66 L63,36 H53 Z", INK, 2, "#b4bcc8"),
+    [(TOP, SD, "D1", "left"), (SD, 40, "D", "right")])
+DIAGRAMS[dg + "depth_photo_vcarve.svg"] = lambda: depth_picture(
+    started([(38, 21), (41, 26), (44, 21), (48, 21), (53, 32), (58, 21), (61, 21), (68, 38), (75, 21)]),
+    bit("v_bit", 68, 0, 38, 6), [(TOP, SD, "D1", "left"), (SD, 38, "D", "right")])
+DIAGRAMS[dg + "depth_sketch.svg"] = lambda: depth_picture(
+    started([(48, 21), (56, 34), (64, 21)]), bit("v_bit", 56, 0, 34, 7),
+    [(TOP, SD, "D1", "left"), (SD, 34, "D", "right")])
+DIAGRAMS[dg + "depth_chamfer.svg"] = lambda: [
+    pl([(X0, BOT), (X0, TOP), (58, TOP), (58, 24), (74, 40), (74, BOT)], WOODD, 2, WOOD, closed=True),
+    rect(70, 0, 8, 24, 1, INK, 2, "#d2d7df"), path("M58,24 H90 L74,40 Z", INK, 2, "#b4bcc8"),
+    dim_right(TOP, 24, "D", x=99, reach=91)]
+# the drag knife in a sheet: the blade down at the cut depth D, and (dashed) lifted to the
+# swivel depth D2 to turn
+DIAGRAMS[dg + "depth_drag_knife.svg"] = lambda: [
+    rect(X0, TOP + 8, X1 - X0, 16, 0, WOODD, 2, WOOD), line(X0, TOP + 24, X1, TOP + 24, INK, 2.5),
+    rect(40, 0, 8, 12, 1, INK, 2, "#d2d7df"), path("M42,12 H46 L45,32 L42,31 Z", INK, 2, "#b4bcc8"),
+    path("M66,6 H70 L69,26 L66,25 Z", INK, 2, "none", "2 2"), arrow(76, 22, 76, 10, INK, 2, 4),
+    dim_right(TOP + 8, 32, "D", reach=48), dim_left(TOP + 8, 26, "D2", reach=66)]
+# the drag knife on its spring: the blade's tip zeroed on the surface, then pressed in by a
+# share of the spring's travel T: P while cutting, the lighter P2 (dashed) to swivel
+def spring(x, y0, y1, w=4, n=5):
+    step = (y1 - y0) / (n * 2)
+    return pl([(x + (w if i % 2 else -w) * (0 < i < n * 2), y0 + i * step) for i in range(n * 2 + 1)], INK, 2)
+
+
+DIAGRAMS[dg + "drag_knife_pressure.svg"] = lambda: [
+    rect(X0, 28, X1 - X0, 18, 0, WOODD, 2, WOOD), line(X0, 46, X1, 46, INK, 2.5),
+    rect(37, 0, 14, 22, 2, INK, 2, "#d2d7df"), spring(44, 2, 15, 4, 3), rect(40, 15, 8, 3, 0, INK, 2, "#b4bcc8"),
+    path("M42,18 H46 L45,42 L42,41 Z", INK, 2, "#b4bcc8"),
+    darrow(57, 2, 57, 15, ACC, 2, 3.5), text("T", 60, 5.5, 6, ACC, 2),
+    path("M70,14 H74 L73,36 L70,35 Z", INK, 2, "none", "2 2"),
+    dim_right(28, 42, "P", reach=46), dim_left(28, 36, "P2", reach=71)]
+# a drag knife's corners from above, with the blade's pivot and its tip O behind it. A
+# gentle corner (under A) is cut straight through; a standard one is swung round with the
+# blade in the material (green); a sharp one (over A2) is cut on past the corner by the
+# overshoot L, lifted, and started again L back along the next side
+DIAGRAMS[dg + "drag_knife_corners.svg"] = lambda: [
+    path("M2,40 L18,30 L34,24", INK, 2.5), path("M23,27.5 A6,6 0 0 0 22,33", ACC, 2), text("A", 24, 32, 6, ACC, 2),
+    circ(9, 35.6, 2.2, INK, 2), line(9, 35.6, 4.5, 38.4, ACC, 2.5), text("O", 4, 42, 6, ACC, 2),
+    path("M40,46 L56,22 L72,46", INK, 2.5), curved_arrow(56, 22, 9, 145, 35, TP, 2, 4),
+    path("M80,48 L96,16 L108,48", INK, 2.5), line(96, 16, 99.6, 8.8, ACC, 2.5), circ(99.6, 8.8, 1.8, ACC, 2),
+    line(96, 16, 98.4, 22.4, ACC, 2.5), text("L", 102, 4, 6, ACC, 2),
+    path("M92.4,23.2 A8,8 0 0 0 99,23.4", ACC, 2), text("A2", 76, 24, 6, ACC, 2)]
+
+
+def render_diagram(name):
+    body = "".join(e for e in DIAGRAMS[name]() if e)
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {DW} {DH}" width="{DW}" height="{DH}">{body}</svg>\n'
+
+
 def render(name):
     els = I[name]()
     body = "".join(e for e in els if e)
@@ -935,6 +1076,8 @@ def main():
             rel = os.path.relpath(os.path.join(root, f), here).replace(os.sep, "/")
             if f.endswith((".svg", ".bmp", ".png")):
                 wanted.add(rel[:-4] + ".svg")
+    # the measurement pictures are checked against DIAGRAMS, not the icons
+    wanted = {w for w in wanted if not w.startswith("diagrams/")}
     # credited third-party icons, pictures rendered from models (scripts/model_pictures.py), and
     # the seven drawn by scripts/draw_icons.py
     wanted -= {"file/github_link.svg", "file/thingiverse_link.svg", "import/pointing_hand.svg",
@@ -943,6 +1086,8 @@ def main():
                "toolpaths/material_setup.svg", "toolpaths/materials.svg"}
     # Interactive Rotation's turns, drawn as solids by scripts/make_3d_icons.py
     wanted -= {f"import/turn_{k}.svg" for k in ("view", "xyz", "x", "y", "z")}
+    # drawn only by scripts/make_3d_icons.py
+    wanted -= {"modeling/decorative_relief.svg"}
     missing = sorted(wanted - set(I))
     extra = sorted(set(I) - wanted)
     if missing:
@@ -952,7 +1097,12 @@ def main():
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         with open(dest, "w") as fh:
             fh.write(render(name))
-    print(f"{len(I)} icons written to {out}" + (f" ({len(extra)} new: {', '.join(extra)})" if extra else ""))
+    for name in sorted(DIAGRAMS):
+        dest = os.path.join(out, name)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "w") as fh:
+            fh.write(render_diagram(name))
+    print(f"{len(I)} icons and {len(DIAGRAMS)} measurement pictures written to {out}" + (f" ({len(extra)} new: {', '.join(extra)})" if extra else ""))
 
 
 if __name__ == "__main__":

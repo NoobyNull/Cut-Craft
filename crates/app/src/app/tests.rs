@@ -3854,6 +3854,33 @@ fn icon_set() -> std::collections::HashSet<String> {
 }
 
 #[test]
+fn every_measurement_picture_is_in_the_icon_set() {
+    fn walk(fields: &[form::Field], out: &mut Vec<String>) {
+        for f in fields {
+            out.extend(f.diagram.clone());
+            if let form::Kind::Group(inner) = &f.kind {
+                walk(inner, out);
+            }
+        }
+    }
+    let known = icon_set();
+    let mut pictures = vec![];
+    for c in commands::registry().commands() {
+        walk(&form::fields(&c.schema()), &mut pictures);
+    }
+    for p in &pictures {
+        assert!(
+            known.contains(p),
+            "{p} is not in assets/icons: run scripts/build-icons"
+        );
+    }
+    assert!(
+        pictures.len() >= 19,
+        "the toolpaths' depth pictures: {pictures:?}"
+    );
+}
+
+#[test]
 fn start_page_and_form_pictures_are_in_the_icon_set() {
     let known = icon_set();
     for (_, _, icon) in STARTUP_TASKS {

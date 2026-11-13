@@ -22,6 +22,7 @@ pub struct Params {
     /// Below the material surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_drill.png"))]
     pub depth: f64,
     /// The feed, plunge rate, spindle speed and pass depth the bank's drills run at; the
     /// holes' sizes come from the drills themselves

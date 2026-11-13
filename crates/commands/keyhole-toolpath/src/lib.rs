@@ -35,6 +35,7 @@ pub struct Params {
     /// Deep enough that the cutter's wide part is below the surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_keyhole.png"))]
     pub slot_depth: f64,
     /// How far the slot runs from the entry hole
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

@@ -176,10 +176,12 @@ pub struct Params {
     /// Below the material surface where the thread starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_thread.png"))]
     pub start_depth: f64,
     /// Deepest the bottom of the tool goes below the start depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
+    #[schemars(extend("x-dim" = "D"))]
     pub max_depth: f64,
     /// A standard thread's pitch, else the pitch typed below
     #[serde(default)]
