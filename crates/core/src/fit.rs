@@ -24,9 +24,6 @@ pub enum FitError {
     NoShape,
     /// The margin leaves no room inside the shape.
     MarginTooBig,
-    /// The shape curls back on itself (a C or U): seen from its middle, some of its edge
-    /// hides behind another part, so a drawing cannot be bent to follow it.
-    CannotMorph,
 }
 
 impl std::fmt::Display for FitError {
@@ -35,7 +32,6 @@ impl std::fmt::Display for FitError {
             Self::NoDrawing => "the drawing has nothing in it to fit",
             Self::NoShape => "the chosen shape is not a closed shape: pick a circle, rectangle or other closed vector",
             Self::MarginTooBig => "the margin leaves no room inside the shape: make it smaller",
-            Self::CannotMorph => "this shape curls back on itself, so the drawing cannot be bent to follow it: use Scale to fit or Stretch instead",
         })
     }
 }
@@ -308,20 +304,23 @@ impl Morph {
         if shape.len() < 3 || crate::geometry::winding(shape).abs() <= 0.0 {
             return Err(FitError::NoShape);
         }
-        let centre = centroid(shape);
-        if !inside(&[shape.to_vec()], centre) {
-            return Err(FitError::CannotMorph);
-        }
+        // the balance point, or for a shape it lies outside of (a C or U) the point deepest
+        // inside it
+        let rings = [shape.to_vec()];
+        let centre = Some(centroid(shape))
+            .filter(|&c| inside(&rings, c))
+            .unwrap_or_else(|| deepest(shape));
         let margin = margin.max(0.0);
         let mut reach = Vec::with_capacity(RAYS);
         for k in 0..RAYS {
             #[expect(clippy::cast_precision_loss, reason = "a ray's number")]
             let dir = DVec2::from_angle(std::f64::consts::TAU * k as f64 / RAYS as f64);
-            let hits = ray_hits(shape, centre, dir);
-            // one crossing each way, or the edge hides behind itself
-            let [hit] = hits[..] else {
-                return Err(FitError::CannotMorph);
-            };
+            // the nearest edge that way: where a shape curls back on itself (a C or U), the
+            // part hidden behind it is left out, and the user sees how it bends
+            let hit = ray_hits(shape, centre, dir)
+                .first()
+                .copied()
+                .ok_or(FitError::NoShape)?;
             let r = hit - margin;
             if r <= 0.0 {
                 return Err(FitError::MarginTooBig);
@@ -401,6 +400,40 @@ impl Morph {
         }
         out
     }
+}
+
+/// Places tried across a shape's box, each way, for the point deepest inside it.
+const DEEPEST_GRID: usize = 40;
+
+/// The point of a grid over the ring's box that is inside it and furthest from its edge.
+fn deepest(ring: &[Point]) -> Point {
+    let area = ring
+        .iter()
+        .map(|&p| Rect::point(p))
+        .reduce(Rect::union)
+        .unwrap_or(Rect::point(Point::ZERO));
+    let rings = [ring.to_vec()];
+    let closed: Vec<Point> = ring.iter().copied().chain(ring.first().copied()).collect();
+    let middle = centroid(ring);
+    #[expect(clippy::cast_precision_loss, reason = "a small grid")]
+    let step = area.size().max_element() / DEEPEST_GRID as f64 / 4.0;
+    (0..=DEEPEST_GRID)
+        .flat_map(|i| (0..=DEEPEST_GRID).map(move |j| (i, j)))
+        .map(|(i, j)| {
+            #[expect(clippy::cast_precision_loss, reason = "a small grid")]
+            let t = DVec2::new(i as f64, j as f64) / DEEPEST_GRID as f64;
+            area.min + area.size() * t
+        })
+        .filter(|&p| inside(&rings, p))
+        .map(|p| (polyline_distance(&closed, p), p))
+        // deepest first; of equally deep points, the one nearest the balance point
+        .max_by(|(da, a), (db, b)| {
+            let near = |p: &Point| -p.distance(middle);
+            ((da / step).round())
+                .total_cmp(&(db / step).round())
+                .then(near(a).total_cmp(&near(b)))
+        })
+        .map_or(ring[0], |(_, p)| p)
 }
 
 /// The ring's area centre (its balance point), or its first point if it has no area.
@@ -655,8 +688,9 @@ mod tests {
     }
 
     #[test]
-    fn a_shape_that_curls_back_cannot_be_morphed_into() {
-        // a C: from its middle the inner edge hides the outer one
+    fn a_shape_that_curls_back_is_still_morphed_into_from_inside_it() {
+        // a C: its balance point is in the gap, so the bend starts from inside the C's back,
+        // and goes as far as the nearest edge each way
         let shape = vec![
             Point::new(0.0, 0.0),
             Point::new(100.0, 0.0),
@@ -668,9 +702,20 @@ mod tests {
             Point::new(0.0, 100.0),
         ];
         let box_ = Rect::new(Point::ZERO, Point::new(10.0, 10.0));
-        assert_eq!(
-            Morph::new(box_, &shape, 0.0).err(),
-            Some(FitError::CannotMorph)
-        );
+        let m = Morph::new(box_, &shape, 0.0).expect("morphed, not refused");
+        // the drawing's box edge lands on the C's edge; how the inside bends, the user sees
+        let mut closed = shape.clone();
+        closed.push(shape[0]);
+        for p in [
+            Point::new(0.0, 5.0),
+            Point::new(10.0, 3.0),
+            Point::new(4.0, 10.0),
+        ] {
+            let q = m.point(p);
+            assert!(
+                polyline_distance(&closed, q) < 0.01,
+                "{q} is on the C's edge"
+            );
+        }
     }
 }
