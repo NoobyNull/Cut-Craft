@@ -109,8 +109,7 @@ impl Command for CopyAlongVectors {
         let object = picked
             .first()
             .filter(|_| !circles)
-            .map(|&first| doc.group_members(first))
-            .unwrap_or_default();
+            .map_or_default(|&first| doc.group_members(first));
         let paths: Vec<EntityId> = picked
             .iter()
             .copied()

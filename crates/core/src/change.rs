@@ -1562,7 +1562,7 @@ impl ChangeBuilder<'_> {
         let (bottom, other) = self.side.clone();
         left.bottom = bottom;
         left.other_side = (!other.is_empty()).then(|| Box::new(other));
-        let other = arriving.other_side.take().map(|o| *o).unwrap_or_default();
+        let other = arriving.other_side.take().map_or_default(|o| *o);
         self.set_side(arriving.bottom, other);
         sheets[active].objects = left;
         sheets[active].job = self.job;

@@ -861,6 +861,47 @@ fn sketch_carving_shows_the_areas_it_would_carve_while_its_form_is_open() {
 }
 
 #[test]
+fn vcarve_shades_the_area_it_would_carve_while_its_form_is_open() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    h.app.invoke(&h.ctx, "vcarve_engrave_toolpath");
+    h.frame(vec![]);
+    let area = |h: &Harness| -> f64 {
+        let found = h.app.carve_area.as_ref().expect("found");
+        found
+            .triangles
+            .iter()
+            .map(|[a, b, c]| ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.0)
+            .sum()
+    };
+    let fill = area(&h);
+    assert!(
+        (fill - 200.0).abs() < 1e-6,
+        "Fill shades the whole shape: {fill}"
+    );
+    // Outside: a band beside the edge, outside the rectangle
+    h.app.form.as_mut().expect("open").params["place"] = "outside".into();
+    h.frame(vec![]);
+    let outside = area(&h);
+    assert!(outside > 0.0 && (outside - fill).abs() > 1.0, "{outside}");
+    assert!(
+        h.app
+            .carve_area
+            .as_ref()
+            .expect("found")
+            .triangles
+            .iter()
+            .flatten()
+            .any(|p| p.x < 10.0),
+        "outside the edge"
+    );
+    h.app.form = None;
+    h.frame(vec![]);
+    assert!(h.app.carve_area.is_none(), "gone with the form");
+}
+
+#[test]
 fn trace_bitmap_takes_its_area_and_colours_from_the_2d_view() {
     use cut_craft_core::bitmap::Bitmap;
     use cut_craft_core::geometry::{Point, Rect};

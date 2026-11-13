@@ -252,6 +252,8 @@ const MODELING_PLANE_MARGIN: f64 = 0.1;
 const MODELING_PLANE_ALPHA: f32 = 0.35;
 /// How strongly Sketch Carving's green shows the areas it would carve over the picture.
 const SKETCH_AREA_ALPHA: f32 = 0.45;
+/// How strongly V-Carve's area to carve is shaded over the vectors.
+const CARVE_AREA_ALPHA: f32 = 0.35;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 const RING_SHARE: f64 = 0.6;
 
@@ -951,6 +953,15 @@ struct SketchAreas {
     areas: Vec<cut_craft_core::geometry::Rect>,
 }
 
+/// See [`CutCraftApp::carve_area`].
+struct CarveArea {
+    params: serde_json::Value,
+    revision: u64,
+    selection: cut_craft_core::selection::Selection,
+    /// The area V-Carve would carve, cut into triangles to fill on the 2D view.
+    triangles: Vec<[cut_craft_core::geometry::Point; 3]>,
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "the windows and modes it shows"
@@ -1102,6 +1113,9 @@ struct CutCraftApp {
     /// Sketch Carving's green areas, with the form settings, revision and selection they
     /// were found for.
     sketch_areas: Option<SketchAreas>,
+    /// V-Carve's shaded area while its form is open, with the form settings, revision and
+    /// selection it was found for.
+    carve_area: Option<CarveArea>,
     /// The open form's reach line's measured shapes, kept while nothing they depend on changes.
     reach_found: Option<reach::ReachFound>,
     /// Toolpath Summary's settings.

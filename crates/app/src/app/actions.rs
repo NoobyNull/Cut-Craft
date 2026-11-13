@@ -25,9 +25,8 @@ impl CutCraftApp {
     pub(super) fn new() -> Self {
         let mut registry = commands::registry();
         let my_gadgets = crate::gadgets::my_gadgets_dir();
-        let addon_gadgets = crate::depth::addons_dir()
-            .map(|dir| crate::gadgets::from_addons(&dir))
-            .unwrap_or_default();
+        let addon_gadgets =
+            crate::depth::addons_dir().map_or_default(|dir| crate::gadgets::from_addons(&dir));
         let gadgets = crate::gadgets::load(&mut registry, my_gadgets.as_deref(), &addon_gadgets);
         let mut menus = gui::MenuSystem::new();
         menus.add_gadgets(&gadgets, my_gadgets.as_deref());
@@ -138,6 +137,7 @@ impl CutCraftApp {
             info: None,
             help_cache: egui_commonmark::CommonMarkCache::default(),
             sketch_areas: None,
+            carve_area: None,
             reach_found: None,
             summary: super::Summary::default(),
             stroke: Vec::new(),
@@ -1092,8 +1092,7 @@ impl CutCraftApp {
         let zones: Vec<_> = self
             .machines
             .active()
-            .map(|m| m.keep_out.as_slice())
-            .unwrap_or_default()
+            .map_or_default(|m| m.keep_out.as_slice())
             .iter()
             .enumerate()
             .filter(|(_, z)| z.width > 0.0 && z.height > 0.0)
@@ -1617,29 +1616,25 @@ impl CutCraftApp {
     /// What the active machine can do, for the checks before cutting; nothing is checked
     /// against a machine without one.
     pub(super) fn limits(&self) -> cut_craft_core::preflight::Limits {
-        let mut limits = self
-            .machines
-            .active()
-            .map(|m| cut_craft_core::preflight::Limits {
-                name: m.name.clone(),
-                bed: [m.width, m.height],
-                z_travel: m.depth,
-                max_rate: m.max_rate,
-                spindle: m.spindle,
-                slots: m.slots.clone(),
-                left: None,
-            })
-            .unwrap_or_default();
+        let mut limits =
+            self.machines
+                .active()
+                .map_or_default(|m| cut_craft_core::preflight::Limits {
+                    name: m.name.clone(),
+                    bed: [m.width, m.height],
+                    z_travel: m.depth,
+                    max_rate: m.max_rate,
+                    spindle: m.spindle,
+                    slots: m.slots.clone(),
+                    left: None,
+                });
         limits.left = Some(self.options.confirmations.left());
         limits
     }
 
     /// The active machine's tool changer slots (empty without one), for `[T]`.
     pub(super) fn slots(&self) -> Vec<Option<String>> {
-        self.machines
-            .active()
-            .map(|m| m.slots.clone())
-            .unwrap_or_default()
+        self.machines.active().map_or_default(|m| m.slots.clone())
     }
 
     /// Reads the machines and finds the custom posts, kept in the config folder.
@@ -1656,11 +1651,7 @@ impl CutCraftApp {
     /// and each tool now in a slot takes the slot as its tool number.
     pub(super) fn tool_changer_changed(&mut self) {
         self.machines_changed("Tool changer changed");
-        let slots = self
-            .machines
-            .active()
-            .map(|m| m.slots.clone())
-            .unwrap_or_default();
+        let slots = self.machines.active().map_or_default(|m| m.slots.clone());
         if self.tools.number_by_slots(&slots) {
             self.tools_changed("Tool changer changed; tools numbered by their slots");
             self.refresh_form_tool();
@@ -2885,8 +2876,7 @@ impl CutCraftApp {
             .path
             .as_deref()
             .and_then(std::path::Path::file_stem)
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .map_or_default(|s| s.to_string_lossy().into_owned());
         let path = std::env::temp_dir().join("cut-craft-part-labels.html");
         let opened = fmt_part_labels::labels(&self.doc, &self.options.part_labels, &job)
             .map_err(|e| e.to_string())
@@ -2940,8 +2930,7 @@ impl CutCraftApp {
             .path
             .as_deref()
             .filter(|p| p.is_file())
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
+            .map_or_default(|p| p.display().to_string());
         let job_copy = match (&self.recovery_path, job_file.is_empty()) {
             (Some(path), true) => {
                 cut_craft_core::file::write_atomic(path, &cut_craft_core::file::save_job(&self.doc))
@@ -2953,13 +2942,13 @@ impl CutCraftApp {
         fmt_create_job_sheet::Setup {
             job_file,
             job_copy,
-            machine: machine.map(|m| m.name.clone()).unwrap_or_default(),
+            machine: machine.map_or_default(|m| m.name.clone()),
             post: machine
                 .and_then(|m| m.post())
                 .unwrap_or_default()
                 .to_owned(),
             outputs: vec![],
-            slots: machine.map(|m| m.slots.clone()).unwrap_or_default(),
+            slots: machine.map_or_default(|m| m.slots.clone()),
             printed: chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
             rapid: self.summary.rapid,
             acceleration: machine

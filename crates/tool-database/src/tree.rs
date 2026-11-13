@@ -224,7 +224,7 @@ pub fn copy_to_mine(db: &mut ToolDatabase, i: usize) -> usize {
     }
     if tool.manufacturer.trim().is_empty() {
         let catalogue = db.catalogues.iter().find(|c| within(&tool.group, c));
-        tool.manufacturer = catalogue.map(|c| leaf(c).to_owned()).unwrap_or_default();
+        tool.manufacturer = catalogue.map_or_default(|c| leaf(c).to_owned());
     }
     tool.group = tool.own_group();
     tool.number = 0;

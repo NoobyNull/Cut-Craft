@@ -180,8 +180,7 @@ impl CutCraftApp {
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
             .extension()
-            .map(|e| e.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string_lossy().to_lowercase());
         let job = [
             JOB_EXTENSION,
             OLD_JOB_EXTENSION,
@@ -846,8 +845,7 @@ impl CutCraftApp {
         self.registry
             .get("draw_text")
             .and_then(|cmd| cmd.run_json(&self.doc, &value).ok())
-            .map(|change| change.added().cloned().collect())
-            .unwrap_or_default()
+            .map_or_default(|change| change.added().cloned().collect())
     }
 
     /// The text settings `p` into Draw Text's form, and the text made again with them.
@@ -1439,11 +1437,65 @@ impl CutCraftApp {
     }
 
     /// What open forms mark in the 2D view: Draw Text's arc handles, Sketch Carving's areas,
-    /// Trace Bitmap's area.
+    /// V-Carve's area to carve, Trace Bitmap's area.
     fn paint_form_marks(&mut self, ui: &egui::Ui, canvas: &Canvas) {
         self.paint_arc_handles(ui, canvas);
         self.paint_sketch_areas(ui, canvas);
+        self.paint_carve_area(ui, canvas);
         self.paint_trace_area(ui, canvas);
+    }
+
+    /// While V-Carve's form is open, the area it would carve shaded over the vectors: the
+    /// shapes for Fill (every other band of nested loops), the groove beside the edge for
+    /// Inside and Outside, along the lines for On the Line. Found again only when the
+    /// settings, the job or the selection change.
+    fn paint_carve_area(&mut self, ui: &egui::Ui, canvas: &Canvas) {
+        let Some(form) = self
+            .form
+            .as_ref()
+            .filter(|f| f.id == "vcarve_engrave_toolpath")
+        else {
+            self.carve_area = None;
+            return;
+        };
+        let fresh = self.carve_area.as_ref().is_some_and(|c| {
+            c.params == form.params
+                && c.revision == self.history.revision()
+                && c.selection == self.doc.selection
+        });
+        if !fresh {
+            let triangles = serde_json::from_value(form.params.clone())
+                .ok()
+                .map_or_default(|p| {
+                    let (_, paths) = self.doc.selected_paths(|_| true);
+                    cut_craft_core::medial::triangles(&cmd_vcarve_engrave_toolpath::carved_area(
+                        &paths, &p,
+                    ))
+                });
+            self.carve_area = Some(super::CarveArea {
+                params: form.params.clone(),
+                revision: self.history.revision(),
+                selection: self.doc.selection.clone(),
+                triangles,
+            });
+        }
+        let Some(area) = &self.carve_area else {
+            return;
+        };
+        let colour = ui
+            .visuals()
+            .selection
+            .bg_fill
+            .gamma_multiply(super::CARVE_AREA_ALPHA);
+        let mut mesh = egui::Mesh::default();
+        for t in &area.triangles {
+            let base = u32::try_from(mesh.vertices.len()).unwrap_or(u32::MAX);
+            for &p in t {
+                mesh.colored_vertex(canvas.transform.to_screen(p), colour);
+            }
+            mesh.add_triangle(base, base + 1, base + 2);
+        }
+        ui.painter_at(canvas.area).add(mesh);
     }
 
     /// While Job Setup is open a red square marks the datum, as in Aspire.
@@ -2652,8 +2704,7 @@ impl CutCraftApp {
                     let cmd = self.registry.get("move_nodes")?;
                     cmd.run_json(&self.doc, &params).ok()
                 })
-                .map(|change| change.added().cloned().collect())
-                .unwrap_or_default(),
+                .map_or_default(|change| change.added().cloned().collect()),
             Some(Gesture::Dragging(drag)) => self
                 .node_target(drag.start, reach)
                 .and_then(|t| {
@@ -2798,8 +2849,7 @@ impl CutCraftApp {
         let mut paths: Vec<Path> = cmd
             .drag_params(form.way.apply(drag), &self.with_stroke(id, &form.params))
             .and_then(|params| cmd.run_json(&self.doc, &params))
-            .map(|change| change.added().cloned().collect())
-            .unwrap_or_default();
+            .map_or_default(|change| change.added().cloned().collect());
         // Freehand's stabilizing circle, round the path's end: the pointer pulls from its edge
         if id == "draw_freehand"
             && let Some(radius) = form.params["stabilize"].as_f64().filter(|r| *r > 0.0)
@@ -3431,8 +3481,7 @@ impl CutCraftApp {
         {
             let ext = path
                 .extension()
-                .map(|e| e.to_string_lossy().into_owned())
-                .unwrap_or_default();
+                .map_or_default(|e| e.to_string_lossy().into_owned());
             match std::fs::read(&path)
                 .map_err(|e| e.to_string())
                 .and_then(|bytes| fmt_create_job_sheet::logo(&bytes, &ext))
