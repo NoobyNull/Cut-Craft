@@ -5,7 +5,7 @@
 use cut_craft_core::document::{Document, Job, Units as JobUnits};
 use cut_craft_core::geometry::{Path, Point, Rect, Segment, polar};
 use cut_craft_core::glam::{DAffine2, DVec2};
-use cut_craft_core::{Change, CommandError, FileFormat, Importer};
+use cut_craft_core::{Change, CommandError, FileFormat, Importer, UnitGuess};
 use dxf::entities::{Ellipse, EntityType, Spline};
 use dxf::enums::Units;
 use std::f64::consts::TAU;
@@ -44,69 +44,67 @@ impl Importer for ImportDxf {
             .map(Path::bounds)
             .reduce(Rect::union)
             .map_or(DVec2::ZERO, Rect::size);
-        let (scale, units_note) = scale(drawing.header.default_drawing_units, size, &doc.job);
+        let (scale, unit_guess) = scale(drawing.header.default_drawing_units, size, &doc.job);
         let to_mm = DAffine2::from_scale(DVec2::splat(scale));
         let paths = paths
             .into_iter()
             .map(|p| p.transformed(&to_mm).closed_where_ends_meet())
             .collect();
         let mut change = Change::swap(doc, [], paths);
-        change.notes.extend(units_note);
+        change.unit_guess = unit_guess;
         change.notes.extend(left_out.note());
         Ok(change)
     }
 }
 
-/// Millimetres per drawing unit, and what was assumed if the DXF does not say its units (an
+/// Millimetres per drawing unit, and the guess made if the DXF does not say its units (an
 /// R12 file never does): the job's units, unless the drawing would then be too small to see
 /// or too big for the material and the other units would fit, so a 6 inch drawing does not
-/// come into a millimetre job as a 6 mm speck (re/SPEC.md, Import).
-fn scale(units: Units, size: DVec2, job: &Job) -> (f64, Option<String>) {
+/// come into a millimetre job as a 6 mm speck (re/SPEC.md, Import). The person is asked
+/// which units it is in, the guess picked.
+fn scale(units: Units, size: DVec2, job: &Job) -> (f64, Option<UnitGuess>) {
     if units != Units::Unitless {
         return (mm_per_unit(units), None);
     }
     let theirs = job.units;
-    let other = match theirs {
+    let other = other_units(theirs);
+    let taken = match (fit(size, theirs, job), fit(size, other, job)) {
+        (Fit::TooSmall | Fit::TooBig, Fit::Fits) => other,
+        _ => theirs,
+    };
+    (taken.per(), Some(UnitGuess { taken, size }))
+}
+
+/// Inches for millimetres and millimetres for inches.
+pub fn other_units(units: JobUnits) -> JobUnits {
+    match units {
         JobUnits::Mm => JobUnits::Inch,
         JobUnits::Inch => JobUnits::Mm,
-    };
-    let fits = |u: JobUnits| {
-        let (long, short) = (size.max_element() * u.per(), size.min_element() * u.per());
-        long <= job.width.max(job.height) + 1e-9 && short <= job.width.min(job.height) + 1e-9
-    };
-    let too_small = |u: JobUnits| size.max_element() * u.per() < job.width.min(job.height) / 50.0;
-    let name = |u: JobUnits| match u {
-        JobUnits::Mm => "millimetres",
-        JobUnits::Inch => "inches",
-    };
-    let (chosen, why) = if too_small(theirs) && fits(other) {
-        (other, Some("too small to see"))
-    } else if !fits(theirs) && fits(other) && !too_small(other) {
-        (other, Some("too big for the material"))
-    } else {
-        (theirs, None)
-    };
-    let shown = |mm: f64| theirs.length(mm, 1);
-    let (w, h) = (size.x * chosen.per(), size.y * chosen.per());
-    let read = match why {
-        None => format!(
-            "This DXF doesn't say what units it was drawn in, so it was read in the job's units, {}",
-            name(theirs)
-        ),
-        Some(why) => format!(
-            "This DXF doesn't say what units it was drawn in. In {}, the job's units, it would \
-             be {why}, so it was read in {}",
-            name(theirs),
-            name(chosen)
-        ),
-    };
-    let note = format!(
-        "{read}: it is {} by {}. If that is the wrong size, it is still selected: use Set Size \
-         to change it.",
-        shown(w),
-        shown(h)
+    }
+}
+
+/// How a drawing `size` units across sits on the job's material if its units are `units`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fit {
+    Fits,
+    /// Its longest side under a fiftieth of the material's shorter side.
+    TooSmall,
+    TooBig,
+}
+
+pub fn fit(size: DVec2, units: JobUnits, job: &Job) -> Fit {
+    let (long, short) = (
+        size.max_element() * units.per(),
+        size.min_element() * units.per(),
     );
-    (chosen.per(), Some(note))
+    let (wide, narrow) = (job.width.max(job.height), job.width.min(job.height));
+    if long < narrow / 50.0 {
+        Fit::TooSmall
+    } else if long > wide + 1e-9 || short > narrow + 1e-9 {
+        Fit::TooBig
+    } else {
+        Fit::Fits
+    }
 }
 
 /// Millimetres per drawing unit; unitless drawings are taken to be millimetres.
@@ -682,10 +680,11 @@ mod tests {
         doc
     }
 
-    /// The size of everything the import brings into `doc`, and its notes.
-    fn imported(doc: &Document, bytes: &[u8]) -> (DVec2, Vec<String>) {
+    /// The size of everything the import brings into `doc`, its notes, and the units it
+    /// guessed the drawing is in if the file doesn't say.
+    fn imported(doc: &Document, bytes: &[u8]) -> (DVec2, Vec<String>, Option<UnitGuess>) {
         let change = ImportDxf::import(doc, bytes).unwrap();
-        let notes = change.notes.clone();
+        let (notes, guess) = (change.notes.clone(), change.unit_guess);
         let mut doc = doc.clone();
         doc.apply(&change).unwrap();
         let bounds = doc
@@ -694,25 +693,27 @@ mod tests {
             .map(Path::bounds)
             .reduce(Rect::union)
             .unwrap();
-        (bounds.size(), notes)
+        (bounds.size(), notes, guess)
+    }
+
+    fn guessed(taken: JobUnits, size: f64) -> UnitGuess {
+        UnitGuess {
+            taken,
+            size: DVec2::splat(size),
+        }
     }
 
     #[test]
-    fn a_drawing_without_units_is_read_in_the_job_s_units() {
+    fn a_drawing_without_units_is_read_in_the_job_s_units_and_the_guess_kept_to_ask() {
         let bytes = unitless(AcadVersion::R12, square(6.0));
-        let (size, notes) = imported(&job(JobUnits::Inch, 610.0, 610.0), &bytes);
+        let (size, notes, guess) = imported(&job(JobUnits::Inch, 610.0, 610.0), &bytes);
         assert!((size.x - 152.4).abs() < 1e-9, "{size:?}");
-        assert_eq!(
-            notes,
-            [
-                "This DXF doesn't say what units it was drawn in, so it was read in the job's \
-              units, inches: it is 6.000 in by 6.000 in. If that is the wrong size, it is \
-              still selected: use Set Size to change it."
-            ]
-        );
+        assert_eq!(guess, Some(guessed(JobUnits::Inch, 6.0)));
+        assert!(notes.is_empty(), "the person is asked instead: {notes:?}");
         let bytes = unitless(AcadVersion::R12, square(100.0));
-        let (size, _) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
+        let (size, _, guess) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
         assert!((size.x - 100.0).abs() < 1e-9, "{size:?}");
+        assert_eq!(guess, Some(guessed(JobUnits::Mm, 100.0)));
     }
 
     #[test]
@@ -720,43 +721,52 @@ mod tests {
         // the 6 inch Aztec calendar saved as an R12 DXF, brought into a millimetre job:
         // 6 mm would be a speck on the material
         let bytes = unitless(AcadVersion::R12, square(6.0));
-        let (size, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
+        let (size, _, guess) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
         assert!((size.x - 152.4).abs() < 1e-9, "{size:?}");
-        assert_eq!(
-            notes,
-            [
-                "This DXF doesn't say what units it was drawn in. In millimetres, the job's \
-              units, it would be too small to see, so it was read in inches: it is 152.4 mm \
-              by 152.4 mm. If that is the wrong size, it is still selected: use Set Size to \
-              change it."
-            ]
-        );
+        assert_eq!(guess, Some(guessed(JobUnits::Inch, 6.0)));
         // a small part that is still a sensible size in millimetres stays in millimetres
         let bytes = unitless(AcadVersion::R12, square(20.0));
-        let (size, _) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
+        let (size, _, _) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
         assert!((size.x - 20.0).abs() < 1e-9, "{size:?}");
     }
 
     #[test]
     fn a_drawing_without_units_too_big_for_the_material_in_inches_is_read_in_millimetres() {
         let bytes = unitless(AcadVersion::R12, square(300.0));
-        let (size, notes) = imported(&job(JobUnits::Inch, 610.0, 610.0), &bytes);
+        let (size, _, guess) = imported(&job(JobUnits::Inch, 610.0, 610.0), &bytes);
         assert!((size.x - 300.0).abs() < 1e-9, "{size:?}");
-        assert!(notes[0].contains("too big for the material"), "{notes:?}");
-        // too big either way: the job's units, as said
+        assert_eq!(guess, Some(guessed(JobUnits::Mm, 300.0)));
+        // too big either way: the job's units
         let bytes = unitless(AcadVersion::R12, square(3000.0));
-        let (size, _) = imported(&job(JobUnits::Inch, 610.0, 610.0), &bytes);
+        let (size, _, _) = imported(&job(JobUnits::Inch, 610.0, 610.0), &bytes);
         assert!((size.x - 3000.0 * 25.4).abs() < 1e-6, "{size:?}");
     }
 
     #[test]
+    fn how_a_size_fits_the_material() {
+        let doc = job(JobUnits::Mm, 600.0, 400.0);
+        let six = DVec2::splat(6.0);
+        assert_eq!(fit(six, JobUnits::Mm, &doc.job), Fit::TooSmall);
+        assert_eq!(fit(six, JobUnits::Inch, &doc.job), Fit::Fits);
+        assert_eq!(
+            fit(DVec2::new(500.0, 100.0), JobUnits::Mm, &doc.job),
+            Fit::Fits
+        );
+        assert_eq!(
+            fit(DVec2::new(500.0, 450.0), JobUnits::Mm, &doc.job),
+            Fit::TooBig
+        );
+    }
+
+    #[test]
     fn a_drawing_with_units_is_never_guessed_at() {
-        let (size, notes) = imported(
+        let (size, notes, guess) = imported(
             &job(JobUnits::Inch, 610.0, 610.0),
             &dxf(Units::Millimeters, square(6.0)),
         );
         assert!((size.x - 6.0).abs() < 1e-9, "{size:?}");
         assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(guess, None);
     }
 
     /// An R12 file as CAD programs write them: CRLF lines, a POLYLINE's points as VERTEXes ended by SEQEND, no
@@ -765,7 +775,7 @@ mod tests {
 
     #[test]
     fn r12_polylines_come_in_closed_at_their_size() {
-        let (size, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes());
+        let (size, notes, _) = imported(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes());
         assert!((size.x - 152.4).abs() < 1e-9, "{size:?}");
         let change =
             ImportDxf::import(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes()).unwrap();
@@ -773,14 +783,14 @@ mod tests {
         doc.apply(&change).unwrap();
         assert_eq!(doc.vectors.len(), 1);
         assert!(doc.vectors.values().all(|p| p.closed));
-        assert!(notes.len() == 2, "{notes:?}");
+        assert!(notes.len() == 1, "{notes:?}");
     }
 
     #[test]
     fn what_is_left_out_is_said_in_plain_words() {
-        let (_, notes) = imported(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes());
+        let (_, notes, _) = imported(&job(JobUnits::Mm, 600.0, 400.0), PLAIN_R12.as_bytes());
         assert_eq!(
-            notes[1],
+            notes[0],
             "Left out 1 hatch fill and 2 texts: only the lines and curves of a DXF come in. \
              To bring text in, turn it into curves in the program that made the DXF."
         );
@@ -803,7 +813,7 @@ mod tests {
         doc.apply(&change).unwrap();
         assert_eq!(doc.vectors.len(), 2980);
         assert!(doc.vectors.values().all(|p| p.closed));
-        let (size, _) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
+        let (size, _, _) = imported(&job(JobUnits::Mm, 600.0, 400.0), &bytes);
         assert!((size - DVec2::splat(152.4)).length() < 1e-6, "{size:?}");
     }
 

@@ -100,6 +100,7 @@ impl CutCraftApp {
             tool_manager: None,
             picking: None,
             deep_cut: None,
+            units_ask: None,
             shots: None,
             space_mouse: None,
             unsigned_gadgets: gadgets
@@ -2901,6 +2902,7 @@ impl CutCraftApp {
         let change = Change {
             edits: taken.edits.into_iter().chain(made.edits).collect(),
             notes: made.notes,
+            unit_guess: made.unit_guess,
         };
         let change = self.onto_import_level(id, change);
         let (toolpaths, notes) = (change.toolpaths_made(), change.notes.clone());

@@ -27,6 +27,7 @@ mod tabs;
 mod tests;
 mod title_bar;
 mod trace_window;
+mod units_ask;
 mod updates;
 mod views;
 
@@ -1082,6 +1083,8 @@ struct CutCraftApp {
     picking: Option<PickFor>,
     /// A Calculate waiting on the deeper-than-the-material warning.
     deep_cut: Option<depth::DeepCut>,
+    /// An import waiting on which units its drawing is in.
+    units_ask: Option<units_ask::UnitsAsk>,
     /// Right-click ▸ Report a Bug Here…
     reporter: cut_craft_bug_report::Reporter,
     /// Help ▸ Check for Updates, and the check at startup.
