@@ -36,6 +36,7 @@ use crate::pages::{Page, Pages, Shown};
 use crate::view2d::{self, Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::{Document, EntityId, LayerId, Units};
 use cut_craft_core::file::{JOB_EXTENSION, OLD_JOB_EXTENSION};
 use cut_craft_core::geometry::{Path, Point, Rect};
@@ -2367,7 +2368,7 @@ fn rest_section(
                     ui.label("Minimum detail")
                         .on_hover_hint("Leave alone unmachined areas narrower than this");
                     ui.add(
-                        egui::DragValue::new(&mut rest.minimum_detail)
+                        Number::new(&mut rest.minimum_detail)
                             .suffix(" mm")
                             .range(0.0..=f64::INFINITY),
                     );
@@ -2375,7 +2376,7 @@ fn rest_section(
                     ui.label("Overlap")
                         .on_hover_hint("Grow each unmachined area by this");
                     ui.add(
-                        egui::DragValue::new(&mut rest.overlap)
+                        Number::new(&mut rest.overlap)
                             .suffix(" mm")
                             .range(0.0..=f64::INFINITY),
                     );

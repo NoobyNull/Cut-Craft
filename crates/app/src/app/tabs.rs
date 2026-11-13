@@ -5,6 +5,7 @@
 use super::CutCraftApp;
 use crate::form;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::entry::{Entry, TabPlacement, TabSettings, TabSpacing, Tabs, spread_tabs};
 use cut_craft_core::toolpath::Tool;
@@ -302,7 +303,7 @@ fn settings(
     egui::Grid::new("tab_spread").num_columns(2).show(ui, |ui| {
         ui.radio_value(&mut tab.spacing, TabSpacing::ConstantNumber, "Number")
             .on_hover_hint("This many on every shape, spread along it");
-        ui.add(egui::DragValue::new(&mut tab.number).range(1..=100));
+        ui.add(Number::new(&mut tab.number).range(1..=100));
         ui.end_row();
         ui.radio_value(
             &mut tab.spacing,
@@ -314,10 +315,10 @@ fn settings(
         ui.end_row();
         if tab.spacing == TabSpacing::ConstantDistance {
             ui.label("    At least");
-            ui.add(egui::DragValue::new(&mut tab.minimum).range(1..=tab.maximum.max(1)));
+            ui.add(Number::new(&mut tab.minimum).range(1..=tab.maximum.max(1)));
             ui.end_row();
             ui.label("    At most");
-            ui.add(egui::DragValue::new(&mut tab.maximum).range(tab.minimum.max(1)..=1000));
+            ui.add(Number::new(&mut tab.maximum).range(tab.minimum.max(1)..=1000));
             ui.end_row();
         }
     });
@@ -351,7 +352,7 @@ pub(super) fn length(ui: &mut egui::Ui, mm: &mut f64, units: Units) {
     let mut value = *mm / per;
     if ui
         .add(
-            egui::DragValue::new(&mut value)
+            Number::new(&mut value)
                 .range(0.0..=f64::MAX)
                 .speed(0.1 / per)
                 .suffix(format!(" {unit}")),

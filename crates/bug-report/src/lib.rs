@@ -14,6 +14,7 @@
 mod github;
 pub mod hint;
 pub mod logs;
+pub mod number;
 pub mod privacy;
 pub mod relay;
 mod spot;

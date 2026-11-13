@@ -4,6 +4,7 @@
 
 use crate::tree;
 use cut_craft_bug_report::hint::HoverHint;
+use cut_craft_bug_report::number::Number;
 use cut_craft_core::document::Units;
 use cut_craft_core::toolpath::{CATALOGUES, CuttingData, RateUnits, Tool, ToolDatabase, ToolShape};
 use eframe::egui;
@@ -971,7 +972,7 @@ fn number(ui: &mut egui::Ui, value: &mut f64, per: f64, unit: &str) -> bool {
     let speed = (shown.abs() / 100.0).max(f64::EPSILON);
     let changed = ui
         .add(
-            egui::DragValue::new(&mut shown)
+            Number::new(&mut shown)
                 .speed(speed)
                 .range(0.0..=f64::MAX)
                 .max_decimals(4)
@@ -1216,12 +1217,12 @@ fn tool_info(
         match loaded {
             Some((machine, slot)) => {
                 ui.horizontal(|ui| {
-                    ui.add_enabled(false, egui::DragValue::new(&mut tool.number));
+                    ui.add_enabled(false, Number::new(&mut tool.number));
                     ui.weak(format!("from slot T{slot} of {machine}'s tool changer"));
                 });
             }
             None => {
-                ui.add(egui::DragValue::new(&mut tool.number).range(0..=999));
+                ui.add(Number::new(&mut tool.number).range(0..=999));
             }
         }
         ui.end_row();
@@ -1250,7 +1251,7 @@ fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
             }
             ui.label("Number of Flutes")
                 .on_hover_hint("How many cutting edges the bit has, for the chip load");
-            ui.add(egui::DragValue::new(&mut tool.flutes).range(1..=12));
+            ui.add(Number::new(&mut tool.flutes).range(1..=12));
             ui.end_row();
         });
 }
@@ -1310,7 +1311,7 @@ fn percent(ui: &mut egui::Ui, fraction: &mut f64) -> bool {
     let mut percent = *fraction * 100.0;
     let changed = ui
         .add(
-            egui::DragValue::new(&mut percent)
+            Number::new(&mut percent)
                 .range(0.0..=100.0)
                 .max_decimals(2)
                 .suffix(" %"),
@@ -1326,7 +1327,7 @@ fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
     egui::Grid::new("tool_feeds").num_columns(2).show(ui, |ui| {
         ui.label("Spindle Speed");
         ui.add(
-            egui::DragValue::new(&mut tool.spindle_speed)
+            Number::new(&mut tool.spindle_speed)
                 .range(0.0..=f64::MAX)
                 .suffix(" r.p.m."),
         );
