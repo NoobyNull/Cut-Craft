@@ -1002,9 +1002,28 @@ fn tool_details(
     (look, loaded): (&Look, Option<(&str, usize)>),
     material: &str,
 ) {
-    section(ui, "Tool Info", |ui| {
-        tool_info(ui, tool, (groups, formats), look, loaded);
-    });
+    // the drawing in a card of its own right of Tool Info, so it does not push the cutting
+    // data down; under it when the window is too narrow for both
+    let gap = ui.spacing().item_spacing.x;
+    if let Some((info, card)) = split(ui.available_width(), gap) {
+        ui.horizontal_top(|ui| {
+            ui.vertical(|ui| {
+                ui.set_width(info);
+                section(ui, "Tool Info", |ui| {
+                    tool_info(ui, tool, (groups, formats), look, loaded);
+                });
+            });
+            ui.vertical(|ui| {
+                ui.set_width(card);
+                section(ui, "Tool Shape", |ui| geometry(ui, tool));
+            });
+        });
+    } else {
+        section(ui, "Tool Info", |ui| {
+            tool_info(ui, tool, (groups, formats), look, loaded);
+        });
+        section(ui, "Tool Shape", |ui| geometry(ui, tool));
+    }
     // the cutting data shown is the active material's
     let own = tool
         .materials
@@ -1235,8 +1254,21 @@ fn tool_info(
         );
         ui.end_row();
     });
-    ui.separator();
-    geometry(ui, tool);
+}
+
+/// The narrowest Tool Info beside the drawing's card.
+const INFO_MIN: f32 = 420.0;
+/// The drawing's card: its share of the width, between these.
+const SHAPE_SHARE: f32 = 0.45;
+const SHAPE_MIN: f32 = 380.0;
+const SHAPE_MAX: f32 = 500.0;
+
+/// Tool Info's and the drawing card's widths side by side in `width` (`gap` between),
+/// or `None` when both do not fit and the card goes under Tool Info.
+fn split(width: f32, gap: f32) -> Option<(f32, f32)> {
+    let card = (width * SHAPE_SHARE).clamp(SHAPE_MIN, SHAPE_MAX);
+    let info = width - card - gap;
+    (info >= INFO_MIN).then_some((info, card))
 }
 
 /// The tool's shape: drawn from its sizes, each typed on its dimension line, then what the
@@ -1417,6 +1449,16 @@ mod tests {
         }
         // the starter tools give no flute or shank length; drawn, they are still unset
         assert_eq!(m.draft.tools, db.tools);
+    }
+
+    #[test]
+    fn the_drawing_sits_right_of_tool_info_when_both_fit() {
+        let (info, card) = split(1200.0, 8.0).expect("wide: side by side");
+        assert_eq!(card, SHAPE_MAX);
+        assert_eq!(info + card + 8.0, 1200.0);
+        let (info, card) = split(820.0, 8.0).expect("still fits");
+        assert!(info >= INFO_MIN && card >= SHAPE_MIN, "{info} {card}");
+        assert_eq!(split(700.0, 8.0), None, "narrow: the drawing goes under");
     }
 
     #[test]
