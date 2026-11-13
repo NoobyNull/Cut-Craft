@@ -66,11 +66,11 @@ pub fn problems_over(doc: &Document, toolpath: &Toolpath, left: f64) -> Vec<Stri
 fn fell_back(toolpath: &Toolpath, units: crate::document::Units) -> Vec<String> {
     use crate::entry::EntryMode;
     let name = &toolpath.name;
-    let places = |used: EntryMode| -> Vec<String> {
+    let places = |which: &dyn Fn(&crate::entry::Fallback) -> bool| -> Vec<String> {
         toolpath
             .fallbacks
             .iter()
-            .filter(|f| (f.used == EntryMode::Plunge) == (used == EntryMode::Plunge))
+            .filter(|f| which(f))
             .map(|f| {
                 format!(
                     "X {} Y {}",
@@ -92,11 +92,25 @@ fn fell_back(toolpath: &Toolpath, units: crate::document::Units) -> Vec<String> 
     };
     let wanted = toolpath
         .fallbacks
-        .first()
+        .iter()
+        .find(|f| f.wanted != EntryMode::Plunge)
         .map_or("entry", |f| f.wanted.said());
     let mut found = vec![];
-    let plunged = places(EntryMode::Plunge);
-    if !plunged.is_empty() {
+    let plunged = places(&|f| f.used == EntryMode::Plunge);
+    let vcarve = toolpath.strategy == "vcarve_engrave_toolpath";
+    if !plunged.is_empty() && vcarve {
+        found.push(format!(
+            "{name} goes straight down in {} {} ({}) where the groove is too short for its \
+             {wanted}. That is usual for a V-carve: nothing to fix",
+            plunged.len(),
+            if plunged.len() == 1 {
+                "place"
+            } else {
+                "places"
+            },
+            listed(&plunged)
+        ));
+    } else if !plunged.is_empty() {
         found.push(format!(
             "{name} goes straight down into the material in {} {} ({}), there being no room \
              there for its {wanted} or a zig-zag. That is hard on the bit, and a bit that \
@@ -111,7 +125,23 @@ fn fell_back(toolpath: &Toolpath, units: crate::document::Units) -> Vec<String> 
             listed(&plunged)
         ));
     }
-    let other = places(EntryMode::ZigZag);
+    let kept_off = places(&|f| f.wanted == EntryMode::Plunge && f.used != EntryMode::Plunge);
+    if !kept_off.is_empty() {
+        found.push(format!(
+            "{name}: {} must not go straight down into the material (a surfacing bit, fly \
+             cutter or form tool), so it ramps in instead in {} {} ({}). Nothing to fix; \
+             set the ramp in the toolpath's Entry settings",
+            toolpath.tool.name,
+            kept_off.len(),
+            if kept_off.len() == 1 {
+                "place"
+            } else {
+                "places"
+            },
+            listed(&kept_off)
+        ));
+    }
+    let other = places(&|f| f.wanted != EntryMode::Plunge && f.used != EntryMode::Plunge);
     if !other.is_empty() {
         found.push(format!(
             "{name} goes down another way than its {wanted} in {} {} ({}), there being too \

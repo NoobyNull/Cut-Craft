@@ -366,6 +366,7 @@ fn entry_for(p: &Params, edge: &[Path]) -> Entry {
         enter: p.entry,
         room: Some(Room::inside(edge.iter().map(cut_points).collect())),
         tool_diameter: p.tool.diameter,
+        no_plunge: p.tool.cannot_plunge(),
         ..Entry::default()
     }
 }
@@ -1246,6 +1247,29 @@ mod tests {
             }),
             ..Params::default()
         }
+    }
+
+    #[test]
+    fn a_surfacing_bit_never_goes_straight_down_into_the_material() {
+        let tp = pocket(
+            60.0,
+            &Params {
+                tool: Tool {
+                    name: "Spoilboard Surfacing Bit".into(),
+                    diameter: 25.4,
+                    ..Tool::default()
+                },
+                depth: 1.0,
+                ..Params::default()
+            },
+        )
+        .unwrap();
+        let straight_in = tp.moves.windows(2).any(|w| {
+            let (a, b) = (w[0].to, w[1].to);
+            b.z < -1e-9 && b.z < a.z - 1e-9 && a.truncate().distance(b.truncate()) < 1e-9
+        });
+        assert!(!straight_in, "{:?}", tp.moves);
+        assert_ne!(tp.fallbacks, vec![], "and Checks before cutting says so");
     }
 
     #[test]

@@ -614,6 +614,9 @@ pub struct Entry {
     pub room: Option<Room>,
     /// Where an entry went down another way than asked, added to as the moves are made.
     pub fallbacks: Fallbacks,
+    /// The bit must not go straight down (a surfacing bit, fly cutter or form tool): a
+    /// straight plunge asked for ramps instead, or zig-zags where a ramp does not fit.
+    pub no_plunge: bool,
 }
 
 impl Entry {
@@ -818,9 +821,10 @@ pub fn path_moves(
             out.along(0.0, line.length, z, Some(above), MoveKind::Cut);
         } else {
             if pass == 0 || !closed {
-                let straight = entry
-                    .enter
-                    .map_or(entry.ramp == Ramp::None, |e| e.mode == EntryMode::Plunge);
+                let straight = !entry.no_plunge
+                    && entry
+                        .enter
+                        .map_or(entry.ramp == Ramp::None, |e| e.mode == EntryMode::Plunge);
                 let to = if straight { z } else { above };
                 out.rapid_down(line.point(from), safe_z, to, MoveKind::Plunge);
             }
@@ -878,6 +882,14 @@ impl Out<'_> {
     fn ramp_down(&mut self, from: f64, above: f64, z: f64) -> f64 {
         let (line, ramping) = (self.line, self.entry.ramping);
         if let Some(settings) = self.entry.enter {
+            return self.enter(line, from, above, z, settings);
+        }
+        if self.entry.no_plunge && self.entry.ramp == Ramp::None {
+            // an older toolpath going straight down with a bit that must not
+            let settings = EntrySettings {
+                mode: EntryMode::Plunge,
+                ..EntrySettings::default()
+            };
             return self.enter(line, from, above, z, settings);
         }
         let drop = above - z;
@@ -971,6 +983,15 @@ impl Out<'_> {
         let wanted = settings.mode;
         let at = track.point(from);
         let (used, end) = match wanted {
+            EntryMode::Plunge if self.entry.no_plunge => {
+                let distance = settings.ramp_distance.max(1e-6);
+                if room_along(track, from) + 1e-9 >= distance {
+                    (EntryMode::Ramp, self.slope(track, from, distance, above, z))
+                } else {
+                    let angle = drop.atan2(distance).to_degrees();
+                    self.zig_zag(track, from, above, z, angle, 2)
+                }
+            }
             EntryMode::Plunge => {
                 if self.moves.last().is_none_or(|m| m.to.z > z) {
                     self.push(MoveKind::Plunge, at, z);

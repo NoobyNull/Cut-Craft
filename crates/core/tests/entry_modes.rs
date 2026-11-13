@@ -340,6 +340,20 @@ fn checks_before_cutting_say_where_an_entry_went_down_another_way() {
         wanted: EntryMode::Helix,
         used,
     };
+    let carve = |fallbacks| Toolpath {
+        name: "V-Carve 1".into(),
+        strategy: "vcarve_engrave_toolpath".into(),
+        params: serde_json::json!({}),
+        tool: Tool::default(),
+        vectors: vec![],
+        moves: vec![],
+        visible: true,
+        power: vec![],
+        stale: false,
+        group: None,
+        drill_bank: None,
+        fallbacks,
+    };
     let toolpath = |fallbacks| Toolpath {
         name: "Pocket 1".into(),
         strategy: "pocket_toolpath".into(),
@@ -379,4 +393,89 @@ fn checks_before_cutting_say_where_an_entry_went_down_another_way() {
     );
     let zigged = problems(&doc, &toolpath(vec![fallback(EntryMode::ZigZag)]));
     assert!(zigged.iter().any(|p| p.contains("zig-zag")), "{zigged:?}");
+    // a bit that must not go straight down ramped in where a plunge was asked for
+    let kept_off = Fallback {
+        wanted: EntryMode::Plunge,
+        used: EntryMode::Ramp,
+        ..fallback(EntryMode::Ramp)
+    };
+    let ramped = problems(&doc, &toolpath(vec![kept_off]));
+    let said = ramped
+        .iter()
+        .find(|p| p.contains("must not go straight down"))
+        .unwrap_or_else(|| panic!("{ramped:?}"));
+    assert!(said.contains("ramps in instead in 1 place"), "{said}");
+    assert!(
+        !ramped.iter().any(|p| p.contains("another way than")),
+        "{ramped:?}"
+    );
+    // a V-carve groove too short for its zig-zag plunges: listed, but not a warning
+    let short = Fallback {
+        wanted: EntryMode::ZigZag,
+        ..fallback(EntryMode::Plunge)
+    };
+    let carved = problems(&doc, &carve(vec![short]));
+    let said = carved
+        .iter()
+        .find(|p| p.contains("straight down"))
+        .unwrap_or_else(|| panic!("{carved:?}"));
+    assert!(
+        said.contains("too short for its zig-zag") && said.contains("nothing to fix"),
+        "{said}"
+    );
+    assert!(!said.contains("hard on the bit"), "{said}");
+}
+
+#[test]
+fn surfacing_bits_fly_cutters_and_form_tools_cannot_plunge() {
+    use cut_craft_core::toolpath::{Tool, ToolShape};
+    let named = |name: &str| Tool {
+        name: name.into(),
+        ..Tool::default()
+    };
+    for name in [
+        "1\" Spoilboard Surfacing Bit",
+        "Fly cutter 2in",
+        "Flycutter",
+        "Slab Planer 50 mm",
+        "Surfacing bit",
+    ] {
+        assert!(named(name).cannot_plunge(), "{name}");
+    }
+    assert!(!named("1/4\" End Mill").cannot_plunge());
+    let form = Tool {
+        shape: ToolShape::FormTool,
+        ..Tool::default()
+    };
+    assert!(form.cannot_plunge());
+}
+
+#[test]
+fn a_bit_that_cannot_plunge_ramps_instead_and_says_so() {
+    let square = rect(0.0, 0.0, 40.0, 40.0);
+    let entry = Entry {
+        no_plunge: true,
+        ..entering(mode(EntryMode::Plunge), None)
+    };
+    let moves = path_moves(&square, true, &[-3.0, -6.0], 0.0, SAFE, &entry);
+    assert!(steepest_below(&moves, 0.0) < 89.0, "never straight down");
+    let fell = notes(&entry);
+    assert!(
+        fell.iter()
+            .all(|f| f.wanted == EntryMode::Plunge && f.used == EntryMode::Ramp),
+        "{fell:?}"
+    );
+    assert_eq!(fell.len(), 2, "one each pass");
+}
+
+#[test]
+fn a_bit_that_cannot_plunge_zig_zags_where_a_ramp_will_not_fit() {
+    let line = [Point::new(0.0, 0.0), Point::new(5.0, 0.0)];
+    let entry = Entry {
+        no_plunge: true,
+        ..entering(mode(EntryMode::Plunge), None)
+    };
+    let moves = path_moves(&line, false, &[-3.0], 0.0, SAFE, &entry);
+    assert!(steepest_below(&moves, 0.0) < 89.0);
+    assert_eq!(notes(&entry)[0].used, EntryMode::ZigZag);
 }

@@ -389,6 +389,7 @@ fn entry_for(p: &Params, depth: f64, tab: TabSettings) -> Entry {
         enter: p.entry,
         room: None,
         fallbacks: Fallbacks::default(),
+        no_plunge: p.tool.cannot_plunge(),
     }
 }
 
