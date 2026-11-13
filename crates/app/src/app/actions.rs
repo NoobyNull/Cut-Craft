@@ -1653,29 +1653,8 @@ impl CutCraftApp {
         if let Some(path) = &self.machines_path {
             self.machines = cut_craft_machines::Machines::load(path);
         }
-        // a holder naming a bit's per-material copy holds the bit it was joined into
-        if self.rename_joined_in_holders()
-            && let Some(path) = &self.machines_path
-            && let Err(e) = self.machines.save(path)
-        {
-            self.status.set_message(&e);
-        }
-        self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
-    }
 
-    /// Holders naming a tool joined into another ([`ToolDatabase::joined`]) name the
-    /// tool now; whether any did.
-    pub(super) fn rename_joined_in_holders(&mut self) -> bool {
-        let mut changed = false;
-        for machine in &mut self.machines.machines {
-            for slot in machine.slots.iter_mut().flatten() {
-                if let Some(bit) = self.tools.joined.get(slot.as_str()) {
-                    slot.clone_from(bit);
-                    changed = true;
-                }
-            }
-        }
-        changed
+        self.posts = cut_craft_machines::Library::new(dir.map(|d| d.join("posts")));
     }
 
     /// The active machine's tool changer was loaded differently: the machines are saved,

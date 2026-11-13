@@ -6,6 +6,17 @@
 //! its folder names.
 
 use crate::toolpath::{CuttingData, Tool, ToolDatabase};
+use serde::{Deserialize, Serialize};
+
+/// A copy joined into its bit ([`ToolDatabase::joined`], by the copy's old name).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct JoinedCopy {
+    /// The bit it was joined into.
+    pub bit: String,
+    /// The material its cutting data is kept for: a toolpath naming the copy keeps
+    /// cutting with it, whatever the active material.
+    pub material: String,
+}
 
 /// Two sizes closer than this (mm or degrees) are the same.
 const SAME: f64 = 1e-6;
@@ -77,7 +88,13 @@ impl ToolDatabase {
             if joined.number == 0 {
                 joined.number = copy.number;
             }
-            self.joined.insert(copy.name.clone(), joined.name.clone());
+            self.joined.insert(
+                copy.name.clone(),
+                JoinedCopy {
+                    bit: joined.name.clone(),
+                    material: material.clone(),
+                },
+            );
         }
         joined.group = group;
         for m in &materials {
@@ -291,6 +308,62 @@ mod tests {
         assert_eq!(db.get(&format!("{BIT} 3")).unwrap().shank_diameter, 6.35);
         assert_eq!(db.join_material_copies(), Vec::<String>::new());
         assert_eq!(db.tools.len(), 2, "joined once");
+    }
+
+    #[test]
+    fn a_toolpath_naming_a_copy_keeps_its_feeds_whatever_the_material() {
+        let mut db = copies();
+        let hardwood = format!("{BIT} 3");
+        let before = db.pick(&hardwood).unwrap();
+        db.join_material_copies();
+        for active in ["", "Softwood", "MDF/Laminate"] {
+            db.material = active.into();
+            let tool = db.pick(&hardwood).unwrap();
+            assert_eq!(tool.name, hardwood, "the toolpath's tool keeps its name");
+            assert_eq!(
+                tool.feed_rate, before.feed_rate,
+                "Hardwood's feed, with {active:?}"
+            );
+            assert_eq!(tool.shank_diameter, 6.35, "the bit's shank");
+        }
+        // put back with a new feed: the bit's Hardwood data, no tool of that name added
+        let mut tool = db.pick(&hardwood).unwrap();
+        tool.feed_rate = 1600.0;
+        db.put(tool);
+        assert_eq!(db.tools.len(), 2);
+        assert_eq!(db.tools[0].name, BIT);
+        assert_eq!(db.tools[0].for_material("Hardwood").feed_rate, 1600.0);
+    }
+
+    /// A `SpeTool W06004` V-bit as one user's tools.json listed it, imported from the maker's file.
+    #[test]
+    fn his_spetool_v_bit_joins_with_its_quarter_inch_shank() {
+        let top = "SpeTool/SpeTool Tool Master 2025-10-15/SpeTool Imperial Tools/V-BIT";
+        let name = "SpeTool W06004 2 Flutes V Bit 90 Deg 3/4\" CD x1/4\" SD [Acrylic]";
+        let make = |suffix: &str, folder: &str, diameter: f64, shank: f64| Tool {
+            name: format!("{name}{suffix}"),
+            group: format!("{top}/{folder}/1/4\" SHANK"),
+            shape: ToolShape::VBit,
+            diameter,
+            angle: 90.0,
+            tip_radius: 0.0,
+            shank_diameter: shank,
+            ..Tool::default()
+        };
+        let mut db = ToolDatabase {
+            tools: vec![
+                make("", "MDF/Laminate", 19.049_999_999_999_997, 6.35),
+                make(" 2", "SOFTWOOD", 19.05, 0.0),
+                make(" 3", "HARDWOOD", 19.05, 0.0),
+                make(" 4", "PLASTIC", 19.05, 0.0),
+            ],
+            ..ToolDatabase::default()
+        };
+        assert_eq!(db.join_material_copies(), Vec::<String>::new());
+        assert_eq!(db.tools.len(), 1);
+        assert_eq!(db.tools[0].shank_diameter, 6.35);
+        assert_eq!(db.pick(&format!("{name} 3")).unwrap().shank_diameter, 6.35);
+        assert_eq!(db.joined[&format!("{name} 3")].material, "Hardwood");
     }
 
     #[test]
